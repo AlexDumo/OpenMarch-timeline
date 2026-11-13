@@ -343,12 +343,51 @@ function fieldLayout(marchers: FieldMarchers | null): {
     return { field, marchers: points };
 }
 
-/** One of the pill's segments: on is the accent on a light accent tint, as the shape editor's toggles */
-const segment = (on: boolean) =>
+/**
+ * One of the pill's segments: on is the accent on a light accent tint, as the shape editor's
+ * toggles. Compact (the pill doesn't fit its pane): the icon over a short caption.
+ */
+const segment = (on: boolean, compact = false) =>
     clsx(
-        "rounded-4 flex h-44 min-w-44 touch-none items-center justify-center gap-4 px-8 whitespace-nowrap select-none",
+        "rounded-4 flex h-44 min-w-44 touch-none items-center justify-center whitespace-nowrap select-none",
+        compact ? "text-sub flex-col gap-2 px-4 leading-none" : "gap-4 px-8",
         on ? "bg-accent/15 text-accent" : "hover:text-accent",
     );
+
+/**
+ * Whether the pill is too wide for the pane it floats in at full size (a 1024 px tablet with
+ * the Inspector open): then it shows its compact form. The full width is measured while the
+ * pill is full size, and again whenever the pane or what the pill says changes.
+ */
+function useCompactPill(
+    enabled: boolean,
+    pill: React.RefObject<HTMLElement | null>,
+    pane: () => HTMLElement | null,
+    content: unknown,
+) {
+    const [compact, setCompact] = useState(false);
+    const fullWidth = useRef(0);
+    useLayoutEffect(() => {
+        if (!enabled) return;
+        const measure = () => {
+            const el = pill.current;
+            const parent = pane();
+            if (!el || !parent) return;
+            if (!compact)
+                fullWidth.current = Math.max(el.offsetWidth, el.scrollWidth);
+            setCompact(parent.clientWidth - 2 * PILL_EDGE < fullWidth.current);
+        };
+        measure();
+        const parent = pane();
+        const observer =
+            parent && typeof ResizeObserver !== "undefined"
+                ? new ResizeObserver(measure)
+                : null;
+        if (parent) observer?.observe(parent);
+        return () => observer?.disconnect();
+    }, [enabled, compact, pill, pane, content]);
+    return compact;
+}
 
 /**
  * The floating pill over the field in the touch layout, where there is often no keyboard
@@ -421,8 +460,11 @@ export default function TouchModifierButtons({
     }, [isTouchMode, clear]);
     useEffect(() => () => clear(), [clear]);
 
-    const container = () =>
-        (rootRef.current?.offsetParent as HTMLElement | null) ?? null;
+    const container = useCallback(
+        () => (rootRef.current?.offsetParent as HTMLElement | null) ?? null,
+        [],
+    );
+    const compact = useCompactPill(isTouchMode, pillRef, container, dragMode);
 
     const clamp = useCallback((p: Position): Position => {
         const pill = pillRef.current;
@@ -475,7 +517,8 @@ export default function TouchModifierButtons({
             observer?.disconnect();
             offView();
         };
-    }, [isTouchMode, saved, placeAutomatically]);
+        // The compact form is narrower: a new spot for it
+    }, [isTouchMode, saved, placeAutomatically, compact, container]);
 
     // The help closes on a press anywhere else (which does nothing more), or
     // Escape. Registered as it appears, so no press slips through.
@@ -655,6 +698,7 @@ export default function TouchModifierButtons({
                 ref={pillRef}
                 // These explain themselves on a long press (not the app-wide guard)
                 data-own-long-press
+                data-compact={compact || undefined}
                 className="rounded-6 border-stroke bg-bg-1 bg-modal shadow-modal flex items-center gap-2 border p-2"
             >
                 <div
@@ -681,7 +725,7 @@ export default function TouchModifierButtons({
                         label: t(current.label),
                         describe: describe(current.describe),
                     })}
-                    className={segment(popup === "dragMode")}
+                    className={segment(popup === "dragMode", compact)}
                     data-testid="field-drag-mode"
                     {...dragModeLongPress}
                     onClick={() =>
@@ -690,12 +734,16 @@ export default function TouchModifierButtons({
                         )
                     }
                 >
-                    <span className="text-text-subtitle">
-                        {t("touch.dragMode.prefix")}
-                    </span>
+                    {!compact && (
+                        <span className="text-text-subtitle">
+                            {t("touch.dragMode.prefix")}
+                        </span>
+                    )}
                     <current.Icon size={16} />
-                    {t(current.label)}
-                    <CaretDownIcon size={12} />
+                    <span className="flex items-center gap-2">
+                        {t(current.label)}
+                        <CaretDownIcon size={compact ? 10 : 12} />
+                    </span>
                 </button>
                 <span className="bg-stroke h-24 w-px" aria-hidden />
                 {TOGGLES.map(({ toggle, label, hint, Icon }) => {
@@ -709,7 +757,7 @@ export default function TouchModifierButtons({
                             aria-label={t(label)}
                             title={t(hint)}
                             aria-pressed={isOn}
-                            className={segment(isOn)}
+                            className={segment(isOn, compact)}
                             data-testid={`touch-toggle-${toggle}`}
                             {...presses[toggle]}
                         >
@@ -730,7 +778,7 @@ export default function TouchModifierButtons({
                     aria-pressed={snapOff}
                     disabled={!snapRunnable}
                     className={clsx(
-                        segment(snapOff),
+                        segment(snapOff, compact),
                         "disabled:pointer-events-none disabled:opacity-50",
                     )}
                     data-testid="touch-snap"
