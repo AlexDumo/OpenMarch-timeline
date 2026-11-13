@@ -4,6 +4,7 @@ import {
     expectCanvasMatchesShow,
     selectedDrillNumbers,
     tap,
+    waitForField,
     waitForSettledField,
 } from "../app.mjs";
 import { seedShowSql, type SeedPosition } from "../seed.mjs";
@@ -52,8 +53,7 @@ const tab = (page: Page, name: string) =>
     titleBarTabs(page).getByRole("tab", { name });
 const panel = (page: Page) => page.getByTestId("toolbar-panel");
 
-const fieldBox = (page: Page) =>
-    page.getByTestId("fieldCanvas").boundingBox();
+const fieldBox = (page: Page) => page.getByTestId("fieldCanvas").boundingBox();
 
 test.beforeEach(async ({ show }) => {
     await expectCanvasMatchesShow(show);
@@ -133,6 +133,7 @@ test("the chevron opens and closes the panel, and a reload remembers it", async 
     await tapOn(page, tab(page, "Shapes"));
     await expect(panel(page)).toBeVisible();
     await page.reload();
+    await waitForField(page);
     await expectCanvasMatchesShow(show);
     await expect(panel(page)).toBeVisible();
     await expect(tab(page, "Shapes")).toHaveAttribute("aria-selected", "true");
@@ -141,6 +142,7 @@ test("the chevron opens and closes the panel, and a reload remembers it", async 
     await tapOn(page, tab(page, "Shapes"));
     await expect(panel(page)).toBeHidden();
     await page.reload();
+    await waitForField(page);
     await expectCanvasMatchesShow(show);
     await expect(tab(page, "Shapes")).toHaveAttribute("aria-selected", "true");
     await expect(panel(page)).toBeHidden();
@@ -154,6 +156,7 @@ test("with the interface set to Mouse, the toolbar is the desktop one", async ({
         localStorage.setItem("openmarch:inputMode", "mouse"),
     );
     await page.reload();
+    await waitForField(page);
     await expectCanvasMatchesShow(show);
     await expect(page.getByTestId("touch-toolbar")).toHaveCount(0);
     await expect(titleBarTabs(page)).toHaveCount(0);

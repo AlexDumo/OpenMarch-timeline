@@ -2,7 +2,7 @@ import { Tabs, TabContent, TabItem, TabsList } from "@openmarch/ui";
 import { FileTab } from "./tabs/FileTab";
 import AlignmentTab from "./tabs/AlignmentTab";
 import ShapesTab from "@/shapes/tool/ShapesTab";
-import { useRef, useState } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { T, useTranslate } from "@tolgee/react";
 import { CaretDownIcon, CaretUpIcon } from "@phosphor-icons/react";
@@ -95,6 +95,23 @@ function ToolbarEnd({ className }: { className?: string }) {
     );
 }
 
+/**
+ * Below this window width the title bar can't hold the tabs, the 3D View button and the
+ * workspace switch together (iPad portrait), so the last two move into the panel and the tabs
+ * keep their room.
+ */
+const NARROW_TOUCH_QUERY = "(max-width: 900px)";
+
+const subscribeNarrow = (onChange: () => void) => {
+    if (typeof window.matchMedia !== "function") return () => {};
+    const query = window.matchMedia(NARROW_TOUCH_QUERY);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+};
+const isNarrow = () =>
+    typeof window.matchMedia === "function" &&
+    window.matchMedia(NARROW_TOUCH_QUERY).matches;
+
 export default function Topbar() {
     // In the tablet layout the title bar holds the tabs. Without its slot (it isn't shown),
     // the toolbar keeps the mouse layout
@@ -136,6 +153,7 @@ function TouchToolbar({ tabsSlot }: { tabsSlot: HTMLElement }) {
     const tab = useToolbarPanelStore((s) => s.tab);
     const open = useToolbarPanelStore((s) => s.open);
     const { setTab, setOpen, pressTab } = useToolbarPanelStore.getState();
+    const narrow = useSyncExternalStore(subscribeNarrow, isNarrow, () => false);
 
     // The tab list selects a tab as the press begins, so whether the tapped tab was already
     // open is read then, before the tap ends
@@ -168,9 +186,10 @@ function TouchToolbar({ tabsSlot }: { tabsSlot: HTMLElement }) {
         >
             {createPortal(
                 // The whole toolbar row, as on the desktop: the tabs, then the 3D View button and
-                // the workspace switch at the end. The field's top right is its display bar's
+                // the workspace switch at the end (the field's top right is its display bar's).
+                // The tabs come first: they only scroll once nothing else is left beside them
                 <div className="@container flex w-full min-w-0 items-center gap-8">
-                    <div className="flex min-w-0 items-center">
+                    <div className="flex max-w-full min-w-0 shrink-0 items-center">
                         <div className="min-w-0 overflow-x-auto [scrollbar-width:none]">
                             <ToolbarTabsList tabProps={tabProps} />
                         </div>
@@ -194,7 +213,9 @@ function TouchToolbar({ tabsSlot }: { tabsSlot: HTMLElement }) {
                             )}
                         </button>
                     </div>
-                    <ToolbarEnd className="ml-auto flex shrink-0 items-center gap-8" />
+                    {!narrow && (
+                        <ToolbarEnd className="ml-auto flex min-w-0 shrink-0 items-center gap-8" />
+                    )}
                 </div>,
                 tabsSlot,
             )}
@@ -202,9 +223,14 @@ function TouchToolbar({ tabsSlot }: { tabsSlot: HTMLElement }) {
                 id="toolbar-panel"
                 data-testid="toolbar-panel"
                 hidden={!open}
-                className="rounded-6 border-stroke bg-modal backdrop-blur-32 shadow-modal absolute inset-x-0 top-0 z-50 border p-8"
+                className="rounded-6 border-stroke bg-modal backdrop-blur-32 shadow-modal absolute inset-x-0 top-0 z-50 flex items-start gap-8 border p-8"
             >
-                <ToolbarTabContents className={touchTabRowClassName} />
+                <div className="min-w-0 flex-1">
+                    <ToolbarTabContents className={touchTabRowClassName} />
+                </div>
+                {narrow && (
+                    <ToolbarEnd className="flex shrink-0 items-center gap-8 self-center" />
+                )}
             </div>
         </Tabs>
     );
