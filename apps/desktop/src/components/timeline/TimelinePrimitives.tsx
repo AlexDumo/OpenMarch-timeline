@@ -8,6 +8,7 @@ import {
     MagnifyingGlassPlusIcon,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
+import { thresholdsFor } from "@/field/editor/pointerThresholds";
 import { animated, useSpring } from "@react-spring/web";
 import { flushSync } from "react-dom";
 import {
@@ -599,6 +600,8 @@ const useRulerScrub = (
     pixelsPerBeat: number,
     seekSnapBeats: readonly number[],
     scrubLine: TimelineLiveValue<number | null> | undefined,
+    /** Where a finger's cancelled scrub goes back to (`useTimelinePointer`'s `restoreBeat`) */
+    restoreBeat?: () => number | null,
 ) => {
     const latest = useRef({
         onSeek,
@@ -606,6 +609,7 @@ const useRulerScrub = (
         pixelsPerBeat,
         seekSnapBeats,
         scrubLine,
+        restoreBeat,
     });
     latest.current = {
         onSeek,
@@ -613,6 +617,7 @@ const useRulerScrub = (
         pixelsPerBeat,
         seekSnapBeats,
         scrubLine,
+        restoreBeat,
     };
     const edgeScroll = useScrubEdgeScroll();
     const [scrub] = useState(() => {
@@ -623,6 +628,10 @@ const useRulerScrub = (
             surface: Element;
             scrubbing: boolean;
             lastBeat: number;
+            /** How far it moves before it scrubs: further for a finger */
+            slop: number;
+            /** A finger's press: where a cancel puts the playhead back */
+            restoreBeat: number | null;
         } | null = null;
         let swallowClick = false;
         const pointerBeat = (clientX: number, surface: Element) =>
@@ -705,12 +714,17 @@ const useRulerScrub = (
                         '[data-testid="timeline-pointer-surface"]',
                     );
                     if (!surface) return;
+                    const touch = event.pointerType === "touch";
                     drag = {
                         pointerId: event.pointerId,
                         startClientX: event.clientX,
                         surface,
                         scrubbing: false,
                         lastBeat: 0,
+                        slop: timelineDragSlop(event.pointerType),
+                        restoreBeat: touch
+                            ? (latest.current.restoreBeat?.() ?? null)
+                            : null,
                     };
                     event.currentTarget.setPointerCapture?.(event.pointerId);
                 },
@@ -723,7 +737,7 @@ const useRulerScrub = (
                     if (
                         !current.scrubbing &&
                         Math.abs(event.clientX - current.startClientX) <
-                            TIMELINE_RANGE_DRAG_PX
+                            current.slop
                     )
                         return;
                     current.scrubbing = true;
@@ -748,8 +762,9 @@ const useRulerScrub = (
                         event.pointerId,
                     );
                 },
+                // A finger's scrub cancelled by a second finger goes back to where it began
                 onPointerCancel: () => {
-                    finish();
+                    finish(drag?.restoreBeat ?? undefined);
                 },
                 // The capture can go without a pointerup or pointercancel (the window loses focus
                 // mid-drag and the button is released outside it): end the scrub as a cancel does
@@ -824,6 +839,7 @@ export const TimelineRuler = memo(function TimelineRuler({
     pageFlagMove,
     height = TIMELINE_PAGE_ROW_BOTTOM,
     flagSnapPlayhead,
+    scrubRestoreBeat,
 }: {
     pages: readonly TimelinePageMarker[];
     measures: readonly TimelineMeasureMarker[];
@@ -848,6 +864,8 @@ export const TimelineRuler = memo(function TimelineRuler({
     height?: number;
     /** The playhead, which a dragged flag lands on when near, as on downbeats and page lines */
     flagSnapPlayhead?: () => BeatPosition;
+    /** Where a finger's cancelled scrub puts the playhead back (`useTimelinePointer`) */
+    scrubRestoreBeat?: () => number | null;
     /** Where the selected marchers are Set (#303); none without a selection */
     keyframes?: readonly TimelineKeyframe[];
     /** A diamond's right-click Unset actions (#306), by view beat; without it, no menu */
@@ -913,6 +931,7 @@ export const TimelineRuler = memo(function TimelineRuler({
         pixelsPerBeat,
         seekSnapBeats,
         scrubLine,
+        scrubRestoreBeat,
     );
     const initialPage = pages.find((page) => page.isInitial);
     // UI-9: the initial box is home; a page box is its range, previous flag to its own flag.
@@ -1651,6 +1670,8 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
          * for its range (a move or a resize), or the range
          */
         from: TimelineBeatRange | null;
+        /** How far it moves before it drags (`timelineDragSlop`) */
+        slop: number;
     } | null>(null);
     const peeling = useClipPeel({ trackId: track.id, peel, clipRef });
 
@@ -1876,6 +1897,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                         moved: false,
                         vertical: false,
                         from: null,
+                        slop: timelineDragSlop(event.pointerType),
                     };
                     event.currentTarget.setPointerCapture?.(event.pointerId);
                 }}
@@ -1893,7 +1915,12 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                     }
                     const dx = event.clientX - drag.startClientX;
                     const dy = event.clientY - drag.startClientY;
-                    if (!drag.moved && peel && isVerticalPeel(dx, dy)) {
+                    if (
+                        !drag.moved &&
+                        peel &&
+                        isVerticalPeel(dx, dy) &&
+                        Math.abs(dy) >= drag.slop
+                    ) {
                         drag.vertical = true;
                         drag.moved = true;
                         setMoving(true);
@@ -1907,7 +1934,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                     // Sideways first is a re-time; mostly up or down waits for the vertical lock
                     if (
                         !drag.moved &&
-                        (Math.abs(dx) < TIMELINE_RANGE_DRAG_PX ||
+                        (Math.abs(dx) < drag.slop ||
                             (peel !== undefined &&
                                 2 * Math.abs(dx) <= Math.abs(dy)))
                     )
@@ -3109,6 +3136,15 @@ export function showsReturnMarker(
 export const TIMELINE_RANGE_DRAG_PX = 4;
 
 /**
+ * How far a press on a clip or a page box moves before it drags (tablet 3.1): the mouse's
+ * `TIMELINE_RANGE_DRAG_PX`, or a finger's move threshold, so a tap that wobbles stays a tap.
+ */
+export const timelineDragSlop = (pointerType: string) =>
+    pointerType === "touch"
+        ? thresholdsFor("touch").moveThreshold
+        : TIMELINE_RANGE_DRAG_PX;
+
+/**
  * The range a drag on empty timeline space selects (ui.md UI-9 "Creating a timeline"): from where
  * it started to where it is, each edge snapped as in UI-2 (Alt turns snapping off), in order.
  * `null` while it covers no whole beat.
@@ -3205,6 +3241,7 @@ export const useTimelinePointer = ({
     beatCount,
     snapBeats = [],
     seekSnapBeats = [],
+    restoreBeat,
 }: {
     onSeek?: TimelineSeek;
     onRangeSelect?: (range: TimelineBeatRange) => void;
@@ -3213,6 +3250,11 @@ export const useTimelinePointer = ({
     snapBeats?: readonly number[];
     /** Downbeats and page lines a click or scrub lands on when near (UI-12) */
     seekSnapBeats?: readonly number[];
+    /**
+     * Where a finger's scrub goes back to when it's cancelled (a second finger landed, tablet
+     * 3.1): the playhead's beat before the press, or null to end where it was (while playing)
+     */
+    restoreBeat?: () => number | null;
 }) => {
     // Every move of a range drag writes it: only the preview leaf reads it (`TimelineRangePreview`)
     const [rangePreview] = useState(() =>
@@ -3233,6 +3275,8 @@ export const useTimelinePointer = ({
         lastBeat: number | null;
         /** The press was on the playhead's line or head: a paused drag can swap it (UI-21) */
         onPlayhead: boolean;
+        /** A finger's press: where a cancel puts the playhead back (`restoreBeat`) */
+        restoreBeat: number | null;
     } | null>(null);
     const edgeScroll = useScrubEdgeScroll();
     const draggedRange = (
@@ -3304,14 +3348,19 @@ export const useTimelinePointer = ({
         rangePreview.set(null);
     };
     const release = () => scrubLine.set(null);
-    /** Ends a gesture without its release: a range isn't selected, a scrub ends where it was */
-    const cancel = () => {
+    /**
+     * Ends a gesture without its release: a range isn't selected, a scrub ends where it was. A
+     * finger's cancelled scrub (a second finger landed) goes back to where the playhead was.
+     */
+    const cancel = (event?: { readonly type: string }) => {
         const current = gesture.current;
         if (!current) return;
         end();
+        const restore =
+            event?.type === "pointercancel" ? current.restoreBeat : null;
         // The scrub ends where it was, so a suspended playback resumes and S settles
         if (current.mode === "scrub" && current.lastBeat !== null)
-            onSeek?.(current.lastBeat, {
+            onSeek?.(restore ?? current.lastBeat, {
                 gesture: "end",
                 ...(current.onPlayhead ? { line: "playhead" as const } : {}),
             });
@@ -3326,6 +3375,14 @@ export const useTimelinePointer = ({
     return {
         rangePreview,
         scrubLine,
+        /**
+         * A finger's tap on bare track space (tablet 3.1, `timelineGestures.ts`): the click there,
+         * one seek. `surface` is the pointer surface.
+         */
+        seekAt: (surface: Element, clientX: number) => {
+            if (gesture.current) return;
+            seek(beatAtClientX(surface, clientX), { altKey: false });
+        },
         pointerHandlers: {
             onPointerMove: (event: ReactPointerEvent<HTMLElement>) => {
                 const current = gesture.current;
@@ -3373,6 +3430,10 @@ export const useTimelinePointer = ({
                 const startBeat = pointerBeat(event);
                 // UI-12: a plain drag scrubs; Ctrl+drag (Cmd on macOS) draws a range
                 gesture.current = {
+                    restoreBeat:
+                        event.pointerType === "touch"
+                            ? (restoreBeat?.() ?? null)
+                            : null,
                     mode:
                         onPlayhead || !onRangeSelect || !drawing
                             ? "scrub"
