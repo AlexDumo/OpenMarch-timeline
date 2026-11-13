@@ -6,7 +6,11 @@
  * - Detach one member, Detach all 16 at once, and Rejoin every unadjusted member after Detach:
  *   every marcher's position at every sixteenth of a beat of the whole show is the same float64
  *   pair (`Object.is` on both coordinates) as before;
- * - each is one undo step that puts the positions back the same way.
+ * - Rejoin after the copy was drawn again: bit for bit as before Detach (review of #900, B1);
+ * - Rejoin after the group path was re-fitted: in the shared part the marcher keeps its place
+ *   against every other member (B1);
+ * - every edit is one undo step that puts every position back as before it, and a redo that puts
+ *   them back as after it.
  *
  * Rejoin drops an Adjust (owner Q4), so an adjusted member is checked to move and only it.
  */
@@ -23,7 +27,8 @@ import { DbConnection, describeDbTests, schema } from "@/test/base";
 import { keepFixturesInPageMode } from "@/test/timelineMode";
 import { convertPagesToTimeline } from "@/test/convertPages";
 import { readTimelineTables } from "@/timeline/timelineRows";
-import { performUndo } from "../history";
+import { performRedo, performUndo } from "../history";
+import { redrawPath, refitPath } from "../timelinePathEdits";
 import {
     detachFromGroupPath,
     drawGroupRoute,
@@ -145,69 +150,219 @@ describeDbTests("Detach parity (AP-R9)", (it) => {
 
         const base = await walkOf(db);
         const pairs = (w: Walk) => w.rows.length * w.rows[0]!.length;
+        const undo = async () =>
+            expect((await performUndo(db)).success).toBe(true);
+        const redo = async () =>
+            expect((await performRedo(db)).success).toBe(true);
+        /**
+         * One edit, checked on positions: who moved against `base`, then an undo that puts every
+         * position back as it was before the edit and a redo that puts them back as after it, bit
+         * for bit. It ends redone when `keep`, else undone.
+         */
+        const step = async (
+            label: string,
+            edit: () => Promise<unknown>,
+            expectMoved: number[] | null,
+            keep = false,
+        ) => {
+            const before = await walkOf(db);
+            await edit();
+            const after = await walkOf(db);
+            const d = differ(base, after);
+            if (expectMoved !== null)
+                expect(d.moved).toEqual([...expectMoved].sort((a, b) => a - b));
+            await undo();
+            expect(differ(before, await walkOf(db)).moved).toEqual([]);
+            await redo();
+            expect(differ(after, await walkOf(db)).moved).toEqual([]);
+            if (!keep) {
+                await undo();
+                expect(differ(before, await walkOf(db)).moved).toEqual([]);
+            }
+            report.push(
+                `${label}: ${d.compared} pairs, ${d.moved.length} moved; undo and redo exact`,
+            );
+            return after;
+        };
+        const plainMember = members[0]!;
 
-        // Detach one adjusted member
-        await detachFromGroupPath({
-            db,
-            timelineId: timeline.id,
-            marcherIds: [adjusted[0]!],
-        });
-        const one = differ(base, await walkOf(db));
-        expect(one.moved).toEqual([]);
-        report.push(
-            `Detach one adjusted member: ${one.compared} pairs, 0 moved`,
+        await step(
+            "Detach one adjusted member",
+            () =>
+                detachFromGroupPath({
+                    db,
+                    timelineId: timeline.id,
+                    marcherIds: [adjusted[0]!],
+                }),
+            [],
         );
-        expect((await performUndo(db)).success).toBe(true);
-        expect(differ(base, await walkOf(db)).moved).toEqual([]);
-
-        // Detach all 16 in one edit: one undo step
-        await detachFromGroupPath({
-            db,
-            timelineId: timeline.id,
-            marcherIds: members,
-        });
-        const all = differ(base, await walkOf(db));
-        expect(all.moved).toEqual([]);
-        report.push(
-            `Detach all 16 in one edit: ${all.compared} pairs, 0 moved`,
+        await step(
+            "Detach all 16 in one edit",
+            () =>
+                detachFromGroupPath({
+                    db,
+                    timelineId: timeline.id,
+                    marcherIds: members,
+                }),
+            [],
         );
-        expect((await performUndo(db)).success).toBe(true);
-        expect(differ(base, await walkOf(db)).moved).toEqual([]);
-        report.push(`Undo of Detach all 16 (one step): 0 moved`);
 
-        // Detach the 16, Rejoin all but the adjusted ones: nobody moves
-        await detachFromGroupPath({
-            db,
-            timelineId: timeline.id,
-            marcherIds: members.slice(0, 15),
-        });
+        // Detach 15, Rejoin the unadjusted, then the adjusted (who drop their Adjust, Q4)
+        await step(
+            "Detach 15",
+            () =>
+                detachFromGroupPath({
+                    db,
+                    timelineId: timeline.id,
+                    marcherIds: members.slice(0, 15),
+                }),
+            [],
+            true,
+        );
         const plain = members.slice(0, 15).filter((m) => !adjusted.includes(m));
-        await rejoinGroupPath({
-            db,
-            timelineId: timeline.id,
-            routeId: drawn.routeId,
-            marcherIds: plain,
-        });
-        const rejoined = differ(base, await walkOf(db));
-        expect(rejoined.moved).toEqual([]);
-        report.push(
-            `Detach 15, Rejoin the ${plain.length} unadjusted: ${rejoined.compared} pairs, 0 moved`,
+        await step(
+            `then Rejoin the ${plain.length} unadjusted`,
+            () =>
+                rejoinGroupPath({
+                    db,
+                    timelineId: timeline.id,
+                    routeId: drawn.routeId,
+                    marcherIds: plain,
+                }),
+            [],
+            true,
         );
-        // Rejoin the adjusted ones: they drop their Adjust (Q4) and only they move
-        await rejoinGroupPath({
-            db,
-            timelineId: timeline.id,
-            routeId: drawn.routeId,
-            marcherIds: adjusted,
-        });
-        expect(differ(base, await walkOf(db)).moved).toEqual(
-            [...adjusted].sort((a, b) => a - b),
+        await step(
+            "then Rejoin the 3 adjusted (only they move: Adjust dropped)",
+            () =>
+                rejoinGroupPath({
+                    db,
+                    timelineId: timeline.id,
+                    routeId: drawn.routeId,
+                    marcherIds: adjusted,
+                }),
+            adjusted,
         );
-        expect((await performUndo(db)).success).toBe(true);
+        await undo();
+        await undo();
         expect(differ(base, await walkOf(db)).moved).toEqual([]);
-        report.push(
-            `Rejoin the 3 adjusted: only those 3 move (Adjust dropped); undo: 0 moved`,
+
+        // B1 (a): the copy drawn again (its offset becomes 0), then Rejoin: bit for bit as before
+        const { routes } = await step(
+            "Detach an unadjusted member",
+            () =>
+                detachFromGroupPath({
+                    db,
+                    timelineId: timeline.id,
+                    marcherIds: [plainMember],
+                }),
+            [],
+            true,
+        ).then(async () => ({
+            routes: {
+                [plainMember]: (await db
+                    .select()
+                    .from(schema.timeline_lanes)
+                    .where(
+                        eq(
+                            schema.timeline_lanes.id,
+                            laneOfMarcher(plainMember).id,
+                        ),
+                    )
+                    .get())!.route_id,
+            },
+        }));
+        const A0 = r0.positionAt(plainMember, 9) as XY;
+        await step(
+            "then draw its copy again (only it moves)",
+            () =>
+                redrawPath({
+                    db,
+                    routeId: routes[plainMember]!,
+                    points: [{ at: [A0[0] + 20, A0[1] - 30] }],
+                }),
+            [plainMember],
+            true,
         );
+        await step(
+            "then Rejoin (B1: its offset is written again from where it starts)",
+            () =>
+                rejoinGroupPath({
+                    db,
+                    timelineId: timeline.id,
+                    routeId: drawn.routeId,
+                    marcherIds: [plainMember],
+                }),
+            [],
+        );
+        await undo();
+        await undo();
+        expect(differ(base, await walkOf(db)).moved).toEqual([]);
+
+        // B1 (b): Detach, Re-fit the group path (the others' middle moved its `from`), Rejoin:
+        // in the shared part the rejoined marcher keeps its place against every other member
+        await step(
+            "Detach an unadjusted member",
+            () =>
+                detachFromGroupPath({
+                    db,
+                    timelineId: timeline.id,
+                    marcherIds: [plainMember],
+                }),
+            [],
+            true,
+        );
+        await step(
+            "then Re-fit the group path",
+            () => refitPath({ db, routeId: drawn.routeId }),
+            null,
+            true,
+        );
+        await step(
+            "then Rejoin",
+            () =>
+                rejoinGroupPath({
+                    db,
+                    timelineId: timeline.id,
+                    routeId: drawn.routeId,
+                    marcherIds: [plainMember],
+                }),
+            null,
+            true,
+        );
+        const r = await resolverOf(db);
+        const refit = JSON.parse(
+            (await db
+                .select()
+                .from(schema.timeline_routes)
+                .where(eq(schema.timeline_routes.id, drawn.routeId))
+                .get())!.geometry,
+        ) as RouteGeometry;
+        const { uFirst, uLast } = groupSchedule(refit);
+        let placed = 0;
+        for (const other of members.filter(
+            (m) => m !== plainMember && !adjusted.includes(m),
+        ))
+            for (let k = 1; k < 16; k++) {
+                const b = 9 + 8 * (uFirst + ((uLast - uFirst) * k) / 16);
+                const p = r.positionAt(plainMember, b);
+                const q = r.positionAt(other, b);
+                const Ao = r0.positionAt(other, 9);
+                expect(Math.abs(p[0] - q[0] - (A0[0] - Ao[0]))).toBeLessThan(
+                    1e-9,
+                );
+                expect(Math.abs(p[1] - q[1] - (A0[1] - Ao[1]))).toBeLessThan(
+                    1e-9,
+                );
+                placed++;
+            }
+        report.push(
+            `  in its place against the other 12 unadjusted members at ${placed} shared-part samples (within 1e-9)`,
+        );
+        await undo();
+        await undo();
+        await undo();
+        expect(differ(base, await walkOf(db)).moved).toEqual([]);
         expect(pairs(base)).toBeGreaterThan(70 * 16 * 16);
         // Printed for the PR (vitest run without --silent)
         // eslint-disable-next-line no-console

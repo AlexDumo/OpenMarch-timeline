@@ -764,13 +764,30 @@ describeDbTests("Adjust and Re-fit", (it) => {
         await db.run(
             sql`UPDATE ${A} SET end_beat = 13 WHERE marcher_id = ${f.m1} AND start_beat = 9`,
         );
+        const ownRow = (
+            await db.select().from(A).where(eq(A.marcher_id, third)).all()
+        ).find((a) => a.start_beat === 9)!;
         await db.run(
             sql`UPDATE ${A} SET start_beat = 13, slot_index = ${f.lane1.slot_index} WHERE marcher_id = ${third} AND start_beat = 9`,
+        );
+        // m3 also keeps its own spot (no lane) until count 4: an earlier row with no lane before
+        // its laned one (review of #900, S3)
+        await db.run(
+            sql`INSERT INTO ${A} (marcher_id, transition_id, slot_index, start_beat, end_beat) VALUES (${third}, ${ownRow.transition_id}, ${ownRow.slot_index}, 9, 13)`,
         );
         const before = await dataOf(db);
         const named = expect.objectContaining({
             message: expect.stringMatching(/4/),
         });
+        // Detach finds m3's lane on its later row (it isn't "not on a group path"), and refuses
+        // the shared spot, naming m1
+        const m3Detach = await detachFromGroupPath({
+            db,
+            timelineId: f.timeline.id,
+            marcherIds: [third],
+        }).catch((e: unknown) => e as Error);
+        expect(m3Detach).toBeInstanceOf(Error);
+        expect(m3Detach.message).not.toMatch(/doesn't follow a group path/);
         await expect(
             adjustLane({
                 db,

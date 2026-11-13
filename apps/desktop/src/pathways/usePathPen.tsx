@@ -589,13 +589,18 @@ export function usePathPenActions(): void {
                     group.lane
                         ? []
                         : selectedIds.filter((id) => members.has(id)),
-                    outside.length > 0
-                        ? {
-                              timelineId: group.timelineId,
-                              routeId: group.routeId!,
-                              marcherIds: outside,
-                          }
-                        : rejoinTarget,
+                    // A shown copy's Rejoin goes onto the group path it came from, for its
+                    // marcher and any other selected marcher off that path, never onto the copy
+                    // (review of #900, S1)
+                    group.lane?.detachedFrom != null
+                        ? rejoinTarget
+                        : outside.length > 0
+                          ? {
+                                timelineId: group.timelineId,
+                                routeId: group.routeId!,
+                                marcherIds: outside,
+                            }
+                          : rejoinTarget,
                 );
                 return;
             }

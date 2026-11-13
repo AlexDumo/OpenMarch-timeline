@@ -88,9 +88,11 @@ export const routeRefusal = {
     /** AP-R9: Detach for a marcher not on a group path */
     notOnGroupPath: (marcher: string) =>
         text.t("timeline.refusals.route.notOnGroupPath", { marcher }),
-    /** AP-R9: Detach for a marcher whose spot is the only one on its path (a copy already) */
-    alreadyDetached: (marcher: string) =>
-        text.t("timeline.refusals.route.alreadyDetached", { marcher }),
+    /** AP-R9: Detach for a marcher whose spot is the only one on its path (a copy, or the last) */
+    onlyOnPath: (marcher: string) =>
+        text.t("timeline.refusals.route.onlyOnPath", { marcher }),
+    /** AP-R10: Rejoin onto a Detached copy (its marcher rejoins the group path it came from) */
+    rejoinOntoCopy: () => text.t("timeline.refusals.route.rejoinOntoCopy"),
     /** AP-R10 (step 15): Rejoin with no group path in the move */
     noGroupPath: (move: TimelineTextArg) =>
         text.t("timeline.refusals.route.noGroupPath", { move }),

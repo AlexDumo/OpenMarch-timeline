@@ -836,7 +836,7 @@ const STATIC_ACTIONS = {
     // counts (Detach, AP-R9) or follow it again (Rejoin, AP-R10). On the floating path bar and in
     // the palette; no keys
     detachPath: {
-        labelKey: "actions.path.detach",
+        labelKey: "actions.path.detachFromGroup",
         keywordsKey: "actions.path.keywords",
         category: "path",
         scope: "canvas",
@@ -844,7 +844,7 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
     },
     rejoinPath: {
-        labelKey: "actions.path.rejoin",
+        labelKey: "actions.path.rejoinGroup",
         keywordsKey: "actions.path.keywords",
         category: "path",
         scope: "canvas",

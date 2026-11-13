@@ -28,10 +28,12 @@ questions:
   walks it. Edit it like any path: drag, add or delete points, Corner or Smooth.
   Editing the copy never moves the group, and editing the group path never moves
   the detached marcher.
-- **Rejoin** puts a detached marcher back on the group path it came from, in the same
-  place in the group. Its copy goes, and so does any adjustment on it (decided: Rejoin
-  always drops it). Undo brings both back. Rejoin shows when a detached marcher is
-  selected on its own, or with the group, where its start ring says **Detached**.
+- **Rejoin** puts a detached marcher back on the group path it came from, in its place
+  in the group, also after its copy or the group path was edited. Its copy goes, and so
+  does any adjustment on it (decided: Rejoin always drops it). Undo brings both back.
+  Rejoin shows when a detached marcher is selected on its own, or with the group, where
+  its start ring and the bar say **Detached**. In the palette they are **Detach from
+  group path** and **Rejoin group path**.
 - Detach, Rejoin and their undo are one step each, also for all 16 members at once.
 
 **Try it**
