@@ -972,6 +972,13 @@ const STATIC_ACTIONS = {
         scope: "fieldEdit",
         defaultBindings: ["Escape"],
     },
+    // The Field panel's X (#824): puts the field back as it was when the panel opened, one undo step
+    fieldEditDiscard: {
+        labelKey: "actions.field.discard",
+        category: "field",
+        scope: "fieldEdit",
+        defaultBindings: [],
+    },
     fieldEditMirror: {
         labelKey: "actions.field.mirror",
         toggleOnKey: "actions.field.mirrorOn",

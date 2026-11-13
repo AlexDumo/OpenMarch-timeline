@@ -77,13 +77,13 @@
     "field-inspector": {
         "chapter": "field",
         "kind": "still",
-        "width": 664,
-        "height": 1936
+        "width": 696,
+        "height": 1364
     },
     "field-keys-help": {
         "chapter": "field",
         "kind": "still",
-        "width": 672,
+        "width": 656,
         "height": 888
     },
     "field-line-popover": {
@@ -96,7 +96,7 @@
         "chapter": "field",
         "kind": "clip",
         "width": 1280,
-        "height": 828,
+        "height": 1064,
         "seconds": 4.9
     },
     "field-show-settings": {

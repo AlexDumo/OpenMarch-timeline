@@ -99,21 +99,21 @@ test("Sidebars are visible", async ({ electronApp }) => {
         page.locator("#workspace div").filter({ hasText: "Marchers" }).nth(1),
     ).toBeVisible();
     await page.locator("#sidebar-launcher-marchers").click();
-    // The Field button edits the field in place (#824): its bar takes the toolbar's place
+    // The Field button opens the Field panel, and the canvas edits the field (#824)
     await page.locator("#sidebar-launcher-field").click();
-    await expect(page.getByTestId("field-edit-bar")).toBeVisible();
-    await expect(page.getByText("Editing field")).toBeVisible();
+    await expect(page.getByTestId("field-edit-panel")).toBeVisible();
     await expect(page.locator("header")).toBeVisible();
     await page.getByTestId("field-edit-done").click();
-    await expect(page.getByTestId("field-edit-bar")).toBeHidden();
+    await expect(page.getByTestId("field-edit-panel")).toBeHidden();
 });
 
-test("Field inspector sections are visible", async ({ electronApp }) => {
+test("Field panel sections are visible", async ({ electronApp }) => {
     const { page } = electronApp;
     await page.locator("#sidebar-launcher-field").click();
-    const inspector = page.getByTestId("field-inspector");
+    const inspector = page.getByTestId("field-edit-panel");
     await expect(inspector).toBeVisible();
-    // Lines and Size and steps start open
+    // Lines starts open
+    await inspector.getByRole("button", { name: "Size and steps" }).click();
     await expect(inspector.getByText("X · side to side")).toBeVisible();
     await expect(inspector.getByText("Y · front to back")).toBeVisible();
     await expect(inspector.getByText("Draw as hashes")).toBeVisible();

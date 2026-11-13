@@ -22,7 +22,7 @@ import {
 /**
  * The Edit field mode's keys (#824 review): Tab, Enter, H, the arrows, Delete and Space belong to
  * the line menu, the line popover and form controls while they have focus; F6 moves between the
- * field, the bar and the inspector; and the mode ends with the show.
+ * field and the Field panel; and the mode ends with the show.
  */
 
 const college = FieldPropertiesTemplates.COLLEGE_FOOTBALL_FIELD_NO_END_ZONES;
@@ -308,7 +308,7 @@ describe("the line popover", () => {
     });
 });
 
-describe("F6 between the field, the bar and the inspector", () => {
+describe("F6 between the field and the Field panel", () => {
     it("goes round the panes, onto each one's first control", () => {
         const view = render(
             <>
@@ -317,31 +317,22 @@ describe("F6 between the field, the bar and the inspector", () => {
                     tabIndex={-1}
                     data-testid="field"
                 />
-                <div data-field-edit-pane="bar">
+                <div data-field-edit-pane="panel">
                     <button type="button" disabled>
                         Delete
                     </button>
-                    <button type="button" data-testid="bar-first">
+                    <button type="button" data-testid="panel-first">
                         X line
-                    </button>
-                </div>
-                <div data-field-edit-pane="inspector">
-                    <button type="button" data-testid="inspector-first">
-                        Lines
                     </button>
                 </div>
             </>,
         );
         // From nowhere (the body) is from the field
-        expect(focusFieldEditPane(1)).toBe("bar");
-        expect(document.activeElement).toBe(view.getByTestId("bar-first"));
-        expect(focusFieldEditPane(1)).toBe("inspector");
-        expect(document.activeElement).toBe(
-            view.getByTestId("inspector-first"),
-        );
+        expect(focusFieldEditPane(1)).toBe("panel");
+        expect(document.activeElement).toBe(view.getByTestId("panel-first"));
         expect(focusFieldEditPane(1)).toBe("field");
         expect(document.activeElement).toBe(view.getByTestId("field"));
-        expect(focusFieldEditPane(-1)).toBe("inspector");
+        expect(focusFieldEditPane(-1)).toBe("panel");
     });
 });
 

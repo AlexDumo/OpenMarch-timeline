@@ -9,9 +9,6 @@ import {
     EyeSlashIcon,
     PlusIcon,
 } from "@phosphor-icons/react";
-import { getButtonClassName } from "@openmarch/ui";
-import ActionButton from "@/shortcuts/ActionButton";
-import Shortcut from "@/components/ui/Shortcut";
 import { useIsTouchMode } from "@/stores/InputModeStore";
 import { fieldEditMode, useFieldEditModeStore } from "../fieldEditModeStore";
 import { lineKey, linesOn, sameLine, toRef, type FieldLineRef } from "../lines";
@@ -101,7 +98,7 @@ export function xLinesAsymmetric(fp: Pick<FieldProperties, "xCheckpoints">) {
 }
 
 /**
- * The inspector's list of lines (#824), linked to the field: one row per line (a mirrored pair is
+ * The Field panel's list of lines (#824), linked to the field: one row per line (a mirrored pair is
  * one row), a + in each gap that adds a line halfway, and the same pick and hover as the field
  * (a row lights its line, a line lights its row). Each row's eye and target hide or show the line
  * and make it a reference or not (H and R on the pick).
@@ -298,24 +295,6 @@ export function LinesList({ fp }: { fp: FieldProperties }) {
             <p className="text-sub text-text/60">
                 {t("fieldEditMode.list.hint")}
             </p>
-            <div className="flex flex-wrap gap-6">
-                <ActionButton
-                    action="fieldEditAddXLine"
-                    className={`${getButtonClassName({ variant: "secondary", size: "compact" })} text-body`}
-                >
-                    <PlusIcon size={14} />
-                    {t("fieldEditMode.bar.addX")}
-                    <Shortcut action="fieldEditAddXLine" />
-                </ActionButton>
-                <ActionButton
-                    action="fieldEditAddYLine"
-                    className={`${getButtonClassName({ variant: "secondary", size: "compact" })} text-body`}
-                >
-                    <PlusIcon size={14} />
-                    {t("fieldEditMode.bar.addY")}
-                    <Shortcut action="fieldEditAddYLine" />
-                </ActionButton>
-            </div>
             <div className="flex items-baseline justify-between">
                 <p className="text-body font-medium">
                     {t("fieldEditMode.list.xHeading")}

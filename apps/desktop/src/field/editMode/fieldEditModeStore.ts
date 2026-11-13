@@ -5,7 +5,7 @@ import type { LineSelection } from "./lineSelection";
 /**
  * The Edit field mode (#824): the main canvas edits the field's lines instead of the drill.
  * While it's on, the field draws rulers and its lines can be picked and dragged, marchers dim
- * and can't be picked, and the inspector holds the field's settings. Everything it changes goes
+ * and can't be picked, and the Field panel holds the field's settings. Everything it changes goes
  * through the field edits (`src/field/edits`), one undo step each.
  *
  * This store holds the mode's view state only (nothing here is saved): what's selected, what the
@@ -28,7 +28,7 @@ export interface FieldEditModeState {
     /** Edits on an X line also edit its twin across the 50 (on by default) */
     readonly mirror: boolean;
     readonly selection: LineSelection;
-    /** The line under the pointer, on the field or in the inspector's list */
+    /** The line under the pointer, on the field or in the Field panel's list */
     readonly hover: FieldLineRef | null;
     /** The line whose exact-values popover is open */
     readonly editing: FieldLineRef | null;

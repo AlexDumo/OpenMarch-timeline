@@ -38,8 +38,6 @@ import { PreviewModeHost } from "./components/preview/PreviewMode";
 import WorkspaceViewSwitch from "./components/toolbar/WorkspaceViewSwitch";
 import { useEditorModeStore } from "./stores/EditorModeStore";
 import { useIsFieldEditMode } from "./field/editMode/fieldEditModeStore";
-import { FieldEditBar } from "./field/editMode/FieldEditBar";
-import FieldInspector from "./field/editMode/inspector/FieldInspector";
 import ErrorBoundary from "./ErrorBoundary";
 import {
     QueryCache,
@@ -253,12 +251,6 @@ function App() {
         "transition-opacity duration-200",
         tempoMode && "pointer-events-none opacity-30 select-none",
     );
-    // The Edit field mode (#824) likewise: the field, its bar and its inspector are in focus; the
-    // sidebar and the timeline step back and take no input until Done
-    const fieldEditClass = clsx(
-        "transition-opacity duration-200",
-        fieldEditing && "pointer-events-none opacity-30 select-none",
-    );
 
     return (
         <ErrorBoundary>
@@ -337,12 +329,7 @@ function App() {
                                                                     tempoMode
                                                                 }
                                                             >
-                                                                {/* The Edit field mode's bar takes the toolbar's place (#824) */}
-                                                                {fieldEditing ? (
-                                                                    <FieldEditBar />
-                                                                ) : (
-                                                                    <Toolbar />
-                                                                )}
+                                                                <Toolbar />
                                                             </div>
                                                         )}
                                                         <div
@@ -356,15 +343,7 @@ function App() {
                                                             inert={tempoMode}
                                                         >
                                                             {!preview && (
-                                                                <div
-                                                                    className={clsx(
-                                                                        "flex h-full min-h-0 shrink-0",
-                                                                        fieldEditClass,
-                                                                    )}
-                                                                    inert={
-                                                                        fieldEditing
-                                                                    }
-                                                                >
+                                                                <div className="flex h-full min-h-0 shrink-0">
                                                                     <Sidebar />
                                                                     <SidebarModal />
                                                                 </div>
@@ -385,15 +364,7 @@ function App() {
                                                             )}
                                                         </div>
                                                         <TimelineSplitter>
-                                                            <div
-                                                                className={clsx(
-                                                                    "flex min-h-0 flex-1 flex-col",
-                                                                    fieldEditClass,
-                                                                )}
-                                                                inert={
-                                                                    fieldEditing
-                                                                }
-                                                            >
+                                                            <div className="flex min-h-0 flex-1 flex-col">
                                                                 <TimelineContainer />
                                                             </div>
                                                         </TimelineSplitter>
@@ -409,11 +380,7 @@ function App() {
                                                             }
                                                             inert={tempoMode}
                                                         >
-                                                            {fieldEditing ? (
-                                                                <FieldInspector />
-                                                            ) : (
-                                                                <Inspector />
-                                                            )}
+                                                            <Inspector />
                                                         </InspectorDock>
                                                     )}
                                                 </div>

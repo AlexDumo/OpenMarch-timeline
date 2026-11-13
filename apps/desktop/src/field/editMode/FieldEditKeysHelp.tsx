@@ -27,7 +27,7 @@ const KEYS: readonly ActionId[] = [
 
 /**
  * The bar's keyboard help (#824): how the keyboard gets around the mode (Tab walks the lines while
- * the field has the keyboard; F6 moves between the field, the bar and the inspector) and the
+ * the field has the keyboard; F6 moves between the field and the Field panel) and the
  * mode's keys, each with its shortcut as the user has it.
  */
 export function FieldEditKeysHelp() {

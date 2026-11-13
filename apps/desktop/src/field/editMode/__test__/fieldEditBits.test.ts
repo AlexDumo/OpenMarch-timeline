@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import { runFieldEdits, type FieldEditIssue } from "@/field/edits";
 import { ghostLines } from "../FieldEditOverlay";
-import { xLinesAsymmetric } from "../inspector/LinesList";
+import { xLinesAsymmetric } from "../panel/LinesList";
 import { toRef } from "../lines";
 import { warningsToShow } from "../useApplyFieldEdits";
 import { settingsToShowImage } from "../useFieldImageActions";

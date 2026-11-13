@@ -9,7 +9,7 @@ import { selectionForEdit, selectionWithTwins } from "./lineSelection";
 
 /**
  * The edits behind the Edit field mode's line commands (#824), as data: the keys, the buttons,
- * the menus and the inspector's rows all build their edits here, so the same command makes the
+ * the menus and the Field panel's rows all build their edits here, so the same command makes the
  * same edit wherever it's run from. Each returns the edits to apply as one undo step, or null
  * when there's nothing to do.
  */

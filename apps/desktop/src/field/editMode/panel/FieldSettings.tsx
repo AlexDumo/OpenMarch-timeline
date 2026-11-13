@@ -24,7 +24,7 @@ import { shapeIcons, shapeOptions } from "@/components/field/customizer/utils";
 import { useFieldImage } from "@/view3d/window/useFieldImage";
 import ActionButton from "@/shortcuts/ActionButton";
 import type { FieldSettingsPatch } from "@/field/edits";
-import { useApplyFieldEdits, useFieldProperties } from "../useApplyFieldEdits";
+import { useApplyFieldEdits } from "../useApplyFieldEdits";
 import { fieldSizeSteps } from "../lines";
 import { resizeField } from "../fieldEditPlans";
 import {
@@ -32,55 +32,41 @@ import {
     parseNumber,
     SubHeading,
     SwitchRow,
-} from "./inspectorInputs";
+} from "./settingsInputs";
 import { LinesList } from "./LinesList";
 import { TemplateSection } from "./TemplateSection";
 
 /**
- * The inspector while the field is edited (#824): every field setting has a home here, docked
- * beside the field instead of over it. Lines (the list linked to the field), size and steps, the
- * template and files, names and sides, markings and labels (yard-number placement included, B9),
- * the background image and the colors. Every change is a field edit, one undo step.
+ * The Field panel's sections (#824), below its commands: Lines (the list linked to the field)
+ * open, then size and steps, the template and files, names and sides, markings and labels
+ * (yard-number placement included, B9), the background image and the colors, folded. Every
+ * change is a field edit, one undo step.
  */
-export default function FieldInspector() {
-    const { t } = useTranslate();
-    const fp = useFieldProperties();
-    if (!fp) return null;
+export function FieldSettingsSections({ fp }: { fp: FieldProperties }) {
     return (
-        <div
-            className="rounded-6 border-stroke bg-fg-1 flex h-full w-xs min-w-0 flex-col border p-12"
-            data-testid="field-inspector"
-            data-field-edit-pane="inspector"
-            role="region"
-            aria-label={t("fieldEditMode.inspector.title")}
-        >
-            <p className="text-body text-text/60">
-                {t("fieldEditMode.inspector.title")}
-            </p>
-            <div className="relative mt-8 flex min-h-0 flex-1 flex-col gap-24 overflow-y-auto pr-4">
-                <Section titleKey="fieldEditMode.inspector.lines" defaultOpen>
-                    <LinesList fp={fp} />
-                </Section>
-                <Section titleKey="fieldEditMode.inspector.size" defaultOpen>
-                    <SizeSection fp={fp} />
-                </Section>
-                <Section titleKey="fieldEditMode.inspector.template">
-                    <TemplateSection fp={fp} />
-                </Section>
-                <Section titleKey="fieldEditMode.inspector.names">
-                    <NamesSection fp={fp} />
-                </Section>
-                <Section titleKey="fieldEditMode.inspector.markings">
-                    <MarkingsSection fp={fp} />
-                </Section>
-                <Section titleKey="fieldEditMode.inspector.image">
-                    <ImageSection fp={fp} />
-                </Section>
-                <Section titleKey="fieldEditMode.inspector.colors">
-                    <ColorsSection fp={fp} />
-                </Section>
-            </div>
-        </div>
+        <>
+            <Section titleKey="fieldEditMode.panel.sections.lines" defaultOpen>
+                <LinesList fp={fp} />
+            </Section>
+            <Section titleKey="fieldEditMode.panel.sections.size">
+                <SizeSection fp={fp} />
+            </Section>
+            <Section titleKey="fieldEditMode.panel.sections.template">
+                <TemplateSection fp={fp} />
+            </Section>
+            <Section titleKey="fieldEditMode.panel.sections.names">
+                <NamesSection fp={fp} />
+            </Section>
+            <Section titleKey="fieldEditMode.panel.sections.markings">
+                <MarkingsSection fp={fp} />
+            </Section>
+            <Section titleKey="fieldEditMode.panel.sections.image">
+                <ImageSection fp={fp} />
+            </Section>
+            <Section titleKey="fieldEditMode.panel.sections.colors">
+                <ColorsSection fp={fp} />
+            </Section>
+        </>
     );
 }
 

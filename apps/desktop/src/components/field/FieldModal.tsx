@@ -1,15 +1,26 @@
+import { useEffect } from "react";
 import { useTranslate } from "@tolgee/react";
 import clsx from "clsx";
 import ActionButton from "@/shortcuts/ActionButton";
-import { useIsFieldEditMode } from "@/field/editMode/fieldEditModeStore";
+import {
+    fieldEditMode,
+    useFieldEditModeStore,
+    useIsFieldEditMode,
+} from "@/field/editMode/fieldEditModeStore";
+import {
+    FIELD_EDIT_PANEL_ID,
+    FieldEditPanel,
+} from "@/field/editMode/FieldEditPanel";
+import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 
 /**
- * The sidebar's Field button: puts the canvas into the Edit field mode (#824), where the field's
- * lines are edited in place and its settings sit in the inspector. Pressed again, it's Done.
+ * The sidebar's Field button: opens the Field panel (#824), and while it's open the canvas edits
+ * the field's lines in place. Pressed again, it's Done.
  */
 export default function FieldModal() {
     const { t } = useTranslate();
     const editing = useIsFieldEditMode();
+    useFieldEditPanel();
     return (
         <ActionButton
             action="fieldEditMode"
@@ -25,6 +36,42 @@ export default function FieldModal() {
             <FieldIcon />
         </ActionButton>
     );
+}
+
+/**
+ * Keeps the Field panel and the Edit field mode together: the mode starting (this button, the
+ * palette, the field's menu) opens the panel; the mode ending closes it; and the panel closing
+ * or giving its place to another panel (Marchers, Show settings) ends the mode, keeping the
+ * changes, as Done does.
+ */
+export function useFieldEditPanel() {
+    useEffect(() => {
+        const sidebar = useSidebarModalStore;
+        // In one update: the content alone, with the panel still shut, would read as closing it
+        const showPanel = () =>
+            sidebar.setState({
+                content: <FieldEditPanel />,
+                contentId: FIELD_EDIT_PANEL_ID,
+                isOpen: true,
+            });
+        if (fieldEditMode.isActive()) showPanel();
+        const offMode = useFieldEditModeStore.subscribe((state, before) => {
+            if (state.active === before.active) return;
+            if (state.active) return showPanel();
+            const { isOpen, contentId } = sidebar.getState();
+            if (isOpen && contentId === FIELD_EDIT_PANEL_ID)
+                sidebar.getState().setOpen(false);
+        });
+        const offSidebar = sidebar.subscribe(({ isOpen, contentId }) => {
+            if (!fieldEditMode.isActive()) return;
+            if (!isOpen || contentId !== FIELD_EDIT_PANEL_ID)
+                fieldEditMode.exit();
+        });
+        return () => {
+            offMode();
+            offSidebar();
+        };
+    }, []);
 }
 
 // from tabler icons, phosphor doesn't have a good field icon

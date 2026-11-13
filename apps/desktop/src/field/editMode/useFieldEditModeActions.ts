@@ -1,5 +1,7 @@
 import { useTranslate } from "@tolgee/react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+import { fieldPropertiesKeys, marcherAppearancesKeys } from "@/hooks/queries";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useDatabaseReady } from "@/hooks/useDatabaseReady";
 import { useEffect } from "react";
@@ -31,6 +33,11 @@ import {
 import type { FieldEditResult } from "@/field/edits";
 import { focusFieldEditPane } from "./fieldEditPanes";
 import { useFieldImageActions } from "./useFieldImageActions";
+import {
+    beginFieldEditSession,
+    discardFieldEditSession,
+    endFieldEditSession,
+} from "./fieldEditSession";
 
 /**
  * What owns its own keys when it has focus: a menu (the line menu), a dialog (the line popover,
@@ -54,7 +61,7 @@ const OWNS_KEYS = [
     "[role=spinbutton]",
     "[role=combobox]",
     "[role=tab]",
-    // A listbox, but not the inspector's list of lines: its rows stand for lines
+    // A listbox, but not the Field panel's list of lines: its rows stand for lines
     "[role=listbox]:not([data-field-line-list])",
 ].join(", ");
 
@@ -72,7 +79,7 @@ function keyTarget(): HTMLElement | null {
 
 /**
  * Whether Tab or Enter belongs to the field rather than a control: on a focused button, field
- * or row in the bar or the inspector they're that control's (Tab moves on, Enter presses it),
+ * or row in the Field panel they're that control's (Tab moves on, Enter presses it),
  * and in the line menu and popover they're theirs. Anything that isn't a key press (a menu
  * entry, a button, the palette) is the field's.
  */
@@ -83,7 +90,7 @@ export function keyIsForField(): boolean {
     return (
         active.closest("[data-field-edit-overlay]") !== null ||
         active.closest("[data-testid='threeField']") !== null ||
-        // Enter on a row of the inspector's list edits its line
+        // Enter on a row of the Field panel's list edits its line
         active.closest("[data-field-line-list] [role=option]") !== null
     );
 }
@@ -92,7 +99,7 @@ export function keyIsForField(): boolean {
  * Whether a single key (Delete, H, R, M, X, Y, the arrows, ⌘A) acts on the lines: anywhere but
  * in the line menu, the line popover, a dialog or a form control, whose keys are their own (an
  * arrow moves a slider, H in the popover is typed or ignored). A focused button keeps none of
- * these, so after clicking Hide/Show in the bar, H still hides.
+ * these, so after clicking Hide/Show in the panel, H still hides.
  */
 export function keyIsForLines(): boolean {
     const active = keyTarget();
@@ -117,6 +124,15 @@ export function useFieldEditModeEntry() {
         fieldEditMode.exit();
         return () => fieldEditMode.exit();
     }, []);
+    // Done, Preview, another panel or the show closing: the changes stay, and there's nothing
+    // left for the panel's X to put back
+    useEffect(
+        () =>
+            useFieldEditModeStore.subscribe((state, before) => {
+                if (before.active && !state.active) endFieldEditSession();
+            }),
+        [],
+    );
     // Preview edits nothing: switching to it leaves the mode
     const preview = useIsPreviewMode();
     useEffect(() => {
@@ -132,6 +148,8 @@ export function useFieldEditModeEntry() {
             // Marchers can't be picked while the field is edited: nothing stays selected to be
             // nudged or deleted by a key meant for a line
             setSelectedMarchers?.([]);
+            // Remembered for the panel's X, before anything can change
+            beginFieldEditSession();
             fieldEditMode.enter();
         },
         { enabled: () => databaseReady && !isPreviewMode() },
@@ -160,7 +178,7 @@ export function useFieldEditModeActions() {
     const mirrorNow = () => fieldEditMode.get().mirror;
     useFieldImageActions(fp);
 
-    // Done (the bar, the palette) leaves at once; Escape first closes the menu or popover, then
+    // Done (the panel, the palette) leaves at once; Escape first closes the menu or popover, then
     // drops the pick, then leaves
     useActionHandler("fieldEditDone", () => fieldEditMode.exit(), {
         onPress: () => {
@@ -171,6 +189,8 @@ export function useFieldEditModeActions() {
             fieldEditMode.exit();
         },
     });
+
+    useFieldEditDiscard();
 
     useActionHandler(
         "fieldEditMirror",
@@ -183,8 +203,8 @@ export function useFieldEditModeActions() {
         },
     );
 
-    // F6 and Shift+F6: the keyboard's way between the field (where Tab walks lines), the bar and
-    // the inspector
+    // F6 and Shift+F6: the keyboard's way between the field (where Tab walks lines) and
+    // the Field panel
     useActionHandler("fieldEditNextPane", () => focusFieldEditPane(1));
     useActionHandler("fieldEditPreviousPane", () => focusFieldEditPane(-1));
 
@@ -314,4 +334,33 @@ export function useFieldEditModeActions() {
         },
         { enabled: () => hasSelection && keyIsForLines() },
     );
+}
+
+/**
+ * The panel's X: leaves at once and puts the field back as it was when the panel opened, as one
+ * undo step, so undo brings the discarded changes back
+ */
+function useFieldEditDiscard() {
+    const { t } = useTranslate();
+    const queryClient = useQueryClient();
+    useActionHandler("fieldEditDiscard", () => {
+        // Takes the remembered field before leaving forgets it
+        const discarding = discardFieldEditSession();
+        fieldEditMode.exit();
+        void discarding
+            .then(async (changed) => {
+                if (!changed) return;
+                await queryClient.invalidateQueries({
+                    queryKey: fieldPropertiesKeys.all,
+                });
+                await queryClient.invalidateQueries({
+                    queryKey: marcherAppearancesKeys.all(),
+                });
+                toast(t("fieldEditMode.panel.discarded"));
+            })
+            .catch((error) => {
+                console.error("Discarding the field changes failed", error);
+                toast.error(t("fieldEdits.issues.invalid"));
+            });
+    });
 }

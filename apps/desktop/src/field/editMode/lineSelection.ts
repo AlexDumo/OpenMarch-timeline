@@ -13,7 +13,7 @@ import {
 
 /**
  * The Edit field mode's line selection (#824): plain refs, in the order they were picked (the
- * last is the one Enter edits and Tab walks from). Pure, so the field, the inspector's list and
+ * last is the one Enter edits and Tab walks from). Pure, so the field, the Field panel's list and
  * the keys share it.
  */
 export type LineSelection = readonly FieldLineRef[];

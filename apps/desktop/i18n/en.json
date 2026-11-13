@@ -65,6 +65,7 @@
             "editField": "Edit field",
             "editFieldKeywords": "field lines checkpoints yard hash grid customize size template settings",
             "done": "Done editing the field",
+            "discard": "Discard field changes",
             "mirror": "Mirror sides",
             "mirrorOn": "Turn Mirror sides on",
             "mirrorOff": "Turn Mirror sides off",
@@ -3804,8 +3805,12 @@
         "failed": "The field change couldn't be saved, so nothing changed."
     },
     "fieldEditMode": {
-        "bar": {
-            "title": "Editing field",
+        "panel": {
+            "title": "Field",
+            "done": "Done",
+            "discard": "Discard changes",
+            "discardTip": "Put the field back as it was when you opened this panel. Undo brings the changes back.",
+            "discarded": "Field changes discarded. Undo brings them back.",
             "basedOn": "Based on {template}",
             "custom": "Custom field",
             "changes": "{count, plural, =0 {No changes} one {# change} other {# changes}}",
@@ -3822,7 +3827,15 @@
             "mirrorOffTip": "Mirror sides is off: each line is edited on its own",
             "undo": "Undo",
             "redo": "Redo",
-            "done": "Done"
+            "sections": {
+                "lines": "Lines",
+                "size": "Size and steps",
+                "template": "Template and files",
+                "names": "Name and sides",
+                "markings": "Markings and labels",
+                "image": "Background image",
+                "colors": "Colors"
+            }
         },
         "ruler": {
             "x": "Drag out of this ruler to add an X line",
@@ -3875,16 +3888,6 @@
             "stopReference": "Stop using as reference"
         },
         "namesAlreadyAutomatic": "Those lines already have the names their position gives them",
-        "inspector": {
-            "title": "Field",
-            "lines": "Lines",
-            "size": "Size and steps",
-            "template": "Template and files",
-            "names": "Name and sides",
-            "markings": "Markings and labels",
-            "image": "Background image",
-            "colors": "Colors"
-        },
         "list": {
             "hint": "Click a line to pick it, Shift-click to add. The field and this list share the pick. + between rows adds a line halfway.",
             "xHeading": "X · side to side",

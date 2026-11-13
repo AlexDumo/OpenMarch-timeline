@@ -180,7 +180,7 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
     }, [cancel]);
     useEffect(() => cancel, [cancel]);
     // A press on the field takes the keyboard there, so Tab walks lines rather than the
-    // inspector's controls (F6 moves between the field, the bar and the inspector)
+    // panel's controls (F6 moves between the field and the Field panel)
     const focusField = () => root.current?.focus({ preventScroll: true });
     // Entering the mode gives the field the keyboard, wherever it was entered from (the
     // sidebar's button, the palette)

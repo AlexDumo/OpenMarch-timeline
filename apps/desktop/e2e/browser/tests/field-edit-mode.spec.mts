@@ -62,8 +62,7 @@ async function enterFromSidebar(page: Page) {
     await waitForField(page);
     await waitForSettledField(page);
     await page.locator("#sidebar-launcher-field").click();
-    await expect(page.getByTestId("field-edit-bar")).toBeVisible();
-    await expect(page.getByTestId("field-inspector")).toBeVisible();
+    await expect(page.getByTestId("field-edit-panel")).toBeVisible();
     await editState(page);
 }
 
@@ -138,7 +137,7 @@ test("enter the mode, drag a mirrored line out of the ruler, undo, and leave wit
         .toBe(false);
     await page.keyboard.press("Escape");
     await expect.poll(() => fieldEdit(page)).toBeNull();
-    await expect(page.getByTestId("field-edit-bar")).toBeHidden();
+    await expect(page.getByTestId("field-edit-panel")).toBeHidden();
     await expect
         .poll(async () => (await drawnMarchers(page)).some((m) => m.dimmed))
         .toBe(false);
@@ -152,7 +151,7 @@ test("box-select, keep every other and delete the ten 5-yard lines, as one undo 
     await waitForSettledField(page);
     // The mode's own key
     await page.keyboard.press("ControlOrMeta+Shift+e");
-    await expect(page.getByTestId("field-edit-bar")).toBeVisible();
+    await expect(page.getByTestId("field-edit-panel")).toBeVisible();
     const before = await savedXSteps(show);
 
     // A thin box across the field, between the front sideline and the front hash, from just
@@ -178,7 +177,7 @@ test("box-select, keep every other and delete the ten 5-yard lines, as one undo 
         .toBe(19);
 
     await page
-        .getByTestId("field-edit-bar")
+        .getByTestId("field-edit-panel")
         .getByRole("button", { name: /Every other/ })
         .click();
     await expect
@@ -258,21 +257,43 @@ test("drag a line, type its exact position, and drag it back into the ruler to d
     await expect.poll(() => fieldEdit(page)).toBeNull();
 });
 
-test("the inspector holds the field's settings: a new width moves the outer lines, one undo step", async ({
+test("the panel's X puts the field back as it was when it opened, and undo brings the changes back", async ({
     show,
 }) => {
     const { page } = show;
     await enterFromSidebar(page);
-    const inspector = page.getByTestId("field-inspector");
+    const before = await savedXSteps(show);
+    await line(page, "x", 16).then((l) =>
+        page.mouse.click(l.screen.x, l.screen.y),
+    );
+    await page.keyboard.press("Delete");
+    await expect.poll(() => savedXSteps(show)).not.toContain(16);
+
+    await page.getByTestId("field-edit-discard").click();
+    await expect.poll(() => fieldEdit(page)).toBeNull();
+    await expect(page.getByTestId("field-edit-panel")).toBeHidden();
+    await expect.poll(() => savedXSteps(show)).toEqual(before);
+
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(() => savedXSteps(show)).not.toContain(16);
+});
+
+test("the Field panel holds the field's settings: a new width moves the outer lines, one undo step", async ({
+    show,
+}) => {
+    const { page } = show;
+    await enterFromSidebar(page);
+    const panel = page.getByTestId("field-edit-panel");
     for (const [section, inside] of [
+        ["Size and steps", "Step size"],
         ["Template and files", "Field Template"],
         ["Name and sides", "Side Descriptions"],
         ["Markings and labels", "Yard numbers"],
         ["Background image", "Show Background Image"],
         ["Colors", "Marchers and paths"],
     ] as const) {
-        await inspector.getByRole("button", { name: section }).click();
-        await expect(inspector.getByText(inside)).toBeVisible();
+        await panel.getByRole("button", { name: section }).click();
+        await expect(panel.getByText(inside).first()).toBeVisible();
     }
 
     // Width: the goal lines move out to ±88, the lines inside stay (owner, #824)
@@ -441,7 +462,7 @@ test("H, R and the arrows act on the picked line and its twin, each one undo ste
     await expect.poll(async () => (await savedX(show, 16))?.visible).toBe(true);
 });
 
-test("Tab walks the lines from the field, and F6 takes the keyboard to the bar and the inspector", async ({
+test("Tab walks the lines from the field, and F6 takes the keyboard to the Field panel and back", async ({
     show,
 }) => {
     const { page } = show;
@@ -460,12 +481,12 @@ test("Tab walks the lines from the field, and F6 takes the keyboard to the bar a
 
     await page.keyboard.press("F6");
     await expect(
-        page.getByTestId("field-edit-bar").locator(":focus"),
+        page.getByTestId("field-edit-panel").locator(":focus"),
     ).toHaveCount(1);
-    // Tab in the bar is the bar's: the pick stays
+    // Tab in the panel is the panel's: the pick stays
     await page.keyboard.press("Tab");
     await expect(
-        page.getByTestId("field-edit-bar").locator(":focus"),
+        page.getByTestId("field-edit-panel").locator(":focus"),
     ).toHaveCount(1);
     expect(
         (await editState(page)).lines
@@ -473,10 +494,6 @@ test("Tab walks the lines from the field, and F6 takes the keyboard to the bar a
             .map((l) => l.id),
     ).toEqual([first.id]);
 
-    await page.keyboard.press("F6");
-    await expect(
-        page.getByTestId("field-inspector").locator(":focus"),
-    ).toHaveCount(1);
     await page.keyboard.press("F6");
     await expect(page.getByTestId("field-edit-overlay")).toBeFocused();
     await page.keyboard.press("Tab");
@@ -490,7 +507,7 @@ test("Tab walks the lines from the field, and F6 takes the keyboard to the bar a
         first.id,
     );
 
-    // The bar's help says how
+    // The panel's help says how
     await page.getByTestId("field-edit-keys").click();
     await expect(page.getByTestId("field-edit-keys-help")).toContainText("F6");
 });
@@ -511,12 +528,10 @@ test("the list's + adds a mirrored line halfway, and the template sheet keeps th
     expect(await savedXSteps(show)).toHaveLength(before.length + 2);
 
     // Hide the top labels (part of the look), then switch templates keeping the look
-    const inspector = page.getByTestId("field-inspector");
-    await inspector
-        .getByRole("button", { name: "Markings and labels" })
-        .click();
+    const panel = page.getByTestId("field-edit-panel");
+    await panel.getByRole("button", { name: "Markings and labels" }).click();
     await page.getByTestId("field-labels-top").click();
-    await inspector.getByRole("button", { name: "Template and files" }).click();
+    await panel.getByRole("button", { name: "Template and files" }).click();
     await page.getByTestId("field-template-select").click();
     await page
         .getByRole("option", { name: "College football field (no end zones)" })
@@ -568,7 +583,7 @@ test("reopening the show leaves the mode", async ({ show }) => {
     // A reload is how the app opens a show again; the mode is the open show's, never kept
     await page.reload();
     await waitForField(page);
-    await expect(page.getByTestId("field-edit-bar")).toBeHidden();
+    await expect(page.getByTestId("field-edit-panel")).toBeHidden();
     expect(await fieldEdit(page)).toBeNull();
 });
 

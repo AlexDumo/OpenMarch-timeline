@@ -29,7 +29,7 @@ async function openPanel(page, wait, contentId) {
 async function editField(page, wait) {
     await tidy(page);
     await page.locator("#sidebar-launcher-field").click();
-    await page.getByTestId("field-edit-bar").waitFor();
+    await page.getByTestId("field-edit-panel").waitFor();
     await page.waitForFunction(() => window.fieldTest?.fieldEdit?.() != null);
     await wait(800);
 }
@@ -46,15 +46,14 @@ async function sideTwoPair(page) {
     return [xs[1], xs[2]];
 }
 
-/** The field's pane: the bar above it, the rulers and the field */
+/** The field's pane: the rulers and the field, beside the Field panel */
 async function fieldPane(page) {
-    const bar = await page.getByTestId("field-edit-bar").boundingBox();
     const field = await page.locator("canvas").first().boundingBox();
     return {
         x: field.x - 4,
-        y: bar.y - 4,
+        y: field.y - 4,
         width: field.width + 8,
-        height: field.y + field.height + 4 - (bar.y - 4),
+        height: field.height + 8,
     };
 }
 
@@ -67,8 +66,8 @@ const shots = [
     {
         id: "field-edit-mode",
         kind: "still",
-        // The whole window in the Edit field mode: its bar, the rulers, the dimmed drill and the
-        // inspector's list of lines
+        // The whole window while the field is edited: the Field panel with its list of lines, the
+        // rulers and the dimmed drill
         async setup({ page, wait }) {
             await wait(3000);
             await editField(page, wait);
@@ -127,7 +126,7 @@ const shots = [
     {
         id: "field-inspector",
         kind: "still",
-        // The inspector in the mode: the list of lines, with a + between rows
+        // The Field panel: Done and X, the commands and the list of lines, with a + between rows
         async setup({ page, wait, around }) {
             await wait(3000);
             await editField(page, wait);
@@ -135,14 +134,14 @@ const shots = [
             await row.hover();
             await wait(500);
             return {
-                box: await around(page.getByTestId("field-inspector"), 6),
+                box: await around(page.getByTestId("field-edit-panel"), 6),
             };
         },
     },
     {
         id: "field-keys-help",
         kind: "still",
-        // The bar's keyboard help: Tab walks the lines, F6 moves between the parts, the keys
+        // The panel's keyboard help: Tab walks the lines, F6 moves between the parts, the keys
         async setup({ page, wait, around }) {
             await wait(3000);
             await editField(page, wait);
@@ -160,8 +159,8 @@ const shots = [
         async setup({ page, wait, around }) {
             await wait(3000);
             await editField(page, wait);
-            const inspector = page.getByTestId("field-inspector");
-            await inspector
+            const panel = page.getByTestId("field-edit-panel");
+            await panel
                 .getByRole("button", { name: "Template and files" })
                 .click();
             await wait(400);
@@ -184,6 +183,11 @@ const shots = [
         async setup({ page, wait }) {
             await wait(3000);
             await editField(page, wait);
+            await page
+                .getByTestId("field-edit-panel")
+                .getByRole("button", { name: "Size and steps" })
+                .click();
+            await wait(400);
             const input = page.getByTestId("field-step-warning");
             await input.fill(STEP_WARNING_INCHES);
             await input.press("Enter");

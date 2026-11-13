@@ -51,7 +51,7 @@ export function settingsToShowImage(
 }
 
 /**
- * Import image and Remove image (#824), the field's background image as actions: the inspector's
+ * Import image and Remove image (#824), the field's background image as actions: the Field panel's
  * buttons and the palette run them. Importing also turns the image on (and its opacity up from
  * 0), in the same undo step.
  */

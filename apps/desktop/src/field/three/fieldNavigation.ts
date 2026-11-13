@@ -265,7 +265,7 @@ export function leaveFieldEditView() {
     // Switching to Preview ends the mode: Preview's own glide takes the view
     if (isPreviewMode()) return;
     const { field, width, height } = view();
-    // The pane's size changes with the bar the mode swaps in: the glide keeps the zoom and the
+    // The pane's size changes as the Field panel closes beside it: the glide keeps the zoom and the
     // top-left as a resize does. Only a field of another size goes back to the fit
     const unchanged =
         before !== null &&
