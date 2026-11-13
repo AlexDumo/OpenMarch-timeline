@@ -204,12 +204,15 @@ test("a finger taps a line's points: Undo point takes one back, Finish ends it, 
     expect(Math.abs(end.y - b.y)).toBeLessThan(15);
 
     // A finger 15 px off the right end still takes it (a mouse reaches 10).
-    // The point goes to the finger, as it goes to the mouse pointer: it ends
-    // where the finger lifts (on half steps), not 15 px short of it
+    // The point goes to the finger, as it goes to the mouse pointer. In Fit it
+    // snaps where the interval comes out to whole steps (`dragPoint`), so the
+    // line's length moves in runs of (marchers - 1) steps: the end lands
+    // within half a run of where the finger lifts
     const grid = await fieldGrid(show);
     const scale = await canvasScale(page);
-    const by = 4 * grid.pixelsPerStep * scale;
-    const halfStep = 0.5 * grid.pixelsPerStep * scale;
+    const step = grid.pixelsPerStep * scale;
+    const by = 4 * step;
+    const halfRun = ((drawn.spots.length - 1) * step) / 2;
     const from = { x: end.x + 15, y: end.y };
     const to = { x: from.x + by, y: from.y };
     await touchDrag(page, from, to, { steps: 12 });
@@ -218,7 +221,9 @@ test("a finger taps a line's points: Undo point takes one back, Finish ends it, 
             const now = (await shapeOverlay(page))!.handles.reduce((p, q) =>
                 q.x > p.x ? q : p,
             );
-            return Math.abs(now.x - to.x) <= halfStep + 1;
+            return (
+                now.x > end.x + step && Math.abs(now.x - to.x) <= halfRun + 1
+            );
         })
         .toBe(true);
     // Moved, not panned: the start point stays where it was
