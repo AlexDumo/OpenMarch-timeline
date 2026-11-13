@@ -1,7 +1,7 @@
 // @vitest-environment node
 // cspell:ignore Millis
 /**
- * Migration 0023 adds `timeline_routes.timing`, pathways step 5 (spec Appendix M, QA-MIG-P1,
+ * Migration 0024 adds `timeline_routes.timing`, pathways step 5 (spec Appendix M, QA-MIG-P1,
  * QA-FV-P1): a nullable column in place, no table rebuilt; a file with lanes, an Adjust and a
  * trail keeps every row and stays at its version until its first pin; E-R7 reads the column.
  */
@@ -30,7 +30,7 @@ import {
 } from "../../__test__/convertOnOpenFixtures";
 import { migrationAt } from "../../__test__/migrationRollback";
 
-const PIN_MIGRATION = migrationAt(23);
+const PIN_MIGRATION = migrationAt(24);
 
 const open = async (file: string) => {
     const db = new DatabaseSync(file);
@@ -55,8 +55,8 @@ const ADJUST = JSON.stringify({
     keys: [{ a: "from", b: "to", f: 0.5, d: [0, 3] }],
 });
 
-/** A new show put back to before 0023: a group lane with an Adjust, version 12, the column gone */
-async function fileBefore0023(file: string) {
+/** A new show put back to before 0024: a group lane with an Adjust, version 12, the column gone */
+async function fileBefore0024(file: string) {
     await createNewTimelineShow(file);
     withDb(file, (db) => {
         db.exec(`
@@ -93,7 +93,7 @@ describe(`Migration ${PIN_MIGRATION.tag}`, () => {
     let tempDir: string;
     let file: string;
     beforeEach(() => {
-        tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "om-0023-"));
+        tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "om-0024-"));
         file = path.join(tempDir, "show.dots");
         vi.spyOn(console, "log").mockImplementation(() => {});
         vi.spyOn(console, "debug").mockImplementation(() => {});
@@ -124,7 +124,7 @@ describe(`Migration ${PIN_MIGRATION.tag}`, () => {
     });
 
     it("QA-MIG-P1: a file with lanes and an Adjust keeps every row, timing NULL, and stays at 12", async () => {
-        await fileBefore0023(file);
+        await fileBefore0024(file);
         await open(file);
         withDb(file, (db) => {
             expect(

@@ -34,7 +34,13 @@ import { mapDbErrors, refuse } from "./timelineErrors";
 import { markPinModelInTransaction } from "./timelineLanes";
 import type { RoutePointInput } from "./timelineRoutes";
 import { editPathPointsInTransaction } from "./timelinePathEdits";
-import { pinRefusal, pinsOf, timingJson } from "./timelineRoutePinRetime";
+import {
+    pinRefusal,
+    pinsOf,
+    retimePins,
+    timingJson,
+    writePinRetime,
+} from "./timelineRoutePinRetime";
 
 export {
     pinRefusal,
@@ -406,5 +412,79 @@ export async function putCornersOnCounts(args: {
     const { db, ...rest } = args;
     return await transactionWithHistory(db, "putCornersOnCounts", (tx) =>
         putCornersOnCountsInTransaction({ tx, ...rest }),
+    );
+}
+
+// ---------------------------------------------------------------------------
+// AP-P5: Scale pins instead (after a resize that kept them)
+// ---------------------------------------------------------------------------
+
+/** Every pinned route of the move `timelineId` with its pins, read before a resize */
+export async function readMovePinSets(
+    db: DbConnection | DbTransaction,
+    timelineId: number,
+): Promise<{ routeId: number; pins: RoutePin[] }[]> {
+    const T = schema.timeline_transitions;
+    const L = schema.timeline_lanes;
+    const R = schema.timeline_routes;
+    const rows = await db
+        .selectDistinct({ id: R.id, timing: R.timing })
+        .from(L)
+        .innerJoin(R, eq(R.id, L.route_id))
+        .innerJoin(T, eq(T.id, L.transition_id))
+        .where(eq(T.timeline_id, timelineId))
+        .orderBy(asc(R.id))
+        .all();
+    return rows
+        .map((r) => ({ routeId: r.id, pins: pinsOf(r.timing) }))
+        .filter((r) => r.pins.length > 0);
+}
+
+/**
+ * AP-P5's **Scale pins instead**: after a resize of `timelineId` from `before` that kept its pins
+ * on their counts, scales `pinsBefore` (the pins read before it) with the move's length now, as
+ * Alt would have, in an edit of its own. Refused, writing nothing, when the move or its pins
+ * changed since (another edit came between), so it never acts on anything but that resize.
+ */
+export async function scaleMovePinsInTransaction({
+    tx,
+    timelineId,
+    before,
+    pinsBefore,
+}: {
+    tx: DbTransaction;
+    timelineId: number;
+    before: { start: number; end: number };
+    pinsBefore: readonly { routeId: number; pins: RoutePin[] }[];
+}): Promise<void> {
+    const timeline = await tx
+        .select()
+        .from(schema.timelines)
+        .where(eq(schema.timelines.id, timelineId))
+        .get();
+    if (!timeline) refuse(pinRefusal.moveChanged());
+    const now = { start: timeline.start_beat, end: timeline.end_beat };
+    const current = await readMovePinSets(tx, timelineId);
+    const plan = pinsBefore.map(({ routeId, pins }) => {
+        const kept = retimePins(pins, before, now, "keep");
+        const stored = current.find((c) => c.routeId === routeId)?.pins;
+        if (JSON.stringify(stored) !== JSON.stringify(kept))
+            refuse(pinRefusal.moveChanged());
+        return { routeId, pins: retimePins(pins, before, now, "scale") };
+    });
+    if (current.length !== pinsBefore.length) refuse(pinRefusal.moveChanged());
+    await writePinRetime(tx, plan);
+}
+
+/** AP-P5 as one undoable edit. */
+export async function scaleMovePins(args: {
+    db: DbConnection;
+    timelineId: number;
+    before: { start: number; end: number };
+    pinsBefore: readonly { routeId: number; pins: RoutePin[] }[];
+}): Promise<void> {
+    const { db, ...rest } = args;
+    await transactionWithHistory(db, "scaleMovePins", (tx) =>
+        scaleMovePinsInTransaction({ tx, ...rest }),
     );
 }

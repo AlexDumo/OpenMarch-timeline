@@ -119,7 +119,7 @@ async function fileBefore0022(file: string) {
             "CREATE INDEX `timeline_idx_tr_timeline` ON `timeline_transitions` (`timeline_id`)",
         );
         // 0022 and every later migration: drizzle applies only what is newer than the last one
-        // recorded. 0023 (pins) adds a column the runner skips when it's there
+        // recorded. 0024 (pins) adds a column the runner skips when it's there
         db.prepare(
             "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
         ).run(TRAIL_MIGRATION.when);

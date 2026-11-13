@@ -1,4 +1,4 @@
--- Pins, pathways step 5 (spec v0.10 J.1 K1, J.2, Appendix M): a route's points pinned to counts, as
+-- Pins, pathways step 5 (numbered after step 3c's 0023, which merges first) (spec v0.10 J.1 K1, J.2, Appendix M): a route's points pinned to counts, as
 -- JSON `{v, pins: [{point, at}]}`. Hand-written over drizzle-kit's output, which rebuilt the table
 -- and copied a column that isn't there yet (`SELECT "timing" FROM timeline_routes`): SQLite adds a
 -- nullable column with a CHECK in place, so no route is rewritten and no other table is touched

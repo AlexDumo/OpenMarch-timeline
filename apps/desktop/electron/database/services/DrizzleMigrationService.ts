@@ -51,7 +51,7 @@ export const CONVERTER_SCHEMA_MIGRATION_TAGS = [
     "0019_timeline_routes",
     "0020_timeline_lanes",
     "0021_timeline_lane_adjust",
-    "0023_timeline_route_timing",
+    "0024_timeline_route_timing",
 ];
 
 /** The migrations folder, also found from a built `dist-electron/main`. */

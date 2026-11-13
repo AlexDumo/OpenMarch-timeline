@@ -1050,6 +1050,11 @@ export function describePageFlagBlock(
             return tolgee.t("timeline.pageFlagBlock.sharesCounts", who);
         case "leftBehind":
             return tolgee.t("timeline.pageFlagBlock.startsOrEnds", who);
+        case "pin":
+            return tolgee.t("timeline.pageFlagBlock.pin", {
+                ...who,
+                count: block.count ?? 0,
+            });
         default:
             return tolgee.t("timeline.pageFlagBlock.inTheWay", who);
     }

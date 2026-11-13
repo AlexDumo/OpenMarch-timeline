@@ -155,7 +155,7 @@ describe(`Migration ${ROUTES_MIGRATION.tag} (QA-MIG-R1)`, () => {
         expect(await open(showPath)).toMatchObject({ kind: "conversion" });
         withDb(showPath, (db) => {
             expect(columns(db, "timeline_transitions")).toContain("route_id");
-            // `timing` since 0023 (pathways step 5, pins)
+            // `timing` since 0024 (pathways step 5, pins)
             expect(columns(db, "timeline_routes")).toEqual([
                 "id",
                 "geometry",

@@ -200,7 +200,9 @@
             "pinToCount": "Pin to count…",
             "removePin": "Remove pin",
             "cornersOnCounts": "Put corners on counts",
-            "pinKeywords": "pin count midset quarter set corner timing keyframe"
+            "pinKeywords": "pin count midset quarter set corner timing keyframe",
+            "pinAtPlayhead": "Pin selected point at the playhead",
+            "scalePins": "Scale pins with the move"
         }
     },
     "analyticsOptIn": {
@@ -2218,7 +2220,8 @@
             "shapeOrDestinations": "A transition uses either a shape or one individual destination for every slot, never both and never fewer.",
             "slotOutOfRange": "That slot doesn't exist. A transition's slots are numbered from 0 up to one less than its slot count.",
             "transitionSpansTimeline": "A transition must span its whole timeline, starting and ending with it. Change the timeline's range instead, and its transitions move with it.",
-            "unknown": "The timeline couldn't make that change."
+            "unknown": "The timeline couldn't make that change.",
+            "pinOutsideMove": "A drawn path's pin would end up outside its move, or on a point the path doesn't have. Remove the pin, or keep the move long enough for it."
         },
         "heldBar": {
             "detail": "{held} of {total} selected",
@@ -2504,7 +2507,8 @@
             "startsOrEnds": "{who, select, page {Page {page}'s move} named {\"{name}\"} other {A move}} starts or ends on this flag",
             "inTheWay": "{who, select, page {Page {page}'s move} named {\"{name}\"} other {A move}} is in the way",
             "showStart": "The start of the show",
-            "showEnd": "The end of the show"
+            "showEnd": "The end of the show",
+            "pin": "{who, select, page {Page {page}'s move} named {\"{name}\"} other {A move}} has a pin on count {count}"
         },
         "pageFlag": {
             "readoutLine": "Page {page}: {before} → {after, plural, one {# count} other {# counts}}",
@@ -2767,7 +2771,10 @@
                 "tooManyCorners": "{corners, plural, one {# corner} other {# corners}} but only {counts, plural, one {# count} other {# counts}} between the ends: lengthen the move or take out corners",
                 "alreadyOnCounts": "Every corner is already on its count",
                 "pastPin": "The move would end before the pin on count {count}",
-                "noRoomToScale": "Too few counts for this path's pins: each needs a count of its own"
+                "noRoomToScale": "Too few counts for this path's pins: each needs a count of its own",
+                "pastPinStart": "The move would start on or after the pin on count {count}",
+                "collide": "This would put two pins of a drawn path on one count",
+                "moveChanged": "The move changed after the resize, so its pins weren't scaled"
             }
         },
         "pinTicks": {

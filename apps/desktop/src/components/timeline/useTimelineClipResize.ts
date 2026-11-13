@@ -1,7 +1,11 @@
 import { useMemo } from "react";
 import { toast } from "sonner";
 import tolgee from "@/global/singletons/Tolgee";
-import { queueHistoryAction } from "@/shortcuts/handlers/historyQueue";
+import { subscribeHistoryChanges } from "@/db-functions/history";
+import {
+    readMovePinSets,
+    scaleMovePins,
+} from "@/db-functions/timelineRoutePins";
 import {
     readTimelineResizeLimits,
     resizeTimeline,
@@ -89,26 +93,31 @@ const scaledReason = (bound: TimelineResizeBound): string | null =>
 function offerScalePins(
     database: DbConnection,
     timelineId: number,
-    to: { start: number; end: number },
+    before: { start: number; end: number },
+    pinsBefore: Awaited<ReturnType<typeof readMovePinSets>>,
 ): void {
-    toast.success(tolgee.t("timeline.clipResize.pinsKept"), {
+    let unsubscribe = () => {};
+    const id = toast.success(tolgee.t("timeline.clipResize.pinsKept"), {
         id: "timeline-pins-kept",
         action: {
             label: tolgee.t("timeline.clipResize.scalePinsInstead"),
-            onClick: () =>
-                void queueHistoryAction("undo")
-                    .then((undone) =>
-                        undone
-                            ? resizeTimeline({
-                                  db: database,
-                                  timelineId,
-                                  ...to,
-                                  scalePins: true,
-                              })
-                            : null,
-                    )
-                    .catch(refused),
+            onClick: () => {
+                unsubscribe();
+                void scaleMovePins({
+                    db: database,
+                    timelineId,
+                    before,
+                    pinsBefore,
+                }).catch(refused);
+            },
         },
+        onDismiss: () => unsubscribe(),
+        onAutoClose: () => unsubscribe(),
+    });
+    // Any other edit, undo or redo after the resize makes the offer stale: it goes
+    unsubscribe = subscribeHistoryChanges(() => {
+        unsubscribe();
+        toast.dismiss(id);
     });
 }
 
@@ -227,29 +236,39 @@ export function useTimelineClipResize({
                     end: change.endBeatIndex,
                 };
                 const scalePins = change.scalePins === true;
-                return resizeTimeline({
-                    db: database,
-                    timelineId,
-                    ...to,
-                    scalePins,
-                }).then((result) => {
-                    if (result) {
-                        useTimelineSelectionStore
-                            .getState()
-                            .followTimelineRange(from, to, timelineId);
-                        // The shrinking or growing changed the counts between pins: offer to
-                        // scale them instead (AP-P5)
-                        const lengthChanged =
-                            to.end - to.start !== from.end - from.start;
-                        if (
-                            !scalePins &&
-                            lengthChanged &&
-                            pinnedMoves.get(timelineId)
-                        )
-                            offerScalePins(database, timelineId, to);
-                    }
-                    return result !== null;
-                }, refused);
+                const pinsBefore = pinnedMoves.get(timelineId)
+                    ? readMovePinSets(database, timelineId)
+                    : Promise.resolve([]);
+                return pinsBefore.then((pinsBeforeResize) =>
+                    resizeTimeline({
+                        db: database,
+                        timelineId,
+                        ...to,
+                        scalePins,
+                    }).then((result) => {
+                        if (result) {
+                            useTimelineSelectionStore
+                                .getState()
+                                .followTimelineRange(from, to, timelineId);
+                            // The shrinking or growing changed the counts between pins: offer to
+                            // scale them instead (AP-P5)
+                            const lengthChanged =
+                                to.end - to.start !== from.end - from.start;
+                            if (
+                                !scalePins &&
+                                lengthChanged &&
+                                pinsBeforeResize.length > 0
+                            )
+                                offerScalePins(
+                                    database,
+                                    timelineId,
+                                    from,
+                                    pinsBeforeResize,
+                                );
+                        }
+                        return result !== null;
+                    }, refused),
+                );
             },
         };
     }, [database, timelines]);

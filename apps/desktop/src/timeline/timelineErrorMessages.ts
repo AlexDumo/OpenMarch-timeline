@@ -120,6 +120,11 @@ export const TIMELINE_ERROR_MESSAGES: Readonly<
         defaultMessage:
             "A marcher can't have two {held} holds over the same counts.",
     },
+    "E-R7": {
+        key: "timeline.errors.pinOutsideMove",
+        defaultMessage:
+            "A drawn path's pin would end up outside its move, or on a point the path doesn't have. Remove the pin, or keep the move long enough for it.",
+    },
     "E-A3": {
         key: "timeline.errors.assignmentOverlap",
         defaultMessage:

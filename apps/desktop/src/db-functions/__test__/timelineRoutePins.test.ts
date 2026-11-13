@@ -31,11 +31,16 @@ import {
     pinPoint,
     putCornersOnCounts,
     removePin,
+    readMovePinSets,
     retimePins,
+    scaleMovePins,
 } from "../timelineRoutePins";
 import { readTimelineResizeLimits, resizeTimeline } from "../timelineResize";
 import { shiftTimeline } from "../timelineCommands";
 import { splitTimelineAtBeat } from "../timelineSplitAtBeat";
+import { movePageFlag, pageFlagMoveLimits } from "../pageFlags";
+import { withTimelinePageRipple } from "../timelineRipple";
+import { createBeatsInTransaction, deleteBeatsInTransaction } from "../beat";
 
 keepFixturesInPageMode("its tests convert the show themselves");
 
@@ -497,5 +502,177 @@ describeDbTests("Pins and path edits (AP-H1, AP-R7, AP-R9)", (it) => {
         ]);
         expect(second.pins).toEqual([{ point: c, at: 2 }]);
         expect(second.id).toBe(routeId);
+    });
+});
+
+describeDbTests(
+    "Page flags and counts with pins (AP-R4 ripple, QA-AP-P5)",
+    (it) => {
+        /** Page 2's group path pinned on counts 2 and 5 (beats 11 and 14) */
+        const pinned = async (db: DbConnection) => {
+            const f = await groupFixture(db);
+            await pinPoint({ db, routeId: f.routeId, pointId: f.p, count: 2 });
+            await pinPoint({ db, routeId: f.routeId, pointId: f.q, count: 5 });
+            return f;
+        };
+        const counts = async (db: DbConnection, routeId: number) =>
+            (await pinsOf(db, routeId)).map((p) => p.at);
+
+        it("dragging the move's start flag keeps each pin on its beat, as a clip resize does; one undo step", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const f = await pinned(db);
+            const before = await dataOf(db);
+            await movePageFlag({ db, pageId: 1, beat: 10 });
+            expect(await counts(db, f.routeId)).toEqual([1, 4]);
+            // Every member still passes the pinned corner on beat 14
+            const r = await resolverOf(db);
+            const q = f.geometry.points[1]!.at;
+            const lane = f.lanes[0]!;
+            const m = (
+                await db
+                    .select()
+                    .from(schema.timeline_assignments)
+                    .where(
+                        eq(
+                            schema.timeline_assignments.transition_id,
+                            lane.transition_id,
+                        ),
+                    )
+                    .all()
+            ).find((a) => a.slot_index === lane.slot_index)!.marcher_id;
+            close(r.positionAt(m, 14), [
+                q[0] + lane.offset_x!,
+                q[1] + lane.offset_y!,
+            ]);
+            await expectOneUndoStep(db, before);
+        });
+
+        it("a flag can't pass a pin: the drag stops before it, and a drop past it is refused in words", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const f = await pinned(db);
+            const limits = (await pageFlagMoveLimits({ db, pageId: 2 }))!;
+            expect(limits.min).toBe(15);
+            expect(limits.minBlock).toMatchObject({
+                kind: "move",
+                reason: "pin",
+                count: 5,
+            });
+            const start = (await pageFlagMoveLimits({ db, pageId: 1 }))!;
+            expect(start.max).toBe(10);
+            expect(start.maxBlock).toMatchObject({ reason: "pin", count: 2 });
+            const data = await dataOf(db);
+            await expect(
+                movePageFlag({ db, pageId: 2, beat: 14 }),
+            ).rejects.toThrow("pin.pastPin");
+            expect(await dataOf(db)).toEqual(data);
+            expect(await counts(db, f.routeId)).toEqual([2, 5]);
+        });
+
+        it("a count inserted between two pins moves the later one with its beat; deleting it moves it back", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const f = await pinned(db);
+            await transactionWithHistory(db, "insertBeat", (tx) =>
+                withTimelinePageRipple(tx, () =>
+                    createBeatsInTransaction({
+                        tx,
+                        newBeats: [{ duration: 0.5, include_in_measure: true }],
+                        startingPosition: 12,
+                    }),
+                ),
+            );
+            expect(await counts(db, f.routeId)).toEqual([2, 6]);
+            await performUndo(db);
+            expect(await counts(db, f.routeId)).toEqual([2, 5]);
+            await transactionWithHistory(db, "deleteBeat", (tx) =>
+                withTimelinePageRipple(tx, () =>
+                    deleteBeatsInTransaction({ tx, beatIds: new Set([12]) }),
+                ),
+            );
+            expect(await counts(db, f.routeId)).toEqual([2, 4]);
+        });
+
+        it("deleting the counts between two pins would put them on one count: refused in words", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            // Pins on counts 2 and 4: the ends of beats 10 and 12
+            const f = await groupFixture(db);
+            await pinPoint({ db, routeId: f.routeId, pointId: f.p, count: 2 });
+            await pinPoint({ db, routeId: f.routeId, pointId: f.q, count: 4 });
+            const data = await dataOf(db);
+            await expect(
+                transactionWithHistory(db, "deleteBeats", (tx) =>
+                    withTimelinePageRipple(tx, () =>
+                        deleteBeatsInTransaction({
+                            tx,
+                            beatIds: new Set([11, 12]),
+                        }),
+                    ),
+                ),
+            ).rejects.toThrow("pin.collide");
+            expect(await dataOf(db)).toEqual(data);
+            expect(await counts(db, f.routeId)).toEqual([2, 4]);
+        });
+    },
+);
+
+describeDbTests("Scale pins instead (AP-P5)", (it) => {
+    it("scales the pins read before the resize, in an edit of its own, as Alt would have", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const f = await groupFixture(db);
+        await pinPoint({ db, routeId: f.routeId, pointId: f.p, count: 2 });
+        await pinPoint({ db, routeId: f.routeId, pointId: f.q, count: 5 });
+        const pinsBefore = await readMovePinSets(db, f.timeline.id);
+        await resizeTimeline({
+            db,
+            timelineId: f.timeline.id,
+            start: 9,
+            end: 21,
+        });
+        expect((await pinsOf(db, f.routeId)).map((p) => p.at)).toEqual([2, 5]);
+        const before = await dataOf(db);
+        await scaleMovePins({
+            db,
+            timelineId: f.timeline.id,
+            before: { start: 9, end: 17 },
+            pinsBefore,
+        });
+        // 2 × 12 / 8 = 3; 5 × 12 / 8 = 7.5, a tie: the earlier count
+        expect((await pinsOf(db, f.routeId)).map((p) => p.at)).toEqual([3, 7]);
+        await expectOneUndoStep(db, before);
+    });
+
+    it("refuses, writing nothing, when another edit came after the resize", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const f = await groupFixture(db);
+        await pinPoint({ db, routeId: f.routeId, pointId: f.q, count: 5 });
+        const pinsBefore = await readMovePinSets(db, f.timeline.id);
+        await resizeTimeline({
+            db,
+            timelineId: f.timeline.id,
+            start: 9,
+            end: 21,
+        });
+        await pinPoint({ db, routeId: f.routeId, pointId: f.q, count: 6 });
+        const data = await dataOf(db);
+        await expect(
+            scaleMovePins({
+                db,
+                timelineId: f.timeline.id,
+                before: { start: 9, end: 17 },
+                pinsBefore,
+            }),
+        ).rejects.toThrow("pin.moveChanged");
+        expect(await dataOf(db)).toEqual(data);
     });
 });

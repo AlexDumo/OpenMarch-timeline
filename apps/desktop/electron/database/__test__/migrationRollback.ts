@@ -233,7 +233,7 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
     // 0022's own test restores the older CHECK itself.
     22: () => {},
     // Pins, pathways step 5: the column goes, once what reads it is off the table
-    23: (db) =>
+    24: (db) =>
         db.exec(`
             DROP VIEW IF EXISTS timeline_route_violations;
             DROP TRIGGER IF EXISTS timeline_log_routes_ins;

@@ -4,7 +4,7 @@
  * `timelineTransitionsInTransaction`, which runs AP-R4 inside every range edit; the pin
  * procedures themselves are in `timelineRoutePins`.
  */
-import { asc, eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 import {
     placeOnCounts,
     type RouteGeometry,
@@ -40,9 +40,16 @@ export const pinRefusal = {
     tooManyCorners: (corners: number, counts: number) =>
         text.t("timeline.refusals.pin.tooManyCorners", { corners, counts }),
     alreadyOnCounts: () => text.t("timeline.refusals.pin.alreadyOnCounts"),
-    /** AP-R4: a range edit that would put a pin outside the move */
+    /** AP-R4: a range edit that would end the move on or before a pin */
     pastPin: (count: number) =>
         text.t("timeline.refusals.pin.pastPin", { count }),
+    /** AP-R4: a range edit that would start the move on or after a pin */
+    pastPinStart: (count: number) =>
+        text.t("timeline.refusals.pin.pastPinStart", { count }),
+    /** AP-R4 (ripple): deleted counts that would put two pins on one count */
+    pinsCollide: () => text.t("timeline.refusals.pin.collide"),
+    /** AP-P5: Scale pins instead after the move changed again */
+    moveChanged: () => text.t("timeline.refusals.pin.moveChanged"),
     /** AP-R4 scale: more pins than counts in the new length */
     noRoomToScale: () => text.t("timeline.refusals.pin.noRoomToScale"),
 };
@@ -95,9 +102,133 @@ export function retimePins(
     }
     if (ds === de) return [...pins];
     const out = pins.map((p) => ({ ...p, at: p.at - ds }));
-    const out0 = out.find((p) => !(p.at > 0 && p.at < c1));
-    if (out0) refuse(pinRefusal.pastPin(out0.at + ds));
+    const early = out.find((p) => !(p.at > 0));
+    if (early) refuse(pinRefusal.pastPinStart(early.at + ds));
+    const late = out.find((p) => !(p.at < c1));
+    if (late) refuse(pinRefusal.pastPin(late.at + ds));
     return out;
+}
+
+// ---------------------------------------------------------------------------
+// AP-R4 in the page and count ripple (page-flag drags, counts inserted or deleted)
+// ---------------------------------------------------------------------------
+
+/** A pinned route as the ripple reads it: its pins and the transitions its lanes are on */
+export interface RipplePinnedRoute {
+    routeId: number;
+    pins: RoutePin[];
+    transitionIds: number[];
+}
+
+/**
+ * Every route with pins and the transitions its lanes are on. None in a file without lanes or the
+ * `timing` column (a page-era file being converted reads none).
+ */
+export async function readPinnedRoutes(
+    tx: DbConnection | DbTransaction,
+): Promise<RipplePinnedRoute[]> {
+    const has = (await tx.all(sql`
+        SELECT (SELECT COUNT(*) FROM pragma_table_info('timeline_routes') WHERE name = 'timing')
+             + (SELECT COUNT(*) FROM sqlite_schema WHERE type = 'table' AND name = 'timeline_lanes')
+               AS n`)) as unknown[];
+    const first = has[0];
+    const n = Number(
+        Array.isArray(first) ? first[0] : (first as { n: number }).n,
+    );
+    if (n < 2) return [];
+    const rows = (await tx.all(sql`
+        SELECT r.id AS id, r.timing AS timing, l.transition_id AS transition_id
+          FROM timeline_routes r JOIN timeline_lanes l ON l.route_id = r.id
+         WHERE r.timing IS NOT NULL
+         ORDER BY r.id, l.transition_id`)) as unknown[];
+    const byRoute = new Map<number, RipplePinnedRoute>();
+    for (const row of rows) {
+        const [id, timing, transition] = Array.isArray(row)
+            ? row
+            : [
+                  (row as { id: number }).id,
+                  (row as { timing: string }).timing,
+                  (row as { transition_id: number }).transition_id,
+              ];
+        const routeId = Number(id);
+        let entry = byRoute.get(routeId);
+        if (!entry) {
+            entry = {
+                routeId,
+                pins: pinsOf(String(timing)),
+                transitionIds: [],
+            };
+            byRoute.set(routeId, entry);
+        }
+        if (!entry.transitionIds.includes(Number(transition)))
+            entry.transitionIds.push(Number(transition));
+    }
+    return [...byRoute.values()].filter((r) => r.pins.length > 0);
+}
+
+/** Why the ripple can't keep a route's pins: the move and the pin's count, and what to say */
+export interface PinRippleProblem {
+    routeId: number;
+    transitionId: number;
+    /** The pin's count in the move before the edit */
+    count: number;
+    message: ReturnType<typeof pinRefusal.pastPin>;
+}
+
+/**
+ * AP-R4 for the page and count ripple (spec Appendix M): each pin keeps its **beat**, mapped from
+ * the old grid to the new one as a row's end edge is (`beatEnd`: the end of its count). A
+ * page-flag drag renumbers no beats, so a pin keeps its count from the edge that didn't move, as a
+ * clip resize does; counts inserted before a pin inside its move move it with its beat; a deleted
+ * count takes the pin to the end of the count before it. `transitions` are the old ranges and
+ * `newRange` the planned ones. A pin that would leave its move, or land on another pin's count,
+ * is the plan's problem (the ripple refuses it, a flag drag stops before it).
+ */
+export function planPinRipple(
+    routes: readonly RipplePinnedRoute[],
+    transitions: ReadonlyMap<number, readonly [number, number]>,
+    newRange: (transitionId: number) => readonly [number, number] | undefined,
+    beatEnd: (beat: number) => number,
+): {
+    newPins: Map<number, RoutePin[]>;
+    problem: PinRippleProblem | null;
+} {
+    const newPins = new Map<number, RoutePin[]>();
+    for (const route of routes) {
+        const tid = route.transitionIds.find((t) => transitions.has(t));
+        if (tid === undefined) continue;
+        const [s0] = transitions.get(tid)!;
+        const next = newRange(tid);
+        if (!next) continue;
+        const [s1, e1] = next;
+        const moved = route.pins.map((p) => ({
+            ...p,
+            at: beatEnd(s0 + p.at) - s1,
+        }));
+        const bad = (message: PinRippleProblem["message"], count: number) => ({
+            newPins,
+            problem: {
+                routeId: route.routeId,
+                transitionId: tid,
+                count,
+                message,
+            },
+        });
+        for (let i = 0; i < moved.length; i++) {
+            const was = route.pins[i]!.at;
+            if (!(moved[i]!.at > 0))
+                return bad(pinRefusal.pastPinStart(was), was);
+            if (!(moved[i]!.at < e1 - s1))
+                return bad(pinRefusal.pastPin(was), was);
+        }
+        const sorted = [...moved].sort((a, b) => a.at - b.at);
+        for (let i = 1; i < sorted.length; i++)
+            if (sorted[i]!.at === sorted[i - 1]!.at)
+                return bad(pinRefusal.pinsCollide(), route.pins[i]!.at);
+        if (moved.some((p, i) => p.at !== route.pins[i]!.at))
+            newPins.set(route.routeId, moved);
+    }
+    return { newPins, problem: null };
 }
 
 /**

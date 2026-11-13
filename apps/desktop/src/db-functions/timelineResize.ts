@@ -466,9 +466,10 @@ export function timelineResizeRefusal(
               ? edge.max
               : null;
     const edges = (scalePins && limits.scaled) || limits;
+    const startBound =
+        start !== limits.start ? outside(edges.startEdge, start) : null;
     const bound =
-        (start !== limits.start && outside(edges.startEdge, start)) ||
-        (end !== limits.end && outside(edges.endEdge, end));
+        startBound || (end !== limits.end && outside(edges.endEdge, end));
     if (bound) {
         switch (bound.stop.kind) {
             case "show":
@@ -482,9 +483,12 @@ export function timelineResizeRefusal(
             case "pin":
                 return scalePins
                     ? text.t("timeline.refusals.pin.noRoomToScale")
-                    : text.t("timeline.refusals.pin.pastPin", {
-                          count: bound.stop.count,
-                      });
+                    : text.t(
+                          startBound
+                              ? "timeline.refusals.pin.pastPinStart"
+                              : "timeline.refusals.pin.pastPin",
+                          { count: bound.stop.count },
+                      );
         }
     }
     const same = limits.taken.find((t) => t.start === start && t.end === end);

@@ -1,3 +1,4 @@
+import { pinRefusal } from "./timelineRoutePinRetime";
 import { eq, inArray } from "drizzle-orm";
 import { generatePageNames } from "@openmarch/core";
 import { schema } from "@/global/database/db";
@@ -396,10 +397,17 @@ export type PageFlagMoveBlock =
           timelineId?: number;
           reason: PageFlagMoveBlockReason;
           message: string;
+          /** With `pin`: the pinned count (in the move) the flag can't pass */
+          count?: number;
       };
 
 /** Why a timeline stops a page flag (`PageFlagMoveBlock`'s `move`). */
-export type PageFlagMoveBlockReason = "leftBehind" | "sharesRange" | "inTheWay";
+export type PageFlagMoveBlockReason =
+    | "leftBehind"
+    | "sharesRange"
+    | "inTheWay"
+    /** A drawn path's pin would leave its move (pathways step 5, AP-R4) */
+    | "pin";
 
 /** Where page `pageId`'s flag can go: any beat in `[min, max]`, and what stops it at each end. */
 export interface PageFlagMoveLimits {
@@ -459,6 +467,19 @@ export function pageFlagMoveBlock(
                 message: error.message,
             };
         throw error;
+    }
+    // AP-R4 (pathways step 5): a flag can't push a pin out of its move
+    if (plan.pinProblem) {
+        const t = rows.transitions.find(
+            (x) => x.id === plan.pinProblem!.transitionId,
+        );
+        return {
+            kind: "move",
+            ...(t ? { timelineId: t.timeline_id } : {}),
+            reason: "pin",
+            count: plan.pinProblem.count,
+            message: `a drawn path's pin on count ${plan.pinProblem.count} would leave its move`,
+        };
     }
     const left = (
         row: { start_beat: number; end_beat: number },
@@ -683,6 +704,13 @@ export async function movePageFlagInTransaction({
         const block =
             hole?.block ??
             (beat < limits.min ? limits.minBlock : limits.maxBlock);
+        // A drawn path's pin (pathways step 5) says so in words
+        if (block.kind === "move" && block.reason === "pin")
+            refuse(
+                beat < from && index > 0 && block.count !== undefined
+                    ? pinRefusal.pastPin(block.count)
+                    : pinRefusal.pastPinStart(block.count ?? 0),
+            );
         refuse(
             `page ${pageId}'s flag can't move to beat ${beat}: ${
                 block.kind === "flag"
