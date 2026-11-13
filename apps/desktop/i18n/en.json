@@ -3348,7 +3348,9 @@
                 "toggles": "<b>Tap</b> a button to keep it on, or <b>hold</b> it while you drag"
             },
             "noSnap": "Snap off"
-        }
+        },
+        "redone": "Redone",
+        "undone": "Undone"
     },
     "shortcutsDialog": {
         "movement": {

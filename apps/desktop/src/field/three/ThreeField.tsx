@@ -94,6 +94,7 @@ import TouchModifierButtons from "@/components/canvas/touch/TouchModifierButtons
 import FieldContextMenu, { useFieldMenu } from "./FieldContextMenu";
 import { attachFieldPointerInput } from "./fieldPointerInput";
 import { attachFieldGestures } from "./fieldGestures";
+import { runFieldHistory } from "./fieldHistory";
 import { cameraBounds, useFieldViewStore } from "./fieldView";
 import {
     attachFieldNavigation,
@@ -552,6 +553,7 @@ function ThreeFieldView() {
             tap: (pointer) => {
                 if (!isPreviewMode()) editor.fingerTap(pointer);
             },
+            history: runFieldHistory,
         });
     }, [editor]);
     // The view opens once the field and a page are loaded. Latched: a page
