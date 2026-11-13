@@ -5,6 +5,8 @@ import {
     expectCanvasMatchesShow,
     longPress,
     penHold,
+    FINGERTIP_WIDTH,
+    canvasScale,
     readField,
     selectedDrillNumbers,
     tap,
@@ -16,9 +18,11 @@ import { seedShowSql, type SeedPosition } from "../seed.mjs";
 
 // A long press opens the menus a right-click does (tablet 1.5,
 // docs/conventions/tablet-parity.md section 2): a finger or a pen held still
-// on a marcher selects it, if it wasn't, and opens the field's menu there,
-// leaving nothing pressed under it. A press that wanders past the long press
-// slop first is a drag, not a menu. Double-click-only actions have menu
+// on a marcher for half a second and lifted without moving selects it, if it
+// wasn't, and opens the field's menu there, leaving nothing pressed under it.
+// Holding only arms it: a finger that moves on after the hold drags as usual
+// (a hesitant finger), and a press that wanders past the long press slop
+// first is a drag too, never a menu. Double-click-only actions have menu
 // entries: on a placed shape selected whole, "Select only this marcher" goes
 // inside it at the marcher pressed, as a double-click on it does.
 
@@ -70,6 +74,40 @@ async function tapTestId(page: Page, testId: string) {
 
 const menu = (page: Page) => page.getByTestId("field-menu");
 
+/** One finger presses at `from`, holds still for `holdMs`, then drags by `by` and lifts. */
+async function holdThenDrag(page: Page, from: Point, by: Point, holdMs = 800) {
+    const cdp = await page.context().newCDPSession(page);
+    const send = (type: "touchStart" | "touchMove" | "touchEnd", p?: Point) =>
+        cdp.send("Input.dispatchTouchEvent", {
+            type,
+            touchPoints: p
+                ? [
+                      {
+                          x: p.x,
+                          y: p.y,
+                          radiusX: FINGERTIP_WIDTH / 2,
+                          radiusY: FINGERTIP_WIDTH / 2,
+                          force: 1,
+                          id: 0,
+                      },
+                  ]
+                : [],
+        });
+    try {
+        await send("touchStart", from);
+        await page.waitForTimeout(holdMs);
+        const steps = 10;
+        for (let i = 1; i <= steps; i++)
+            await send("touchMove", {
+                x: from.x + (by.x * i) / steps,
+                y: from.y + (by.y * i) / steps,
+            });
+        await send("touchEnd");
+    } finally {
+        await cdp.detach();
+    }
+}
+
 async function expectNothingMoved(show: Show) {
     await waitForIdle(show.page);
     expect(await savedPositions(show, 0)).toEqual(
@@ -103,6 +141,26 @@ test("a finger held on a marcher selects it and opens the field's menu, and noth
     await expect
         .poll(() => selectedDrillNumbers(page))
         .toEqual(["T1", "T2", "T3", "T4"]);
+});
+
+test("a finger held on a marcher past the long press time, then dragged, moves it and opens no menu", async ({
+    show,
+}) => {
+    const { page } = show;
+    const scale = await canvasScale(page);
+    await holdThenDrag(page, await screenOf(page, "T2"), {
+        x: 60 * scale,
+        y: 0,
+    });
+    await waitForIdle(page);
+    await expect(menu(page)).toBeHidden();
+    expect(await selectedDrillNumbers(page)).toEqual(["T2"]);
+    await expect
+        .poll(async () => {
+            const t2 = (await savedPositions(show, 0)).find((m) => m.id === 2);
+            return t2 && t2.x > 603 + 30;
+        })
+        .toBe(true);
 });
 
 test("a pen held on a marcher selects it and opens the field's menu, and nothing moves", async ({

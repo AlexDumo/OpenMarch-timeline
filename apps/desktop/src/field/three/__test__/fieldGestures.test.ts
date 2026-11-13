@@ -275,22 +275,40 @@ describe("an editing finger held still (tablet 1.2, 1.5)", () => {
         s.finger("up", 1, 112, 120, GESTURE_TIMING.longPressMs + 100);
         expect(s.calls).toEqual([
             "down 100,100",
-            "longPress 100,100",
+            "longPress 102,100",
             "up 102,100",
         ]);
         expect(s.tap).not.toHaveBeenCalled();
     });
 
-    it("hands the rest of the press to nobody once the long press opened a menu", () => {
+    it("asks for the menu only on the release, and nothing more once it opened", () => {
         const s = setup({ singleFinger: () => "edit", menuOpens: true });
         s.finger("down", 1, 110, 120, 0);
         s.fireTimers();
-        s.finger("move", 1, 160, 120, GESTURE_TIMING.longPressMs + 50);
-        s.finger("up", 1, 160, 120, GESTURE_TIMING.longPressMs + 100);
-        // The editor gave its press up itself (`longPress`): no release, move or cancel follows
-        expect(s.calls).toEqual(["down 100,100", "longPress 100,100"]);
+        // Armed: the press is still the editor's, no menu yet
+        expect(s.calls).toEqual(["down 100,100"]);
+        s.finger("up", 1, 112, 120, GESTURE_TIMING.longPressMs + 100);
+        // The editor gave its press up itself (`longPress`): no release follows
+        expect(s.calls).toEqual(["down 100,100", "longPress 102,100"]);
         expect(s.views).toEqual([]);
         expect(s.tap).not.toHaveBeenCalled();
+    });
+
+    it("drags when the finger moves on after the hold: a hesitant finger, no menu", () => {
+        const s = setup({ singleFinger: () => "edit", menuOpens: true });
+        s.finger("down", 1, 110, 120, 0);
+        s.fireTimers();
+        const t = GESTURE_TIMING.longPressMs + 100;
+        s.finger("move", 1, 140, 120, t);
+        s.finger("move", 1, 170, 120, t + 16);
+        s.finger("up", 1, 170, 120, t + 32);
+        expect(s.calls).toEqual([
+            "down 100,100",
+            "move 130,100",
+            "move 160,100",
+            "up 160,100",
+        ]);
+        expect(s.ed.longPress).not.toHaveBeenCalled();
     });
 });
 
@@ -358,46 +376,43 @@ describe("two fingers", () => {
 });
 
 describe("long press", () => {
-    it("asks the editor for a menu when a finger is held still, where it is held", () => {
+    it("asks the editor for a menu when a finger held still is lifted, where it lifted", () => {
         const s = setup();
         s.finger("down", 1, 300, 300, 0);
         s.finger("move", 1, 303, 301, 100);
         expect(s.timers.at(-1)?.at).toBe(GESTURE_TIMING.longPressMs);
         s.fireTimers();
-        expect(s.calls).toEqual(["longPress 293,281"]);
+        expect(s.calls).toEqual([]);
         s.finger("up", 1, 303, 301, 700);
-        expect(s.calls).toHaveLength(1);
+        expect(s.calls).toEqual(["longPress 293,281"]);
         expect(s.views).toEqual([]);
+        expect(s.tap).not.toHaveBeenCalled();
     });
 
-    it("asks for nothing when the finger moves first, or a second finger lands", () => {
+    it("asks for nothing when the finger moves first, lifts too soon, or a second finger lands", () => {
         const s = setup();
         s.finger("down", 1, 300, 300, 0);
         s.finger("move", 1, 340, 300, 100);
         s.fireTimers();
         s.finger("up", 1, 340, 300, 600);
+        s.finger("down", 1, 300, 300, 800);
+        s.finger("up", 1, 300, 300, 900);
         s.finger("down", 1, 300, 300, 1000);
         s.finger("down", 2, 400, 300, 1100);
         s.fireTimers();
+        s.finger("up", 1, 300, 300, 1700);
+        s.finger("up", 2, 400, 300, 1700);
         expect(s.calls).toEqual([]);
     });
 
-    it("still pans when the finger moves on after a long press that opened no menu", () => {
-        const s = setup();
-        s.finger("down", 1, 300, 300, 0);
-        s.fireTimers();
-        s.finger("move", 1, 340, 300, 700);
-        expect(s.view().panX).toBe(40);
-    });
-
-    it("pans no more once the long press opened a menu (tablet 1.5)", () => {
+    it("pans, and asks for no menu, when the finger moves on after the hold", () => {
         const s = setup({ menuOpens: true });
         s.finger("down", 1, 300, 300, 0);
         s.fireTimers();
         s.finger("move", 1, 340, 300, 700);
         s.finger("up", 1, 340, 300, 750);
-        expect(s.views).toEqual([]);
-        expect(s.tap).not.toHaveBeenCalled();
+        expect(s.view().panX).toBe(40);
+        expect(s.calls).toEqual([]);
     });
 });
 

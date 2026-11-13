@@ -197,30 +197,24 @@ describe("attachFieldPointerInput, right presses that start off the field (#315 
 
 describe("attachFieldPointerInput, a pen held still (tablet 1.5)", () => {
     beforeEach(() => {
-        vi.useFakeTimers({
-            toFake: [
-                "setTimeout",
-                "clearTimeout",
-                "requestAnimationFrame",
-                "cancelAnimationFrame",
-            ],
-        });
+        vi.useFakeTimers({ toFake: ["performance"] });
     });
     afterEach(() => vi.useRealTimers());
-    /** Past the long press time, and the frame it waits for */
+    /** Past the long press time */
     const hold = () => vi.advanceTimersByTime(GESTURE_TIMING.longPressMs + 50);
     const pen = { pointerType: "pen" };
 
-    it("selects the marcher under it and opens the field's menu, and its lift and moves do nothing more", () => {
+    it("held, then lifted without moving: selects the marcher under it and opens the field's menu, and the lift does nothing more", () => {
         const { editor, state, fire } = setup();
         fire("pointerdown", { x: 100, y: 100, buttons: 1, ...pen });
         fire("pointermove", { x: 103, y: 101, buttons: 1, ...pen });
         hold();
+        // Armed only: the press is still the editor's
+        expect(state.menus).toBe(0);
+        fire("pointerup", { x: 103, y: 101, ...pen });
         expect(state.menus).toBe(1);
         expect(state.selected).toEqual([1]);
-        fire("pointermove", { x: 160, y: 101, buttons: 1, ...pen });
         expect(editor.activeGesture()).toBeNull();
-        fire("pointerup", { x: 160, y: 101, ...pen });
         expect(state.shown).toBeNull();
         expect(state.drops).toBe(0);
         // The next pen press is a press like any other
@@ -230,20 +224,21 @@ describe("attachFieldPointerInput, a pen held still (tablet 1.5)", () => {
         expect(state.menus).toBe(1);
     });
 
-    it("opens no menu once the pen has moved past the slop: it drags", () => {
+    it("held, then moved on: drags the marcher, and no menu opens", () => {
         const { editor, state, fire } = setup();
         fire("pointerdown", { x: 100, y: 100, buttons: 1, ...pen });
-        fire("pointermove", { x: 100, y: 112, buttons: 1, ...pen });
         hold();
-        expect(state.menus).toBe(0);
+        fire("pointermove", { x: 100, y: 130, buttons: 1, ...pen });
         expect(editor.activeGesture()).toBe("move");
+        fire("pointerup", { x: 100, y: 130, ...pen });
+        expect(state.menus).toBe(0);
+        expect(state.drops).toBe(1);
     });
 
-    it("opens no menu for a pen tap, nor for a mouse held still", () => {
+    it("opens no menu for a quick pen tap, nor for a mouse held still", () => {
         const { state, fire } = setup();
         fire("pointerdown", { x: 100, y: 100, ...pen });
         fire("pointerup", { x: 100, y: 100, ...pen });
-        hold();
         fire("pointerdown", { x: 200, y: 100, buttons: 1 });
         hold();
         fire("pointerup", { x: 200, y: 100 });

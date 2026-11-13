@@ -784,9 +784,11 @@ export class FieldEditor {
     }
 
     /**
-     * A finger or pen held still at `pointer` (tablet 1.5; a pen and a finger have no right
-     * button): the menus a right-click there opens, a mode's first, then the field's (#569,
-     * #315), selecting the marcher under it if it isn't selected. Returns whether it took over.
+     * A long press by a finger or pen, lifted at `pointer` (tablet 1.5; a pen and a finger have
+     * no right button; held still past the long press time and released without moving): the
+     * menus a right-click there opens, a mode's first, then the field's (#569, #315), selecting
+     * the marcher under it if it isn't selected. Returns whether it took over; when it didn't,
+     * a press it holds is left for the caller to release (a slow tap).
      *
      * A press the editor holds that hasn't become a drag (a finger or pen on a marcher) is given
      * up first, so nothing is left pressed under the menu; a mode's press only when the mode says

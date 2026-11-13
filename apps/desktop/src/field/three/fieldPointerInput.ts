@@ -14,7 +14,7 @@ import { fieldGesturesOwn } from "./fieldGestures";
  * navigates or opens a menu, and tells the editor itself. Returns the detach.
  *
  * A pen has no right button (an Apple Pencil has no barrel button), so a pen
- * held still opens the menus a right-click would (tablet 1.5): see
+ * held still and lifted opens the menus a right-click would (tablet 1.5): see
  * {@link watchPenHold}. A mouse never long-presses.
  */
 export function attachFieldPointerInput(
@@ -35,15 +35,16 @@ export function attachFieldPointerInput(
         penHold.down(event);
     };
     const move = (event: PointerEvent) => {
-        if (fieldGesturesOwn(event) || penHold.move(event)) return;
+        if (fieldGesturesOwn(event)) return;
+        penHold.move(event);
         editor.pointerMove(pointer(event));
     };
     const up = (event: PointerEvent) => {
-        if (fieldGesturesOwn(event) || penHold.end(event)) return;
+        if (fieldGesturesOwn(event) || penHold.up(event)) return;
         editor.pointerUp(pointer(event));
     };
     const cancel = (event: PointerEvent) => {
-        penHold.end(event);
+        penHold.cancel(event);
         if (event.pointerId !== captured) return;
         captured = null;
         editor.pointerCancel();
@@ -81,85 +82,63 @@ export function attachFieldPointerInput(
 }
 
 /**
- * A pen's long press (tablet 1.5): a pen press the editor took that stays
- * within the long press slop for the long press time, as a finger's
- * (`GESTURE_TIMING`), asks the editor for the menus a right-click there
- * opens (`FieldEditor.longPress`). One that opens a menu has ended the press
- * in the editor; the rest of the pen's press (its moves and its lift) is then
- * nobody's. A pen that moves past the slop first is dragging, and is left
- * alone. Mouse presses are never timed.
+ * A pen's long press (tablet 1.5), by the same rule as a finger's
+ * (`touchGestures.ts`, `GESTURE_TIMING`): a pen press the editor took that
+ * stays within the long press slop arms once it has been down for the long
+ * press time, and lifting it then, without having moved past the slop, asks
+ * the editor for the menus a right-click there opens (`FieldEditor.longPress`).
+ * The editor's press stays alive while armed: a pen that moves on after the
+ * hold drags as usual. When a menu opens, the editor has given up its press
+ * and the lift is nobody's; with no menu, the lift is an ordinary release.
+ * Mouse presses are never timed.
  *
- * The timer waits a frame after it's due, as the finger's does, so moves the
- * browser has queued are counted first.
+ * Decided from times read at the press and the lift, so moves handled late
+ * can't make a moving pen look held.
  */
 export function watchPenHold(
     editor: Pick<FieldEditor, "longPress">,
     pointer: (event: PointerEvent) => FieldPointer,
+    now: () => number = () => performance.now(),
 ) {
-    let held: {
-        id: number;
-        x: number;
-        y: number;
-        last: PointerEvent;
-        cancel: () => void;
-    } | null = null;
-    /** The pen press a long press ended, until it lifts */
-    let ended: number | null = null;
-    const stop = () => {
-        held?.cancel();
-        held = null;
-    };
-    const fire = () => {
-        if (!held) return;
-        const { id, last } = held;
-        held = null;
-        if (editor.longPress(pointer(last))) ended = id;
-    };
+    let held: { id: number; x: number; y: number; at: number } | null = null;
+    const past = (event: PointerEvent, from: { x: number; y: number }) =>
+        Math.hypot(event.clientX - from.x, event.clientY - from.y) >
+        GESTURE_TIMING.longPressSlopPx;
     return {
         /** A press the editor took */
         down(event: PointerEvent) {
-            stop();
-            if (event.pointerType !== "pen" || event.button !== 0) return;
-            let frame: number | null = null;
-            const timer = setTimeout(() => {
-                frame = requestAnimationFrame(() => {
-                    frame = null;
-                    fire();
-                });
-            }, GESTURE_TIMING.longPressMs);
-            held = {
-                id: event.pointerId,
-                x: event.clientX,
-                y: event.clientY,
-                last: event,
-                cancel: () => {
-                    clearTimeout(timer);
-                    if (frame !== null) cancelAnimationFrame(frame);
-                },
-            };
+            held =
+                event.pointerType === "pen" && event.button === 0
+                    ? {
+                          id: event.pointerId,
+                          x: event.clientX,
+                          y: event.clientY,
+                          at: now(),
+                      }
+                    : null;
         },
-        /** A move; true when it's no one's (the press it's part of opened a menu) */
-        move(event: PointerEvent): boolean {
-            if (event.pointerId === ended) return true;
+        /** A move: past the slop, the press is a drag and never a long press */
+        move(event: PointerEvent) {
+            if (event.pointerId === held?.id && past(event, held)) held = null;
+        },
+        /** A lift; true when a long press opened a menu, so the lift is no one's */
+        up(event: PointerEvent): boolean {
             if (event.pointerId !== held?.id) return false;
+            const press = held;
+            held = null;
             if (
-                Math.hypot(event.clientX - held.x, event.clientY - held.y) >
-                GESTURE_TIMING.longPressSlopPx
+                past(event, press) ||
+                now() - press.at < GESTURE_TIMING.longPressMs
             )
-                stop();
-            else held.last = event;
-            return false;
+                return false;
+            return editor.longPress(pointer(event));
         },
-        /** A lift or a lost pointer; true when it's no one's, as {@link move} */
-        end(event: PointerEvent): boolean {
-            if (event.pointerId === held?.id) stop();
-            if (event.pointerId !== ended) return false;
-            ended = null;
-            return true;
+        /** The pointer was lost: no long press */
+        cancel(event: PointerEvent) {
+            if (event.pointerId === held?.id) held = null;
         },
         stop() {
-            stop();
-            ended = null;
+            held = null;
         },
     };
 }
