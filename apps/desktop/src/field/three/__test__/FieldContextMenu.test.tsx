@@ -1,10 +1,22 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+    act,
+    cleanup,
+    fireEvent,
+    render,
+    renderHook,
+    screen,
+} from "@testing-library/react";
 import { TolgeeProvider } from "@tolgee/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import tolgee from "@/global/singletons/Tolgee";
 import type { ActionId } from "@/shortcuts/definitions";
 import { registerActionHandler } from "@/shortcuts/registry";
-import FieldContextMenu, { FIELD_MENU_ACTIONS } from "../FieldContextMenu";
+import type { FieldEditor } from "@/field/editor/fieldEditor";
+import FieldContextMenu, {
+    FIELD_MENU_ACTIONS,
+    useFieldMenu,
+} from "../FieldContextMenu";
+import type { FieldMarchers } from "../fieldMarchers";
 
 /**
  * The field's right-click menu (#315): registered actions, with their enabled
@@ -310,5 +322,48 @@ describe("FieldContextMenu", () => {
                 expect.stringContaining("Select all"),
             ]),
         );
+    });
+});
+
+describe("useFieldMenu", () => {
+    const menu = () =>
+        renderHook(() =>
+            useFieldMenu({
+                marchers: {} as FieldMarchers,
+                editor: { blocksFieldMenu: () => false } as FieldEditor,
+                hasSelection: true,
+            }),
+        );
+
+    afterEach(cleanup);
+
+    it("leaves a press on the field alone while closed", () => {
+        const { result } = menu();
+        expect(result.current.takePress()).toBe(false);
+        expect(result.current.at).toBeNull();
+    });
+
+    it("takes a press on the field while open and only closes (#876: a finger's tap on a marcher)", () => {
+        const { result } = menu();
+        act(() => result.current.openAt({ x: 10, y: 20 }, 2));
+        expect(result.current.at).toEqual({ x: 10, y: 20 });
+
+        let taken = false;
+        act(() => {
+            taken = result.current.takePress();
+        });
+        expect(taken).toBe(true);
+        expect(result.current.at).toBeNull();
+        expect(result.current.marcher).toBeNull();
+        // Closed, the next press is the field's again
+        expect(result.current.takePress()).toBe(false);
+    });
+
+    it("takes a press the menu already closed itself on, until it's drawn closed (a mouse's press)", () => {
+        const { result } = menu();
+        act(() => result.current.openAt({ x: 10, y: 20 }, null));
+        // The menu's own close on a press outside it, before the field hears the press
+        result.current.close();
+        expect(result.current.takePress()).toBe(true);
     });
 });

@@ -2,6 +2,7 @@ import {
     Fragment,
     useCallback,
     useEffect,
+    useRef,
     useState,
     useSyncExternalStore,
 } from "react";
@@ -267,7 +268,8 @@ type OpenFieldMenu = { at: MenuPoint; marcher: number | null };
  * how it opens: at a right-click or a long press (the editor's `openMenu`
  * port, with `openAt`, and the marcher under it), or from the keyboard (the `openFieldMenu` action: the
  * context-menu key or Shift+F10, while the field has focus and a selection) at
- * the middle of the selected marchers drawn.
+ * the middle of the selected marchers drawn. `takePress` is the field's: a press on the field
+ * while the menu is open closes it and does nothing more.
  */
 export function useFieldMenu({
     marchers,
@@ -279,12 +281,23 @@ export function useFieldMenu({
     hasSelection: boolean;
 }) {
     const [open, setOpen] = useState<OpenFieldMenu | null>(null);
+    // Whether it's open as last drawn, read by the field's presses
+    const shown = useRef(false);
+    shown.current = open !== null;
     const openAt = useCallback(
         (point: MenuPoint, marcher: number | null = null) =>
             setOpen({ at: point, marcher }),
         [],
     );
     const close = useCallback(() => setOpen(null), []);
+    // A press on the field while the menu is open only closes it, as a click outside a menu
+    // does (#315). The menu closes itself on a mouse's press outside it, but after a finger's
+    // it waits for a click, which the field's touch handling stops (#876)
+    const takePress = useCallback(() => {
+        if (!shown.current) return false;
+        setOpen(null);
+        return true;
+    }, []);
     useActionHandler(
         "openFieldMenu",
         () => {
@@ -306,6 +319,7 @@ export function useFieldMenu({
         marcher: open?.marcher ?? null,
         openAt,
         close,
+        takePress,
     };
 }
 
