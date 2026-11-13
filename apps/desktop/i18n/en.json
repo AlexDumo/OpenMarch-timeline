@@ -2791,6 +2791,8 @@
         }
     },
     "toolbar": {
+        "showControls": "Show the toolbar",
+        "hideControls": "Hide the toolbar",
         "alignment": {
             "lockXCaption": "Lock X",
             "lockYCaption": "Lock Y",

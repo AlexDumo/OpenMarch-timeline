@@ -1,6 +1,7 @@
 import { T, useTranslate } from "@tolgee/react";
 import { SegmentedTextSwitch } from "@openmarch/ui";
 import { usePreviewModeStore } from "@/stores/PreviewModeStore";
+import { runAction } from "@/shortcuts/registry";
 
 const OPTIONS = [
     {
@@ -23,12 +24,14 @@ export default function WorkspaceViewSwitch({
 }) {
     const { t } = useTranslate();
     const preview = usePreviewModeStore((s) => s.isPreview);
-    const setPreview = usePreviewModeStore((s) => s.setPreview);
     return (
         <SegmentedTextSwitch
             options={OPTIONS}
             selected={preview ? "preview" : "editor"}
-            setSelected={(v) => setPreview(v === "preview")}
+            // The same action as Alt+P and the palette (docs/conventions/tablet-parity.md)
+            setSelected={(v) => {
+                if ((v === "preview") !== preview) runAction("togglePreview");
+            }}
             ariaLabel={t("workspace.label")}
             className={className}
             testId="workspace-view-switch"

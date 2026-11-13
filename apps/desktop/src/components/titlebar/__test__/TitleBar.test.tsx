@@ -1,6 +1,5 @@
-import { act, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createPortal } from "react-dom";
 import { useInputModeStore } from "@/stores/InputModeStore";
 import { useToolbarTabsSlot } from "../toolbarSlot";
 import { TolgeeProvider } from "@tolgee/react";
@@ -46,12 +45,6 @@ beforeEach(() => {
 afterEach(() => {
     useInputModeStore.setState({ mode: "pointer" });
 });
-
-/** Stands in for the touch toolbar: portals its tabs into the title bar slot. */
-function FakeToolbarTabs() {
-    const slot = useToolbarTabsSlot();
-    return slot ? createPortal(<span>Tabs</span>, slot) : null;
-}
 
 const renderBar = (props: Parameters<typeof TitleBar>[0] = {}) =>
     render(
@@ -121,38 +114,24 @@ describe("TitleBar", () => {
         expect(screen.queryByTestId("update-pill")).not.toBeInTheDocument();
     });
 
-    describe("touch mode", () => {
-        beforeEach(() => {
-            useInputModeStore.setState({ mode: "touch" });
-        });
-
-        it("shows the show's name while nothing fills the toolbar slot", async () => {
-            renderBar({ showControls: true });
-            expect(await screen.findByText("Halftime.dots")).toBeVisible();
-            expect(
-                screen.getByTestId("titlebar-toolbar-tabs"),
-            ).toBeEmptyDOMElement();
-        });
-
-        it("gives the middle to the toolbar's tabs once they're portalled in", async () => {
-            const { rerender } = renderBar({ showControls: true });
-            await screen.findByText("Halftime.dots");
-            await act(async () => {
-                rerender(
-                    <TolgeeProvider tolgee={tolgee} fallback="">
-                        <TitleBar showControls />
-                        <FakeToolbarTabs />
-                    </TolgeeProvider>,
-                );
-            });
-            expect(
-                screen.getByTestId("titlebar-toolbar-tabs"),
-            ).toHaveTextContent("Tabs");
-            await vi.waitFor(() =>
-                expect(
-                    screen.queryByText("Halftime.dots"),
-                ).not.toBeInTheDocument(),
-            );
-        });
+    it("touch mode gives the middle to the toolbar's slot instead of the show's name", async () => {
+        useInputModeStore.setState({ mode: "touch" });
+        let slot: HTMLElement | null = null;
+        function ReadSlot() {
+            slot = useToolbarTabsSlot();
+            return null;
+        }
+        render(
+            <TolgeeProvider tolgee={tolgee} fallback="">
+                <TitleBar showControls />
+                <ReadSlot />
+            </TolgeeProvider>,
+        );
+        await vi.waitFor(() =>
+            expect(slot).toBe(screen.getByTestId("titlebar-toolbar-tabs")),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(window.electron.databaseGetPath).not.toHaveBeenCalled();
+        expect(screen.queryByText("Halftime.dots")).not.toBeInTheDocument();
     });
 });
