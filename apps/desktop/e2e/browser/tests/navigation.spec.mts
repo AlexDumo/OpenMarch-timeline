@@ -1,6 +1,12 @@
 import type { Page } from "@playwright/test";
 import { test, expect } from "../fixtures.mjs";
-import { pinch, readField, touchDrag, waitForIdle } from "../app.mjs";
+import {
+    pinch,
+    readField,
+    touchDrag,
+    twoFingerPan,
+    waitForIdle,
+} from "../app.mjs";
 import type { Show } from "../fixtures.mjs";
 
 // Navigation on the field (fork #194): wheel, trackpad, pinch, pan drags,
@@ -654,19 +660,26 @@ test("Preview fits the whole field, and leaving it centers the field again", asy
     await openedView(show);
 });
 
+// Fingers go through the field's gesture adapter (tablet plan 1.1). The
+// baseline (#845) panned half as far as the finger, zoomed twice as far as
+// the fingers spread, and ignored two fingers panning together.
 test.describe("touch", () => {
-    test("one finger pans, at the pan sensitivity", async ({ show }) => {
+    test("one finger pans one to one: the field stays under it", async ({
+        show,
+    }) => {
         const { page } = show;
         const before = await openedView(show);
         const { x, y } = await center(page);
         const from = await inField(page, x, y);
         await touchDrag(page, from, { x: from.x + 100, y: from.y + 60 });
-        // 100 × 60 px of finger, at the default sensitivity of 0.5
-        await waitForView(page, (v) => v.pan.x, before.pan.x + 50, 0.01);
-        await waitForView(page, (v) => v.pan.y, before.pan.y + 30, 0.01);
+        await waitForView(page, (v) => v.pan.x, before.pan.x + 100, 0.01);
+        await waitForView(page, (v) => v.pan.y, before.pan.y + 60, 0.01);
+        expect((await view(page)).zoom).toBeCloseTo(before.zoom, 6);
     });
 
-    test("two fingers pinch at the point between them", async ({ show }) => {
+    test("two fingers pinch by as much as they spread, at the point between them", async ({
+        show,
+    }) => {
         const { page } = show;
         const before = await openedView(show);
         const mid = await center(page);
@@ -675,10 +688,25 @@ test.describe("touch", () => {
             from: 50,
             to: 100,
         });
-        // 0.01 zoom per pixel the fingers spread: 100 px
-        await waitForView(page, (v) => v.zoom, before.zoom + 1, 1e-6);
+        // Twice as far apart: twice the zoom
+        await waitForView(page, (v) => v.zoom, before.zoom * 2, 1e-6);
         const drawn = drawnAt(await view(page), under);
         expectNear(drawn.x, mid.x, 0.5);
         expectNear(drawn.y, mid.y, 0.5);
+    });
+
+    test("two fingers moving together pan, without zooming", async ({
+        show,
+    }) => {
+        const { page } = show;
+        const before = await openedView(show);
+        const mid = await center(page);
+        await twoFingerPan(page, await inField(page, mid.x, mid.y), {
+            x: 80,
+            y: -40,
+        });
+        await waitForView(page, (v) => v.pan.x, before.pan.x + 80, 0.01);
+        await waitForView(page, (v) => v.pan.y, before.pan.y - 40, 0.01);
+        expect((await view(page)).zoom).toBeCloseTo(before.zoom, 6);
     });
 });
