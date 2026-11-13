@@ -1475,6 +1475,16 @@
         "category": "timeline",
         "bindings": []
     },
+    "timelineZoomIn": {
+        "label": "Zoom the timeline in",
+        "category": "timeline",
+        "bindings": []
+    },
+    "timelineZoomOut": {
+        "label": "Zoom the timeline out",
+        "category": "timeline",
+        "bindings": []
+    },
     "moveSelectedMarchersUp": {
         "label": "Nudge up",
         "category": "movement",
