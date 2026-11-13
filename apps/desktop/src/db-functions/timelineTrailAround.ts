@@ -17,6 +17,8 @@
 import { and, eq, gt, inArray, lt } from "drizzle-orm";
 import {
     arcPoint,
+    aroundEnds,
+    aroundPoint,
     createResolver,
     EPS_GEOM,
     loopPoint,
@@ -24,6 +26,7 @@ import {
     makeLoop,
     MAX_LAPS,
     nearestOnLoop,
+    type AroundEnds,
     type RouteGeometry,
     type RoutePath,
     type XY,
@@ -64,6 +67,8 @@ export const goRoundRefusal = {
     /** AP-T13: more times round than a move may go */
     tooFar: (laps: number) =>
         text.t("timeline.refusals.trail.tooFar", { laps }),
+    /** AP-T14: Reverse on a move round an outline that nobody starts */
+    reverseNobody: () => text.t("timeline.refusals.trail.reverseNobody"),
 };
 
 // ---------------------------------------------------------------------------
@@ -249,16 +254,25 @@ function smallestBox(pts: readonly XY[]): XY[] | null {
 }
 
 /**
- * Whether the starts go all the way round `loop`: no stretch between neighbors round it is much
- * longer than the usual one (a quarter of the way round at most for three or four marchers)
+ * Whether the starts go all the way round `loop`, a closed outline: no stretch between neighbors
+ * round it is more than 2.5 times the usual one, so an arc, three sides of a box or two ranks far
+ * apart are not outlines
  */
 function allRound(loop: RoutePath, starts: readonly XY[]): boolean {
     const d = starts.map((p) => nearestOnLoop(loop, p)).sort((a, b) => a - b);
     const gaps = d.map((x, i) =>
         i + 1 < d.length ? d[i + 1]! - x : d[0]! + loop.L - x,
     );
-    return Math.max(...gaps) <= Math.max(2.5 * median(gaps), loop.L / 3);
+    return Math.max(...gaps) <= 2.5 * median(gaps);
 }
+
+/**
+ * How far a marcher may stand from the outline it's fitted to (DO-2): a quarter of the usual
+ * spacing, and never more than half a step, so an oval, a hexagon or an octagon isn't taken for
+ * a circle
+ */
+export const fitTolerance = (usual: number, step: number): number =>
+    Math.min(usual / 4, step / 2);
 
 /**
  * The box outline round `starts` (`fitOutline`'s second candidate): the smallest box square to a
@@ -329,16 +343,26 @@ function onALine(starts: readonly XY[], tol: number): boolean {
 
 /**
  * The closed outline a line can go round (DO-2): {@link fitOutline}'s, or else the circle a line
- * of three or more stands on part of (an arc, not a straight line), every one within a quarter of
- * the usual spacing of it; `full` says which. Null when there's neither.
+ * of three or more stands on part of (an arc, not a straight line), every one within the fit's
+ * tolerance of it; `full` says which. Null when there's neither.
  */
-export function outlineOf(starts: readonly XY[]): Outline | null {
-    const whole = fitOutline(starts);
+export function outlineOf(starts: readonly XY[], step: number): Outline | null {
+    const whole = fitOutline(starts, step);
     if (whole || starts.length < 3) return whole;
     const usual = median(nearestGaps(starts));
     if (!(usual > EPS_GEOM)) return null;
-    const tol = usual / 4;
+    const tol = fitTolerance(usual, step);
     if (onALine(starts, tol)) return null;
+    const circle = circleCandidate(starts, usual, tol);
+    return circle ? { ...circle, full: false } : null;
+}
+
+/** The circle through `starts` (the Arc kind's fit), every one within `tol` of it; null otherwise */
+function circleCandidate(
+    starts: readonly XY[],
+    usual: number,
+    tol: number,
+): Outline | null {
     const circle = fitCircle(starts.map(([x, y]) => ({ x, y })));
     if (!circle || !(circle.r > usual / 2)) return null;
     const c: XY = [circle.center.x, circle.center.y];
@@ -351,7 +375,7 @@ export function outlineOf(starts: readonly XY[]): Outline | null {
     const geometry = circleOutline(c, circle.r);
     const loop = makeLoop(geometry);
     return loop
-        ? { kind: "circle", geometry, loop, residual, full: false }
+        ? { kind: "circle", geometry, loop, residual, full: true }
         : null;
 }
 
@@ -359,50 +383,33 @@ export function outlineOf(starts: readonly XY[]): Outline | null {
  * The closed outline the marchers stand on at the start flag (DO-2), fitted as the shape tools
  * draw it: a **circle** (the Arc kind's circle fit) or a **box outline** (the smallest box round
  * them, square to one of their hull's edges, at least two on each side, corners counting for
- * both). Four marchers or more; every one within a quarter of the usual spacing of it, and all
- * the way round with no gap much wider than the usual one. When both fit, the closer one; on a tie
- * (eight evenly round a circle also stand on a square's sides), the box only when a marcher stands
- * on one of its corners (four on a square's corners walk its sides). Null when neither fits.
+ * both). Four marchers or more, every one within {@link fitTolerance} of it, all the way round
+ * (`allRound`). When both fit, the circle, unless the box is clearly closer (by more than a
+ * quarter of the tolerance) or a marcher stands on one of its corners: eight round a circle also
+ * stand on a square's sides, and four on a square's corners walk its sides. Null when neither fits.
  */
-export function fitOutline(starts: readonly XY[]): Outline | null {
-    const n = starts.length;
-    if (n < 4) return null;
+export function fitOutline(
+    starts: readonly XY[],
+    step: number,
+): Outline | null {
+    if (starts.length < 4) return null;
     const usual = median(nearestGaps(starts));
     if (!(usual > EPS_GEOM)) return null;
-    const tol = usual / 4;
-    const found: (Outline & { cornered?: boolean })[] = [];
-    const circle = fitCircle(starts.map(([x, y]) => ({ x, y })));
-    if (circle && circle.r > usual / 2) {
-        const c: XY = [circle.center.x, circle.center.y];
-        const residual = Math.max(
-            ...starts.map((p) =>
-                Math.abs(Math.hypot(p[0] - c[0], p[1] - c[1]) - circle.r),
-            ),
-        );
-        const geometry = circleOutline(c, circle.r);
-        const loop = makeLoop(geometry);
-        if (residual <= tol && loop && allRound(loop, starts))
-            found.push({
-                kind: "circle",
-                geometry,
-                loop,
-                residual,
-                full: true,
-            });
-    }
+    const tol = fitTolerance(usual, step);
+    const found = circleCandidate(starts, usual, tol);
+    const circle = found && allRound(found.loop, starts) ? found : null;
     const box = boxCandidate(starts, tol);
-    if (box) found.push(box);
-    if (found.length === 0) return null;
-    const best = found.reduce((a, b) =>
-        b.residual < a.residual - 1e-9 ||
-        (Math.abs(b.residual - a.residual) <= 1e-9 &&
-            b.kind === "box" &&
-            b.cornered)
-            ? b
-            : a,
-    );
-    const { cornered: _cornered, ...outline } = best;
-    return outline;
+    const tie = tol / 4;
+    if (
+        box &&
+        (!circle ||
+            box.residual < circle.residual - tie ||
+            (box.cornered && box.residual <= circle.residual + tie))
+    ) {
+        const { cornered: _cornered, ...outline } = box;
+        return outline;
+    }
+    return circle;
 }
 
 // ---------------------------------------------------------------------------
@@ -430,20 +437,32 @@ export interface GoRoundPlan {
     loop: RoutePath;
     /** The members as indexes into the starts, in walking order: the tail first, the leader last */
     line: number[];
+    /** Each member's start, by line */
+    starts: XY[];
     /** Each member's start round the outline, by line */
     startDist: number[];
-    /** Each member's end round it (past its start by `distance`), by line */
+    /** Each member's end round it, by line */
     ends: number[];
     /** The spots written, `loop(ends)`, by line */
     spots: XY[];
     /** Whole times round (R-13‴ `laps`) */
     laps: number;
-    /** How far each goes round */
-    distance: number;
-    /** One spot of the outline: once round over its spot count */
+    /** How far each goes round the outline, by line */
+    distances: number[];
+    /** How many times round (spots over the spot count, or steps over once round) */
+    turns: number;
+    /** The outline's spots, distances round it in walking order: the marchers' places and the gaps' */
+    ring: number[];
+    /** Each member's spot in `ring`, by line */
+    memberSpot: number[];
+    /** The usual gap between spots (the median), for N's default and changing the unit */
     spacing: number;
-    /** The outline's spots: its marchers' places, with room for the gaps between them */
-    spotCount: number;
+    /** The most spots or steps a move may go (no more than 100 times round, as Finish allows) */
+    maxAmount: number;
+    /** How many members stand off the outline (more than a twentieth of a step) and step onto it first */
+    offOutline: number;
+    /** R-13‴'s walk for each member, as the resolver will have it (for ▶ Preview and Big steps) */
+    walk: AroundEnds;
 }
 
 /** The outline walked the way chosen */
@@ -485,10 +504,50 @@ export function lineRound(
 }
 
 /**
- * AP-T13's plan for marchers at `starts` on `outline`: walked the way chosen, each member goes
- * `amount` spots (the outline's length over its spot count) or steps round from where it stands,
- * the same distance for everyone, so nobody passes anyone. The spots are `loop(start + distance)`
- * and `laps` the whole times round, as R-13‴ reads them back.
+ * The outline's spots (DO-4), counted along it: every marcher's place, and a place in each gap
+ * for every marcher missing there. A gap holds `round(gap / longer neighbor gap) − 1` missing
+ * places, spread evenly in it, so uneven spacing (a box with long sides 2 apart and short ones 1
+ * apart) has no false gaps. Distances round `L`, ascending; `memberSpot[i]` is `d[i]`'s place.
+ */
+export function outlineSpots(
+    d: readonly number[],
+    L: number,
+): { ring: number[]; memberSpot: number[] } {
+    const order = d.map((_, i) => i).sort((a, b) => d[a]! - d[b]! || a - b);
+    const m = order.length;
+    const gaps = order.map((i, k) => {
+        const next = order[(k + 1) % m]!;
+        return k + 1 < m ? d[next]! - d[i]! : d[next]! + L - d[i]!;
+    });
+    const ring: number[] = [];
+    const memberSpot = d.map(() => 0);
+    order.forEach((i, k) => {
+        memberSpot[i] = ring.length;
+        ring.push(d[i]!);
+        const ref = Math.max(gaps[(k + m - 1) % m]!, gaps[(k + 1) % m]!);
+        const missing =
+            m > 2 && ref > EPS_GEOM
+                ? Math.max(0, Math.round(gaps[k]! / ref) - 1)
+                : 0;
+        for (let h = 1; h <= missing; h++) {
+            const x = d[i]! + (gaps[k]! * h) / (missing + 1);
+            ring.push(x >= L ? x - L : x);
+        }
+    });
+    // a place in the last gap that passed the seam belongs at the start
+    const sorted = ring.map((x, j) => ({ x, j })).sort((a, b) => a.x - b.x);
+    const at = new Map(sorted.map((e, k) => [e.j, k]));
+    return {
+        ring: sorted.map((e) => e.x),
+        memberSpot: memberSpot.map((j) => at.get(j)!),
+    };
+}
+
+/**
+ * AP-T13's plan for marchers at `starts` on `outline`, walked the way chosen. **By spots** each
+ * member moves on N of the outline's places (`outlineSpots`), so a line on its spots ends on spots
+ * whatever the spacing, and nobody passes anyone. **By steps** each goes the same N steps round.
+ * The spots are where they stop and `laps` the whole times round, as R-13‴ reads them back.
  */
 export function planGoRound(
     starts: readonly XY[],
@@ -497,33 +556,62 @@ export function planGoRound(
 ): GoRoundPlan {
     const { geometry, loop } = walkingOutline(outline, options.reversed);
     const L = loop.L;
+    const snap = loopSnap(L);
     const line = lineRound(loop, starts, options.leader);
-    const startDist = line.map((i) => nearestOnLoop(loop, starts[i]!));
-    const sorted = [...startDist].sort((a, b) => a - b);
-    const gaps = sorted.map((x, k) =>
-        k + 1 < sorted.length ? sorted[k + 1]! - x : sorted[0]! + L - x,
+    const memberStarts = line.map((i) => starts[i]!);
+    const startDist = memberStarts.map((p) => nearestOnLoop(loop, p));
+    const { ring, memberSpot } = outlineSpots(startDist, L);
+    const S = ring.length;
+    const gaps = ring.map((x, k) =>
+        k + 1 < S ? ring[k + 1]! - x : ring[0]! + L - x,
     );
-    const usual = median(gaps);
-    const spotCount = Math.max(
-        line.length,
-        usual > EPS_GEOM ? Math.round(L / usual) : line.length,
+    const spacing = median(gaps);
+    const amount = Math.max(0, Math.round(options.amount));
+    let laps: number;
+    let ends: number[];
+    if (options.unit === "spots") {
+        laps = Math.floor(amount / S);
+        ends = startDist.map((s, q) => {
+            let a = ring[(memberSpot[q]! + amount) % S]! - s;
+            if (a < 0) a += L;
+            if (a > L - snap) a = 0;
+            return s + a + laps * L;
+        });
+    } else {
+        const D = amount * options.step;
+        laps = Math.floor((D + snap) / L);
+        ends = startDist.map((s) => s + D);
+    }
+    const spots = ends.map((e) => loopPoint(loop, e));
+    const walk = aroundEnds(loop, memberStarts, spots, laps);
+    const distances = walk.endDist.map(
+        (e, q) =>
+            walk.inStraight[q]! + e - walk.startDist[q]! + walk.straight[q]!,
     );
-    const spacing = L / spotCount;
-    const amount = Math.max(0, options.amount);
-    const distance =
-        options.unit === "spots" ? amount * spacing : amount * options.step;
-    const ends = startDist.map((s) => s + distance);
     return {
         geometry,
         loop,
         line,
+        starts: memberStarts,
         startDist,
         ends,
-        spots: ends.map((e) => loopPoint(loop, e)),
-        laps: Math.floor((distance + loopSnap(L)) / L),
-        distance,
+        spots,
+        laps,
+        distances,
+        turns:
+            options.unit === "spots" ? amount / S : (amount * options.step) / L,
+        ring,
+        memberSpot,
         spacing,
-        spotCount,
+        maxAmount:
+            options.unit === "spots"
+                ? (MAX_LAPS + 1) * S - 1
+                : Math.max(
+                      1,
+                      Math.floor(((MAX_LAPS + 1) * L - snap) / options.step),
+                  ),
+        offOutline: walk.inStraight.filter((x) => x > options.step / 20).length,
+        walk,
     };
 }
 
@@ -541,14 +629,29 @@ export function defaultSpots(
 }
 
 /**
- * Where each member of `plan` is at progress `p` of the move (0 to 1): round the outline from its
- * start, the same distance for everyone, as R-13‴ resolves the written move. For ▶ Preview.
+ * Where each member of `plan` is at progress `p` of the move (0 to 1): R-13‴ itself (straight onto
+ * the outline when it stands off it, round it, straight to its spot), as the resolver will have
+ * the written move. For ▶ Preview.
  */
 export function goRoundPreview(plan: GoRoundPlan, p: number): XY[] {
-    return plan.startDist.map((s, q) =>
-        p >= 1
-            ? plan.spots[q]!
-            : loopPoint(plan.loop, s + plan.distance * Math.max(0, p)),
+    const { walk, loop } = plan;
+    return plan.starts.map((o, q) =>
+        p <= 0
+            ? o
+            : p >= 1
+              ? plan.spots[q]!
+              : aroundPoint(
+                    loop,
+                    o,
+                    walk.enter[q]!,
+                    walk.inStraight[q]!,
+                    walk.startDist[q]!,
+                    walk.endDist[q]!,
+                    walk.turn[q]!,
+                    walk.straight[q]!,
+                    plan.spots[q]!,
+                    p,
+                ),
     );
 }
 
@@ -615,7 +718,7 @@ async function planInTransaction(
         const [x, y] = resolver.positionAt(m, window.start);
         return [x, y];
     });
-    const outline = outlineOf(starts);
+    const outline = outlineOf(starts, input.step);
     if (!outline) refuse(goRoundRefusal.notOutline());
     const leader = input.leaderId === null ? null : ids.indexOf(input.leaderId);
     const plan = planGoRound(starts, outline, {
@@ -625,7 +728,8 @@ async function planInTransaction(
         unit: input.unit,
         step: input.step,
     });
-    if (!(plan.distance >= EPS_GEOM)) refuse(goRoundRefusal.noDistance());
+    if (!(input.amount >= 1) || !plan.distances.some((d) => d >= EPS_GEOM))
+        refuse(goRoundRefusal.noDistance());
     if (plan.laps > MAX_LAPS) refuse(goRoundRefusal.tooFar(MAX_LAPS));
     const again = await aroundTrailOver(tx, window, ids);
     // AP-T1's refusals on the moves the members have in the window now (AP-T8's peel); their own
@@ -671,6 +775,8 @@ export async function goRoundRefusalFor(
     tx: DbTransaction,
     window: TrailWindow,
     marcherIds: readonly number[],
+    /** One step, in field units: the fit's tolerance is at most half of it */
+    step: number,
 ): Promise<TimelineText | null> {
     try {
         await planInTransaction(tx, {
@@ -680,7 +786,7 @@ export async function goRoundRefusalFor(
             reversed: false,
             amount: 1,
             unit: "spots",
-            step: 1,
+            step,
         });
         return null;
     } catch (error) {
@@ -763,6 +869,37 @@ export async function goRound(
 // ---------------------------------------------------------------------------
 
 /**
+ * AP-T14's spots on the outline turned round (`loop`): a founder's as far the other way from where
+ * it stands (`originOf`); a slot nobody founds from its own spot, turned back by twice the usual
+ * distance (the founders' median, once round at most), so no two slots end on one point.
+ */
+function turnedSpots(
+    loop: RoutePath,
+    entry: { members: number[]; startDist: number[]; endDist: number[] },
+    slotOf: ReadonlyMap<number, number>,
+    spots: readonly { slot_index: number; x: number; y: number }[],
+    originOf: (marcher: number) => XY,
+): Map<number, XY> {
+    const out = new Map<number, XY>();
+    const went: number[] = [];
+    for (const [q, m] of entry.members.entries()) {
+        const slot = slotOf.get(m);
+        if (slot === undefined) continue;
+        const a = entry.endDist[q]! - entry.startDist[q]!;
+        went.push(a - Math.floor(a / loop.L) * loop.L);
+        out.set(slot, loopPoint(loop, nearestOnLoop(loop, originOf(m)) + a));
+    }
+    const usual = median(went);
+    for (const d of spots)
+        if (!out.has(d.slot_index))
+            out.set(
+                d.slot_index,
+                loopPoint(loop, nearestOnLoop(loop, [d.x, d.y]) + 2 * usual),
+            );
+    return out;
+}
+
+/**
  * AP-T14: a move round an outline goes the other way round, each member the same distance as it
  * went (its spot is then on the outline: one off it is put back on). The outline is turned round,
  * `reverse` toggled (the old tail leads, R-12′), the laps kept and every slot's spot rewritten, in
@@ -798,8 +935,15 @@ export async function reverseAroundInTransaction(
     const resolver = createResolver((await readTimelineTables(tx)).snapshot);
     const entry = resolver.ftlEntry(transitionId);
     const reverse = params.reverse !== true;
-    // Each founding member's new spot: as far round the other way, from where it stands
-    const slots = await tx
+    // Every slot's new spot (AP-T14): a founder's as far round the other way from where it stands;
+    // a slot nobody founds (a joiner's, a vacant one) as far the other way from its spot's start,
+    // its spot turned back by twice the usual distance, so no two end on one point
+    const spots = await tx
+        .select()
+        .from(D)
+        .where(eq(D.transition_id, transitionId))
+        .all();
+    const founders = await tx
         .select({
             marcher: schema.timeline_assignments.marcher_id,
             slot: schema.timeline_assignments.slot_index,
@@ -807,27 +951,21 @@ export async function reverseAroundInTransaction(
         .from(schema.timeline_assignments)
         .where(eq(schema.timeline_assignments.transition_id, transitionId))
         .all();
-    const slotOf = new Map(slots.map((s) => [s.marcher, s.slot]));
-    if (loop)
-        for (const [q, m] of entry.members.entries()) {
-            const slot = slotOf.get(m);
-            if (slot === undefined) continue;
-            const went = entry.endDist[q]! - entry.startDist[q]!;
-            const from = resolver.explain(m, transition.start_beat).origin;
-            const [x, y] = loopPoint(
-                loop,
-                nearestOnLoop(loop, [from[0], from[1]]) + went,
+    const slotOf = new Map(founders.map((f) => [f.marcher, f.slot]));
+    if (entry.members.length === 0) refuse(goRoundRefusal.reverseNobody());
+    const newSpot = loop
+        ? turnedSpots(loop, entry, slotOf, spots, (m) => {
+              const o = resolver.explain(m, transition.start_beat).origin;
+              return [o[0], o[1]];
+          })
+        : new Map<number, XY>();
+    for (const [slot, [x, y]] of newSpot)
+        await tx
+            .update(D)
+            .set({ x, y })
+            .where(
+                and(eq(D.transition_id, transitionId), eq(D.slot_index, slot)),
             );
-            await tx
-                .update(D)
-                .set({ x, y })
-                .where(
-                    and(
-                        eq(D.transition_id, transitionId),
-                        eq(D.slot_index, slot),
-                    ),
-                );
-        }
     await writeRouteGeometryInTransaction(tx, transition.route_id, back);
     await tx
         .update(T)

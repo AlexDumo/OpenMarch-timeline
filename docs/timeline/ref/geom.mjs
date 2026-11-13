@@ -335,7 +335,8 @@ export function alongWayAt(way, s, e, turn, straight, spot, p) {
  * the route with `closed: true`, walked by this file's own routeWalk from `from` through its points back to `to` (the same
  * point), the closing leg an arc by `toBulge`. Null when the route isn't closed, has no point, or has no length. `at(d)` is
  * the outline at d modulo its length; `nearest(p)` the distance round it (0 ≤ d < L) of the point nearest p, by a linear
- * scan of its straight legs and its arc legs (exactly, from the circle), ties to the smaller distance. Written from the spec.
+ * scan of its straight legs and its arc legs (exactly, from the circle); places within EPS_GEOM of the nearest are a tie,
+ * which the smaller distance round wins. Written from the spec.
  */
 export function makeAroundWay(route) {
   if (!route || route.closed !== true || !(route.points?.length > 0)) return null;
@@ -360,7 +361,9 @@ export function makeAroundWay(route) {
   const at = (d) => { let x = d - Math.floor(d / L) * L; if (x >= L) x = 0; return once(x); };
   const nearest = (p) => {
     let best = Infinity, d = 0;
-    const offer = (q, at) => { const dd = Math.hypot(q[0] - p[0], q[1] - p[1]); if (dd < best) { best = dd; d = at; } };
+    // nearer by more than EPS_GEOM wins; within it, a tie that the smaller distance round wins
+    const offer = (q, at) => { const dd = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      if (dd < best - EPS_GEOM) { best = dd; d = at; } else if (dd <= best + EPS_GEOM) { if (at < d) d = at; if (dd < best) best = dd; } };
     for (let j = 0; j < W.V.length - 1; j++) {
       const P0 = W.V[j], P3 = W.V[j + 1], pc = W.pieces[j], d0 = W.D[j], len = W.D[j + 1] - W.D[j];
       if (pc && 'arc' in pc) {

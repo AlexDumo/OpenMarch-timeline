@@ -26,8 +26,9 @@ import {
 import {
     flipRoundWay,
     goingRound,
-    ROUND_MAX,
+    roundMaxOf,
     setGoRound,
+    setRoundUnit,
     stepRoundAmount,
 } from "./followAround";
 import { isTrailLineAt, openFollowTool } from "./followTool";
@@ -361,24 +362,60 @@ export function usePathPenActions(): void {
     const roundAmount = usePathPenStore(
         (s) => s.session?.follow?.around?.amount ?? 0,
     );
+    const roundMax = usePathPenStore((s) => roundMaxOf(s.session?.follow));
+    // Go around (step 10): switches Go around | Drag out in the Follow tool; with the tool shut,
+    // opens it going around when the selection stands on a circle or box outline
+    const canOpenRound =
+        phase !== "drawing" && performers.length >= 2 && !isPlaying;
     useActionHandler(
         "followGoRound",
         () => {
             const a = usePathPenStore.getState().session?.follow?.around;
-            if (a) setGoRound(!a.on);
+            if (a) {
+                setGoRound(!a.on);
+                return;
+            }
+            const resolver = useTimelineResolverStore.getState().resolver;
+            if (!resolver) return;
+            const beat = useTimelineSelectionStore.getState().playheadBeat;
+            void openFollowTool(
+                resolver,
+                performers.map((m) => m.id),
+                drills,
+                beat,
+                true,
+            ).then((refused) => {
+                if (refused) toast.error(refused, { id: "path-pen" });
+                else if (useShapeToolStore.getState().tool) closeShapeTool();
+            });
         },
         {
-            enabled: roundOffered,
+            enabled: roundOffered || canOpenRound,
             label: round
                 ? tolgee.t("actions.path.dragOut", "Drag a trail out instead")
                 : undefined,
+            disabledReason: round
+                ? tolgee.t(
+                      "pathways.refusals.goAroundOnly",
+                      "This line can only go around: it has no ends to drag a trail out of",
+                  )
+                : tolgee.t(
+                      "pathways.refusals.goAroundSelect",
+                      "Select marchers on a circle or box outline",
+                  ),
         },
     );
     useActionHandler("followRoundMore", () => stepRoundAmount(1), {
-        enabled: round && roundAmount < ROUND_MAX,
+        enabled: round && roundAmount < roundMax,
     });
     useActionHandler("followRoundLess", () => stepRoundAmount(-1), {
         enabled: round && roundAmount > 1,
+    });
+    useActionHandler("followRoundSpots", () => setRoundUnit("spots"), {
+        enabled: round,
+    });
+    useActionHandler("followRoundSteps", () => setRoundUnit("steps"), {
+        enabled: round,
     });
     useActionHandler(
         "followPreview",

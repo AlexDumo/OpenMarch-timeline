@@ -152,6 +152,186 @@ const trailOf = async (db: DbConnection) => {
     return trails[0]!;
 };
 
+/** The app's step in field units (8 to 5 at half a unit an inch) */
+const STEP = 11.25;
+/** A seeded random number from 0 to 1 (the test's own) */
+const seeded = (seed: number) => () => {
+    seed = (seed * 16807) % 2147483647;
+    return seed / 2147483647;
+};
+/** `n` evenly round an ellipse of semi-axes `a`, `b` about `c` */
+const ellipse = (c: XY, a: number, b: number, n: number, turn = 0): XY[] =>
+    Array.from({ length: n }, (_, i) => {
+        const t = turn + (i * 2 * Math.PI) / n;
+        return [c[0] + a * Math.cos(t), c[1] + b * Math.sin(t)];
+    });
+/** `k` evenly along each side of a regular polygon of `sides` sides and radius to its corners `r` */
+const polygon = (sides: number, r: number, k: number): XY[] => {
+    const out: XY[] = [];
+    for (let s = 0; s < sides; s++) {
+        const a = (s * 2 * Math.PI) / sides;
+        const b = ((s + 1) * 2 * Math.PI) / sides;
+        for (let j = 0; j < k; j++) {
+            const f = j / k;
+            out.push([
+                r * ((1 - f) * Math.cos(a) + f * Math.cos(b)),
+                r * ((1 - f) * Math.sin(a) + f * Math.sin(b)),
+            ]);
+        }
+    }
+    return out;
+};
+
+describe("the fit's review cases (step 10, QA-OL-12)", () => {
+    plainIt(
+        "eight round a circle are a circle, not the square they also stand on: exact, rounded to 1, 0.5 or 0.25 field units, and with ±0.01 noise",
+        () => {
+            for (const r of [40, 56, 67.5, 90, 120])
+                for (const grid of [0, 1, 0.5, 0.25])
+                    for (const turn of [0, 0.2, Math.PI / 8]) {
+                        const pts = ellipse([300, 200], r, r, 8, turn).map(
+                            ([x, y]): XY =>
+                                grid
+                                    ? [
+                                          Math.round(x / grid) * grid,
+                                          Math.round(y / grid) * grid,
+                                      ]
+                                    : [x, y],
+                        );
+                        expect(
+                            fitOutline(pts, STEP)?.kind,
+                            `r ${r} grid ${grid} turn ${turn}`,
+                        ).toBe("circle");
+                    }
+            const R = seeded(12345);
+            for (let trial = 0; trial < 60; trial++) {
+                const r = 40 + R() * 80;
+                const noisy = ellipse([100, 100], r, r, 8, R() * Math.PI).map(
+                    ([x, y]): XY => [
+                        x + (R() - 0.5) * 0.02,
+                        y + (R() - 0.5) * 0.02,
+                    ],
+                );
+                expect(
+                    fitOutline(noisy, STEP)?.kind,
+                    `noisy trial ${trial}`,
+                ).toBe("circle");
+            }
+            // four on a square's corners still walk its sides
+            expect(fitOutline([[0, 0], [40, 0], [40, 40], [0, 40]], STEP)?.kind).toBe("box"); // prettier-ignore
+        },
+    );
+
+    plainIt(
+        "the tolerance is at most half a step: a clear oval, a hexagon and an octagon are refused; a near circle fits, with who steps onto it counted",
+        () => {
+            // 12 × 8 steps (semi-axes 6 and 4) with 16 or 8 marchers: refused, not a circle or a box
+            for (const n of [8, 12, 16, 24])
+                expect(
+                    fitOutline(ellipse([0, 0], 6 * STEP, 4 * STEP, n), STEP),
+                    `oval of ${n}`,
+                ).toBeNull();
+            // a hexagon of radius 8 steps and an octagon of 16 with marchers along their sides (an
+            // octagon of 8 is within half a step of its circle, so it fits, its marchers counted off it)
+            expect(fitOutline(polygon(6, 8 * STEP, 3), STEP)).toBeNull();
+            expect(fitOutline(polygon(8, 16 * STEP, 2), STEP)).toBeNull();
+            const small = fitOutline(polygon(8, 8 * STEP, 2), STEP)!;
+            expect(small.kind).toBe("circle");
+            expect(
+                planGoRound(polygon(8, 8 * STEP, 2), small, {
+                    reversed: false,
+                    amount: 1,
+                    unit: "spots",
+                    step: STEP,
+                }).offOutline,
+            ).toBeGreaterThan(0);
+            // 10 × 9.6 steps: within half a step of a circle, so it fits, and the plan says who steps onto it
+            const near = ellipse([0, 0], 5 * STEP, 4.8 * STEP, 16);
+            const o = fitOutline(near, STEP);
+            expect(o?.kind).toBe("circle");
+            const plan = planGoRound(near, o!, {
+                reversed: false,
+                amount: 1,
+                unit: "spots",
+                step: STEP,
+            });
+            expect(plan.offOutline).toBeGreaterThan(0);
+            // ▶ Preview walks them straight onto it first, as the resolver will (R-13‴)
+            const q = plan.walk.inStraight.findIndex((x) => x > STEP / 20);
+            const early = goRoundPreview(plan, 1e-3)[q]!;
+            const start = plan.starts[q]!;
+            const enter = plan.walk.enter[q]!;
+            const toward =
+                (early[0] - start[0]) * (enter[0] - start[0]) +
+                (early[1] - start[1]) * (enter[1] - start[1]);
+            expect(toward).toBeGreaterThan(0);
+        },
+    );
+
+    plainIt(
+        "only closed outlines: a 270° arc of nine, three sides of a box and two ranks far apart are not, though the arc can go around its circle",
+        () => {
+            const arc9 = Array.from({ length: 9 }, (_, i): XY => {
+                const a = (i * 1.5 * Math.PI) / 8;
+                return [8 * STEP * Math.cos(a), 8 * STEP * Math.sin(a)];
+            });
+            expect(fitOutline(arc9, STEP)).toBeNull();
+            expect(outlineOf(arc9, STEP)?.full).toBe(false);
+            // a box with one middle gone is still closed
+            const box = boxPlaces([0, 0], STEP);
+            expect(
+                fitOutline(
+                    box.filter((_, i) => i !== 5),
+                    STEP,
+                )?.kind,
+            ).toBe("box");
+            // a U: a 6 × 6-step box's top and two sides, 2 apart, its bottom side empty
+            const u: XY[] = [];
+            for (let x = 0; x <= 6; x += 2) u.push([x * STEP, 0]);
+            for (let y = 2; y <= 6; y += 2)
+                u.push([0, y * STEP], [6 * STEP, y * STEP]);
+            expect(fitOutline(u, STEP)).toBeNull();
+            const ranks: XY[] = [0, 1, 2, 3].flatMap((i): XY[] => [
+                [2 * i * STEP, 0],
+                [2 * i * STEP, 12 * STEP],
+            ]);
+            expect(fitOutline(ranks, STEP)).toBeNull();
+        },
+    );
+
+    plainIt(
+        "uneven spacing: a 12 × 4 box, long sides 2 apart and short sides 1 apart, goes on by places, landing on spots",
+        () => {
+            const pts: XY[] = [];
+            for (let x = 0; x < 12; x += 2) pts.push([x * STEP, 0]);
+            for (let y = 0; y < 4; y += 1) pts.push([12 * STEP, y * STEP]);
+            for (let x = 12; x > 0; x -= 2) pts.push([x * STEP, 4 * STEP]);
+            for (let y = 4; y > 0; y -= 1) pts.push([0, y * STEP]);
+            const o = fitOutline(pts, STEP)!;
+            expect(o.kind).toBe("box");
+            const plan = planGoRound(pts, o, {
+                reversed: false,
+                amount: 3,
+                unit: "spots",
+                step: STEP,
+            });
+            expect(plan.ring.length).toBe(pts.length);
+            // every spot written is one of the places they stand on
+            for (const spot of plan.spots)
+                expect(pts.some((p) => near(p, spot, 1e-6))).toBe(true);
+            // nobody passes: the walking order is kept at the end
+            const ends = plan.ends.map(
+                (e) => e - Math.floor(e / plan.loop.L) * plan.loop.L,
+            );
+            const order = [...ends.keys()].sort((a, b) => ends[a]! - ends[b]!);
+            const rot = order.indexOf(0);
+            expect([...order.slice(rot), ...order.slice(0, rot)]).toEqual([
+                ...ends.keys(),
+            ]);
+        },
+    );
+});
+
 describe("the outline and the plan (step 10, pure)", () => {
     plainIt(
         "fitOutline: circles of 8, 12 and 16 are circles; box outlines (square, oblong, turned) are boxes; four on a square's corners walk its sides",
@@ -164,13 +344,13 @@ describe("the outline and the plan (step 10, pure)", () => {
                         -3 + 7 * Math.sin((i * 2 * Math.PI) / n),
                     ],
                 );
-                const o = fitOutline(pts);
+                const o = fitOutline(pts, 1);
                 expect(o?.kind, `circle of ${n}`).toBe("circle");
                 expect(o!.loop.L).toBeCloseTo(2 * Math.PI * 7, 6);
             }
             const square = boxPlaces([0, 0], 2);
-            expect(fitOutline(square)?.kind).toBe("box");
-            expect(fitOutline(square)!.loop.L).toBeCloseTo(32, 9);
+            expect(fitOutline(square, 1)?.kind).toBe("box");
+            expect(fitOutline(square, 1)!.loop.L).toBeCloseTo(32, 9);
             // an oblong 12 × 4 with spots 2 apart, turned 30°
             const a = Math.PI / 6;
             const turn = ([x, y]: XY): XY => [
@@ -182,10 +362,10 @@ describe("the outline and the plan (step 10, pure)", () => {
             for (let y = 0; y < 4; y += 2) oblong.push([12, y]);
             for (let x = 12; x > 0; x -= 2) oblong.push([x, 4]);
             for (let y = 4; y > 0; y -= 2) oblong.push([0, y]);
-            const turned = fitOutline(oblong.map(turn));
+            const turned = fitOutline(oblong.map(turn), 1);
             expect(turned?.kind).toBe("box");
             expect(turned!.loop.L).toBeCloseTo(32, 9);
-            expect(fitOutline([[0, 0], [4, 0], [4, 4], [0, 4]])?.kind).toBe("box"); // prettier-ignore
+            expect(fitOutline([[0, 0], [4, 0], [4, 4], [0, 4]], 1)?.kind).toBe("box"); // prettier-ignore
         },
     );
 
@@ -193,7 +373,10 @@ describe("the outline and the plan (step 10, pure)", () => {
         "fitOutline: a line, a half circle, three on a circle, a filled block and a scatter are not outlines",
         () => {
             expect(
-                fitOutline([0, 1, 2, 3, 4, 5].map((i): XY => [2 * i, 0])),
+                fitOutline(
+                    [0, 1, 2, 3, 4, 5].map((i): XY => [2 * i, 0]),
+                    1,
+                ),
             ).toBeNull();
             const half = Array.from(
                 { length: 6 },
@@ -202,13 +385,13 @@ describe("the outline and the plan (step 10, pure)", () => {
                     8 * Math.sin((i * Math.PI) / 5),
                 ],
             );
-            expect(fitOutline(half)).toBeNull();
-            expect(fitOutline([[0, -5], [4.33, 2.5], [-4.33, 2.5]])).toBeNull(); // prettier-ignore
+            expect(fitOutline(half, 1)).toBeNull();
+            expect(fitOutline([[0, -5], [4.33, 2.5], [-4.33, 2.5]], 1)).toBeNull(); // prettier-ignore
             const block: XY[] = [];
             for (let x = 0; x < 3; x++)
                 for (let y = 0; y < 3; y++) block.push([2 * x, 2 * y]);
-            expect(fitOutline(block)).toBeNull();
-            expect(fitOutline([[0, 0], [9, 1], [3, 7], [11, 13], [-4, 6]])).toBeNull(); // prettier-ignore
+            expect(fitOutline(block, 1)).toBeNull();
+            expect(fitOutline([[0, 0], [9, 1], [3, 7], [11, 13], [-4, 6]], 1)).toBeNull(); // prettier-ignore
         },
     );
 
@@ -222,8 +405,8 @@ describe("the outline and the plan (step 10, pure)", () => {
                     8 * Math.sin((i * Math.PI) / 8),
                 ],
             );
-            expect(fitOutline(arc)).toBeNull();
-            const o = outlineOf(arc)!;
+            expect(fitOutline(arc, 1)).toBeNull();
+            const o = outlineOf(arc, 1)!;
             expect(o.kind).toBe("circle");
             expect(o.full).toBe(false);
             expect(o.loop.L).toBeCloseTo(16 * Math.PI, 6);
@@ -234,7 +417,7 @@ describe("the outline and the plan (step 10, pure)", () => {
                 unit: "spots",
                 step: 1,
             });
-            expect(plan.spotCount).toBe(16);
+            expect(plan.ring.length).toBe(16);
             expect(plan.line.at(-1)).toBe(4);
             plan.line.forEach((i, q) => {
                 const want = [
@@ -244,9 +427,12 @@ describe("the outline and the plan (step 10, pure)", () => {
                 expect(near(plan.spots[q]!, want, 1e-9)).toBe(true);
             });
             expect(
-                outlineOf([0, 1, 2, 3].map((i): XY => [2 * i, 0])),
+                outlineOf(
+                    [0, 1, 2, 3].map((i): XY => [2 * i, 0]),
+                    1,
+                ),
             ).toBeNull();
-            expect(outlineOf(boxPlaces([0, 0], 2))?.full).toBe(true);
+            expect(outlineOf(boxPlaces([0, 0], 2), 1)?.full).toBe(true);
         },
     );
 
@@ -287,16 +473,16 @@ describe("the outline and the plan (step 10, pure)", () => {
         "planGoRound: the same distance for everyone, a spot being the usual gap; a gap in the outline counts as spots; laps",
         () => {
             const square = boxPlaces([0, 0], 2);
-            const outline = fitOutline(square)!;
+            const outline = fitOutline(square, 1)!;
             const plan = planGoRound(square, outline, {
                 reversed: false,
                 amount: 3,
                 unit: "spots",
                 step: 1,
             });
-            expect(plan.spotCount).toBe(8);
+            expect(plan.ring.length).toBe(8);
             expect(plan.spacing).toBeCloseTo(4, 12);
-            expect(plan.distance).toBeCloseTo(12, 12);
+            plan.distances.forEach((d) => expect(d).toBeCloseTo(12, 12));
             expect(plan.laps).toBe(0);
             // every member ends three places on, round the corners
             plan.line.forEach((i, q) =>
@@ -325,13 +511,13 @@ describe("the outline and the plan (step 10, pure)", () => {
             ).toBe(1);
             // two missing: six members, still eight spots, and the one behind the gap leads
             const six = [0, 1, 2, 3, 4, 5].map((i) => square[i]!);
-            const p6 = planGoRound(six, fitOutline(six) ?? outline, {
+            const p6 = planGoRound(six, fitOutline(six, 1) ?? outline, {
                 reversed: false,
                 amount: 1,
                 unit: "spots",
                 step: 1,
             });
-            expect(p6.spotCount).toBe(8);
+            expect(p6.ring.length).toBe(8);
             expect(p6.line.at(-1)).toBe(5);
             // by steps
             expect(
@@ -340,7 +526,7 @@ describe("the outline and the plan (step 10, pure)", () => {
                     amount: 5,
                     unit: "steps",
                     step: 2,
-                }).distance,
+                }).distances[0],
             ).toBe(10);
             expect(defaultSpots(4, 8, 1)).toBe(2);
             expect(defaultSpots(4, 1, 1)).toBe(1);
@@ -351,7 +537,7 @@ describe("the outline and the plan (step 10, pure)", () => {
         "lineRound: walking order, the leader last; reversed, the order turns round",
         () => {
             const square = boxPlaces([0, 0], 2);
-            const outline = fitOutline(square)!;
+            const outline = fitOutline(square, 1)!;
             expect(lineRound(outline.loop, square, 4)).toEqual([
                 5, 6, 7, 0, 1, 2, 3, 4,
             ]);
@@ -393,7 +579,7 @@ describeDbTests("Go round an outline (AP-T13 to AP-T15)", (it) => {
             expect(near(r.positionAt(m, 17), at[(i + 3) % 8]!)).toBe(true),
         );
         // the move is the plan's preview at every quarter beat
-        const plan = planGoRound(IDS.map((m) => before.positionAt(m, 9) as XY), fitOutline(at)!, { reversed: false, amount: 3, unit: "spots", step }); // prettier-ignore
+        const plan = planGoRound(IDS.map((m) => before.positionAt(m, 9) as XY), fitOutline(at, step)!, { reversed: false, amount: 3, unit: "spots", step }); // prettier-ignore
         for (let b = 9; b <= 17; b += 0.25) {
             const want = goRoundPreview(plan, (b - 9) / 8);
             plan.line.forEach((i, q) =>
@@ -478,7 +664,9 @@ describeDbTests("Go round an outline (AP-T13 to AP-T15)", (it) => {
         await goRound({ db, window: WINDOW, marcherIds: IDS, leaderId: null, reversed: false, amount: 1, unit: "spots", step }); // prettier-ignore
         const first = await dataOf(db);
         expect(
-            await db.transaction((tx) => goRoundRefusalFor(tx, WINDOW, IDS)),
+            await db.transaction((tx) =>
+                goRoundRefusalFor(tx, WINDOW, IDS, step),
+            ),
         ).toBeNull();
         const again = await goRound({ db, window: WINDOW, marcherIds: IDS, leaderId: null, reversed: false, amount: 2, unit: "spots", step }); // prettier-ignore
         expect(again.replaced).toBe(true);
@@ -516,6 +704,33 @@ describeDbTests("Go round an outline (AP-T13 to AP-T15)", (it) => {
         );
     });
 
+    it("QA-AP-OL-5b (AP-T14): Reverse leader with a member taken over at the start rewrites every slot's spot, so no two end on one point", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { step, at } = await onOutline(db, boxPlaces);
+        await goRound({ db, window: WINDOW, marcherIds: IDS, leaderId: null, reversed: false, amount: 3, unit: "spots", step }); // prettier-ignore
+        // M3 taken over for the window's first count: it joins the move after it
+        const t = await trailOf(db);
+        const A = schema.timeline_assignments;
+        const row = (await db.select().from(A).where(eq(A.marcher_id, 3)).all()).find((r) => r.transition_id === t.transitionId)!; // prettier-ignore
+        await db.update(A).set({ start_beat: 10 }).where(eq(A.id, row.id));
+        await reverseTrail({ db, routeId: t.routeId });
+        const r = await resolverOf(db);
+        const ends = IDS.map((m) => r.positionAt(m, 17));
+        for (let i = 0; i < ends.length; i++)
+            for (let j = i + 1; j < ends.length; j++)
+                expect(
+                    near(ends[i]!, ends[j]!, 1e-6),
+                    `M${IDS[i]} and M${IDS[j]}`,
+                ).toBe(false);
+        // the joiner's spot is turned back as far as everyone else's: five places on
+        expect(near(ends[2]!, at[(2 + 5) % 8]!)).toBe(true);
+        IDS.forEach((m, i) =>
+            expect(near(ends[i]!, at[(i + 5) % 8]!), `M${m}`).toBe(true),
+        );
+    });
+
     it("QA-AP-OL-6: refusals with their reasons, nothing written; point edits refused (AP-T15); Remove trail walks straight to the same spots", async ({
         db,
         marchersAndPages: _,
@@ -524,14 +739,14 @@ describeDbTests("Go round an outline (AP-T13 to AP-T15)", (it) => {
         const go = (ids: number[], amount = 1) => goRound({ db, window: WINDOW, marcherIds: ids, leaderId: null, reversed: false, amount, unit: "spots", step }); // prettier-ignore
         await expectRefused(db, () => go([1]), /two or more/);
         await expectRefused(db, () => go([1, 2, 3]), /circle or a box outline/);
-        await expectRefused(db, () => go(IDS, 0), /more than nothing/);
+        await expectRefused(db, () => go(IDS, 0), /at least one spot or step/);
         await expectRefused(db, () => go(IDS, 1e6), /at most 100 times/);
         expect(
             refusalText(
                 new TimelineWriteError(
                     "E-ARGS",
                     (await db.transaction((tx) =>
-                        goRoundRefusalFor(tx, WINDOW, [1, 2, 3]),
+                        goRoundRefusalFor(tx, WINDOW, [1, 2, 3], step),
                     ))!,
                 ),
             ),

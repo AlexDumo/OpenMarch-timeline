@@ -15,6 +15,7 @@ import {
 import { readTrails, type MoveTrail } from "@/db-functions/timelineTrails";
 import {
     aroundTrailOver,
+    goRoundRefusal,
     goRoundRefusalFor,
     outlineOf,
 } from "@/db-functions/timelineTrailAround";
@@ -109,6 +110,8 @@ export async function openFollowTool(
     ids: readonly number[],
     drills: ReadonlyMap<number, string>,
     beat: number,
+    /** Open going round (the palette's Go around), refused when they stand on no outline */
+    round = false,
 ): Promise<string | null> {
     const window = followWindowNow();
     if (!window) return translateTimelineText(trailDragRefusal.noWindow());
@@ -123,17 +126,7 @@ export async function openFollowTool(
     const along = await followOrderAt(db, sorted, window.start, starts);
     const tailFirst = along ? tailFirstOf(along).map((i) => sorted[i]!) : null;
     // Said before drawing starts, so no drawing is lost (AP-T8's refusals)
-    const dragRefusal = tailFirst
-        ? await db.transaction((tx) =>
-              trailDragRefusalFor(
-                  tx,
-                  window,
-                  sorted,
-                  tailFirst.at(-1)!,
-                  "trail",
-              ),
-          )
-        : trailDragRefusal.notFitted();
+    const dragRefusal = await dragRefusalOf(window, sorted, tailFirst);
     const at = new Map<number, XY>(
         sorted.map((m, i) => [m, { x: starts[i]![0], y: starts[i]![1] }]),
     );
@@ -146,10 +139,15 @@ export async function openFollowTool(
         ...base,
         remembered,
         canDrag,
+        round,
     });
-    if (!offer.around && dragRefusal)
-        return translateTimelineText(offer.refusal ?? dragRefusal);
     const { around } = offer;
+    const refusal = around
+        ? null
+        : round
+          ? (offer.refusal ?? goRoundRefusal.notOutline())
+          : dragRefusal && (offer.refusal ?? dragRefusal);
+    if (refusal) return translateTimelineText(refusal);
     const keep = await followKeepAt(db, resolver, sorted, beat);
     const follow: FollowDrag = {
         window,
@@ -186,6 +184,18 @@ export async function openFollowTool(
         },
     });
     return null;
+}
+
+/** Why a trail can't be dragged out of the line `tailFirst` (none: not a line), or null */
+async function dragRefusalOf(
+    window: TrailWindow,
+    ids: readonly number[],
+    tailFirst: readonly number[] | null,
+): Promise<TimelineText | null> {
+    if (!tailFirst) return trailDragRefusal.notFitted();
+    return await db.transaction((tx) =>
+        trailDragRefusalFor(tx, window, ids, tailFirst.at(-1)!, "trail"),
+    );
 }
 
 /** The Follow tool's target as it opens: the line, each where it stands, its last leading */
@@ -229,21 +239,24 @@ async function goRoundOffer(
     f: Pick<FollowDrag, "ids" | "starts" | "step" | "window"> & {
         remembered: readonly number[] | null;
         canDrag: boolean;
+        /** Asked for going around (the palette's Go around): it's on */
+        round: boolean;
     },
 ): Promise<{ around: FollowAround | null; refusal: TimelineText | null }> {
     const starts = f.ids.map((id): [number, number] => {
         const p = f.starts.get(id)!;
         return [p.x, p.y];
     });
-    const outline = outlineOf(starts);
+    const outline = outlineOf(starts, f.step);
     if (!outline) return { around: null, refusal: null };
     const refusal = await db.transaction((tx) =>
-        goRoundRefusalFor(tx, f.window, f.ids),
+        goRoundRefusalFor(tx, f.window, f.ids, f.step),
     );
     if (refusal) return { around: null, refusal };
     // On part of a circle (an arc), dragging a trail out stays the first choice
     const first = initialAround(f, outline, f.remembered, f.canDrag);
-    const around = outline.full || !f.canDrag ? first : { ...first, on: false };
+    const around =
+        outline.full || !f.canDrag || f.round ? first : { ...first, on: false };
     const again = await aroundTrailOver(db, f.window, f.ids);
     return {
         around: again ? againAround(around, again, resolver, f) : around,
@@ -283,16 +296,21 @@ function againAround(
     const q = plan.line.indexOf(base.ids.indexOf(leader));
     const id = base.ids[plan.line[q]!]!;
     const [tx, ty] = resolver.positionAt(id, base.window.end);
-    // How far the leader goes: its spot's place past its start, plus the stored times round
+    // How far the leader goes: the outline's places from its own to its spot's, plus the stored
+    // times round; a spot on no place is steps
     const L = plan.loop.L;
+    const S = plan.ring.length;
     const u = nearestOnLoop(plan.loop, [tx, ty]);
+    const near = (x: number) => Math.min(Math.abs(x - u), L - Math.abs(x - u));
+    const k = plan.ring.findIndex((x) => near(x) < 1e-6 * Math.max(1, L));
+    const whole = k >= 0;
+    const spots = whole
+        ? ((k - plan.memberSpot[q]! + S) % S) + again.laps * S
+        : 0;
     let gone = u - plan.startDist[q]!;
     if (gone < 0) gone += L;
     if (gone > L - loopSnap(L)) gone = 0;
-    const laps = again.laps;
-    gone += laps * L;
-    const spots = gone / plan.spacing;
-    const whole = Math.abs(spots - Math.round(spots)) < 1e-6;
+    gone += again.laps * L;
     return {
         ...around,
         reversed,

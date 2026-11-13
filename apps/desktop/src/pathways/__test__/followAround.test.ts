@@ -12,6 +12,7 @@ import {
     initialAround,
     setGoRound,
     setRoundAmount,
+    roundMaxOf,
     setRoundUnit,
     stepRoundAmount,
 } from "../followAround";
@@ -36,7 +37,10 @@ const PLACES: XY[] = [
     { x: 0, y: 4 },
 ];
 const IDS = [11, 12, 13, 14, 15, 16, 17, 18];
-const outline = fitOutline(PLACES.map((p) => [p.x, p.y]))!;
+const outline = fitOutline(
+    PLACES.map((p) => [p.x, p.y]),
+    1,
+)!;
 
 function followOn(
     remembered: number[] | null = null,
@@ -152,7 +156,7 @@ describe("Go round in the Follow tool (step 10)", () => {
         ).toBe(11);
     });
 
-    it("how far: +, −, typed, held to 1; spots to steps keeps the distance", () => {
+    it("how far: +, −, typed, held to 1 and to as far as Finish allows (100 times around); spots to steps keeps the distance", () => {
         open(followOn());
         stepRoundAmount(1);
         expect(now().follow!.around!.amount).toBe(3);
@@ -160,6 +164,12 @@ describe("Go round in the Follow tool (step 10)", () => {
         expect(now().follow!.around!.amount).toBe(1);
         setRoundAmount(12);
         expect(aroundPlanOf(now().follow!)!.laps).toBe(1);
+        // eight places: 101 × 8 − 1 spots is 100 times around and seven places, the most Finish takes
+        expect(roundMaxOf(now().follow)).toBe(807);
+        setRoundAmount(5000);
+        expect(now().follow!.around!.amount).toBe(807);
+        expect(aroundPlanOf(now().follow!)!.laps).toBe(100);
+        setRoundAmount(12);
         setRoundUnit("steps");
         expect(now().follow!.around!.unit).toBe("steps");
         expect(now().follow!.around!.amount).toBe(48);

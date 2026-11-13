@@ -84,6 +84,7 @@ export type {
     GroupMemberWalk,
     GroupLeg,
     ResolvedAdjust,
+    AroundEnds,
 } from "./geom";
 export {
     adjustRefusal,

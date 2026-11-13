@@ -35,6 +35,22 @@ const near = (a: XY, b: XY, eps = 1e-9) =>
     Math.abs(a[0] - b[0]) <= eps && Math.abs(a[1] - b[1]) <= eps;
 const same = (a: XY, b: XY) => Object.is(a[0], b[0]) && Object.is(a[1], b[1]);
 
+/** A point at distance `d` along a polyline, by a linear scan (the test's own) */
+function along(pts: XY[], d: number): XY {
+    let acc = 0;
+    for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1]!;
+        const b = pts[i]!;
+        const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (d <= acc + len && len > 0) {
+            const f = (d - acc) / len;
+            return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+        }
+        acc += len;
+    }
+    return pts[pts.length - 1]!;
+}
+
 /** The square (0,0) (8,0) (8,8) (0,8), clockwise on the field (y down), as a closed route */
 const SQUARE: RouteGeometry = {
     v: 1,
@@ -276,6 +292,16 @@ describe("going round a closed outline (spec R-13‴, pathways step 10)", () => 
         walkedAgrees(db);
     });
 
+    it("QA-OL-4b: a start equally near two places of the outline (the square's centre) takes the smaller distance round, in both oracles", () => {
+        // (4,4) is 4 from all four sides: a tie the first side (from the seam) wins, its middle at 4
+        const db = aroundShow([[4, 4]], SQUARE, [[8, 4]]);
+        const res = agree(db);
+        expect(res.ftlEntry(1).startDist[0]).toBe(4);
+        // a hair nearer the bottom side is still a tie (within ε_geom), so the top side's place wins
+        const near = aroundShow([[4, 4 + 1e-10]], SQUARE, [[8, 4]]);
+        expect(agree(near).ftlEntry(1).startDist[0]).toBe(4);
+    });
+
     it("QA-OL-5: the outline's own order is the way round; Reverse only changes who leads", () => {
         const back: RouteGeometry = {
             ...SQUARE,
@@ -463,15 +489,41 @@ describe("going round a closed outline (spec R-13‴, pathways step 10)", () => 
         check("outline edited");
     });
 
-    it("QA-OL-10: random outlines (squares, boxes, circles, either way, off-outline starts and spots, laps, gaps): resolver, oracle and ref agree; walked paths agree; equal advances never pass", () => {
+    it("QA-OL-10: random outlines (squares, turned boxes, circles, either way, off-outline starts and spots, laps, Reverse, gaps): the resolver is where the test's own outline formulas put each marcher; the spec's reference oracle (independent) and the package oracle (which shares this geometry) agree; walked paths agree", () => {
         for (let seed = 1; seed <= 80; seed++) {
             const R = mulberry32(9100 + seed);
             const kind = seed % 3;
             const c: XY = [R() * 40 - 20, R() * 40 - 20];
+            const backward = R() < 0.5;
             let geometry: RouteGeometry;
+            // the outline at distance d round it, by the test's own formula
+            let handAt: (d: number) => XY;
+            let L: number;
             if (kind === 2) {
                 const r = 3 + R() * 12;
-                geometry = circleRoute(c, r, (R() < 0.5 ? 1 : -1) * QUARTER);
+                const at = (a: number): XY => [
+                    c[0] + r * Math.cos(a),
+                    c[1] + r * Math.sin(a),
+                ];
+                // from the top, clockwise on the field (the angle grows) or back
+                const dir = backward ? -1 : 1;
+                const quarter = (k: number) =>
+                    at(-Math.PI / 2 + (dir * k * Math.PI) / 2);
+                const k = -dir * QUARTER; // bowing out, as QA-OL-3 works out for clockwise
+                geometry = {
+                    v: 1,
+                    closed: true,
+                    from: quarter(0),
+                    to: quarter(0),
+                    points: [1, 2, 3].map((q) => ({
+                        id: `p${q}`,
+                        at: quarter(q),
+                        bulge: k,
+                    })),
+                    toBulge: k,
+                };
+                L = 2 * Math.PI * r;
+                handAt = (d) => at(-Math.PI / 2 + (dir * d) / r);
             } else {
                 const w = 2 + R() * 16;
                 const h = kind === 0 ? w : 2 + R() * 16;
@@ -481,47 +533,27 @@ describe("going round a closed outline (spec R-13‴, pathways step 10)", () => 
                     c[1] + x * Math.sin(a) + y * Math.cos(a),
                 ];
                 const pts = [corner(w, 0), corner(w, h), corner(0, h)];
-                if (R() < 0.5) pts.reverse();
-                const from = corner(0, 0);
+                if (backward) pts.reverse();
+                const ring = [corner(0, 0), ...pts, corner(0, 0)];
                 geometry = {
                     v: 1,
                     closed: true,
-                    from,
-                    to: from,
-                    points: pts.map((at, i) => ({ id: `p${i}`, at })),
+                    from: ring[0]!,
+                    to: ring[0]!,
+                    points: pts.map((at, q) => ({ id: `p${q}`, at })),
                 };
+                L = 2 * (w + h);
+                handAt = (d) => along(ring, ((d % L) + L) % L);
             }
-            // members evenly round it, all advancing the same distance (or a few nudged off it)
             const n = 3 + Math.floor(R() * 8);
-            const L = (() => {
-                const probe = aroundShow(
-                    [geometry.from],
-                    geometry,
-                    [geometry.from],
-                    { laps: 1 },
-                );
-                return createCachedResolver(probe).ftlEntry(1).endDist[0]!;
-            })();
-            const loopAt = (d: number) => {
-                const probe = aroundShow(
-                    [geometry.from],
-                    geometry,
-                    [geometry.from],
-                    { end: 1, laps: 1 },
-                );
-                return createCachedResolver(probe).positionAt(
-                    1,
-                    (((d % L) + L) % L) / L,
-                );
-            };
             const phase = R() * L;
             const advance = R() * L * 2.5;
             const laps = Math.floor((advance + 1e-9 * L) / L);
-            const homes = Array.from({ length: n }, (_, i) =>
-                loopAt(phase + (i * L) / n),
+            const homes = Array.from({ length: n }, (_, q) =>
+                handAt(phase + (q * L) / n),
             );
-            const spots = Array.from({ length: n }, (_, i) =>
-                loopAt(phase + (i * L) / n + advance),
+            const spots = Array.from({ length: n }, (_, q) =>
+                handAt(phase + (q * L) / n + advance),
             );
             const off = R() < 0.3;
             if (off) {
@@ -530,24 +562,26 @@ describe("going round a closed outline (spec R-13‴, pathways step 10)", () => 
             }
             const db = aroundShow(homes, geometry, spots, { end: 8, laps });
             if (R() < 0.2) db.transitions[1]!.params!.reverse = true;
-            if (R() < 0.2 && n > 3)
-                db.assignments = db.assignments.filter((a) => a.marcher !== 2);
-            const res = agree(db);
+            const gap = R() < 0.2 && n > 3;
+            if (gap)
+                db.assignments = db.assignments.filter((x) => x.marcher !== 2);
+            // every member on the outline at every 1/8 beat where the formulas say (the off ones
+            // only by the oracles); nudged-off ones by both oracles
+            agree(
+                db,
+                off
+                    ? undefined
+                    : (q, b) =>
+                          gap && q === 1
+                              ? homes[1]!
+                              : handAt(
+                                    phase +
+                                        (q * L) / n +
+                                        (advance * Math.min(b, 8)) / 8,
+                                ),
+                1e-7,
+            );
             walkedAgrees(db);
-            if (
-                !off &&
-                !db.transitions[1]!.params!.reverse &&
-                db.assignments.length === n
-            ) {
-                // equal advances: everyone keeps the same distance round to the one ahead
-                const e = res.ftlEntry(1);
-                e.endDist.forEach((d, q) =>
-                    expect(
-                        d - e.startDist[q]!,
-                        `seed ${seed} M${q + 1}`,
-                    ).toBeCloseTo(advance, 6),
-                );
-            }
         }
     });
 });

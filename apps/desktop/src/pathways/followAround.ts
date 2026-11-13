@@ -38,8 +38,9 @@ export interface FollowAround {
     readonly again: boolean;
 }
 
-/** The most spots or steps the bar goes to */
-export const ROUND_MAX = 999;
+/** The most spots or steps the bar goes to: as far as Finish allows (100 times round) */
+export const roundMaxOf = (f: FollowDrag | null | undefined): number =>
+    aroundPlanOf(f)?.maxAmount ?? 1;
 
 /** Whether the Follow tool is going round (DO-1): chosen, and no trail being dragged out */
 export const goingRound = (f: FollowDrag | null | undefined): boolean =>
@@ -221,10 +222,12 @@ export function setGoRound(on: boolean): void {
     );
 }
 
-/** How far (DO-4): a whole number from 1 to {@link ROUND_MAX} */
+/** How far (DO-4): a whole number from 1 to as far as Finish allows ({@link roundMaxOf}) */
 export function setRoundAmount(amount: number): void {
-    const n = Math.max(1, Math.min(ROUND_MAX, Math.round(amount)));
-    updateAround((a) => (a.on && a.amount !== n ? { ...a, amount: n } : null));
+    updateAround((a, f) => {
+        const n = Math.max(1, Math.min(roundMaxOf(f), Math.round(amount)));
+        return a.on && a.amount !== n ? { ...a, amount: n } : null;
+    });
 }
 
 /** One more or one less spot (or step) round */
@@ -238,15 +241,17 @@ export function setRoundUnit(unit: RoundUnit): void {
     updateAround((a, f) => {
         if (!a.on || a.unit === unit) return null;
         const plan = aroundPlanOf(f)!;
+        const gone =
+            plan.distances.reduce((x, d) => x + d, 0) /
+            Math.max(1, plan.distances.length);
         const per = unit === "spots" ? plan.spacing : f.step;
-        return {
+        const next = {
             ...a,
             unit,
-            amount: Math.max(
-                1,
-                Math.min(ROUND_MAX, Math.round(plan.distance / per)),
-            ),
+            amount: Math.max(1, Math.round(gone / per)),
         };
+        const max = roundMaxOf({ ...f, around: next });
+        return { ...next, amount: Math.min(next.amount, max) };
     });
 }
 

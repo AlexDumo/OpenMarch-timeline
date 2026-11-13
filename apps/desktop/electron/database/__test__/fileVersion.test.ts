@@ -56,7 +56,7 @@ describe("file-format version", () => {
             },
         );
 
-        it.each([18, 42, 2 ** 31 - 1])(
+        it.each([15, 16, 18, 42, 2 ** 31 - 1])(
             "refuses a file at %i as too new, new or not",
             (version) => {
                 for (const isNewFile of [false, true]) {
@@ -84,9 +84,9 @@ describe("file-format version", () => {
         });
     });
 
-    it("isSupportedUserVersion covers 7, 8, 10 to 14 and 17, not 9 or past 17", () => {
+    it("isSupportedUserVersion covers 7, 8, 10 to 14 and 17, not 9, 15, 16 (steps not merged here) or past 17", () => {
         expect(
-            [0, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18].map(
+            [0, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18].map(
                 isSupportedUserVersion,
             ),
         ).toEqual([
@@ -100,6 +100,8 @@ describe("file-format version", () => {
             true,
             true,
             true,
+            false,
+            false,
             true,
             false,
         ]);

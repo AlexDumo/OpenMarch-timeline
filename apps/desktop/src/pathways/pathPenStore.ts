@@ -861,7 +861,7 @@ async function save(
 export const aroundPointsReason = (): string =>
     tolgee.t(
         "timeline.refusals.trail.aroundPoints",
-        "This line goes round the outline it stands on, which has no points to edit. Use Reverse leader to go the other way round, or Follow again to change how far",
+        "This line goes around the outline it stands on, which has no points to edit. Use Reverse leader to go the other way around, or Follow again to change how far",
     );
 
 /** Go round as the Follow tool's bar says (AP-T13): one undo step; false when it's refused */
@@ -888,7 +888,7 @@ async function saveAround(follow: FollowDrag): Promise<boolean> {
     } catch (error) {
         toastTimelineError(
             error,
-            tolgee.t("pathways.errors.goRound", "Couldn't go round"),
+            tolgee.t("pathways.errors.goRound", "Couldn't go around"),
         );
         return false;
     } finally {

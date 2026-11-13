@@ -36,8 +36,9 @@
  *   them would walk the leg straight, or refuse the route, so a file is written as 14 when a route
  *   first gets a bulge. A file without one stays at the version it had, and the number is not
  *   lowered when the last arc goes.
- * - 15 and 16 are taken by pathways steps 5 and the step after it (open pull requests); this build
- *   doesn't write them.
+ * - 15 and 16 are taken by pathways steps 5 (pins) and 26 (sub-group Adjust), open pull requests.
+ *   This build doesn't know them, so it refuses such a file as written by a newer build
+ *   (`UNKNOWN_USER_VERSIONS`); each step adds its own number to what's accepted when it merges.
  * - 17: outlines (pathways step 10, spec Appendix L.11, R-13‴): a follow-the-leader move goes round
  *   a closed outline (`path_params.ends = "around"`, a route with `closed: true`, `laps`). A build
  *   that doesn't know it would walk the outline as an open trail into the spots, so a file is
@@ -73,6 +74,12 @@ export const OUTLINE_MODEL_USER_VERSION = 17;
 
 /** Oldest version this build opens. Older files must go through 0.0.10 first. */
 export const MIN_SUPPORTED_USER_VERSION = PAGE_MODEL_USER_VERSION;
+/**
+ * Versions below the newest that this build doesn't know (pathways steps 5 and 26, not merged
+ * here): refused as too new, never played wrong. A step takes its number out when it merges.
+ */
+export const UNKNOWN_USER_VERSIONS: readonly number[] = [15, 16];
+
 /** Newest version this build opens. Anything higher was written by a newer release. */
 export const MAX_SUPPORTED_USER_VERSION = OUTLINE_MODEL_USER_VERSION;
 /** Version written into a brand-new file: a new show is a timeline show. */
@@ -117,7 +124,10 @@ export function decideFileVersion(
     if (userVersion === PARKED_FLOOR_USER_VERSION) {
         return { action: "downgrade", version: TIMELINE_MODEL_USER_VERSION };
     }
-    if (userVersion > MAX_SUPPORTED_USER_VERSION) {
+    if (
+        userVersion > MAX_SUPPORTED_USER_VERSION ||
+        UNKNOWN_USER_VERSIONS.includes(userVersion)
+    ) {
         return { action: "refuse-too-new", version: userVersion };
     }
     if (isNewFile && userVersion === 0) {
@@ -137,7 +147,8 @@ export function isSupportedUserVersion(userVersion: number): boolean {
     return (
         userVersion >= MIN_SUPPORTED_USER_VERSION &&
         userVersion <= MAX_SUPPORTED_USER_VERSION &&
-        userVersion !== PARKED_FLOOR_USER_VERSION
+        userVersion !== PARKED_FLOOR_USER_VERSION &&
+        !UNKNOWN_USER_VERSIONS.includes(userVersion)
     );
 }
 

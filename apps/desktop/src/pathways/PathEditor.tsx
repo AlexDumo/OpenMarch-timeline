@@ -53,10 +53,9 @@ import {
 import {
     aroundPlanOf,
     goingRound,
-    ROUND_MAX,
+    roundMaxOf,
     setGoRound,
     setRoundAmount,
-    setRoundUnit,
 } from "./followAround";
 import {
     memberNow,
@@ -94,7 +93,7 @@ function reverseLabel(along: boolean | undefined, around?: boolean): string {
     if (around)
         return tolgee.t(
             "pathways.trail.reverseAroundTip",
-            "Go the other way round the outline, as far. The one at the back leads.",
+            "Go the other way around the outline, as far. The one at the back leads.",
         );
     return along
         ? tolgee.t(
@@ -181,7 +180,7 @@ function trailBigSteps(
         ? aroundPlanOf(session.follow)
         : null;
     const distances = round
-        ? trail.members.map(() => round.distance)
+        ? round.distances
         : plan
           ? plan.ends.map((e, q) => e - plan.startDist[q]!)
           : trailDistances(trail.members, curveOf(shapeOf(session)).L);
@@ -416,7 +415,7 @@ function PathPenBanner({ session }: { session: PathSession }) {
             {goingRound(session.follow) ? (
                 <T
                     keyName="pathways.banner.goRound"
-                    defaultValue="Go round: {count} marchers follow {marcher} round the {shape} · <enter></enter> to finish · <esc></esc> to leave"
+                    defaultValue="Go around: {count} marchers follow {marcher} around the {shape} · <enter></enter> to finish · <esc></esc> to leave"
                     params={{
                         count: session.follow!.ids.length,
                         marcher:
@@ -690,18 +689,23 @@ function PathEditorBar({
                         <FollowControls session={session} />
                     )}
                     <span className="flex items-center gap-2">
-                        <IconButton
-                            label={tolgee.t(
-                                "pathways.editor.removeLastPoint",
-                                "Remove last point",
-                            )}
-                            action="shapeRemoveLastPoint"
-                            disabled={session.points.length === 0}
-                            onClick={() => runAction("shapeRemoveLastPoint")}
-                            testId="path-remove-last"
-                        >
-                            <BackspaceIcon size={14} />
-                        </IconButton>
+                        {/* Going around draws nothing, so there's no point to take back */}
+                        {!goingRound(session.follow) && (
+                            <IconButton
+                                label={tolgee.t(
+                                    "pathways.editor.removeLastPoint",
+                                    "Remove last point",
+                                )}
+                                action="shapeRemoveLastPoint"
+                                disabled={session.points.length === 0}
+                                onClick={() =>
+                                    runAction("shapeRemoveLastPoint")
+                                }
+                                testId="path-remove-last"
+                            >
+                                <BackspaceIcon size={14} />
+                            </IconButton>
+                        )}
                         <IconButton
                             label={tolgee.t("pathways.editor.cancel", "Cancel")}
                             action="cancelAlignmentUpdates"
@@ -964,7 +968,7 @@ function FollowModeChoice({ session }: { session: PathSession }) {
                 <IconButton
                     label={tolgee.t(
                         "pathways.editor.goRoundTip",
-                        "Go round: everyone follows the one ahead round the outline they stand on",
+                        "Go around: everyone follows the one ahead around the outline they stand on",
                     )}
                     action="followGoRound"
                     pressed={on}
@@ -972,7 +976,7 @@ function FollowModeChoice({ session }: { session: PathSession }) {
                     testId="follow-go-round"
                 >
                     <ArrowClockwiseIcon size={14} />
-                    {tolgee.t("actions.path.goRound", "Go round")}
+                    {tolgee.t("actions.path.goRound", "Go around")}
                 </IconButton>
                 <IconButton
                     label={tolgee.t(
@@ -994,17 +998,22 @@ function FollowModeChoice({ session }: { session: PathSession }) {
 }
 
 /**
- * Go round's choices on the path bar (step 10, DO-3 to DO-5): how far (a number of the outline's
- * spots, or steps, with − and + as commands), which way round (Reverse leader turns it), and
- * ▶ Preview. A readout says when it's a whole time round or more.
+ * Go around's choices on the path bar (step 10, DO-3 to DO-5): how far (a number of the outline's
+ * spots or of steps; − and +, Spots and Steps are commands; the field can be cleared while typing,
+ * and goes no further than Finish allows), which way around (Reverse leader turns it), ▶ Preview,
+ * a readout from a whole time around, and a note when marchers stand off the outline and step
+ * onto it first.
  */
 function GoRoundControls({ session }: { session: PathSession }) {
     const follow = session.follow!;
     const around = follow.around!;
     const plan = aroundPlanOf(follow);
+    const max = roundMaxOf(follow);
     const reducedMotion = prefersReducedMotion();
-    const turns = plan && plan.loop.L > 0 ? plan.distance / plan.loop.L : 0;
+    const turns = plan?.turns ?? 0;
     const clockwise = !around.reversed;
+    // What's typed, kept while it isn't a number yet (an empty field), applied once it is
+    const [typed, setTyped] = useState<string | null>(null);
     return (
         <>
             <span
@@ -1012,14 +1021,14 @@ function GoRoundControls({ session }: { session: PathSession }) {
                 role="group"
                 aria-label={tolgee.t(
                     "pathways.editor.roundHowFar",
-                    "How far round",
+                    "How far around",
                 )}
                 data-testid="follow-round"
             >
                 <IconButton
                     label={tolgee.t(
                         "actions.path.roundLess",
-                        "Go round less far",
+                        "Go around less far",
                     )}
                     action="followRoundLess"
                     disabled={around.amount <= 1}
@@ -1033,25 +1042,33 @@ function GoRoundControls({ session }: { session: PathSession }) {
                     type="number"
                     inputMode="numeric"
                     min={1}
-                    max={ROUND_MAX}
-                    value={around.amount}
+                    max={max}
+                    value={typed ?? String(around.amount)}
                     aria-label={tolgee.t(
                         "pathways.editor.roundAmount",
-                        "How many round",
+                        "How many spots or steps around",
                     )}
                     onChange={(e) => {
                         const n = Number(e.target.value);
-                        if (Number.isFinite(n) && n >= 1) setRoundAmount(n);
+                        if (
+                            e.target.value !== "" &&
+                            Number.isFinite(n) &&
+                            n >= 1
+                        ) {
+                            setTyped(null);
+                            setRoundAmount(n);
+                        } else setTyped(e.target.value);
                     }}
+                    onBlur={() => setTyped(null)}
                     data-testid="follow-round-amount"
                 />
                 <IconButton
                     label={tolgee.t(
                         "actions.path.roundMore",
-                        "Go round farther",
+                        "Go around farther",
                     )}
                     action="followRoundMore"
-                    disabled={around.amount >= ROUND_MAX}
+                    disabled={around.amount >= max}
                     onClick={() => runAction("followRoundMore")}
                     testId="follow-round-more"
                 >
@@ -1060,10 +1077,11 @@ function GoRoundControls({ session }: { session: PathSession }) {
                 <IconButton
                     label={tolgee.t(
                         "pathways.editor.roundSpotsTip",
-                        "Spots: each marcher moves on this many places round the outline",
+                        "Spots: each marcher moves on this many places around the outline",
                     )}
+                    action="followRoundSpots"
                     pressed={around.unit === "spots"}
-                    onClick={() => setRoundUnit("spots")}
+                    onClick={() => runAction("followRoundSpots")}
                     testId="follow-round-spots"
                 >
                     {tolgee.t("pathways.editor.roundSpots", "spots")}
@@ -1071,10 +1089,11 @@ function GoRoundControls({ session }: { session: PathSession }) {
                 <IconButton
                     label={tolgee.t(
                         "pathways.editor.roundStepsTip",
-                        "Steps: each marcher goes this many steps round the outline, ending between spots if it must",
+                        "Steps: each marcher goes this many steps around the outline, ending between spots if it must",
                     )}
+                    action="followRoundSteps"
                     pressed={around.unit === "steps"}
-                    onClick={() => setRoundUnit("steps")}
+                    onClick={() => runAction("followRoundSteps")}
                     testId="follow-round-steps"
                 >
                     {tolgee.t("pathways.editor.roundSteps", "steps")}
@@ -1086,7 +1105,7 @@ function GoRoundControls({ session }: { session: PathSession }) {
                     >
                         {tolgee.t(
                             "pathways.editor.roundTurns",
-                            "{turns} × round",
+                            "{turns} × around",
                             { turns: Math.round(turns * 100) / 100 },
                         )}
                     </span>
@@ -1098,11 +1117,11 @@ function GoRoundControls({ session }: { session: PathSession }) {
                     clockwise
                         ? tolgee.t(
                               "pathways.editor.roundClockwiseTip",
-                              "Going clockwise. Reverse leader goes the other way round",
+                              "Going clockwise around. Reverse leader goes the other way around",
                           )
                         : tolgee.t(
                               "pathways.editor.roundCounterTip",
-                              "Going counterclockwise. Reverse leader goes the other way round",
+                              "Going counterclockwise around. Reverse leader goes the other way around",
                           )
                 }
                 action="reverseTrail"
@@ -1115,10 +1134,13 @@ function GoRoundControls({ session }: { session: PathSession }) {
                     <ArrowCounterClockwiseIcon size={14} />
                 )}
                 {clockwise
-                    ? tolgee.t("pathways.editor.roundClockwise", "Clockwise")
+                    ? tolgee.t(
+                          "pathways.editor.roundClockwise",
+                          "Clockwise around",
+                      )
                     : tolgee.t(
                           "pathways.editor.roundCounter",
-                          "Counterclockwise",
+                          "Counterclockwise around",
                       )}
             </IconButton>
             <Divider />
@@ -1131,7 +1153,7 @@ function GoRoundControls({ session }: { session: PathSession }) {
                           )
                         : tolgee.t(
                               "pathways.editor.previewRoundTip",
-                              "Preview: the marchers go round from start to end, again and again",
+                              "Preview: the marchers go around from start to end, again and again",
                           )
                 }
                 action="followPreview"
@@ -1144,6 +1166,22 @@ function GoRoundControls({ session }: { session: PathSession }) {
                 {tolgee.t("pathways.editor.preview", "Preview")}
             </IconButton>
             <Divider />
+            {plan && plan.offOutline > 0 && (
+                <>
+                    <span
+                        className="text-yellow flex items-center gap-4 px-4"
+                        data-testid="follow-round-off"
+                    >
+                        <WarningIcon size={14} weight="bold" aria-hidden />
+                        {tolgee.t(
+                            "pathways.editor.roundOffOutline",
+                            "{count, plural, one {# marcher stands off the outline and steps onto it first} other {# marchers stand off the outline and step onto it first}}",
+                            { count: plan.offOutline },
+                        )}
+                    </span>
+                    <Divider />
+                </>
+            )}
         </>
     );
 }

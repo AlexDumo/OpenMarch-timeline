@@ -590,8 +590,8 @@ export function loopPoint(loop: RoutePath, d: number): XY {
 }
 
 /**
- * R-13‴: the distance round `loop` (0 ≤ d < its length) of the point of it nearest `p`, ties to
- * the smaller distance. Lines and arc legs are projected exactly (`nearestOnArc`); a cubic piece
+ * R-13‴: the distance round `loop` (0 ≤ d < its length) of the point of it nearest `p`. Places
+ * within `ε_geom` of the nearest distance are a tie, which the smaller distance round wins. Lines and arc legs are projected exactly (`nearestOnArc`); a cubic piece
  * (never stored on a closed route, but total) onto its 64 measured chords.
  */
 export function nearestOnLoop(loop: RoutePath, p: XY): number {
@@ -606,9 +606,15 @@ export function nearestOnLoop(loop: RoutePath, p: XY): number {
                 ? clamp01(((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2)
                 : 0;
         const dd = Math.hypot(a[0] + dx * f - p[0], a[1] + dy * f - p[1]);
-        if (dd < best) {
+        const d = d0 + f * len;
+        // Nearer by more than ε_geom wins; within ε_geom it's a tie, and the smaller distance
+        // round wins, so rounding can't pick between two equally near places
+        if (dd < best - EPS_GEOM) {
             best = dd;
-            at = d0 + f * len;
+            at = d;
+        } else if (dd <= best + EPS_GEOM) {
+            if (d < at) at = d;
+            if (dd < best) best = dd;
         }
     };
     loop.pieces.forEach((piece, j) => {
