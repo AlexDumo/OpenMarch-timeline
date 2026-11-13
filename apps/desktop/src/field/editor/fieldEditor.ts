@@ -780,6 +780,39 @@ export class FieldEditor {
         if (this.menuFree()) this.mode?.openMenu?.(pointer);
     }
 
+    /**
+     * Whether a single finger pressing at `pointer` edits (tablet 1.2): it
+     * lands on what a drag would move. That is a marcher within the finger's
+     * hit radius, a handle of the selection box, or the inside of a
+     * multi-selection's box (unless the pill's Add makes that press a marquee,
+     * as Shift does). Anywhere else the finger moves the view.
+     *
+     * Not while the prop tool or a field mode is on: their presses are
+     * theirs, and touch reaches them later (tablet 1.4).
+     */
+    fingerEdits(pointer: FieldPointer): boolean {
+        if (this.propTool || this.mode) return false;
+        if (this.handleAt(pointer) || this.marcherAt(pointer) !== null)
+            return true;
+        return (
+            !(this.options.onScreen?.add() ?? false) &&
+            !this.modeOwnsSelectionBox() &&
+            this.insideSelectionBox(this.ports.selection.get(), pointer.field)
+        );
+    }
+
+    /**
+     * A finger tapped where it moves the view (empty field, tablet 1.2): a
+     * click there, so it clears the selection as a click does (the pill's Add
+     * keeps it, as Shift does). Nothing while the prop tool or a field mode
+     * is on, as {@link fingerEdits}.
+     */
+    fingerTap(pointer: FieldPointer): void {
+        if (this.propTool || this.mode || !this.menuFree()) return;
+        if (!this.pointerDown(pointer)) return;
+        this.pointerUp(pointer);
+    }
+
     /** No press, drag or prop tool that a menu would cut into */
     private menuFree(): boolean {
         return (

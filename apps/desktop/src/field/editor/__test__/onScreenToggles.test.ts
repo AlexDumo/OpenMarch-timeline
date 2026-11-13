@@ -363,3 +363,41 @@ describe("Add on the pill, as Shift at the press", () => {
         });
     });
 });
+
+describe("the pill and a finger (tablet 1.2)", () => {
+    const finger = (x: number, y: number): FieldPointer => ({
+        ...at(x, y),
+        kind: "touch",
+    });
+
+    it("Fine slows a finger's drag as it slows a mouse's", () => {
+        store().toggleLatched("fine");
+        const { editor, state } = setup({ selected: [1] });
+        editor.pointerDown(finger(100, 100));
+        editor.pointerMove(finger(130, 110));
+        editor.pointerMove(finger(157, 121));
+        editor.pointerUp(finger(157, 121));
+        expect(state.drops[0]).toEqual([{ id: 1, x: 114.25, y: 105.25 }]);
+    });
+
+    it("Add keeps the selection on a tap on empty field, and adds the marcher a finger taps", () => {
+        store().toggleLatched("add");
+        const { editor, state } = setup({ selected: [1, 2] });
+        editor.fingerTap(finger(250, 300));
+        expect(state.selected).toEqual([1, 2]);
+        editor.pointerDown(finger(300, 100));
+        editor.pointerUp(finger(300, 100));
+        expect(state.selected).toEqual([1, 2, 3]);
+    });
+
+    it("Add makes a finger inside the selection's box pan, as a press there would draw a marquee", () => {
+        // Between marchers 2 and 3, inside the box around 1 and 3, clear of its handles
+        const plain = setup({ selected: [1, 3] });
+        expect(plain.editor.fingerEdits(finger(250, 100))).toBe(true);
+        store().toggleLatched("add");
+        const add = setup({ selected: [1, 3] });
+        expect(add.editor.fingerEdits(finger(250, 100))).toBe(false);
+        // On a marcher it still edits
+        expect(add.editor.fingerEdits(finger(300, 100))).toBe(true);
+    });
+});
