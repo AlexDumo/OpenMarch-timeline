@@ -823,6 +823,14 @@ const STATIC_ACTIONS = {
         defaultBindings: [],
         ignoreRepeat: true,
     },
+    adjustResetGroup: {
+        labelKey: "actions.path.adjustResetGroup",
+        keywordsKey: "actions.path.keywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
     adjustAcknowledge: {
         labelKey: "actions.path.adjustAcknowledge",
         keywordsKey: "actions.path.keywords",

@@ -3,7 +3,7 @@
 //
 // The resolver keeps its own row index, updated only from batch row images (§10.2). It reads marchers,
 // shapes and transitions by id from the host's post-commit mirror (`db`).
-import { lerp, clamp01, destPath, paramT, destinationsOf, arcPoint, flatten, makeTrail, makeRouteTrail, makeAlongWay, alongWayEnds, alongWayAt, ftlDest, routeWalk, groupWalk } from './geom.mjs';
+import { lerp, clamp01, destPath, paramT, destinationsOf, arcPoint, flatten, makeTrail, makeRouteTrail, makeAlongWay, alongWayEnds, alongWayAt, ftlDest, routeWalk, groupWalk, linkedOf } from './geom.mjs';
 
 export function makeResolver(db, { rules = 'v0.2+' } = {}) {
   const T = (id) => db.transitions[id];
@@ -112,7 +112,7 @@ export function makeResolver(db, { rules = 'v0.2+' } = {}) {
     if (isFtl(t)) return lerp(o, entry(t.id).target.get(s.m), p);
     const dst = dests.get(t.id)[s.row.slot];
     const lane = laneAt(t.id, s.row.slot);                                // R-14′ (v0.10): lane first
-    if (lane) { const g = routeGeo(lane.route); return founding(s) ? (lane.offset ? groupWalk(o, g.points, dst, g.from, g.to, lane.offset, lane.adjust ?? null, g.toBulge).at(p) : routeWalk(o, g.points, dst, g.from, g.to, g.toBulge).at(p)) : lerp(o, dst, p); }
+    if (lane) { const g = routeGeo(lane.route); return founding(s) ? (lane.offset ? groupWalk(o, g.points, dst, g.from, g.to, lane.offset, lane.adjust ?? null, g.toBulge, linkedOf(db, lane)).at(p) : routeWalk(o, g.points, dst, g.from, g.to, g.toBulge).at(p)) : lerp(o, dst, p); }
     return t.style === 'arc' ? arcPoint(o, dst, t.params?.bulge ?? 0, p) : lerp(o, dst, p);
   }
   function prevNonHold(s) { const l = spans.get(s.m); for (let j = s.k - 1; j >= 0; j--) if (l[j].row) return l[j]; return null; } // ≤ 2 steps: holds never abut
@@ -198,7 +198,7 @@ export function makeResolver(db, { rules = 'v0.2+' } = {}) {
   // lanes (v0.10, J.7): read from the host mirror on use, like routes; a lane edit seeds W-3 for its old and new transition
   const laneAt = (tid, slot) => Object.values(db.lanes ?? {}).find((l) => l.transition === tid && l.slot === slot);
 
-  /** batch = { rows:[{before,after}], transitions:[{id,before,after}], shapes:[id], marchers:[{id}], destinations:[transitionId], routes:[routeId], lanes:[{before,after}] } (§9.4 order). */
+  /** batch = { rows:[{before,after}], transitions:[{id,before,after}], shapes:[id], marchers:[{id}], destinations:[transitionId], routes:[routeId], lanes:[{before,after}], routeAdjusts:[id] } (§9.4 order). */
   function applyBatch(raw) {
     const batch = { rows: coalesce(raw.rows, (c) => (c.before ?? c.after).id),
                     transitions: coalesce(raw.transitions, (c) => c.id),
@@ -257,6 +257,8 @@ export function makeResolver(db, { rules = 'v0.2+' } = {}) {
       for (const t of Object.values(db.transitions)) if (t.route === rid) seedTs.add(t.id);   // a trail route edited (R-9′): route -> its follow-the-leader transitions
     for (const rid of new Set(raw.routes ?? []))
       for (const l of Object.values(db.lanes ?? {})) if (l.route === rid && db.transitions[l.transition]) seedTs.add(l.transition);   // route geometry edited: route -> lanes -> transitions
+    for (const gid of new Set(raw.routeAdjusts ?? []))                                         // plan step 26: a linked Adjust edited
+      for (const l of Object.values(db.lanes ?? {})) if (l.groupAdjust === gid && db.transitions[l.transition]) seedTs.add(l.transition); // -> its lanes -> transitions
     for (const tid of seedTs) seed(tid);
   }
 

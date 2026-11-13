@@ -9,6 +9,7 @@ import {
     unique,
     customType,
     sqliteView,
+    type AnySQLiteColumn,
 } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
@@ -518,7 +519,8 @@ export const timeline_transitions = sqliteTable(
  * route's `from`: a group path's lane; both NULL for an own lane (one marcher's own path, walked
  * alone, I-LN4). At most one lane per slot (I-LN3); the slot is one of the transition's (I-LN1,
  * triggers). `adjust` is this spot's own Adjust profile as JSON (spec J.2, plan step 3b).
- * `group_adjust_id` comes with step 26, as `ADD COLUMN`.
+ * `group_adjust_id` (plan step 26, `ADD COLUMN` in 0025) is the linked Adjust this spot shares
+ * with others of its sub-group, added before its own; NULL for none, always on an own lane.
  */
 export const timeline_lanes = sqliteTable(
     "timeline_lanes",
@@ -536,6 +538,10 @@ export const timeline_lanes = sqliteTable(
         offset_x: real(),
         offset_y: real(),
         adjust: text(),
+        group_adjust_id: integer().references(
+            (): AnySQLiteColumn => timeline_route_adjusts.id,
+            { onDelete: "restrict" },
+        ),
     },
     (table) => [
         integerTypeCheck("timeline_lanes", "transition_id"),
@@ -558,11 +564,41 @@ export const timeline_lanes = sqliteTable(
             "timeline_lanes_adjust_check",
             sql`adjust IS NULL OR json_valid(adjust)`,
         ),
+        // Step 26 (spec J.1): an integer id, and none on an own lane (it walks alone)
+        check(
+            "timeline_lanes_group_adjust_id_check",
+            sql`group_adjust_id IS NULL OR (typeof(group_adjust_id) = 'integer' AND offset_x IS NOT NULL)`,
+        ),
         unique("timeline_lanes_transition_slot_unique").on(
             table.transition_id,
             table.slot_index,
         ),
         index("timeline_idx_lane_route").on(table.route_id),
+        index("timeline_idx_lane_adjust").on(table.group_adjust_id),
+    ],
+);
+
+/**
+ * A linked Adjust (spec v0.10 J.1 and J.2, ADR 0015 §2; plan step 26): one Adjust profile shared
+ * by a sub-group of route `route_id`'s lanes, each pointing at it by `group_adjust_id`. A spot's
+ * own Adjust is added on top of it (R-14′ item 7). Depth is fixed by the structure: route, then
+ * this, then the lane. Every lane pointing at it walks its route (I-J1), and it has at least one
+ * such lane (I-J2); both are commit checks.
+ */
+export const timeline_route_adjusts = sqliteTable(
+    "timeline_route_adjusts",
+    {
+        id: integer().primaryKey(),
+        route_id: integer()
+            .notNull()
+            .references(() => timeline_routes.id, { onDelete: "restrict" }),
+        /** JSON Adjust profile `{v, keys, rehomed?}` (spec J.2) */
+        profile: text().notNull(),
+    },
+    (table) => [
+        integerTypeCheck("timeline_route_adjusts", "route_id"),
+        check("timeline_route_adjusts_profile_check", sql`json_valid(profile)`),
+        index("timeline_idx_route_adjusts_route").on(table.route_id),
     ],
 );
 

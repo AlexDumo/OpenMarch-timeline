@@ -34,6 +34,8 @@ export const tablesWithHistory = [
     schema.timeline_slot_destinations,
     // Routes, and the lanes that bind slots to them (spec v0.9 and v0.10, ADR 0014 and 0015)
     schema.timeline_routes,
+    // Linked Adjusts a sub-group of a route's lanes shares (step 26, spec J.1)
+    schema.timeline_route_adjusts,
     schema.timeline_lanes,
     // Where a route came from (K6, spec J.1): Detach's link back to its group path (step 3c)
     schema.timeline_route_sources,

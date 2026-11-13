@@ -49,6 +49,10 @@ import {
     acknowledgeOpenPath,
     deleteAdjustKey,
     deleteOnLane,
+    deleteOnSubgroup,
+    detachPickedSubgroup,
+    resetPickedSubgroup,
+    sharedAdjustOf,
     resetSpot,
     memberOf,
     refitOpenPath,
@@ -399,14 +403,32 @@ export function usePathPenActions(): void {
             s.session?.target.group?.members.some((m) => m.adjust?.rehomed) ??
             false,
     );
+    // Several lanes picked (step 26), and whether they share a tweak
+    const subgroup = usePathPenStore((s) =>
+        s.session?.phase === "open" ? (s.session.subgroup ?? null) : null,
+    );
+    const subgroupShared = usePathPenStore((s) =>
+        s.session?.phase === "open" && s.session.subgroup
+            ? sharedAdjustOf(s.session, s.session.subgroup.marcherIds) !== null
+            : false,
+    );
     useActionHandler(
         "adjustRemoveKey",
         () => {
             if (lane && lane.key !== null)
                 void deleteAdjustKey(lane.marcherId, lane.key);
+            else if (subgroup && subgroup.key !== null)
+                void deleteOnSubgroup(subgroup);
         },
-        { enabled: lane !== null && lane.key !== null },
+        {
+            enabled:
+                (lane !== null && lane.key !== null) ||
+                (subgroupShared && subgroup?.key != null),
+        },
     );
+    useActionHandler("adjustResetGroup", () => void resetPickedSubgroup(), {
+        enabled: subgroupShared,
+    });
     useActionHandler(
         "adjustResetSpot",
         () => {
@@ -422,9 +444,17 @@ export function usePathPenActions(): void {
     const detachSession = usePathPenStore((s) => s.session);
     const ownIds = detachIdsOf(selectedMembers, detachSession);
     const rejoin = usePathPenStore((s) => s.rejoin);
-    useActionHandler("detachPath", () => void detachFor(ownIds), {
-        enabled: ownIds.length > 0 && phase !== "drawing",
-    });
+    // A picked sub-group sharing a tweak Detaches as one shared copy (AP-R12, step 26)
+    useActionHandler(
+        "detachPath",
+        () =>
+            void (subgroupShared && selectedMembers.length === 0
+                ? detachPickedSubgroup()
+                : detachFor(ownIds)),
+        {
+            enabled: ownIds.length > 0 && phase !== "drawing",
+        },
+    );
     useActionHandler("rejoinPath", () => void rejoinFor(rejoin), {
         enabled: rejoin !== null && phase !== "drawing",
     });
@@ -780,12 +810,14 @@ export function PathPenKeys(): null {
     const picked = usePathPenStore((s) => s.session?.selected ?? null);
     const object = usePathPenStore((s) => s.session?.object ?? false);
     const pickedLane = usePathPenStore((s) => s.session?.lane ?? null);
+    const pickedGroup = usePathPenStore((s) => s.session?.subgroup ?? null);
     const drawing = phase === "drawing";
     const objectSelected = object && phase === "closed";
     useActionHandler(
         "cancelAlignmentUpdates",
         () => {
-            if (!drawing && pickedLane !== null) selectLane(null);
+            if (!drawing && (pickedLane !== null || pickedGroup !== null))
+                selectLane(null);
             else if (!drawing && picked !== null) selectPoint(null);
             else if (!drawing && escapePathObject()) return;
             // The Follow tool (step 4b): Escape cancels the trail drawn, then leaves the tool
@@ -795,13 +827,15 @@ export function PathPenKeys(): null {
         {
             label: drawing
                 ? tolgee.t("actions.path.cancel", "Cancel path")
-                : pickedLane !== null
-                  ? tolgee.t("actions.path.deselectSpot", "Deselect spot")
-                  : picked !== null
-                    ? tolgee.t("actions.path.deselectPoint", "Deselect point")
-                    : objectSelected
-                      ? tolgee.t("actions.path.deselect", "Deselect path")
-                      : tolgee.t("actions.path.close", "Close path"),
+                : pickedGroup !== null
+                  ? tolgee.t("actions.path.deselectSpots", "Deselect spots")
+                  : pickedLane !== null
+                    ? tolgee.t("actions.path.deselectSpot", "Deselect spot")
+                    : picked !== null
+                      ? tolgee.t("actions.path.deselectPoint", "Deselect point")
+                      : objectSelected
+                        ? tolgee.t("actions.path.deselect", "Deselect path")
+                        : tolgee.t("actions.path.close", "Close path"),
         },
     );
     useActionHandler(
@@ -818,6 +852,8 @@ export function PathPenKeys(): null {
             if (drawing) removeLastPoint();
             // A picked lane takes the key: its Adjust key goes, or the spot resets, never the path
             else if (pickedLane) void deleteOnLane(pickedLane);
+            // Several picked (step 26): a shared key goes, or the shared tweak resets
+            else if (pickedGroup) void deleteOnSubgroup(pickedGroup);
             else if (picked !== null) {
                 const index = Number(picked.slice(1));
                 if (Number.isInteger(index))
@@ -831,13 +867,20 @@ export function PathPenKeys(): null {
         {
             label: drawing
                 ? tolgee.t("actions.path.removeLastPoint", "Remove last point")
-                : pickedLane?.key != null
+                : pickedGroup?.key != null
                   ? tolgee.t("actions.path.removeKey", "Remove key")
-                  : pickedLane
-                    ? tolgee.t("actions.path.resetSpot", "Reset spot")
-                    : picked !== null
-                      ? tolgee.t("actions.path.deletePoint", "Delete point")
-                      : tolgee.t("actions.path.remove", "Remove path"),
+                  : pickedGroup
+                    ? tolgee.t(
+                          "actions.path.resetShared",
+                          "Reset shared adjustment",
+                      )
+                    : pickedLane?.key != null
+                      ? tolgee.t("actions.path.removeKey", "Remove key")
+                      : pickedLane
+                        ? tolgee.t("actions.path.resetSpot", "Reset spot")
+                        : picked !== null
+                          ? tolgee.t("actions.path.deletePoint", "Delete point")
+                          : tolgee.t("actions.path.remove", "Remove path"),
         },
         drawing || phase === "open" || objectSelected,
     );

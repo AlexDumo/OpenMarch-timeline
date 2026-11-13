@@ -179,6 +179,14 @@ function constructionOf(
 }
 
 /** What the editor's mode draws, with its handles in viewport CSS px (#204). */
+/** How many lanes are drawn heavy: one picked, or a sub-group's (pathways step 26) */
+const pickedLaneCount = (drawing: {
+    lanePicked?: number;
+    lanesPicked?: readonly number[];
+}) =>
+    (drawing.lanePicked !== undefined ? 1 : 0) +
+    (drawing.lanesPicked?.length ?? 0);
+
 function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
     const drawn = field.modeDrawing();
     const element = field.element();
@@ -204,6 +212,7 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
         })),
         rings: (drawing.rings ?? []).map(copy),
         lanes: (drawing.lanes ?? []).length,
+        lanesPicked: pickedLaneCount(drawing),
         laneLines: (drawing.lanes ?? []).map((lane) => lane.map(screen)),
         adjustHandles: (drawing.adjustHandles ?? []).map((h) => screen(h.at)),
         memberRings: (drawing.memberRings ?? []).map((r) => ({

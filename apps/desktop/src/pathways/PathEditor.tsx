@@ -53,6 +53,7 @@ import {
     detachIdsOf,
     memberNow,
     memberOf,
+    sharedAdjustOf,
     shapeOf,
     usePathPenStore,
     type PathSession,
@@ -528,7 +529,15 @@ function PathEditorBar({
             : undefined;
     const rehomed =
         !drawing &&
-        (session.target.group?.members.some((m) => m.adjust?.rehomed) ?? false);
+        (session.target.group?.members.some(
+            (m) => m.adjust?.rehomed || m.linked?.rehomed,
+        ) ??
+            false);
+    // Several lanes picked (step 26): how many, and whether they share a tweak
+    const pickedGroup = !drawing ? (session.subgroup ?? null) : null;
+    const pickedShared =
+        pickedGroup !== null &&
+        sharedAdjustOf(session, pickedGroup.marcherIds) !== null;
     // An open path is always a stored one, so the bar always holds a control
     const controls = drawing || stored;
     // While a new path is drawn for two or more marchers: Together (a group path) or Follow (a
@@ -811,6 +820,63 @@ function PathEditorBar({
                                     )}
                                 </button>
                             </Tip>
+                            <Divider />
+                        </>
+                    )}
+                    {pickedGroup && (
+                        <>
+                            <span
+                                className="flex items-center gap-2 px-4"
+                                data-testid="path-subgroup-picked"
+                            >
+                                {pickedShared
+                                    ? tolgee.t(
+                                          "pathways.editor.subgroupShared",
+                                          "{count} spots · shared adjustment",
+                                          {
+                                              count: pickedGroup.marcherIds
+                                                  .length,
+                                          },
+                                      )
+                                    : tolgee.t(
+                                          "pathways.editor.subgroupPicked",
+                                          "{count} spots · drag one to bend them together",
+                                          {
+                                              count: pickedGroup.marcherIds
+                                                  .length,
+                                          },
+                                      )}
+                                {pickedShared && pickedGroup.key !== null && (
+                                    <IconButton
+                                        label={tolgee.t(
+                                            "pathways.menu.removeSharedKey",
+                                            "Remove shared adjustment point",
+                                        )}
+                                        action="adjustRemoveKey"
+                                        onClick={() =>
+                                            runAction("adjustRemoveKey")
+                                        }
+                                        testId="path-adjust-remove-shared-key"
+                                    >
+                                        <BackspaceIcon size={14} />
+                                    </IconButton>
+                                )}
+                                {pickedShared && (
+                                    <IconButton
+                                        label={tolgee.t(
+                                            "pathways.editor.resetGroupTip",
+                                            "Take away the adjustment these spots share. Each spot keeps its own adjustment",
+                                        )}
+                                        action="adjustResetGroup"
+                                        onClick={() =>
+                                            runAction("adjustResetGroup")
+                                        }
+                                        testId="path-adjust-reset-group"
+                                    >
+                                        <ArrowCounterClockwiseIcon size={14} />
+                                    </IconButton>
+                                )}
+                            </span>
                             <Divider />
                         </>
                     )}

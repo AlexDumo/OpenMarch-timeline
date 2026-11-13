@@ -130,6 +130,9 @@ export interface GroupMember {
     laneId?: number;
     slot?: number;
     adjust?: AdjustProfile | null;
+    /** The linked Adjust its spot shares with its sub-group, and its profile (step 26) */
+    groupAdjustId?: number | null;
+    linked?: AdjustProfile | null;
 }
 
 /** Who walks a group path, and the selected marchers in the move who don't (step 15) */
@@ -365,6 +368,8 @@ export async function findGroupTarget(
             laneId: r.laneId,
             slot: r.slot,
             adjust: r.adjust,
+            groupAdjustId: r.groupAdjustId,
+            linked: r.linked,
         });
     }
     const outside: GroupTarget["outside"][number][] = [];
@@ -785,6 +790,8 @@ export function targetOfRoute(
             laneId: r.laneId,
             slot: r.slot,
             adjust: r.adjust,
+            groupAdjustId: r.groupAdjustId,
+            linked: r.linked,
         });
     }
     const target: PathTarget = {

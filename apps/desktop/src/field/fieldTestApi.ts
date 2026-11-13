@@ -201,6 +201,8 @@ export type FieldTestShapeOverlay = {
     rings: { x: number; y: number }[];
     /** How many group path lanes are drawn (pathways step 15) */
     lanes: number;
+    /** How many of them are picked, drawn heavy (one lane, or a sub-group's, step 26) */
+    lanesPicked: number;
     /** Each lane as drawn, on screen (pathways step 3b) */
     laneLines: { x: number; y: number }[][];
     /** Adjust keys' handles, on screen */

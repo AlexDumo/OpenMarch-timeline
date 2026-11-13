@@ -65,7 +65,7 @@ function makeWorld(seed, withRoutes = false) {
   for (let i = 0; i < 60; i++) { const r = randRow(); if (r && validRow(r)) { db.assignments.push(r); nextRow++; } }
 
   // ---- route worlds: own lanes, group lanes (offsets, Adjust) and trail routes, with arc legs (R-14″)
-  let nextRoute = 1, nextLane = 1;
+  let nextRoute = 1, nextLane = 1, nextAdjust = 1;
   const lanesOf = (tid) => Object.entries(db.lanes ?? {}).filter(([, l]) => l.transition === tid);
   const slotDest = (t, slot) => { try { return destinationsOf(t, db.shapes)[slot]; } catch { return null; } };
   const newRoute = (targets, extra = {}) => { const id = nextRoute++; db.routes[id] = { geometry: randArcRoute(R, { pt, n: ri(0, 5), targets, ...extra }) }; return id; };
@@ -78,6 +78,11 @@ function makeWorld(seed, withRoutes = false) {
         if (R() < 0.4) l.adjust = randAdjust(R, db.routes[rid].geometry, 2);
         out.push([nextLane++, l]);
       }
+      // plan step 26: a linked Adjust shared by some of the route's lanes (a sub-group)
+      if (out.length > 1 && R() < 0.5) {
+        const gid = nextAdjust++; db.routeAdjusts[gid] = { route: rid, profile: randAdjust(R, db.routes[rid].geometry, 2) };
+        for (const [, l] of out) if (R() < 0.6) l.groupAdjust = gid;
+      }
     } else for (let s = 0; s < t.slots; s++) if (R() < 0.75) {
       const B = slotDest(t, s), rid = newRoute(B ? [B] : []);
       out.push([nextLane++, { transition: t.id, slot: s, route: rid, offset: null }]);
@@ -85,7 +90,7 @@ function makeWorld(seed, withRoutes = false) {
     return out;
   };
   if (withRoutes) {
-    db.routes = {}; db.lanes = {};
+    db.routes = {}; db.lanes = {}; db.routeAdjusts = {};
     for (const t of Object.values(db.transitions)) {
       if (t.style === 'follow_the_leader') { if (R() < 0.6) t.route = newRoute([]); }
       else if (R() < 0.7) for (const [id, l] of laneSet(t)) db.lanes[id] = l;
@@ -194,6 +199,19 @@ function makeWorld(seed, withRoutes = false) {
       const [id, l] = pick(ls), n = { ...l };
       if (R() < 0.5) n.offset = [ri(-3, 3), ri(-3, 3)]; else if (R() < 0.8) n.adjust = randAdjust(R, db.routes[l.route].geometry, 2); else delete n.adjust;
       db.lanes[id] = n; return { lanes: [{ before: l, after: n }] }; },
+    linkedEdit() { // plan step 26: a linked Adjust's profile edited, or a lane joins or leaves a sub-group
+      const ls = Object.entries(db.lanes).filter(([, l]) => l.offset); if (!ls.length) return null;
+      if (R() < 0.5) {
+        const gids = Object.keys(db.routeAdjusts); if (!gids.length) return null; const gid = +pick(gids), g = db.routeAdjusts[gid];
+        db.routeAdjusts[gid] = { ...g, profile: randAdjust(R, db.routes[g.route]?.geometry ?? { v: 1, from: [0, 0], to: [1, 0], points: [] }, 2) };
+        return { routeAdjusts: [gid] };
+      }
+      const [id, l] = pick(ls), n = { ...l };
+      const mine = Object.entries(db.routeAdjusts).filter(([, g]) => g.route === l.route);
+      if (n.groupAdjust != null && R() < 0.4) delete n.groupAdjust;
+      else if (mine.length && R() < 0.7) n.groupAdjust = +pick(mine)[0];
+      else { const gid = nextAdjust++; db.routeAdjusts[gid] = { route: R() < 0.9 ? l.route : 999, profile: randAdjust(R, db.routes[l.route].geometry, 2) }; n.groupAdjust = gid; } // 999: T-10
+      db.lanes[id] = n; return { lanes: [{ before: l, after: n }] }; },
     trail() { // a follow-the-leader transition gains, changes or loses its trail route
       const ts = Object.values(db.transitions).filter((t) => t.style === 'follow_the_leader'); if (!ts.length) return null;
       const t = pick(ts), before = { ...t };
@@ -203,7 +221,8 @@ function makeWorld(seed, withRoutes = false) {
   const opNames = Object.keys(ops);
   const merge = (a, b) => ({ destinations: [...(a.destinations ?? []), ...(b.destinations ?? [])], rows: [...(a.rows ?? []), ...(b.rows ?? [])], transitions: [...(a.transitions ?? []), ...(b.transitions ?? [])],
                              shapes: [...(a.shapes ?? []), ...(b.shapes ?? [])], marchers: [...(a.marchers ?? []), ...(b.marchers ?? [])],
-                             routes: [...(a.routes ?? []), ...(b.routes ?? [])], lanes: [...(a.lanes ?? []), ...(b.lanes ?? [])] });
+                             routes: [...(a.routes ?? []), ...(b.routes ?? [])], lanes: [...(a.lanes ?? []), ...(b.lanes ?? [])],
+                             routeAdjusts: [...(a.routeAdjusts ?? []), ...(b.routeAdjusts ?? [])] });
   function randomBatch() {
     const n = R() < 0.7 ? 1 : ri(2, 3); let batch = { rows: [], transitions: [], shapes: [], marchers: [] }; const names = [];
     for (let i = 0; i < n; i++) { const name = pick(opNames); const b = ops[name](); if (b) { batch = merge(batch, b); names.push(name); } }

@@ -9,6 +9,7 @@ import {
 import {
     addSlotDestination,
     laneFromImage,
+    routeAdjustFromImage,
     marcherFromImage,
     removeSlotDestination,
     routeFromImage,
@@ -115,6 +116,14 @@ export function applyBatchToMirror(
                 if (change.after)
                     snapshot.lanes[change.rowId] = laneFromImage(change.after);
                 else delete snapshot.lanes[change.rowId];
+                break;
+            case "route_adjusts":
+                snapshot.routeAdjusts ??= {};
+                if (change.after)
+                    snapshot.routeAdjusts[change.rowId] = routeAdjustFromImage(
+                        change.after,
+                    );
+                else delete snapshot.routeAdjusts[change.rowId];
                 break;
             case "assignments":
                 // The resolver indexes assignments itself, from the batch (spec §10.2)

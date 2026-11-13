@@ -232,6 +232,6 @@ describe(`Migration ${TRAIL_MIGRATION.tag}`, () => {
         );
         expect(decideFileVersion(13, false).action).toBe("accept");
         // 14 is arc legs (step 10a); what's past this build is refused
-        expect(decideFileVersion(15, false).action).toBe("refuse-too-new");
+        expect(decideFileVersion(17, false).action).toBe("refuse-too-new");
     });
 });

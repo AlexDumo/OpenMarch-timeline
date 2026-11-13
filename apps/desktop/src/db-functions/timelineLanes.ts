@@ -21,6 +21,7 @@ import { and, asc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import type { XY } from "@openmarch/core";
 import {
     ADJUST_MODEL_USER_VERSION,
+    LINKED_ADJUST_MODEL_USER_VERSION,
     LANE_MODEL_USER_VERSION,
     TRAIL_MODEL_USER_VERSION,
     ARC_MODEL_USER_VERSION,
@@ -169,14 +170,32 @@ export async function sweepOrphanRoutesInTransaction(
     const orphans = rows.map((row) =>
         Number(Array.isArray(row) ? row[0] : (row as { id: number }).id),
     );
-    if (orphans.length === 0) return [];
     const L = schema.timeline_lanes;
-    await tx.delete(L).where(inArray(L.route_id, orphans));
+    if (orphans.length > 0)
+        await tx.delete(L).where(inArray(L.route_id, orphans));
+    // Step 1 (step 26): linked Adjusts no lane shares any more, after the lanes they had went
+    // (theirs are RESTRICT); also those of the routes going now, which reference them
+    await deleteUnsharedLinkedAdjustsInTransaction(tx);
+    if (orphans.length === 0) return [];
     await deleteRouteSourcesInTransaction(tx, orphans);
     await tx
         .delete(schema.timeline_routes)
         .where(inArray(schema.timeline_routes.id, orphans));
     return orphans;
+}
+
+/**
+ * AP-H3 step 1 (pathways step 26): deletes every linked Adjust no lane points at any more (I-J2).
+ * A procedure that re-points or deletes lanes, or resets a sub-group, ends with this (through the
+ * sweep), so no linked Adjust is left behind.
+ */
+export async function deleteUnsharedLinkedAdjustsInTransaction(
+    tx: DbTransaction,
+): Promise<void> {
+    await tx.run(sql`
+        DELETE FROM timeline_route_adjusts
+         WHERE NOT EXISTS (SELECT 1 FROM timeline_lanes l
+                            WHERE l.group_adjust_id = timeline_route_adjusts.id)`);
 }
 
 /**
@@ -238,6 +257,10 @@ export const markLaneModelInTransaction = (tx: DbTransaction) =>
 /** Writes the Adjust file version (12) with a file's first Adjust (ADR 0015 §9, step 3b). */
 export const markAdjustModelInTransaction = (tx: DbTransaction) =>
     raiseFileVersion(tx, ADJUST_MODEL_USER_VERSION);
+
+/** Writes the linked-Adjust file version (16) with a file's first sub-group tweak (step 26). */
+export const markLinkedAdjustModelInTransaction = (tx: DbTransaction) =>
+    raiseFileVersion(tx, LINKED_ADJUST_MODEL_USER_VERSION);
 
 /** Writes the trail file version (13) with a file's first Follow (pathways step 4, Appendix K). */
 export const markTrailModelInTransaction = (tx: DbTransaction) =>

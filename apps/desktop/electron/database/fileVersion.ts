@@ -36,6 +36,12 @@
  *   them would walk the leg straight, or refuse the route, so a file is written as 14 when a route
  *   first gets a bulge. A file without one stays at the version it had, and the number is not
  *   lowered when the last arc goes.
+ * - 15: pins (pathways step 5), taken by that step's lab build.
+ * - 16: linked Adjusts (pathways step 26, spec J.1 `timeline_route_adjusts`): a sub-group of a group
+ *   path's spots shares one Adjust (`timeline_lanes.group_adjust_id`), with each spot's own on top.
+ *   A build that doesn't know it would walk those spots without the shared tweak, so a file is
+ *   written as 16 with its first linked Adjust. A file without one stays at the version it had,
+ *   and the number is not lowered when the last one is reset or undone.
  */
 import type { DatabaseSync } from "node:sqlite";
 import { recoverParkedFloorInTransaction } from "./parkedFloor";
@@ -61,10 +67,13 @@ export const TRAIL_MODEL_USER_VERSION = 13;
 /** Version of a file with an arc leg on a route (pathways step 10a, spec Appendix L). */
 export const ARC_MODEL_USER_VERSION = 14;
 
+/** Version of a file with a linked Adjust, a sub-group's shared tweak (pathways step 26). */
+export const LINKED_ADJUST_MODEL_USER_VERSION = 16;
+
 /** Oldest version this build opens. Older files must go through 0.0.10 first. */
 export const MIN_SUPPORTED_USER_VERSION = PAGE_MODEL_USER_VERSION;
 /** Newest version this build opens. Anything higher was written by a newer release. */
-export const MAX_SUPPORTED_USER_VERSION = ARC_MODEL_USER_VERSION;
+export const MAX_SUPPORTED_USER_VERSION = LINKED_ADJUST_MODEL_USER_VERSION;
 /** Version written into a brand-new file: a new show is a timeline show. */
 export const NEW_FILE_USER_VERSION = TIMELINE_MODEL_USER_VERSION;
 

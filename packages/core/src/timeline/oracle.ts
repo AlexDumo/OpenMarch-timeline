@@ -169,6 +169,11 @@ export function createOracle(db: TimelineSnapshot): Oracle {
             if (l.transition !== tid || l.slot !== slot) continue;
             const r = db.routes?.[l.route];
             if (!r) throw new Error(`lane on ${tid}:${slot} has no route`);
+            // T-10: a linked Adjust of another route is ignored (step 26)
+            const linked =
+                l.offset && l.groupAdjust != null
+                    ? db.routeAdjusts?.[l.groupAdjust]
+                    : undefined;
             return {
                 route: r.geometry,
                 offset: l.offset,
@@ -178,6 +183,15 @@ export function createOracle(db: TimelineSnapshot): Oracle {
                               groupSchedule(r.geometry),
                               r.geometry.points,
                               l.adjust,
+                          ),
+                      }
+                    : {}),
+                ...(linked && linked.route === l.route
+                    ? {
+                          linked: resolveAdjust(
+                              groupSchedule(r.geometry),
+                              r.geometry.points,
+                              linked.profile,
                           ),
                       }
                     : {}),
@@ -327,6 +341,8 @@ export function createOracle(db: TimelineSnapshot): Oracle {
             if (t.style !== "follow_the_leader")
                 for (let k = 0; k < t.slots; k++) {
                     const w = laneAt(t.id, k);
+                    if (w?.linked)
+                        out.push(...adjustDiagnostics(w.linked, t.id, k, true));
                     if (w?.adjust)
                         out.push(...adjustDiagnostics(w.adjust, t.id, k));
                 }

@@ -300,6 +300,39 @@ export function walkedPathShow(seed: number, S: number): TimelineSnapshot {
             rid++;
         }
     }
+    // Linked Adjusts (pathways step 26): on their own random stream, so the shows above are
+    // unchanged; some group routes get a sub-group sharing one profile, now and then one of
+    // another route (T-10 ignores it)
+    const G = mulberry32(seed * 7907 + 3);
+    const routeAdjusts: Record<number, any> = {};
+    let adjustId = 1;
+    const groupLanes = new Map<number, any[]>();
+    for (const l of Object.values(lanes) as any[])
+        if (l.offset)
+            groupLanes.set(l.route, [...(groupLanes.get(l.route) ?? []), l]);
+    for (const [route, ls] of groupLanes) {
+        if (ls.length < 2 || G() < 0.4) continue;
+        const r = routes[route].geometry;
+        const ids = ["from", ...r.points.map((p: any) => p.id), "to"];
+        const gi = (a: number, b: number) => a + Math.floor(G() * (b - a + 1));
+        const id = adjustId++;
+        routeAdjusts[id] = {
+            route: G() < 0.08 ? route + 1000 : route,
+            profile: {
+                v: 1,
+                keys: Array.from({ length: gi(1, 4) }, () => {
+                    const i = gi(0, ids.length - 2);
+                    return {
+                        a: ids[i],
+                        b: ids[i + 1],
+                        f: [0, 1, 0.5, G()][gi(0, 3)],
+                        d: [(G() - 0.5) * (S / 50), (G() - 0.5) * (S / 50)],
+                    };
+                }),
+            },
+        };
+        for (const l of ls) if (G() < 0.6) l.groupAdjust = id;
+    }
     return {
         marchers,
         shapes,
@@ -307,5 +340,6 @@ export function walkedPathShow(seed: number, S: number): TimelineSnapshot {
         assignments,
         routes,
         lanes,
+        routeAdjusts,
     } as TimelineSnapshot;
 }

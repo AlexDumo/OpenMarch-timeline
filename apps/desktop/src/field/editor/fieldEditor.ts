@@ -341,6 +341,8 @@ export type FieldModeDrawing = {
     laneHighlights?: readonly number[];
     /** Which of `lanes` is being worked on: the only heavy line, over the path's (pathways step 3b) */
     lanePicked?: number;
+    /** Several of `lanes` picked at once, each heavy (a sub-group, pathways step 26) */
+    lanesPicked?: readonly number[];
     /** An adjusted lane's keys, small round handles while its path is open (pathways step 3b) */
     adjustHandles?: readonly { at: FieldPoint; selected: boolean }[];
     /**
@@ -473,6 +475,11 @@ export type FieldModePress = {
     reachesInside(): boolean;
     /** The editor's `isMac`: on a Mac, $mod is Cmd. */
     readonly isMac: boolean;
+    /**
+     * The press adds to what's picked: Shift at the press, or the touch pill's Add, as a press on
+     * a marcher adds it to the selection (pathways step 26: a lane to the picked lanes)
+     */
+    readonly add?: boolean;
     /** Whether a marcher's dot (or an item) is under the press, so it is the dot's (P-1) */
     onDot(): boolean;
 };
@@ -674,6 +681,7 @@ export class FieldEditor {
                 this.reachInside(pointer, this.marcherAt(pointer.field)) !==
                 null,
             isMac: this.options.isMac ?? false,
+            add: pointer.shift || (this.options.onScreen?.add() ?? false),
             onDot: () => this.marcherAt(pointer.field) !== null,
         };
         if (this.mode?.claims(pointer, modePress)) {

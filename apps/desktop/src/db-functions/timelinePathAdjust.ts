@@ -26,6 +26,7 @@ import { assertValid, mapDbErrors, refuse } from "./timelineErrors";
 import { lanesOfRoute, markAdjustModelInTransaction } from "./timelineLanes";
 import { marcherName, refuseSharedSpot, routeRefusal } from "./timelineRoutes";
 import { profileOfLane } from "./timelineRouteGeometry";
+import { acknowledgeSubgroupRehomedInTransaction } from "./timelineSubgroupAdjust";
 
 const refusalText = (reason: AdjustRefusal) =>
     reason === "tooShort"
@@ -187,7 +188,10 @@ export async function resetLaneAdjustInTransaction({
     await writeProfile(tx, lane.id, schedule, geometry, null);
 }
 
-/** Takes the "re-homed" badge off every Adjust on route `routeId`. Positions don't change. */
+/**
+ * Takes the "re-homed" badge off every Adjust on route `routeId`, the sub-groups' linked ones too
+ * (step 26). Positions don't change.
+ */
 export async function acknowledgeRehomedInTransaction({
     tx,
     routeId,
@@ -203,6 +207,7 @@ export async function acknowledgeRehomedInTransaction({
             .set({ adjust: JSON.stringify({ v: 1, keys: profile.keys }) })
             .where(eq(schema.timeline_lanes.id, lane.id));
     }
+    await acknowledgeSubgroupRehomedInTransaction(tx, routeId);
 }
 
 /** Runs `edit` as one undoable edit named `name`. */

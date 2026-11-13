@@ -1,5 +1,9 @@
 import {
     adjustAt,
+    adjustedAt,
+    adjustPlaces,
+    adjustsAt,
+    isAdjusted,
     arcPoint,
     cubicPoint,
     groupMemberWalk,
@@ -860,34 +864,87 @@ function legMenu(shape: PathShape, leg: number): ToolMenuSection[] {
     ];
 }
 
-/** The menu of an Adjust key, or of an adjusted lane elsewhere on its line */
-function adjustMenu(onKey: boolean): ToolMenuSection[] {
-    return [
-        {
-            items: [
-                ...(onKey
-                    ? [
-                          {
-                              value: "removeKey",
-                              label: tolgee.t(
-                                  "actions.path.adjustRemoveKey",
-                                  "Remove adjustment point",
-                              ),
-                          },
-                      ]
-                    : []),
-                {
-                    value: "resetSpot",
-                    label: tolgee.t(
-                        "actions.path.adjustResetSpot",
-                        "Reset this spot",
-                    ),
-                    icon: "trash" as const,
-                    destructive: true,
-                },
-            ],
-        },
+/**
+ * The menu of an Adjust key (the spot's own, or its sub-group's shared one), or of a lane
+ * elsewhere on its line: its flags (`laneKey`) say what it offers
+ */
+function adjustMenu(
+    onKey: "own" | "shared" | null,
+    flags: string,
+): ToolMenuSection[] | null {
+    const items = [
+        ...(onKey === "own"
+            ? [
+                  {
+                      value: "removeKey",
+                      label: tolgee.t(
+                          "actions.path.adjustRemoveKey",
+                          "Remove adjustment point",
+                      ),
+                  },
+              ]
+            : []),
+        ...(onKey === "shared"
+            ? [
+                  {
+                      value: "removeSharedKey",
+                      label: tolgee.t(
+                          "pathways.menu.removeSharedKey",
+                          "Remove shared adjustment point",
+                      ),
+                  },
+              ]
+            : []),
+        ...(flags.includes("a")
+            ? [
+                  {
+                      value: "pickAdd",
+                      label: tolgee.t(
+                          "pathways.menu.pickAdd",
+                          "Add to picked lanes",
+                      ),
+                  },
+              ]
+            : []),
+        ...(flags.includes("r")
+            ? [
+                  {
+                      value: "pickRemove",
+                      label: tolgee.t(
+                          "pathways.menu.pickRemove",
+                          "Take out of picked lanes",
+                      ),
+                  },
+              ]
+            : []),
+        ...(flags.includes("s")
+            ? [
+                  {
+                      value: "resetShared",
+                      label: tolgee.t(
+                          "actions.path.adjustResetGroup",
+                          "Reset shared adjustment",
+                      ),
+                      icon: "trash" as const,
+                      destructive: true,
+                  },
+              ]
+            : []),
+        ...(flags.includes("o")
+            ? [
+                  {
+                      value: "resetSpot",
+                      label: tolgee.t(
+                          "actions.path.adjustResetSpot",
+                          "Reset this spot",
+                      ),
+                      icon: "trash" as const,
+                      destructive: true,
+                  },
+              ]
+            : []),
     ];
+    return items.length > 0 ? [{ items }] : null;
 }
 
 /**
@@ -900,8 +957,9 @@ function adjustMenu(onKey: boolean): ToolMenuSection[] {
 export const PATH_MENU: ToolHandleMenu<PathShape> = {
     sections(shape, _n, key) {
         const adjustKey = adjustKeyOf(key);
-        if (adjustKey) return adjustMenu(true);
-        if (laneOfKey(key) !== null) return adjustMenu(false);
+        if (adjustKey) return adjustMenu("own", "");
+        if (sharedKeyOf(key)) return adjustMenu("shared", "");
+        if (laneOfKey(key) !== null) return adjustMenu(null, laneFlagsOf(key));
         const index = pointOf(shape, key);
         if (index >= 0) return pointMenu(shape, index);
         const leg = menuLegOf(shape, key);
@@ -909,7 +967,8 @@ export const PATH_MENU: ToolHandleMenu<PathShape> = {
     },
     pick(shape, _n, key, value) {
         // Adjust's entries are the app's to run (`PathPenMode.openMenu`)
-        if (adjustKeyOf(key) || laneOfKey(key) !== null) return null;
+        if (adjustKeyOf(key) || sharedKeyOf(key) || laneOfKey(key) !== null)
+            return null;
         const with_ = (points: readonly PathPoint[]) => ({ ...shape, points });
         const leg = menuLegOf(shape, key);
         if (leg >= 0) {
@@ -978,7 +1037,10 @@ export function scheduleOf(shape: PathShape): GroupSchedule {
     });
 }
 
-/** One member's walk on the group path `shape`: its own legs onto and off its lane, with its Adjust */
+/**
+ * One member's walk on the group path `shape`: its own legs onto and off its lane, with its
+ * sub-group's linked Adjust and its own on top (R-14′ item 7, step 26)
+ */
 export const memberWalkOf = (
     schedule: GroupSchedule,
     member: {
@@ -986,6 +1048,7 @@ export const memberWalkOf = (
         to: XY;
         offset: XY;
         adjust?: AdjustProfile | null;
+        linked?: AdjustProfile | null;
     },
     points: readonly { id?: string }[] = [],
 ): GroupMemberWalk =>
@@ -995,6 +1058,7 @@ export const memberWalkOf = (
         tuple(member.to),
         tuple(member.offset),
         member.adjust ? resolveAdjust(schedule, points, member.adjust) : null,
+        member.linked ? resolveAdjust(schedule, points, member.linked) : null,
     );
 
 /** An Adjust key's handle key: `a<marcher>:<index in the stored profile>` */
@@ -1007,27 +1071,46 @@ export function adjustKeyOf(
     const m = key ? ADJUST_KEY.exec(key) : null;
     return m ? { marcherId: Number(m[1]), index: Number(m[2]) } : null;
 }
-/** A lane's menu key: `l<marcher>` */
-export const laneKey = (marcherId: number) => `l${marcherId}`;
+/** A key of a sub-group's shared tweak, drawn on one lane: `g<marcher>:<index>` (step 26) */
+export const sharedKey = (marcherId: number, index: number) =>
+    `g${marcherId}:${index}`;
+export function sharedKeyOf(
+    key: string | null,
+): { marcherId: number; index: number } | null {
+    const m = key ? /^g(\d+):(\d+)$/.exec(key) : null;
+    return m ? { marcherId: Number(m[1]), index: Number(m[2]) } : null;
+}
+/**
+ * A lane's menu key: `l<marcher>`, with what its menu offers after a dot (step 26): `o` its own
+ * tweak to reset, `s` its sub-group's shared tweak to reset, `a` or `r` add it to the picked
+ * lanes or take it out
+ */
+export const laneKey = (marcherId: number, flags = "") =>
+    flags ? `l${marcherId}.${flags}` : `l${marcherId}`;
+const LANE_KEY = /^l(\d+)(?:\.([a-z]+))?$/;
 export function laneOfKey(key: string | null): number | null {
-    const m = key ? /^l(\d+)$/.exec(key) : null;
+    const m = key ? LANE_KEY.exec(key) : null;
     return m ? Number(m[1]) : null;
 }
+const laneFlagsOf = (key: string | null): string =>
+    (key ? LANE_KEY.exec(key)?.[2] : undefined) ?? "o";
 
-/** A lane's Adjust keys as handles, in place order: its stored index, place and where it's drawn */
+/**
+ * A lane's Adjust keys as handles, in place order: its stored index, place and where it's drawn
+ * (on the lane as it walks, so with its linked Adjust too). `linked` lists the keys of the
+ * sub-group's shared tweak instead (step 26), drawn on this lane.
+ */
 export function adjustHandlesOf(
     walk: GroupMemberWalk,
+    { linked = false }: { linked?: boolean } = {},
 ): { index: number; x: number; at: XY }[] {
-    const { adjust, schedule, offset } = walk;
-    if (!adjust) return [];
-    return adjust.xs.map((x, i) => {
+    const { schedule, offset } = walk;
+    const keys = linked ? walk.linked : walk.adjust;
+    if (!keys) return [];
+    return keys.xs.map((x, i) => {
         const q = routePoint(schedule.W, x / schedule.W.L);
-        const d = adjust.ds[i]!;
-        return {
-            index: adjust.sources[i]!,
-            x,
-            at: { x: q[0] + offset[0] + d[0], y: q[1] + offset[1] + d[1] },
-        };
+        const at = adjustedAt([q[0] + offset[0], q[1] + offset[1]], walk, x);
+        return { index: keys.sources[i]!, x, at: { x: at[0], y: at[1] } };
     });
 }
 
@@ -1037,10 +1120,24 @@ export function lanePlain(walk: GroupMemberWalk, x: number): XY {
     return { x: q[0] + walk.offset[0], y: q[1] + walk.offset[1] };
 }
 
-/** The lane's displacement at `x` now */
+/** The lane's displacement at `x` now: its linked Adjust's and its own, together */
 export function laneDelta(walk: GroupMemberWalk, x: number): XY {
-    if (!walk.adjust) return { x: 0, y: 0 };
-    const d = adjustAt(walk.adjust, x);
+    const d = adjustsAt(walk, x);
+    return {
+        x: d.reduce((sum, v) => sum + v[0], 0),
+        y: d.reduce((sum, v) => sum + v[1], 0),
+    };
+}
+
+/** One of the lane's two Adjusts at `x` (step 26): its sub-group's linked one, or its own */
+export function profileDelta(
+    walk: GroupMemberWalk,
+    which: "linked" | "own",
+    x: number,
+): XY {
+    const p = which === "linked" ? walk.linked : walk.adjust;
+    if (!p) return { x: 0, y: 0 };
+    const d = adjustAt(p, x);
     return { x: d[0], y: d[1] };
 }
 
@@ -1253,11 +1350,13 @@ function adjustedStretches(
     marcherId: number,
     walk: GroupMemberWalk,
 ): LegDistance[] {
-    const { adjust, schedule } = walk;
-    if (!adjust || adjust.xs.length === 0) return [];
+    const { schedule } = walk;
+    // the linked Adjust (step 26) and the spot's own, together
+    const places = adjustPlaces(walk);
+    if (!isAdjusted(walk) || places.length === 0) return [];
     const { W } = schedule;
     const m = W.V.length - 2;
-    const breaks = [...new Set([...W.D.slice(1, m + 1), ...adjust.xs])].sort(
+    const breaks = [...new Set([...W.D.slice(1, m + 1), ...places])].sort(
         (a, b) => a - b,
     );
     const samples = laneSamples(walk);
@@ -1265,9 +1364,9 @@ function adjustedStretches(
     for (let i = 1; i < breaks.length; i++) {
         const x0 = breaks[i - 1]!;
         const x1 = breaks[i]!;
-        const a = adjustAt(adjust, x0);
-        const b = adjustAt(adjust, x1);
-        if (a[0] === b[0] && a[1] === b[1]) continue;
+        const a = adjustsAt(walk, x0);
+        const b = adjustsAt(walk, x1);
+        if (a.every((d, j) => d[0] === b[j]![0] && d[1] === b[j]![1])) continue;
         let travel = 0;
         for (let k = 1; k < samples.length; k++) {
             const s0 = samples[k - 1]!;

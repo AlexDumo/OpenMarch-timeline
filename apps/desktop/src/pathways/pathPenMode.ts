@@ -52,6 +52,9 @@ import {
     laneHitOf,
     laneKey,
     lanePlain,
+    profileDelta,
+    sharedKey,
+    sharedKeyOf,
     splitLeg,
     limitDrag,
     laneOutline,
@@ -83,6 +86,14 @@ import {
     cancelDrag,
     commitAdjustKey,
     commitLaneAdjust,
+    commitSubgroupAdjust,
+    commitSubgroupKey,
+    deleteOnSubgroup,
+    pickSubgroup,
+    resetPickedSubgroup,
+    sharedAdjustOf,
+    subgroupOfMember,
+    toggleLaneInPick,
     commitPoints,
     commitShape,
     deleteAdjustKey,
@@ -187,6 +198,32 @@ function adjustNow(s: PathSession, marcherId: number) {
     return member ? (memberNow(s, member).adjust ?? null) : null;
 }
 
+/**
+ * The shared tweak of the spots of `marcherIds` as drawn now (step 26): their linked Adjust when
+ * they are exactly its sharers (a drag's preview included), else null, a new one
+ */
+function linkedNow(s: PathSession, marcherIds: readonly number[]) {
+    if (sharedAdjustOf(s, marcherIds) === null) return null;
+    const member = memberOf(s, marcherIds[0]!);
+    return member ? (memberNow(s, member).linked ?? null) : null;
+}
+
+/**
+ * The spots a drag on `marcherId`'s lane bends together (AP-R12, step 26), or null for its own
+ * Adjust (AP-R11). Picked lanes go together; a lane picked alone is its own; otherwise a lane in
+ * a sub-group takes its sub-group along, as a drag on a grouped layer moves the group in Figma.
+ */
+function linkedDragOf(
+    s: PathSession,
+    marcherId: number,
+): readonly number[] | null {
+    if (s.subgroup?.marcherIds.includes(marcherId))
+        return s.subgroup.marcherIds;
+    if (s.lane?.marcherId === marcherId) return null;
+    const theirs = subgroupOfMember(s, marcherId);
+    return theirs && theirs.length > 1 ? theirs : null;
+}
+
 /** A press on a lane or an Adjust key, while it's held (decision C) */
 interface LaneHold {
     marcherId: number;
@@ -206,6 +243,13 @@ interface LaneHold {
     /** How many lanes lie under the press, and which comes after this one */
     stacked: number;
     next: number;
+    /**
+     * The spots whose shared tweak this drag bends (step 26): `base` and `index` are then the
+     * shared tweak's. Null for the spot's own Adjust.
+     */
+    linkedTo: readonly number[] | null;
+    /** The press added to the pick (Shift, or the touch pill's Add): a click toggles the lane */
+    add: boolean;
 }
 
 /** Lanes this close together (field units) are one on top of the other under a press */
@@ -350,8 +394,15 @@ class PathPenMode implements FieldMode {
         if (this.handleAt(s, pointer)) return null;
         const walks = laneWalks(s);
         let bestKey: { d: number; hold: LaneHold } | null = null;
+        // With a sub-group in focus its shared tweak's keys are the handles, on each of its lanes
+        // (step 26); otherwise each lane's own keys
+        const shared = sharedFocus(s);
         for (const { marcherId, walk } of walks)
-            for (const h of adjustHandlesOf(walk)) {
+            for (const h of shared
+                ? shared.includes(marcherId)
+                    ? adjustHandlesOf(walk, { linked: true })
+                    : []
+                : adjustHandlesOf(walk)) {
                 const d = Math.hypot(
                     h.at.x - pointer.field.x,
                     h.at.y - pointer.field.y,
@@ -365,11 +416,15 @@ class PathPenMode implements FieldMode {
                             x: h.x,
                             at: h.at,
                             plain: lanePlain(walk, h.x),
-                            base: adjustNow(s, marcherId),
+                            base: shared
+                                ? linkedNow(s, shared)
+                                : adjustNow(s, marcherId),
                             refused: false,
                             d: null,
                             stacked: 1,
                             next: marcherId,
+                            linkedTo: shared,
+                            add: false,
                         },
                     };
             }
@@ -381,8 +436,9 @@ class PathPenMode implements FieldMode {
         // row: every lane this near is under the press. The one picked keeps it; a click on it
         // goes to the next (`releaseLane`), as a click cycles through stacked layers in a drawing
         // app
+        const focused = lanesInFocus(s);
         const hits = walks.flatMap(({ marcherId, walk }) => {
-            if (onGroupLine && marcherId !== focus) return [];
+            if (onGroupLine && !focused.includes(marcherId)) return [];
             const hit = laneHitOf(walk, pointer.field, env.hitRadius);
             return hit ? [{ marcherId, walk, hit }] : [];
         });
@@ -392,20 +448,24 @@ class PathPenMode implements FieldMode {
             (h) => h.hit.distance <= nearest + LANE_STACK_TOLERANCE,
         );
         const on =
-            stacked.find((h) => h.marcherId === s.lane?.marcherId) ??
-            stacked[0]!;
+            stacked.find((h) => focused.includes(h.marcherId)) ?? stacked[0]!;
         const after = stacked[(stacked.indexOf(on) + 1) % stacked.length]!;
+        const linkedTo = linkedDragOf(s, on.marcherId);
         return {
             marcherId: on.marcherId,
             index: null,
             x: on.hit.x,
             at: on.hit.at,
             plain: on.hit.x === null ? null : lanePlain(on.walk, on.hit.x),
-            base: adjustNow(s, on.marcherId),
+            base: linkedTo
+                ? linkedNow(s, linkedTo)
+                : adjustNow(s, on.marcherId),
             refused: false,
             d: null,
             stacked: stacked.length,
             next: after.marcherId,
+            linkedTo,
+            add: false,
         };
     }
 
@@ -418,7 +478,10 @@ class PathPenMode implements FieldMode {
         return !press.onDot() && this.laneAt(s, pointer) !== null;
     }
 
-    press(pointer: FieldPointer, { isMac }: { isMac: boolean }): void {
+    press(
+        pointer: FieldPointer,
+        { isMac, add = false }: { isMac: boolean; add?: boolean },
+    ): void {
         const s = this.session;
         if (!s) return;
         this.endHeld();
@@ -461,7 +524,8 @@ class PathPenMode implements FieldMode {
             s.phase === "open"
                 ? (this.handleAt(s, pointer)?.key ?? null)
                 : null;
-        const lane = key === null ? this.laneAt(s, pointer) : null;
+        const found = key === null ? this.laneAt(s, pointer) : null;
+        const lane = found ? { ...found, add } : null;
         const keys = holdGesture<FieldPointer>(
             pointer,
             (at, roles) => this.follow(at, roles),
@@ -625,19 +689,42 @@ class PathPenMode implements FieldMode {
             },
             env,
         );
-        const d: [number, number] = [to.x - hold.plain.x, to.y - hold.plain.y];
+        // A pick that mixes a sub-group with other spots can't share one tweak (AP-R12)
+        if (
+            hold.linkedTo &&
+            sharedAdjustOf(s, hold.linkedTo) === null &&
+            hold.linkedTo.some((id) => memberOf(s, id)?.groupAdjustId != null)
+        ) {
+            this.refuseLane(hold, "mixed");
+            return;
+        }
+        // The lane's whole displacement there, less its other tweak (R-14′ item 7, step 26): a
+        // shared drag keeps each spot's own tweak on top, an own drag keeps the shared one under
+        const walk = laneWalks(s).find(
+            (w) => w.marcherId === hold.marcherId,
+        )?.walk;
+        const other = walk
+            ? profileDelta(walk, hold.linkedTo ? "own" : "linked", hold.x)
+            : { x: 0, y: 0 };
+        const d: [number, number] = [
+            to.x - hold.plain.x - other.x,
+            to.y - hold.plain.y - other.y,
+        ];
         if (hold.index !== null && !hold.base) return;
         hold.d = d;
+        const preview = (adjust: AdjustProfile | null) =>
+            setLaneEdit({
+                marcherId: hold.marcherId,
+                adjust,
+                ...(hold.linkedTo ? { linkedTo: hold.linkedTo } : {}),
+            });
         if (hold.index !== null) {
             const keys = pruneZeroKeys(
                 hold.base!.keys.map((k, i) =>
                     i === hold.index ? { ...k, d } : k,
                 ),
             );
-            setLaneEdit({
-                marcherId: hold.marcherId,
-                adjust: keys ? { v: 1, keys } : null,
-            });
+            preview(keys ? { v: 1, keys } : null);
             return;
         }
         const placed = placeAdjustKey({
@@ -651,14 +738,34 @@ class PathPenMode implements FieldMode {
             this.refuseLane(hold, placed.reason);
             return;
         }
-        setLaneEdit({ marcherId: hold.marcherId, adjust: placed.profile });
+        preview(placed.profile);
     }
 
-    private refuseLane(hold: LaneHold, reason: keyof typeof refusalKeys) {
+    private refuseLane(
+        hold: LaneHold,
+        reason: keyof typeof refusalKeys | "mixed",
+    ) {
         hold.refused = true;
         hold.d = null;
         setLaneEdit(null);
-        toast.error(tolgee.t(refusalKeys[reason]), { id: "path-adjust" });
+        const s = this.session;
+        const named =
+            reason === "mixed" && s && hold.linkedTo
+                ? (memberOf(
+                      s,
+                      hold.linkedTo.find(
+                          (id) => memberOf(s, id)?.groupAdjustId != null,
+                      ) ?? hold.marcherId,
+                  )?.drill ?? "")
+                : "";
+        toast.error(
+            reason === "mixed"
+                ? tolgee.t("timeline.refusals.route.subgroupMixed", {
+                      marcher: named,
+                  })
+                : tolgee.t(refusalKeys[reason]),
+            { id: "path-adjust" },
+        );
     }
 
     /**
@@ -792,11 +899,36 @@ class PathPenMode implements FieldMode {
 
     /** A lane or key let go: saved once it moved (one undo step), otherwise a click that picks it */
     private releaseLane(p: NonNullable<PathPenMode["held"]>, hold: LaneHold) {
-        if (!p.moved) {
+        const s = usePathPenStore.getState().session;
+        if (!p.moved && s) {
+            // Shift (or the pill's Add): the lane goes into the pick, or out of it (step 26)
+            if (hold.add && hold.index === null) {
+                toggleLaneInPick(hold.marcherId);
+                return;
+            }
+            // A key of the sub-group's shared tweak: it's picked, with the sub-group
+            if (hold.linkedTo && hold.index !== null) {
+                pickSubgroup(hold.linkedTo, hold.index);
+                return;
+            }
+            // A click on a lane of the picked sub-group picks that lane alone, as a second click
+            // goes into a group in Figma; a click on a sub-group's lane picks the sub-group
+            if (
+                hold.index === null &&
+                !s.subgroup?.marcherIds.includes(hold.marcherId)
+            ) {
+                const theirs = subgroupOfMember(s, hold.marcherId);
+                if (
+                    theirs &&
+                    theirs.length > 1 &&
+                    s.lane?.marcherId !== hold.marcherId
+                ) {
+                    pickSubgroup(theirs);
+                    return;
+                }
+            }
             // Already picked, with others under it: the click goes to the next one down
-            const picked =
-                usePathPenStore.getState().session?.lane?.marcherId ===
-                hold.marcherId;
+            const picked = s.lane?.marcherId === hold.marcherId;
             const marcherId =
                 picked && hold.stacked > 1 ? hold.next : hold.marcherId;
             selectLane({ marcherId, key: hold.index });
@@ -810,6 +942,16 @@ class PathPenMode implements FieldMode {
             return;
         }
         // What was just bent is what's being worked on, as a drag selects in a drawing app
+        if (hold.linkedTo) {
+            pickSubgroup(hold.linkedTo, hold.index);
+            const shared = s ? sharedAdjustOf(s, hold.linkedTo) : null;
+            if (hold.index !== null && shared !== null)
+                void commitSubgroupKey(shared, hold.index, hold.d);
+            else if (hold.index === null)
+                void commitSubgroupAdjust(hold.linkedTo, hold.x!, hold.d);
+            else setLaneEdit(null);
+            return;
+        }
         selectLane({ marcherId: hold.marcherId, key: hold.index });
         if (hold.index !== null)
             void commitAdjustKey(hold.marcherId, hold.index, hold.d);
@@ -928,15 +1070,7 @@ class PathPenMode implements FieldMode {
         if (s.phase === "drawing") return removeLastPoint();
         const handle = this.handleAt(s, pointer);
         const lane = handle ? null : this.laneAt(s, pointer);
-        // An Adjust key's menu, or an adjusted lane's; a plain lane has the field's
-        const adjusted =
-            lane && memberOf(s, lane.marcherId)?.adjust
-                ? lane.index !== null
-                    ? adjustKey(lane.marcherId, lane.index)
-                    : laneKey(lane.marcherId)
-                : null;
-        if (adjusted && lane)
-            selectLane({ marcherId: lane.marcherId, key: lane.index });
+        const adjusted = lane ? laneMenuKey(s, lane) : null;
         const menuKey = handle?.key ?? adjusted;
         return openHandleMenu(
             MENU_KIND,
@@ -947,15 +1081,7 @@ class PathPenMode implements FieldMode {
             (key, value) => {
                 const now = usePathPenStore.getState().session;
                 if (!now || now.phase !== "open") return null;
-                const onKey = adjustKeyOf(key);
-                if (value === "removeKey" && onKey) {
-                    void deleteAdjustKey(onKey.marcherId, onKey.index);
-                    return null;
-                }
-                if (value === "resetSpot" && lane) {
-                    void resetSpot(lane.marcherId);
-                    return null;
-                }
+                if (runLaneMenu(now, key, value, lane)) return null;
                 const shape = shapeOf(now);
                 const point = pointOf(shape, key);
                 // Deleting the last point removes the path (AP-R2)
@@ -1029,7 +1155,7 @@ class PathPenMode implements FieldMode {
         const env = envOf();
         if (
             s?.phase === "open" &&
-            s.lane &&
+            (s.lane || s.subgroup) &&
             env &&
             onPath(shapeOf(s), pointer.field, env)
         ) {
@@ -1281,8 +1407,9 @@ function buildDrawing(session: PathSession): FieldModeDrawing {
           : (middle[session.dragging] ?? null);
     const tipText = moving ? drillTerms(moving) : null;
     const group = target.group;
-    const { lanes, memberRings, laneHighlights, lanePicked, adjustHandles } =
-        target.trail ? trailParts(target.trail) : groupParts(session, shape);
+    const parts = target.trail
+        ? trailParts(target.trail)
+        : groupParts(session, shape);
     const laneTip = moving ? null : laneTipOf(session);
     return {
         outline,
@@ -1306,11 +1433,10 @@ function buildDrawing(session: PathSession): FieldModeDrawing {
             : group
               ? group.members.map((m) => m.marcherId)
               : [target.marcherId],
-        ...(lanes ? { lanes } : {}),
-        ...(laneHighlights ? { laneHighlights } : {}),
-        ...(lanePicked !== undefined ? { lanePicked } : {}),
-        ...(adjustHandles ? { adjustHandles } : {}),
-        ...(memberRings ? { memberRings } : {}),
+        // the lanes' parts that are there
+        ...Object.fromEntries(
+            Object.entries(parts).filter(([, v]) => v !== undefined),
+        ),
         ...guidesFor(moving ? [moving] : [], outline),
         ...(tipText && moving ? { tip: { at: moving, text: tipText } } : {}),
         ...(laneTip ? { tip: laneTip } : {}),
@@ -1337,6 +1463,10 @@ function laneTipOf(session: PathSession): FieldModeDrawing["tip"] | null {
                           marcher: hoverMember.drill,
                       },
                   ),
+                  // In a sub-group (step 26): a drag bends its shared tweak, a click picks it
+                  ...(hoverMember.groupAdjustId != null
+                      ? [tolgee.t("pathways.lanes.hoverShared", "shared")]
+                      : []),
                   ...((hover.stacked ?? 1) > 1
                       ? [
                             tolgee.t(
@@ -1352,12 +1482,91 @@ function laneTipOf(session: PathSession): FieldModeDrawing["tip"] | null {
 }
 
 /**
+ * The menu key for a press on a lane or an Adjust key (AP-R11, step 26), or null for the field's
+ * menu. A key's menu, or a lane's: one with a tweak (its own or its sub-group's), or any lane while
+ * lanes are picked, so a finger can add it to the pick; a plain lane with nothing picked has the
+ * field's. A key, or a lane with nothing else picked, is picked as its menu opens.
+ */
+function laneMenuKey(s: PathSession, lane: LaneHold): string | null {
+    const member = memberOf(s, lane.marcherId);
+    const focused = lanesInFocus(s);
+    if (lane.index !== null) {
+        if (lane.linkedTo) {
+            pickSubgroup(lane.linkedTo, lane.index);
+            return sharedKey(lane.marcherId, lane.index);
+        }
+        selectLane({ marcherId: lane.marcherId, key: lane.index });
+        return adjustKey(lane.marcherId, lane.index);
+    }
+    const pick =
+        focused.length === 0
+            ? ""
+            : !focused.includes(lane.marcherId)
+              ? "a"
+              : focused.length > 1
+                ? "r"
+                : "";
+    const flags = `${member?.adjust ? "o" : ""}${member?.groupAdjustId != null ? "s" : ""}${pick}`;
+    if (!flags) return null;
+    if (focused.length === 0)
+        selectLane({ marcherId: lane.marcherId, key: null });
+    return laneKey(lane.marcherId, flags);
+}
+
+/** Runs a lane or Adjust key menu's entry (AP-R11, step 26); false when it isn't one of theirs */
+function runLaneMenu(
+    now: PathSession,
+    key: string | null,
+    value: string,
+    lane: LaneHold | null,
+): boolean {
+    const onKey = adjustKeyOf(key);
+    const onShared = sharedKeyOf(key);
+    if (value === "removeKey" && onKey)
+        void deleteAdjustKey(onKey.marcherId, onKey.index);
+    else if (value === "removeSharedKey" && onShared && now.subgroup)
+        void deleteOnSubgroup({ ...now.subgroup, key: onShared.index });
+    else if (value === "resetSpot" && lane) void resetSpot(lane.marcherId);
+    else if ((value === "pickAdd" || value === "pickRemove") && lane)
+        toggleLaneInPick(lane.marcherId);
+    else if (value === "resetShared" && lane) {
+        const theirs = subgroupOfMember(now, lane.marcherId);
+        if (theirs) {
+            pickSubgroup(theirs);
+            void resetPickedSubgroup();
+        }
+    } else return false;
+    return true;
+}
+
+/**
  * The spot whose lane is being worked on, picked or in mid-drag. While there is one, that lane is
  * the only heavy line and the group path is context: thin, grey and without handles (AP-R11).
  */
 function laneInFocus(s: PathSession): number | null {
-    if (s.phase !== "open") return null;
-    return s.laneEdit?.marcherId ?? s.lane?.marcherId ?? null;
+    return lanesInFocus(s)[0] ?? null;
+}
+
+/**
+ * Every spot whose lane is being worked on (step 26): a sub-group's being bent or picked, or the
+ * one lane. Each is a heavy line while the group path is context.
+ */
+function lanesInFocus(s: PathSession): readonly number[] {
+    if (s.phase !== "open") return [];
+    if (s.laneEdit) return s.laneEdit.linkedTo ?? [s.laneEdit.marcherId];
+    if (s.subgroup) return s.subgroup.marcherIds;
+    return s.lane ? [s.lane.marcherId] : [];
+}
+
+/**
+ * The sub-group in focus when its spots share a tweak, whose keys are then the handles shown
+ * (step 26); null otherwise
+ */
+function sharedFocus(s: PathSession): readonly number[] | null {
+    const ids = s.laneEdit?.linkedTo ?? s.subgroup?.marcherIds ?? null;
+    if (!ids) return null;
+    // A drag making a new shared tweak shows its keys too
+    return sharedAdjustOf(s, ids) !== null || s.laneEdit?.linkedTo ? ids : null;
 }
 
 /**
@@ -1379,7 +1588,12 @@ function trailParts(
     trail: NonNullable<PathTarget["trail"]>,
 ): Pick<
     FieldModeDrawing,
-    "lanes" | "memberRings" | "laneHighlights" | "lanePicked" | "adjustHandles"
+    | "lanes"
+    | "memberRings"
+    | "laneHighlights"
+    | "lanePicked"
+    | "lanesPicked"
+    | "adjustHandles"
 > {
     const lineUp = trail.members.map((m) => m.from);
     // The line is entered at the tail's end spot and runs on to the leader's
@@ -1407,7 +1621,12 @@ function groupParts(
     shape: PathShape,
 ): Pick<
     FieldModeDrawing,
-    "lanes" | "memberRings" | "laneHighlights" | "lanePicked" | "adjustHandles"
+    | "lanes"
+    | "memberRings"
+    | "laneHighlights"
+    | "lanePicked"
+    | "lanesPicked"
+    | "adjustHandles"
 > {
     const group = session.target.group;
     if (!group) return {};
@@ -1427,25 +1646,23 @@ function groupParts(
     }));
     const open = session.phase === "open";
     const picked = open ? session.lane : null;
-    const focus = laneInFocus(session);
+    const focused = lanesInFocus(session);
+    const shared = open ? sharedFocus(session) : null;
     const hovered = open ? session.hoverLane?.marcherId : undefined;
-    const pickedIndex = walks.findIndex((w) => w.marcherId === focus);
+    const pickedIndexes = walks.flatMap((w, i) =>
+        focused.includes(w.marcherId) ? [i] : [],
+    );
     return {
         lanes: walks.map(({ walk }) => laneOutline(walk)),
         laneHighlights: walks.flatMap(({ marcherId }, i) =>
-            marcherId === hovered && marcherId !== focus ? [i] : [],
+            marcherId === hovered && !focused.includes(marcherId) ? [i] : [],
         ),
-        ...(pickedIndex >= 0 ? { lanePicked: pickedIndex } : {}),
-        adjustHandles: open
-            ? walks.flatMap(({ marcherId, walk }) =>
-                  adjustHandlesOf(walk).map((h) => ({
-                      at: h.at,
-                      selected:
-                          picked?.marcherId === marcherId &&
-                          picked.key === h.index,
-                  })),
-              )
-            : [],
+        ...(pickedIndexes.length === 1
+            ? { lanePicked: pickedIndexes[0]! }
+            : pickedIndexes.length > 1
+              ? { lanesPicked: pickedIndexes }
+              : {}),
+        adjustHandles: open ? handlesDrawn(session, walks, shared, picked) : [],
         memberRings: [
             ...group.members.map((m) => ({
                 at: m.from,
@@ -1474,6 +1691,31 @@ function groupParts(
             })),
         ],
     };
+}
+
+/**
+ * The Adjust key handles drawn on an open group path: a sub-group in focus shows its shared
+ * tweak's keys on its lanes (step 26); otherwise each lane its own
+ */
+function handlesDrawn(
+    session: PathSession,
+    walks: readonly { marcherId: number; walk: GroupMemberWalk }[],
+    shared: readonly number[] | null,
+    picked: PathSession["lane"] | null,
+): NonNullable<FieldModeDrawing["adjustHandles"]> {
+    return walks.flatMap(({ marcherId, walk }) => {
+        if (shared)
+            return shared.includes(marcherId)
+                ? adjustHandlesOf(walk, { linked: true }).map((h) => ({
+                      at: h.at,
+                      selected: session.subgroup?.key === h.index,
+                  }))
+                : [];
+        return adjustHandlesOf(walk).map((h) => ({
+            at: h.at,
+            selected: picked?.marcherId === marcherId && picked.key === h.index,
+        }));
+    });
 }
 
 /** Guides along the field's lines that `points` lie on, as a shape's are drawn while it's edited */

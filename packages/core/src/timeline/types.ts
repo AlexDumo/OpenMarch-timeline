@@ -92,7 +92,8 @@ export interface ChangeBatch {
             | "assignments"
             | "slot_destinations"
             | "routes"
-            | "lanes";
+            | "lanes"
+            | "route_adjusts";
         /** For `slot_destinations`, the transition id */
         rowId: number;
         /** null on insert */
@@ -275,6 +276,21 @@ export interface LaneRow {
     offset: XY | null;
     /** This spot's own Adjust profile (spec J.2, pathways step 3b); absent or null for none */
     adjust?: AdjustProfile | null;
+    /**
+     * The linked Adjust this spot shares with others of its sub-group (spec J.1
+     * `group_adjust_id`, pathways step 26): an id in `routeAdjusts`. Absent or null for none.
+     * Added before the spot's own Adjust (R-14′ item 7).
+     */
+    groupAdjust?: number | null;
+}
+
+/**
+ * A linked Adjust (spec v0.10 J.1 `timeline_route_adjusts`, pathways step 26): one profile shared
+ * by a sub-group of a route's lanes. Ignored on a lane of another route (T-10).
+ */
+export interface RouteAdjustRow {
+    route: number;
+    profile: AdjustProfile;
 }
 
 /**
@@ -320,6 +336,8 @@ export interface TimelineSnapshot {
     routes?: Record<number, RouteRow>;
     /** Lanes by id (v0.10, D-20); absent when the show has none */
     lanes?: Record<number, LaneRow>;
+    /** Linked Adjusts by id (v0.10 J.1, pathways step 26); absent when the show has none */
+    routeAdjusts?: Record<number, RouteAdjustRow>;
 }
 
 /** One piece of a marcher's flattened timeline (R-2). */

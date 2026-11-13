@@ -198,7 +198,10 @@
             "setOrder": "Set order",
             "reverseOrder": "Reverse order",
             "clearOrder": "Clear order",
-            "orderKeywords": "order sequence leader tail first last line follow reverse numbers"
+            "orderKeywords": "order sequence leader tail first last line follow reverse numbers",
+            "adjustResetGroup": "Reset shared adjustment",
+            "deselectSpots": "Deselect spots",
+            "resetShared": "Reset shared adjustment"
         }
     },
     "analyticsOptIn": {
@@ -2729,7 +2732,10 @@
                 "refitNotNeeded": "The path already fits where its marchers stand",
                 "refitNoFounder": "Nobody starts on this path, so it has no ends to re-fit to",
                 "arcTooRound": "An arc can bend at most into a half circle",
-                "smoothBesideArc": "A point at an end of an arc must be a corner"
+                "smoothBesideArc": "A point at an end of an arc must be a corner",
+                "subgroupTooFew": "Pick two or more marchers' lanes to adjust them together",
+                "subgroupTwoPaths": "These marchers walk different paths, so they can't share an adjustment",
+                "subgroupMixed": "{marcher} already shares an adjustment with other marchers; pick all of them, or reset theirs first"
             },
             "trail": {
                 "tooFew": "Follow is for two or more marchers",
@@ -3830,7 +3836,10 @@
             "previewReduced": "Preview is off while your system asks for less motion",
             "previewNothing": "Preview: place a point first",
             "detachedNote": "Detached",
-            "detachedCount": "{count} detached"
+            "detachedCount": "{count} detached",
+            "subgroupShared": "{count} spots · shared adjustment",
+            "subgroupPicked": "{count} spots · drag one to bend them together",
+            "resetGroupTip": "Take away the adjustment these spots share. Each spot keeps its own adjustment"
         },
         "menu": {
             "pointType": "Corner type",
@@ -3845,14 +3854,18 @@
             "noCurve": "The path runs straight through here",
             "arc": "Arc",
             "besideArc": "A point at an end of an arc stays a corner",
-            "nextToArc": "An arc meets this leg at a corner"
+            "nextToArc": "An arc meets this leg at a corner",
+            "removeSharedKey": "Remove shared adjustment point",
+            "pickAdd": "Add to picked lanes",
+            "pickRemove": "Take out of picked lanes"
         },
         "errors": {
             "save": "Couldn't save the path",
             "remove": "Couldn't remove the path",
             "adjust": "Couldn't adjust this spot",
             "refit": "Couldn't re-fit the path",
-            "reverse": "Couldn't reverse the trail"
+            "reverse": "Couldn't reverse the trail",
+            "adjustGroup": "Couldn't adjust these spots"
         },
         "refusals": {
             "noMove": "{marcher} has no move at the playhead to draw a path on",
@@ -3884,7 +3897,9 @@
             "rehomedCleared": "{count, plural, one {# spot} other {# spots}} lost their adjustment",
             "adjustsRemoved": "{count, plural, one {# adjustment} other {# adjustments}} removed: {count, plural, one {it was} other {they were}} on the old path",
             "removedTrail": "Removed the trail: {count, plural, one {# marcher walks} other {# marchers walk}} straight to the same end spots",
-            "reversed": "{marcher} leads now"
+            "reversed": "{marcher} leads now",
+            "rehomedGroups": "Moved the shared adjustment of {count, plural, one {# group of spots} other {# groups of spots}} to the nearest points left",
+            "rehomedGroupsCleared": "{count, plural, one {# group of spots} other {# groups of spots}} lost their shared adjustment"
         },
         "rings": {
             "group": "Follows the group path",
@@ -3899,7 +3914,8 @@
         "lanes": {
             "hover": "Spot {spot} · {marcher}",
             "hoverAdjusted": "Spot {spot} · {marcher} · adjusted",
-            "stacked": "click for the next of {count}"
+            "stacked": "click for the next of {count}",
+            "hoverShared": "shared"
         },
         "trail": {
             "leader": "Leader · {marcher}",

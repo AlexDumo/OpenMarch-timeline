@@ -9,7 +9,8 @@ import {
     EPS_GEOM,
     ROUTE_ARC_SAMPLES,
     ROUTE_CUBIC_SAMPLES,
-    adjustAt,
+    adjustPlaces,
+    adjustsAt,
     arcPoint,
     cubicPoint,
     cumOf,
@@ -17,10 +18,12 @@ import {
     dist,
     groupMemberWalk,
     groupSchedule,
+    isAdjusted,
     lerp,
     makeAlongTrail,
     makeTrail,
     placed,
+    placedBy,
     resolveAdjust,
     routePath,
     routePiecePoint,
@@ -472,7 +475,7 @@ function legPieces(pa: number, pb: number, leg: GroupLeg): Piece[] {
 
 /** A group lane's walk (R-14 group schedule, R-14′ Adjust) as pieces (R-20 items 4 and 5). */
 function groupPieces(walk: GroupMemberWalk): Piece[] {
-    const { schedule, A, B, offset, first, last, adjust } = walk;
+    const { schedule, A, B, offset, first, last } = walk;
     if (!first || !last) {
         const only = schedule.W.pieces[0];
         return only?.kind === "arc"
@@ -482,7 +485,9 @@ function groupPieces(walk: GroupMemberWalk): Piece[] {
     const { W, uFirst, uLast } = schedule;
     const m = W.V.length - 2;
     const out: Piece[] = legPieces(0, uFirst, first);
-    const keys = adjust && adjust.xs.length > 0 ? adjust : null;
+    // R-14′ item 7 (step 26): the linked Adjust, then the spot's own; their key places together
+    const places = adjustPlaces(walk);
+    const keys = isAdjusted(walk) && places.length > 0 ? walk : null;
     for (let j = 1; j < m; j++) {
         const xLo = W.D[j]!;
         const xHi = W.D[j + 1]!;
@@ -490,17 +495,18 @@ function groupPieces(walk: GroupMemberWalk): Piece[] {
         // the piece's parts between Adjust keys: the displacement is linear on each
         const breaks = [xLo];
         if (keys)
-            for (const x of keys.xs) if (x > xLo && x < xHi) breaks.push(x);
+            for (const x of places) if (x > xLo && x < xHi) breaks.push(x);
         breaks.push(xHi);
         for (let i = 0; i + 1 < breaks.length; i++) {
             const xa = breaks[i]!;
             const xb = breaks[i + 1]!;
-            const da: XY = keys ? adjustAt(keys, xa) : [0, 0];
-            const db: XY = keys ? adjustAt(keys, xb) : [0, 0];
-            const place = (q: XY, d: XY): XY => {
-                const p = placed(q, offset);
-                return keys ? placed(p, d) : p;
-            };
+            const da: XY[] = keys ? adjustsAt(keys, xa) : [];
+            const db: XY[] = keys ? adjustsAt(keys, xb) : [];
+            const place = (q: XY, d: readonly XY[]): XY =>
+                placedBy(placed(q, offset), d);
+            const sameD = da.every(
+                (d, i) => d[0] === db[i]![0] && d[1] === db[i]![1],
+            );
             const pa = xa / W.L;
             const pb = xb / W.L;
             const pointAt = (x: number): XY =>
@@ -521,7 +527,7 @@ function groupPieces(walk: GroupMemberWalk): Piece[] {
                 );
             } else if (piece.kind === "arc") {
                 const len = xHi - xLo;
-                if (da[0] === db[0] && da[1] === db[1]) {
+                if (sameD) {
                     // a moved arc is the same arc (R-14″)
                     const part = subArc(
                         W.V[j]!,
@@ -546,7 +552,7 @@ function groupPieces(walk: GroupMemberWalk): Piece[] {
                             pb,
                             (u) => {
                                 const x = xa + (xb - xa) * u;
-                                return place(pointAt(x), adjustAt(keys!, x));
+                                return place(pointAt(x), adjustsAt(keys!, x));
                             },
                             Array.from(
                                 { length: ROUTE_ARC_SAMPLES + 1 },
@@ -556,7 +562,7 @@ function groupPieces(walk: GroupMemberWalk): Piece[] {
                             ),
                         ),
                     );
-            } else if (da[0] === db[0] && da[1] === db[1]) {
+            } else if (sameD) {
                 out.push(
                     cubicPiece(
                         pa,
@@ -578,7 +584,7 @@ function groupPieces(walk: GroupMemberWalk): Piece[] {
                         pb,
                         (u) => {
                             const x = xa + (xb - xa) * u;
-                            return place(pointAt(x), adjustAt(keys!, x));
+                            return place(pointAt(x), adjustsAt(keys!, x));
                         },
                         // where R-14's chords of this curve begin, as fractions of the part
                         piece.e.map((e) => (xLo + e - xa) / (xb - xa)),
@@ -762,6 +768,25 @@ export function createWalkedPaths(
             adjusts.set(
                 lane,
                 (resolved = resolveAdjust(schedule, route.points, lane.adjust)),
+            );
+        return resolved;
+    };
+    const linkedOf = new Map<number, ResolvedAdjust>();
+    /** The lane's linked Adjust (step 26); none for one of another route (T-10) */
+    const linkedAdjustOf = (
+        lane: LaneRow,
+        schedule: GroupSchedule,
+        route: RouteWalk,
+    ): ResolvedAdjust | null => {
+        const gid = lane.groupAdjust;
+        if (gid == null) return null;
+        const row = host.routeAdjusts?.[gid];
+        if (!row || row.route !== lane.route) return null;
+        let resolved = linkedOf.get(gid);
+        if (!resolved)
+            linkedOf.set(
+                gid,
+                (resolved = resolveAdjust(schedule, route.points, row.profile)),
             );
         return resolved;
     };
@@ -1010,6 +1035,7 @@ export function createWalkedPaths(
                         B,
                         lane.offset,
                         adjustOf(lane, schedule, route),
+                        linkedAdjustOf(lane, schedule, route),
                     ),
                 );
             }

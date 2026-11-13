@@ -234,6 +234,21 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
     22: () => {},
     // Route sources, pathways step 3c: a new table only
     23: (db) => dropTables(db, ["timeline_route_sources"]),
+    // Linked Adjusts, pathways step 26: the lanes' column goes, once what reads it is off the
+    // table, then the new table
+    25: (db) => {
+        db.exec(`
+            DROP VIEW IF EXISTS timeline_route_violations;
+            DROP TRIGGER IF EXISTS timeline_log_lanes_ins;
+            DROP TRIGGER IF EXISTS timeline_log_lanes_upd;
+            DROP TRIGGER IF EXISTS timeline_log_lanes_del;
+            DROP TRIGGER IF EXISTS timeline_lanes_ut;
+            DROP TRIGGER IF EXISTS timeline_lanes_dt;
+            DROP INDEX IF EXISTS timeline_idx_lane_adjust;
+            ALTER TABLE timeline_lanes DROP COLUMN group_adjust_id;
+        `);
+        dropTables(db, ["timeline_route_adjusts"]);
+    },
 };
 
 /**

@@ -252,6 +252,10 @@ export interface MoveRoute {
     offset: XY | null;
     /** The spot's Adjust, or null (spec J.2) */
     adjust: AdjustProfile | null;
+    /** The linked Adjust the spot shares with its sub-group, or null (step 26, spec J.1) */
+    groupAdjustId: number | null;
+    /** That linked Adjust's profile, or null */
+    linked: AdjustProfile | null;
     geometry: RouteGeometry;
     /** How many lanes the route has, vacant ones too */
     laneCount: number;
@@ -285,6 +289,10 @@ export async function readRoutes(
             offsetX: L.offset_x,
             offsetY: L.offset_y,
             adjust: L.adjust,
+            groupAdjustId: L.group_adjust_id,
+            linked: sql<
+                string | null
+            >`(SELECT g.profile FROM timeline_route_adjusts g WHERE g.id = ${L.group_adjust_id})`,
             laneCount: sql<number>`(SELECT count(*) FROM timeline_lanes c WHERE c.route_id = ${R.id})`,
             detachedFrom: sql<
                 number | null
@@ -307,8 +315,9 @@ export async function readRoutes(
         )
         .orderBy(asc(R.id), asc(A.marcher_id), asc(A.start_beat))
         .all();
-    return rows.map(({ offsetX, offsetY, geometry, adjust, ...r }) => ({
+    return rows.map(({ offsetX, offsetY, geometry, adjust, linked, ...r }) => ({
         ...r,
+        linked: linked === null ? null : (JSON.parse(linked) as AdjustProfile),
         laneCount: Number(r.laneCount),
         detachedFrom: r.detachedFrom === null ? null : Number(r.detachedFrom),
         offset:
@@ -521,6 +530,7 @@ export async function drawRouteInTransaction({
                     offset_x: null,
                     offset_y: null,
                     adjust: null,
+                    group_adjust_id: null,
                 })
                 .where(eq(L.id, lane.id));
         else
@@ -620,6 +630,10 @@ export async function removeRouteInTransaction({
                 lanes.map((l) => l.id),
             ),
         );
+        // AP-R2: lanes, then its linked Adjusts (step 26), then K6 rows naming it, then R
+        await tx
+            .delete(schema.timeline_route_adjusts)
+            .where(eq(schema.timeline_route_adjusts.route_id, rid));
         await deleteRouteSourcesInTransaction(tx, [rid]);
         await tx
             .delete(schema.timeline_routes)

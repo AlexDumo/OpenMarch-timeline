@@ -4,9 +4,10 @@
  * a point that went is re-homed in the same edit and never dropped silently. A new route has
  * nothing anchored on it, so inserting one doesn't come here.
  *
- * What AP-H1 also names and doesn't exist yet plugs in here beside the lanes' profiles: handoff
- * ramps (step 25), pins and holds (step 5) and linked Adjusts (step 26). AP-R21's merge and join
- * (still refused, AP-R6) write through this helper when they arrive.
+ * Linked Adjusts (step 26) are re-homed here beside the lanes' own profiles, by the same rule.
+ * What AP-H1 also names and doesn't exist yet plugs in here too: handoff ramps (step 25), pins and
+ * holds (step 5). AP-R21's merge and join (still refused, AP-R6) write through this helper when
+ * they arrive.
  */
 import {
     isRouteBulge,
@@ -69,6 +70,10 @@ export async function markArcsInTransaction(
 export interface RehomeReport {
     /** Spots whose Adjust had a key re-homed or dropped and still has keys */
     rehomedSpots: number;
+    /** Sub-groups whose linked Adjust had a key re-homed or dropped and still has keys (step 26) */
+    rehomedGroups?: number;
+    /** Sub-groups whose linked Adjust went altogether (step 26) */
+    clearedGroups?: number;
     /** Keys dropped, over every spot */
     droppedKeys: number;
     /** Spots whose Adjust went altogether */
@@ -123,12 +128,19 @@ export async function writeRouteGeometryInTransaction(
         const profile = profileOfLane(lane);
         return profile ? [{ lane, profile }] : [];
     });
+    // Linked Adjusts on the route (step 26): a drag stops short for them too, and they re-home
+    const G = schema.timeline_route_adjusts;
+    const linked = (
+        await tx.select().from(G).where(eq(G.route_id, routeId)).all()
+    ).map((g) => ({
+        id: g.id,
+        profile: JSON.parse(g.profile) as AdjustProfile,
+    }));
     const limited = drag
-        ? limitRouteEdit(
-              old,
-              next,
-              adjusted.map((a) => a.profile),
-          )
+        ? limitRouteEdit(old, next, [
+              ...adjusted.map((a) => a.profile),
+              ...linked.map((g) => g.profile),
+          ])
         : { geometry: next, stopped: false };
     refuseArcRules(limited.geometry);
     assertValid(validateRouteGeometry(limited.geometry), "route");
@@ -148,6 +160,26 @@ export async function writeRouteGeometryInTransaction(
         report.droppedKeys += out.dropped;
         if (out.profile) report.rehomedSpots++;
         else report.clearedSpots++;
+    }
+    for (const g of linked) {
+        const out = rehomeProfile(old, limited.geometry, g.profile);
+        if (!out.changed) continue;
+        report.droppedKeys += out.dropped;
+        if (out.profile) {
+            await tx
+                .update(G)
+                .set({ profile: JSON.stringify(out.profile) })
+                .where(eq(G.id, g.id));
+            report.rehomedGroups = (report.rehomedGroups ?? 0) + 1;
+        } else {
+            // Nothing of it is left (I-J2 and J.2 need one key): its lanes stop sharing it
+            await tx
+                .update(L)
+                .set({ group_adjust_id: null })
+                .where(eq(L.group_adjust_id, g.id));
+            await tx.delete(G).where(eq(G.id, g.id));
+            report.clearedGroups = (report.clearedGroups ?? 0) + 1;
+        }
     }
     return report;
 }

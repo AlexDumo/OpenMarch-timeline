@@ -54,6 +54,9 @@ export const CONVERTER_SCHEMA_MIGRATION_TAGS = [
     // Route sources (K6, pathways step 3c): not read by the converter or the resolver, but a new
     // table, so it is made here with the others and the conversion's own stage only drops tables
     "0023_timeline_route_sources",
+    // Linked Adjusts (pathways step 26): the resolver's cold build reads `group_adjust_id` and the
+    // new table
+    "0025_timeline_route_adjusts",
 ];
 
 /** The migrations folder, also found from a built `dist-electron/main`. */

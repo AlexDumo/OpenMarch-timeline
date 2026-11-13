@@ -16,7 +16,7 @@
  * AP-R2 (Remove path removes the whole group's) lives with the own-path procedures; AP-R3 and the
  * orphan sweep (AP-H3) in `timelineLanes`; AP-R7 refuses a group path in `timelineSplitAtBeat`.
  */
-import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import {
     createResolver,
     validateLaneOffset,
@@ -230,14 +230,16 @@ async function setLane(
     const L = schema.timeline_lanes;
     const columns = offsetColumns(offset);
     const leaves = m.lane !== undefined && m.lane.route_id !== routeId;
-    const hadAdjust = leaves && m.lane!.adjust !== null;
+    const hadAdjust =
+        leaves && (m.lane!.adjust !== null || m.lane!.group_adjust_id !== null);
     if (m.lane)
         await tx
             .update(L)
             .set({
                 route_id: routeId,
                 ...columns,
-                ...(leaves ? { adjust: null } : {}),
+                // a linked Adjust is of the old route too (I-J1, step 26); AP-H3 drops it unshared
+                ...(leaves ? { adjust: null, group_adjust_id: null } : {}),
             })
             .where(eq(L.id, m.lane.id));
     else
@@ -620,10 +622,17 @@ export async function detachInTransaction({
                 .values({ geometry: geometries.get(lane.route_id)! })
                 .returning()
                 .get())!;
-            // Offset and Adjust stay: the same inputs walk the same positions
+            // Offset and Adjust stay: the same inputs walk the same positions. A spot in a
+            // sub-group takes a copy of its linked Adjust onto the copy (AP-R9 step 2, step 26):
+            // the others still share the original
+            const linked = await copyLinkedAdjust(
+                tx,
+                lane.group_adjust_id,
+                copy.id,
+            );
             await tx
                 .update(schema.timeline_lanes)
-                .set({ route_id: copy.id })
+                .set({ route_id: copy.id, group_adjust_id: linked })
                 .where(eq(schema.timeline_lanes.id, lane.id));
             // The lane's offset and the group path's `from` at Detach: Rejoin restores this offset
             // while `from` is the same, so a round trip moves nobody even with a Re-fit pending
@@ -647,6 +656,122 @@ export async function detachInTransaction({
     });
 }
 
+/**
+ * AP-R9 step 2: a copy of linked Adjust `groupAdjustId` on route `routeId` (the profile text
+ * verbatim, so its keys name the copy's identical point ids), or null for none.
+ */
+async function copyLinkedAdjust(
+    tx: DbTransaction,
+    groupAdjustId: number | null,
+    routeId: number,
+): Promise<number | null> {
+    if (groupAdjustId === null) return null;
+    const G = schema.timeline_route_adjusts;
+    const g = await tx.select().from(G).where(eq(G.id, groupAdjustId)).get();
+    if (!g) refuse(`linked Adjust ${groupAdjustId} does not exist`);
+    return (await tx
+        .insert(G)
+        .values({ route_id: routeId, profile: g.profile })
+        .returning()
+        .get())!.id;
+}
+
+/**
+ * AP-R12 "Detach the sub-group" (pathways step 26): every spot sharing linked Adjust
+ * `groupAdjustId` moves to **one** shared copy of the group path, with one shared copy of the
+ * linked Adjust, so the sub-group stays a group (its own path, its shared tweak, each spot's own
+ * tweak) and nobody moves (AP-R9: every input is the same). One K6 link records the group path,
+ * its `from` and each lane's offset, so Rejoin brings each spot back as AP-R10 says. Refused when
+ * a spot is held by two marchers (D-22). The original linked Adjust and, if nobody is left on it,
+ * the group path go (AP-H3). One undo step.
+ */
+export async function detachSubgroupInTransaction({
+    tx,
+    groupAdjustId,
+}: {
+    tx: DbTransaction;
+    groupAdjustId: number;
+}): Promise<{ routeId: number }> {
+    const L = schema.timeline_lanes;
+    const lanes = await tx
+        .select()
+        .from(L)
+        .where(eq(L.group_adjust_id, groupAdjustId))
+        .orderBy(asc(L.id))
+        .all();
+    if (lanes.length === 0)
+        refuse(`linked Adjust ${groupAdjustId} does not exist`);
+    const T = schema.timeline_transitions;
+    const A = schema.timeline_assignments;
+    for (const lane of lanes) {
+        const t = (await tx
+            .select()
+            .from(T)
+            .where(eq(T.id, lane.transition_id))
+            .get())!;
+        const holder = await tx
+            .select({ m: A.marcher_id })
+            .from(A)
+            .where(
+                and(
+                    eq(A.transition_id, lane.transition_id),
+                    eq(A.slot_index, lane.slot_index),
+                ),
+            )
+            .orderBy(asc(A.start_beat), asc(A.id))
+            .get();
+        if (holder) await refuseSharedSpot(tx, t, lane.slot_index, holder.m);
+    }
+    const routeId = lanes[0]!.route_id;
+    const R = schema.timeline_routes;
+    const source = await tx.select().from(R).where(eq(R.id, routeId)).get();
+    if (!source) refuse(`route ${routeId} does not exist`);
+    return await mapDbErrors(async () => {
+        const copy = (await tx
+            .insert(R)
+            .values({ geometry: source.geometry })
+            .returning()
+            .get())!;
+        const linked = await copyLinkedAdjust(tx, groupAdjustId, copy.id);
+        await tx
+            .update(L)
+            .set({ route_id: copy.id, group_adjust_id: linked })
+            .where(
+                inArray(
+                    L.id,
+                    lanes.map((l) => l.id),
+                ),
+            );
+        const from = (JSON.parse(source.geometry) as RouteGeometry).from;
+        const link: DetachedLinkData = {
+            offset: [lanes[0]!.offset_x!, lanes[0]!.offset_y!],
+            from: [from[0], from[1]],
+            offsets: Object.fromEntries(
+                lanes.map((l) => [String(l.id), [l.offset_x!, l.offset_y!]]),
+            ),
+        };
+        await tx.insert(schema.timeline_route_sources).values({
+            route_id: copy.id,
+            kind: "detached_from",
+            source_route_id: routeId,
+            data: JSON.stringify(link),
+        });
+        await sweepOrphanRoutesInTransaction(tx);
+        return { routeId: copy.id };
+    });
+}
+
+/** AP-R12's Detach of a sub-group as one undoable edit. */
+export async function detachSubgroup(args: {
+    db: DbConnection;
+    groupAdjustId: number;
+}): Promise<{ routeId: number }> {
+    const { db, ...rest } = args;
+    return await transactionWithHistory(db, "detachSubgroup", (tx) =>
+        detachSubgroupInTransaction({ tx, ...rest }),
+    );
+}
+
 /** AP-R9 Detach as one undoable edit (every marcher at once is one undo step). */
 export async function detachFromGroupPath(args: {
     db: DbConnection;
@@ -663,11 +788,22 @@ export async function detachFromGroupPath(args: {
 // AP-R10: Rejoin
 // ---------------------------------------------------------------------------
 
-/** What a `detached_from` link records at Detach (K6 `data`): the lane's offset and R's `from` */
+/**
+ * What a `detached_from` link records at Detach (K6 `data`): the lane's offset and R's `from`. A
+ * sub-group's shared copy (step 26) records every lane's offset by lane id in `offsets`; `offset`
+ * is then its first lane's.
+ */
 interface DetachedLinkData {
     offset: XY;
     from: XY;
+    offsets?: Record<string, XY>;
 }
+
+/** Whether `v` is a finite `[x, y]` */
+const pairXY = (v: unknown): v is XY =>
+    Array.isArray(v) &&
+    v.length === 2 &&
+    v.every((n) => typeof n === "number" && Number.isFinite(n));
 
 /** A Detached copy's K6 link: the group path it came from, and what Detach recorded */
 interface DetachedLink {
@@ -689,10 +825,7 @@ async function detachedLinkOf(
         .get();
     if (!row) return null;
     const parsed = row.data === null ? null : (JSON.parse(row.data) as unknown);
-    const pair = (v: unknown): v is XY =>
-        Array.isArray(v) &&
-        v.length === 2 &&
-        v.every((n) => typeof n === "number" && Number.isFinite(n));
+    const pair = pairXY;
     const data =
         parsed !== null &&
         typeof parsed === "object" &&
@@ -769,12 +902,16 @@ async function backFromDetach(
         link.data !== null &&
         Object.is(link.data.from[0], R.from[0]) &&
         Object.is(link.data.from[1], R.from[1]);
+    // A sub-group's shared copy recorded each lane's offset (step 26)
+    const recorded = link.data?.offsets?.[String(found.lane.id)];
     return {
         marcherId,
         lane: found.lane,
         transitionId: found.transition.id,
         offset: sameFrom
-            ? offsetColumns(link.data!.offset)
+            ? offsetColumns(
+                  recorded && pairXY(recorded) ? recorded : link.data!.offset,
+              )
             : founds
               ? offsetColumns(sub([A[0], A[1]], R.from))
               : null,
@@ -844,7 +981,14 @@ export async function rejoinGroupPathInTransaction({
         for (const { marcherId, lane, transitionId, offset } of back) {
             await tx
                 .update(schema.timeline_lanes)
-                .set({ route_id: routeId, adjust: null, ...(offset ?? {}) })
+                // Q4: the spot walks the plain group lane, its own and its linked Adjust both gone
+                // (step 26); AP-H3 drops the copy's linked Adjust with the copy
+                .set({
+                    route_id: routeId,
+                    adjust: null,
+                    group_adjust_id: null,
+                    ...(offset ?? {}),
+                })
                 .where(eq(schema.timeline_lanes.id, lane.id));
             transitions[marcherId] = transitionId;
         }

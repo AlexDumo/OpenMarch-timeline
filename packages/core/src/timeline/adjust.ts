@@ -7,7 +7,8 @@
  * Evaluation lives in `geom.ts` (R-14′ item 6), which the resolver and the oracle share.
  */
 import {
-    adjustAt,
+    adjustedAt,
+    adjustPlaces,
     anchorPlace,
     clamp01,
     dist,
@@ -522,26 +523,28 @@ export interface LaneSample {
  * straight, or as near as the path's own measure does. For drawing, hit tests and Big steps.
  */
 export function laneSamples(walk: GroupMemberWalk): LaneSample[] {
-    const { schedule, offset, adjust } = walk;
+    const { schedule, offset } = walk;
     const { W } = schedule;
     const m = W.V.length - 2;
     if (m < 1) return [];
+    // R-14′ item 7: the linked Adjust (step 26), then the spot's own
     const point = (j: number, x: number): LaneSample => {
         const q = placed(routePiecePoint(W, j, x - W.D[j]!), offset);
-        return { x, at: adjust ? placed(q, adjustAt(adjust, x)) : q };
+        return { x, at: adjustedAt(q, walk, x) };
     };
     const atKept = (k: number): LaneSample => {
         const x = W.D[k]!;
         const q = placed(W.V[k]!, offset);
-        return { x, at: adjust ? placed(q, adjustAt(adjust, x)) : q };
+        return { x, at: adjustedAt(q, walk, x) };
     };
+    const keyPlaces = adjustPlaces(walk);
     const out: LaneSample[] = [atKept(1)];
     for (let j = 1; j < m; j++) {
         const piece = W.pieces[j]!;
         const start = W.D[j]!;
         const end = W.D[j + 1]!;
         const places = new Set<number>(
-            adjust?.xs.filter((x) => x > start && x < end) ?? [],
+            keyPlaces.filter((x) => x > start && x < end),
         );
         if (piece.kind === "cubic")
             for (let i = 1; i < ROUTE_CUBIC_SAMPLES; i++)

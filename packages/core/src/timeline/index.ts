@@ -38,6 +38,7 @@ export type {
     AdjustAnchor,
     AdjustKey,
     AdjustProfile,
+    RouteAdjustRow,
     FtlTrail,
 } from "./types";
 export type { Oracle } from "./oracle";
@@ -60,7 +61,12 @@ export {
     alongEnds,
     alongPoint,
     placed,
+    placedBy,
     adjustAt,
+    adjustsAt,
+    adjustedAt,
+    adjustPlaces,
+    isAdjusted,
     anchorPlace,
     resolveAdjust,
     EPS_GEOM,
@@ -78,6 +84,7 @@ export type {
     GroupMemberWalk,
     GroupLeg,
     ResolvedAdjust,
+    LaneAdjusts,
 } from "./geom";
 export {
     adjustRefusal,
