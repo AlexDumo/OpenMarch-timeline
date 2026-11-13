@@ -2933,5 +2933,7 @@
     "shapes.edit.drawPointsHintTouchFor": "Hint shown on a tablet at the top of the field when a line-like shape tool is chosen and nothing is drawn yet: drag to draw it, or tap one point after another. {shape} picks the kind of shape.",
     "shapes.edit.finish": "Button shown on a tablet while drawing a line on the field point by point. Finishes the line with the points tapped so far.",
     "shapes.edit.pointsHintTouch": "Hint shown on a tablet while drawing a line point by point. \"Finish\" is the name of the button next to it; keep it the same as that button's text.",
-    "shapes.edit.undoPoint": "Button shown on a tablet while drawing a line on the field point by point. Takes back the last point tapped."
+    "shapes.edit.undoPoint": "Button shown on a tablet while drawing a line on the field point by point. Takes back the last point tapped.",
+    "shapes.tool.tab.ringCaption": "Short caption under a button in the Shapes tab of the toolbar, shown only in the touch layout (tablet). The button opens the shape ring: a round menu of shape kinds (box, line, arc…) that opens over the field; the user taps a shape in it to pick it. Keep it one short word.",
+    "toolbar.alignmentTabShort": "Shortened name of the 'Alignment' toolbar tab, shown instead of it in the tablet layout when the screen is narrow (an iPad held upright), beside the tabs 'File', 'Shapes' and 'Select'. Keep it as short as possible, one word."
 }
