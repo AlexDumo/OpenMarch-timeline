@@ -10,6 +10,7 @@
 import {
     alongEnds,
     cornerCounts,
+    roundCount,
     trailCornerCounts,
     wayCorners,
     type CornerCount,
@@ -30,37 +31,6 @@ export interface TrailCornersView {
 }
 
 const tuple = (p: XY): CoreXY => [p.x, p.y];
-
-/**
- * Each member's index on the end line `line`: its own end spot's, in walking order (a member's
- * end spot is its slot's destination, so the numbers are the same), nearest if none is the same.
- */
-export function endLineIndexes(
-    line: readonly XY[],
-    spots: readonly XY[],
-): number[] {
-    let from = 0;
-    return spots.map((spot) => {
-        let at = -1;
-        for (let k = from; k < line.length; k++)
-            if (line[k]!.x === spot.x && line[k]!.y === spot.y) {
-                at = k;
-                break;
-            }
-        if (at < 0) {
-            let best = Infinity;
-            line.forEach((p, k) => {
-                const d = Math.hypot(p.x - spot.x, p.y - spot.y);
-                if (d < best) {
-                    best = d;
-                    at = k;
-                }
-            });
-        }
-        from = Math.max(from, at + 1);
-        return Math.max(at, 0);
-    });
-}
 
 const views = new WeakMap<PathSession, TrailCornersView | null>();
 
@@ -142,18 +112,29 @@ function computeView(s: PathSession): TrailCornersView | null {
         ends = {
             kind: "line",
             endLine: line.map(tuple),
-            at: endLineIndexes(line, spots),
+            // each member's own spot by its slot (a new trail's slots are its line order)
+            at: members.map((m, q) => m.endAt ?? q),
         };
     }
     return {
-        corners: trailCornerCounts({ origins, route, ends, counts }),
+        corners: trailCornerCounts({
+            origins,
+            route,
+            ends,
+            counts,
+            // TC-2: a founder taken over partway turns at no corner after it leaves
+            until: members.map((m) =>
+                m.until === undefined ? undefined : m.until - s.target.start,
+            ),
+        }),
         drills,
     };
 }
 
 /** TC-4: a count as shown, to a tenth: `6`, `7.5` */
 export const formatCount = (count: number): string => {
-    const t = Math.round(count * 10) / 10;
+    // the same rounding as "on a count" (TC-4), so a whole number shown is never warned about
+    const t = roundCount(count);
     return Number.isInteger(t) ? `${t}` : t.toFixed(1);
 };
 

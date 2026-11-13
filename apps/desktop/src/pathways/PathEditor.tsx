@@ -37,7 +37,7 @@ import {
 import type { XY } from "@/shapes/types";
 import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
 import { refitNeeded } from "./pathTarget";
-import { TrailCornerCounts } from "./TrailCornerCounts";
+import { OffCountWarning, TrailCornerCounts } from "./TrailCornerCounts";
 import { offCountTally, trailCornersOf } from "./trailCorners";
 import {
     EVEN_FIRST,
@@ -598,26 +598,7 @@ function PathEditorBar({
                     </span>
                 </Tip>
             )}
-            {offCount.turns > 0 && (
-                <Tip
-                    label={tolgee.t(
-                        "pathways.corners.offCountTip",
-                        "{turns, plural, one {# turn falls} other {# turns fall}} between counts, at {corners, plural, one {# corner} other {# corners}}. Each marcher reaches a corner at its own steady speed. Move the corner, change the spacing or the move's counts to put every turn on a count. Click a corner's count to see who turns when.",
-                        { turns: offCount.turns, corners: offCount.corners },
-                    )}
-                >
-                    <span
-                        className="text-yellow flex items-center gap-4 px-4"
-                        data-testid="path-off-count"
-                    >
-                        <WarningIcon size={14} weight="bold" aria-hidden />
-                        {tolgee.t(
-                            "pathways.corners.offCountShort",
-                            "Turns between counts",
-                        )}
-                    </span>
-                </Tip>
-            )}
+            {offCount.turns > 0 && <OffCountWarning tally={offCount} />}
             {(big || offCount.turns > 0) && controls && <Divider />}
             {drawing ? (
                 <>

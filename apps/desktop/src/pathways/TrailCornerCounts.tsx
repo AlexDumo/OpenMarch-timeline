@@ -4,6 +4,7 @@ import * as Popover from "@radix-ui/react-popover";
 import { FlagPennantIcon, WarningIcon } from "@phosphor-icons/react";
 import type { CornerCount } from "@openmarch/core";
 import tolgee from "@/global/singletons/Tolgee";
+import { Tip } from "@/components/ui/Tip";
 import { fieldToElement, useFieldViewStore } from "@/field/three/fieldView";
 import { POPOVER_CLASS } from "@/components/ui/popupClasses";
 import type { PathSession } from "./pathPenStore";
@@ -16,6 +17,40 @@ import {
 
 /** How far outside its corner a chip's middle sits, in screen pixels (clear of the point handle) */
 const CHIP_OFFSET_PX = 26;
+/** A chip's room, in screen pixels: a chip whose middle is closer than this to one shown is left out */
+const CHIP_ROOM_X = 48;
+const CHIP_ROOM_Y = 22;
+
+/**
+ * Where each corner's chip goes, in screen pixels, in order along the way; a chip that would sit
+ * on one already placed (a dense block, or zoomed out) is left out (TC-5): zoom in to see it.
+ * Exported for tests.
+ */
+export function chipPlaces(
+    corners: readonly CornerCount[],
+    toScreen: (x: number, y: number) => { x: number; y: number },
+): { corner: CornerCount; left: number; top: number }[] {
+    const placed: { corner: CornerCount; left: number; top: number }[] = [];
+    for (const corner of corners) {
+        const at = toScreen(corner.at[0], corner.at[1]);
+        // outside the turn: away from where the way bends to
+        const ix = corner.dirOut[0] - corner.dirIn[0];
+        const iy = corner.dirOut[1] - corner.dirIn[1];
+        const il = Math.hypot(ix, iy) || 1;
+        const left = at.x - (ix / il) * CHIP_OFFSET_PX;
+        const top = at.y - (iy / il) * CHIP_OFFSET_PX;
+        if (
+            placed.some(
+                (p) =>
+                    Math.abs(p.left - left) < CHIP_ROOM_X &&
+                    Math.abs(p.top - top) < CHIP_ROOM_Y,
+            )
+        )
+            continue;
+        placed.push({ corner, left, top });
+    }
+    return placed;
+}
 
 /**
  * Corner counts on the field, pathways step 6 (spec L.9, TC-5 and TC-6): a chip just outside each
@@ -31,23 +66,20 @@ export function TrailCornerCounts({ session }: { session: PathSession }) {
     const drawing = session.phase === "drawing";
     return (
         <>
-            {view.corners.map((corner, i) => {
-                const at = fieldToElement(field, corner.at[0], corner.at[1]);
-                // outside the turn: away from where the way bends to
-                const ix = corner.dirOut[0] - corner.dirIn[0];
-                const iy = corner.dirOut[1] - corner.dirIn[1];
-                const il = Math.hypot(ix, iy) || 1;
-                return (
-                    <CornerChip
-                        key={i}
-                        view={view}
-                        corner={corner}
-                        left={at.x - (ix / il) * CHIP_OFFSET_PX}
-                        top={at.y - (iy / il) * CHIP_OFFSET_PX}
-                        inert={drawing}
-                    />
-                );
-            })}
+            {chipPlaces(view.corners, (x, y) =>
+                fieldToElement(field, x, y),
+            ).map(({ corner, left, top }) => (
+                <CornerChip
+                    // by where it is along the way, so an open list stays on its corner when
+                    // another corner comes or goes
+                    key={corner.d.toFixed(3)}
+                    view={view}
+                    corner={corner}
+                    left={left}
+                    top={top}
+                    inert={drawing}
+                />
+            ))}
         </>
     );
 }
@@ -95,6 +127,8 @@ function CornerChip({
             aria-label={label}
             tabIndex={inert ? -1 : undefined}
             data-testid="trail-corner-count"
+            // Space on a chip reached by keyboard opens its list rather than playing the show
+            data-shape-ui=""
             data-off={corner.offCount ? "true" : undefined}
             data-counts={corner.turns
                 .map((t) => formatCount(t.count))
@@ -202,11 +236,63 @@ function CornerList({
                 <div className="text-text-subtitle px-4">
                     {tolgee.t(
                         "pathways.corners.stopBefore",
-                        "{count, plural, one {# stops before turning here} other {# stop before turning here}}",
+                        "{count, plural, one {# stops or leaves the trail before turning here} other {# stop or leave the trail before turning here}}",
                         { count: corner.stopBefore },
                     )}
                 </div>
             )}
         </>
+    );
+}
+
+/**
+ * TC-7: the path bar's warning when turns fall between counts. Hovering shows the detail as a tip;
+ * a click or tap (a finger or pencil has no hover) opens the same detail in a popover.
+ */
+export function OffCountWarning({
+    tally,
+}: {
+    tally: { turns: number; corners: number };
+}) {
+    const detail = tolgee.t(
+        "pathways.corners.offCountTip",
+        "{turns, plural, one {# turn falls} other {# turns fall}} between counts, at {corners, plural, one {# corner} other {# corners}}. Each marcher reaches a corner at its own steady speed. Move the corner, change the spacing or the move's counts to put every turn on a count. Tap or click a corner's count to see who turns when.",
+        { turns: tally.turns, corners: tally.corners },
+    );
+    return (
+        <Popover.Root>
+            <Tip label={detail}>
+                <Popover.Trigger asChild>
+                    <button
+                        type="button"
+                        className="text-yellow focus-visible:outline-accent flex items-center gap-4 rounded-full px-4 focus-visible:outline-2"
+                        data-testid="path-off-count"
+                        data-shape-ui=""
+                        aria-label={detail}
+                    >
+                        <WarningIcon size={14} weight="bold" aria-hidden />
+                        {tolgee.t(
+                            "pathways.corners.offCountShort",
+                            "Turns between counts",
+                        )}
+                    </button>
+                </Popover.Trigger>
+            </Tip>
+            <Popover.Portal>
+                <Popover.Content
+                    side="top"
+                    sideOffset={6}
+                    collisionPadding={8}
+                    className={clsx(
+                        POPOVER_CLASS,
+                        "text-sub z-50 max-w-288 p-8 whitespace-normal",
+                    )}
+                    data-testid="path-off-count-detail"
+                    onPointerDown={(e) => e.stopPropagation()}
+                >
+                    {detail}
+                </Popover.Content>
+            </Popover.Portal>
+        </Popover.Root>
     );
 }

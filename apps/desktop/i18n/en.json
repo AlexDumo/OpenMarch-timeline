@@ -3919,9 +3919,9 @@
             "leader": "Leader",
             "onCount": "count {count}",
             "betweenCounts": "{count} · between {before} and {after}",
-            "stopBefore": "{count, plural, one {# stops before turning here} other {# stop before turning here}}",
+            "stopBefore": "{count, plural, one {# stops or leaves the trail before turning here} other {# stop or leave the trail before turning here}}",
             "offCountShort": "Turns between counts",
-            "offCountTip": "{turns, plural, one {# turn falls} other {# turns fall}} between counts, at {corners, plural, one {# corner} other {# corners}}. Each marcher reaches a corner at its own steady speed. Move the corner, change the spacing or the move's counts to put every turn on a count. Click a corner's count to see who turns when."
+            "offCountTip": "{turns, plural, one {# turn falls} other {# turns fall}} between counts, at {corners, plural, one {# corner} other {# corners}}. Each marcher reaches a corner at its own steady speed. Move the corner, change the spacing or the move's counts to put every turn on a count. Tap or click a corner's count to see who turns when."
         }
     }
 }

@@ -88,6 +88,16 @@ export interface TrailTarget {
         from: XY;
         /** Its end spot (the line runs on through these, from the entrance to the leader's) */
         to: XY;
+        /**
+         * Its slot's index on `endLine` (step 6): which end spot is its own, by slot, never by
+         * where the spots are (an end line may touch itself). Absent while a new trail is drawn.
+         */
+        endAt?: number;
+        /**
+         * The beat its founding span ends when that is before the move's end (taken over, or
+         * cut by a higher layer, partway): it turns at no corner after it (TC-2). Absent: the end.
+         */
+        until?: number;
     }[];
     leaderId: number;
     /** Whether the other end leads (R-12′); false while a new trail is drawn */
@@ -352,7 +362,7 @@ function targetOfTrail(
     trail: MoveTrail,
     resolver: Pick<Resolver, "explain" | "positionAt" | "ftlEntry">,
     drills: ReadonlyMap<number, string>,
-    endLine: readonly XY[],
+    { line: endLine, endAt }: TrailEndLine,
 ): PathTarget | null {
     const entrance = endLine[0] ?? null;
     const entry = resolver.ftlEntry(trail.transitionId);
@@ -366,12 +376,19 @@ function targetOfTrail(
               : [...trail.marcherIds];
     if (line.length === 0) return null;
     const ends = new Map(entry.targets);
-    const members = line.map((m) => ({
-        marcherId: m,
-        drill: drills.get(m) ?? `${m}`,
-        from: xy(resolver.explain(m, trail.start).origin),
-        to: xy(ends.get(m) ?? resolver.positionAt(m, trail.end)),
-    }));
+    const members = line.map((m) => {
+        const explained = resolver.explain(m, trail.start);
+        const until = explained.span.end;
+        const at = endAt.get(m);
+        return {
+            marcherId: m,
+            drill: drills.get(m) ?? `${m}`,
+            from: xy(explained.origin),
+            to: xy(ends.get(m) ?? resolver.positionAt(m, trail.end)),
+            ...(at === undefined ? {} : { endAt: at }),
+            ...(until < trail.end - 1e-9 ? { until } : {}),
+        };
+    });
     const leader = members.at(-1)!;
     return {
         timelineId: trail.timelineId,
@@ -397,20 +414,44 @@ function targetOfTrail(
     };
 }
 
+/** A trail's end line, and each marcher's index on it by its slot */
+interface TrailEndLine {
+    line: XY[];
+    endAt: Map<number, number>;
+}
+
 /**
  * A trail's end line: every slot's destination in the order the line enters it, the first slot's
  * first, or the last's when reversed (R-13′). Its first is the end spot the line is entered at.
+ * With it, each of the line's marchers' index on it, read from its slot (step 6).
  */
-async function trailEndLine(db: DbConnection, trail: MoveTrail): Promise<XY[]> {
+async function trailEndLine(
+    db: DbConnection,
+    trail: MoveTrail,
+): Promise<TrailEndLine> {
     const D = schema.timeline_slot_destinations;
+    const A = schema.timeline_assignments;
     const spots = await db
         .select()
         .from(D)
         .where(eq(D.transition_id, trail.transitionId))
         .orderBy(D.slot_index)
         .all();
+    const rows = await db
+        .select({ marcher: A.marcher_id, slot: A.slot_index })
+        .from(A)
+        .where(eq(A.transition_id, trail.transitionId))
+        .all();
+    const indexOfSlot = new Map(spots.map((spot, i) => [spot.slot_index, i]));
+    const n = spots.length;
+    const endAt = new Map<number, number>();
+    for (const r of rows) {
+        const i = indexOfSlot.get(r.slot);
+        if (i !== undefined && r.marcher !== null)
+            endAt.set(r.marcher, trail.reverse ? n - 1 - i : i);
+    }
     const line = spots.map((spot) => ({ x: spot.x, y: spot.y }));
-    return trail.reverse ? line.reverse() : line;
+    return { line: trail.reverse ? line.reverse() : line, endAt };
 }
 
 /**

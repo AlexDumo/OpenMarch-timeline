@@ -156,7 +156,9 @@ export {
     wayCorners,
     cornerCounts,
     isOnCount,
+    roundCount,
     CORNER_MIN_TURN,
+    CORNER_STAND_OUT,
     ON_COUNT_TOLERANCE,
 } from "./trailCorners";
 export type {

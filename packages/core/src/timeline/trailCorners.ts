@@ -20,7 +20,14 @@ import type { FtlTrail, XY } from "./types";
 /** TC-1: the smallest turn that is a corner, in radians (20°) */
 export const CORNER_MIN_TURN = (20 * Math.PI) / 180;
 
-/** TC-4: a turn within this many counts of a whole count is on it (it shows as whole at a tenth) */
+/**
+ * TC-1: a bend between two legs of the line-up or the end line (where the marchers stand) is a
+ * corner only when it turns this much more than each neighboring bend between two such legs
+ * (20°), so a line standing in a curve or an arc gets no corner at every marcher
+ */
+export const CORNER_STAND_OUT = (20 * Math.PI) / 180;
+
+/** TC-2: within this many counts of its own start or stop a member starts or stops, not turns */
 export const ON_COUNT_TOLERANCE = 0.05;
 
 /** TC-2: how far past its start, and short of its end, a member must be to turn at a corner */
@@ -32,6 +39,11 @@ export interface WayWalk {
     endDist: number;
     /** R-13″: the straight leg from the way to the spot; 0 or absent otherwise */
     straight?: number;
+    /**
+     * When its founding span ends, in counts from the move's start (taken over, or cut by a
+     * higher layer, partway): it turns at no corner it would reach after that. Absent: the end.
+     */
+    until?: number;
 }
 
 /** A corner of the way (TC-1) */
@@ -60,15 +72,19 @@ export interface CornerTurn {
 export interface CornerCount extends WayCorner {
     /** Who turns there, leader first (the first to reach it) */
     turns: CornerTurn[];
-    /** Members that stop before it, or on it, so never turn there */
+    /** Members that stop on the way, or leave the trail (taken over), before turning there */
     stopBefore: number;
     /** Whether any member turns between counts there (TC-4, TC-5) */
     offCount: boolean;
 }
 
-/** TC-4: whether a count is on a whole count */
+/** TC-4: a count as shown, rounded to a tenth (the display and the warning use this one value) */
+export const roundCount = (count: number): number =>
+    Math.round(count * 10) / 10;
+
+/** TC-4: whether a count is on a whole count: it is whole once rounded to a tenth */
 export const isOnCount = (count: number): boolean =>
-    Math.abs(count - Math.round(count)) < ON_COUNT_TOLERANCE;
+    Number.isInteger(roundCount(count));
 
 /** A stretch of the way with its direction at each end */
 interface Stretch {
@@ -77,6 +93,8 @@ interface Stretch {
     a: XY;
     dirIn: XY | null;
     dirOut: XY | null;
+    /** A leg of the line-up or the end line (through where marchers stand), not the drawn part */
+    standing?: boolean;
 }
 
 const unit = (v: XY): XY | null => {
@@ -102,6 +120,7 @@ function polylineStretches(pts: readonly XY[], d0: number): Stretch[] {
             a: pts[i - 1]!,
             dirIn: dir,
             dirOut: dir,
+            standing: true,
         });
     }
     return out;
@@ -164,26 +183,46 @@ export function wayCorners(
             ...polylineStretches(
                 [origins[origins.length - 1]!, endLine[0]!],
                 lineLen,
-            ),
+            ).map((st) => ({ ...st, standing: false })),
         );
     if (endLine)
         stretches.push(...polylineStretches(endLine, trail.destOffset));
+    // the turn at each joint, between stretch i - 1 and stretch i (null where a stretch has no
+    // direction)
+    const turns: (number | null)[] = stretches.map((st, i) => {
+        if (i === 0) return null;
+        const a = stretches[i - 1]!.dirOut;
+        const b = st.dirIn;
+        if (!a || !b) return null;
+        return Math.atan2(a[0] * b[1] - a[1] * b[0], a[0] * b[0] + a[1] * b[1]);
+    });
+    // a bend between two standing legs (the line-up's or the end line's own)
+    const standingBend = (i: number) =>
+        i > 0 &&
+        i < stretches.length &&
+        !!stretches[i - 1]!.standing &&
+        !!stretches[i]!.standing;
     const corners: WayCorner[] = [];
     for (let i = 1; i < stretches.length; i++) {
-        const a = stretches[i - 1]!.dirOut;
-        const b = stretches[i]!.dirIn;
-        if (!a || !b) continue;
-        const turn = Math.atan2(
-            a[0] * b[1] - a[1] * b[0],
-            a[0] * b[0] + a[1] * b[1],
-        );
-        if (Math.abs(turn) < minTurn) continue;
+        const turn = turns[i];
+        if (turn == null || Math.abs(turn) < minTurn) continue;
+        // TC-1: a bend in the line-up or the end line (both legs standing) must stand out from
+        // the standing bends beside it, so a line in a curve or an arc gets no corner at each
+        // marcher; the leader's start and the entrance take the plain rule
+        if (standingBend(i)) {
+            const outdone = [i - 1, i + 1].some(
+                (j) =>
+                    standingBend(j) &&
+                    Math.abs(turn) < Math.abs(turns[j] ?? 0) + CORNER_STAND_OUT,
+            );
+            if (outdone) continue;
+        }
         corners.push({
             d: stretches[i]!.d0,
             at: stretches[i]!.a,
             turn,
-            dirIn: a,
-            dirOut: b,
+            dirIn: stretches[i - 1]!.dirOut!,
+            dirOut: stretches[i]!.dirIn!,
         });
     }
     return corners;
@@ -220,6 +259,11 @@ export function cornerCounts(
                 return;
             }
             if (count < ON_COUNT_TOLERANCE) return;
+            // taken over (or cut short) before reaching it: it leaves the trail first (TC-2)
+            if (w.until !== undefined && count > w.until - ON_COUNT_TOLERANCE) {
+                stopBefore++;
+                return;
+            }
             turns.push({ q, count, onCount: isOnCount(count) });
         });
         if (turns.length === 0) continue;
@@ -255,11 +299,17 @@ export function trailCornerCounts(input: {
     route: RouteWalk | null;
     ends: TrailEnds;
     counts: number;
+    /** Each member's founding span end in counts (`WayWalk.until`), tail first */
+    until?: readonly (number | undefined)[];
     minTurn?: number;
 }): CornerCount[] {
     const { origins, route, ends, counts } = input;
     if (origins.length === 0) return [];
     const startDist = (trail: FtlTrail) => origins.map((_, q) => trail.cum[q]!);
+    const untilOf = (q: number) => {
+        const u = input.until?.[q];
+        return u === undefined ? {} : { until: u };
+    };
     if (ends.kind === "along") {
         const trail = makeAlongTrail(origins, route);
         const s = startDist(trail);
@@ -270,6 +320,7 @@ export function trailCornerCounts(input: {
                 startDist: d,
                 endDist: e.endDist[q]!,
                 straight: e.straight[q]!,
+                ...untilOf(q),
             })),
             counts,
         );
@@ -283,6 +334,7 @@ export function trailCornerCounts(input: {
         s.map((d, q) => ({
             startDist: d,
             endDist: trail.destOffset + (along[ends.at[q] ?? 0] ?? 0),
+            ...untilOf(q),
         })),
         counts,
     );

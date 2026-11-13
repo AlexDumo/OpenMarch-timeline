@@ -1,5 +1,5 @@
 /**
- * Corner counts for block letters, pathways step 6 (spec Appendix L.9): QA-TC-1 to QA-TC-6.
+ * Corner counts for block letters, pathways step 6 (spec Appendix L.9): QA-TC-1 to QA-TC-12.
  *
  * Hand-worked counts on corners, and agreement with the resolver: at every listed turn the
  * resolver has the member on the corner at the beat its count names (TC-3).
@@ -9,6 +9,7 @@ import { createCachedResolver } from "../resolver";
 import {
     CORNER_MIN_TURN,
     isOnCount,
+    roundCount,
     trailCornerCounts,
     type CornerCount,
     type TrailEnds,
@@ -35,7 +36,13 @@ function show(
     homes: XY[],
     points: RoutePoint[],
     spots: XY[],
-    opts: { along?: boolean; counts?: number; reverse?: boolean } = {},
+    opts: {
+        along?: boolean;
+        counts?: number;
+        reverse?: boolean;
+        /** Marcher index → the beat its row ends (taken over partway) */
+        cut?: Record<number, number>;
+    } = {},
 ): TimelineSnapshot {
     const counts = opts.counts ?? 16;
     const leader = opts.reverse ? homes[0]! : homes[homes.length - 1]!;
@@ -75,7 +82,7 @@ function show(
             transition: 1,
             slot: i,
             start: 0,
-            end: counts,
+            end: opts.cut?.[i] ?? counts,
             layer: 0,
         })),
     };
@@ -119,7 +126,18 @@ function countsOf(db: TimelineSnapshot): {
         },
         ends,
         counts: t.end - t.start,
+        // TC-2: a founder's span may end before the move does (taken over partway)
+        until: e.members.map((m) => {
+            const end = r.explain(m, t.start).span.end;
+            return end < t.end ? end - t.start : undefined;
+        }),
     });
+    const untilOf = new Map(
+        e.members.map((m) => [m, r.explain(m, t.start).span.end - t.start]),
+    );
+    for (const c of corners)
+        for (const turn of c.turns)
+            expect(turn.count).toBeLessThan(untilOf.get(e.members[turn.q]!)!);
     // TC-3: the resolver has each member on the corner at the beat its count names
     for (const c of corners)
         for (const turn of c.turns) {
@@ -388,6 +406,105 @@ describe("corner counts (spec L.9, pathways step 6)", () => {
         expect(r.corners[1]!.turn).toBeCloseTo(half, 12);
     });
 
+    it("QA-TC-9: a founder taken over partway turns at no corner after it leaves", () => {
+        // QA-TC-2's letter; M1's row ends at count 9, before its turn at (6,8) on 14
+        const r = countsOf(
+            show(homes4, way, keepSpots, { along: true, cut: { 0: 9 } }),
+        );
+        expect(summary(r)).toEqual([
+            [
+                6,
+                0,
+                [
+                    [3, 2],
+                    [2, 4],
+                    [1, 6],
+                ],
+            ],
+            [
+                6,
+                8,
+                [
+                    [4, 8],
+                    [3, 10],
+                    [2, 12],
+                ],
+            ],
+        ]);
+        expect(r.corners[1]!.stopBefore).toBe(1);
+    });
+
+    it("QA-TC-10: a line standing in a small circle gets no corner at each marcher; an L-shaped line keeps its bend", () => {
+        for (const n of [8, 12, 16, 18]) {
+            // n marchers on a circle of radius 6, tail first counterclockwise; the trail leaves
+            // the leader straight out
+            const homes = Array.from({ length: n }, (_, i): XY => {
+                const a = (2 * Math.PI * i) / n;
+                return [6 * Math.cos(a), 6 * Math.sin(a)];
+            });
+            const leader = homes[n - 1]!;
+            const out: XY = [leader[0] * 3, leader[1] * 3];
+            const r = countsOf(
+                show(homes, pts([out]), [out, out].concat(homes.slice(2)), {
+                    along: true,
+                }),
+            );
+            const lineLen = 2 * n * 6 * Math.sin(Math.PI / n) * ((n - 1) / n);
+            const inLine = r.corners.filter((c) => c.d < lineLen - 1e-6);
+            expect(inLine, `circle of ${n}`).toEqual([]);
+        }
+        // an L: four along x, then three up; the bend at (6,0) is a corner
+        const L: XY[] = [
+            [0, 0],
+            [2, 0],
+            [4, 0],
+            [6, 0],
+            [6, 2],
+            [6, 4],
+        ];
+        const r = countsOf(
+            show(
+                L,
+                pts([[6, 12]]),
+                [
+                    [6, 6],
+                    [6, 7],
+                    [6, 8],
+                    [6, 9],
+                    [6, 10],
+                    [6, 12],
+                ],
+                { along: true },
+            ),
+        );
+        expect(r.corners.map((c) => c.at)).toEqual([[6, 0]]);
+    });
+
+    it("QA-TC-11: an end line on a small arc gets no corner at each spot", () => {
+        // five spots on a quarter circle of radius 4 about (20,10); the trail runs into the first
+        const arc = Array.from({ length: 5 }, (_, i): XY => {
+            const a = (Math.PI / 2) * (i / 4);
+            return [20 + 4 * Math.cos(a), 10 + 4 * Math.sin(a)];
+        });
+        const homes: XY[] = [0, 1, 2, 3, 4].map((i): XY => [2 * i, 0]);
+        const r = countsOf(show(homes, pts([[24, 0]]), arc));
+        // the trail's corner at (24,0); the entrance turns only about 11° onto the arc, and the
+        // arc's own spots don't stand out from each other
+        expect(r.corners.map((c) => c.at)).toEqual([[24, 0]]);
+    });
+
+    it("QA-TC-12 (TC-4): on a count is the count shown, whole at a tenth", () => {
+        // 2.05 is 20.5 tenths, which rounds up: shown as 2.1, so off a count
+        expect([0.95, 2.05, 1.94, 7.45, 6.04].map(isOnCount)).toEqual([
+            true,
+            false,
+            false,
+            false,
+            true,
+        ]);
+        expect([0.95, 2.05, 1.94].map(roundCount)).toEqual([1, 2.1, 1.9]);
+    });
+
     it("QA-TC-6: random trails agree with the resolver at every listed turn", () => {
         const rand = mulberry32(648);
         const R = (lo: number, hi: number) => lo + (hi - lo) * rand();
@@ -421,8 +538,11 @@ describe("corner counts (spec L.9, pathways step 6)", () => {
                 { length: n },
                 (_, i): XY => [p[0] + 2 * i, p[1] + R(0, 1)],
             );
+            // now and then a member is taken over partway (its row ends early)
+            const cut: Record<number, number> = {};
+            if (rand() < 0.3) cut[Math.floor(rand() * n)] = R(1, counts - 1);
             const r = countsOf(
-                show(homes, points, spots, { along, counts, reverse }),
+                show(homes, points, spots, { along, counts, reverse, cut }),
             );
             for (const c of r.corners) {
                 checked += c.turns.length;
