@@ -50,6 +50,8 @@ export const pinRefusal = {
     pinsCollide: () => text.t("timeline.refusals.pin.collide"),
     /** AP-P5: Scale pins instead after the move changed again */
     moveChanged: () => text.t("timeline.refusals.pin.moveChanged"),
+    /** AP-P5: scaling would leave every pin on the count it has */
+    scaleNoChange: () => text.t("timeline.refusals.pin.scaleNoChange"),
     /** AP-R4 scale: more pins than counts in the new length */
     noRoomToScale: () => text.t("timeline.refusals.pin.noRoomToScale"),
 };
@@ -189,6 +191,7 @@ export function planPinRipple(
     transitions: ReadonlyMap<number, readonly [number, number]>,
     newRange: (transitionId: number) => readonly [number, number] | undefined,
     beatEnd: (beat: number) => number,
+    beatStart: (beat: number) => number = beatEnd,
 ): {
     newPins: Map<number, RoutePin[]>;
     problem: PinRippleProblem | null;
@@ -201,9 +204,16 @@ export function planPinRipple(
         const next = newRange(tid);
         if (!next) continue;
         const [s1, e1] = next;
+        // A whole count's end follows its beat; a pin partway through a count (left by an older
+        // build or a hand edit) goes with that count, keeping its fraction
+        const place = (b: number) => {
+            if (Number.isInteger(b)) return beatEnd(b);
+            const whole = Math.floor(b);
+            return beatStart(whole) + (b - whole);
+        };
         const moved = route.pins.map((p) => ({
             ...p,
-            at: beatEnd(s0 + p.at) - s1,
+            at: place(s0 + p.at) - s1,
         }));
         const bad = (message: PinRippleProblem["message"], count: number) => ({
             newPins,
@@ -221,10 +231,15 @@ export function planPinRipple(
             if (!(moved[i]!.at < e1 - s1))
                 return bad(pinRefusal.pastPin(was), was);
         }
-        const sorted = [...moved].sort((a, b) => a.at - b.at);
-        for (let i = 1; i < sorted.length; i++)
-            if (sorted[i]!.at === sorted[i - 1]!.at)
-                return bad(pinRefusal.pinsCollide(), route.pins[i]!.at);
+        const order = moved
+            .map((p, i) => ({ at: p.at, i }))
+            .sort((a, b) => a.at - b.at);
+        for (let k = 1; k < order.length; k++)
+            if (order[k]!.at === order[k - 1]!.at)
+                return bad(
+                    pinRefusal.pinsCollide(),
+                    route.pins[order[k]!.i]!.at,
+                );
         if (moved.some((p, i) => p.at !== route.pins[i]!.at))
             newPins.set(route.routeId, moved);
     }

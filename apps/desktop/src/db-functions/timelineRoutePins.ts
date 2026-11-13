@@ -444,20 +444,24 @@ export async function readMovePinSets(
 }
 
 /**
- * AP-P5's **Scale pins instead**: after a resize of `timelineId` from `before` that kept its pins
- * on their counts, scales `pinsBefore` (the pins read before it) with the move's length now, as
- * Alt would have, in an edit of its own. Refused, writing nothing, when the move or its pins
- * changed since (another edit came between), so it never acts on anything but that resize.
+ * AP-P5's **Scale pins instead**: after a resize of `timelineId` from `before` to `after` that
+ * kept its pins on their counts, scales `pinsBefore` (the pins read before it) with the move's new
+ * length, as Alt would have, in an edit of its own. Refused, writing nothing, unless the move
+ * still has `after` as its range and its pins are exactly what that resize left (another edit, or
+ * an undo, came between), and when scaling would change nothing. So it only ever finishes that
+ * resize, never writes an empty step.
  */
 export async function scaleMovePinsInTransaction({
     tx,
     timelineId,
     before,
+    after,
     pinsBefore,
 }: {
     tx: DbTransaction;
     timelineId: number;
     before: { start: number; end: number };
+    after: { start: number; end: number };
     pinsBefore: readonly { routeId: number; pins: RoutePin[] }[];
 }): Promise<void> {
     const timeline = await tx
@@ -465,18 +469,30 @@ export async function scaleMovePinsInTransaction({
         .from(schema.timelines)
         .where(eq(schema.timelines.id, timelineId))
         .get();
-    if (!timeline) refuse(pinRefusal.moveChanged());
-    const now = { start: timeline.start_beat, end: timeline.end_beat };
+    if (
+        !timeline ||
+        timeline.start_beat !== after.start ||
+        timeline.end_beat !== after.end
+    )
+        refuse(pinRefusal.moveChanged());
     const current = await readMovePinSets(tx, timelineId);
+    if (current.length !== pinsBefore.length) refuse(pinRefusal.moveChanged());
     const plan = pinsBefore.map(({ routeId, pins }) => {
-        const kept = retimePins(pins, before, now, "keep");
+        const kept = retimePins(pins, before, after, "keep");
         const stored = current.find((c) => c.routeId === routeId)?.pins;
         if (JSON.stringify(stored) !== JSON.stringify(kept))
             refuse(pinRefusal.moveChanged());
-        return { routeId, pins: retimePins(pins, before, now, "scale") };
+        return {
+            routeId,
+            kept,
+            pins: retimePins(pins, before, after, "scale"),
+        };
     });
-    if (current.length !== pinsBefore.length) refuse(pinRefusal.moveChanged());
-    await writePinRetime(tx, plan);
+    const changed = plan.filter(
+        (p) => JSON.stringify(p.pins) !== JSON.stringify(p.kept),
+    );
+    if (changed.length === 0) refuse(pinRefusal.scaleNoChange());
+    await writePinRetime(tx, changed);
 }
 
 /** AP-P5 as one undoable edit. */
@@ -484,6 +500,7 @@ export async function scaleMovePins(args: {
     db: DbConnection;
     timelineId: number;
     before: { start: number; end: number };
+    after: { start: number; end: number };
     pinsBefore: readonly { routeId: number; pins: RoutePin[] }[];
 }): Promise<void> {
     const { db, ...rest } = args;

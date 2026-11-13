@@ -519,6 +519,7 @@ export function planTimelineRipple(
         ),
         (id) => newTransition.get(id),
         (b) => map.beatEnd(b),
+        (b) => map.beatStart(b),
     );
 
     return {

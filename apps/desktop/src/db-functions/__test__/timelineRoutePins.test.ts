@@ -41,6 +41,11 @@ import { splitTimelineAtBeat } from "../timelineSplitAtBeat";
 import { movePageFlag, pageFlagMoveLimits } from "../pageFlags";
 import { withTimelinePageRipple } from "../timelineRipple";
 import { createBeatsInTransaction, deleteBeatsInTransaction } from "../beat";
+import {
+    openPinsKeptOffer,
+    takePinsKeptOffer,
+    usePinsKeptOffer,
+} from "@/timeline/pinsKeptOffer";
 
 keepFixturesInPageMode("its tests convert the show themselves");
 
@@ -643,6 +648,7 @@ describeDbTests("Scale pins instead (AP-P5)", (it) => {
             db,
             timelineId: f.timeline.id,
             before: { start: 9, end: 17 },
+            after: { start: 9, end: 21 },
             pinsBefore,
         });
         // 2 × 12 / 8 = 3; 5 × 12 / 8 = 7.5, a tie: the earlier count
@@ -670,9 +676,167 @@ describeDbTests("Scale pins instead (AP-P5)", (it) => {
                 db,
                 timelineId: f.timeline.id,
                 before: { start: 9, end: 17 },
+                after: { start: 9, end: 21 },
                 pinsBefore,
             }),
         ).rejects.toThrow("pin.moveChanged");
         expect(await dataOf(db)).toEqual(data);
     });
 });
+
+describeDbTests("Scale pins instead: stale offers (AP-P5 re-check)", (it) => {
+    /** Page 2's move pinned on 2 and 5, read, then resized from 8 counts to `end − 9` */
+    const resized = async (db: DbConnection, end: number) => {
+        const f = await groupFixture(db);
+        await pinPoint({ db, routeId: f.routeId, pointId: f.p, count: 2 });
+        await pinPoint({ db, routeId: f.routeId, pointId: f.q, count: 5 });
+        const pinsBefore = await readMovePinSets(db, f.timeline.id);
+        await resizeTimeline({ db, timelineId: f.timeline.id, start: 9, end });
+        return {
+            f,
+            offer: {
+                database: db,
+                timelineId: f.timeline.id,
+                before: { start: 9, end: 17 },
+                after: { start: 9, end },
+                pinsBefore,
+            },
+        };
+    };
+
+    it("refuses after the resize was undone, writing nothing; the resize can still be redone", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { f, offer } = await resized(db, 21);
+        await performUndo(db);
+        const data = await dataOf(db);
+        await expect(scaleMovePins({ db, ...offer })).rejects.toThrow(
+            "pin.moveChanged",
+        );
+        expect(await dataOf(db)).toEqual(data);
+        expect((await performRedo(db)).success).toBe(true);
+        expect((await pinsOf(db, f.routeId)).map((p) => p.at)).toEqual([2, 5]);
+    });
+
+    it("refuses after a page-flag drag moved the move, writing nothing", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { offer } = await resized(db, 15);
+        await movePageFlag({ db, pageId: 1, beat: 10 });
+        const data = await dataOf(db);
+        await expect(scaleMovePins({ db, ...offer })).rejects.toThrow(
+            "pin.moveChanged",
+        );
+        expect(await dataOf(db)).toEqual(data);
+    });
+
+    it("refuses when scaling would change nothing (no empty undo step)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const f = await groupFixture(db);
+        await pinPoint({ db, routeId: f.routeId, pointId: f.q, count: 3 });
+        const pinsBefore = await readMovePinSets(db, f.timeline.id);
+        await resizeTimeline({
+            db,
+            timelineId: f.timeline.id,
+            start: 9,
+            end: 18,
+        });
+        const data = await dataOf(db);
+        // 3 × 9 / 8 = 3.375: still count 3
+        await expect(
+            scaleMovePins({
+                db,
+                timelineId: f.timeline.id,
+                before: { start: 9, end: 17 },
+                after: { start: 9, end: 18 },
+                pinsBefore,
+            }),
+        ).rejects.toThrow("pin.scaleNoChange");
+        expect(await dataOf(db)).toEqual(data);
+    });
+
+    it("the offer lives only until the next edit, undo or redo, or its close", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { f, offer } = await resized(db, 21);
+        let closed = 0;
+        const close = openPinsKeptOffer(offer, () => closed++);
+        expect(usePinsKeptOffer.getState().offer).toBe(offer);
+        // Any edit: gone, and its toast told once
+        await pinPoint({ db, routeId: f.routeId, pointId: f.q, count: 6 });
+        expect(usePinsKeptOffer.getState().offer).toBeNull();
+        expect(closed).toBe(1);
+        close();
+        expect(closed).toBe(1);
+        // An undo: gone
+        openPinsKeptOffer(offer);
+        await performUndo(db);
+        expect(usePinsKeptOffer.getState().offer).toBeNull();
+        // Its toast closed: gone, and the command does nothing
+        const closeToast = openPinsKeptOffer(offer);
+        closeToast();
+        const data = await dataOf(db);
+        expect(await takePinsKeptOffer()).toBe(false);
+        expect(await dataOf(db)).toEqual(data);
+        // Taken while current: scaled once, then gone
+        openPinsKeptOffer(offer);
+        expect(await takePinsKeptOffer()).toBe(true);
+        expect((await pinsOf(db, f.routeId)).map((p) => p.at)).toEqual([3, 7]);
+        expect(usePinsKeptOffer.getState().offer).toBeNull();
+    });
+});
+
+describeDbTests(
+    "A pin partway through a count in the ripple (re-check nit)",
+    (it) => {
+        it("keeps its fraction with its count through a flag drag and a count insert", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const f = await groupFixture(db);
+            await transactionWithHistory(db, "raw", async (tx) => {
+                await tx
+                    .update(schema.timeline_routes)
+                    .set({
+                        timing: JSON.stringify({
+                            v: 1,
+                            pins: [
+                                { point: f.p, at: 2.5 },
+                                { point: f.q, at: 5 },
+                            ],
+                        }),
+                    })
+                    .where(eq(schema.timeline_routes.id, f.routeId));
+            });
+            await movePageFlag({ db, pageId: 1, beat: 10 });
+            expect((await pinsOf(db, f.routeId)).map((p) => p.at)).toEqual([
+                1.5, 4,
+            ]);
+            await transactionWithHistory(db, "insertBeat", (tx) =>
+                withTimelinePageRipple(tx, () =>
+                    createBeatsInTransaction({
+                        tx,
+                        newBeats: [{ duration: 0.5, include_in_measure: true }],
+                        startingPosition: 10,
+                    }),
+                ),
+            );
+            // A count inserted before the one holding beat 11.5 (the move grows to [10, 18)): that
+            // count, and the pin partway through it, one later, keeping its half; the later pin too
+            const move = (await db
+                .select()
+                .from(schema.timelines)
+                .where(eq(schema.timelines.id, f.timeline.id))
+                .get())!;
+            expect([move.start_beat, move.end_beat]).toEqual([10, 18]);
+            expect((await pinsOf(db, f.routeId)).map((p) => p.at)).toEqual([
+                2.5, 5,
+            ]);
+        });
+    },
+);

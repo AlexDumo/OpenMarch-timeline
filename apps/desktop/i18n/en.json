@@ -2775,7 +2775,8 @@
                 "noRoomToScale": "Too few counts for this path's pins: each needs a count of its own",
                 "pastPinStart": "The move would start on or after the pin on count {count}",
                 "collide": "This would put two pins of a drawn path on one count",
-                "moveChanged": "The move changed after the resize, so its pins weren't scaled"
+                "moveChanged": "The move changed after the resize, so its pins weren't scaled",
+                "scaleNoChange": "Scaling would leave every pin on the count it has"
             }
         },
         "pinTicks": {

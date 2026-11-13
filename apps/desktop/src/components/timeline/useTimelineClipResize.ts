@@ -1,12 +1,14 @@
 import { useMemo } from "react";
 import { toast } from "sonner";
-import { create } from "zustand";
 import tolgee from "@/global/singletons/Tolgee";
-import { subscribeHistoryChanges } from "@/db-functions/history";
+import { readMovePinSets } from "@/db-functions/timelineRoutePins";
 import {
-    readMovePinSets,
-    scaleMovePins,
-} from "@/db-functions/timelineRoutePins";
+    closePinsKeptOffer,
+    openPinsKeptOffer,
+    takePinsKeptOffer,
+    type PinsKeptOffer,
+} from "@/timeline/pinsKeptOffer";
+
 import {
     readTimelineResizeLimits,
     resizeTimeline,
@@ -22,6 +24,8 @@ import type {
     ClipResizeLimits,
     TimelineClipResizeCommands,
 } from "./TimelineClipResize";
+
+export { usePinsKeptOffer } from "@/timeline/pinsKeptOffer";
 
 /**
  * The panel's side of resizing a clip (docs/timeline/research/resize-move): the limits a drag
@@ -86,63 +90,32 @@ const scaledReason = (bound: TimelineResizeBound): string | null =>
           })
         : null;
 
-/**
- * After a resize that kept a move's pins on their counts (AP-P5): the toast offers to scale them
- * instead, which undoes the resize and does it again scaled, as Alt does. The way to scale with a
- * pencil or a finger.
- */
 /** The toast offering Scale pins instead, by id (not shown text) */
 const PINS_KEPT_TOAST = "timeline-pins-kept"; // i18n-ignore: a toast id, never shown
-
-/** The last resize that kept a move's pins, which Scale pins instead (or its command) scales */
-interface PinsKeptOffer {
-    database: DbConnection;
-    timelineId: number;
-    before: { start: number; end: number };
-    pinsBefore: Awaited<ReturnType<typeof readMovePinSets>>;
-}
-export const usePinsKeptOffer = create<{ offer: PinsKeptOffer | null }>(() => ({
-    offer: null,
-}));
 
 /**
  * AP-P5: scales the pins of the last resize that kept them, as one edit of their own (the toast's
  * Scale pins instead, and the **Scale pins with the move** command). Nothing when there's none.
  */
 export function scaleLastResizePins(): void {
-    const { offer } = usePinsKeptOffer.getState();
-    if (!offer) return;
-    usePinsKeptOffer.setState({ offer: null });
-    toast.dismiss(PINS_KEPT_TOAST);
-    void scaleMovePins({
-        db: offer.database,
-        timelineId: offer.timelineId,
-        before: offer.before,
-        pinsBefore: offer.pinsBefore,
-    }).catch(refused);
+    void takePinsKeptOffer().catch(refused);
 }
 
+/**
+ * After a resize that kept a move's pins on their counts (AP-P5): the toast offers to scale them
+ * instead (`pinsKeptOffer`). The offer goes when the toast closes and with any other edit, undo
+ * or redo; the toast goes with the offer.
+ */
 function offerScalePins(offer: PinsKeptOffer): void {
-    usePinsKeptOffer.setState({ offer });
-    let unsubscribe = () => {};
+    openPinsKeptOffer(offer, () => toast.dismiss(PINS_KEPT_TOAST));
     toast.success(tolgee.t("timeline.clipResize.pinsKept"), {
         id: PINS_KEPT_TOAST,
         action: {
             label: tolgee.t("timeline.clipResize.scalePinsInstead"),
-            onClick: () => {
-                unsubscribe();
-                scaleLastResizePins();
-            },
+            onClick: () => scaleLastResizePins(),
         },
-        onDismiss: () => unsubscribe(),
-        onAutoClose: () => unsubscribe(),
-    });
-    // Any other edit, undo or redo after the resize makes the offer stale: it goes
-    unsubscribe = subscribeHistoryChanges(() => {
-        unsubscribe();
-        if (usePinsKeptOffer.getState().offer === offer)
-            usePinsKeptOffer.setState({ offer: null });
-        toast.dismiss(PINS_KEPT_TOAST);
+        onDismiss: () => closePinsKeptOffer(),
+        onAutoClose: () => closePinsKeptOffer(),
     });
 }
 
@@ -288,6 +261,7 @@ export function useTimelineClipResize({
                                     database,
                                     timelineId,
                                     before: from,
+                                    after: to,
                                     pinsBefore: pinsBeforeResize,
                                 });
                         }
