@@ -55,6 +55,26 @@ const panel = (page: Page) => page.getByTestId("toolbar-panel");
 
 const fieldBox = (page: Page) => page.getByTestId("fieldCanvas").boundingBox();
 
+/** The middle of the part of a tab that the title bar's scrolling tab row shows */
+const visibleMiddle = (locator: Locator) =>
+    locator.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        const row = element
+            .closest(".overflow-x-auto")!
+            .getBoundingClientRect();
+        const left = Math.max(box.left, row.left);
+        const right = Math.min(box.right, row.right);
+        if (right - left < 24)
+            throw new Error("Less than a fingertip of the tab is on screen");
+        return { x: (left + right) / 2, y: box.top + box.height / 2 };
+    });
+
+/** Whether the title bar's tab row is narrower than its tabs */
+const tabRowOverflows = (page: Page) =>
+    titleBarTabs(page)
+        .locator(".overflow-x-auto")
+        .evaluate((row) => row.scrollWidth > row.clientWidth);
+
 /** Whether a finger at the middle of `locator` lands on it, not on something over it */
 const tappable = (locator: Locator) =>
     locator.evaluate((element) => {
@@ -198,16 +218,20 @@ test("on a narrow screen the 3D View and the switch stay in the title bar, and t
     show,
 }) => {
     const { page } = show;
-    // iPad mini held upright
-    await page.setViewportSize({ width: 744, height: 1000 });
+    // An iPad held upright. This target draws the desktop title bar (menu, reload, window
+    // buttons), which a tablet's browser doesn't have: at 834 px its tab row is about as wide
+    // as an iPad mini's at 744 px, and still too short for all four tabs
+    await page.setViewportSize({ width: 834, height: 1000 });
     await expect(titleBarTabs(page).getByTestId("open-view3d")).toBeVisible();
     await expect(
         titleBarTabs(page).getByTestId("workspace-view-switch"),
     ).toBeVisible();
-    // Every tab can still be reached: the row scrolls to it
+    // The row is narrower than the tabs: it scrolls
+    expect(await tabRowOverflows(page)).toBe(true);
+    // Every tab can still be reached: scroll the row to it, and tap the part on screen
     for (const name of ["File", "Alignment", "Shapes", "Select"]) {
         await tab(page, name).scrollIntoViewIfNeeded();
-        await tapOn(page, tab(page, name));
+        await tap(page, await visibleMiddle(tab(page, name)));
         await expect(tab(page, name)).toHaveAttribute("aria-selected", "true");
         await expect(panel(page)).toBeVisible();
     }
