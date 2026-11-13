@@ -6,6 +6,7 @@ import type {
     PathParams,
     PathStyle,
     RouteGeometry,
+    RouteTiming,
     RouteRow,
     RowImage,
     ShapeKind,
@@ -93,9 +94,10 @@ export const transitionFromRow = (row: TransitionDbRow): TransitionRow => ({
     route: row.route_id,
 });
 
-/** A route (spec v0.9 §5.2): its geometry, parsed. */
+/** A route (spec v0.9 §5.2): its geometry and pins (step 5, Appendix M), parsed. */
 export const routeFromRow = (row: RouteDbRow): RouteRow => ({
     geometry: JSON.parse(row.geometry) as RouteGeometry,
+    timing: row.timing == null ? null : (JSON.parse(row.timing) as RouteTiming),
 });
 
 /** A lane (spec v0.10 J.1): its slot, route and start offset (null for an own lane). */
@@ -200,6 +202,8 @@ export const routeFromImage = (image: RowImage): RouteRow => ({
         "routes",
         (v) => typeof v === "object" && v !== null,
     ),
+    // Pins (pathways step 5): absent from an image logged before the column, read as none
+    timing: (image.timing ?? null) as RouteTiming | null,
 });
 
 /** A lane from its change-log image `{id, transition, slot, route, offset, adjust}` (spec v0.10). */

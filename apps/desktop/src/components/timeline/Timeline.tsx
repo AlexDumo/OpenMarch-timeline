@@ -619,6 +619,20 @@ export function Timeline(props: TimelineProps) {
                         startBeatIndex: axis.toView(t.startBeatIndex),
                         endBeatIndex: axis.toView(t.endBeatIndex),
                     })),
+                    ...(limits.scaled
+                        ? {
+                              scaled: {
+                                  startEdge: {
+                                      min: toView(limits.scaled.startEdge.min),
+                                      max: toView(limits.scaled.startEdge.max),
+                                  },
+                                  endEdge: {
+                                      min: toView(limits.scaled.endEdge.min),
+                                      max: toView(limits.scaled.endEdge.max),
+                                  },
+                              },
+                          }
+                        : {}),
                 };
             },
             commit: (change) => {
@@ -637,6 +651,7 @@ export function Timeline(props: TimelineProps) {
                         change.startBeatIndex,
                     ),
                     endBeatIndex: edge(input.endBeatIndex, change.endBeatIndex),
+                    ...(change.scalePins ? { scalePins: true } : {}),
                 });
             },
         };

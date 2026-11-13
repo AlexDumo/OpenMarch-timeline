@@ -327,17 +327,29 @@ describeDbTests("Adjust and Re-fit", (it) => {
                     /(?:const|let)\s+(\w+)\s*=\s*schema\.timeline_routes\b/g,
                 ),
             ].map((m) => m[1]!);
+            // A geometry write; a write of the pins alone (`timing`, step 5) isn't one
+            const setsGeometry = String.raw`\s*\)\s*\.set\(\s*\{[^}]*\bgeometry\b`;
             return (
-                /update\(\s*schema\.timeline_routes\s*\)/.test(source) ||
-                /UPDATE\s+"?timeline_routes\b/i.test(source) ||
+                new RegExp(
+                    String.raw`update\(\s*schema\.timeline_routes` +
+                        setsGeometry,
+                ).test(source) ||
+                /UPDATE\s+"?timeline_routes\b[^;]*\bgeometry\b/i.test(source) ||
                 aliases.some((a) =>
-                    new RegExp(`update\\(\\s*${a}\\s*\\)`).test(source),
+                    new RegExp(String.raw`update\(\s*${a}` + setsGeometry).test(
+                        source,
+                    ),
                 )
             );
         };
-        expect(writes("const R = schema.timeline_routes; tx.update(R)")).toBe(
-            true,
-        );
+        expect(
+            writes(
+                "const R = schema.timeline_routes; tx.update(R).set({ geometry: g })",
+            ),
+        ).toBe(true);
+        expect(
+            writes("tx.update(schema.timeline_routes).set({ timing: t })"),
+        ).toBe(false);
         const writers = fs
             .readdirSync(dir)
             .filter((f) => f.endsWith(".ts"))

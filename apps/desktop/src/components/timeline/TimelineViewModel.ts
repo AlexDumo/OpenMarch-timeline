@@ -388,6 +388,11 @@ export interface TimelineBasicPoint {
 
 export interface TimelineRangeChange extends TimelineBeatRange {
     readonly timelineId: TimelineTrackId;
+    /**
+     * A resize with Alt held: the move's drawn-path pins scale with it instead of keeping their
+     * counts (pathways step 5, AP-R4)
+     */
+    readonly scalePins?: boolean;
 }
 
 /**

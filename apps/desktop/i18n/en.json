@@ -2617,7 +2617,11 @@
             "change": "{before} → {after, plural, one {# count} other {# counts}}",
             "changeNamed": "{label}: {before} → {after, plural, one {# count} other {# counts}}",
             "throughFlags": "{count, plural, one {through # page flag} other {through # page flags}}",
-            "withNote": "{change} · {note}"
+            "withNote": "{change} · {note}",
+            "pin": "pin on count {count}",
+            "pinsScaled": "too short for {count, plural, one {# pin} other {# pins}}",
+            "pinsKept": "Pins kept their counts",
+            "scalePinsInstead": "Scale pins instead"
         },
         "pagesText": {
             "one": "Page {page}",
@@ -2746,6 +2750,20 @@
                 "notOneMove": "{marcher} can't join the rest of the line in one move here, so nothing was changed",
                 "noWindow": "Move the playhead past the start flag to drag out a trail",
                 "reverseAlong": "Reverse leader is off for a trail dragged out of a line. Drag the trail out of the other end instead."
+            },
+            "pin": {
+                "countRange": "Pick a whole count from 1 to {last}",
+                "afterPin": "This point comes after the pin on count {count}: pick a count after {count}",
+                "beforePin": "This point comes before the pin on count {count}: pick a count before {count}",
+                "trail": "A trail takes no pins",
+                "noPoint": "That point isn't on the path any more",
+                "dropOnPoint": "Drop on a point, or on a straight stretch of the path",
+                "playheadOff": "Put the playhead on a whole count inside the move to pin there",
+                "noCorners": "This path has no corners",
+                "tooManyCorners": "{corners, plural, one {# corner} other {# corners}} but only {counts, plural, one {# count} other {# counts}} between the ends: lengthen the move or take out corners",
+                "alreadyOnCounts": "Every corner is already on its count",
+                "pastPin": "The move would end before the pin on count {count}",
+                "noRoomToScale": "Too few counts for this path's pins: each needs a count of its own"
             }
         }
     },

@@ -4,8 +4,8 @@
  * a point that went is re-homed in the same edit and never dropped silently. A new route has
  * nothing anchored on it, so inserting one doesn't come here.
  *
- * What AP-H1 also names and doesn't exist yet plugs in here beside the lanes' profiles: handoff
- * ramps (step 25), pins and holds (step 5) and linked Adjusts (step 26). AP-R21's merge and join
+ * What AP-H1 also names plugs in here beside the lanes' profiles: pins (step 5) go with their
+ * points; handoff ramps (step 25), holds (step 14) and linked Adjusts (step 26) will. AP-R21's merge and join
  * (still refused, AP-R6) write through this helper when they arrive.
  */
 import {
@@ -23,6 +23,7 @@ import { text } from "@/timeline/timelineText";
 import type { DbTransaction } from "./types";
 import { assertValid, refuse } from "./timelineErrors";
 import { lanesOfRoute, markArcModelInTransaction } from "./timelineLanes";
+import { dropPinsOfMissingPointsInTransaction } from "./timelineRoutePinRetime";
 
 /** R-14″'s refusals, with the reasons the app shows */
 export const arcRefusal = {
@@ -75,6 +76,8 @@ export interface RehomeReport {
     clearedSpots: number;
     /** A point drag stopped short to keep keys a step apart (AP-R11) */
     stoppedShort: boolean;
+    /** Pins dropped with the points they were on (AP-H1, pathways step 5) */
+    droppedPins: number;
 }
 
 export const NOTHING_REHOMED: RehomeReport = {
@@ -82,6 +85,7 @@ export const NOTHING_REHOMED: RehomeReport = {
     droppedKeys: 0,
     clearedSpots: 0,
     stoppedShort: false,
+    droppedPins: 0,
 };
 
 /**
@@ -137,7 +141,17 @@ export async function writeRouteGeometryInTransaction(
         .set({ geometry: JSON.stringify(limited.geometry) })
         .where(eq(R.id, routeId));
     await markArcsInTransaction(tx, limited.geometry);
-    const report = { ...NOTHING_REHOMED, stoppedShort: limited.stopped };
+    const report = {
+        ...NOTHING_REHOMED,
+        stoppedShort: limited.stopped,
+        // AP-H1 (pins): a pin goes with its point
+        droppedPins: await dropPinsOfMissingPointsInTransaction(
+            tx,
+            routeId,
+            row.timing,
+            limited.geometry,
+        ),
+    };
     for (const { lane, profile } of adjusted) {
         const out = rehomeProfile(old, limited.geometry, profile);
         if (!out.changed) continue;

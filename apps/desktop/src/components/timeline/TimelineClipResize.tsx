@@ -43,7 +43,19 @@ export interface ClipResizeLimits {
     readonly taken: readonly (TimelineBeatRange & {
         readonly reason: string;
     })[];
+    /**
+     * The edges' limits while Alt scales the move's pins (pathways step 5, AP-R4); absent when
+     * the move has none
+     */
+    readonly scaled?: Pick<ClipResizeLimits, "startEdge" | "endEdge">;
 }
+
+/** The limits a drag reads: the scaled ones while Alt is held over a move with pins */
+const limitsFor = (
+    limits: ClipResizeLimits | null,
+    alt: boolean,
+): ClipResizeLimits | null =>
+    limits && alt && limits.scaled ? { ...limits, ...limits.scaled } : limits;
 
 /** What the timeline offers for resizing clips; without it clips have no handles. */
 export interface TimelineClipResizeCommands {
@@ -479,7 +491,8 @@ export function useClipEdgeResize({
             snapDisabled,
             pixelsPerBeat,
             beatCount: beatCount!,
-            limits: drag.limits,
+            // Alt is no snap, and over a move with pins it scales them (AP-R4)
+            limits: limitsFor(drag.limits, snapDisabled),
         });
     const landWith = (
         drag: NonNullable<typeof dragRef.current>,
@@ -615,6 +628,9 @@ export function useClipEdgeResize({
                     timelineId: trackId,
                     startBeatIndex: next.startBeatIndex,
                     endBeatIndex: next.endBeatIndex,
+                    ...(snapDisabled && drag.limits?.scaled
+                        ? { scalePins: true }
+                        : {}),
                 });
                 if (superseded) return;
                 settle(next);

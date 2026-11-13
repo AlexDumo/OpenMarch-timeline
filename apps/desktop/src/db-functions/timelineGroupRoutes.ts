@@ -541,6 +541,8 @@ export async function ownPathInTransaction({
         lane: DatabaseTimelineLane;
         geometry: RouteGeometry;
         marcherId: number;
+        /** The group path's pins, copied with its point ids (AP-R9, pathways step 5) */
+        timing: string | null;
     }[] = [];
     for (const marcherId of ids) {
         const found = await tx
@@ -593,14 +595,24 @@ export async function ownPathInTransaction({
             ),
         };
         assertValid(validateRouteGeometry(geometry), "route");
-        plan.push({ lane, geometry, marcherId });
+        const source = await tx
+            .select({ timing: schema.timeline_routes.timing })
+            .from(schema.timeline_routes)
+            .where(eq(schema.timeline_routes.id, lane.route_id))
+            .get();
+        plan.push({
+            lane,
+            geometry,
+            marcherId,
+            timing: source?.timing ?? null,
+        });
     }
     return await mapDbErrors(async () => {
         const routes: Record<number, number> = {};
-        for (const { lane, geometry, marcherId } of plan) {
+        for (const { lane, geometry, marcherId, timing } of plan) {
             const route = (await tx
                 .insert(schema.timeline_routes)
-                .values({ geometry: JSON.stringify(geometry) })
+                .values({ geometry: JSON.stringify(geometry), timing })
                 .returning()
                 .get())!;
             await markArcsInTransaction(tx, geometry);

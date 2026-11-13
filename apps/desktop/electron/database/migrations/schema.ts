@@ -421,9 +421,18 @@ export const timeline_routes = sqliteTable(
         id: integer().primaryKey(),
         /** JSON geometry `{v, from, to, points}` (spec §5.2, I-R1) */
         geometry: text().notNull(),
+        /**
+         * JSON timing `{v, pins: [{point, at}]}`: points pinned to counts (spec J.2 K1, Appendix M,
+         * plan step 5); NULL for none
+         */
+        timing: text(),
     },
     (_table) => [
         check("timeline_routes_geometry_check", sql`json_valid(geometry)`),
+        check(
+            "timeline_routes_timing_check",
+            sql`timing IS NULL OR json_valid(timing)`,
+        ),
     ],
 );
 
