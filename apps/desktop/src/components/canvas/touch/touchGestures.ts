@@ -21,6 +21,7 @@
  *   ignored. Shortly after the pen lifts, a finger can move the view but
  *   never edits (palm rejection by timing; see isPalmContact).
  */
+import { thresholdsFor } from "@/field/editor/pointerThresholds";
 
 export type GesturePointerKind = "touch" | "pen";
 
@@ -157,7 +158,7 @@ export const GESTURE_TIMING = {
      */
     longPressLateJumpPx: 40,
     /** A single finger tap moves less than this (px) */
-    tapSlopPx: 10,
+    tapSlopPx: thresholdsFor("touch").clickSlop,
     /** All fingers of a multi-finger tap go down within this */
     multiTapDownWindowMs: 400,
     /** A multi-finger tap is over (all fingers up) within this, from the first finger down */

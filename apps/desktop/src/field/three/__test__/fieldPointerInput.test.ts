@@ -64,6 +64,7 @@ function setup() {
             button = 0,
             buttons = 0,
             target = element as HTMLElement,
+            pointerType = "mouse",
         } = {},
     ) => {
         const event = new MouseEvent(type, {
@@ -73,7 +74,7 @@ function setup() {
             buttons,
             bubbles: true,
         });
-        Object.assign(event, { pointerId, pointerType: "mouse" });
+        Object.assign(event, { pointerId, pointerType });
         target.dispatchEvent(event);
     };
     return { editor, state, captures, fire, detach, root };
@@ -108,6 +109,23 @@ describe("attachFieldPointerInput, a lost pointer (#208)", () => {
         fire("pointermove", { x: 100, y: 160 });
         fire("lostpointercapture", { pointerId: 7 });
         expect(editor.activeGesture()).toBe("move");
+    });
+});
+
+describe("attachFieldPointerInput, the pointer's kind (tablet 0.1)", () => {
+    // Marcher 1 is at (100, 100); at zoom 1 a mouse reaches 6 units from it, a pen 8
+    it("tells the editor a pen press is a pen's, so it reaches a little further", () => {
+        const { state, fire } = setup();
+        fire("pointerdown", { x: 107, y: 100, pointerType: "pen" });
+        fire("pointerup", { x: 107, y: 100, pointerType: "pen" });
+        expect(state.selected).toEqual([1]);
+    });
+
+    it("tells the editor a mouse press is a mouse's", () => {
+        const { state, fire } = setup();
+        fire("pointerdown", { x: 107, y: 100 });
+        fire("pointerup", { x: 107, y: 100 });
+        expect(state.selected).toEqual([]);
     });
 });
 

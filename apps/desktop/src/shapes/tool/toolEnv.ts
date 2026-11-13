@@ -9,9 +9,15 @@ import { useLastLayoutStore } from "./lastLayout";
 import type { Roles } from "@/input/modifierRoles";
 import type { NudgeArgs } from "@/shortcuts/definitions";
 import { isSnapOn } from "@/stores/UiSettingsStore";
+import { thresholdsFor } from "@/field/editor/pointerThresholds";
 
-/** How far from a handle a press still takes it, in screen pixels */
-export const HANDLE_REACH_PX = 10;
+/**
+ * How far from a handle a press still takes it, in screen pixels: a mouse's
+ * (`pointerThresholds.ts`). The knob's stem is drawn this many lengths long
+ * too, so a pen's or finger's longer reach waits for the two to be separated
+ * (tablet plan 1.4).
+ */
+export const HANDLE_REACH_PX = thresholdsFor("mouse").shapeHandleReach;
 
 /**
  * How near one of the field's lines a box's moving edge must come to land on it, in screen

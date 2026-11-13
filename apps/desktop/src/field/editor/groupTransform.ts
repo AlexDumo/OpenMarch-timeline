@@ -83,16 +83,18 @@ export function handlePoints(
 }
 
 /**
- * The handle a press at `point` lands on: inside its {@link HANDLE_SIZE}
- * square on screen, the nearest when squares overlap (a small box). Null
- * when it misses them all.
+ * The handle a press at `point` lands on: within `reachPx` of it on screen
+ * along each axis (a mouse's is its {@link HANDLE_SIZE} square; a pen or
+ * finger reaches further, `thresholdsFor(kind).handleReach`), the nearest
+ * when they overlap (a small box). Null when it misses them all.
  */
 export function handleAt(
     handles: Record<HandleId, FieldPoint>,
     point: FieldPoint,
     zoom: number,
+    reachPx: number = HANDLE_SIZE / 2,
 ): HandleId | null {
-    const reach = HANDLE_SIZE / 2 / zoom;
+    const reach = reachPx / zoom;
     let found: HandleId | null = null;
     let nearest = Infinity;
     for (const [id, at] of Object.entries(handles) as [

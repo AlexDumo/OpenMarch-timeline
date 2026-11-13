@@ -107,6 +107,7 @@ const at = (
     field: { x, y },
     screen: { x: x * ZOOM, y: y * ZOOM },
     button: 0,
+    kind: "mouse",
     shift: false,
     alt: false,
     ctrl: false,
