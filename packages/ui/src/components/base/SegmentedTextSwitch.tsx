@@ -39,8 +39,9 @@ export function SegmentedTextSwitch({
             }}
             className={clsx(
                 // Touch layout: finger-sized segments, the frame tight around them so the
-                // switch grows as little as it can (tablet plan 2.2)
-                "bg-fg-1 border-stroke touch:flex-nowrap touch:p-2 inline-flex flex-wrap items-center gap-2 rounded-full border p-4",
+                // switch grows as little as it can (tablet plan 2.2). It still wraps where it
+                // has to; a switch that must stay on one line says so (`WorkspaceViewSwitch`)
+                "bg-fg-1 border-stroke touch:p-2 inline-flex flex-wrap items-center gap-2 rounded-full border p-4",
                 "shadow-inner",
                 className,
             )}
