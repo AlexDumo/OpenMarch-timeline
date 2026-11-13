@@ -1000,6 +1000,34 @@ export interface RouteClock {
 }
 
 /**
+ * A pinned point's place on `path` (R-15): `D` of the kept point that represents it, except a
+ * point after the last kept one and within `EPS_GEOM` of the walk's end (cleaning drops it
+ * there), which reads as the end.
+ */
+function pinPlace(
+    path: RoutePath,
+    point: IdentifiedPoint & { readonly at?: unknown },
+    index: number,
+): number {
+    const at = point.at;
+    const xy: XY | null = Array.isArray(at)
+        ? (at as unknown as XY)
+        : at && typeof at === "object" && "x" in at && "y" in at
+          ? [(at as { x: number }).x, (at as { y: number }).y]
+          : null;
+    // Only the points after the last kept one can have been dropped at the end (R-14 cleaning
+    // pops them there); a point near the end in the middle of the route is kept as itself
+    const lastKept = path.V.length > 2 ? path.source[path.V.length - 2]! : -1;
+    if (
+        index > lastKept &&
+        xy &&
+        dist(xy, path.V[path.V.length - 1]!) < EPS_GEOM
+    )
+        return path.L;
+    return placeOfIndex(path, index);
+}
+
+/**
  * R-15 (pins) and T-6: the clock of a route with `timing` on `path` over a move of `c` beats.
  * A pin whose `at` isn't finite or isn't in `(0, c)`, or whose id isn't in `points`, is dropped;
  * then, in route order (ties in stored order), so is a pin whose `at` isn't strictly greater than
@@ -1022,7 +1050,7 @@ export function routeClock(
         const i =
             typeof id === "string" ? points.findIndex((p) => p.id === id) : -1;
         if (i < 0) return;
-        candidates.push({ at, x: placeOfIndex(path, i), i, s });
+        candidates.push({ at, x: pinPlace(path, points[i]!, i), i, s });
     });
     candidates.sort((a, b) => a.i - b.i || a.s - b.s);
     const us = [0];

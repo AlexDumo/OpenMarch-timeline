@@ -3006,5 +3006,7 @@
     "timeline.refusals.pin.moveChanged": "Error toast for the Scale pins instead button on the resize toast, when another edit came after the resize. Nothing changes; the user can resize again with Alt.",
     "timeline.pageFlagBlock.pin": "Short tag beside a page flag being dragged, saying why it stops: a drawn path in that move has a point pinned to count {count}, and the flag can't push the pin out of the move. {who} picks how the move is named, as in the other flag tags.",
     "actions.path.pinAtPlayhead": "Name of a command (command palette): pins the selected point of the open drawn path to the count the playhead is on, as dragging the playhead marker onto it does.",
-    "actions.path.scalePins": "Name of a command (command palette): resizing the selected move scales its drawn path's pins with it instead of keeping their counts, as dragging a clip edge with Alt does. It changes the pins of the last resize, as the toast's Scale pins instead button does."
+    "actions.path.scalePins": "Name of a command (command palette): resizing the selected move scales its drawn path's pins with it instead of keeping their counts, as dragging a clip edge with Alt does. It changes the pins of the last resize, as the toast's Scale pins instead button does.",
+    "pathways.editor.pinAtPlayheadNeeds": "Why the Pin selected point at the playhead command is unavailable: it needs an open drawn path, one of its points selected, and the playhead on a whole count strictly inside the path's move.",
+    "timeline.clipResize.scalePinsNeeds": "Why the Scale pins with the move command is unavailable: it acts on the last resize of a move whose drawn path has pinned points, and there is none (or another edit came after it)."
 }

@@ -1069,12 +1069,12 @@ export function createWalkedPaths(
                     : null;
                 return clock?.active ? timedPieces(pieces, clock) : pieces;
             }
+            if (route.points.length === 0 && !route.toBulge)
+                return [linePiece(0, 1, A, B)];
             const own = routePath(A, route.points, B, route);
             const clock = timing
                 ? routeClock(own, route.points, timing, c)
                 : null;
-            if (route.points.length === 0 && !route.toBulge)
-                return [linePiece(0, 1, A, B)];
             const pieces = routePieces(own);
             return clock?.active ? timedPieces(pieces, clock) : pieces;
         }

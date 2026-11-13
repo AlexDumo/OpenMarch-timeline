@@ -826,6 +826,22 @@ const STATIC_ACTIONS = {
         defaultBindings: [],
         ignoreRepeat: true,
     },
+    pathPinAtPlayhead: {
+        labelKey: "actions.path.pinAtPlayhead",
+        keywordsKey: "actions.path.pinKeywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    scalePinsWithMove: {
+        labelKey: "actions.path.scalePins",
+        keywordsKey: "actions.path.pinKeywords",
+        category: "path",
+        scope: "global",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
     putCornersOnCounts: {
         labelKey: "actions.path.cornersOnCounts",
         keywordsKey: "actions.path.pinKeywords",

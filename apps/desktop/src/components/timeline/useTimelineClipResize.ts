@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { toast } from "sonner";
+import { create } from "zustand";
 import tolgee from "@/global/singletons/Tolgee";
 import { subscribeHistoryChanges } from "@/db-functions/history";
 import {
@@ -90,25 +91,47 @@ const scaledReason = (bound: TimelineResizeBound): string | null =>
  * instead, which undoes the resize and does it again scaled, as Alt does. The way to scale with a
  * pencil or a finger.
  */
-function offerScalePins(
-    database: DbConnection,
-    timelineId: number,
-    before: { start: number; end: number },
-    pinsBefore: Awaited<ReturnType<typeof readMovePinSets>>,
-): void {
+/** The toast offering Scale pins instead, by id (not shown text) */
+const PINS_KEPT_TOAST = "timeline-pins-kept"; // i18n-ignore: a toast id, never shown
+
+/** The last resize that kept a move's pins, which Scale pins instead (or its command) scales */
+interface PinsKeptOffer {
+    database: DbConnection;
+    timelineId: number;
+    before: { start: number; end: number };
+    pinsBefore: Awaited<ReturnType<typeof readMovePinSets>>;
+}
+export const usePinsKeptOffer = create<{ offer: PinsKeptOffer | null }>(() => ({
+    offer: null,
+}));
+
+/**
+ * AP-P5: scales the pins of the last resize that kept them, as one edit of their own (the toast's
+ * Scale pins instead, and the **Scale pins with the move** command). Nothing when there's none.
+ */
+export function scaleLastResizePins(): void {
+    const { offer } = usePinsKeptOffer.getState();
+    if (!offer) return;
+    usePinsKeptOffer.setState({ offer: null });
+    toast.dismiss(PINS_KEPT_TOAST);
+    void scaleMovePins({
+        db: offer.database,
+        timelineId: offer.timelineId,
+        before: offer.before,
+        pinsBefore: offer.pinsBefore,
+    }).catch(refused);
+}
+
+function offerScalePins(offer: PinsKeptOffer): void {
+    usePinsKeptOffer.setState({ offer });
     let unsubscribe = () => {};
-    const id = toast.success(tolgee.t("timeline.clipResize.pinsKept"), {
-        id: "timeline-pins-kept",
+    toast.success(tolgee.t("timeline.clipResize.pinsKept"), {
+        id: PINS_KEPT_TOAST,
         action: {
             label: tolgee.t("timeline.clipResize.scalePinsInstead"),
             onClick: () => {
                 unsubscribe();
-                void scaleMovePins({
-                    db: database,
-                    timelineId,
-                    before,
-                    pinsBefore,
-                }).catch(refused);
+                scaleLastResizePins();
             },
         },
         onDismiss: () => unsubscribe(),
@@ -117,7 +140,9 @@ function offerScalePins(
     // Any other edit, undo or redo after the resize makes the offer stale: it goes
     unsubscribe = subscribeHistoryChanges(() => {
         unsubscribe();
-        toast.dismiss(id);
+        if (usePinsKeptOffer.getState().offer === offer)
+            usePinsKeptOffer.setState({ offer: null });
+        toast.dismiss(PINS_KEPT_TOAST);
     });
 }
 
@@ -259,12 +284,12 @@ export function useTimelineClipResize({
                                 lengthChanged &&
                                 pinsBeforeResize.length > 0
                             )
-                                offerScalePins(
+                                offerScalePins({
                                     database,
                                     timelineId,
-                                    from,
-                                    pinsBeforeResize,
-                                );
+                                    before: from,
+                                    pinsBefore: pinsBeforeResize,
+                                });
                         }
                         return result !== null;
                     }, refused),

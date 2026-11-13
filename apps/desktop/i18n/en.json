@@ -2629,7 +2629,8 @@
             "pin": "pin on count {count}",
             "pinsScaled": "too short for {count, plural, one {# pin} other {# pins}}",
             "pinsKept": "Pins kept their counts",
-            "scalePinsInstead": "Scale pins instead"
+            "scalePinsInstead": "Scale pins instead",
+            "scalePinsNeeds": "Resize a move whose drawn path has pins first"
         },
         "pagesText": {
             "one": "Page {page}",
@@ -3862,7 +3863,8 @@
             "pinCountLabel": "Count this point is passed on: type a count from 1 to {last} and press Enter to pin it there",
             "pinGroup": "Pin",
             "cornersOnCountsTip": "Pin every corner to the whole count it reaches at a steady speed. Replaces the path's other pins",
-            "cornersOnCounts": "Corners on counts"
+            "cornersOnCounts": "Corners on counts",
+            "pinAtPlayheadNeeds": "Open a path, select one of its points and put the playhead on a count inside its move"
         },
         "menu": {
             "pointType": "Corner type",

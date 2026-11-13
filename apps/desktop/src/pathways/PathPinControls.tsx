@@ -31,13 +31,13 @@ export function PinCountField({ session }: { session: PathSession }) {
     const passing = index >= 0 ? passingCount(session.target, shape, index) : 0;
     const shown = pin ? formatCount(pin.at) : "";
     const [draft, setDraft] = useState<string | null>(null);
-    const [wrong, setWrong] = useState(false);
     const ref = useRef<HTMLInputElement>(null);
+    // Escape leaves the field without saving what was typed
+    const dropDraft = useRef(false);
     const focus = usePathPenStore((s) => s.pinFocus);
     // A new point, or the pin changed under it: show what's stored
     useEffect(() => {
         setDraft(null);
-        setWrong(false);
     }, [id, pin?.at]);
     useEffect(() => {
         if (focus === 0) return;
@@ -49,8 +49,8 @@ export function PinCountField({ session }: { session: PathSession }) {
     const commit = async (text: string): Promise<boolean> => {
         const trimmed = text.trim();
         if (trimmed === "") return pin ? await unpinSelectedPoint() : true;
+        // Anything but a whole count inside the move is refused with its reason, in a toast
         const count = Number(trimmed);
-        if (!Number.isInteger(count)) return false;
         if (pin && count === pin.at) return true;
         return await pinSelectedPoint(count);
     };
@@ -86,40 +86,35 @@ export function PinCountField({ session }: { session: PathSession }) {
                 inputMode="numeric"
                 spellCheck={false}
                 aria-label={label}
-                aria-invalid={wrong || undefined}
                 value={draft ?? shown}
                 placeholder={`≈${formatCount(Math.round(passing * 10) / 10)}`}
                 data-testid="path-pin-count"
                 data-pinned={pin ? "true" : undefined}
                 onChange={(e) => {
                     setDraft(e.target.value);
-                    setWrong(false);
                 }}
+                // Leaving the field saves what was typed, as Enter does: a touch keyboard's
+                // Done, or a tap elsewhere, has no Enter
                 onBlur={() => {
+                    const text = draft;
+                    const drop = dropDraft.current;
+                    dropDraft.current = false;
                     setDraft(null);
-                    setWrong(false);
+                    // A refused count says why in a toast; the field shows what's stored again
+                    if (text !== null && !drop) void commit(text);
                 }}
                 onKeyDown={(e) => {
                     // The keys are the field's: Enter doesn't also finish the path, nor Space play
                     e.stopPropagation();
-                    if (e.key === "Enter") {
-                        const text = draft ?? shown;
-                        void commit(text).then((ok) => {
-                            if (ok) {
-                                setDraft(null);
-                                ref.current?.blur();
-                            } else setWrong(true);
-                        });
-                    } else if (e.key === "Escape") {
+                    if (e.key === "Enter") ref.current?.blur();
+                    else if (e.key === "Escape") {
                         e.preventDefault();
-                        setDraft(null);
-                        setWrong(false);
+                        dropDraft.current = true;
                         ref.current?.blur();
                     }
                 }}
                 className={clsx(
                     "rounded-4 border-stroke bg-bg-1 w-40 border px-4 py-2 text-center font-mono",
-                    wrong && "border-red",
                 )}
             />
             {pin && (

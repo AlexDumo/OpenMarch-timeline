@@ -208,10 +208,24 @@ const views = {
                            < 126.5625))
             UNION ALL
             SELECT 'E-R7' AS code, NULL AS transition_id,
+                   'route ' || r.id || ' has timing that is not an object with a list of pins' AS detail
+              FROM timeline_routes r
+             WHERE r.timing IS NOT NULL
+               AND (json_type(r.timing) <> 'object'
+                    OR coalesce(json_type(r.timing, '$.pins'), 'array') <> 'array')
+            UNION ALL
+            SELECT 'E-R7' AS code, NULL AS transition_id,
+                   'route ' || r.id || ' has a pin that is not {point, at}' AS detail
+              FROM timeline_routes r, json_each(r.timing, '$.pins') p
+             WHERE json_type(r.timing, '$.pins') = 'array' AND p.type <> 'object'
+            UNION ALL
+            SELECT 'E-R7' AS code, NULL AS transition_id,
                    'route ' || r.id || ' has a pin on ' || coalesce(json_extract(p.value, '$.point'), '?')
                        || ' that is not a point of a path inside its move' AS detail
               FROM timeline_routes r, json_each(r.timing, '$.pins') p
-             WHERE NOT EXISTS (SELECT 1 FROM json_each(r.geometry, '$.points') q
+             WHERE json_type(r.timing, '$.pins') = 'array'
+               AND CASE WHEN p.type <> 'object' THEN 0 ELSE (
+                   NOT EXISTS (SELECT 1 FROM json_each(r.geometry, '$.points') q
                                 WHERE json_extract(q.value, '$.id') = json_extract(p.value, '$.point'))
                 OR EXISTS (SELECT 1 FROM timeline_transitions t WHERE t.route_id = r.id)
                 OR EXISTS (SELECT 1 FROM timeline_lanes l
@@ -219,7 +233,7 @@ const views = {
                             WHERE l.route_id = r.id
                               AND NOT (json_type(p.value, '$.at') IN ('integer', 'real')
                                        AND json_extract(p.value, '$.at') > 0
-                                       AND json_extract(p.value, '$.at') < t.end_beat - t.start_beat));
+                                       AND json_extract(p.value, '$.at') < t.end_beat - t.start_beat))) END;
     `,
     timeline_held_violations: `
         CREATE VIEW IF NOT EXISTS timeline_held_violations AS

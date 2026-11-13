@@ -53,6 +53,7 @@ import {
     pinOf,
     pointIdOf,
     putCornersOnCountsOpen,
+    pinAtPlayheadOpen,
     requestPinFocus,
     unpinSelectedPoint,
     selectLane,
@@ -422,6 +423,41 @@ export function usePathPenActions(): void {
         "putCornersOnCounts",
         () => void putCornersOnCountsOpen(),
         { enabled: takesPinsNow },
+    );
+    // The playhead marker's drop on the selected point, as a command (AP-P2): the palette's way
+    const playheadCount = usePathPenStore((s) =>
+        s.session?.phase === "open"
+            ? playheadBeat - s.session.target.start
+            : null,
+    );
+    const playheadOnACount =
+        playheadCount !== null &&
+        Number.isInteger(playheadCount) &&
+        playheadCount > 0 &&
+        usePathPenStore.getState().session !== null &&
+        playheadCount <
+            usePathPenStore.getState().session!.target.end -
+                usePathPenStore.getState().session!.target.start;
+    useActionHandler(
+        "pathPinAtPlayhead",
+        () => {
+            const s = usePathPenStore.getState().session;
+            const id = pointIdOf(s);
+            const count = s
+                ? useTimelineSelectionStore.getState().playheadBeat -
+                  s.target.start
+                : NaN;
+            if (id)
+                void pinAtPlayheadOpen(count, { kind: "point", pointId: id });
+        },
+        {
+            enabled: takesPinsNow && pickedPoint !== null && playheadOnACount,
+            disabledReason: () =>
+                tolgee.t(
+                    "pathways.editor.pinAtPlayheadNeeds",
+                    "Open a path, select one of its points and put the playhead on a count inside its move",
+                ),
+        },
     );
     // Adjust's named actions, on the lane or key picked on the open group path (decision C)
     const lane = usePathPenStore((s) =>

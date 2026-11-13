@@ -168,6 +168,24 @@ describe(`Migration ${PIN_MIGRATION.tag}`, () => {
                         .map((r) => ({ ...r })),
                 ).toEqual([{ code: "E-R7" }]);
             }
+            // Malformed timing is a violation, not a raw SQL error (N2)
+            for (const timing of [
+                "5",
+                '"pins"',
+                '{"v":1,"pins":5}',
+                '{"v":1,"pins":{"a":1}}',
+                '{"v":1,"pins":["p",3,null]}',
+            ]) {
+                db.exec(
+                    `UPDATE timeline_routes SET timing = '${timing}' WHERE id = 1`,
+                );
+                const codes = db
+                    .prepare("SELECT code FROM timeline_route_violations")
+                    .all()
+                    .map((r) => (r as { code: string }).code);
+                expect(codes.length, timing).toBeGreaterThan(0);
+                expect(new Set(codes), timing).toEqual(new Set(["E-R7"]));
+            }
             expect(() =>
                 db.exec(
                     `UPDATE timeline_routes SET timing = 'not json' WHERE id = 1`,

@@ -12,7 +12,7 @@ questions:
   - "Move the playhead into the move and drag the yellow diamond (the playhead marker) onto a point. Was it clear what the diamond is and what dropping it does? Did you expect it to work on a curve too?"
   - "Drop the diamond on a straight stretch between two points. It adds a corner there and pins it. Is that what you wanted, or should it only work on points?"
   - "Try Corners on counts on a block letter. Did each corner land on the count you'd have written? When two corners were close, one moved to the next count: was that the right one?"
-  - "Resize the move with pins by dragging a clip edge. The pins kept their counts. Then do it again with Alt held (or tap Scale pins instead on the toast). Which did you want more often? Should the toast offer stay?"
+  - "Resize the move with pins by dragging a clip edge, or drag its page flag. The pins kept their counts. Then do it again with Alt held (or tap Scale pins instead on the toast). Which did you want more often? Should the toast offer stay?"
   - "Pins are whole counts only. Did you ever want a pin on a half count?"
   - "Anything else about pins you'd change?"
 ---
@@ -36,7 +36,9 @@ questions:
 - **Resizing keeps pinned counts** (counted from the edge you didn't drag). **Alt** while
   dragging an edge scales them with the move instead, onto whole counts. After a resize
   the toast offers **Scale pins instead**, which does the same with a pencil or a finger.
-  An edge stops before it would pass a pin.
+  An edge stops before it would pass a pin, and so does a page flag. Dragging a move's page
+  flag keeps each pin on its beat, as a clip edge does; inserting a count before a pin inside
+  the move moves the pin along with it.
 - Deleting a pinned point takes its pin too, and the toast says so (with Undo).
 - **Big steps** judges each stretch between pins at its own speed.
 
@@ -62,5 +64,3 @@ questions:
 - Trails take no pins; their corner counts are step 6.
 - Splitting a group path at the playhead is still refused (step 17).
 - A pin for one member only is not possible: a group path's pins are the whole group's.
-- Moving a page flag that would push a pin out of its move is refused with a reason,
-  rather than stopping short as a clip edge does.

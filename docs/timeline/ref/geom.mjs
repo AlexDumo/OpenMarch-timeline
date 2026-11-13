@@ -441,7 +441,12 @@ export function groupWalk(A, pts, B, F, G, o, adjust = null, toBulge = undefined
 export function pinKnots(R, pts, timing, c) {
   const pins = timing && Array.isArray(timing.pins) ? timing.pins : [];
   if (pins.length === 0) return null;
-  const placeOf = (i) => { for (let k = R.V.length - 2; k >= 1; k--) if (R.src[k] <= i) return R.D[k]; return 0; };
+  const end = R.V[R.V.length - 1];
+  const placeOf = (i) => {
+    const lastKept = R.V.length > 2 ? R.src[R.V.length - 2] : -1;   // only points after it can be dropped at the end
+    if (i > lastKept && Math.hypot(pts[i].at[0] - end[0], pts[i].at[1] - end[1]) < EPS_GEOM) return R.L;
+    for (let k = R.V.length - 2; k >= 1; k--) if (R.src[k] <= i) return R.D[k]; return 0;
+  };
   const ok = [];
   pins.forEach((pin, s) => {
     const at = pin ? pin.at : undefined, i = pin ? pts.findIndex((q) => q.id === pin.point) : -1;

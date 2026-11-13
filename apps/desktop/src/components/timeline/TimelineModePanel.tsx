@@ -80,7 +80,11 @@ import {
     splitMoveBlocker,
     splitAtPlayheadBlocker,
 } from "./useTimelineCommands";
-import { useTimelineClipResize } from "./useTimelineClipResize";
+import {
+    scaleLastResizePins,
+    useTimelineClipResize,
+    usePinsKeptOffer,
+} from "./useTimelineClipResize";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { useSplitMergeActions, useSplitMergeMoves } from "./useSplitMergeMoves";
 import { useTimelinePlayback } from "./useTimelinePlayback";
@@ -439,6 +443,16 @@ export default function TimelineModePanel() {
         !basic,
     );
     const clipResize = useTimelineClipResize({ database: db, timelines });
+    // AP-P5: Scale pins with the move, after a resize that kept a path's pins (the toast's button)
+    const pinsKept = usePinsKeptOffer((s) => s.offer !== null);
+    useActionHandler("scalePinsWithMove", () => scaleLastResizePins(), {
+        enabled: pinsKept,
+        disabledReason: () =>
+            tolgee.t(
+                "timeline.clipResize.scalePinsNeeds",
+                "Resize a move whose drawn path has pins first",
+            ),
+    });
     const queryClient = useQueryClient();
     // Moving a page flag (research/move-page-flag): the playhead and start flag on it go with it
     const { mutateAsync: movePageFlag } = useMutation(

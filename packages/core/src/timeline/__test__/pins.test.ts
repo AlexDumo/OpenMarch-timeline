@@ -332,7 +332,23 @@ describe("QA-PIN-5: T-6 drops what can't be a knot", () => {
         expectAllAgree(host);
     });
 
-    it("two pins on one point make the second a stop there", () => {
+    it("a pin on a point cleaning drops at the end reads as the end: arrive, then stand (N4)", () => {
+        const g: RouteGeometry = {
+            ...L_PATH,
+            points: [
+                { id: "p1", at: [30, 0] },
+                { id: "e", at: [30, 40 + 1e-10] },
+            ],
+        };
+        const host = ownShow(g, timing(pin("e", 12)));
+        const r = createResolver(host);
+        expect(r.positionAt(1, 12)).toEqual([30, 40]);
+        expect(r.positionAt(1, 14)).toEqual([30, 40]);
+        expect(r.diagnostics().some((d) => d.code === "D-PIN")).toBe(false);
+        expectAllAgree(host);
+    });
+
+    it("two pins on one point at rising counts are kept: a stop there", () => {
         const host = ownShow(L_PATH, timing(pin("p1", 4), pin("p1", 8)));
         const r = createResolver(host);
         expect(r.positionAt(1, 6)).toEqual([30, 0]);

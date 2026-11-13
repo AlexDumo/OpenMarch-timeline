@@ -8,9 +8,12 @@
  *   straight stretch, where it adds a corner first.
  * - **AP-P3** `removePinInTransaction`.
  * - **AP-P4** `putCornersOnCountsInTransaction`: a pin on every corner, by length (M-COUNTS).
- * - **AP-R4** `retimePinsInTransaction`: what every range edit does to the pins of its move,
- *   called by `setTimelineRangeInTransaction`.
- * - **AP-H1** `dropPinsOfMissingPointsInTransaction`: called by the one route geometry writer.
+ * - **AP-P5** `scaleMovePinsInTransaction`: Scale pins instead, after a resize that kept them.
+ *
+ * What range edits and geometry writes do to pins is in `timelineRoutePinRetime`, which is
+ * renderer-free: AP-R4 (`planPinRetime` for `setTimelineRangeInTransaction`, `planPinRipple` for
+ * page-flag drags and counts inserted or deleted) and AP-H1 (`dropPinsOfMissingPointsInTransaction`,
+ * for the one route geometry writer).
  *
  * Every write of a pin raises the file version to 15 (`markPinModelInTransaction`).
  */
