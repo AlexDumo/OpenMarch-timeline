@@ -447,6 +447,35 @@ describe("QA-PIN-8: the drawn walked path with pins (R-20)", () => {
             ),
         ],
     ];
+    // Stops (S3): two coincident points pinned at 4 and 8; a pin on a point at the path's start
+    cases.push(
+        [
+            "own path with a stop at a corner",
+            ownShow(
+                {
+                    ...L_PATH,
+                    points: [
+                        { id: "p1", at: [30, 0] },
+                        { id: "p2", at: [30, 0] },
+                    ],
+                },
+                timing(pin("p1", 4), pin("p2", 8)),
+            ),
+        ],
+        [
+            "own path with a stop at its start",
+            ownShow(
+                {
+                    ...L_PATH,
+                    points: [
+                        { id: "s", at: [0, 0] },
+                        { id: "p1", at: [30, 0] },
+                    ],
+                },
+                timing(pin("s", 4), pin("p1", 10)),
+            ),
+        ],
+    );
     for (const [name, host] of cases)
         it(`${name}: matches positionAt, whole and cut at a page flag`, () => {
             const r = createResolver(host);
@@ -454,6 +483,8 @@ describe("QA-PIN-8: the drawn walked path with pins (R-20)", () => {
                 [0, 16],
                 [0, 6],
                 [6, 16],
+                [2, 6],
+                [5, 9],
             ] as const) {
                 for (const { id } of host.marchers) {
                     const path = walkedPath(host, r, id, from, to);

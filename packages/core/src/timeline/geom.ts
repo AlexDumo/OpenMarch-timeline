@@ -1064,18 +1064,35 @@ export function clockPlace(clock: RouteClock, u: number): number {
 }
 
 /**
- * The beats into the move at which the clock first reaches place `x` (the inverse of
- * {@link clockPlace}, for the app's hints): the earliest beat of a stop.
+ * The beats into the move at which the clock is at place `x` (the inverse of {@link clockPlace},
+ * for the app's hints and the walked path): the earliest such beat, or with `latest` the last one,
+ * which differ at a stop (two knots at one place). A place before the first knot or past the
+ * last reads as the start or the end.
  */
-export function clockBeatAt(clock: RouteClock, x: number): number {
+export function clockBeatAt(
+    clock: RouteClock,
+    x: number,
+    latest = false,
+): number {
     const { us, xs } = clock;
-    if (x <= 0) return 0;
-    if (x >= clock.L) return clock.c;
-    let i = 0;
-    while (i + 1 < xs.length - 1 && x > xs[i + 1]!) i++;
-    const dx = xs[i + 1]! - xs[i]!;
-    if (dx <= 0) return us[i]!;
-    return us[i]! + ((x - xs[i]!) * (us[i + 1]! - us[i]!)) / dx;
+    const n = xs.length;
+    const at = (i: number) => {
+        const dx = xs[i + 1]! - xs[i]!;
+        if (latest ? x === xs[i + 1] : x === xs[i])
+            return latest ? us[i + 1]! : us[i]!;
+        if (latest ? x === xs[i] : x === xs[i + 1])
+            return latest ? us[i]! : us[i + 1]!;
+        if (dx <= 0) return latest ? us[i + 1]! : us[i]!;
+        return us[i]! + ((x - xs[i]!) * (us[i + 1]! - us[i]!)) / dx;
+    };
+    if (latest) {
+        for (let i = n - 2; i >= 0; i--)
+            if (xs[i]! <= x && x <= xs[i + 1]!) return at(i);
+        return x < xs[0]! ? 0 : clock.c;
+    }
+    for (let i = 0; i + 1 < n; i++)
+        if (xs[i]! <= x && x <= xs[i + 1]!) return at(i);
+    return x < xs[0]! ? 0 : clock.c;
 }
 
 /** The place of stored point `index` on `path` (R-14 "represented"), as the clock's knots read it */

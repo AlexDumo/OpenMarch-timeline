@@ -174,18 +174,29 @@ interface Piece {
 function timedPieces(pieces: readonly Piece[], clock: RouteClock): Piece[] {
     const { L, c } = clock;
     if (!clock.active || !(L > 0)) return [...pieces];
-    const cuts = clock.xs.slice(1, -1).map((x) => x / L);
-    const retime = (p: number) => clockBeatAt(clock, p * L) / c;
+    const cuts = [...new Set(clock.xs.slice(1, -1).map((x) => x / L))];
+    // A piece starts where the walker leaves a place and ends where it arrives: at a stop (two
+    // knots at one place) those are the last and the first beat there
+    // `p · L` can miss a knot's place by a rounding error: a place that close is the knot's own
+    const placeOf = (p: number) => {
+        const x = p * L;
+        const knot = clock.xs.find((k) => Math.abs(k - x) <= 1e-12 * L);
+        return knot ?? x;
+    };
+    const leaves = (p: number) => clockBeatAt(clock, placeOf(p), true) / c;
+    const arrives = (p: number) => clockBeatAt(clock, placeOf(p)) / c;
     const out: Piece[] = [];
     for (const piece of pieces) {
-        const inside = cuts.filter((q) => q > piece.pa && q < piece.pb);
+        const inside = cuts.filter(
+            (q) => q > piece.pa + 1e-12 && q < piece.pb - 1e-12,
+        );
         const bounds = [piece.pa, ...inside, piece.pb];
         const width = piece.pb - piece.pa;
         for (let i = 0; i + 1 < bounds.length; i++) {
             const f0 = width > 0 ? (bounds[i]! - piece.pa) / width : 0;
             const f1 = width > 0 ? (bounds[i + 1]! - piece.pa) / width : 1;
-            const pa = retime(bounds[i]!);
-            const pb = retime(bounds[i + 1]!);
+            const pa = leaves(bounds[i]!);
+            const pb = arrives(bounds[i + 1]!);
             out.push({
                 pa,
                 pb,

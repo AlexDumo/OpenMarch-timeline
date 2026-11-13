@@ -98,3 +98,26 @@ export function randAdjust(R, g, dmax) {
   }
   return { v: 1, keys };
 }
+
+// Pins (Appendix M, plan step 5): a route's timing for a move of `c` beats. Mostly valid (increasing whole counts
+// on points in route order); sometimes a pin T-6 drops (a missing id, at 0 or c, out of order, NaN), or two on one point.
+export function randTiming(R, g, c) {
+  const ids = g.points.map((q) => q.id);
+  if (!ids.length || c < 2) return null;
+  const pins = [];
+  let at = 0;
+  for (const id of ids) {
+    if (R() < 0.5) continue;
+    const room = c - 1 - at;
+    if (room < 1) break;
+    at += 1 + Math.floor(R() * Math.min(room, 3));
+    if (at > c - 1) break;
+    pins.push({ point: id, at });
+  }
+  if (R() < 0.2) {
+    const bad = [{ point: 'gone', at: 1 }, { point: ids[0], at: 0 }, { point: ids[0], at: c }, { point: ids[ids.length - 1], at: 0.5 }, { point: ids[0], at: NaN }];
+    pins.push(bad[Math.floor(R() * bad.length)]);
+  }
+  if (R() < 0.1 && pins.length && pins[pins.length - 1].at < c - 1) pins.push({ point: pins[pins.length - 1].point, at: pins[pins.length - 1].at + 1 });
+  return pins.length ? { v: 1, pins } : null;
+}

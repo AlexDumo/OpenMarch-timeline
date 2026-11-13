@@ -4,7 +4,7 @@
 import { makeOracle } from './oracle.mjs';
 import { makeResolver } from './resolver.mjs';
 import { arcPoint, destinationsOf } from './geom.mjs';   // subjects of the R-8 cross-check and the bit-exact arrival check only
-import { randArcRoute, randAdjust, hasArc, hasSmooth } from './arcroutes.mjs';   // route generation only (R-14″ worlds)
+import { randArcRoute, randAdjust, hasArc, hasSmooth, randTiming } from './arcroutes.mjs';   // route generation only (R-14″ worlds)
 
 const SEEDS = +(process.argv[2] ?? 300);
 function mulberry32(a) { return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -165,7 +165,22 @@ function routeWorld(seed, boundary) {
       }
     } else for (let k = 0; k < t.slots; k++) if (R() < 0.75) db.lanes[nl++] = { transition: t.id, slot: k, route: route({ targets: [dests[k]] }), offset: null };
   }
+  // Pins on about half the lane routes (Appendix M), on their own stream so the worlds above are unchanged
+  const P = mulberry32(seed * 7 + 5);
+  for (const l of Object.values(db.lanes)) {
+    const r = db.routes[l.route], t = db.transitions[l.transition];
+    if (r.timing === undefined && P() < 0.5) { const timing = randTiming(P, r.geometry, t.end - t.start); if (timing) r.timing = timing; }
+  }
   return w;
+}
+
+/** Pins every one of which T-6 keeps: on distinct points, in route order, counts rising inside (0, c) */
+function cleanPins(g, timing, c) {
+  const pins = timing?.pins ?? [];
+  if (!pins.length) return null;
+  const idx = pins.map((p) => g.points.findIndex((q) => q.id === p.point));
+  const ok = pins.every((p, i) => idx[i] >= 0 && Number.isInteger(p.at) && p.at > 0 && p.at < c && (i === 0 || (idx[i] > idx[i - 1] && p.at > pins[i - 1].at)));
+  return ok ? pins.map((p, i) => ({ at: p.at, i: idx[i] })) : null;
 }
 /** β over the routes: every route point (and its placed copy on each lane), plus the largest Adjust displacement. */
 function routeBeta(db) {
@@ -278,7 +293,28 @@ for (let seed = 1; seed <= SEEDS; seed++) for (const mode of ['normal', 'boundar
       const lane = s.row && laneOf(db, s.row.transition, s.row.slot), lt = s.row && db.transitions[s.row.transition];
       if (lane && lt.style !== 'follow_the_leader' && o.kind(s) === 'founding') {
         const g = db.routes[lane.route].geometry, Aorig = o.evalSpan(s, s.start), Bdst = destinationsOf(lt, db.shapes)[s.row.slot];
-        if (!hasSmooth(g) && !(lane.offset && lane.adjust?.keys?.length)) {
+        const timing = db.routes[lane.route].timing;
+        const pins = timing ? cleanPins(g, timing, lt.end - lt.start) : null;
+        if (timing) {
+          // Pins (R-15): each pinned point, kept by cleaning, is passed on its beat (its copy, on a group lane with no Adjust),
+          // and an own path's walker stays on the path's legs at every probe, however it is timed
+          const W = cleanLegs(Aorig, g.points, Bdst, g.toBulge);
+          if (pins && !(lane.offset && lane.adjust?.keys?.length)) for (const pn of pins) {
+            const q = g.points[pn.i].at, b = lt.start + pn.at;
+            // a point cleaning drops (on the walk's start or end: A and B, or a group's F and G) isn't passed as itself
+            const ends = lane.offset ? [g.from, g.to] : [Aorig, Bdst];
+            if (ends.some((e) => Math.hypot(q[0] - e[0], q[1] - e[1]) < 1e-6 * Math.max(1, S))) continue;
+            if (g.points.some((o2, j) => j !== pn.i && Math.hypot(o2.at[0] - q[0], o2.at[1] - q[1]) < 1e-6 * Math.max(1, S))) continue;
+            if (b < s.start || b > s.end) continue;
+            const want = lane.offset ? [q[0] + lane.offset[0], q[1] + lane.offset[1]] : q, got = o.evalSpan(s, b);
+            if (!(d2(got, want) <= 10 * eps)) { F('P-15 pin hit', `M${m.id} T${lt.id}@${b}: ${fmt(got)} vs ${fmt(want)}`); } else pass('P-15 pin hit');
+          }
+          if (!lane.offset && !hasSmooth(g)) for (const f of [0.1, 0.33, 0.5, 0.77, R()]) {
+            const b = s.start + f * (s.end - s.start), p = o.evalSpan(s, b);
+            const dist = Math.min(...W.legs.map((l) => distToLeg(p, l)));
+            if (!(dist <= 10 * eps)) F('P-15 pinned own path on its legs', `M${m.id} T${lt.id}@${b}: ${dist.toExponential(2)} off`); else pass('P-15 pinned own path on its legs');
+          }
+        } else if (!hasSmooth(g) && !(lane.offset && lane.adjust?.keys?.length)) {
           const kind = lane.offset ? 'group' : 'own';
           for (const f of [0.03, 0.2, 0.37, 0.5, 0.61, 0.8, 0.97, R()]) {
             const b = s.start + f * (s.end - s.start), pr = (b - lt.start) / (lt.end - lt.start);
