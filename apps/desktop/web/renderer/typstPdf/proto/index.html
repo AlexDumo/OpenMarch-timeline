@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Typst PDF prototype</title>
+        <style>
+            body {
+                font:
+                    15px system-ui,
+                    sans-serif;
+                margin: 24px;
+            }
+            button {
+                font: inherit;
+                padding: 8px 14px;
+                margin: 4px;
+            }
+            #status {
+                margin-top: 12px;
+                white-space: pre-wrap;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Coordinate sheets (Typst, in the browser)</h1>
+        <p>Uses the shared fixture. Nothing leaves this page.</p>
+        <label
+            ><input type="radio" name="layout" value="full" checked /> Full
+            pages</label
+        >
+        <label
+            ><input type="radio" name="layout" value="quarter" /> Quarter
+            pages</label
+        >
+        <label><input type="checkbox" id="org" /> Organize by section</label>
+        <div>
+            <button id="go">Export</button>
+            <button id="chart">Drill chart page</button>
+        </div>
+        <div id="status"></div>
+        <script type="module" src="./main.ts"></script>
+    </body>
+</html>

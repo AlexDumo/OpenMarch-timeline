@@ -117,6 +117,8 @@
         "@electron/notarize": "^3.0.1",
         "@electron/rebuild": "^3.7.2",
         "@faker-js/faker": "^10.0.0",
+        "@myriaddreamin/typst-ts-web-compiler": "0.7.0",
+        "@myriaddreamin/typst.ts": "0.7.0",
         "@noble/hashes": "1.8.0",
         "@playwright/test": "1.60.0",
         "@sqlite.org/sqlite-wasm": "3.53.4-build1",
