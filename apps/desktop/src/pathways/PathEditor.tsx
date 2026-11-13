@@ -1060,6 +1060,16 @@ function GoRoundControls({ session }: { session: PathSession }) {
                         } else setTyped(e.target.value);
                     }}
                     onBlur={() => setTyped(null)}
+                    // Enter keeps what's typed and leaves the field, so it finishes as the bar's
+                    // Enter does; Escape only leaves the field (it doesn't leave the tool)
+                    onKeyDown={(e) => {
+                        if (e.key === "Escape") {
+                            e.preventDefault();
+                            setTyped(null);
+                        }
+                        if (e.key === "Enter" || e.key === "Escape")
+                            e.currentTarget.blur();
+                    }}
                     data-testid="follow-round-amount"
                 />
                 <IconButton

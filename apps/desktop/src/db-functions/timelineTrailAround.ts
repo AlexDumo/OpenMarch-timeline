@@ -869,7 +869,79 @@ export async function goRound(
 // ---------------------------------------------------------------------------
 
 /**
- * AP-T14's spots on the outline turned round (`loop`): a founder's as far the other way from where
+ * AP-T14 for a move that went **by spots**: on the outline turned round (`loop`), the outline's
+ * places (`outlineSpots`) from where every slot's marcher stands at the start; each founder's
+ * stored spot is N places behind its own (N the same for every founder, else null: it went by
+ * steps), and every slot moves N places the other way: a founder from its own place, any other
+ * slot from its spot's place, 2N on. Null when a stored spot isn't on a place (it went by steps,
+ * or a spot was moved off), so the caller turns back by distance instead.
+ */
+function turnedPlaces(
+    loop: RoutePath,
+    entry: { members: number[] },
+    slotOf: ReadonlyMap<number, number>,
+    spots: readonly { slot_index: number; x: number; y: number }[],
+    startOf: (marcher: number) => XY,
+): Map<number, XY> | null {
+    const L = loop.L;
+    const tol = 1e-6 * Math.max(1, L);
+    // The places come from the founders' starts, and from any other slot's marcher standing on
+    // the outline at the start (a joiner taken over from its own place)
+    const founders = new Set(entry.members);
+    const occupants = [...slotOf.keys()].filter((m) => {
+        if (founders.has(m)) return true;
+        const p = startOf(m);
+        return (
+            Math.hypot(...sub(loopPoint(loop, nearestOnLoop(loop, p)), p)) <=
+            tol
+        );
+    });
+    const { ring, memberSpot } = outlineSpots(
+        occupants.map((m) => nearestOnLoop(loop, startOf(m))),
+        L,
+    );
+    const S = ring.length;
+    const placeOf = (p: XY): number => {
+        const u = nearestOnLoop(loop, p);
+        const k = ring.findIndex(
+            (x) => Math.min(Math.abs(x - u), L - Math.abs(x - u)) <= tol,
+        );
+        // a place it stands on, and not merely near the outline there
+        return k >= 0 && Math.hypot(...sub(loopPoint(loop, ring[k]!), p)) <= tol
+            ? k
+            : -1;
+    };
+    const spotOf = new Map(spots.map((d) => [d.slot_index, [d.x, d.y] as XY]));
+    const placeOfStart = new Map(occupants.map((m, i) => [m, memberSpot[i]!]));
+    let n: number | null = null;
+    for (const m of entry.members) {
+        const spot = spotOf.get(slotOf.get(m) ?? -1);
+        if (!spot) return null;
+        const k = placeOf(spot);
+        if (k < 0) return null;
+        const off = (placeOfStart.get(m)! - k + S) % S;
+        if (n !== null && off !== n) return null;
+        n = off;
+    }
+    if (n === null) return null;
+    const founding = new Map(entry.members.map((m) => [slotOf.get(m)!, m]));
+    const out = new Map<number, XY>();
+    for (const d of spots) {
+        const m = founding.get(d.slot_index);
+        const from =
+            m !== undefined ? placeOfStart.get(m)! : placeOf([d.x, d.y]);
+        if (from < 0) return null;
+        const to = (from + (m !== undefined ? n : 2 * n)) % S;
+        out.set(d.slot_index, loopPoint(loop, ring[to]!));
+    }
+    return out;
+}
+
+const sub = (a: XY, b: XY): [number, number] => [a[0] - b[0], a[1] - b[1]];
+
+/**
+ * AP-T14's spots on the outline turned round (`loop`) for a move that went **by steps**: a
+ * founder's as far the other way from where
  * it stands (`originOf`); a slot nobody founds from its own spot, turned back by twice the usual
  * distance (the founders' median, once round at most), so no two slots end on one point.
  */
@@ -953,11 +1025,15 @@ export async function reverseAroundInTransaction(
         .all();
     const slotOf = new Map(founders.map((f) => [f.marcher, f.slot]));
     if (entry.members.length === 0) refuse(goRoundRefusal.reverseNobody());
+    const startOf = (m: number): XY => {
+        const o = resolver.positionAt(m, transition.start_beat);
+        return [o[0], o[1]];
+    };
+    // In places when it went by spots (every founder the same number of places on), so uneven
+    // spacing turns back onto the same places; else (by steps) as far in distance
     const newSpot = loop
-        ? turnedSpots(loop, entry, slotOf, spots, (m) => {
-              const o = resolver.explain(m, transition.start_beat).origin;
-              return [o[0], o[1]];
-          })
+        ? (turnedPlaces(loop, entry, slotOf, spots, startOf) ??
+          turnedSpots(loop, entry, slotOf, spots, startOf))
         : new Map<number, XY>();
     for (const [slot, [x, y]] of newSpot)
         await tx

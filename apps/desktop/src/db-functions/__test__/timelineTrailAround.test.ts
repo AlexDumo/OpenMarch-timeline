@@ -116,6 +116,24 @@ const boxPlaces = (c: XY, step: number): XY[] => {
     ];
 };
 
+/**
+ * Eight places round a 4 × 2-step box about `c` with uneven spacing: the long sides' places 2
+ * apart, the short sides' 1 apart (corners and middles), clockwise from the top left
+ */
+const unevenPlaces = (c: XY, step: number): XY[] =>
+    (
+        [
+            [0, 0],
+            [2, 0],
+            [4, 0],
+            [4, 1],
+            [4, 2],
+            [2, 2],
+            [0, 2],
+            [0, 1],
+        ] as XY[]
+    ).map(([x, y]): XY => [c[0] + (x - 2) * step, c[1] + (y - 1) * step]);
+
 /** Eight places round a circle of radius `r` about `c`, from its top, clockwise on the field */
 const circlePlaces = (c: XY, r: number): XY[] =>
     Array.from({ length: 8 }, (_, i) => {
@@ -728,6 +746,83 @@ describeDbTests("Go round an outline (AP-T13 to AP-T15)", (it) => {
         expect(near(ends[2]!, at[(2 + 5) % 8]!)).toBe(true);
         IDS.forEach((m, i) =>
             expect(near(ends[i]!, at[(i + 5) % 8]!), `M${m}`).toBe(true),
+        );
+    });
+
+    it("QA-AP-OL-5c (AP-T14): by spots on uneven spacing (a 4 × 2 box, long sides 2 apart, short 1 apart), Reverse leader turns back in places: no two on one spot; twice is back", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { step, at } = await onOutline(db, unevenPlaces);
+        await goRound({ db, window: WINDOW, marcherIds: IDS, leaderId: null, reversed: false, amount: 3, unit: "spots", step }); // prettier-ignore
+        const r0 = await resolverOf(db);
+        IDS.forEach((m, i) =>
+            expect(
+                near(r0.positionAt(m, 17), at[(i + 3) % 8]!),
+                `forward M${m}`,
+            ).toBe(true),
+        );
+        const t = await trailOf(db);
+        await reverseTrail({ db, routeId: t.routeId });
+        const r1 = await resolverOf(db);
+        // three places the other way from where each started: (i + 5) mod 8
+        IDS.forEach((m, i) =>
+            expect(
+                near(r1.positionAt(m, 17), at[(i + 5) % 8]!),
+                `reversed M${m}`,
+            ).toBe(true),
+        );
+        await reverseTrail({ db, routeId: t.routeId });
+        const r2 = await resolverOf(db);
+        IDS.forEach((m, i) =>
+            expect(
+                near(r2.positionAt(m, 17), at[(i + 3) % 8]!),
+                `back M${m}`,
+            ).toBe(true),
+        );
+    });
+
+    it("QA-AP-OL-5d (AP-T14): the uneven box with M3 taken over for the first count: every slot turned back in places, no two on one spot", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { step, at } = await onOutline(db, unevenPlaces);
+        await goRound({ db, window: WINDOW, marcherIds: IDS, leaderId: null, reversed: false, amount: 3, unit: "spots", step }); // prettier-ignore
+        const t = await trailOf(db);
+        const A = schema.timeline_assignments;
+        const row = (await db.select().from(A).where(eq(A.marcher_id, 3)).all()).find((r) => r.transition_id === t.transitionId)!; // prettier-ignore
+        await db.update(A).set({ start_beat: 10 }).where(eq(A.id, row.id));
+        await reverseTrail({ db, routeId: t.routeId });
+        const r = await resolverOf(db);
+        const ends = IDS.map((m) => r.positionAt(m, 17));
+        for (let i = 0; i < ends.length; i++)
+            for (let j = i + 1; j < ends.length; j++)
+                expect(
+                    near(ends[i]!, ends[j]!, 1e-6),
+                    `M${IDS[i]} and M${IDS[j]}`,
+                ).toBe(false);
+        IDS.forEach((m, i) =>
+            expect(near(ends[i]!, at[(i + 5) % 8]!), `M${m}`).toBe(true),
+        );
+    });
+
+    it("QA-AP-OL-5e (AP-T14): by steps on the uneven box, Reverse leader turns back as far in distance", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { step } = await onOutline(db, unevenPlaces);
+        await goRound({ db, window: WINDOW, marcherIds: IDS, leaderId: null, reversed: false, amount: 3, unit: "steps", step }); // prettier-ignore
+        const t = await trailOf(db);
+        const before = await resolverOf(db);
+        const went = before.ftlEntry(t.transitionId);
+        await reverseTrail({ db, routeId: t.routeId });
+        const after = (await resolverOf(db)).ftlEntry(t.transitionId);
+        // everyone the same three steps, the other way
+        after.endDist.forEach((e, q) =>
+            expect(e - after.startDist[q]!).toBeCloseTo(
+                went.endDist[0]! - went.startDist[0]!,
+                6,
+            ),
         );
     });
 

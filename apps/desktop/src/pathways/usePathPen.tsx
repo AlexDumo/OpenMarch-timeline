@@ -31,7 +31,9 @@ import {
     setRoundUnit,
     stepRoundAmount,
 } from "./followAround";
-import { isTrailLineAt, openFollowTool } from "./followTool";
+import { followWindowNow, isTrailLineAt, openFollowTool } from "./followTool";
+import { outlineOf } from "@/db-functions/timelineTrailAround";
+import { currentShapeField } from "@/shapes/field/shapeField";
 import {
     closeShapeTool,
     useShapeToolStore,
@@ -365,8 +367,23 @@ export function usePathPenActions(): void {
     const roundMax = usePathPenStore((s) => roundMaxOf(s.session?.follow));
     // Go around (step 10): switches Go around | Drag out in the Follow tool; with the tool shut,
     // opens it going around when the selection stands on a circle or box outline
-    const canOpenRound =
-        phase !== "drawing" && performers.length >= 2 && !isPlaying;
+    const selection = useTimelineSelectionStore((s) => s.selection);
+    // Whether the selection stands on a circle or box outline at the window's start flag: the fit
+    // the Follow tool would open with, worked out once per selection, edit or window
+    const onOutline = useMemo(() => {
+        if (performers.length < 2) return false;
+        const resolver = useTimelineResolverStore.getState().resolver;
+        const window = followWindowNow();
+        const field = currentShapeField();
+        if (!resolver || !window || !field) return false;
+        const starts = performers.map((m): [number, number] => {
+            const [x, y] = resolver.positionAt(m.id, window.start);
+            return [x, y];
+        });
+        return outlineOf(starts, field.fieldProperties.pixelsPerStep) !== null;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectionKey, version, ready, selection]);
+    const canOpenRound = phase !== "drawing" && !isPlaying && onOutline;
     useActionHandler(
         "followGoRound",
         () => {
