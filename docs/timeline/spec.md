@@ -3682,3 +3682,80 @@ data-visualization tools (light to dark carries the order in grey too).
 | QA-DL-39 | Nobody moves on page 3: an order set on page 2, then Clear on page 3; or instead an order 4→1 set on page 3 | Page 2 keeps its order each time; page 3 guesses, or shows 4→1                                            |
 | QA-DL-40 | A trail on page 2 and an order set on page 3 where nobody moves; the trail reversed     | Page 2 shows the trail's order; page 3 keeps the order set there                                            |
 | QA-DL-41 | A shape tool open, or a path open, then Shift+O; a path being drawn, then Shift+O        | The tool closes (undo brings the shape back) and Set order opens; while drawing it's unavailable, with its reason |
+
+### L.10 Step 9: ripple into the next form
+
+**Change (plan step 9, ticket #650; built 2026-11-13 on the owner's standing brief, decisions
+below for the owner to confirm).** A line standing in one form (a Line, an Arc, a Curve or the end
+of a trail) **ripples into the form its end spots make**, in one follow move: the leader walks a
+straight **connector** from its start to the near end of the next form, then along it, and
+everyone follows through the same corner. Register E-4 and J-7: a ripple from route A onto route
+B is **one** follow-the-leader move whose trail runs from the marchers' current line, through the
+connector, onto B. The owner's first words were "a straight line over N counts to the next route";
+after rereading R-9 and R-10 (2026-11-02) the connector is **a trail segment, not a timed entry**:
+every member moves for the whole move at its own constant speed (R-10), so the connector has no
+counts of its own. This needs no resolver change: it is R-9′ with the connector as the drawn part
+and the next form as R-13′'s destination path.
+
+| ID   | Decision |
+| ---- | -------- |
+| RP-1 | **Ripple in** is a third choice on the Follow tool's **Ends** (DL-8), beside From trail and Keep end spots, offered when Keep end spots is: the line's members all have end spots in the move at the playhead (step 4's target rule). It is disabled, with the reason, when those spots don't stand in a form (RP-2). From trail stays the default (DL-8). The Ends group shows before an end is grabbed too, so Ripple in can be chosen first and one drag from an end onto the form does it. |
+| RP-2 | **The next form** is the members' end spots in that move, in the order the show remembers for them at the move's end (DL-21, `followOrderAt`: a placed Line, Arc or Curve, a trail, an order set by hand), or else the order `followSource` guesses from the spots (a line, an arc, a chain of near neighbours). Neither: "Their end spots don't stand in a line, curve or arc". A box or a circle as the next form is step 11 (snake order) and step 10 (outlines). |
+| RP-3 | **Who stands where (register S-10, "the destination supplies the slots").** The next form's spots are dealt in trail order: the tail takes the spot at the end the line enters (the **entrance**), the leader the far end, each member between the next spot along the form. The set of spots doesn't change; who stands on which can. This is what a follow the leader does: nobody passes anyone, so the order along the new form is the order along the trail. Keep end spots stays for a line that must keep each marcher's own spot. |
+| RP-4 | **The entrance** is the end of the next form nearer where the drawing arrives: the last placed point, or the leader's start when nothing is placed (ties: the form's first end in its order). A finish on one of the form's two end spots enters there. While drawing, the pointer counts as the last point for what is shown (DL-20); what finishes is what's placed. |
+| RP-5 | **The connector.** With nothing drawn it is the straight leg from the leader's start to the entrance; clicks add corners to it as on any trail, and smooth points and arc legs work as they do there. It is part of the trail, so each member's speed is its whole way over the whole move (R-10): the leader reaches the form on whichever count its share of the way gives. The path bar says it ("Leader reaches the form on count 6½"); lengthening the move or the connector changes it. A typed count for the connector would be a pin (step 5) or a timed entry, which E-4 rules out. |
+| RP-6 | **Finishing with nothing drawn** is allowed with Ripple in and with Keep end spots (step 4's "none for a straight way in"): after an end is grabbed, a release or click on the entrance's spot, Enter, a double-click, or Finish on the bar. From trail still needs a drawn trail (AP-T8's "a trail shorter than ε_geom"). |
+
+**Rules.** The move written is step 4's follow move (AP-T1, I-T5′): no shape, a trail route,
+`order_mode = 'slot'`, `path_params = {"waypoints": []}`, no `ends`. So R-9′, R-12′, R-13′ and
+R-10 resolve it as written, with no new rule:
+
+- the trail is the line-up through the members' starts, then the drawn part `W =
+  walk(leader's start, R.points, entrance)` (the connector), then `destPath` = the line through
+  the dealt spots in slot order (the next form, entrance first);
+- with no point drawn, `W` keeps no inner point and the trail is R-9's with `waypoints = []`, bit
+  for bit (QA-TR-2): the connector is the chord from the leader's start to the entrance;
+- member `q` (tail first) is in slot `q` and its target is the `q`-th dealt spot, so `endDist`
+  increases with `q` (R-13′) and nobody overtakes (P-5);
+- on an Arc or Curve form, `destPath` runs through the spots, so between spots members walk the
+  chords, as the line-up does (L.3, "The line-up is chords").
+
+**Storage.** None: no column, no migration, no file version beyond step 4's 13 (written by the
+first Follow, `markTrailModelInTransaction`). v0.1.7 files open unchanged.
+
+| ID     | Procedure |
+| ------ | --------- |
+| AP-T12 | **Ripple in.** Inputs: the selected marchers `S` (two or more), the window, the grabbed end (the leader), the drawn points (possibly none), the move `K` they have end spots in (step 4's target), and optionally the entrance (the marcher whose spot it is, when the finish was on it). Reads: the line's order at the start flag (`followOrderAt`, as AP-T8) and the next form's order at `K`'s end (RP-2), from the members' placed destinations in `K`. **Deal:** orient the form from the entrance (RP-4); the line's `q`-th marcher (tail first) takes the `q`-th spot. **Writes**, in one write-wrapper transaction: AP-T1 in `K` in the same trail order, each slot's placed destination its dealt spot and the route's `to` the entrance (the tail's spot); then every shape recipe of `K` (not order marks) re-deals its members' rows: the row of a spot names whoever now stands on it, keeping its id, slot and point, so the recipe reopens with everyone on a spot and its order agrees with the trail (DL-21, DL-23). Each row is deleted and written again with its id (the unique `(recipe, marcher)` pair forbids swapping in place); undo restores every row and id. **Refused**, nothing written: AP-T1's refusals (a member with a drawn path, taken over at the start, in part of the move, part of another follow line, sharing a stored shape with marchers who stay); AP-T8's (not an end, a source that isn't a line); no move with end spots for every member (`noSpots`); end spots that aren't a form (RP-2, `notAForm`); the line already a trail's line in `K` ("already follows"). |
+
+**After it is written** the move is an ordinary step 4 trail, so every edit of K.3 applies as it
+is: AP-T2 point edits reshape the connector; AP-T3 Reverse lets the old tail lead into the far end
+(everyone keeps the dealt spot); AP-T4 Remove trail walks everyone straight to the dealt spot;
+split at a count refuses (AP-T5); split by marchers, merge, resize and page-flag drags keep it
+(AP-T5 to AP-T7). Step 4f reads the trail's order at `K`'s end (a trail has the last word at its
+beat, DL-22), and the re-dealt recipe agrees with it.
+
+**On the field.** The Ends group reads **From trail | Keep end spots | Ripple in**. With Ripple
+in, the drawing shows the connector from the leader's start (through any corners) to the
+entrance, the next form's line, and the line's real marchers on their dealt spots with their
+starts as ghosts (DL-16); ▶ Preview loops the walk (R-10 on the trail, as written); the bar shows
+the leader's count into the form; Big steps tests each member's whole way. The entrance follows
+the pointer while drawing (RP-4), so the dealt spots flip when the pointer nears the other end.
+Pencil and finger: the bar's Ends, Preview and Finish are buttons; a drag from an end released on
+the entrance's spot finishes; nothing needs hover or a modifier.
+
+**Not in this step:** rippling into a box or circle (steps 10 and 11); a form with more spots than
+the line (vacancies), or into another move's trail (joining two moves); a count typed for the
+connector (a pin, step 5); following the true arc of the source form (step 10); corner counts on
+the connector (step 6).
+
+| ID      | Case | Expected |
+| ------- | ---- | -------- |
+| QA-RP-1 | Six in a line (0,0)–(10,0) at 2 steps; their end spots a line (20,10)–(30,10) dealt right to left; grab the right end; nothing drawn | One follow move; the tail's spot is (20,10) (the entrance, nearer the leader's start), the leader's (30,10); the trail is R-9's with `waypoints = []` bit for bit; positions at every quarter beat equal the drawing's preview; nobody overtakes |
+| QA-RP-2 | QA-RP-1 with one corner at (10,10) | The connector bends there; the ends dealt the same; `startDist` and `endDist` as R-9′ gives |
+| QA-RP-3 | QA-RP-1 finished on the far end's spot (30,10) | That end is the entrance: the tail takes (30,10), the leader (20,10) |
+| QA-RP-4 | The next form is a placed Line recipe; ripple; open the Line | Every recipe row names whoever stands on its spot, same row ids; the Line reads back with nobody moved; its order agrees with the trail's |
+| QA-RP-5 | End spots in a box; scattered spots | Ripple in disabled with "Their end spots don't stand in a line, curve or arc"; the write refuses the same |
+| QA-RP-6 | Keep end spots with nothing drawn | Step 4's trail with no route points; each keeps its own spot |
+| QA-RP-7 | After QA-RP-1: Reverse, Remove trail, resize, split at the playhead, split off the middle two by marchers | Reverse and Remove keep the dealt spots; resize keeps positions by share; split at a count refuses with its reason; split by marchers leaves a gap |
+| QA-RP-8 | Resolver vs the reference oracle (`docs/timeline/ref`) on random ripples: a straight or cornered connector, either end entered, a line or an arc form | Within 10⁻⁹ at every 1/8 beat |
+| QA-UNDO-RP | Each write above | One undo step restores every row (transition, assignments, destinations, route, recipe rows) and id; redo restores the same rows |

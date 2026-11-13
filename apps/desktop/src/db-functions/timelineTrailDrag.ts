@@ -498,7 +498,10 @@ async function planDragInTransaction(
         spacing,
         step,
     );
-    if (drawn && !(plan.drawn >= EPS_GEOM)) refuse(trailDragRefusal.tooShort());
+    // Keep end spots may run straight in with nothing drawn (step 9, RP-6): the leg from the
+    // leader's start to the tail's spot is its trail, as step 4's Follow with no points
+    if (drawn && input.ends !== "keep" && !(plan.drawn >= EPS_GEOM))
+        refuse(trailDragRefusal.tooShort());
     // Keep end spots has no spacing of its own: the members go to the spots they have
     if (input.ends !== "keep" && spacing.kind === "even" && !plan.forward)
         refuse(

@@ -13,6 +13,7 @@ import {
     type TrailWindow,
 } from "@/db-functions/timelineTrailDrag";
 import { readTrails } from "@/db-functions/timelineTrails";
+import { rippleFormAt } from "@/db-functions/timelineTrailRipple";
 import type { DbConnection } from "@/db-functions/types";
 import { isBasicMode } from "@/stores/EditorModeStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
@@ -84,6 +85,20 @@ export async function followKeepAt(
     };
 }
 
+/** Ripple in's next form (RP-2): `keep`'s end spots of `ids` in the form's own order, or null */
+const followFormOf = (ids: readonly number[], keep: FollowKeep) =>
+    rippleFormAt(
+        db,
+        ids,
+        keep.end,
+        new Map(
+            [...keep.spots].map(([m, p]): [number, [number, number]] => [
+                m,
+                [p.x, p.y],
+            ]),
+        ),
+    );
+
 /**
  * Opens the Follow tool on the selected marchers `ids`: their ends pulse, ready to drag a trail
  * out of one. `beat` is the playhead, whose move Keep end spots follows into. Resolves to why not
@@ -115,6 +130,8 @@ export async function openFollowTool(
     );
     if (refusal) return translateTimelineText(refusal);
     const keep = await followKeepAt(db, resolver, sorted, beat);
+    // Ripple in (step 9, RP-2): the form those end spots make, in its own order
+    const form = keep ? await followFormOf(sorted, keep) : null;
     const at = new Map<number, XY>(
         sorted.map((m, i) => [m, { x: starts[i]![0], y: starts[i]![1] }]),
     );
@@ -127,6 +144,7 @@ export async function openFollowTool(
         spacing: { kind: "keep" },
         ends: "trail",
         keep,
+        form,
         step: field.fieldProperties.pixelsPerStep,
     };
     const members = order.map((m) => ({

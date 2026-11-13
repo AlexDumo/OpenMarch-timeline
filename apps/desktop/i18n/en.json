@@ -2743,6 +2743,7 @@
                 "tooShort": "Draw a longer trail",
                 "evenTooWide": "Even spacing can be at most {limit} steps here, or someone would walk backward",
                 "noSpots": "Keep end spots needs every marcher in one move with spots there",
+                "notAForm": "Their end spots don't stand in a line, curve or arc, so the line can't ripple into them",
                 "notOneMove": "{marcher} can't join the rest of the line in one move here, so nothing was changed",
                 "noWindow": "Move the playhead past the start flag to drag out a trail",
                 "reverseAlong": "Reverse leader is off for a trail dragged out of a line. Drag the trail out of the other end instead."
@@ -3822,6 +3823,10 @@
             "endsFromTrailTip": "From trail: the line stops along the trail, and those become its end spots",
             "endsKeep": "Keep end spots",
             "endsKeepTip": "Keep end spots: the line follows the trail into the end spots it already has",
+            "endsRipple": "Ripple in",
+            "endsRippleTip": "Ripple in: the line follows its leader straight to the near end of the form its end spots make, then along it. The leader takes the far end",
+            "endsRippleOff": "Ripple in: their end spots don't stand in a line, curve or arc",
+            "rippleArrival": "Leader reaches the form on count {count}",
             "preview": "Preview",
             "previewTip": "Preview: the marchers walk the trail from start to end, again and again",
             "previewReduced": "Preview is off while your system asks for less motion",
@@ -3862,6 +3867,7 @@
             "drawingPointsClick": "{marcher}'s path: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel",
             "groupDrawing": "Group path for {count} marchers: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel",
             "trailDrawing": "Trail for {count} marchers, {marcher} leading: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel",
+            "rippleDrawing": "Ripple in, {marcher} leading: click an end of the form to go straight in, or click for corners first · Double-click to finish · <esc></esc> to cancel",
             "followGrab": "Follow: drag a trail out of either end of the line · <esc></esc> to leave"
         },
         "toolbar": {

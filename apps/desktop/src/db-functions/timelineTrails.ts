@@ -606,6 +606,7 @@ export async function followTrailInTransaction({
     points,
     line,
     along = false,
+    destinations,
 }: {
     tx: DbTransaction;
     timelineId: number;
@@ -621,6 +622,12 @@ export async function followTrailInTransaction({
      * the route runs to its last point (`to`), not to an end spot. A new line only.
      */
     along?: boolean;
+    /**
+     * Step 9 (AP-T12, RP-3): each member's end spot by id, in place of the one it has, so a
+     * ripple deals the next form's spots in trail order; the route then runs to the tail's. A
+     * new line only.
+     */
+    destinations?: ReadonlyMap<number, XY>;
 }): Promise<FollowTrailResult> {
     const plan = await planFollow(tx, timelineId, marcherIds);
     if (plan.kind === "redraw") {
@@ -637,7 +644,14 @@ export async function followTrailInTransaction({
             redrawn: true,
         };
     }
-    const { chosen, starts, ends } = plan;
+    const { chosen, starts } = plan;
+    const ends = destinations
+        ? chosen.map((r) => {
+              const to = destinations.get(r.assignment.marcher_id);
+              if (!to) refuse("the end spots name other marchers");
+              return to;
+          })
+        : plan.ends;
     const order = line
         ? line.map((id) => {
               const i = chosen.findIndex((r) => r.assignment.marcher_id === id);
