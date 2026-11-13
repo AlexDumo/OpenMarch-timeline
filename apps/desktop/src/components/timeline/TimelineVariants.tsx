@@ -59,6 +59,12 @@ import { markedRangeAt, useTimelineRangeMenu } from "./TimelineRangeMenu";
 import { holdBarPageAt } from "./TimelineHoldBars";
 import { isTyping, overlayOpen } from "./timelineHotkeys";
 import { useLatestCallback } from "./useLatestCallback";
+import {
+    attachTimelineGestures,
+    TIMELINE_CONTROL_SELECTOR,
+    timelineTouchRegion,
+    type TimelineNavigationStep,
+} from "./timelineGestures";
 import { TimelineAppendAtPlayhead } from "./TimelineAppendAtPlayhead";
 import { useViewportExtent } from "./useViewportExtent";
 import {
@@ -357,14 +363,105 @@ const useTimelineZoom = ({
         return () => window.removeEventListener("keydown", onKeyDown);
     }, [fit, onPixelsPerBeatChange]);
 
+    /**
+     * Two fingers' navigation (tablet 3.1, `timelineGestures.ts`): the limits a pinch zooms within,
+     * and the move to a step, zooming about its anchor when the zoom changed. Without a zoom owner
+     * a pinch only pans.
+     */
+    const clampZoom = useLatestCallback((next: number) =>
+        clamp(next, latest.current.minimum, TIMELINE_MAX_PX_PER_BEAT),
+    )!;
+    const navigate = useLatestCallback((target: TimelineNavigationStep) => {
+        const viewport = viewportRef.current;
+        if (!viewport) return;
+        viewport.scrollTop = target.scrollTop;
+        if (
+            onPixelsPerBeatChange &&
+            Math.abs(target.pixelsPerBeat - latest.current.pixelsPerBeat) >
+                0.001
+        ) {
+            zoomTo(target.pixelsPerBeat, target.anchorPx, target.anchorBeat);
+            return;
+        }
+        viewport.scrollLeft = target.scrollLeft;
+    })!;
+
     return {
         fit,
         fitted: isFitted,
+        clampZoom: onPixelsPerBeatChange ? clampZoom : undefined,
+        navigate,
+        /** The zoom the view is drawn at, or about to be */
+        currentPixelsPerBeat: () => latest.current.pixelsPerBeat,
         viewportWidth,
         step,
         canZoomIn: pixelsPerBeat < TIMELINE_MAX_PX_PER_BEAT - 0.001,
         canZoomOut: pixelsPerBeat > minimum + 0.01,
     };
+};
+
+/**
+ * Fingers on the timeline (tablet 3.1, `timelineGestures.ts`): the ruler and page row scrub, bare
+ * track space pans, a control takes its own press, and two fingers pan and pinch. Mouse and pen
+ * presses never reach it.
+ */
+const useTimelineGestures = ({
+    viewportRef,
+    headerHeight,
+    leadingInset,
+    zoom,
+    seekAt,
+}: {
+    viewportRef: React.RefObject<HTMLDivElement | null>;
+    /** The pinned header's height: the ruler, page row and measure row */
+    headerHeight: number;
+    leadingInset: number;
+    zoom: Pick<
+        ReturnType<typeof useTimelineZoom>,
+        "clampZoom" | "navigate" | "currentPixelsPerBeat"
+    >;
+    seekAt: (surface: Element, clientX: number) => void;
+}) => {
+    const latest = useRef({ headerHeight, leadingInset, zoom, seekAt });
+    latest.current = { headerHeight, leadingInset, zoom, seekAt };
+    useEffect(() => {
+        const viewport = viewportRef.current;
+        if (!viewport) return;
+        return attachTimelineGestures(viewport, {
+            region: (event) =>
+                timelineTouchRegion({
+                    onControl:
+                        event.target instanceof Element &&
+                        event.target.closest(TIMELINE_CONTROL_SELECTOR) !==
+                            null,
+                    offsetY:
+                        event.clientY - viewport.getBoundingClientRect().top,
+                    headerHeight: latest.current.headerHeight,
+                }),
+            view: () => ({
+                scrollLeft: viewport.scrollLeft,
+                scrollTop: viewport.scrollTop,
+                pixelsPerBeat: latest.current.zoom.currentPixelsPerBeat(),
+            }),
+            navigate: (step) => latest.current.zoom.navigate(step),
+            leadingInset: () => latest.current.leadingInset,
+            // Without a zoom owner a pinch keeps the zoom, and only pans
+            clampZoom: (next) =>
+                latest.current.zoom.clampZoom?.(next) ??
+                latest.current.zoom.currentPixelsPerBeat(),
+            tap: (clientX) => {
+                const surface = viewport.querySelector(
+                    '[data-testid="timeline-pointer-surface"]',
+                );
+                if (!surface) return;
+                // Only where a click would seek: off the surface (left of beat 0, or past its
+                // end) a click does nothing
+                const { left, right } = surface.getBoundingClientRect();
+                if (clientX < left || clientX > right) return;
+                latest.current.seekAt(surface, clientX);
+            },
+        });
+    }, [viewportRef]);
 };
 
 const navigateToPage = ({
@@ -809,8 +906,14 @@ const TimelineSurface = memo(function TimelineSurface({
     // A dragged page flag also lands on the playhead when near; read when a drag starts, so the
     // ruler doesn't re-render as the playhead moves
     const playheadAt = useLatestCallback(() => positionBeat)!;
+    // A finger's scrub that a second finger cancels goes back here (tablet 3.1); while playing a
+    // scrub only suspends playback, and ends where it was
+    const scrubRestoreBeat = useLatestCallback(() =>
+        props.isPlaying ? null : positionBeat,
+    )!;
     const pointer = useTimelinePointer({
         seekSnapBeats,
+        restoreBeat: scrubRestoreBeat,
         onSeek: props.onSeek,
         // Basic and a read-only timeline draw no ranges: every drag scrubs
         onRangeSelect:
@@ -821,6 +924,13 @@ const TimelineSurface = memo(function TimelineSurface({
         pixelsPerBeat,
         beatCount: model.beatCount,
         snapBeats,
+    });
+    useTimelineGestures({
+        viewportRef,
+        headerHeight: audioTop,
+        leadingInset: initialPageWidth,
+        zoom,
+        seekAt: pointer.seekAt,
     });
     const onNavigate = useLatestCallback(transportNavigation(props));
     // A clip is its timeline: clicking it selects that range (UI-12)
@@ -1208,6 +1318,7 @@ const TimelineSurface = memo(function TimelineSurface({
                             }
                             height={pinnedHeight}
                             flagSnapPlayhead={playheadAt}
+                            scrubRestoreBeat={scrubRestoreBeat}
                             // Only a show without measures numbers the playhead page's counts
                             positionBeat={
                                 expanded &&

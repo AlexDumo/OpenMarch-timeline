@@ -1,3 +1,4 @@
+import { fingerDragSlop } from "./timelineGestures";
 import { snapEdgeBeat, stepOffForbidden } from "./timelineEdgeSnap";
 import clsx from "clsx";
 import tolgee from "@/global/singletons/Tolgee";
@@ -264,6 +265,8 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
         pageId: string | number;
         index: number;
         startClientX: number;
+        /** How far it moves before it drags: further for a finger (`fingerDragSlop`) */
+        slop: number;
         surface: Element;
         /** The playhead when the drag started, which the flag lands on when near */
         playhead: number | null;
@@ -337,6 +340,7 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
             pageId: box.page.id,
             index,
             startClientX: event.clientX,
+            slop: fingerDragSlop(event.pointerType, FLAG_DRAG_PX),
             surface,
             playhead: snapPlayhead ? Math.round(snapPlayhead()) : null,
             moved: false,
@@ -387,7 +391,7 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
         if (!current || current.pointerId !== event.pointerId) return;
         if (
             !current.moved &&
-            Math.abs(event.clientX - current.startClientX) < FLAG_DRAG_PX
+            Math.abs(event.clientX - current.startClientX) < current.slop
         )
             return;
         current.moved = true;

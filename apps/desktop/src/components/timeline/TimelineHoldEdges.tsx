@@ -1,3 +1,4 @@
+import { fingerDragSlop } from "./timelineGestures";
 import {
     type KeyboardEvent as ReactKeyboardEvent,
     type PointerEvent as ReactPointerEvent,
@@ -159,6 +160,8 @@ export const TimelineHoldEdgeHandles = memo(function TimelineHoldEdgeHandles({
         pointerId: number;
         index: number;
         startClientX: number;
+        /** How far it moves before it drags: further for a finger (`fingerDragSlop`) */
+        slop: number;
         surface: Element;
         playhead: number | null;
         moved: boolean;
@@ -235,6 +238,7 @@ export const TimelineHoldEdgeHandles = memo(function TimelineHoldEdgeHandles({
             pointerId: event.pointerId,
             index,
             startClientX: event.clientX,
+            slop: fingerDragSlop(event.pointerType, DRAG_PX),
             surface,
             playhead: snapPlayhead ? Math.round(snapPlayhead()) : null,
             moved: false,
@@ -248,7 +252,7 @@ export const TimelineHoldEdgeHandles = memo(function TimelineHoldEdgeHandles({
         if (!current || current.pointerId !== event.pointerId) return;
         if (
             !current.moved &&
-            Math.abs(event.clientX - current.startClientX) < DRAG_PX
+            Math.abs(event.clientX - current.startClientX) < current.slop
         )
             return;
         const first = !current.moved;
