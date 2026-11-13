@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { GESTURE_TIMING } from "@/components/canvas/touch/touchGestures";
 import { FieldEditor, type FieldEditorPorts } from "@/field/editor/fieldEditor";
 import type { FieldPoint } from "@/field/editor/view";
 import { attachFieldPointerInput } from "../fieldPointerInput";
@@ -191,5 +192,62 @@ describe("attachFieldPointerInput, right presses that start off the field (#315 
         // Over: later right-button moves from elsewhere aren't the field's
         fire("pointermove", { x: 50, y: 50, buttons: 2, target: root });
         expect(moves).toEqual([{ x: 420, y: 520 }]);
+    });
+});
+
+describe("attachFieldPointerInput, a pen held still (tablet 1.5)", () => {
+    beforeEach(() => {
+        vi.useFakeTimers({
+            toFake: [
+                "setTimeout",
+                "clearTimeout",
+                "requestAnimationFrame",
+                "cancelAnimationFrame",
+            ],
+        });
+    });
+    afterEach(() => vi.useRealTimers());
+    /** Past the long press time, and the frame it waits for */
+    const hold = () => vi.advanceTimersByTime(GESTURE_TIMING.longPressMs + 50);
+    const pen = { pointerType: "pen" };
+
+    it("selects the marcher under it and opens the field's menu, and its lift and moves do nothing more", () => {
+        const { editor, state, fire } = setup();
+        fire("pointerdown", { x: 100, y: 100, buttons: 1, ...pen });
+        fire("pointermove", { x: 103, y: 101, buttons: 1, ...pen });
+        hold();
+        expect(state.menus).toBe(1);
+        expect(state.selected).toEqual([1]);
+        fire("pointermove", { x: 160, y: 101, buttons: 1, ...pen });
+        expect(editor.activeGesture()).toBeNull();
+        fire("pointerup", { x: 160, y: 101, ...pen });
+        expect(state.shown).toBeNull();
+        expect(state.drops).toBe(0);
+        // The next pen press is a press like any other
+        fire("pointerdown", { x: 200, y: 100, ...pen });
+        fire("pointerup", { x: 200, y: 100, ...pen });
+        expect(state.selected).toEqual([2]);
+        expect(state.menus).toBe(1);
+    });
+
+    it("opens no menu once the pen has moved past the slop: it drags", () => {
+        const { editor, state, fire } = setup();
+        fire("pointerdown", { x: 100, y: 100, buttons: 1, ...pen });
+        fire("pointermove", { x: 100, y: 112, buttons: 1, ...pen });
+        hold();
+        expect(state.menus).toBe(0);
+        expect(editor.activeGesture()).toBe("move");
+    });
+
+    it("opens no menu for a pen tap, nor for a mouse held still", () => {
+        const { state, fire } = setup();
+        fire("pointerdown", { x: 100, y: 100, ...pen });
+        fire("pointerup", { x: 100, y: 100, ...pen });
+        hold();
+        fire("pointerdown", { x: 200, y: 100, buttons: 1 });
+        hold();
+        fire("pointerup", { x: 200, y: 100 });
+        expect(state.menus).toBe(0);
+        expect(state.selected).toEqual([2]);
     });
 });

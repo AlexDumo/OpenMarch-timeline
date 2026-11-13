@@ -20,10 +20,13 @@ function setup({
     editor = true,
     singleFinger,
     claims = true,
+    menuOpens = false,
 }: {
     editor?: boolean;
     singleFinger?: (press: FieldPointer) => SingleFingerRole;
     claims?: boolean;
+    /** What the editor's `longPress` answers: whether a menu opened */
+    menuOpens?: boolean;
 } = {}) {
     let view: FieldView = {
         width: 800,
@@ -50,6 +53,7 @@ function setup({
         }),
         longPress: vi.fn((p: FieldPointer) => {
             calls.push(`longPress ${p.screen.x},${p.screen.y}`);
+            return menuOpens;
         }),
     };
     const timers: { at: number; tick: () => void; live: boolean }[] = [];
@@ -263,14 +267,29 @@ describe("a finger that edits", () => {
     });
 });
 
-describe("an editing finger held still (tablet 1.2)", () => {
-    it("ends the editor's press as a release where it lifted: a slow tap", () => {
+describe("an editing finger held still (tablet 1.2, 1.5)", () => {
+    it("ends the editor's press as a release where it lifted when no menu opened: a slow tap", () => {
         const s = setup({ singleFinger: () => "edit" });
         s.finger("down", 1, 110, 120, 0);
         s.fireTimers();
         s.finger("up", 1, 112, 120, GESTURE_TIMING.longPressMs + 100);
-        expect(s.calls).toEqual(["down 100,100", "up 102,100"]);
-        expect(s.ed.longPress).not.toHaveBeenCalled();
+        expect(s.calls).toEqual([
+            "down 100,100",
+            "longPress 100,100",
+            "up 102,100",
+        ]);
+        expect(s.tap).not.toHaveBeenCalled();
+    });
+
+    it("hands the rest of the press to nobody once the long press opened a menu", () => {
+        const s = setup({ singleFinger: () => "edit", menuOpens: true });
+        s.finger("down", 1, 110, 120, 0);
+        s.fireTimers();
+        s.finger("move", 1, 160, 120, GESTURE_TIMING.longPressMs + 50);
+        s.finger("up", 1, 160, 120, GESTURE_TIMING.longPressMs + 100);
+        // The editor gave its press up itself (`longPress`): no release, move or cancel follows
+        expect(s.calls).toEqual(["down 100,100", "longPress 100,100"]);
+        expect(s.views).toEqual([]);
         expect(s.tap).not.toHaveBeenCalled();
     });
 });
@@ -363,12 +382,22 @@ describe("long press", () => {
         expect(s.calls).toEqual([]);
     });
 
-    it("still pans when the finger moves on after the menu was asked for", () => {
+    it("still pans when the finger moves on after a long press that opened no menu", () => {
         const s = setup();
         s.finger("down", 1, 300, 300, 0);
         s.fireTimers();
         s.finger("move", 1, 340, 300, 700);
         expect(s.view().panX).toBe(40);
+    });
+
+    it("pans no more once the long press opened a menu (tablet 1.5)", () => {
+        const s = setup({ menuOpens: true });
+        s.finger("down", 1, 300, 300, 0);
+        s.fireTimers();
+        s.finger("move", 1, 340, 300, 700);
+        s.finger("up", 1, 340, 300, 750);
+        expect(s.views).toEqual([]);
+        expect(s.tap).not.toHaveBeenCalled();
     });
 });
 

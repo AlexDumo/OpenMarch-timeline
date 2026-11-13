@@ -129,6 +129,9 @@
             "groupKeywords": "group shape freeze as is keep together combine",
             "ungroup": "Shape: Ungroup",
             "ungroupKeywords": "ungroup shape break apart release separate",
+            "enterBox": "Select only this marcher",
+            "centerPivot": "Shape: Move the pivot back to the center",
+            "centerPivotKeywords": "pivot center centre reset turn flip around",
             "arc": "Shape: Arc"
         },
         "swap": {
@@ -1743,6 +1746,7 @@
             },
             "pivot": {
                 "aria": "Pivot: {pivot}",
+                "backToCenter": "Back to the center",
                 "custom": "Pivot: where it was dragged on the field",
                 "label": "Pivot",
                 "names": {

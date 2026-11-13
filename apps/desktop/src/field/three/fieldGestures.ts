@@ -32,12 +32,15 @@ import { fieldPointerAt, useFieldViewStore } from "./fieldView";
  *   the drag mode on the pill).
  * - Two or more fingers pan and pinch the view. The field point under the
  *   fingers stays under them, one to one.
- * - A finger held still asks the editor for a menu (`longPress`).
+ * - A finger held still asks the editor for a menu (`longPress`), as a
+ *   right-click does: a mode's, else the field's. One that opens a menu ends
+ *   the press there: the editor has given up any press it held (a finger on
+ *   a marcher), and the rest of the finger's press does nothing.
  * - Two- and three-finger taps go to {@link FieldGestureOptions.history}.
  * - A pen is only watched, for palm rejection by timing: fingers are ignored
  *   while it is down and only navigate (with two fingers) just after.
  *   The pen's presses reach the editor as a mouse's do, through
- *   `fieldPointerInput.ts`.
+ *   `fieldPointerInput.ts`, which also times its long press.
  *
  * Mouse presses never come here.
  */
@@ -242,22 +245,27 @@ export class FieldGestures {
                 this.single = null;
                 break;
             case "longPressArmed": {
-                // The menu opens while the finger is held, as a right-click opens it
+                // The menu opens while the finger is held, as a right-click
+                // opens it. Once it has, the press is over: an editing
+                // finger's press was given up for it, and nothing more of
+                // the finger's goes to the editor or pans
                 const last = this.latest.get(effect.id);
-                if (this.single?.role === "navigate" && editor && last)
-                    editor.longPress(
-                        this.env.pointer({
-                            ...last,
-                            clientX: effect.point.x,
-                            clientY: effect.point.y,
-                        }),
-                    );
+                if (this.single?.id !== effect.id || !editor || !last) break;
+                const opened = editor.longPress(
+                    this.env.pointer({
+                        ...last,
+                        clientX: effect.point.x,
+                        clientY: effect.point.y,
+                    }),
+                );
+                if (opened) this.single = null;
                 break;
             }
             case "longPressCommit":
                 // No `singleEnd` follows: the press is over. An editing
-                // finger held still was a slow tap: the editor ends its press
-                // as a release there (it never moved past the long press slop)
+                // finger held still that opened no menu was a slow tap: the
+                // editor ends its press as a release there (it never moved
+                // past the long press slop)
                 if (this.single?.role === "edit" && event)
                     editor?.pointerUp(
                         this.env.pointer({

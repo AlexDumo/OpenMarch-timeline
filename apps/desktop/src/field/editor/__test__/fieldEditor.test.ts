@@ -522,6 +522,7 @@ describe("FieldEditor right-click menu (#315)", () => {
             expect.objectContaining({
                 screen: { x: (EMPTY.x + 1) * ZOOM, y: EMPTY.y * ZOOM },
             }),
+            null,
         );
     });
 
@@ -643,13 +644,13 @@ describe("FieldEditor right-click menu (#315)", () => {
         expect(openMenu).toHaveBeenCalledTimes(1);
     });
 
-    it("opens the mode's menu on a long press, not the field's", () => {
+    it("opens the mode's menu on a long press, then the field's (tablet 1.5)", () => {
         const { editor, ports } = setup({ selected: [1] });
         const openMenu = vi.fn(() => false);
         editor.setMode({ ...fakeMode().mode, openMenu });
-        editor.longPress(at(300, 100));
+        expect(editor.longPress(at(300, 100, { kind: "touch" }))).toBe(true);
         expect(openMenu).toHaveBeenCalledTimes(1);
-        expect(ports.openMenu).not.toHaveBeenCalled();
+        expect(ports.openMenu).toHaveBeenCalledTimes(1);
     });
 
     it("opens the menu for a selected placed box's marchers, keeping the selection", () => {
@@ -2658,5 +2659,91 @@ describe("FieldEditor reach inside a placed box ($mod)", () => {
         expect(state.selected).toEqual([3]);
         expect(box.inside).toBeNull();
         expect(pressSelection).not.toHaveBeenCalled();
+    });
+});
+
+describe("FieldEditor long press (tablet 1.5)", () => {
+    const touch = (x: number, y: number) => at(x, y, { kind: "touch" });
+    const pen = (x: number, y: number) => at(x, y, { kind: "pen" });
+
+    it("selects an unselected marcher and opens the field's menu there, as a right-click does", () => {
+        const { editor, ports, state } = setup({ selected: [2] });
+        expect(editor.longPress(touch(100, 100))).toBe(true);
+        expect(state.selected).toEqual([1]);
+        expect(ports.openMenu).toHaveBeenCalledWith(
+            expect.objectContaining({ field: { x: 100, y: 100 } }),
+            1,
+        );
+    });
+
+    it("keeps a selection that holds the marcher, and the selection on empty field", () => {
+        const { editor, ports, state } = setup({ selected: [1, 2] });
+        editor.longPress(touch(200, 100));
+        expect(state.selected).toEqual([1, 2]);
+        editor.longPress(touch(EMPTY.x, EMPTY.y));
+        expect(state.selected).toEqual([1, 2]);
+        expect(ports.openMenu).toHaveBeenLastCalledWith(
+            expect.anything(),
+            null,
+        );
+    });
+
+    it("gives up a held press on a marcher: its release clicks nothing and its moves drag nothing", () => {
+        const { editor, ports, state } = setup({ selected: [2] });
+        expect(editor.pointerDown(pen(100, 100))).toBe(true);
+        expect(editor.longPress(pen(100, 100))).toBe(true);
+        expect(state.selected).toEqual([1]);
+        editor.pointerMove(pen(160, 100));
+        editor.pointerUp(pen(160, 100));
+        expect(editor.activeGesture()).toBeNull();
+        expect(state.shown).toBeNull();
+        expect(ports.drop).not.toHaveBeenCalled();
+        expect(state.selected).toEqual([1]);
+    });
+
+    it("leaves a drag under way alone", () => {
+        const { editor, ports } = setup({ selected: [1] });
+        editor.pointerDown(pen(100, 100));
+        editor.pointerMove(pen(140, 100));
+        expect(editor.longPress(pen(140, 100))).toBe(false);
+        expect(ports.openMenu).not.toHaveBeenCalled();
+        expect(editor.activeGesture()).toBe("move");
+    });
+
+    it("keeps a mode's press unless the mode gives it up, then opens the mode's menu", () => {
+        const { editor, ports } = setup({ selected: [1] });
+        const fake = fakeMode();
+        const openMenu = vi.fn(() => true);
+        let givesUp = false;
+        editor.setMode({
+            ...fake.mode,
+            blocksFieldMenu: true,
+            openMenu,
+            longPress: () => givesUp,
+        });
+        editor.pointerDown(pen(300, 100));
+        expect(editor.longPress(pen(300, 100))).toBe(false);
+        expect(openMenu).not.toHaveBeenCalled();
+        expect(fake.calls).toEqual(["press 300,100"]);
+        givesUp = true;
+        expect(editor.longPress(pen(300, 100))).toBe(true);
+        expect(fake.calls).toEqual(["press 300,100", "cancel"]);
+        expect(openMenu).toHaveBeenCalledTimes(1);
+        expect(ports.openMenu).not.toHaveBeenCalled();
+        // Its release is no click of the mode's
+        editor.pointerUp(pen(300, 100));
+        expect(fake.calls).toEqual(["press 300,100", "cancel"]);
+    });
+
+    it("keeps a mode's press that has no say, and opens nothing while the open shape blocks the field's menu", () => {
+        const { editor, ports } = setup({ selected: [1] });
+        const fake = fakeMode();
+        editor.setMode({ ...fake.mode, blocksFieldMenu: true });
+        editor.pointerDown(pen(300, 100));
+        expect(editor.longPress(pen(300, 100))).toBe(false);
+        editor.pointerUp(pen(300, 100));
+        expect(fake.calls).toEqual(["press 300,100", "release 300,100 click"]);
+        expect(editor.longPress(touch(300, 100))).toBe(false);
+        expect(ports.openMenu).not.toHaveBeenCalled();
     });
 });
