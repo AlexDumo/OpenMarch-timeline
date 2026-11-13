@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { Resolver } from "@openmarch/core";
 import type { MoveRoute } from "@/db-functions/timelineRoutes";
 import { laneOutline, memberWalkOf, scheduleOf } from "../pathEdit";
-import { groupToShow, refitNeeded, targetOfRoute } from "../pathTarget";
+import {
+    groupToShow,
+    refitNeeded,
+    rejoinTargetOf,
+    targetOfRoute,
+} from "../pathTarget";
 
 /**
  * Detach (pathways step 3c, spec J.8 AP-R9): a Detached copy is a group path with one lane, shown
@@ -143,5 +148,64 @@ describe("which group path the selection shows (groupToShow)", () => {
         );
         expect(groupToShow([R, other])).toBe(null);
         expect(groupToShow([])).toBe(null);
+    });
+});
+
+describe("where Rejoin goes (rejoinTargetOf, AP-R10)", () => {
+    const R = { routeId: 5, marcherIds: [1, 2], detachedFrom: null };
+    const other = { routeId: 6, marcherIds: [3, 4], detachedFrom: null };
+    const copy7 = { routeId: 9, marcherIds: [7], detachedFrom: 5 };
+    const copy8 = { routeId: 10, marcherIds: [8], detachedFrom: 5 };
+    const copyOfOther = { routeId: 11, marcherIds: [12], detachedFrom: 6 };
+
+    it("a shown copy goes back onto its group path, with any other selected marcher, never onto the copy (S1)", () => {
+        const shown = targetOfRoute([copyEntry(1)], resolver, drills)!;
+        expect(rejoinTargetOf(shown, [R, copy7], 1, [7, 13])).toEqual({
+            timelineId: 1,
+            routeId: 5,
+            marcherIds: [7, 13],
+        });
+    });
+
+    it("a group path shown takes its outside marchers", () => {
+        const shown = targetOfRoute([copyEntry(2)], resolver, drills)!;
+        const withOutside = {
+            ...shown,
+            group: {
+                ...shown.group!,
+                outside: [
+                    {
+                        marcherId: 13,
+                        drill: "B13",
+                        from: { x: 0, y: 0 },
+                        ownPath: false,
+                    },
+                ],
+            },
+        };
+        expect(rejoinTargetOf(withOutside, null, 1, [7, 13])).toEqual({
+            timelineId: 1,
+            routeId: 9,
+            marcherIds: [13],
+        });
+        expect(rejoinTargetOf(shown, null, 1, [7])).toBeNull();
+    });
+
+    it("nothing shown: two copies of one group path rejoin it, even with another group path in the move", () => {
+        expect(
+            rejoinTargetOf(null, [R, other, copy7, copy8], 1, [7, 8]),
+        ).toEqual({ timelineId: 1, routeId: 5, marcherIds: [7, 8] });
+    });
+
+    it("nothing shown: the move's only group path; none with two and copies from both", () => {
+        expect(rejoinTargetOf(null, [R, copy7], 1, [13])).toEqual({
+            timelineId: 1,
+            routeId: 5,
+            marcherIds: [13],
+        });
+        expect(
+            rejoinTargetOf(null, [R, other, copy7, copyOfOther], 1, [7, 12]),
+        ).toBeNull();
+        expect(rejoinTargetOf(null, [R], 1, [1, 2])).toBeNull();
     });
 });

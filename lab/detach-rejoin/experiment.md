@@ -64,5 +64,8 @@ questions:
 - No live link between a copy and its group path (decided: copies now, links later). An
   edit of the group path after Detach doesn't reach the copy.
 - Detaching every member leaves no group path to Rejoin; Undo brings it back.
+- Rejoin puts a marcher in its place on the group path when no Re-fit is pending there.
+  If another member's start moved since the group path was drawn, and you then move the
+  group path's first point, the rejoined marcher can land a little off; Re-fit first.
 - Linked adjustments for several members at once (and detaching such a sub-group with
   one shared copy) are step 26.

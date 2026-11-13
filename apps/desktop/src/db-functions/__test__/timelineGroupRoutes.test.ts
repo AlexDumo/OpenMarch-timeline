@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import { and, eq, getTableName } from "drizzle-orm";
+import { and, eq, getTableName, sql } from "drizzle-orm";
 import {
     createResolver,
     groupMemberWalk,
@@ -455,7 +455,11 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
                 route_id: copyId,
                 kind: "detached_from",
                 source_route_id: drawn.routeId,
-                data: null,
+                // What Rejoin restores while the group path's `from` is unchanged
+                data: JSON.stringify({
+                    offset: o,
+                    from: JSON.parse(groupText).from,
+                }),
             }),
         ]);
         // Every marcher at every quarter beat, bit for bit
@@ -648,6 +652,55 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
             marcherIds: rest,
         });
         for (const k of rest) await expectInPlace(k, ids[0]!);
+    });
+
+    it("Detach then Rejoin with nothing edited moves nobody, even when a member's start moved before with a Re-fit pending (review of #900)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await convertPagesToTimeline(db);
+        const timeline = await page2(db);
+        const r0 = await resolverOf(db);
+        const ids = r0.marcherIds().slice(0, 4);
+        const drawn = await drawGroupRoute({
+            db,
+            timelineId: timeline.id,
+            marcherIds: ids,
+            points: await groupPoints(db, ids),
+        });
+        const m = ids[1]!;
+        // m's start moves by [6, -4] on the page before (its previous move's end spot); the
+        // group path isn't re-fitted, so its stored `from` and m's offset are as drawn
+        const A = schema.timeline_assignments;
+        const D = schema.timeline_slot_destinations;
+        const prev = (
+            await db.select().from(A).where(eq(A.marcher_id, m)).all()
+        ).find((a) => a.end_beat === 9)!;
+        await db.run(
+            sql`UPDATE ${D} SET x = x + 6, y = y - 4 WHERE transition_id = ${prev.transition_id} AND slot_index = ${prev.slot_index}`,
+        );
+        // The start really moved, so `A − R.from` is no longer the stored offset
+        const moved = (await resolverOf(db)).positionAt(m, 9);
+        const was = r0.positionAt(m, 9);
+        expect(moved[0] - was[0]).toBeCloseTo(6, 9);
+        expect(moved[1] - was[1]).toBeCloseTo(-4, 9);
+        const laneBefore = (await laneOf(db, m, timeline.id))!;
+        const walking = positions(await resolverOf(db), 30);
+        await detachFromGroupPath({
+            db,
+            timelineId: timeline.id,
+            marcherIds: [m],
+        });
+        expect(positions(await resolverOf(db), 30)).toEqual(walking);
+        await rejoinGroupPath({
+            db,
+            timelineId: timeline.id,
+            routeId: drawn.routeId,
+            marcherIds: [m],
+        });
+        // The offset it had, not A − R.from (which the moved start would have changed)
+        expect(await laneOf(db, m, timeline.id)).toEqual(laneBefore);
+        expect(positions(await resolverOf(db), 30)).toEqual(walking);
     });
 
     it("Detach every member at once: one undo step; the group path goes, with its links; Rejoin adds a straight marcher to the group (QA-AP-R9)", async ({

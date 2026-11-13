@@ -178,6 +178,68 @@ export function onItsLane(
     };
 }
 
+/** A group path in a move as `readGroupPaths` reads it */
+export interface GroupPathRow {
+    routeId: number;
+    marcherIds: readonly number[];
+    detachedFrom: number | null;
+}
+
+/**
+ * Where Rejoin puts the selected marchers (AP-R10), or null when it isn't offered:
+ *
+ * - a group path shown with selected marchers off it: onto it, those marchers;
+ * - a Detached copy shown: onto the group path it came from, never onto the copy (review of
+ *   #900, S1), its marcher and any other selected marcher off that path;
+ * - nothing shown: onto the one group path every selected copy came from (two detached members of
+ *   one group, with another group path in the move), else onto the move's only group path that
+ *   isn't a copy.
+ *
+ * `groups` are the move's group paths (`readGroupPaths`), needed unless a non-copy is shown.
+ */
+export function rejoinTargetOf(
+    shown: PathTarget | null,
+    groups: readonly GroupPathRow[] | null,
+    timelineId: number,
+    selectedIds: readonly number[],
+): { timelineId: number; routeId: number; marcherIds: number[] } | null {
+    const copyOf = shown?.lane?.detachedFrom ?? null;
+    if (shown && copyOf === null) {
+        const outside = shown.group?.outside.map((m) => m.marcherId) ?? [];
+        return outside.length > 0 && shown.routeId !== null
+            ? {
+                  timelineId: shown.timelineId,
+                  routeId: shown.routeId,
+                  marcherIds: outside,
+              }
+            : null;
+    }
+    if (!groups) return null;
+    const selected = new Set(selectedIds);
+    const sources = new Set(
+        groups
+            .filter(
+                (g) =>
+                    g.detachedFrom !== null &&
+                    g.marcherIds.some((m) => selected.has(m)),
+            )
+            .map((g) => g.detachedFrom!),
+    );
+    const main = groups.filter((g) => g.detachedFrom === null);
+    const source = copyOf ?? (sources.size === 1 ? [...sources][0]! : null);
+    const onto =
+        source !== null
+            ? groups.find((g) => g.routeId === source)
+            : main.length === 1
+              ? main[0]
+              : undefined;
+    if (!onto) return null;
+    const off = selectedIds.filter((id) => !onto.marcherIds.includes(id));
+    return off.length > 0
+        ? { timelineId, routeId: onto.routeId, marcherIds: off }
+        : null;
+}
+
 /**
  * Whether Paths All draws `target` as a group path object, its one line with faint lanes (AP-O7).
  * A one-lane path (a Detached copy) is one marcher's path, so it draws as an own path does: its

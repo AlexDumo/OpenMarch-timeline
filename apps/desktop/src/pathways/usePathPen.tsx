@@ -41,6 +41,7 @@ import {
     pathObjectsAt,
     refitNeeded,
     readPathObjectIndex,
+    rejoinTargetOf,
     type PathObjectIndex,
     type PathTarget,
 } from "./pathTarget";
@@ -538,35 +539,28 @@ export function usePathPenActions(): void {
                 group === null && one
                     ? await findPathTarget(db, resolver, one.id, beat)
                     : null;
-            // Rejoin onto the move's only group path (Detached copies aside), with only marchers
-            // off it selected; or, for a shown copy, onto the group path it came from
-            let rejoinTarget: RejoinTarget | null = null;
+            // Where Rejoin goes (AP-R10): read the move's group paths unless a group path that
+            // isn't a copy is shown (its outside marchers are the only ones it takes)
             const move =
                 group === null || group.lane?.detachedFrom != null
                     ? await groupMoveAt(db, selectedIds, beat)
                     : null;
-            if (move?.kind === "move") {
-                const groups = await readGroupPaths(db, move.timelineId);
-                const source = group?.lane?.detachedFrom ?? null;
-                const onto =
-                    source !== null
-                        ? groups.find((g) => g.routeId === source)
-                        : (() => {
-                              const main = groups.filter(
-                                  (g) => g.detachedFrom === null,
-                              );
-                              return main.length === 1 ? main[0] : undefined;
-                          })();
-                const off = selectedIds.filter(
-                    (id) => !(onto?.marcherIds.includes(id) ?? true),
-                );
-                if (onto && off.length > 0)
-                    rejoinTarget = {
-                        timelineId: move.timelineId,
-                        routeId: onto.routeId,
-                        marcherIds: off,
-                    };
-            }
+            const rejoinTarget: RejoinTarget | null =
+                move === null
+                    ? rejoinTargetOf(
+                          group,
+                          null,
+                          group!.timelineId,
+                          selectedIds,
+                      )
+                    : move.kind === "move"
+                      ? rejoinTargetOf(
+                            group,
+                            await readGroupPaths(db, move.timelineId),
+                            move.timelineId,
+                            selectedIds,
+                        )
+                      : null;
             if (ask !== asked.current) return;
             const now = usePathPenStore.getState();
             if (now.session?.phase === "drawing") return;
@@ -583,24 +577,12 @@ export function usePathPenActions(): void {
                         ? group.group!.members[0]!.drill
                         : `${members.size}`,
                 );
-                const outside = group.group!.outside.map((m) => m.marcherId);
                 setGroupCommands(
                     // A one-lane path has nobody to Detach from
                     group.lane
                         ? []
                         : selectedIds.filter((id) => members.has(id)),
-                    // A shown copy's Rejoin goes onto the group path it came from, for its
-                    // marcher and any other selected marcher off that path, never onto the copy
-                    // (review of #900, S1)
-                    group.lane?.detachedFrom != null
-                        ? rejoinTarget
-                        : outside.length > 0
-                          ? {
-                                timelineId: group.timelineId,
-                                routeId: group.routeId!,
-                                marcherIds: outside,
-                            }
-                          : rejoinTarget,
+                    rejoinTarget,
                 );
                 return;
             }

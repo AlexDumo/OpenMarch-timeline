@@ -625,10 +625,20 @@ export async function detachInTransaction({
                 .update(schema.timeline_lanes)
                 .set({ route_id: copy.id })
                 .where(eq(schema.timeline_lanes.id, lane.id));
+            // The lane's offset and the group path's `from` at Detach: Rejoin restores this offset
+            // while `from` is the same, so a round trip moves nobody even with a Re-fit pending
+            const from = (
+                JSON.parse(geometries.get(lane.route_id)!) as RouteGeometry
+            ).from;
+            const link: DetachedLinkData = {
+                offset: [lane.offset_x!, lane.offset_y!],
+                from: [from[0], from[1]],
+            };
             await tx.insert(schema.timeline_route_sources).values({
                 route_id: copy.id,
                 kind: "detached_from",
                 source_route_id: lane.route_id,
+                data: JSON.stringify(link),
             });
             routes[marcherId] = copy.id;
         }
@@ -653,6 +663,46 @@ export async function detachFromGroupPath(args: {
 // AP-R10: Rejoin
 // ---------------------------------------------------------------------------
 
+/** What a `detached_from` link records at Detach (K6 `data`): the lane's offset and R's `from` */
+interface DetachedLinkData {
+    offset: XY;
+    from: XY;
+}
+
+/** A Detached copy's K6 link: the group path it came from, and what Detach recorded */
+interface DetachedLink {
+    source: number | null;
+    data: DetachedLinkData | null;
+}
+
+/** The `detached_from` link of route `routeId`, or null when it isn't a Detached copy */
+async function detachedLinkOf(
+    tx: DbTransaction,
+    routeId: number,
+): Promise<DetachedLink | null> {
+    const S = schema.timeline_route_sources;
+    const row = await tx
+        .select({ source: S.source_route_id, data: S.data })
+        .from(S)
+        .where(and(eq(S.route_id, routeId), eq(S.kind, "detached_from")))
+        .orderBy(asc(S.id))
+        .get();
+    if (!row) return null;
+    const parsed = row.data === null ? null : (JSON.parse(row.data) as unknown);
+    const pair = (v: unknown): v is XY =>
+        Array.isArray(v) &&
+        v.length === 2 &&
+        v.every((n) => typeof n === "number" && Number.isFinite(n));
+    const data =
+        parsed !== null &&
+        typeof parsed === "object" &&
+        pair((parsed as DetachedLinkData).offset) &&
+        pair((parsed as DetachedLinkData).from)
+            ? (parsed as DetachedLinkData)
+            : null;
+    return { source: row.source, data };
+}
+
 /** A marcher back from Detach (AP-R10): its lane, and the offset Rejoin writes on it */
 interface BackFromDetach {
     marcherId: number;
@@ -666,11 +716,13 @@ interface BackFromDetach {
  * Whether `marcherId` comes back from Detach onto group path `routeId` (geometry `R`): its row in
  * the move (any row, not only the first, review of #900 S3) whose lane walks a copy K6 names
  * `detached_from` it; null when none, so it is new to the path. Refused when that spot is shared
- * (D-22). The offset is written again from where the marcher starts, as at draw time (`A − R.from`,
- * the same float subtraction): a copy drawn again (offset 0), or a group path re-fitted or drawn
- * again since (another `from`), then still puts it in its place in the group, and with nothing
- * edited it is the offset it had, bit for bit. A spot whose marcher doesn't start on it keeps its
- * stored offset (review of #900, B1). `resolver` is built once, on the first marcher back.
+ * (D-22). **The offset:** while R's `from` is bit for bit the one the link recorded at Detach, the
+ * offset recorded then, so a round trip moves nobody (whatever the copy went through, and even
+ * with a Re-fit pending); once `from` changed (Re-fit, a first-point edit, drawing it again), the
+ * offset is written from where the marcher starts, as at draw time (`A − R.from`), so it lands in
+ * its place in the group (review of #900, B1). A link with no data (written by no build so far)
+ * takes that second branch; a spot whose marcher doesn't start on it then keeps its stored offset.
+ * `resolver` is built once, on the first marcher back.
  */
 async function backFromDetach(
     tx: DbTransaction,
@@ -681,12 +733,15 @@ async function backFromDetach(
     resolver: { current: Resolver | null },
 ): Promise<BackFromDetach | null> {
     let found: Awaited<ReturnType<typeof groupLanedRows>>[number] | undefined;
-    for (const r of await groupLanedRows(tx, timelineId, marcherId))
-        if ((await detachedSourceOf(tx, r.lane.route_id)) === routeId) {
+    let link: DetachedLink | null = null;
+    for (const r of await groupLanedRows(tx, timelineId, marcherId)) {
+        link = await detachedLinkOf(tx, r.lane.route_id);
+        if (link?.source === routeId) {
             found = r;
             break;
         }
-    if (!found) return null;
+    }
+    if (!found || !link) return null;
     // A personal edit of the spot: refused while someone else holds it (D-22)
     await refuseSharedSpot(
         tx,
@@ -708,11 +763,21 @@ async function backFromDetach(
                 sp.kind === "founding",
         );
     const A = res.explain(marcherId, start).origin;
+    // R's `from` as it was at Detach: the offset recorded then, so a round trip moves nobody even
+    // when the marcher's start had moved before Detach with a Re-fit pending (review of #900)
+    const sameFrom =
+        link.data !== null &&
+        Object.is(link.data.from[0], R.from[0]) &&
+        Object.is(link.data.from[1], R.from[1]);
     return {
         marcherId,
         lane: found.lane,
         transitionId: found.transition.id,
-        offset: founds ? offsetColumns(sub([A[0], A[1]], R.from)) : null,
+        offset: sameFrom
+            ? offsetColumns(link.data!.offset)
+            : founds
+              ? offsetColumns(sub([A[0], A[1]], R.from))
+              : null,
     };
 }
 
@@ -720,9 +785,11 @@ async function backFromDetach(
  * AP-R10: the marchers `marcherIds` in move `timelineId` follow the group path `routeId` there.
  *
  * - **Back from Detach** (K6 says the marcher's lane walks a copy `detached_from` this path): the
- *   lane goes back to the group path with its offset unchanged and its Adjust cleared, always
- *   (owner Q4); undo brings the Adjust back. An unadjusted spot whose group path wasn't edited
- *   since is bit-identical to before Detach. The copy goes with its link (AP-H3).
+ *   lane goes back to the group path with its Adjust cleared, always (owner Q4); undo brings the
+ *   Adjust back. Its offset is the one it had at Detach while the group path's `from` is still the
+ *   one recorded then, else `A_j − R.from` (`backFromDetach`). An unadjusted spot is then
+ *   bit-identical to before Detach unless the group path's `from` changed. The copy goes with its
+ *   link (AP-H3).
  * - **New to the path:** each with the offset of where it stands now (`A_j − R.from`), so a member
  *   that drew its own path gets a lane again and a marcher on a straight, arc or shape move joins
  *   the group. Nobody leaves their move.

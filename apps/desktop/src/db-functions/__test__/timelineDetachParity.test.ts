@@ -6,7 +6,8 @@
  * - Detach one member, Detach all 16 at once, and Rejoin every unadjusted member after Detach:
  *   every marcher's position at every sixteenth of a beat of the whole show is the same float64
  *   pair (`Object.is` on both coordinates) as before;
- * - Rejoin after the copy was drawn again: bit for bit as before Detach (review of #900, B1);
+ * - Rejoin after the copy was drawn again: bit for bit as before Detach, the offset recorded at
+ *   Detach restored while the group path's `from` is unchanged (review of #900);
  * - Rejoin after the group path was re-fitted: in the shared part the marcher keeps its place
  *   against every other member (B1);
  * - every edit is one undo step that puts every position back as before it, and a redo that puts
@@ -285,7 +286,7 @@ describeDbTests("Detach parity (AP-R9)", (it) => {
             true,
         );
         await step(
-            "then Rejoin (B1: its offset is written again from where it starts)",
+            "then Rejoin (R's `from` unchanged: the offset recorded at Detach)",
             () =>
                 rejoinGroupPath({
                     db,
@@ -319,7 +320,7 @@ describeDbTests("Detach parity (AP-R9)", (it) => {
             true,
         );
         await step(
-            "then Rejoin",
+            "then Rejoin (R's `from` moved: offset from where it starts)",
             () =>
                 rejoinGroupPath({
                     db,
