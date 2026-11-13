@@ -5,7 +5,13 @@ import { CaretDownIcon, CaretUpIcon } from "@phosphor-icons/react";
 import { Input, Button, Switch } from "@openmarch/ui";
 import { T, useTranslate } from "@tolgee/react";
 import FormField from "../../ui/FormField";
-import { inputClassname, blurOnEnterFunc as blurOnEnter } from "./utils";
+import { inputClassname } from "./utils";
+import { useCommitInput, type CommitInputProps } from "./useCommitInput";
+import {
+    filterSignedNumber,
+    formatNumber,
+    parseNumber,
+} from "./fieldEditorValues";
 
 interface CheckpointEditorProps {
     checkpoint: Checkpoint;
@@ -27,20 +33,53 @@ export function CheckpointEditor({
     const { t } = useTranslate();
     const [open, setOpen] = useState(false);
 
-    // Local state for validated fields - initialized from props, reset via key={checkpoint.id} in parent
-    const [stepsValue, setStepsValue] = useState(
-        String(checkpoint.stepsFromCenterFront),
-    );
-    const [nameValue, setNameValue] = useState(checkpoint.name);
-    const [terseNameValue, setTerseNameValue] = useState(checkpoint.terseName);
+    /** Saves one changed property of the checkpoint. */
+    const save = <K extends keyof Checkpoint>(key: K, value: Checkpoint[K]) =>
+        updateCheckpoint({
+            axis,
+            oldCheckpoint: checkpoint,
+            newCheckpoint: { ...checkpoint, [key]: value },
+        });
 
-    // Validation helpers
-    const isStepsValid =
-        stepsValue.trim() !== "" && !isNaN(parseFloat(stepsValue));
-    const isNameValid = nameValue.trim() !== "";
-    const isTerseNameValid = terseNameValue.trim() !== "";
+    // Each input follows the stored checkpoint (undo, import, another window) and saves only a
+    // changed, valid value
+    const steps = useCommitInput({
+        current: checkpoint.stepsFromCenterFront,
+        format: formatNumber,
+        parse: (text) => {
+            const value = parseNumber(text);
+            return value === undefined ? null : { value };
+        },
+        commit: (value) => save("stepsFromCenterFront", value),
+        filter: filterSignedNumber,
+    });
+    const nonEmpty = (text: string) =>
+        text.trim() === "" ? null : { value: text.trim() };
+    const name = useCommitInput({
+        current: checkpoint.name,
+        format: (text) => text,
+        parse: nonEmpty,
+        commit: (value) => save("name", value),
+    });
+    const terseName = useCommitInput({
+        current: checkpoint.terseName,
+        format: (text) => text,
+        parse: nonEmpty,
+        commit: (value) => save("terseName", value),
+    });
+    const fieldLabel = useCommitInput({
+        current: checkpoint.fieldLabel,
+        format: (text) => text ?? "",
+        parse: (text) => ({ value: text.length === 0 ? undefined : text }),
+        commit: (value) => save("fieldLabel", value),
+    });
 
     const errorInputClassname = `${inputClassname} border-red`;
+    /** An input's props from `useCommitInput`, with the red border for an invalid value. */
+    const inputProps = ({ valid, ...props }: CommitInputProps) => ({
+        ...props,
+        className: valid ? inputClassname : errorInputClassname,
+    });
 
     return (
         <RadixCollapsible.Root
@@ -84,74 +123,20 @@ export function CheckpointEditor({
                             type="text"
                             inputMode="numeric"
                             pattern="-?[0-9]*\.?[0-9]*"
-                            className={
-                                isStepsValid
-                                    ? inputClassname
-                                    : errorInputClassname
-                            }
-                            value={stepsValue}
-                            onBlur={(e) => {
-                                e.preventDefault();
-                                const trimmed = stepsValue.trim();
-                                const parsedFloat = parseFloat(trimmed);
-
-                                if (trimmed !== "" && !isNaN(parsedFloat)) {
-                                    updateCheckpoint({
-                                        axis,
-                                        oldCheckpoint: checkpoint,
-                                        newCheckpoint: {
-                                            ...checkpoint,
-                                            stepsFromCenterFront: parsedFloat,
-                                        },
-                                    });
-                                }
-                            }}
-                            onChange={(e) => {
-                                // Allow numbers, decimal point, and negative sign
-                                const filtered = e.target.value.replace(
-                                    /[^\d.-]/g,
-                                    "",
-                                );
-                                // Ensure only one decimal point and one negative sign at start
-                                const normalized = filtered
-                                    .replace(/\.+/g, ".")
-                                    .replace(/--+/g, "-")
-                                    .replace(/(.+)-/g, "$1");
-                                setStepsValue(normalized);
-                            }}
-                            onKeyDown={blurOnEnter}
+                            {...inputProps(steps)}
                             required
                             maxLength={10}
                         />
                     </FormField>
                     <FormField
                         label={t("fieldProperties.checkpoint.name")}
-                        tooltip={t("fieldProperties.checkpoint.nameTooltip")}
+                        tooltip={t(
+                            "fieldProperties.checkpoint.nameUsageTooltip",
+                        )}
                     >
                         <Input
                             type="text"
-                            className={
-                                isNameValid
-                                    ? inputClassname
-                                    : errorInputClassname
-                            }
-                            value={nameValue}
-                            onBlur={(e) => {
-                                e.preventDefault();
-                                const trimmed = nameValue.trim();
-                                if (trimmed !== "") {
-                                    updateCheckpoint({
-                                        axis,
-                                        oldCheckpoint: checkpoint,
-                                        newCheckpoint: {
-                                            ...checkpoint,
-                                            name: trimmed,
-                                        },
-                                    });
-                                }
-                            }}
-                            onChange={(e) => setNameValue(e.target.value)}
-                            onKeyDown={blurOnEnter}
+                            {...inputProps(name)}
                             required
                             maxLength={40}
                         />
@@ -159,36 +144,12 @@ export function CheckpointEditor({
                     <FormField
                         label={t("fieldProperties.checkpoint.shortName")}
                         tooltip={t(
-                            "fieldProperties.checkpoint.shortNameTooltip",
+                            "fieldProperties.checkpoint.shortNameUsageTooltip",
                         )}
                     >
                         <Input
                             type="text"
-                            className={
-                                isTerseNameValid
-                                    ? inputClassname
-                                    : errorInputClassname
-                            }
-                            value={terseNameValue}
-                            onBlur={(e) => {
-                                e.preventDefault();
-                                const trimmed = terseNameValue.trim();
-                                if (
-                                    trimmed !== "" &&
-                                    trimmed !== checkpoint.terseName
-                                ) {
-                                    updateCheckpoint({
-                                        axis,
-                                        oldCheckpoint: checkpoint,
-                                        newCheckpoint: {
-                                            ...checkpoint,
-                                            terseName: trimmed,
-                                        },
-                                    });
-                                }
-                            }}
-                            onChange={(e) => setTerseNameValue(e.target.value)}
-                            onKeyDown={blurOnEnter}
+                            {...inputProps(terseName)}
                             required
                         />
                     </FormField>
@@ -199,30 +160,7 @@ export function CheckpointEditor({
                                 "fieldProperties.checkpoint.fieldLabelTooltip",
                             )}
                         >
-                            <Input
-                                type="text" // Changed from "number"
-                                onBlur={(e) => {
-                                    e.preventDefault();
-                                    if (
-                                        e.target.value !== checkpoint.fieldLabel
-                                    ) {
-                                        updateCheckpoint({
-                                            axis,
-                                            oldCheckpoint: checkpoint,
-                                            newCheckpoint: {
-                                                ...checkpoint,
-                                                fieldLabel:
-                                                    e.target.value.length === 0
-                                                        ? undefined
-                                                        : e.target.value,
-                                            },
-                                        });
-                                    }
-                                }}
-                                className={inputClassname}
-                                onKeyDown={blurOnEnter}
-                                defaultValue={checkpoint.fieldLabel ?? ""}
-                            />
+                            <Input type="text" {...inputProps(fieldLabel)} />
                         </FormField>
                     )}
                     <FormField

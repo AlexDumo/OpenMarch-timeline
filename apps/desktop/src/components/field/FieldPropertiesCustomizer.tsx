@@ -1,16 +1,10 @@
-import {
-    FieldProperties,
-    Checkpoint,
-    MeasurementSystem,
-    FieldTheme,
-} from "@openmarch/core";
+import { FieldProperties, Checkpoint } from "@openmarch/core";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { BooksIcon } from "@phosphor-icons/react";
 import * as Form from "@radix-ui/react-form";
 import { Button, Tabs, TabsList, TabItem } from "@openmarch/ui";
 import { toast } from "sonner";
-import { RgbaColor } from "@uiw/react-color";
 import { T, useTranslate } from "@tolgee/react";
 import {
     fieldPropertiesQueryOptions,
@@ -21,7 +15,6 @@ import { GeneralTab } from "./customizer/GeneralTab";
 import { CheckpointsTab } from "./customizer/CheckpointsTab";
 import { ImageTab } from "./customizer/ImageTab";
 import { ThemeTab } from "./customizer/ThemeTab";
-import { blurOnEnterFunc } from "./customizer/utils";
 import { siteUrl } from "@/global/siteUrl";
 
 const defaultFieldProperties =
@@ -31,16 +24,10 @@ export default function FieldPropertiesCustomizer() {
     const { t } = useTranslate();
     const queryClient = useQueryClient();
     const { data: fieldProperties } = useQuery(fieldPropertiesQueryOptions());
-    const { mutate: updateFieldProperties } = useMutation(
-        updateFieldPropertiesMutationOptions(queryClient),
-    );
+    const { mutate: updateFieldProperties, mutateAsync: saveFieldProperties } =
+        useMutation(updateFieldPropertiesMutationOptions(queryClient));
     const [currentFieldProperties, setCurrentFieldProperties] =
         useState<FieldProperties>(fieldProperties ?? defaultFieldProperties);
-    const [measurementSystem, setMeasurementSystem] =
-        useState<MeasurementSystem>(currentFieldProperties.measurementSystem);
-    const stepSizeInputRef = useRef<HTMLInputElement>(null);
-
-    const blurOnEnter = useCallback(blurOnEnterFunc, []);
 
     const updateCheckpoint = useCallback(
         ({
@@ -241,38 +228,6 @@ export default function FieldPropertiesCustomizer() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fieldProperties]);
 
-    useEffect(() => {
-        if (currentFieldProperties.measurementSystem !== measurementSystem) {
-            setMeasurementSystem(currentFieldProperties.measurementSystem);
-            if (stepSizeInputRef.current) {
-                stepSizeInputRef.current.value =
-                    currentFieldProperties.stepSizeInUnits.toString();
-            }
-        }
-    }, [
-        currentFieldProperties.measurementSystem,
-        currentFieldProperties.stepSizeInUnits,
-        measurementSystem,
-    ]);
-
-    // Helper function to validate RGBA colors
-    const validateIsRgbaColor = (
-        themeProperty: keyof FieldTheme,
-        fieldProperties: FieldProperties,
-    ) => {
-        const color = fieldProperties.theme[themeProperty] as RgbaColor;
-        const isRgba =
-            color.r !== undefined &&
-            color.g !== undefined &&
-            color.b !== undefined &&
-            color.a !== undefined;
-        if (!isRgba) {
-            toast.error(t("fieldProperties.errors.invalidColor"));
-            return false;
-        }
-        return true;
-    };
-
     return (
         <Form.Root
             onSubmit={(e) => e.preventDefault()}
@@ -316,11 +271,8 @@ export default function FieldPropertiesCustomizer() {
 
                 <GeneralTab
                     currentFieldProperties={currentFieldProperties}
-                    updateFieldProperties={updateFieldProperties}
-                    fieldProperties={fieldProperties}
-                    measurementSystem={measurementSystem}
-                    stepSizeInputRef={stepSizeInputRef}
-                    blurOnEnter={blurOnEnter}
+                    // Awaited, so an input whose save fails goes back and says so
+                    updateFieldProperties={saveFieldProperties}
                 />
 
                 <CheckpointsTab
@@ -329,7 +281,6 @@ export default function FieldPropertiesCustomizer() {
                     updateCheckpoint={updateCheckpoint}
                     deleteCheckpoint={deleteCheckpoint}
                     addCheckpoint={addCheckpoint}
-                    sorter={sorter}
                 />
 
                 <ImageTab
@@ -337,10 +288,7 @@ export default function FieldPropertiesCustomizer() {
                     updateFieldProperties={updateFieldProperties}
                 />
 
-                <ThemeTab
-                    currentFieldProperties={currentFieldProperties}
-                    validateIsRgbaColor={validateIsRgbaColor}
-                />
+                <ThemeTab currentFieldProperties={currentFieldProperties} />
             </Tabs>
         </Form.Root>
     );

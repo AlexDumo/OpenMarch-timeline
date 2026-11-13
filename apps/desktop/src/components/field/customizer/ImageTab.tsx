@@ -1,5 +1,15 @@
 import { FieldProperties } from "@openmarch/core";
-import { updateFieldPropertiesImage } from "@/global/classes/FieldProperties";
+import {
+    deleteFieldPropertiesImage,
+    updateFieldPropertiesImage,
+} from "@/global/classes/FieldProperties";
+import { fieldPropertiesKeys } from "@/hooks/queries/useFieldProperties";
+import { historyKeys } from "@/hooks/queries/useHistory";
+import {
+    fieldImageQueryOptions,
+    useFieldImage,
+} from "@/view3d/window/useFieldImage";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { TabContent, Button, Switch, Slider } from "@openmarch/ui";
 import {
     Select,
@@ -13,6 +23,7 @@ import { fieldLengthText } from "./fieldSizeText";
 import FormField, { StaticFormField } from "../../ui/FormField";
 import { inputClassname } from "./utils";
 import clsx from "clsx";
+import { toast } from "sonner";
 import { useState, useEffect, useMemo, useCallback } from "react";
 
 interface ImageTabProps {
@@ -27,6 +38,10 @@ export function ImageTab({
     const tolgee = useTolgee(["language"]);
     const t = tolgee.t;
     const language = tolgee.getLanguage();
+    const queryClient = useQueryClient();
+    const { data: imageBytes } = useQuery(fieldImageQueryOptions());
+    const hasImage = imageBytes != null && imageBytes.byteLength > 0;
+    const { image: fieldImage } = useFieldImage();
     const [opacityValue, setOpacityValue] = useState(
         currentFieldProperties.backgroundImageOpacity,
     );
@@ -50,6 +65,19 @@ export function ImageTab({
         },
         [currentFieldProperties, updateFieldProperties],
     );
+
+    /**
+     * After the image is written or removed: the field, the 3D View and this tab read it again
+     * (the image query sits under the field properties' key), and the undo button follows.
+     */
+    const refreshImage = useCallback(async () => {
+        await Promise.all([
+            queryClient.invalidateQueries({
+                queryKey: fieldPropertiesKeys.all,
+            }),
+            queryClient.invalidateQueries({ queryKey: historyKeys.all() }),
+        ]);
+    }, [queryClient]);
 
     const opacityPercentage = useMemo(
         () => Math.round(opacityValue * 100),
@@ -96,7 +124,7 @@ export function ImageTab({
                                 }),
                             );
                         }}
-                        defaultValue={currentFieldProperties.imageFillOrFit}
+                        value={currentFieldProperties.imageFillOrFit}
                     >
                         <SelectTriggerButton
                             className={inputClassname}
@@ -170,11 +198,15 @@ export function ImageTab({
                         onChange={async (
                             e: React.ChangeEvent<HTMLInputElement>,
                         ) => {
-                            const file = e.target.files?.[0];
+                            const input = e.currentTarget;
+                            const file = input.files?.[0];
                             if (!file) return;
                             const arrayBuffer = await file.arrayBuffer();
                             const raw = new Uint8Array(arrayBuffer);
+                            // Lets the same file be picked again
+                            input.value = "";
                             await updateFieldPropertiesImage(raw);
+                            await refreshImage();
                             updateFieldProperties(
                                 new FieldProperties({
                                     ...currentFieldProperties,
@@ -184,9 +216,37 @@ export function ImageTab({
                             );
                         }}
                     />
-                    <div className="text-sub text-text-subtitle h-fit min-h-0 w-fit leading-none whitespace-nowrap">
-                        <T keyName="fieldProperties.messages.refreshAfterImporting" />
-                    </div>
+                    {hasImage && (
+                        <Button
+                            tooltipText={t(
+                                "fieldProperties.tooltips.removeImage",
+                            )}
+                            tooltipSide="right"
+                            variant="secondary"
+                            type="button"
+                            size="compact"
+                            onClick={async () => {
+                                try {
+                                    // One undo step: the image is part of the field's history
+                                    await deleteFieldPropertiesImage();
+                                } catch (error) {
+                                    console.error(
+                                        "Couldn't remove the field image",
+                                        error,
+                                    );
+                                    toast.error(
+                                        t(
+                                            "fieldProperties.errors.removeImageFailed",
+                                        ),
+                                    );
+                                    return;
+                                }
+                                await refreshImage();
+                            }}
+                        >
+                            <T keyName="fieldProperties.buttons.removeImage" />
+                        </Button>
+                    )}
                 </div>
             </div>
 
@@ -277,14 +337,13 @@ export function ImageTab({
                     <div className="flex w-full gap-8">
                         <div className="bg-fg-2 border-stroke rounded-6 w-full border px-8 py-2 text-center font-mono">
                             {(() => {
-                                if (!FieldProperties.imageDimensions) {
+                                if (!fieldImage) {
                                     return t(
                                         "fieldProperties.labels.noBackgroundImage",
                                     );
                                 }
-                                const w = FieldProperties.imageDimensions.width;
-                                const h =
-                                    FieldProperties.imageDimensions.height;
+                                const w = fieldImage.width;
+                                const h = fieldImage.height;
                                 const gcd = (a: number, b: number): number =>
                                     b ? gcd(b, a % b) : a;
                                 const divisor = gcd(w, h);
