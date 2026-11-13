@@ -255,6 +255,8 @@ export interface MoveRoute {
     /** The spot's Adjust, or null (spec J.2) */
     adjust: AdjustProfile | null;
     geometry: RouteGeometry;
+    /** The route's pins, in route order (pathways step 5, spec Appendix M) */
+    pins: RoutePin[];
 }
 
 /**
@@ -283,6 +285,7 @@ export async function readRoutes(
             offsetX: L.offset_x,
             offsetY: L.offset_y,
             adjust: L.adjust,
+            timing: R.timing,
         })
         .from(L)
         .innerJoin(R, eq(R.id, L.route_id))
@@ -301,8 +304,12 @@ export async function readRoutes(
         )
         .orderBy(asc(R.id), asc(A.marcher_id), asc(A.start_beat))
         .all();
-    return rows.map(({ offsetX, offsetY, geometry, adjust, ...r }) => ({
+    return rows.map(({ offsetX, offsetY, geometry, adjust, timing, ...r }) => ({
         ...r,
+        pins:
+            timing === null
+                ? []
+                : ((JSON.parse(timing) as RouteTiming).pins ?? []),
         offset:
             offsetX === null || offsetY === null ? null : [offsetX, offsetY],
         adjust: adjust === null ? null : (JSON.parse(adjust) as AdjustProfile),

@@ -37,6 +37,8 @@ import {
 import type { XY } from "@/shapes/types";
 import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
 import { refitNeeded } from "./pathTarget";
+import { countAtPlace, pinSpeedFactor, takesPins } from "./pathPins";
+import { CornersOnCountsButton, PinCountField } from "./PathPinControls";
 import {
     EVEN_FIRST,
     EVEN_STEP,
@@ -101,9 +103,12 @@ export function bigSteps(
     const counts = target.end - target.start;
     if (target.trail) return trailBigSteps(session, fieldProperties);
     if (target.group) return groupBigSteps(session, fieldProperties);
+    // With pins (step 5) the fastest stretch between them sets the steps
+    const shape = shapeOf(session);
+    const L = curveOf(shape).L;
     const size = StepSize.fromDistance({
         marcher_id: target.marcherId,
-        distance: curveOf(shapeOf(session)).L,
+        distance: L * pinSpeedFactor(target, shape, 0, L),
         counts,
         fieldProperties,
     });
@@ -234,11 +239,31 @@ function groupBigSteps(
     const tenth = (v: number) => Math.round(v * 10) / 10;
     const threshold = fieldProperties.stepSizeWarningThresholdInches;
     const big: (BigSteps["legs"][number] & { inches: number })[] = [];
+    const m = schedule.W.V.length - 2;
+    const D1 = m >= 1 ? schedule.W.D[1]! : 0;
+    const Dm = m >= 1 ? schedule.W.D[m]! : L;
+    // With pins (step 5) each stretch is walked at its own speed: the fastest one it crosses
+    const placesOf = (leg: {
+        where: string;
+        x0?: number;
+        x1?: number;
+    }): [number, number] =>
+        leg.x0 !== undefined && leg.x1 !== undefined
+            ? [leg.x0, leg.x1]
+            : leg.where === "onto"
+              ? [0, D1]
+              : leg.where === "off"
+                ? [Dm, L]
+                : leg.where === "along"
+                  ? [D1, Dm]
+                  : [0, L];
     for (const leg of groupLegDistances(schedule, walks)) {
+        const [xa, xb] = placesOf(leg);
+        const factor = pinSpeedFactor(target, shapeOf(session), xa, xb);
         const size = StepSize.fromDistance({
             marcher_id: leg.marcherId ?? target.marcherId,
             distance: Number.isFinite(leg.distance)
-                ? leg.distance
+                ? leg.distance * factor
                 : Number.MAX_SAFE_INTEGER,
             counts,
             fieldProperties,
@@ -256,8 +281,10 @@ function groupBigSteps(
                 ? {}
                 : {
                       spot: (slots.get(leg.marcherId ?? -1) ?? 0) + 1,
-                      from: tenth((leg.x0 / L) * counts),
-                      to: tenth((leg.x1 / L) * counts),
+                      from: tenth(
+                          countAtPlace(target, shapeOf(session), leg.x0),
+                      ),
+                      to: tenth(countAtPlace(target, shapeOf(session), leg.x1)),
                   }),
         });
     }
@@ -523,6 +550,8 @@ function PathEditorBar({
         (!!session.target.trail ||
             (!!session.target.group && session.target.routeId === null));
     const trail = session.target.trail ?? null;
+    // Pins (step 5): a stored path, not a trail
+    const takesPinsNow = !drawing && takesPins(session.target);
     return (
         <div
             ref={ref}
@@ -713,6 +742,12 @@ function PathEditorBar({
                                     <WaveSineIcon size={14} />
                                 </IconButton>
                             </span>
+                            {takesPinsNow && (
+                                <>
+                                    <Divider />
+                                    <PinCountField session={session} />
+                                </>
+                            )}
                             {stored && <Divider />}
                         </>
                     )}
@@ -832,6 +867,12 @@ function PathEditorBar({
                                     </IconButton>
                                 )}
                             </span>
+                            <Divider />
+                        </>
+                    )}
+                    {takesPinsNow && (
+                        <>
+                            <CornersOnCountsButton />
                             <Divider />
                         </>
                     )}

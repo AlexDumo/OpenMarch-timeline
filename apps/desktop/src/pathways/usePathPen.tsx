@@ -50,6 +50,11 @@ import {
     resetSpot,
     memberOf,
     refitOpenPath,
+    pinOf,
+    pointIdOf,
+    putCornersOnCountsOpen,
+    requestPinFocus,
+    unpinSelectedPoint,
     selectLane,
     setGroupCommands,
     setPathObjects,
@@ -382,6 +387,42 @@ export function usePathPenActions(): void {
     useActionHandler("refitPath", () => void refitOpenPath(), {
         enabled: canRefit,
     });
+    // Pins (pathways step 5): on the open path, not a trail; the selected point's for the first two
+    const takesPinsNow = usePathPenStore(
+        (s) =>
+            s.session?.phase === "open" &&
+            s.session.target.routeId !== null &&
+            !s.session.target.trail,
+    );
+    const pickedPoint = usePathPenStore((s) =>
+        s.session?.phase === "open" ? pointIdOf(s.session) : null,
+    );
+    const pickedPinned = usePathPenStore(
+        (s) => pickedPoint !== null && !!pinOf(s.session, pickedPoint),
+    );
+    useActionHandler(
+        "pathPinToCount",
+        () => {
+            const s = usePathPenStore.getState().session;
+            if (s?.selected) requestPinFocus(s.selected);
+        },
+        {
+            enabled: takesPinsNow && pickedPoint !== null,
+            disabledReason: () =>
+                tolgee.t(
+                    "pathways.editor.pinNeedsPoint",
+                    "Open a path and select one of its points to pin it",
+                ),
+        },
+    );
+    useActionHandler("pathRemovePin", () => void unpinSelectedPoint(), {
+        enabled: takesPinsNow && pickedPinned,
+    });
+    useActionHandler(
+        "putCornersOnCounts",
+        () => void putCornersOnCountsOpen(),
+        { enabled: takesPinsNow },
+    );
     // Adjust's named actions, on the lane or key picked on the open group path (decision C)
     const lane = usePathPenStore((s) =>
         s.session?.phase === "open" ? (s.session.lane ?? null) : null,

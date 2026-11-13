@@ -1,3 +1,4 @@
+import type { TimelinePinTick } from "./TimelinePinTicks";
 import type {
     ClipResizeBound,
     TimelineClipResizeCommands,
@@ -265,6 +266,11 @@ export interface TimelineProps {
     ) => void;
     /** #303: where the selected marchers are Set, spec beats; none without a selection */
     readonly keyframes?: readonly TimelineKeyframe[];
+    /**
+     * Pathways step 5: the open path's pinned counts, spec beats, as ticks along the page row;
+     * none without an open path with pins
+     */
+    readonly pinTicks?: readonly TimelinePinTick[];
     /** #306: a keyframe diamond's right-click Unset actions, by spec beat; without it, no menu */
     readonly keyframeMenu?: TimelineKeyframeMenu;
     /** #472: the selected marchers' Held holds, spec beats; none without a selection */
@@ -973,6 +979,16 @@ export function Timeline(props: TimelineProps) {
             })),
         [axis, keyframes],
     );
+    // Pathways step 5: the open path's pins on the view axis
+    const { pinTicks } = props;
+    const viewPinTicks = useMemo(
+        () =>
+            pinTicks?.map((tick) => ({
+                ...tick,
+                beat: axis.toView(tick.beat),
+            })),
+        [axis, pinTicks],
+    );
     // #472: the selection's Held bars on the view axis
     const { heldBars } = props;
     const viewHeldBars = useMemo(
@@ -1041,6 +1057,7 @@ export function Timeline(props: TimelineProps) {
         transportClock: props.transportClock,
         transportAccessories: props.transportAccessories,
         keyframes: viewKeyframes,
+        pinTicks: viewPinTicks,
         keyframeMenu: viewKeyframeMenu,
         heldBars: viewHeldBars,
         keepChains: props.keepChains,

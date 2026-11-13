@@ -807,6 +807,33 @@ const STATIC_ACTIONS = {
         defaultBindings: [],
         ignoreRepeat: true,
     },
+    // Pathways step 5: pins. Pin to count… puts the cursor in the selected point's count field on
+    // the path's bar; Remove pin and Put corners on counts write. No keys of their own: the
+    // path's bar, the point's menu and the palette
+    pathPinToCount: {
+        labelKey: "actions.path.pinToCount",
+        keywordsKey: "actions.path.pinKeywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    pathRemovePin: {
+        labelKey: "actions.path.removePin",
+        keywordsKey: "actions.path.pinKeywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    putCornersOnCounts: {
+        labelKey: "actions.path.cornersOnCounts",
+        keywordsKey: "actions.path.pinKeywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
     adjustRemoveKey: {
         labelKey: "actions.path.adjustRemoveKey",
         keywordsKey: "actions.path.keywords",

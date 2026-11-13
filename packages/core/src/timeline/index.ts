@@ -48,6 +48,7 @@ export {
     routePath,
     routePoint,
     routePiecePoint,
+    routePointAtDistance,
     routePolyline,
     arcLength,
     arcPoint,

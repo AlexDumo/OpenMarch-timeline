@@ -196,7 +196,11 @@
             "setOrder": "Set order",
             "reverseOrder": "Reverse order",
             "clearOrder": "Clear order",
-            "orderKeywords": "order sequence leader tail first last line follow reverse numbers"
+            "orderKeywords": "order sequence leader tail first last line follow reverse numbers",
+            "pinToCount": "Pin to count…",
+            "removePin": "Remove pin",
+            "cornersOnCounts": "Put corners on counts",
+            "pinKeywords": "pin count midset quarter set corner timing keyframe"
         }
     },
     "analyticsOptIn": {
@@ -2765,6 +2769,9 @@
                 "pastPin": "The move would end before the pin on count {count}",
                 "noRoomToScale": "Too few counts for this path's pins: each needs a count of its own"
             }
+        },
+        "pinTicks": {
+            "title": "Pin on count {pin} of the move · Page {page}, count {count}"
         }
     },
     "titlebar": {
@@ -3843,7 +3850,12 @@
             "preview": "Preview",
             "previewTip": "Preview: the marchers walk the trail from start to end, again and again",
             "previewReduced": "Preview is off while your system asks for less motion",
-            "previewNothing": "Preview: place a point first"
+            "previewNothing": "Preview: place a point first",
+            "pinNeedsPoint": "Open a path and select one of its points to pin it",
+            "pinCountLabel": "Count this point is passed on: type a count from 1 to {last} and press Enter to pin it there",
+            "pinGroup": "Pin",
+            "cornersOnCountsTip": "Pin every corner to the whole count it reaches at a steady speed. Replaces the path's other pins",
+            "cornersOnCounts": "Corners on counts"
         },
         "menu": {
             "pointType": "Corner type",
@@ -3858,14 +3870,16 @@
             "noCurve": "The path runs straight through here",
             "arc": "Arc",
             "besideArc": "A point at an end of an arc stays a corner",
-            "nextToArc": "An arc meets this leg at a corner"
+            "nextToArc": "An arc meets this leg at a corner",
+            "pinnedToCount": "Pinned to count {count}…"
         },
         "errors": {
             "save": "Couldn't save the path",
             "remove": "Couldn't remove the path",
             "adjust": "Couldn't adjust this spot",
             "refit": "Couldn't re-fit the path",
-            "reverse": "Couldn't reverse the trail"
+            "reverse": "Couldn't reverse the trail",
+            "pin": "Couldn't pin the point"
         },
         "refusals": {
             "noMove": "{marcher} has no move at the playhead to draw a path on",
@@ -3897,7 +3911,8 @@
             "rehomedCleared": "{count, plural, one {# spot} other {# spots}} lost their adjustment",
             "adjustsRemoved": "{count, plural, one {# adjustment} other {# adjustments}} removed: {count, plural, one {it was} other {they were}} on the old path",
             "removedTrail": "Removed the trail: {count, plural, one {# marcher walks} other {# marchers walk}} straight to the same end spots",
-            "reversed": "{marcher} leads now"
+            "reversed": "{marcher} leads now",
+            "pinsRemoved": "{count, plural, one {# pin} other {# pins}} removed with the points they were on"
         },
         "rings": {
             "group": "Follows the group path",

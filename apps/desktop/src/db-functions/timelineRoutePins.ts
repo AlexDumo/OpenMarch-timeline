@@ -33,6 +33,7 @@ import { transactionWithHistory } from "./history";
 import { mapDbErrors, refuse } from "./timelineErrors";
 import { markPinModelInTransaction } from "./timelineLanes";
 import type { RoutePointInput } from "./timelineRoutes";
+import { editPathPointsInTransaction } from "./timelinePathEdits";
 import { pinRefusal, pinsOf, timingJson } from "./timelineRoutePinRetime";
 
 export {
@@ -291,7 +292,8 @@ export async function pinAtPlayheadInTransaction({
     routeId: number;
     count: number;
     drop: PinDrop;
-    editPoints: (
+    /** The path's point edit (`editPathPointsInTransaction`); injectable for tests */
+    editPoints?: (
         tx: DbTransaction,
         routeId: number,
         points: readonly RoutePointInput[],
@@ -327,13 +329,28 @@ export async function pinAtPlayheadInTransaction({
         ...(p.bulge === undefined ? {} : { bulge: p.bulge }),
     }));
     inputs.splice(drop.before, 0, { at: drop.at });
-    await editPoints(tx, routeId, inputs);
+    await (editPoints
+        ? editPoints(tx, routeId, inputs)
+        : editPathPointsInTransaction({ tx, routeId, points: inputs }));
     const after = await readRouteContext(tx, routeId);
     const added = after.geometry.points[drop.before];
     const known = new Set(points.map((p) => p.id));
     if (!added || known.has(added.id)) refuse(pinRefusal.dropOnPoint());
     await pinPointInTransaction({ tx, routeId, pointId: added.id, count });
     return added.id;
+}
+
+/** AP-P2 as one undoable edit; returns the pinned point's id. */
+export async function pinAtPlayhead(args: {
+    db: DbConnection;
+    routeId: number;
+    count: number;
+    drop: PinDrop;
+}): Promise<string> {
+    const { db, ...rest } = args;
+    return await transactionWithHistory(db, "pinAtPlayhead", (tx) =>
+        pinAtPlayheadInTransaction({ tx, ...rest }),
+    );
 }
 
 // ---------------------------------------------------------------------------

@@ -1,3 +1,5 @@
+import type { TimelinePinTick } from "./TimelinePinTicks";
+import { usePathPenStore } from "@/pathways/pathPenStore";
 import clsx from "clsx";
 import { TEMPO_BAND, useTempoModeStore } from "@/tempo/TempoBand";
 import { TempoModeButton } from "@/tempo/TempoModeButton";
@@ -310,6 +312,20 @@ export default function TimelineModePanel() {
             }),
         [pages, selectedIdList, performers, entriesOn],
     );
+    // Pathways step 5: the open path's pinned counts as ticks over its move
+    const pinTarget = usePathPenStore((s) =>
+        s.session?.phase === "open" ? s.session.target : null,
+    );
+    const pinTicks = useMemo<readonly TimelinePinTick[] | undefined>(
+        () =>
+            pinTarget?.pins?.length
+                ? pinTarget.pins.map((pin) => ({
+                      beat: pinTarget.start + pin.at,
+                      count: pin.at,
+                  }))
+                : undefined,
+        [pinTarget],
+    );
     const { tracks: timelines, current: tracksCurrent } =
         useTimelineTracksState({
             database: db,
@@ -604,6 +620,7 @@ export default function TimelineModePanel() {
                               : EXPERT_VIEW_CONTROLS
                     }
                     keyframes={keyframes}
+                    pinTicks={pinTicks}
                     keyframeMenu={keyframeMenu}
                     heldBars={heldBars}
                     keepChains={keepChains}

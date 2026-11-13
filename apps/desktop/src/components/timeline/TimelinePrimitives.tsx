@@ -1,3 +1,4 @@
+import { TimelinePinTicks, type TimelinePinTick } from "./TimelinePinTicks";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Popover from "@radix-ui/react-popover";
 import {
@@ -820,6 +821,7 @@ export const TimelineRuler = memo(function TimelineRuler({
     seekSnapBeats = [],
     positionBeat,
     keyframes,
+    pinTicks,
     keyframeMenu,
     heldBars,
     keepChains,
@@ -853,6 +855,8 @@ export const TimelineRuler = memo(function TimelineRuler({
     flagSnapPlayhead?: () => BeatPosition;
     /** Where the selected marchers are Set (#303); none without a selection */
     keyframes?: readonly TimelineKeyframe[];
+    /** The open path's pinned counts (pathways step 5), view beats */
+    pinTicks?: readonly TimelinePinTick[];
     /** A diamond's right-click Unset actions (#306), by view beat; without it, no menu */
     keyframeMenu?: TimelineKeyframeMenu;
     /** The selected marchers' Held holds (#472), view beats; none without a selection */
@@ -1020,6 +1024,14 @@ export const TimelineRuler = memo(function TimelineRuler({
                     bars={heldBars}
                     pages={pages}
                     pixelsPerBeat={pixelsPerBeat}
+                />
+            )}
+            {pinTicks && pinTicks.length > 0 && (
+                <TimelinePinTicks
+                    ticks={pinTicks}
+                    pages={pages}
+                    pixelsPerBeat={pixelsPerBeat}
+                    onSeek={onSeek}
                 />
             )}
             {keyframes && (
