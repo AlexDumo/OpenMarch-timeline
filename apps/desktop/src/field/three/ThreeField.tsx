@@ -540,13 +540,19 @@ function ThreeFieldView() {
             () => useUiSettingsStore.getState().uiSettings.mouseSettings,
         );
     }, []);
-    // Fingers and the pen's palm rule (tablet plan 1.1): one finger pans, two
-    // pan and pinch, a long press asks the editor for a menu. Preview edits
-    // nothing, so there fingers only navigate
+    // Fingers and the pen's palm rule (tablet plan 1.1): one finger on a
+    // marcher or the selection selects and moves it (1.2), elsewhere it pans;
+    // two pan and pinch, a long press asks the editor for a menu. Preview
+    // edits nothing, so there fingers only navigate
     useEffect(() => {
         if (!root.current) return;
         return attachFieldGestures(root.current, () => element.current, {
             editor: () => (isPreviewMode() ? null : editor),
+            singleFinger: (press) =>
+                editor.fingerEdits(press) ? "edit" : "navigate",
+            tap: (pointer) => {
+                if (!isPreviewMode()) editor.fingerTap(pointer);
+            },
             history: runFieldHistory,
         });
     }, [editor]);

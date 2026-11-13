@@ -255,7 +255,17 @@ export class FieldGestures {
                 break;
             }
             case "longPressCommit":
-                // No `singleEnd` follows: the press is over
+                // No `singleEnd` follows: the press is over. An editing
+                // finger held still was a slow tap: the editor ends its press
+                // as a release there (it never moved past the long press slop)
+                if (this.single?.role === "edit" && event)
+                    editor?.pointerUp(
+                        this.env.pointer({
+                            ...event,
+                            clientX: effect.point.x,
+                            clientY: effect.point.y,
+                        }),
+                    );
                 this.single = null;
                 break;
             case "longPressMoved":

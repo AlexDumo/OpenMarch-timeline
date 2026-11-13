@@ -400,6 +400,86 @@ describe("FieldEditor thresholds by pointer kind (tablet 0.1)", () => {
     });
 });
 
+describe("FieldEditor finger presses (tablet 1.2)", () => {
+    const touch = { kind: "touch" } as const;
+
+    it("edits where a finger lands on a marcher, within its 22 px hit radius", () => {
+        const { editor } = setup();
+        expect(editor.fingerEdits(at(100, 100, touch))).toBe(true);
+        // 9 field units is 18 screen px: a finger hits, a mouse misses
+        expect(editor.fingerEdits(at(100, 109, touch))).toBe(true);
+        expect(editor.fingerEdits(at(100, 109))).toBe(false);
+        expect(editor.fingerEdits(at(100, 111.5, touch))).toBe(false);
+    });
+
+    it("edits inside a multi-selection's box and on its handles; pans on the rest of the field", () => {
+        const { editor } = setup({ selected: [1, 3] });
+        // Between marchers 2 and 3, inside the box around 1 and 3, clear of its handles
+        expect(editor.fingerEdits(at(250, 100, touch))).toBe(true);
+        // The box's right-hand middle handle is at (310, 100)
+        expect(editor.fingerEdits(at(316, 100, touch))).toBe(true);
+        expect(editor.fingerEdits(at(EMPTY.x, EMPTY.y, touch))).toBe(false);
+        // A single selected marcher has no box: only its dot
+        const one = setup({ selected: [1] });
+        expect(one.editor.fingerEdits(at(250, 100, touch))).toBe(false);
+    });
+
+    it("pans over a marcher that can't be selected or is hidden", () => {
+        const { editor } = setup({
+            dimmed: [1],
+            marcherHidden: (id) => id === 2,
+        });
+        expect(editor.fingerEdits(at(100, 100, touch))).toBe(false);
+        expect(editor.fingerEdits(at(200, 100, touch))).toBe(false);
+    });
+
+    it("leaves fingers to navigation while a field mode is on", () => {
+        const { editor, state } = setup({ selected: [1] });
+        const { mode, calls } = fakeMode();
+        editor.setMode(mode);
+        expect(editor.fingerEdits(at(100, 100, touch))).toBe(false);
+        editor.fingerTap(at(EMPTY.x, EMPTY.y, touch));
+        expect(calls).toEqual([]);
+        expect(state.selected).toEqual([1]);
+    });
+
+    it("clears the selection on a tap on empty field, as a click does, and saves nothing", () => {
+        const { editor, state } = setup({ selected: [1, 2] });
+        editor.fingerTap(at(EMPTY.x, EMPTY.y, touch));
+        expect(state.selected).toEqual([]);
+        expect(state.drops).toEqual([]);
+    });
+
+    it("selects only the marcher a finger taps, and moves it after 12 px", () => {
+        const { editor, state } = setup({ selected: [2] });
+        click(editor, 100, 108, touch);
+        expect(state.selected).toEqual([1]);
+        editor.pointerDown(at(300, 100, touch));
+        editor.pointerMove(at(305, 100, touch));
+        expect(state.shown).toBeNull();
+        editor.pointerMove(at(320, 100, touch));
+        // Caught up with the whole drag, not just what came after 12 px
+        expect(state.shown?.get(3)).toEqual({ x: 320, y: 100 });
+        editor.pointerUp(at(320, 100, touch));
+        expect(state.selected).toEqual([3]);
+        expect(state.drops.map((d) => d.positions)).toEqual([
+            [{ id: 3, x: 320, y: 100 }],
+        ]);
+    });
+
+    it("puts a finger's move back with nothing saved when it is cancelled (a second finger)", () => {
+        const { editor, state } = setup({ selected: [1, 3] });
+        editor.pointerDown(at(250, 100, touch));
+        editor.pointerMove(at(290, 100, touch));
+        expect(editor.activeGesture()).toBe("move");
+        expect(state.shown?.get(1)).toEqual({ x: 140, y: 100 });
+        editor.pointerCancel();
+        expect(state.shown).toBeNull();
+        expect(state.drops).toEqual([]);
+        expect(state.selected).toEqual([1, 3]);
+    });
+});
+
 describe("FieldEditor buttons", () => {
     it("leaves the right and middle buttons to navigation", () => {
         const { editor, state } = setup();

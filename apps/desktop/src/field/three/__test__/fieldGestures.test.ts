@@ -263,6 +263,18 @@ describe("a finger that edits", () => {
     });
 });
 
+describe("an editing finger held still (tablet 1.2)", () => {
+    it("ends the editor's press as a release where it lifted: a slow tap", () => {
+        const s = setup({ singleFinger: () => "edit" });
+        s.finger("down", 1, 110, 120, 0);
+        s.fireTimers();
+        s.finger("up", 1, 112, 120, GESTURE_TIMING.longPressMs + 100);
+        expect(s.calls).toEqual(["down 100,100", "up 102,100"]);
+        expect(s.ed.longPress).not.toHaveBeenCalled();
+        expect(s.tap).not.toHaveBeenCalled();
+    });
+});
+
 describe("two fingers", () => {
     it("pan together, without zooming (the baseline did nothing)", () => {
         const s = setup();
