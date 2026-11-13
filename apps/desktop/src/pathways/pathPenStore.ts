@@ -910,7 +910,14 @@ export async function finishDrawing(
         closePath();
         return;
     }
-    const ok = await save(session.points, false, enter);
+    // Ripple in finished with no end named (Enter, Finish, a double-click): the entrance the
+    // drawing shows now, the pointer counted as it's shown, so what's written is what's seen
+    // (RP-4, step 9 review)
+    const shown =
+        enter === null && session.follow && ripplesIn(session.follow)
+            ? (rippleDrawnPlanOf(session)?.entrance ?? null)
+            : enter;
+    const ok = await save(session.points, false, shown);
     // A trail dragged out (step 4b): the stored trail is read again and shown as any trail is
     if (ok && session.follow) {
         usePathPenStore.setState((state) => ({

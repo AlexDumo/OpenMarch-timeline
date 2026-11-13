@@ -23,6 +23,7 @@ import {
     followHasTrail,
     followMarchersOf,
     rippleDrawnPlanOf,
+    rippleEndAt,
     ripplePlanOf,
     setFollowEnds,
     setFollowPreview,
@@ -230,6 +231,55 @@ describe("Ripple in (pathways step 9)", () => {
         });
     });
 
+    it("RP-4 (review blocker): Enter with the pointer out on the field writes the deal the drawing shows", async () => {
+        open();
+        setFollowEnds("ripple");
+        const right = starts.get(5)!;
+        pathPenMode.press(at(right.x, right.y), press);
+        pathPenMode.release(at(right.x, right.y), null);
+        // Six steps below the far end: nearer it than the near end, but not on it
+        const far = FORM_SPOTS[4]!;
+        setPointer({ x: far[0], y: far[1] + 6 * STEP });
+        const shown = rippleDrawnPlanOf(session())!;
+        expect(shown.takes).toEqual([1, 2, 3, 4, 5]);
+        // The placed plan alone would enter at the near end
+        expect(ripplePlanOf(session())!.takes).toEqual([5, 4, 3, 2, 1]);
+        await finishDrawing();
+        expect(rippleTrail).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(rippleTrail).mock.calls[0]![0]).toMatchObject({
+            points: [],
+            enter: shown.entrance,
+        });
+        expect(shown.entrance).toBe(1);
+    });
+
+    it("RP-4: one reach for being on an end, two steps, for the drawing and the finish alike", () => {
+        open();
+        setFollowEnds("ripple");
+        const right = starts.get(5)!;
+        pathPenMode.press(at(right.x, right.y), press);
+        pathPenMode.release(at(right.x, right.y), null);
+        const far = FORM_SPOTS[4]!;
+        // 1.9 steps off the far end: on it, no corner for the pointer
+        setPointer({ x: far[0], y: far[1] + 1.9 * STEP });
+        expect(rippleDrawnPlanOf(session())!.connector).toBeCloseTo(
+            planRipple(line, FORM, [], 1).connector,
+            9,
+        );
+        expect(
+            rippleEndAt(session().follow!, {
+                x: far[0],
+                y: far[1] + 1.9 * STEP,
+            }),
+        ).toBe(1);
+        expect(
+            rippleEndAt(session().follow!, {
+                x: far[0],
+                y: far[1] + 2.1 * STEP,
+            }),
+        ).toBeNull();
+    });
+
     it("corners bend the connector; Finish writes what's placed, the entrance by the last point", async () => {
         open();
         setFollowEnds("ripple");
@@ -246,7 +296,8 @@ describe("Ripple in (pathways step 9)", () => {
         expect(rippleTrail).toHaveBeenCalledTimes(1);
         expect(vi.mocked(rippleTrail).mock.calls[0]![0]).toMatchObject({
             points: [{ at: tuple(placed) }],
-            enter: null,
+            // The pointer sits on the point placed: the entrance shown is the placed plan's
+            enter: planRipple(line, FORM, [{ at: tuple(placed) }]).entrance,
         });
     });
 

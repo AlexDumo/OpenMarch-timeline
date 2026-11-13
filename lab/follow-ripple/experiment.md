@@ -38,7 +38,7 @@ questions:
 
 **Try it**
 
-1. Select five marchers in a line and nudge them 8 steps up on the next page.
+1. Select five marchers in a line and drag them 8 steps up on the next page.
 2. Press **Shift+L**, then **Ripple in** on the bar.
 3. Drag from the left end of the line onto the left end of the raised line and let go.
 4. Press **Shift+Space** to play the page. Then undo and try dragging toward the other end.
@@ -46,13 +46,21 @@ questions:
 
 **Good to know**
 
-- Ripple in is greyed out, with the reason, when the end spots are scattered or in a box.
+- Ripple in is greyed out when the end spots are scattered, close into a loop or fill a
+  block (a box or a circle), or lie on the line itself. Press it anyway and it says why (a
+  tooltip with a mouse, a message with a finger). With no end spots on the page it says that
+  placing them first unlocks it.
+- The line is read where its move starts, so a window starting on an earlier page still
+  ripples from where the line stands when this move begins.
+- Enter or Finish writes the deal you see: if the drawing shows the far end, that's the end
+  the line enters.
 - After a ripple it's an ordinary follow move: drag its points, Reverse leader, Remove
   trail, resize the page; split at the playhead still says no, as for any trail.
 
 **Not in this step, on purpose**
 
-- Rippling into a box or a circle (snake order and outlines come in steps 10 and 11).
+- Rippling into a box, a circle or an outline (snake order and outlines come in steps 10
+  and 11).
 - A form with more spots than the line, or rippling into another page's trail.
 - Typing a count for the straight piece (that would be a pin, step 5).
 - Following the true curve of the form the line starts in (step 10).

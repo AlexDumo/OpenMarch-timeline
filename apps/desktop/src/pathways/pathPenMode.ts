@@ -40,6 +40,7 @@ import {
     grabEnd,
     setFollowHover,
     intoEndSpots,
+    lineOf,
     rippleDrawnPlanOf,
     rippleEndAt,
     ripplesIn,
@@ -727,8 +728,7 @@ class PathPenMode implements FieldMode {
             }
             // Pressed on the last point or the end spot and moved a little: still a finish
             if (p.moved && p.landed === null) {
-                const env = envOf(roles);
-                void finishDrawing(env ? enterAt(s, pointer.field, env) : null);
+                void finishDrawing(enterAt(s, pointer.field));
                 return;
             }
             this.releaseDrawing(s, pointer, click, roles);
@@ -830,7 +830,7 @@ class PathPenMode implements FieldMode {
         }
         // On the last point (a Line's last point), or on the end spot the path goes to
         if (onFinishSpot(s, pointer.field, env)) {
-            void finishDrawing(enterAt(s, pointer.field, env));
+            void finishDrawing(enterAt(s, pointer.field));
             return;
         }
         const at = landCorner(shapeOf(s), pointer.field, env);
@@ -865,7 +865,7 @@ class PathPenMode implements FieldMode {
             intoEndSpots(s.follow) &&
             onEndSpot(s, pointer.field, env)
         ) {
-            void finishDrawing(enterAt(s, pointer.field, env));
+            void finishDrawing(enterAt(s, pointer.field));
             return;
         }
         if (p.moved && env) {
@@ -1117,7 +1117,7 @@ function followDrawing(session: PathSession): FieldModeDrawing {
     const ends = followEnds(follow);
     const line = trailLine(follow);
     const grabbed = follow.grabbed !== null;
-    const starts = line.map((id) => follow.starts.get(id)!);
+    const starts = line.map((id) => lineOf(follow).starts.get(id)!);
     const shape = shapeOf(session);
     // Keep end spots (AP-T9): the spots the line has, step 4's trail running on into the tail's;
     // Ripple in (step 9): the next form's spots as dealt, the trail running on into its entrance;
@@ -1161,10 +1161,10 @@ function followDrawing(session: PathSession): FieldModeDrawing {
         selectedHandles: [],
         rings: [],
         lanes: [starts, ...(trail ? [spots] : [])].filter((l) => l.length > 1),
-        memberRings: line.map((id) => {
+        memberRings: line.map((id, q) => {
             const end = ends.includes(id);
             return {
-                at: follow.starts.get(id)!,
+                at: starts[q]!,
                 marcherId: id,
                 kind: grabbed
                     ? id === follow.grabbed
@@ -1205,7 +1205,7 @@ function grabEndTip(follow: FollowDrag): Pick<FieldModeDrawing, "tip"> {
     if (follow.grabbed !== null || follow.hover == null) return {};
     return {
         tip: {
-            at: follow.starts.get(follow.hover)!,
+            at: lineOf(follow).starts.get(follow.hover)!,
             text: tolgee.t(
                 "pathways.rings.grabEnd",
                 "Drag from an end of the line",
@@ -1221,7 +1221,7 @@ function grabEndTip(follow: FollowDrag): Pick<FieldModeDrawing, "tip"> {
 function pullArrowsOf(
     follow: FollowDrag,
 ): NonNullable<FieldModeDrawing["pullArrows"]> {
-    const { order, starts } = follow;
+    const { order, starts } = lineOf(follow);
     if (order.length < 2) return [];
     return (
         [
@@ -1574,8 +1574,13 @@ function objectHit(o: PathObject, at: XY, radius: number): boolean {
 /** The one pen mode the field editor is given while a path is drawn or open. */
 export const pathPenMode = new PathPenMode();
 
-/** Whether `at` is on the end spot the path goes to */
+/**
+ * Whether `at` is on the end spot the path goes to: with Ripple in, on either end of the next
+ * form, by the same reach the drawing shows it with (`rippleEndAt`, RP-4)
+ */
 function onEndSpot(s: PathSession, at: XY, env: ToolEnv): boolean {
+    if (s.follow && ripplesIn(s.follow))
+        return rippleEndAt(s.follow, at) !== null;
     const points = pathPoints(shapeOf(s));
     const end = points[points.length - 1]!;
     return Math.hypot(end.x - at.x, end.y - at.y) <= env.hitRadius;
@@ -1585,8 +1590,8 @@ function onEndSpot(s: PathSession, at: XY, env: ToolEnv): boolean {
  * Ripple in (step 9, RP-4): the marcher whose spot at an end of the next form is under `at`, so a
  * finish there enters there; null otherwise, and for any other drawing
  */
-function enterAt(s: PathSession, at: XY, env: ToolEnv): number | null {
-    return s.follow ? rippleEndAt(s.follow, at, env.hitRadius) : null;
+function enterAt(s: PathSession, at: XY): number | null {
+    return s.follow ? rippleEndAt(s.follow, at) : null;
 }
 
 /** Whether `at` is on the drawing's last point or on the end spot the path goes to */
@@ -1595,5 +1600,10 @@ function onFinishSpot(s: PathSession, at: XY, env: ToolEnv): boolean {
     const last = points[points.length - 2]!;
     const end = points[points.length - 1]!;
     const near = (q: XY) => Math.hypot(q.x - at.x, q.y - at.y) <= env.hitRadius;
-    return (s.points.length > 0 && near(last)) || near(end);
+    // Ripple in: on either end of the next form, by the drawing's own reach (RP-4)
+    const onEnd =
+        s.follow && ripplesIn(s.follow)
+            ? rippleEndAt(s.follow, at) !== null
+            : near(end);
+    return (s.points.length > 0 && near(last)) || onEnd;
 }

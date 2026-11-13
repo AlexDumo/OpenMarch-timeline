@@ -1,5 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
+import { toast } from "sonner";
 import { T } from "@tolgee/react";
 import {
     ArrowCounterClockwiseIcon,
@@ -48,7 +49,6 @@ import {
     keepsEndSpots,
     rippleDrawnPlanOf,
     ripplesIn,
-    setFollowEnds,
     setFollowSpacing,
 } from "./followDrag";
 import { rippleArrivalCount } from "@/db-functions/timelineTrailRipplePlan";
@@ -659,9 +659,7 @@ function PathEditorBar({
                     {session.follow && session.follow.grabbed !== null && (
                         <FollowControls session={session} />
                     )}
-                    {session.follow?.keep && (
-                        <FollowEndsControls session={session} />
-                    )}
+                    {session.follow && <FollowEndsControls session={session} />}
                     <span className="flex items-center gap-2">
                         <IconButton
                             label={tolgee.t(
@@ -926,70 +924,88 @@ function FollowEndsControls({ session }: { session: PathSession }) {
     const follow = session.follow!;
     const fromTrail = follow.ends === "trail";
     const ripple = ripplesIn(follow);
+    // A finger gets no tooltip: a press on the greyed-out choice says why (step 9 review)
+    const sayWhy = (why: string) => () =>
+        toast.info(why, { id: "follow-ends-why" });
+    const needSpots = tolgee.t(
+        "pathways.editor.endsNeedSpots",
+        "Ripple in and Keep end spots follow into end spots the line already has on this page. Place them first (a shape tool, or move the marchers), then choose Follow",
+    );
+    if (!follow.keep)
+        // No end spots here: Ripple in shows greyed out, saying what would make it work
+        return (
+            <>
+                <IconButton
+                    label={needSpots}
+                    action="followEndsRipple"
+                    disabled
+                    onClick={() => undefined}
+                    onDisabledClick={sayWhy(needSpots)}
+                    testId="follow-ends-ripple"
+                >
+                    {tolgee.t("pathways.editor.endsRipple", "Ripple in")}
+                </IconButton>
+                <Divider />
+            </>
+        );
+    const rippleWhy =
+        follow.formWhy ??
+        tolgee.t(
+            "pathways.editor.endsRippleOff",
+            "Ripple in: their end spots don't stand in a line, curve or arc",
+        );
     return (
         <>
-            {follow.keep && (
-                <>
-                    <span
-                        className="flex items-center gap-2"
-                        role="group"
-                        aria-label={tolgee.t("pathways.editor.ends", "Ends")}
-                        data-testid="follow-ends"
-                    >
-                        <IconButton
-                            label={tolgee.t(
-                                "pathways.editor.endsFromTrailTip",
-                                "From trail: the line stops along the trail, and those become its end spots",
-                            )}
-                            pressed={fromTrail}
-                            onClick={() => setFollowEnds("trail")}
-                            testId="follow-ends-trail"
-                        >
-                            {tolgee.t(
-                                "pathways.editor.endsFromTrail",
-                                "From trail",
-                            )}
-                        </IconButton>
-                        <IconButton
-                            label={tolgee.t(
-                                "pathways.editor.endsKeepTip",
-                                "Keep end spots: the line follows the trail into the end spots it already has",
-                            )}
-                            pressed={follow.ends === "keep"}
-                            onClick={() => setFollowEnds("keep")}
-                            testId="follow-ends-keep"
-                        >
-                            {tolgee.t(
-                                "pathways.editor.endsKeep",
-                                "Keep end spots",
-                            )}
-                        </IconButton>
-                        <IconButton
-                            label={
-                                follow.form
-                                    ? tolgee.t(
-                                          "pathways.editor.endsRippleTip",
-                                          "Ripple in: the line follows its leader straight to the near end of the form its end spots make, then along it. The leader takes the far end",
-                                      )
-                                    : tolgee.t(
-                                          "pathways.editor.endsRippleOff",
-                                          "Ripple in: their end spots don't stand in a line, curve or arc",
-                                      )
-                            }
-                            disabled={!follow.form}
-                            pressed={ripple}
-                            onClick={() => setFollowEnds("ripple")}
-                            testId="follow-ends-ripple"
-                        >
-                            {tolgee.t(
-                                "pathways.editor.endsRipple",
-                                "Ripple in",
-                            )}
-                        </IconButton>
-                    </span>
-                    <Divider />
-                </>
-            )}
+            <span
+                className="flex items-center gap-2"
+                role="group"
+                aria-label={tolgee.t("pathways.editor.ends", "Ends")}
+                data-testid="follow-ends"
+            >
+                <IconButton
+                    label={tolgee.t(
+                        "pathways.editor.endsFromTrailTip",
+                        "From trail: the line stops along the trail, and those become its end spots",
+                    )}
+                    action="followEndsTrail"
+                    pressed={fromTrail}
+                    onClick={() => runAction("followEndsTrail")}
+                    testId="follow-ends-trail"
+                >
+                    {tolgee.t("pathways.editor.endsFromTrail", "From trail")}
+                </IconButton>
+                <IconButton
+                    label={tolgee.t(
+                        "pathways.editor.endsKeepTip",
+                        "Keep end spots: the line follows the trail into the end spots it already has",
+                    )}
+                    action="followEndsKeep"
+                    pressed={follow.ends === "keep"}
+                    onClick={() => runAction("followEndsKeep")}
+                    testId="follow-ends-keep"
+                >
+                    {tolgee.t("pathways.editor.endsKeep", "Keep end spots")}
+                </IconButton>
+                <IconButton
+                    label={
+                        follow.form
+                            ? tolgee.t(
+                                  "pathways.editor.endsRippleTip",
+                                  "Ripple in: the line follows its leader straight to the near end of the form its end spots make, then along it. The leader takes the far end",
+                              )
+                            : rippleWhy
+                    }
+                    action="followEndsRipple"
+                    disabled={!follow.form}
+                    pressed={ripple}
+                    onClick={() => runAction("followEndsRipple")}
+                    onDisabledClick={sayWhy(rippleWhy)}
+                    testId="follow-ends-ripple"
+                >
+                    {tolgee.t("pathways.editor.endsRipple", "Ripple in")}
+                </IconButton>
+            </span>
+            <Divider />
         </>
     );
 }
@@ -1149,11 +1165,16 @@ function FollowControls({ session }: { session: PathSession }) {
                         className="text-text-subtitle"
                         data-testid="follow-ripple-arrival"
                     >
-                        {tolgee.t(
-                            "pathways.editor.rippleArrival",
-                            "Leader reaches the form on count {count}",
-                            { count: countText(arrival) },
-                        )}
+                        {arrival === 0
+                            ? tolgee.t(
+                                  "pathways.editor.rippleArrivalStart",
+                                  "Leader starts at the form",
+                              )
+                            : tolgee.t(
+                                  "pathways.editor.rippleArrival",
+                                  "Leader reaches the form on count {count}",
+                                  { count: countText(arrival) },
+                              )}
                     </span>
                     <Divider />
                 </>

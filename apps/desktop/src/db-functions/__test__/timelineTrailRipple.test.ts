@@ -13,14 +13,17 @@ import { removeTrail, reverseTrail } from "../timelineTrails";
 import {
     readAllShapeRecipes,
     saveShapeRecipeInTransaction,
+    UNGROUPED_RECIPE_KIND,
 } from "../shapeRecipes";
 import { rememberedOrderAt } from "../rememberedOrder";
 import { dragTrail } from "../timelineTrailDrag";
+import { followKeepAt } from "@/pathways/followTool";
 import { rippleFormAt, rippleTrail } from "../timelineTrailRipple";
 import {
     planRipple,
     rippleArrivalCount,
     rippleEntrance,
+    rippleFormProblem,
     ripplePreview,
     type RippleForm,
 } from "../timelineTrailRipplePlan";
@@ -339,6 +342,133 @@ describeDbTests("Ripple into the next form (AP-T12)", (it) => {
         IDS.forEach((m, q) => expect(r.positionAt(m, 17)).toEqual(spots[q]));
     });
 
+    it("review: the line is read where the kept move starts, not at an earlier start flag", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { starts, step, spots } = await setUp(db);
+        // Page 1 now ends with the line 4 steps lower: page 2's move starts there
+        await moveMarchersInTarget({
+            db,
+            target: { kind: "range", start: 1, end: 9 },
+            moves: IDS.map((marcherId) => ({
+                marcherId,
+                x: starts.get(marcherId)![0],
+                y: starts.get(marcherId)![1] + 4 * step,
+            })),
+        });
+        const r0 = await resolverOf(db);
+        const page2 = (await db
+            .select()
+            .from(schema.timelines)
+            .where(eq(schema.timelines.start_beat, 9))
+            .get())!;
+        // The tool reads the same line (Keep end spots and Ripple in)
+        const keep = (await followKeepAt(db, r0, IDS, 17))!;
+        expect([...keep.line!.starts.entries()]).toEqual(
+            IDS.map((m) => {
+                const [x, y] = r0.positionAt(m, 9);
+                return [m, { x, y }];
+            }),
+        );
+        expect(keep.line!.order).toEqual([1, 2, 3, 4]);
+        // A window from page 1's start flag, following into page 2's move
+        const result = await rippleTrail({ db, window: { start: 1, end: 17 }, marcherIds: IDS, leaderId: 4, points: [], keepMove: page2.id }); // prettier-ignore
+        const plan = planRipple(
+            IDS.map((m) => r0.positionAt(m, 9) as XY),
+            { ids: [4, 3, 2, 1], spots },
+            [],
+        );
+        expect(result.takes).toEqual(plan.takes);
+        const r = await resolverOf(db);
+        for (let b = 9; b <= 17; b += 0.5) {
+            const shown = ripplePreview(plan, (b - 9) / 8);
+            IDS.forEach((m, q) =>
+                expect(near(r.positionAt(m, b), shown[q]!, 1e-9)).toBe(true),
+            );
+        }
+    });
+
+    it("RP-2 (review): end spots in a 2×2 block, or on the line itself, refuse with their reason", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { starts, step } = await setUp(db, { recipe: false });
+        const [x0, y0] = starts.get(1)!;
+        const place = (at: XY[]) =>
+            moveMarchersInTarget({
+                db,
+                target: { kind: "range", ...WINDOW },
+                moves: IDS.map((marcherId, k) => ({
+                    marcherId,
+                    x: at[k]![0],
+                    y: at[k]![1],
+                })),
+            });
+        await place([
+            [x0 + 20 * step, y0 - 20 * step],
+            [x0 + 22 * step, y0 - 20 * step],
+            [x0 + 20 * step, y0 - 22 * step],
+            [x0 + 22 * step, y0 - 22 * step],
+        ]);
+        await expectRefused(
+            db,
+            () => rippleTrail({ db, window: WINDOW, marcherIds: IDS, leaderId: 4, points: [] }), // prettier-ignore
+            /loop|block/,
+        );
+        // The line slid two steps along itself
+        await place(IDS.map((_, k): XY => [x0 + (2 + 2 * k) * step, y0]));
+        await expectRefused(
+            db,
+            () => rippleTrail({ db, window: WINDOW, marcherIds: IDS, leaderId: 4, points: [] }), // prettier-ignore
+            /walk back through itself/,
+        );
+    });
+
+    it("AP-T12 (review): an ungrouped mark in the move isn't dealt, only shapes are", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await setUp(db);
+        const page2 = (await db
+            .select()
+            .from(schema.timelines)
+            .where(eq(schema.timelines.start_beat, 9))
+            .get())!;
+        const R = schema.timeline_shape_recipes;
+        const M = schema.timeline_shape_recipe_marchers;
+        const mark = (await db
+            .insert(R)
+            .values({
+                timeline_id: page2.id,
+                kind: UNGROUPED_RECIPE_KIND,
+                kind_version: 1,
+                params: "{}",
+                order_mode: "keep",
+            })
+            .returning()
+            .get())!;
+        await db.insert(M).values(
+            IDS.map((marcher_id, slot) => ({
+                recipe_id: mark.id,
+                marcher_id,
+                slot,
+                x: 0,
+                y: 0,
+            })),
+        );
+        const before = await db
+            .select()
+            .from(M)
+            .where(eq(M.recipe_id, mark.id))
+            .all();
+        const result = await rippleTrail({ db, window: WINDOW, marcherIds: IDS, leaderId: 4, points: [] }); // prettier-ignore
+        expect(result.recipeRows).toBe(4);
+        expect(
+            await db.select().from(M).where(eq(M.recipe_id, mark.id)).all(),
+        ).toEqual(before);
+    });
+
     it("refusals: a line already rippled, or a middle marcher grabbed", async ({
         db,
         marchersAndPages: _,
@@ -374,6 +504,43 @@ describe("Ripple's plan (pure)", () => {
         expect(rippleEntrance(form, [-1, 0], 9)).toBe(9);
         // A marcher in the middle isn't an end: the nearer end instead
         expect(rippleEntrance(form, [-1, 0], 8)).toBe(7);
+    });
+
+    test("RP-2: open lines, curves and arcs pass; loops, blocks, zigzags and the line itself don't", () => {
+        const line: XY[] = [0, 1, 2, 3, 4].map((i) => [2 * i, 0]);
+        const away = (pts: XY[]): XY[] =>
+            pts.map(([x, y]) => [x + 100, y + 100]);
+        const why = (spots: XY[], from: XY[] = line) => {
+            const t = rippleFormProblem(spots, from);
+            return t ? JSON.stringify(t) : null;
+        };
+        // A line, an L, a half circle of five: fine
+        expect(why(away(line))).toBeNull();
+        expect(why(away([[0, 0], [2, 0], [4, 0], [4, 2], [4, 4]]))).toBeNull(); // prettier-ignore
+        const half = [0, 1, 2, 3, 4].map(
+            (i): XY => [
+                10 * Math.cos((i / 4) * Math.PI),
+                10 * Math.sin((i / 4) * Math.PI),
+            ],
+        );
+        expect(why(away(half))).toBeNull();
+        // A 2×2 box around, a full circle, a 3×2 snake, a box outline: a loop or a block
+        expect(why(away([[0, 0], [2, 0], [2, 2], [0, 2]]))).toMatch(/formLoop/); // prettier-ignore
+        const circle = [0, 1, 2, 3, 4, 5].map(
+            (i): XY => [
+                10 * Math.cos((i / 6) * 2 * Math.PI),
+                10 * Math.sin((i / 6) * 2 * Math.PI),
+            ],
+        );
+        expect(why(away(circle))).toMatch(/formLoop/);
+        expect(why(away([[0, 0], [2, 0], [4, 0], [4, 2], [2, 2], [0, 2]]))).toMatch(/formLoop/); // prettier-ignore
+        // A zigzag through scattered spots: not a form
+        expect(why(away([[0, 0], [2, 0], [30, 0], [32, 0]]))).toMatch(/notAForm/); // prettier-ignore
+        // The line slid along itself, or the line itself: overlap
+        expect(why(line.map(([x, y]): XY => [x + 2, y]))).toMatch(
+            /formOverlap/,
+        );
+        expect(why(line)).toMatch(/formOverlap/);
     });
 
     test("RP-5: the leader's count into the form, to the nearest half count", () => {

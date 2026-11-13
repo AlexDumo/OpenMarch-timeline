@@ -13,18 +13,27 @@ import { and, eq, inArray } from "drizzle-orm";
 import { createResolver, type XY } from "@openmarch/core";
 import { schema } from "@/global/database/db";
 import { readTimelineTables } from "@/timeline/timelineRows";
-import { text } from "@/timeline/timelineText";
 import type { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 import { refuse } from "./timelineErrors";
-import { marcherName, type RoutePointInput } from "./timelineRoutes";
-import { isOrderMarkKind } from "./shapeRecipes";
+import {
+    destinationOf,
+    marcherName,
+    type RoutePointInput,
+} from "./timelineRoutes";
+import { shapeRecipesOnly } from "./shapeRecipes";
+import { memberRows, readTimeline } from "./timelineMemberRows";
 import {
     followTrailInTransaction,
     trailRefusal,
     type FollowTrailResult,
 } from "./timelineTrails";
-import { planRipple, type RippleForm } from "./timelineTrailRipplePlan";
+import {
+    planRipple,
+    rippleFormProblem,
+    rippleRefusal,
+    type RippleForm,
+} from "./timelineTrailRipplePlan";
 import {
     followOrderAt,
     trailDragRefusal,
@@ -32,12 +41,6 @@ import {
     windowMoveOf,
     type TrailWindow,
 } from "./timelineTrailDrag";
-
-/** The refusals' texts of step 9, translated where they are shown */
-export const rippleRefusal = {
-    /** RP-2: the members' end spots don't stand in a line, curve or arc */
-    notAForm: () => text.t("timeline.refusals.trail.notAForm"),
-};
 
 // ---------------------------------------------------------------------------
 // Reads
@@ -106,20 +109,21 @@ async function dealRecipesAgainInTransaction(
 ): Promise<number> {
     const R = schema.timeline_shape_recipes;
     const M = schema.timeline_shape_recipe_marchers;
+    // Shapes only: an ungrouped mark or an order mark holds no spots to deal
     const rows = (
         await tx
-            .select({ row: M, kind: R.kind })
+            .select({ row: M })
             .from(M)
             .innerJoin(R, eq(R.id, M.recipe_id))
             .where(
                 and(
                     eq(R.timeline_id, timelineId),
                     inArray(M.marcher_id, [...holder.keys()]),
+                    shapeRecipesOnly(),
                 ),
             )
             .all()
     )
-        .filter((r) => !isOrderMarkKind(r.kind))
         .map((r) => r.row)
         .filter((r) => holder.get(r.marcher_id) !== r.marcher_id);
     if (rows.length === 0) return 0;
@@ -139,13 +143,14 @@ async function dealRecipesAgainInTransaction(
 
 /**
  * AP-T12 (spec L.10), inside one write-wrapper transaction: the line of `marcherIds` (its order
- * at the window's start, the grabbed end leading, as AP-T8 reads it) ripples into the form its
+ * at the start of move `keepMove`, the grabbed end leading, as AP-T8 reads it) ripples into the form its
  * end spots make in move `keepMove`: the form's spots dealt in trail order from the entrance
  * (RP-3, RP-4), then AP-T1 in that move with the dealt spots as the slots' destinations and the
  * connector's corners as the trail, then the move's shape recipes re-dealt to match.
  *
  * Refused (`E-ARGS`, nothing written): AP-T1's and AP-T8's refusals; no move with end spots for
- * every member; end spots that don't stand in a form; the line already a trail's line there.
+ * every member; end spots that don't stand in an open line, curve or arc, or that lie on the
+ * line itself (RP-2, `rippleFormProblem`); the line already a trail's line there.
  */
 export async function rippleTrailInTransaction(
     tx: DbTransaction,
@@ -156,34 +161,39 @@ export async function rippleTrailInTransaction(
     if (ids.length < 2) refuse(trailRefusal.tooFew());
     if (!(window.end > window.start) || window.start < 0)
         refuse(trailDragRefusal.noWindow());
+    // The move the line ripples in: it starts where that move starts, not at the start flag
+    const move = input.keepMove ?? (await windowMoveOf(tx, window, ids));
+    if (move === null) refuse(trailDragRefusal.noSpots());
+    const timeline = await readTimeline(tx, move);
+    if (!timeline) refuse(trailDragRefusal.noSpots());
     const resolver = createResolver((await readTimelineTables(tx)).snapshot);
-    // The line's order where it stands at the start flag, the grabbed end leading (AP-T8)
+    // The line's order where it stands at the move's start, the grabbed end leading (AP-T8)
     const starts = ids.map((m): XY => {
-        const [x, y] = resolver.positionAt(m, window.start);
+        const [x, y] = resolver.positionAt(m, timeline.start_beat);
         return [x, y];
     });
-    const along = await followOrderAt(tx, ids, window.start, starts);
+    const along = await followOrderAt(tx, ids, timeline.start_beat, starts);
     if (!along) refuse(trailDragRefusal.notFitted());
     const order = trailOrderFrom(along.order, ids.indexOf(leaderId));
     if (!order) refuse(trailDragRefusal.notAnEnd());
     const line = order.map((i) => ids[i]!);
-    // The move the line ripples in, and its end spots there
-    const move = input.keepMove ?? (await windowMoveOf(tx, window, ids));
-    if (move === null) refuse(trailDragRefusal.noSpots());
-    const timeline = await tx
-        .select({ end_beat: schema.timelines.end_beat })
-        .from(schema.timelines)
-        .where(eq(schema.timelines.id, move))
-        .get();
-    if (!timeline) refuse(trailDragRefusal.noSpots());
-    const spots = new Map(
-        ids.map((m): [number, XY] => {
-            const [x, y] = resolver.positionAt(m, timeline.end_beat);
-            return [m, [x, y]];
-        }),
-    );
+    // Each member's end spot there, its slot's stored destination (as AP-T1 reads it)
+    const rows = await memberRows(tx, move);
+    const spots = new Map<number, XY>();
+    for (const m of ids) {
+        const row = rows.find((r) => r.assignment.marcher_id === m);
+        if (!row) refuse(trailDragRefusal.noSpots());
+        const [x, y] = await destinationOf(
+            tx,
+            row.transition,
+            row.assignment.slot_index,
+        );
+        spots.set(m, [x, y]);
+    }
     const form = await rippleFormAt(tx, ids, timeline.end_beat, spots);
     if (!form) refuse(rippleRefusal.notAForm());
+    const problem = rippleFormProblem(form.spots, starts);
+    if (problem) refuse(problem);
     const plan = planRipple(
         order.map((i) => starts[i]!),
         form,
