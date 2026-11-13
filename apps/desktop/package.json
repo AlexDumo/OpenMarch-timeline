@@ -97,6 +97,7 @@
         "mediabunny": "^1.46.0",
         "nan": "^2.22.2",
         "pdfkit": "^0.17.1",
+        "pdfmake": "0.3.13",
         "posthog-js": "^1.256.2",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
