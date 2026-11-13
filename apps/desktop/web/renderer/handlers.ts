@@ -28,6 +28,10 @@ import {
     browserVideoExportDeps,
     createVideoExportHandlers,
 } from "./videoExport";
+import {
+    browserDrillChartExportDeps,
+    createDrillChartExportHandlers,
+} from "./drillChartExport";
 
 const SETTINGS_KEY = storageKey("settings");
 /** Tells this build's other tabs (e.g. the settings tab) about a change. */
@@ -566,9 +570,24 @@ export function registerPageHandlers({ isSettingsTab = false } = {}) {
     handleInPage("export:videoEnd", (sessionId: string, success: boolean) =>
         video.end(sessionId, success),
     );
-    // "Open the exported file" in Electron; here, save the finished video
+    // Drill charts: drawn in the page, kept in memory and saved from a tap
+    // (see ./drillChartExport.ts).
+    const drillCharts = createDrillChartExportHandlers(
+        browserDrillChartExportDeps({ appleTouch, share: shareFile }),
+    );
+    handleInPage("export:createExportDirectory", (defaultName: string) =>
+        drillCharts.createExportDirectory(defaultName),
+    );
+    handleInPage(
+        "export:generateDocForMarcher",
+        (args: Parameters<typeof drillCharts.generateDocForMarcher>[0]) =>
+            drillCharts.generateDocForMarcher(args),
+    );
+    // "Open the exported file" in Electron; here, save the finished file
     handleInPage("open-export-directory", (path: string) =>
-        video.deliver(path),
+        drillCharts.owns(path)
+            ? drillCharts.deliver(path)
+            : video.deliver(path),
     );
 
     handleInPage("database:repair", () => {

@@ -150,6 +150,15 @@ export default defineConfig({
                 find: /^(node:)?worker_threads$/,
                 replacement: web("renderer/workerThreads.ts"),
             },
+            // Drill chart PDFs (src/components/exporting/utils/drillChartPdf.ts):
+            // PDFKit's browser build bundles its fonts and Node shims, and
+            // sanitize-html only uses PostCSS for style attributes, which the
+            // notes never keep; PostCSS would pull in `fs` and `path` (above).
+            {
+                find: /^pdfkit$/,
+                replacement: "pdfkit/js/pdfkit.standalone.js",
+            },
+            { find: /^postcss$/, replacement: web("renderer/postcssStub.ts") },
             {
                 find: "@sentry/electron/renderer",
                 replacement: web("renderer/sentry.ts"),

@@ -5,7 +5,11 @@ import { EXPORT_ACTION_IDS } from "../definitions";
 import { useActionHandler, useActionHandlerGroup } from "../useActionHandler";
 import { isWebBuild } from "@/utilities/webBuild";
 
-const WEB_EXPORT_ACTION_IDS = ["openExportDialog", "exportVideo"] as const;
+const WEB_EXPORT_ACTION_IDS = [
+    "openExportDialog",
+    "exportDrillCharts",
+    "exportVideo",
+] as const;
 
 /** App-level commands: exporting and closing the show. */
 export function useAppActionHandlers() {
@@ -13,12 +17,16 @@ export function useAppActionHandlers() {
     const openExport = useAppDialogStore((s) => s.openExport);
 
     useActionHandlerGroup(
-        // On the web only video export works: the others need Electron
-        // (printToPDF, file streams, sign-in).
+        // On the web only drill charts and video work: coordinate sheets
+        // need Electron's printToPDF, and mobile export needs sign-in.
         isWebBuild ? WEB_EXPORT_ACTION_IDS : EXPORT_ACTION_IDS,
-        (_id, args) =>
+        (id, args) =>
             openExport(
-                isWebBuild ? "video" : (args?.tab as ExportTab | undefined),
+                isWebBuild
+                    ? id === "exportDrillCharts"
+                        ? "drill-charts"
+                        : "video"
+                    : (args?.tab as ExportTab | undefined),
             ),
         { enabled: databaseReady },
     );

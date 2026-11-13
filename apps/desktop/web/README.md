@@ -43,7 +43,7 @@ main-process code and at `renderer/electron.ts` for the preload.
 In the app's own code, `isWebBuild` (`src/utilities/webBuild.ts`) turns off
 what has no meaning in a browser: the window buttons and native menu in the
 title bar (replaced by `WebFileMenu`), the update check, and the new-show
-wizard's file location, every export but video (and mobile upload), and the settings for
+wizard's file location, coordinate sheet and mobile export, and the settings for
 privacy, developer tools and file repair. "Save a copy" backs up the file;
 ⌘/Ctrl+S and ⌘/Ctrl+O are bound, since there is no native menu to bind
 them, so swapping marchers moves to ⌘/Ctrl+Shift+S.
@@ -140,10 +140,32 @@ the show, so they take space (20 per show). Private Browsing detection is a
 best effort: a browser that hands out storage and drops it at the end of the
 session looks like a normal one.
 
+### Drill chart export
+
+The export dialog offers drill charts and video on the web (File menu ›
+Export drill charts… or Export video…, or the toolbar's Export). The
+renderer makes each page's SVG as in Electron, and the page answers
+`export:createExportDirectory` and `export:generateDocForMarcher` instead
+of the main process (`renderer/drillChartExport.ts`):
+
+- The PDFs are drawn by the code Electron uses
+  (`src/components/exporting/utils/drillChartPdf.ts`, PDFKit and
+  svg-to-pdfkit). `vite.web.config.mts` points `pdfkit` at its browser
+  build, which bundles the standard fonts, and PostCSS (which
+  sanitize-html imports but the notes never need) at a stub. That code is
+  a separate chunk (`renderer/drillChartRender.ts`, about 540 KB gzipped),
+  loaded on the first export.
+- The field image is read from the show in the page. The PDFs are kept in
+  memory until saved (tens of MB for a large show with a chart per
+  marcher).
+- As with video, saving needs a fresh tap: the dialog shows **Save drill
+  charts** when they're done. On iPads it opens the share sheet (Save to
+  Files, AirDrop, Mail); elsewhere it downloads. One PDF is saved as it
+  is; a chart per marcher comes as one zip (stored, not compressed again).
+
 ### Video export
 
-The export dialog offers only video on the web (File menu › Export
-video…, or the toolbar's Export video). The renderer draws and encodes the
+On the web the renderer draws and encodes the
 frames as in Electron (`src/components/exporting/video/`, mediabunny over
 WebCodecs); the page answers `export:videoStart`, `export:videoChunk` and
 `export:videoEnd` instead of the main process (`renderer/videoExport.ts`):
@@ -176,7 +198,8 @@ WebCodecs); the page answers `export:videoStart`, `export:videoChunk` and
 These are hidden, or answer the way the app expects when they're
 unavailable:
 
-- PDF and mobile export (they use Electron's `printToPDF` and sign-in)
+- Coordinate sheet and mobile export (they use Electron's `printToPDF`
+  and sign-in)
 - Sign-in, automatic updates, analytics
 - Recent files, repairing a file, and backups before migrating
 

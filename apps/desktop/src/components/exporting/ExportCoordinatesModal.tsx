@@ -763,6 +763,12 @@ function DrillChartExport() {
     const [individualCharts, setIndividualCharts] = useState(false);
     const [includeNotesAppendix, setIncludeNotesAppendix] = useState(true);
 
+    // Web only: the finished export, waiting for a tap on Save
+    const [finishedCharts, setFinishedCharts] = useState<{
+        exportDir: string;
+        count: number;
+    } | null>(null);
+
     /**
      * Exports the generated SVGs as PDF files for each marcher or a single overview PDF.
      * @param svgPages - 2D array of SVG strings for each marcher.
@@ -882,6 +888,7 @@ function DrillChartExport() {
         isCancelled.current = false;
         setIsLoading(true);
         setProgress(0);
+        setFinishedCharts(null);
 
         assert(
             marcherPagesLoaded,
@@ -961,6 +968,15 @@ function DrillChartExport() {
 
             setProgress(100);
             setCurrentStep(t("exportCoordinates.exportComplete"));
+
+            // The web keeps the files until the person taps Save
+            if (isWebBuild) {
+                setFinishedCharts({
+                    exportDir,
+                    count: individualCharts ? SVGs.length : 1,
+                });
+                return;
+            }
 
             // Prompt user to open the export directory
             toast.success(
@@ -1169,6 +1185,10 @@ function DrillChartExport() {
                     </Button>
                 </DialogClose>
             </div>
+
+            {isWebBuild && finishedCharts && (
+                <WebFinishedDrillCharts charts={finishedCharts} />
+            )}
 
             {/* Progress Bar */}
             {isLoading && (
@@ -2080,6 +2100,66 @@ function WebFinishedVideo({
     );
 }
 
+/**
+ * Web only: the finished drill charts and their Save button. Saving opens
+ * the share sheet on iPads (Save to Files, AirDrop, Mail) and downloads
+ * elsewhere; several charts come as one zip (web/renderer/drillChartExport.ts).
+ */
+function WebFinishedDrillCharts({
+    charts,
+}: {
+    charts: { exportDir: string; count: number };
+}) {
+    const t = tolgee.t;
+    const [saving, setSaving] = useState(false);
+    const save = () => {
+        setSaving(true);
+        // Called straight from the tap: the share sheet needs it
+        const delivered = window.electron.openExportDirectory(
+            charts.exportDir,
+        ) as Promise<unknown>;
+        void delivered
+            .then((outcome) => {
+                if (outcome === "saved")
+                    toast.success(t("exportCoordinates.drillChartsWebSaved"));
+                else if (outcome === "missing")
+                    toast.error(t("exportCoordinates.drillChartsWebMissing"));
+            })
+            .catch((error: unknown) => {
+                console.error("Saving the drill charts failed:", error);
+                toast.error(t("exportCoordinates.drillChartsWebMissing"));
+            })
+            .finally(() => setSaving(false));
+    };
+    return (
+        <div
+            role="status"
+            className="border-stroke bg-fg-1 rounded-6 flex flex-col gap-12 border p-16"
+        >
+            <p className="text-body">
+                {charts.count > 1
+                    ? t("exportCoordinates.drillChartsWebReadyZip", {
+                          count: charts.count,
+                      })
+                    : t("exportCoordinates.drillChartsWebReady")}
+            </p>
+            {isAppleTouchDevice() && (
+                <p className="text-sub text-text/75">
+                    {t("exportCoordinates.drillChartsWebSaveHintApple")}
+                </p>
+            )}
+            <Button
+                type="button"
+                className="w-fit"
+                onClick={save}
+                disabled={saving}
+            >
+                {t("exportCoordinates.drillChartsWebSave")}
+            </Button>
+        </div>
+    );
+}
+
 function MobileExportOption({ onClick }: { onClick: () => void }) {
     return (
         <button
@@ -2121,14 +2201,41 @@ function MobileExportOption({ onClick }: { onClick: () => void }) {
     );
 }
 
+const WEB_EXPORT_TABS: ExportTab[] = ["drill-charts", "video"];
+
 function ExportModalContents({
     onMobileExportClick,
 }: {
     onMobileExportClick: () => void;
 }) {
     const { exportTab, setExportTab } = useAppDialogStore();
-    // The web build can only export video (the rest needs Electron)
-    if (isWebBuild) return <VideoExport />;
+    // The web build exports drill charts and video; coordinate sheets need
+    // Electron's printToPDF, and mobile export needs sign-in
+    if (isWebBuild)
+        return (
+            <Tabs
+                value={
+                    WEB_EXPORT_TABS.includes(exportTab) ? exportTab : "video"
+                }
+                onValueChange={(tab) => setExportTab(tab as ExportTab)}
+                className="gap-12"
+            >
+                <TabsList>
+                    <TabItem value="drill-charts">
+                        <T keyName="exportCoordinates.drillCharts" />
+                    </TabItem>
+                    <TabItem value="video">
+                        <T keyName="exportCoordinates.video" />
+                    </TabItem>
+                </TabsList>
+                <TabContent value="drill-charts">
+                    <DrillChartExport />
+                </TabContent>
+                <TabContent value="video">
+                    <VideoExport />
+                </TabContent>
+            </Tabs>
+        );
     return (
         <Tabs
             value={exportTab}
@@ -2188,11 +2295,7 @@ export default function ExportCoordinatesModal() {
                 {/* Dialog Setup */}
                 <DialogContent className="export-coordinates-dialog touch:max-h-[calc(100dvh-2rem)]! max-h-[80vh] w-[48rem] overflow-y-auto">
                     <DialogTitle>
-                        {isWebBuild ? (
-                            <T keyName="exportCoordinates.exportVideoButton" />
-                        ) : (
-                            <T keyName="exportCoordinates.title" />
-                        )}
+                        <T keyName="exportCoordinates.title" />
                     </DialogTitle>
                     <ExportModalContents
                         onMobileExportClick={handleMobileExportClick}
