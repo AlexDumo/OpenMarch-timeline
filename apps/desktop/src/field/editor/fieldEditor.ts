@@ -536,6 +536,8 @@ export class FieldEditor {
      * Mac's Ctrl-press too, whose click opens only a mode's menu (#569).
      */
     private rightPress: { start: FieldPointer; dragged: boolean } | null = null;
+    /** What made the last press: readouts by the pointer keep clear of a finger. */
+    private lastPressKind: PointerKind = "mouse";
     private readonly listeners = new Set<() => void>();
     private readonly now: () => number;
     private readonly areaPorts: AreaPorts;
@@ -564,6 +566,7 @@ export class FieldEditor {
      * here; false leaves it to navigation (right, middle, Ctrl on a Mac).
      */
     pointerDown(pointer: FieldPointer): boolean {
+        this.lastPressKind = pointer.kind;
         if (!this.isEditButton(pointer)) {
             // Navigation pans with it; a right-click (no drag) opens the
             // menu. A Mac's Ctrl-click pans (#194), and opens only a mode's
@@ -840,6 +843,14 @@ export class FieldEditor {
                     wanted.has(id) && !hidden?.[i] && this.ports.canSelect(id),
             ),
         );
+    }
+
+    /**
+     * What made the press in progress, or the last one: the overlay keeps its readouts clear
+     * of a finger, and by a mouse or pen pointer as they always were.
+     */
+    pressKind(): PointerKind {
+        return this.lastPressKind;
     }
 
     /** The gesture in progress, for the field test API and the overlay; a press that's still a click has none. */

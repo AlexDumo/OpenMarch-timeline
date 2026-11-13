@@ -30,6 +30,7 @@ import {
     placeGroupLabels,
 } from "@/shapes/field/groupDrawing";
 import HeldRolesChip, { HeldRolesChipBelowTip } from "./HeldRolesChip";
+import ClearOfFinger from "./ClearOfFinger";
 
 /** The selection border width, in CSS px. */
 const BOX_WIDTH = 2;
@@ -177,10 +178,18 @@ export default function FieldOverlay({
     const propTool = useSyncExternalStore(subscribeEditor, () =>
         editor.propToolShape(),
     );
+    // A finger's drag puts its readouts above the finger, where they aren't covered
+    const touch = useSyncExternalStore(
+        subscribeEditor,
+        () => editor.pressKind() === "touch",
+    );
 
     return (
         <>
-            <HeldRolesChip belowTip={modeDrawing?.tip !== undefined} />
+            <HeldRolesChip
+                belowTip={modeDrawing?.tip !== undefined}
+                touch={touch}
+            />
             <svg
                 className="pointer-events-none absolute inset-0 h-full w-full"
                 data-testid="fieldOverlay"
@@ -201,6 +210,7 @@ export default function FieldOverlay({
                         drawing={modeDrawing}
                         theme={theme}
                         marchers={marchers}
+                        touch={touch}
                     />
                 )}
                 {propTool && <PropToolPreview tool={propTool} theme={theme} />}
@@ -868,10 +878,13 @@ function ModeDrawing({
     drawing,
     theme,
     marchers,
+    touch,
 }: {
     drawing: FieldModeDrawing;
     theme: FieldTheme;
     marchers: FieldMarchers;
+    /** The press is a finger's: the tip sits above it, clear of the finger */
+    touch: boolean;
 }) {
     const view = useFieldViewStore();
     const shape = rgbaToString(theme.shape);
@@ -1234,6 +1247,43 @@ function ModeDrawing({
                 (() => {
                     const p = at(drawing.tip.at);
                     // A solid pill, so the readout reads over any part of the field (owner)
+                    const stack = (
+                        <div className="flex flex-col items-start gap-4">
+                            <div
+                                className="rounded-6 border-stroke bg-bg-1 bg-modal text-text shadow-modal inline-flex items-center gap-2 border px-6 py-2 whitespace-nowrap tabular-nums"
+                                style={{ fontSize: TIP_PX }}
+                                data-testid="fieldShapeTip"
+                            >
+                                <GlyphText text={drawing.tip.text} size={12} />
+                            </div>
+                            {/* The held-roles chip stacks under the readout, never over it */}
+                            <HeldRolesChipBelowTip />
+                        </div>
+                    );
+                    if (touch) {
+                        // Over the whole field, so the stack can center above the finger and
+                        // stay inside the field's edges
+                        return (
+                            <foreignObject
+                                x={0}
+                                y={0}
+                                width={view.width}
+                                height={view.height}
+                            >
+                                <div className="relative h-full w-full">
+                                    <ClearOfFinger
+                                        finger={p}
+                                        bounds={{
+                                            width: view.width,
+                                            height: view.height,
+                                        }}
+                                    >
+                                        {stack}
+                                    </ClearOfFinger>
+                                </div>
+                            </foreignObject>
+                        );
+                    }
                     return (
                         <foreignObject
                             x={p.x + TIP_OFFSET_PX}
@@ -1242,20 +1292,7 @@ function ModeDrawing({
                             height={TIP_BOX.height}
                             overflow="visible"
                         >
-                            <div className="flex flex-col items-start gap-4">
-                                <div
-                                    className="rounded-6 border-stroke bg-bg-1 bg-modal text-text shadow-modal inline-flex items-center gap-2 border px-6 py-2 whitespace-nowrap tabular-nums"
-                                    style={{ fontSize: TIP_PX }}
-                                    data-testid="fieldShapeTip"
-                                >
-                                    <GlyphText
-                                        text={drawing.tip.text}
-                                        size={12}
-                                    />
-                                </div>
-                                {/* The held-roles chip stacks under the readout, never over it */}
-                                <HeldRolesChipBelowTip />
-                            </div>
+                            {stack}
                         </foreignObject>
                     );
                 })()}

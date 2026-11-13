@@ -310,6 +310,21 @@ describe("FieldEditor thresholds by pointer kind (tablet 0.1)", () => {
     const pen = { kind: "pen" } as const;
     const touch = { kind: "touch" } as const;
 
+    it("reports what made the last press, for readouts that keep clear of a finger", () => {
+        const { editor } = setup();
+        expect(editor.pressKind()).toBe("mouse");
+        editor.pointerDown(at(100, 100, touch));
+        expect(editor.pressKind()).toBe("touch");
+        editor.pointerUp(at(100, 100, touch));
+        // Still the finger's until the next press
+        expect(editor.pressKind()).toBe("touch");
+        editor.pointerDown(at(100, 100, pen));
+        expect(editor.pressKind()).toBe("pen");
+        editor.pointerUp(at(100, 100, pen));
+        editor.pointerDown(at(100, 100));
+        expect(editor.pressKind()).toBe("mouse");
+    });
+
     it("starts a mouse move at 4 screen px, as always", () => {
         const { editor } = setup();
         editor.pointerDown(at(100, 100));
