@@ -456,6 +456,9 @@ importers:
       '@noble/hashes':
         specifier: 1.8.0
         version: 1.8.0
+      '@pdf-lib/fontkit':
+        specifier: 1.1.1
+        version: 1.1.1
       '@playwright/test':
         specifier: 1.64.1
         version: 1.64.1
@@ -513,6 +516,9 @@ importers:
       cross-env:
         specifier: ^10.0.0
         version: 10.1.0
+      dompdf.js:
+        specifier: 2.0.7
+        version: 2.0.7
       dotenv:
         specifier: ^16.6.1
         version: 16.6.1
@@ -531,12 +537,18 @@ importers:
       fast-check:
         specifier: ^4.3.0
         version: 4.6.0
+      ironpress:
+        specifier: 1.7.0
+        version: 1.7.0
       jsdom:
         specifier: ^24.1.3
         version: 24.1.3(canvas@3.2.3(patch_hash=cbe6ad11ca8470108282514a34931732726ed7ea9376666ba672d81e688df32f))
       patch-package:
         specifier: ^8.0.0
         version: 8.0.1
+      pdf-lib:
+        specifier: 1.17.1
+        version: 1.17.1
       pdfjs-dist:
         specifier: 6.3.289
         version: 6.3.289
@@ -555,6 +567,9 @@ importers:
       tsx:
         specifier: ^4.19.2
         version: 4.21.0
+      turbo-html2pdf-wasm:
+        specifier: 0.8.2
+        version: 0.8.2
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -828,7 +843,7 @@ importers:
         version: 1.2.8(@types/react-dom@19.2.3(@types/react@19.2.9))(@types/react@19.2.9)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@tailwindcss/vite':
         specifier: ^4.1.11
-        version: 4.1.18(vite@8.0.14(@types/node@24.12.2)(esbuild@0.27.7)(jiti@2.6.1)(sass@1.77.4)(terser@5.16.9)(tsx@4.21.0)(yaml@2.8.3))
+        version: 4.1.18(vite@7.3.3(@types/node@24.12.2)(jiti@2.6.1)(lightningcss@1.32.0)(sass@1.77.4)(terser@5.16.9)(tsx@4.21.0)(yaml@2.8.3))
       '@types/react':
         specifier: ^19.1.8
         version: 19.2.9
@@ -4257,6 +4272,15 @@ packages:
       payload: 3.84.1
       react: ^19.0.0
       react-dom: ^19.0.0
+
+  '@pdf-lib/fontkit@1.1.1':
+    resolution: {integrity: sha512-KjMd7grNapIWS/Dm0gvfHEilSyAmeLvrEGVcqLGi0VYebuqqzTbgF29efCx7tvx+IEbG3zQciRSWl3GkUSvjZg==}
+
+  '@pdf-lib/standard-fonts@1.0.0':
+    resolution: {integrity: sha512-hU30BK9IUN/su0Mn9VdlVKsWBS6GyhVfqjwl1FjZN4TxP6cCw0jP2w7V3Hf5uX7M0AZJ16vey9yE0ny7Sa59ZA==}
+
+  '@pdf-lib/upng@1.0.1':
+    resolution: {integrity: sha512-dQK2FUMQtowVP00mtIksrlZhdFXQZPC+taih1q4CvPZ5vqdxR/LKBaFg0oAfzd1GlHZXXSPdQfzQnt+ViGvEIQ==}
 
   '@phosphor-icons/react@2.1.10':
     resolution: {integrity: sha512-vt8Tvq8GLjheAZZYa+YG/pW7HDbov8El/MANW8pOAz4eGxrwhnbfrQZq0Cp4q8zBEu8NIhHdnr+r8thnfRSNYA==}
@@ -7756,6 +7780,10 @@ packages:
     resolution: {integrity: sha512-cgwlv/1iFQiFnU96XXgROh8xTeetsnJiDsTc7TYCLFd9+/WNkIqPTxiM/8pSd8VIrhXGTf1Ny1q1hquVqDJB5w==}
     engines: {node: '>= 4'}
 
+  dompdf.js@2.0.7:
+    resolution: {integrity: sha512-cWibKDrEY14tHhPlq02LTbSwZWwbxVvBXvzaHC2mgXv5YpqUbC09TFrvFiC/zvQ2r/epR2YX6KSOrH6sllL3MQ==}
+    engines: {node: '>=18'}
+
   dompurify@3.4.5:
     resolution: {integrity: sha512-OrwIBKsdNSVEeubdJ1HBv/wNENRM9ytAVCv7YXt//A3vPdVMNuACRqK9mXCGCBW2ln7BT/A4X0jXHo2Gu89miA==}
 
@@ -9087,6 +9115,9 @@ packages:
 
   iron-webcrypto@1.2.1:
     resolution: {integrity: sha512-feOM6FaSr6rEABp/eDfVseKyTMDt+KGpeB35SkVn9Tyn0CqvVsY3EwI0v5i8nMHyJnzCIQf7nsy3p41TPkJZhg==}
+
+  ironpress@1.7.0:
+    resolution: {integrity: sha512-NJ6JKnKArpmgYkGdegzXg8X+60O4Vbu47Ubcbyn3erNwMhCQG6/GStqQpH8kwoSKkoJjMkvncmBxOmGY3zN6uA==}
 
   is-alphabetical@2.0.1:
     resolution: {integrity: sha512-FWyyY60MeTNyeSRpkM2Iry0G9hpr7/9kD40mD/cGQEuilcZYS4okz8SN2Q6rLCJ8gbCt6fN+rC+6tMGS99LaxQ==}
@@ -10662,6 +10693,9 @@ packages:
     hasBin: true
     peerDependencies:
       graphql: ^16.8.1
+
+  pdf-lib@1.17.1:
+    resolution: {integrity: sha512-V/mpyJAoTsN4cnP31vc0wfNA1+p20evqqnap0KLoRUN0Yk/p3wN52DOEsL4oBFcLdb76hlpKPtzJIgo67j/XLw==}
 
   pdfjs-dist@6.3.289:
     resolution: {integrity: sha512-ZHjSVpDa3D6izMq8/04lvkhkATUmL9px6ChPaXc1k6nU2Mrhlg1/7F0bdUqCwUjw3NsPTfPZsMDUU6ZIcRaeQw==}
@@ -12335,6 +12369,9 @@ packages:
 
   tunnel-rat@0.1.2:
     resolution: {integrity: sha512-lR5VHmkPhzdhrM092lI2nACsLO4QubF0/yoOhzX7c+wIpbN1GjHNzCc91QlpxBi+cnx8vVJ+Ur6vL5cEoQPFpQ==}
+
+  turbo-html2pdf-wasm@0.8.2:
+    resolution: {integrity: sha512-Ehn9jp+3hgqrwG6pf9e7XHItTam8WnqfBi0Z1beVZo2r0JA5XVQEGDIamhXQd0UUukjpoVeXVDiyX4wrFix8iA==}
 
   turbo@2.9.14:
     resolution: {integrity: sha512-BQqXRr4UoWI3UPFrtznCLykYHxwxWh53iCB57x092jPMjIlW1wnm3N895g5irpiXmnxUhREBB0n6+y8BHhs4nw==}
@@ -17972,6 +18009,18 @@ snapshots:
       - supports-color
       - typescript
 
+  '@pdf-lib/fontkit@1.1.1':
+    dependencies:
+      pako: 1.0.11
+
+  '@pdf-lib/standard-fonts@1.0.0':
+    dependencies:
+      pako: 1.0.11
+
+  '@pdf-lib/upng@1.0.1':
+    dependencies:
+      pako: 1.0.11
+
   '@phosphor-icons/react@2.1.10(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
       react: 19.2.4
@@ -19450,6 +19499,13 @@ snapshots:
     dependencies:
       postcss-selector-parser: 6.0.10
       tailwindcss: 4.2.2
+
+  '@tailwindcss/vite@4.1.18(vite@7.3.3(@types/node@24.12.2)(jiti@2.6.1)(lightningcss@1.32.0)(sass@1.77.4)(terser@5.16.9)(tsx@4.21.0)(yaml@2.8.3))':
+    dependencies:
+      '@tailwindcss/node': 4.1.18
+      '@tailwindcss/oxide': 4.1.18
+      tailwindcss: 4.1.18
+      vite: 7.3.3(@types/node@24.12.2)(jiti@2.6.1)(lightningcss@1.32.0)(sass@1.77.4)(terser@5.16.9)(tsx@4.21.0)(yaml@2.8.3)
 
   '@tailwindcss/vite@4.1.18(vite@8.0.14(@types/node@24.12.2)(esbuild@0.27.7)(jiti@2.6.1)(sass@1.77.4)(terser@5.16.9)(tsx@4.21.0)(yaml@2.8.3))':
     dependencies:
@@ -22041,6 +22097,8 @@ snapshots:
     dependencies:
       domelementtype: 2.3.0
 
+  dompdf.js@2.0.7: {}
+
   dompurify@3.4.5:
     optionalDependencies:
       '@types/trusted-types': 2.0.7
@@ -23974,6 +24032,8 @@ snapshots:
   ipaddr.js@2.2.0: {}
 
   iron-webcrypto@1.2.1: {}
+
+  ironpress@1.7.0: {}
 
   is-alphabetical@2.0.1: {}
 
@@ -25911,6 +25971,13 @@ snapshots:
       - typescript
       - utf-8-validate
 
+  pdf-lib@1.17.1:
+    dependencies:
+      '@pdf-lib/standard-fonts': 1.0.0
+      '@pdf-lib/upng': 1.0.1
+      pako: 1.0.11
+      tslib: 1.14.1
+
   pdfjs-dist@6.3.289: {}
 
   pdfkit@0.17.2:
@@ -27831,6 +27898,8 @@ snapshots:
       - immer
       - react
 
+  turbo-html2pdf-wasm@0.8.2: {}
+
   turbo@2.9.14:
     optionalDependencies:
       '@turbo/darwin-64': 2.9.14
@@ -28554,7 +28623,7 @@ snapshots:
   volar-service-typescript@0.0.70(@volar/language-service@2.4.28):
     dependencies:
       path-browserify: 1.0.1
-      semver: 7.7.4
+      semver: 7.8.5
       typescript-auto-import-cache: 0.3.6
       vscode-languageserver-textdocument: 1.0.12
       vscode-nls: 5.2.0

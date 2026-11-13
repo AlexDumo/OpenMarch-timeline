@@ -332,6 +332,8 @@ ignorePaths:
   # Verbatim SIL Open Font License for the vendored text symbols fonts
   - packages/ui/src/fonts/OFL.txt
   - "**/view3d/assets/om-pose/**"
+  # Generated WebAssembly glue code in the web PDF prototype
+  - apps/desktop/web/pdf-proto-html-wasm/vendor/**
   # Verbatim third-party license for the vendored front ensemble models
   - "**/view3d/assets/pit/LICENSE"
   - "**/view3d/assets/instruments/*.json"

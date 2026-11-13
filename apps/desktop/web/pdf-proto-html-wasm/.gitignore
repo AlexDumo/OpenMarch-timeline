@@ -1,0 +1,3 @@
+public/fixtures
+vendor/fulgur/*.wasm
+vendor/fulgur/crate/target

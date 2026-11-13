@@ -1,0 +1,29 @@
+<!doctype html>
+<!-- cspell:words fulgur ironpress dompdf -->
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>PDF prototype: HTML to PDF in WebAssembly</title>
+        <style>
+            @font-face { font-family: "DejaVu Sans"; src: url("./fonts/DejaVuSans.ttf"); font-weight: 400; }
+            @font-face { font-family: "DejaVu Sans"; src: url("./fonts/DejaVuSans-Bold.ttf"); font-weight: 700; }
+            body { font-family: system-ui, sans-serif; margin: 2rem; }
+        </style>
+    </head>
+    <body>
+        <h1>Coordinate sheets PDF (prototype)</h1>
+        <label>Engine
+            <select id="engine">
+                <option value="fulgur">fulgur</option>
+                <option value="ironpress">ironpress</option>
+                <option value="dompdf">dompdf.js</option>
+                <option value="turbo">turbo-html2pdf</option>
+            </select>
+        </label>
+        <label><input type="checkbox" id="quarter" /> Quarter pages</label>
+        <button id="export">Export coordinate sheets</button>
+        <p id="status"></p>
+        <script type="module" src="./main.ts"></script>
+    </body>
+</html>
