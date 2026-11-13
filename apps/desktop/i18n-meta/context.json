@@ -2521,6 +2521,8 @@
     "touch.modifiers.helpList.fromCenter": "One line of the help list opened by the question-mark button on the tablet modifier bar. <b>…</b> marks bold text: keep the tags and put the button name inside them. \"From center\" is the name of a button on the bar; boxes then grow from their middle.",
     "touch.modifiers.helpList.toggles": "First line of the help list opened by the question-mark button on the tablet modifier bar. <b>…</b> marks bold text: keep the tags around the two verbs. Explains the two ways to use a toggle button: tap it to keep it on, or hold it with one finger while dragging with another.",
     "touch.modifiers.noSnap": "Label (with a magnet icon) of the toggle button on the tablet modifier bar that turns snapping off. Snapping makes marchers land on whole and half steps and field lines. The button reads \"Snap off\" and appears pressed while snapping is off; the screen-reader label is the same text.",
+    "touch.redone": "Brief notice after a three-finger tap on the field (tablet) redid the last undone edit. Past participle, one word if possible.",
+    "touch.undone": "Brief notice after a two-finger tap on the field (tablet) undid the last edit. Past participle, one word if possible.",
     "updates.action.download": "Button in the update panel and in a notification. Starts downloading the newer OpenMarch version that was found.",
     "updates.action.downloadInstaller": "Button in the update panel and in a notification. Opens the OpenMarch release page in the web browser, where the installer for the new version can be downloaded and run by hand.",
     "updates.action.later": "Button in the update panel next to 'Update now'. Closes the panel; the downloaded update still installs the next time OpenMarch quits.",
