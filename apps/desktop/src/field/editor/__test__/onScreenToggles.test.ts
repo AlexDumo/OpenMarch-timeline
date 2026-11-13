@@ -390,6 +390,19 @@ describe("the pill and a finger (tablet 1.2)", () => {
         expect(state.selected).toEqual([1, 2, 3]);
     });
 
+    it("Add takes out a selected marcher a finger taps, even with a box handle within the finger's reach (#875)", () => {
+        store().toggleLatched("add");
+        const { editor, state } = setup({ selected: [1, 2, 3] });
+        // 7 px above marcher 2's dot: the box's top-middle handle, at y 90, is 13 px away,
+        // within a finger's 22 px reach, but the marcher is nearer
+        const tap = finger(200, 96.5);
+        expect(editor.fingerEdits(tap)).toBe(true);
+        editor.pointerDown(tap);
+        editor.pointerUp(tap);
+        expect(state.selected).toEqual([1, 3]);
+        expect(state.drops).toEqual([]);
+    });
+
     it("Add makes a finger inside the selection's box pan, as a press there would draw a marquee", () => {
         // Between marchers 2 and 3, inside the box around 1 and 3, clear of its handles
         const plain = setup({ selected: [1, 3] });

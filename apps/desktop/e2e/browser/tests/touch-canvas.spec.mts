@@ -338,10 +338,6 @@ test("in Pan, one finger on empty field moves the view one to one, keeps the sel
 test("with Add on, a tap on a selected marcher, just above its dot, takes it out", async ({
     show,
 }) => {
-    test.fixme(
-        true,
-        "App bug: with the pill's Add on, a finger tap on a selected marcher leaves it selected (Shift+click with a mouse takes it out)",
-    );
     const { page } = show;
     await tap(page, await screenOf(page, "T1"));
     await expect.poll(() => selectedDrillNumbers(page)).toEqual(["T1"]);
@@ -414,10 +410,6 @@ test("the tap on empty field that closes the long press menu doesn't touch the f
 test("the tap on another marcher that closes the long press menu doesn't touch the field", async ({
     show,
 }) => {
-    test.fixme(
-        true,
-        "App bug: a finger tap on a marcher leaves the long press menu open (a tap on empty field or a mouse click closes it)",
-    );
     const { page } = show;
     await longPress(page, await screenOf(page, "T2"));
     await expect(fieldMenu(page)).toBeVisible();

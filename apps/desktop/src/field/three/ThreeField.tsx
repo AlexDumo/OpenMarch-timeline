@@ -372,11 +372,11 @@ function ThreeFieldView() {
         fieldProperties,
     };
     // #315: where a right-click opens the field's menu (`useFieldMenu`, below
-    // the editor), and whether it's open: a press that closes it does nothing more
+    // the editor), and the press that closes it, which does nothing more
     const openMenuAt = useRef(
         (_at: { x: number; y: number }, _marcher: number | null) => {},
     );
-    const menuShown = useRef(false);
+    const takeMenuPress = useRef((): boolean => false);
 
     const editor = useMemo(
         () =>
@@ -408,7 +408,8 @@ function ThreeFieldView() {
                         ),
                     // #558: the shape's hidden marchers aren't there to press while it's seen alone
                     marcherHidden: (id) => dimming.isHidden(id),
-                    takePress: () => menuShown.current || takeFieldPress(),
+                    takePress: () =>
+                        takeMenuPress.current() || takeFieldPress(),
                     selectionBoxPadding: () =>
                         selectionBoxPadding(useFieldViewStore.getState().zoom),
                     showPositions: (positions) =>
@@ -496,7 +497,7 @@ function ThreeFieldView() {
         hasSelection: selectedIds.length > 0,
     });
     openMenuAt.current = menu.openAt;
-    menuShown.current = menu.at !== null;
+    takeMenuPress.current = menu.takePress;
     const timelineMode = useTimelineResolverStore((s) => s.resolver !== null);
 
     useEffect(() => {
