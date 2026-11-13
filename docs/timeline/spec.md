@@ -3736,8 +3736,10 @@ playhead marker sits on the path. A selected point's count is on the floating pa
 showing its pin, or empty with the count it passes now as a hint; typing a count and Enter pins it
 (AP-P1), and the pin's × removes it (AP-P3). The point's right-click or long-press menu has **Pin to
 count…** (which selects the point and puts the cursor in that field) and **Remove pin**. **Put
-corners on counts** is a button on the bar and a command. On the timeline, the move's clip shows a
-tick at each pinned count. Every control is a named action in the command palette.
+corners on counts** is a button on the bar and a command. While a path is open, the timeline shows a short tick at each of its pinned counts, standing on
+the page row over the move (a click seeks there). **Big steps** (J.6) judges each stretch at its
+pinned speed: a leg's distance is scaled by the fastest stretch of the clock it crosses. Every
+control is a named action in the command palette.
 
 **Not in this step:** holds and stops (`timing.holds`, step 14); steps per count and pins on
 another step grid (16); pins on follow-the-leader trails (trails get corner counts, step 6); exact
