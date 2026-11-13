@@ -139,6 +139,11 @@ export function usePathPenActions(): void {
         // path again: a path edit by its route, keeping its id, never refused for who holds its
         // spots (AP-O8, J.8 AP-R1, 07 N3)
         const now = usePathPenStore.getState().session;
+        // A line going round an outline (step 10, AP-T15): nothing to draw again
+        if (now?.target.trail?.around && now.phase !== "drawing") {
+            toast.error(aroundPointsReason(), { id: "path-pen" });
+            return;
+        }
         if (
             now &&
             now.target.routeId !== null &&
@@ -149,11 +154,6 @@ export function usePathPenActions(): void {
             if (useShapeToolStore.getState().tool) closeShapeTool();
             againFor.current = now.object ? "" : selectionKey;
             startDrawing(now.target, now.drill, now.object, true);
-            return;
-        }
-        // A line going round an outline (step 10, AP-T15): nothing to draw again
-        if (now?.target.trail?.around && now.phase !== "drawing") {
-            toast.error(aroundPointsReason(), { id: "path-pen" });
             return;
         }
         // The line's trail shown (pathways step 4): P draws the trail again, as Follow does
