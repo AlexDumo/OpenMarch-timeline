@@ -50,6 +50,7 @@ import {
     setFollowSpacing,
 } from "./followDrag";
 import {
+    detachIdsOf,
     memberNow,
     memberOf,
     shapeOf,
@@ -408,7 +409,11 @@ function PathPenBanner({ session }: { session: PathSession }) {
                         esc,
                     }}
                 />
-            ) : session.target.group ? (
+            ) : session.target.group &&
+              !(
+                  session.target.lane &&
+                  session.target.group.members.length === 1
+              ) ? (
                 <T
                     keyName="pathways.banner.groupDrawing"
                     defaultValue="Group path for {count} marchers: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
@@ -498,11 +503,23 @@ function PathEditorBar({
     const smooth = picked >= 0 && isSmooth(shape, picked);
     // R-14″: a point at an end of an arc stays a corner, and Smooth says why
     const cornerOnly = picked >= 0 && !smooth && besideArc(shape, picked);
-    // Own path and Rejoin for a group path (step 15): who they act on comes from the selection
-    const ownable = usePathPenStore((s) => s.ownable);
+    // Detach and Rejoin for a group path (AP-R9, AP-R10): who they act on comes from the selection
+    const selectedMembers = usePathPenStore((s) => s.ownable);
+    const ownable = detachIdsOf(selectedMembers, session);
     const rejoin = usePathPenStore((s) => s.rejoin);
     const groupControls = !drawing && (ownable.length > 0 || rejoin !== null);
-    // Re-fit shows only when the ends have moved, as Own path shows only when it can act (decision A)
+    // Rejoin's marchers that were Detached: the copy shown, or the group's detached ones
+    const detachedOutside =
+        session.target.group?.outside.filter((m) => m.detached).length ?? 0;
+    const detachedNote =
+        session.target.lane?.detachedFrom != null
+            ? tolgee.t("pathways.editor.detachedNote", "Detached")
+            : detachedOutside > 0
+              ? tolgee.t("pathways.editor.detachedCount", "{count} detached", {
+                    count: detachedOutside,
+                })
+              : null;
+    // Re-fit shows only when the ends have moved, as Detach shows only when it can act (decision A)
     const refit = !drawing && refitNeeded(session.target);
     // The lane picked on the open group path (decision C), and any Adjust the app moved
     const laneMember =
@@ -722,25 +739,35 @@ function PathEditorBar({
                                 {ownable.length > 0 && (
                                     <IconButton
                                         label={tolgee.t(
-                                            "pathways.editor.ownPathTip",
-                                            "Give the selected marchers their own copy of their part of the path",
+                                            "pathways.editor.detachTip",
+                                            "Give the selected marchers, or the marcher whose lane is picked, their own copy of the group path. They walk in step with the group until you edit the copy",
                                         )}
-                                        action="ownPath"
-                                        onClick={() => runAction("ownPath")}
-                                        testId="path-own"
+                                        action="detachPath"
+                                        onClick={() => runAction("detachPath")}
+                                        testId="path-detach"
                                     >
                                         <ArrowsSplitIcon size={14} />
                                         {tolgee.t(
-                                            "actions.path.ownPath",
-                                            "Own path",
+                                            "actions.path.detach",
+                                            "Detach",
                                         )}
                                     </IconButton>
+                                )}
+                                {rejoin !== null && detachedNote && (
+                                    // Says in words what the Detached ring's tooltip says, so a
+                                    // finger reads it too (review of #900, N3)
+                                    <span
+                                        className="text-text-subtitle px-4"
+                                        data-testid="path-detached-note"
+                                    >
+                                        {detachedNote}
+                                    </span>
                                 )}
                                 {rejoin !== null && (
                                     <IconButton
                                         label={tolgee.t(
                                             "pathways.editor.rejoinTip",
-                                            "Put the selected marchers back on the group path, each from where it stands",
+                                            "Put the selected marchers back on the group path. A detached marcher's copy goes, and so does any adjustment on it",
                                         )}
                                         action="rejoinPath"
                                         onClick={() => runAction("rejoinPath")}

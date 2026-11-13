@@ -232,6 +232,8 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
     // is left as it is, as for 0019: re-running 0022 rebuilds the table and copies every row.
     // 0022's own test restores the older CHECK itself.
     22: () => {},
+    // Route sources, pathways step 3c: a new table only
+    23: (db) => dropTables(db, ["timeline_route_sources"]),
 };
 
 /**

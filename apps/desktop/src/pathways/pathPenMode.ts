@@ -30,7 +30,7 @@ import { lineCoordinate } from "@/shapes/field/lineCoordinate";
 import { toolEnvFor } from "@/shapes/tool/toolEnv";
 import type { ToolEnv } from "@/shapes/tool/toolKind";
 import type { XY } from "@/shapes/types";
-import { refitNeeded, type PathTarget } from "./pathTarget";
+import { drawnAsGroup, refitNeeded, type PathTarget } from "./pathTarget";
 import {
     followEnds,
     followHit,
@@ -1460,12 +1460,17 @@ function groupParts(
                 at: m.from,
                 marcherId: m.marcherId,
                 kind: "own" as const,
-                label: m.ownPath
-                    ? tolgee.t("pathways.rings.own", "Own path")
-                    : tolgee.t(
-                          "pathways.rings.offGroup",
-                          "Not on the group path",
-                      ),
+                label: m.detached
+                    ? tolgee.t(
+                          "pathways.rings.detached",
+                          "Detached: walks its own copy of the group path",
+                      )
+                    : m.ownPath
+                      ? tolgee.t("pathways.rings.own", "Own path")
+                      : tolgee.t(
+                            "pathways.rings.offGroup",
+                            "Not on the group path",
+                        ),
             })),
         ],
     };
@@ -1509,7 +1514,7 @@ const objectDrawings = new WeakMap<PathTarget, FieldModeDrawing | null>();
  * was, so it has no drawing of its own (null).
  */
 export function objectDrawingOf(o: PathObject): FieldModeDrawing | null {
-    if (!o.target.group) return null;
+    if (!drawnAsGroup(o.target)) return null;
     let drawing = objectDrawings.get(o.target);
     if (drawing !== undefined) return drawing;
     const built = buildDrawing({

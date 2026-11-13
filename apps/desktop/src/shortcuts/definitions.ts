@@ -832,10 +832,11 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
     },
 
-    // Pathways step 15: a group path's members break off with a copy of their lane (Own path,
-    // AP-R9) or follow it (Rejoin, AP-R10). On the floating path bar and in the palette; no keys
-    ownPath: {
-        labelKey: "actions.path.ownPath",
+    // Pathways step 3c: a group path's members break off with a copy of it that keeps the group's
+    // counts (Detach, AP-R9) or follow it again (Rejoin, AP-R10). On the floating path bar and in
+    // the palette; no keys
+    detachPath: {
+        labelKey: "actions.path.detachFromGroup",
         keywordsKey: "actions.path.keywords",
         category: "path",
         scope: "canvas",
@@ -843,7 +844,7 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
     },
     rejoinPath: {
-        labelKey: "actions.path.rejoin",
+        labelKey: "actions.path.rejoinGroup",
         keywordsKey: "actions.path.keywords",
         category: "path",
         scope: "canvas",
