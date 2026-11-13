@@ -159,7 +159,7 @@ export default function CanvasZoomControls({
     return (
         <div
             className={clsx(
-                "group border-stroke bg-bg-1 rounded-8 pointer-events-auto absolute right-6 bottom-6 z-10 flex w-160 flex-col overflow-hidden border shadow-lg",
+                "group border-stroke bg-bg-1 rounded-8 touch:w-216 pointer-events-auto absolute right-6 bottom-6 z-10 flex w-160 flex-col overflow-hidden border shadow-lg",
             )}
         >
             <div className="border-stroke flex items-center border-b px-12 py-2">
@@ -180,17 +180,21 @@ export default function CanvasZoomControls({
                 {/* Zoom Out Button */}
                 <button
                     onClick={handleZoomOut}
-                    className="border-stroke text-text flex w-full items-center justify-center p-2 transition-colors duration-150 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="border-stroke text-text touch:min-h-48 touch:min-w-48 flex w-full items-center justify-center p-2 transition-colors duration-150 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={!canvas || currentZoom <= getMinZoom()}
                     title={t("canvas.zoom.out")}
                 >
-                    <MinusIcon size={18} weight="bold" />
+                    <MinusIcon
+                        size={18}
+                        weight="bold"
+                        className="touch:size-24"
+                    />
                 </button>
 
                 {/* Zoom Percentage Display and Reset Button */}
                 <button
                     onClick={handleResetZoomAndCenter}
-                    className="border-stroke bg-fg-2 text-text flex h-full w-full items-center justify-center border-r border-l px-3 py-4 font-mono text-sm transition-colors duration-150 hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="border-stroke bg-fg-2 text-text touch:min-h-48 touch:min-w-72 flex h-full w-full items-center justify-center border-r border-l px-3 py-4 font-mono text-sm transition-colors duration-150 hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={!canvas}
                     title={t("canvas.zoom.resetAndCenter")}
                     aria-label={t("canvas.zoom.reset", { zoom: currentZoom })}
@@ -201,11 +205,15 @@ export default function CanvasZoomControls({
                 {/* Zoom In Button */}
                 <button
                     onClick={handleZoomIn}
-                    className="border-stroke text-text flex w-full items-center justify-center border-l p-2 transition-colors duration-150 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="border-stroke text-text touch:min-h-48 touch:min-w-48 flex w-full items-center justify-center border-l p-2 transition-colors duration-150 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={!canvas || currentZoom >= getMaxZoom()}
                     title={t("canvas.zoom.in")}
                 >
-                    <PlusIcon size={18} weight="bold" />
+                    <PlusIcon
+                        size={18}
+                        weight="bold"
+                        className="touch:size-24"
+                    />
                 </button>
             </div>
         </div>
