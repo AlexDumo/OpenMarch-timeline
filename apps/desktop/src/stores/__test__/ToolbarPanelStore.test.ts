@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
     DEFAULT_TOOLBAR_PANEL,
     parseToolbarPanel,
@@ -90,6 +90,43 @@ describe("useToolbarPanelStore", () => {
         useToolbarPanelStore.getState().setTab("file");
         expect(useToolbarPanelStore.getState()).toMatchObject({
             tab: "file",
+            open: false,
+        });
+    });
+});
+
+describe("the store at startup", () => {
+    beforeEach(() => {
+        localStorage.clear();
+        vi.resetModules();
+    });
+
+    /** A new window: the store module loads again and reads storage once */
+    const freshStore = async () =>
+        (await import("../ToolbarPanelStore")).useToolbarPanelStore.getState();
+
+    it("opens as it was left, from openmarch:toolbarPanel", async () => {
+        localStorage.setItem(
+            "openmarch:toolbarPanel",
+            JSON.stringify({ tab: "shapes", open: true }),
+        );
+        expect(await freshStore()).toMatchObject({
+            tab: "shapes",
+            open: true,
+        });
+    });
+
+    it("starts closed on Alignment with nothing saved", async () => {
+        expect(await freshStore()).toMatchObject({
+            tab: "alignment",
+            open: false,
+        });
+    });
+
+    it("starts closed on Alignment when what's saved is unreadable", async () => {
+        localStorage.setItem("openmarch:toolbarPanel", "{not json");
+        expect(await freshStore()).toMatchObject({
+            tab: "alignment",
             open: false,
         });
     });

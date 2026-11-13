@@ -55,6 +55,17 @@ const panel = (page: Page) => page.getByTestId("toolbar-panel");
 
 const fieldBox = (page: Page) => page.getByTestId("fieldCanvas").boundingBox();
 
+/** Whether a finger at the middle of `locator` lands on it, not on something over it */
+const tappable = (locator: Locator) =>
+    locator.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        const hit = document.elementFromPoint(
+            box.left + box.width / 2,
+            box.top + box.height / 2,
+        );
+        return hit !== null && element.contains(hit);
+    });
+
 test.beforeEach(async ({ show }) => {
     await expectCanvasMatchesShow(show);
 });
@@ -66,10 +77,15 @@ test("the tabs sit in the title bar, and the panel starts closed", async ({
     for (const name of ["File", "Alignment", "Shapes", "Select"])
         await expect(tab(page, name)).toBeVisible();
     // The tabs take the middle of the bar, where the show's name was
-    await expect(page.getByTestId("titlebar-file-path")).toHaveCount(0);
+    await expect(page.locator(".main-app-titlebar")).not.toContainText(
+        "show.dots",
+    );
     await expect(panel(page)).toBeHidden();
-    // The 3D View button and the workspace switch stay on screen
-    await expect(page.getByTestId("workspace-view-switch")).toBeVisible();
+    // The 3D View button and the workspace switch stay on screen, in the same row
+    await expect(titleBarTabs(page).getByTestId("open-view3d")).toBeVisible();
+    await expect(
+        titleBarTabs(page).getByTestId("workspace-view-switch"),
+    ).toBeVisible();
     await page.screenshot({ path: test.info().outputPath("closed.png") });
 });
 
@@ -92,6 +108,16 @@ test("tapping a tab opens its controls over the field without moving the field",
     expect(await fieldBox(page)).toEqual(before);
     const panelBox = await panel(page).boundingBox();
     expect(panelBox!.y).toBeGreaterThanOrEqual(before!.y - 16);
+
+    // It leaves the sidebar and the field display bar uncovered: both stay tappable
+    const displayBar = page.getByTestId("field-display-bar");
+    const firstDisplayButton = displayBar.getByRole("button").first();
+    await expect(firstDisplayButton).toBeVisible();
+    expect(await tappable(firstDisplayButton)).toBe(true);
+    const barBox = await displayBar.boundingBox();
+    expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(barBox!.x);
+    const sidebarFirst = page.locator("#sidebar").getByRole("button").first();
+    expect(await tappable(sidebarFirst)).toBe(true);
 
     // The control runs the toolbar's own action
     await tapOn(page, selectAll);
@@ -166,4 +192,68 @@ test("with the interface set to Mouse, the toolbar is the desktop one", async ({
         "true",
     );
     await expect(page.getByTestId("toolbar-panel")).toHaveCount(0);
+});
+
+test("on a narrow screen the 3D View and the switch stay in the title bar, and the tabs scroll", async ({
+    show,
+}) => {
+    const { page } = show;
+    // iPad mini held upright
+    await page.setViewportSize({ width: 744, height: 1000 });
+    await expect(titleBarTabs(page).getByTestId("open-view3d")).toBeVisible();
+    await expect(
+        titleBarTabs(page).getByTestId("workspace-view-switch"),
+    ).toBeVisible();
+    // Every tab can still be reached: the row scrolls to it
+    for (const name of ["File", "Alignment", "Shapes", "Select"]) {
+        await tab(page, name).scrollIntoViewIfNeeded();
+        await tapOn(page, tab(page, name));
+        await expect(tab(page, name)).toHaveAttribute("aria-selected", "true");
+        await expect(panel(page)).toBeVisible();
+    }
+    await expect(
+        panel(page).getByRole("button", { name: "Select all" }),
+    ).toBeVisible();
+    await page.screenshot({ path: test.info().outputPath("narrow-open.png") });
+});
+
+test("Editor to Preview and back keeps the field where it is", async ({
+    show,
+}) => {
+    const { page } = show;
+    await waitForSettledField(page);
+    // Where the field starts. Preview's timeline is its own height, and Preview has no sidebar
+    // or inspector, so only the top edge is the toolbar's to keep
+    const top = async () => (await fieldBox(page))!.y;
+    const before = await top();
+
+    await tapOn(page, page.getByTestId("workspace-view-preview"));
+    // Preview's switch takes the same title bar row; nothing is added above the field
+    await expect(page.getByTestId("touch-preview-toolbar")).toBeVisible();
+    await expect(titleBarTabs(page)).toContainText("Preview");
+    await expect(titleBarTabs(page).getByRole("tab")).toHaveCount(0);
+    await waitForSettledField(page);
+    expect(await top()).toBe(before);
+    await page.screenshot({ path: test.info().outputPath("preview.png") });
+
+    await tapOn(page, page.getByTestId("workspace-view-editor"));
+    await expect(tab(page, "Alignment")).toBeVisible();
+    await waitForSettledField(page);
+    expect(await top()).toBe(before);
+});
+
+test("in tempo mode the title bar row steps back with the rest", async ({
+    show,
+}) => {
+    const { page } = show;
+    await tapOn(page, page.getByTestId("timeline-tempo-mode"));
+    await expect(page.getByRole("button", { name: "Done" })).toBeVisible();
+    const row = page.getByTestId("touch-toolbar-row");
+    await expect(row).toHaveAttribute("inert", "");
+    await expect(row).toHaveClass(/opacity-30/);
+    // A tap on a tab does nothing, and Preview can't be turned on
+    await tapOn(page, tab(page, "Select"));
+    await expect(panel(page)).toBeHidden();
+    await tapOn(page, page.getByTestId("workspace-view-preview"));
+    await expect(page.getByTestId("touch-preview-toolbar")).toHaveCount(0);
 });

@@ -2,7 +2,8 @@ import { Tabs, TabContent, TabItem, TabsList } from "@openmarch/ui";
 import { FileTab } from "./tabs/FileTab";
 import AlignmentTab from "./tabs/AlignmentTab";
 import ShapesTab from "@/shapes/tool/ShapesTab";
-import { useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
+import clsx from "clsx";
 import { createPortal } from "react-dom";
 import { T, useTranslate } from "@tolgee/react";
 import { CaretDownIcon, CaretUpIcon } from "@phosphor-icons/react";
@@ -16,6 +17,7 @@ import {
     type ToolbarTab,
     useToolbarPanelStore,
 } from "@/stores/ToolbarPanelStore";
+import { usePanelInsets } from "./touchPanelInsets";
 
 /**
  * Touch layout: each tab's controls are one row that scrolls sideways, so the panel keeps its
@@ -80,14 +82,23 @@ function ToolbarTabContents({ className }: { className?: string }) {
     );
 }
 
-/** The 3D View button and the Editor/Preview switch, at the toolbar's right end */
-function ToolbarEnd({ className }: { className?: string }) {
+/**
+ * The 3D View button and the Editor/Preview switch, at the toolbar's right end. In the touch
+ * title bar the 3D View button keeps its icon however narrow the row (tablet plan 2.2)
+ */
+function ToolbarEnd({
+    className,
+    touch = false,
+}: {
+    className?: string;
+    touch?: boolean;
+}) {
     return (
         <div className={className}>
             {/* Its words go first, then the whole button, so it never covers the tabs at the
                 narrowest window (the shortcut and ⌘K still open the 3D View) */}
             <View3dButton
-                className="@max-[480px]:hidden"
+                className={touch ? undefined : "@max-[480px]:hidden"}
                 labelClassName="@max-[600px]:sr-only"
             />
             <WorkspaceViewSwitch />
@@ -95,30 +106,60 @@ function ToolbarEnd({ className }: { className?: string }) {
     );
 }
 
-/**
- * Below this window width the title bar can't hold the tabs, the 3D View button and the
- * workspace switch together (iPad portrait), so the last two move into the panel and the tabs
- * keep their room.
- */
-const NARROW_TOUCH_QUERY = "(max-width: 900px)";
-
-const subscribeNarrow = (onChange: () => void) => {
-    if (typeof window.matchMedia !== "function") return () => {};
-    const query = window.matchMedia(NARROW_TOUCH_QUERY);
-    query.addEventListener("change", onChange);
-    return () => query.removeEventListener("change", onChange);
+/** What the tablet layout's title bar row gets to lock it in tempo mode, as App locks the rest */
+type TempoLock = {
+    /** Tempo mode (Edit music) is on: nothing but the tempo lanes takes input */
+    tempoMode?: boolean;
+    /** App's class for what steps back in tempo mode */
+    tempoModeClass?: string;
 };
-const isNarrow = () =>
-    typeof window.matchMedia === "function" &&
-    window.matchMedia(NARROW_TOUCH_QUERY).matches;
 
-export default function Topbar() {
-    // In the tablet layout the title bar holds the tabs. Without its slot (it isn't shown),
-    // the toolbar keeps the mouse layout
+/** The touch toolbar's row in the title bar: a tablet's toolbar takes no room above the field */
+function useTouchSlot() {
     const isTouch = useIsTouchMode();
-    const tabsSlot = useToolbarTabsSlot();
-    if (isTouch && tabsSlot) return <TouchToolbar tabsSlot={tabsSlot} />;
+    const slot = useToolbarTabsSlot();
+    // Without the title bar slot (it isn't shown), the toolbar keeps the mouse layout
+    return isTouch ? slot : null;
+}
+
+export default function Topbar(props: TempoLock) {
+    const slot = useTouchSlot();
+    if (slot) return <TouchToolbar tabsSlot={slot} {...props} />;
     return <MouseToolbar />;
+}
+
+/**
+ * Preview's only controls: the workspace switch, to go back, and the 3D View. In the tablet
+ * layout they take the title bar row as the editor's toolbar does, so switching between the
+ * two never moves the field.
+ */
+export function PreviewToolbar() {
+    const slot = useTouchSlot();
+    if (slot)
+        return (
+            <>
+                {/* Holds the editor toolbar's place in the column, so the field stays put */}
+                <div className="h-0" />
+                {createPortal(
+                    <div
+                        className="@container flex w-full min-w-0 items-center justify-end gap-8"
+                        data-testid="touch-preview-toolbar"
+                    >
+                        <ToolbarEnd
+                            touch
+                            className="flex shrink-0 items-center gap-8"
+                        />
+                    </div>,
+                    slot,
+                )}
+            </>
+        );
+    return (
+        <div className="flex items-center justify-end gap-8">
+            <View3dButton />
+            <WorkspaceViewSwitch />
+        </div>
+    );
 }
 
 function MouseToolbar() {
@@ -145,15 +186,22 @@ function MouseToolbar() {
  * Tablet layout (ported from upstream #1060): the tab row moves into the title bar, so the
  * top of the screen is one row, and the tab's controls are a panel over the top of the field.
  * Tap a tab to open its panel, tap the open tab or the chevron to close it. The panel takes
- * no layout space, so opening it never resizes the field. The controls inside are the same
- * as the mouse toolbar's and run the same actions.
+ * no layout space, so opening it never resizes the field, and it covers the field only,
+ * short of the field display bar, so the sidebar and the display bar stay reachable. The
+ * controls inside are the same as the mouse toolbar's and run the same actions.
  */
-function TouchToolbar({ tabsSlot }: { tabsSlot: HTMLElement }) {
+// eslint-disable-next-line max-lines-per-function
+function TouchToolbar({
+    tabsSlot,
+    tempoMode = false,
+    tempoModeClass,
+}: { tabsSlot: HTMLElement } & TempoLock) {
     const { t } = useTranslate();
     const tab = useToolbarPanelStore((s) => s.tab);
     const open = useToolbarPanelStore((s) => s.open);
     const { setTab, setOpen, pressTab } = useToolbarPanelStore.getState();
-    const narrow = useSyncExternalStore(subscribeNarrow, isNarrow, () => false);
+    const [root, setRoot] = useState<HTMLDivElement | null>(null);
+    const insets = usePanelInsets(root, open);
 
     // The tab list selects a tab as the press begins, so whether the tapped tab was already
     // open is read then, before the tap ends
@@ -167,6 +215,10 @@ function TouchToolbar({ tabsSlot }: { tabsSlot: HTMLElement }) {
         onPointerDown: () => {
             pressedOpenTab.current = isOpenOn(value);
         },
+        // A press the system takes over (a scroll of the tab row) is no tap
+        onPointerCancel: () => {
+            pressedOpenTab.current = null;
+        },
         onClick: () => {
             // A keyboard click (Enter, Space) has no press before it
             pressTab(value, pressedOpenTab.current ?? isOpenOn(value));
@@ -174,64 +226,83 @@ function TouchToolbar({ tabsSlot }: { tabsSlot: HTMLElement }) {
         },
     });
 
+    // The tab row scrolls when the title bar is narrow: keep the selected tab in view
+    const tabRow = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        const selected = tabRow.current?.querySelector<HTMLElement>(
+            '[role="tab"][data-state="active"]',
+        );
+        selected?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    }, [tab]);
+
     return (
-        <Tabs
-            value={tab}
-            onValueChange={(value) => {
-                if (isToolbarTab(value)) setTab(value);
-            }}
-            // Takes no height: the panel floats over the field
-            className="relative h-0 gap-0"
-            data-testid="touch-toolbar"
-        >
-            {createPortal(
-                // The whole toolbar row, as on the desktop: the tabs, then the 3D View button and
-                // the workspace switch at the end (the field's top right is its display bar's).
-                // The tabs come first: they only scroll once nothing else is left beside them
-                <div className="@container flex w-full min-w-0 items-center gap-8">
-                    <div className="flex max-w-full min-w-0 shrink-0 items-center">
-                        <div className="min-w-0 overflow-x-auto [scrollbar-width:none]">
-                            <ToolbarTabsList tabProps={tabProps} />
-                        </div>
-                        <button
-                            type="button"
-                            aria-expanded={open}
-                            aria-controls="toolbar-panel"
-                            aria-label={t(
-                                open
-                                    ? "toolbar.hideControls"
-                                    : "toolbar.showControls",
-                            )}
-                            onClick={() => setOpen(!open)}
-                            data-testid="toolbar-panel-toggle"
-                            className="hover:text-accent text-text focus-visible:text-accent flex size-44 shrink-0 cursor-pointer items-center justify-center rounded-full outline-hidden duration-150 ease-out"
-                        >
-                            {open ? (
-                                <CaretUpIcon size={18} />
-                            ) : (
-                                <CaretDownIcon size={18} />
-                            )}
-                        </button>
-                    </div>
-                    {!narrow && (
-                        <ToolbarEnd className="ml-auto flex min-w-0 shrink-0 items-center gap-8" />
-                    )}
-                </div>,
-                tabsSlot,
-            )}
-            <div
-                id="toolbar-panel"
-                data-testid="toolbar-panel"
-                hidden={!open}
-                className="rounded-6 border-stroke bg-modal backdrop-blur-32 shadow-modal absolute inset-x-0 top-0 z-50 flex items-start gap-8 border p-8"
+        // Takes no height: the panel floats over the field
+        <div ref={setRoot} className="relative h-0" data-testid="touch-toolbar">
+            <Tabs
+                value={tab}
+                onValueChange={(value) => {
+                    if (isToolbarTab(value)) setTab(value);
+                }}
+                className="gap-0"
             >
-                <div className="min-w-0 flex-1">
+                {createPortal(
+                    // The whole toolbar row, as on the desktop: the tabs, then the 3D View button and
+                    // the workspace switch at the end (the field's top right is its display bar's).
+                    // When the row is short of room the tabs scroll sideways
+                    <div
+                        className={clsx(
+                            "@container flex w-full min-w-0 items-center gap-8",
+                            tempoModeClass,
+                        )}
+                        inert={tempoMode}
+                        data-testid="touch-toolbar-row"
+                    >
+                        <div className="flex min-w-0 items-center">
+                            <div
+                                ref={tabRow}
+                                className="min-w-0 overflow-x-auto [scrollbar-width:none]"
+                            >
+                                <ToolbarTabsList tabProps={tabProps} />
+                            </div>
+                            <button
+                                type="button"
+                                aria-expanded={open}
+                                aria-controls="toolbar-panel"
+                                aria-label={t(
+                                    open
+                                        ? "toolbar.hideControls"
+                                        : "toolbar.showControls",
+                                )}
+                                onClick={() => setOpen(!open)}
+                                data-testid="toolbar-panel-toggle"
+                                className="hover:text-accent text-text focus-visible:text-accent flex size-44 shrink-0 cursor-pointer items-center justify-center rounded-full outline-hidden duration-150 ease-out"
+                            >
+                                {open ? (
+                                    <CaretUpIcon size={18} />
+                                ) : (
+                                    <CaretDownIcon size={18} />
+                                )}
+                            </button>
+                        </div>
+                        <ToolbarEnd
+                            touch
+                            className="ml-auto flex shrink-0 items-center gap-8"
+                        />
+                    </div>,
+                    tabsSlot,
+                )}
+                <div
+                    id="toolbar-panel"
+                    data-testid="toolbar-panel"
+                    // Until it's measured, nothing: it would cover the sidebar for a frame
+                    hidden={!open || !insets}
+                    style={insets ?? undefined}
+                    // Under an open sidebar panel, which sits over the field's left side
+                    className="rounded-6 border-stroke bg-modal backdrop-blur-32 shadow-modal absolute top-0 z-40 border p-8"
+                >
                     <ToolbarTabContents className={touchTabRowClassName} />
                 </div>
-                {narrow && (
-                    <ToolbarEnd className="flex shrink-0 items-center gap-8 self-center" />
-                )}
-            </div>
-        </Tabs>
+            </Tabs>
+        </div>
     );
 }
