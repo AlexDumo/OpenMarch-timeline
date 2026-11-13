@@ -74,23 +74,26 @@ export interface WindowCueInputs {
      * for the Feet default: marchers mark time while the band moves.
      */
     bandMoving?: ArrayLike<number> | null;
+    /**
+     * What each marcher carries, which decides the Horn/Equipment default.
+     * Marchers carry nothing when it is left out.
+     */
+    carries?: (marcherId: number) => PerformerCarry;
 }
 
 /**
  * Compiles the 3D View's performer behavior from the marchers and the timed
  * beats (in the count clock's order) with no stored cues: the show defaults
  * only (ADR 0004; cue storage is parked). `stepOffFoot` is the show's saved
- * default. `carries` says what each marcher carries, which decides the
- * Horn/Equipment default.
+ * default.
  */
 export function compileWindowCues(
     marchers: readonly { id: number; section: string }[],
     beats: readonly { id: number; timestamp: number; duration: number }[],
     stepOffFoot: Foot,
     inputs: WindowCueInputs = {},
-    carries: (marcherId: number) => PerformerCarry = () => "none",
 ): CompiledCues {
-    const { bandMoving } = inputs;
+    const { bandMoving, carries = () => "none" } = inputs;
     return compileCues({
         beats: beats
             .filter((b) => b.duration > 0)
