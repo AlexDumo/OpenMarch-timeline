@@ -8,9 +8,10 @@
  * - **AP-R8** `drawGroupRouteInTransaction`: draw a group path for two or more marchers, or again.
  * - **AP-R1** (group branch) `editGroupRoutePointsInTransaction`: point edits on the open group
  *   path move every lane; no offset changes.
- * - **AP-R9** `ownPathInTransaction`: members break off with a copy of their lane, as an own path
- *   (step 15's Own path; Detach, which keeps the group's counts, is step 3).
- * - **AP-R10** `rejoinGroupPathInTransaction`: marchers follow the group path (back, or new).
+ * - **AP-R9** `detachInTransaction`: members break off with a verbatim copy of the group path,
+ *   keeping offset and Adjust, so nobody moves (step 3c; it replaced step 15's baked Own path).
+ * - **AP-R10** `rejoinGroupPathInTransaction`: marchers follow the group path (back from Detach,
+ *   or new).
  *
  * AP-R2 (Remove path removes the whole group's) lives with the own-path procedures; AP-R3 and the
  * orphan sweep (AP-H3) in `timelineLanes`; AP-R7 refuses a group path in `timelineSplitAtBeat`.
@@ -48,8 +49,11 @@ import {
     type RehomeReport,
 } from "./timelineRouteGeometry";
 import {
+    detachedSourceOf,
+    isGroupLane,
     laneOffset,
     laneOn,
+    lanesOfRoute,
     markLaneModelInTransaction,
     sweepOrphanRoutesInTransaction,
     type DatabaseTimelineLane,
@@ -514,17 +518,48 @@ export async function editGroupRoutePoints(args: {
 }
 
 // ---------------------------------------------------------------------------
-// AP-R9: Own path
+// AP-R9: Detach
 // ---------------------------------------------------------------------------
 
+/** A marcher's first row in move `timelineId` and the lane on its slot, if any. */
+async function rowAndLane(
+    tx: DbTransaction,
+    timelineId: number,
+    marcherId: number,
+): Promise<
+    | {
+          row: AssignmentRow;
+          transition: TransitionRow;
+          lane?: DatabaseTimelineLane;
+      }
+    | undefined
+> {
+    const T = schema.timeline_transitions;
+    const A = schema.timeline_assignments;
+    const found = await tx
+        .select({ row: A, transition: T })
+        .from(A)
+        .innerJoin(T, eq(A.transition_id, T.id))
+        .where(and(eq(T.timeline_id, timelineId), eq(A.marcher_id, marcherId)))
+        .orderBy(asc(A.start_beat), asc(A.id))
+        .get();
+    if (!found) return undefined;
+    const lane = await laneOn(tx, found.transition.id, found.row.slot_index);
+    return lane ? { ...found, lane } : found;
+}
+
 /**
- * AP-R9 (step 15's Own path): each of `marcherIds` on a group path in move `timelineId` gets its
- * own copy of its lane: a route with `from`, `to` and every point placed by its offset (ids and
- * tensions kept), and its slot's lane then walks it with no offset (an own lane, I-LN4). Group
- * paths nobody walks any more go (AP-H3). It walks the same line, at its own steady speed from now
- * on. The marcher stays in its move.
+ * AP-R9 Detach (spec v0.10 J.8, owner Q3 and Q5): each of `marcherIds` on a group path in move
+ * `timelineId` gets its own copy of the path. The copy is the group path's route verbatim (its
+ * geometry text, so every point id, tension and bulge, and `from` and `to`), and the marcher's lane
+ * moves to it keeping its offset and Adjust, so every position stays bit-identical: the marcher
+ * passes each point on the group's counts until the copy (or the group path) is edited. A K6 link
+ * (`detached_from`) remembers the group path for Rejoin. Group paths nobody walks any more go, with
+ * the links naming them (AP-H3), so detaching every member leaves copies only. One copy per spot;
+ * the marcher stays in its move. Refused when a marcher doesn't walk a group path there, walks the
+ * only lane of its path already (a copy), or shares its spot (D-22).
  */
-export async function ownPathInTransaction({
+export async function detachInTransaction({
     tx,
     timelineId,
     marcherIds,
@@ -533,97 +568,72 @@ export async function ownPathInTransaction({
     timelineId: number;
     marcherIds: readonly number[];
 }): Promise<{ routes: Record<number, number> }> {
-    const T = schema.timeline_transitions;
-    const A = schema.timeline_assignments;
-    const L = schema.timeline_lanes;
     const ids = [...new Set(marcherIds)].sort((a, b) => a - b);
-    const plan: {
-        lane: DatabaseTimelineLane;
-        geometry: RouteGeometry;
-        marcherId: number;
-    }[] = [];
+    if (ids.length === 0) refuse("name the marchers to detach");
+    const plan: { lane: DatabaseTimelineLane; marcherId: number }[] = [];
+    const geometries = new Map<number, string>();
     for (const marcherId of ids) {
-        const found = await tx
-            .select({ lane: L })
-            .from(A)
-            .innerJoin(T, eq(A.transition_id, T.id))
-            .innerJoin(
-                L,
-                and(
-                    eq(L.transition_id, A.transition_id),
-                    eq(L.slot_index, A.slot_index),
-                ),
-            )
-            .where(
-                and(
-                    eq(T.timeline_id, timelineId),
-                    eq(A.marcher_id, marcherId),
-                    isNotNull(L.offset_x),
-                ),
-            )
-            .orderBy(asc(A.start_beat), asc(A.id))
-            .get();
-        if (!found)
+        const found = await rowAndLane(tx, timelineId, marcherId);
+        const lane = found?.lane;
+        if (!found || !lane || !isGroupLane(lane))
             refuse(
                 routeRefusal.notOnGroupPath(await marcherName(tx, marcherId)),
             );
-        const { lane } = found;
-        const t = await tx
-            .select()
-            .from(T)
-            .where(eq(T.id, lane.transition_id))
-            .get();
-        await refuseSharedSpot(tx, t!, lane.slot_index, marcherId);
-        // This Own path copies the line alone, and an own lane can't hold an Adjust (I-LN4), so it
-        // would silently undo the tweak. Detach (step 3c) keeps it.
-        if (lane.adjust !== null)
+        await refuseSharedSpot(
+            tx,
+            found.transition,
+            lane.slot_index,
+            marcherId,
+        );
+        if ((await lanesOfRoute(tx, lane.route_id)).length < 2)
             refuse(
-                routeRefusal.ownPathAdjusted(await marcherName(tx, marcherId)),
+                routeRefusal.alreadyDetached(await marcherName(tx, marcherId)),
             );
-        const o = laneOffset(lane)!;
-        const g = await routeGeometryOf(tx, lane.route_id);
-        const add = (q: XY): XY => [q[0] + o[0], q[1] + o[1]];
-        const geometry: RouteGeometry = {
-            v: 1,
-            from: add(g.from),
-            to: add(g.to),
-            ...(g.toBulge === undefined ? {} : { toBulge: g.toBulge }),
-            points: g.points.map((p) =>
-                storedPoint(p.id, add(p.at), p.tension, p.bulge),
-            ),
-        };
-        assertValid(validateRouteGeometry(geometry), "route");
-        plan.push({ lane, geometry, marcherId });
+        if (!geometries.has(lane.route_id)) {
+            const r = await tx
+                .select({ geometry: schema.timeline_routes.geometry })
+                .from(schema.timeline_routes)
+                .where(eq(schema.timeline_routes.id, lane.route_id))
+                .get();
+            if (!r) refuse(`route ${lane.route_id} does not exist`);
+            geometries.set(lane.route_id, r.geometry);
+        }
+        plan.push({ lane, marcherId });
     }
     return await mapDbErrors(async () => {
         const routes: Record<number, number> = {};
-        for (const { lane, geometry, marcherId } of plan) {
-            const route = (await tx
+        for (const { lane, marcherId } of plan) {
+            const copy = (await tx
                 .insert(schema.timeline_routes)
-                .values({ geometry: JSON.stringify(geometry) })
+                .values({ geometry: geometries.get(lane.route_id)! })
                 .returning()
                 .get())!;
-            await markArcsInTransaction(tx, geometry);
+            // Offset and Adjust stay: the same inputs walk the same positions
             await tx
-                .update(L)
-                .set({ route_id: route.id, offset_x: null, offset_y: null })
-                .where(eq(L.id, lane.id));
-            routes[marcherId] = route.id;
+                .update(schema.timeline_lanes)
+                .set({ route_id: copy.id })
+                .where(eq(schema.timeline_lanes.id, lane.id));
+            await tx.insert(schema.timeline_route_sources).values({
+                route_id: copy.id,
+                kind: "detached_from",
+                source_route_id: lane.route_id,
+            });
+            routes[marcherId] = copy.id;
         }
         await sweepOrphanRoutesInTransaction(tx);
         return { routes };
     });
 }
 
-/** AP-R9 as one undoable edit. */
-export async function ownPath(args: {
+/** AP-R9 Detach as one undoable edit (every marcher at once is one undo step). */
+export async function detachFromGroupPath(args: {
     db: DbConnection;
     timelineId: number;
     marcherIds: readonly number[];
 }): Promise<{ routes: Record<number, number> }> {
     const { db, ...rest } = args;
-    return await transactionWithHistory(db, "ownPath", (tx) =>
-        ownPathInTransaction({ tx, ...rest }),
+    return await transactionWithHistory(db, "detachPath", (tx) =>
+        detachInTransaction({ tx, ...rest }),
     );
 }
 
@@ -632,12 +642,17 @@ export async function ownPath(args: {
 // ---------------------------------------------------------------------------
 
 /**
- * AP-R10: the marchers `marcherIds` in move `timelineId` follow the group path `routeId` there,
- * each with the offset of where it stands now (`A_j − R.from`), so a member that took Own path
- * gets back its old lane while nothing moved. A marcher on a straight, arc or shape move gets a
- * lane on its slot, so Rejoin also adds a marcher to the group, and nobody leaves their move.
- * Marchers already on it are left as they are. The routes they leave go once nobody walks them
- * (AP-H3).
+ * AP-R10: the marchers `marcherIds` in move `timelineId` follow the group path `routeId` there.
+ *
+ * - **Back from Detach** (K6 says the marcher's lane walks a copy `detached_from` this path): the
+ *   lane goes back to the group path with its offset unchanged and its Adjust cleared, always
+ *   (owner Q4); undo brings the Adjust back. An unadjusted spot whose group path wasn't edited
+ *   since is bit-identical to before Detach. The copy goes with its link (AP-H3).
+ * - **New to the path:** each with the offset of where it stands now (`A_j − R.from`), so a member
+ *   that drew its own path gets a lane again and a marcher on a straight, arc or shape move joins
+ *   the group. Nobody leaves their move.
+ *
+ * Marchers already on it are left as they are. Routes nobody walks any more go (AP-H3).
  */
 export async function rejoinGroupPathInTransaction({
     tx,
@@ -656,13 +671,47 @@ export async function rejoinGroupPathInTransaction({
     if (walkers.length === 0 || walkers.some((w) => w.lane.offset_x === null))
         refuse(routeRefusal.noGroupPath(await moveNameOf(tx, timelineId)));
     const on = new Set(walkers.map((w) => w.row.marcher_id));
-    const joining = marcherIds.filter((id) => !on.has(id));
+    const joining = [...new Set(marcherIds)]
+        .filter((id) => !on.has(id))
+        .sort((a, b) => a - b);
     // Nothing to rejoin: refused, not an empty edit (review of #683)
     if (joining.length === 0) refuse(routeRefusal.alreadyOnGroupPath());
-    const members = await readMembers(tx, timelineId, joining);
+    const back: {
+        marcherId: number;
+        lane: DatabaseTimelineLane;
+        transitionId: number;
+    }[] = [];
+    const newcomers: number[] = [];
+    for (const marcherId of joining) {
+        const found = await rowAndLane(tx, timelineId, marcherId);
+        const lane = found?.lane;
+        if (
+            found &&
+            lane &&
+            isGroupLane(lane) &&
+            (await detachedSourceOf(tx, lane.route_id)) === routeId
+        ) {
+            // A personal edit of the spot: refused while someone else holds it (D-22)
+            await refuseSharedSpot(
+                tx,
+                found.transition,
+                lane.slot_index,
+                marcherId,
+            );
+            back.push({ marcherId, lane, transitionId: found.transition.id });
+        } else newcomers.push(marcherId);
+    }
+    const members = await readMembers(tx, timelineId, newcomers);
     const R = await routeGeometryOf(tx, routeId);
     return await mapDbErrors(async () => {
         const transitions: Record<number, number> = {};
+        for (const { marcherId, lane, transitionId } of back) {
+            await tx
+                .update(schema.timeline_lanes)
+                .set({ route_id: routeId, adjust: null })
+                .where(eq(schema.timeline_lanes.id, lane.id));
+            transitions[marcherId] = transitionId;
+        }
         for (const m of members) {
             await setLane(tx, m, routeId, sub(m.A, R.from));
             transitions[m.marcherId] = m.transition.id;
@@ -685,11 +734,21 @@ export async function rejoinGroupPath(args: {
     );
 }
 
-/** The group paths walked in move `timelineId`, each with its walkers' marcher ids. */
+/**
+ * The group paths walked in move `timelineId`, each with its walkers' marcher ids, how many lanes
+ * it has (vacant ones too) and the group path it was Detached from (K6), if any.
+ */
 export async function readGroupPaths(
     db: DbConnection | DbTransaction,
     timelineId: number,
-): Promise<{ routeId: number; marcherIds: number[] }[]> {
+): Promise<
+    {
+        routeId: number;
+        marcherIds: number[];
+        laneCount: number;
+        detachedFrom: number | null;
+    }[]
+> {
     const T = schema.timeline_transitions;
     const A = schema.timeline_assignments;
     const L = schema.timeline_lanes;
@@ -713,5 +772,13 @@ export async function readGroupPaths(
         if (!list.includes(r.marcherId)) list.push(r.marcherId);
         out.set(r.routeId, list);
     }
-    return [...out].map(([routeId, marcherIds]) => ({ routeId, marcherIds }));
+    const result = [];
+    for (const [routeId, marcherIds] of out)
+        result.push({
+            routeId,
+            marcherIds,
+            laneCount: (await lanesOfRoute(db, routeId)).length,
+            detachedFrom: await detachedSourceOf(db, routeId),
+        });
+    return result;
 }

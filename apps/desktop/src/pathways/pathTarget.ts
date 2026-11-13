@@ -76,6 +76,22 @@ export interface PathTarget {
      * and `transitionId` are the leader's.
      */
     trail?: TrailTarget | null;
+    /**
+     * A group path with one lane (a Detached copy, AP-R9, or a group path every other spot left),
+     * shown and edited as that lane: `from`, `to`, `ends` and `points` are the route's plus the
+     * lane's offset, and its one member's offset is zero, so the editor draws and hands back the
+     * copy where its marcher walks it; point edits by the route take them so (`editPathPoints`).
+     * Absent for every other path.
+     */
+    lane?: OneLane;
+}
+
+/** A one-lane path's lane (`PathTarget.lane`) */
+export interface OneLane {
+    /** The lane's offset, added to the route's points to show them */
+    offset: XY;
+    /** The group path it was Detached from (K6), or null */
+    detachedFrom: number | null;
 }
 
 /** The line that follows a trail: who, in what order, and where each starts and ends */
@@ -125,7 +141,65 @@ export interface GroupTarget {
         drill: string;
         from: XY;
         ownPath: boolean;
+        /** Walks a copy Detached from this group path (AP-R9), which Rejoin brings back */
+        detached?: boolean;
     }[];
+}
+
+/**
+ * `target`, a group path with one lane, as that lane (`PathTarget.lane`): the route's ends and
+ * points moved by the lane's offset, and the member's offset zero.
+ */
+export function onItsLane(
+    target: PathTarget,
+    offset: XY,
+    detachedFrom: number | null,
+): PathTarget {
+    const add = (p: XY): XY => ({ x: p.x + offset.x, y: p.y + offset.y });
+    return {
+        ...target,
+        from: add(target.from),
+        to: add(target.to),
+        points: target.points.map((p) => ({
+            ...p,
+            at: [p.at[0] + offset.x, p.at[1] + offset.y] as [number, number],
+        })),
+        ends: target.ends
+            ? { from: add(target.ends.from), to: add(target.ends.to) }
+            : null,
+        group: target.group && {
+            ...target.group,
+            members: target.group.members.map((m) => ({
+                ...m,
+                offset: { x: 0, y: 0 },
+            })),
+        },
+        lane: { offset, detachedFrom },
+    };
+}
+
+/**
+ * Whether Paths All draws `target` as a group path object, its one line with faint lanes (AP-O7).
+ * A one-lane path (a Detached copy) is one marcher's path, so it draws as an own path does: its
+ * marcher's start flag positions' path, at the paths level's normal weight.
+ */
+export const drawnAsGroup = (target: PathTarget): boolean =>
+    target.group !== null && !target.lane;
+
+/**
+ * Of the group paths `on` that selected marchers walk, the one to show: the only one, or the only
+ * one that isn't a copy Detached from another of them (its detached members are then "outside" it,
+ * and Rejoin brings them back). Null when that doesn't pick one.
+ */
+export function groupToShow<
+    G extends { routeId: number; detachedFrom: number | null },
+>(on: readonly G[]): G | null {
+    if (on.length === 1) return on[0]!;
+    const ids = new Set(on.map((g) => g.routeId));
+    const main = on.filter(
+        (g) => g.detachedFrom === null || !ids.has(g.detachedFrom),
+    );
+    return main.length === 1 ? main[0]! : null;
 }
 
 const xy = (p: readonly [number, number]): XY => ({ x: p[0], y: p[1] });
@@ -201,8 +275,14 @@ export async function findGroupTarget(
     const groups = await readGroupPaths(db, move.timelineId);
     const selected = new Set(marcherIds);
     const on = groups.filter((g) => g.marcherIds.some((m) => selected.has(m)));
-    if (on.length !== 1) return null;
-    const group = on[0]!;
+    const group = groupToShow(on);
+    if (!group) return null;
+    // Selected marchers on copies Detached from it are off it, and can Rejoin
+    const detached = new Set(
+        on
+            .filter((g) => g.detachedFrom === group.routeId)
+            .flatMap((g) => g.marcherIds),
+    );
     const route = (await readRoutes(db, move.timelineId)).filter(
         (r) => r.routeId === group.routeId,
     );
@@ -237,10 +317,11 @@ export async function findGroupTarget(
             drill: drills.get(id) ?? `${id}`,
             from: xy(resolver.explain(id, move.start).origin),
             ownPath: lane !== undefined && lane.offset_x === null,
+            ...(detached.has(id) ? { detached: true } : {}),
         });
     }
     const g = route[0]!.geometry;
-    return {
+    const target: PathTarget = {
         timelineId: move.timelineId,
         transitionId: members[0]!.transitionId,
         marcherId: members[0]!.marcherId,
@@ -255,6 +336,9 @@ export async function findGroupTarget(
         drawnEnds: drawnEndsOf(members),
         group: { members, outside },
     };
+    return group.laneCount === 1
+        ? onItsLane(target, members[0]!.offset, group.detachedFrom)
+        : target;
 }
 
 /** The ends a saved group path's line is drawn between: its members' middles now (AP-R5) */
@@ -641,7 +725,7 @@ export function targetOfRoute(
             adjust: r.adjust,
         });
     }
-    return {
+    const target: PathTarget = {
         timelineId: first.timelineId,
         transitionId: members[0]!.transitionId,
         marcherId: members[0]!.marcherId,
@@ -657,6 +741,9 @@ export function targetOfRoute(
         group: { members, outside: [] },
         span,
     };
+    return first.laneCount === 1
+        ? onItsLane(target, members[0]!.offset, first.detachedFrom)
+        : target;
 }
 
 /**
@@ -671,7 +758,12 @@ export function refitNeeded(target: PathTarget): boolean {
     const pair = (p: XY): [number, number] => [p.x, p.y];
     return routeEndsChanged(
         { from: pair(target.ends.from), to: pair(target.ends.to) },
-        { from: pair(now.from), to: pair(now.to) },
+        // A one-lane path keeps the group's `to`: its end side follows its end spot (AP-R5), so
+        // only a start that moved asks for Re-fit
+        {
+            from: pair(now.from),
+            to: pair(target.lane ? target.ends.to : now.to),
+        },
     );
 }
 

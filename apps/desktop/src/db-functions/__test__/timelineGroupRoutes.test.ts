@@ -25,8 +25,8 @@ import { drawRoute, readRoutes, removeRoute } from "../timelineRoutes";
 import {
     drawGroupRoute,
     editGroupRoutePoints,
+    detachFromGroupPath,
     meanOf,
-    ownPath,
     readGroupPaths,
     rejoinGroupPath,
 } from "../timelineGroupRoutes";
@@ -50,6 +50,7 @@ const TABLES = [
     schema.timeline_slot_destinations,
     schema.timeline_routes,
     schema.timeline_lanes,
+    schema.timeline_route_sources,
 ];
 const dataOf = async (db: DbConnection) => {
     const out: Record<string, unknown[]> = {};
@@ -207,7 +208,7 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
                 starts[i]![1] - geometry.from[1],
             ]);
         }
-        expect(await readGroupPaths(db, timeline.id)).toEqual([
+        expect(await readGroupPaths(db, timeline.id)).toMatchObject([
             {
                 routeId: result.routeId,
                 marcherIds: [...ids].sort((a, b) => a - b),
@@ -402,7 +403,7 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
         await expectOneUndoStep(db, before2);
     });
 
-    it("one member breaks off with Own path and rejoins: line kept, positions back bit for bit; each one undo step (QA-AP-R9)", async ({
+    it("Detach one member: a verbatim copy, nobody moves; edits on the group and on the copy stay apart; Rejoin restores it; each one undo step (QA-AP-R9, QA-RT-L9, QA-AP-L10)", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -419,36 +420,59 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
         const onGroup = positions(await resolverOf(db), 30);
         const m = ids[1]!;
         const index = r0.marcherIds().indexOf(m);
-        const group = await routeOf(db, drawn.routeId);
+        const groupText = (await db
+            .select()
+            .from(schema.timeline_routes)
+            .where(eq(schema.timeline_routes.id, drawn.routeId))
+            .get())!.geometry;
         const o = (await offsetOfMarcher(db, m, timeline.id))!;
+        const laneBefore = (await laneOf(db, m, timeline.id))!;
 
         const before = await dataOf(db);
-        const own = await ownPath({
+        const { routes } = await detachFromGroupPath({
             db,
             timelineId: timeline.id,
             marcherIds: [m],
         });
-        const copy = await routeOf(db, own.routes[m]!);
-        expect(copy.from).toEqual([group.from[0] + o[0], group.from[1] + o[1]]);
-        expect(copy.points.map((p) => p.id)).toEqual(
-            group.points.map((p) => p.id),
-        );
-        expect(copy.points[0]!.tension).toBe(group.points[0]!.tension);
-        // An own lane on its slot, in its move as before
-        const ownLane = (await laneOf(db, m, timeline.id))!;
-        expect(ownLane.route_id).toBe(own.routes[m]);
-        expect(laneOffset(ownLane)).toBeNull();
-        expect(ownLane.transition_id).toBe(drawn.transitions[m]);
-        // The others are untouched, bit for bit
-        const afterOwn = positions(await resolverOf(db), 30);
-        afterOwn.forEach((row, i) => {
-            if (i !== index) expect(row).toEqual(onGroup[i]);
+        const copyId = routes[m]!;
+        expect(copyId).not.toBe(drawn.routeId);
+        // The route verbatim: the same geometry text, every point id, tension and both ends
+        const copyText = (await db
+            .select()
+            .from(schema.timeline_routes)
+            .where(eq(schema.timeline_routes.id, copyId))
+            .get())!.geometry;
+        expect(copyText).toBe(groupText);
+        // The same lane, re-pointed, offset kept; its link back to the group path
+        const lane = (await laneOf(db, m, timeline.id))!;
+        expect(lane).toEqual({ ...laneBefore, route_id: copyId });
+        expect(laneOffset(lane)).toEqual(o);
+        expect(
+            await db.select().from(schema.timeline_route_sources).all(),
+        ).toEqual([
+            expect.objectContaining({
+                route_id: copyId,
+                kind: "detached_from",
+                source_route_id: drawn.routeId,
+                data: null,
+            }),
+        ]);
+        // Every marcher at every quarter beat, bit for bit
+        expect(positions(await resolverOf(db), 30)).toEqual(onGroup);
+        const groups = await readGroupPaths(db, timeline.id);
+        expect(groups.find((g) => g.routeId === copyId)).toMatchObject({
+            marcherIds: [m],
+            laneCount: 1,
+            detachedFrom: drawn.routeId,
         });
-        // It still starts and ends where it did
-        expect(afterOwn[index]![36]).toEqual(onGroup[index]![36]);
-        expect(afterOwn[index]![68]).toEqual(onGroup[index]![68]);
+        expect(groups.find((g) => g.routeId === drawn.routeId)).toMatchObject({
+            laneCount: 3,
+            detachedFrom: null,
+        });
         await expectOneUndoStep(db, before);
 
+        // Rejoin with the group path unedited: bit for bit as before Detach; the copy and its
+        // link go
         const before2 = await dataOf(db);
         await rejoinGroupPath({
             db,
@@ -456,13 +480,54 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
             routeId: drawn.routeId,
             marcherIds: [m],
         });
-        expect(await offsetOfMarcher(db, m, timeline.id)).toEqual(o);
+        expect(await laneOf(db, m, timeline.id)).toEqual(laneBefore);
         expect(positions(await resolverOf(db), 30)).toEqual(onGroup);
         expect(await readRoutes(db)).toHaveLength(4);
+        expect(
+            await db.select().from(schema.timeline_route_sources).all(),
+        ).toEqual([]);
         await expectOneUndoStep(db, before2);
+        // Undo the Rejoin: detached again
+        expect((await performUndo(db)).success).toBe(true);
+        expect((await laneOf(db, m, timeline.id))!.route_id).toBe(copyId);
+
+        // QA-RT-L9: with it detached, editing the group path doesn't move it...
+        const group = await routeOf(db, drawn.routeId);
+        await editGroupRoutePoints({
+            db,
+            routeId: drawn.routeId,
+            points: group.points.map((p, i) =>
+                i === 0 ? { ...p, at: [p.at[0], p.at[1] + 12] as XY } : p,
+            ),
+        });
+        const afterGroupEdit = positions(await resolverOf(db), 30);
+        expect(afterGroupEdit[index]).toEqual(onGroup[index]);
+        expect(afterGroupEdit).not.toEqual(onGroup);
+        // ...and editing the copy doesn't move the group
+        const copy = await routeOf(db, copyId);
+        await editGroupRoutePoints({
+            db,
+            routeId: copyId,
+            points: copy.points.map((p, i) =>
+                i === 1 ? { ...p, at: [p.at[0] - 9, p.at[1]] as XY } : p,
+            ),
+        });
+        const afterCopyEdit = positions(await resolverOf(db), 30);
+        afterCopyEdit.forEach((row, i) => {
+            if (i === index) expect(row).not.toEqual(afterGroupEdit[i]);
+            else expect(row).toEqual(afterGroupEdit[i]);
+        });
+        // Rejoin after both edits: back on the group path with its offset
+        await rejoinGroupPath({
+            db,
+            timelineId: timeline.id,
+            routeId: drawn.routeId,
+            marcherIds: [m],
+        });
+        expect(await laneOf(db, m, timeline.id)).toEqual(laneBefore);
     });
 
-    it("Own path for every member deletes the group path; Rejoin adds a straight marcher to the group (QA-AP-R9)", async ({
+    it("Detach every member at once: one undo step; the group path goes, with its links; Rejoin adds a straight marcher to the group (QA-AP-R9)", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -495,12 +560,14 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
         );
         await expectOneUndoStep(db, before);
 
+        const walking = positions(await resolverOf(db), 30);
         const before2 = await dataOf(db);
-        await ownPath({
+        const { routes } = await detachFromGroupPath({
             db,
             timelineId: timeline.id,
             marcherIds: [...ids, extra],
         });
+        expect(new Set(Object.values(routes)).size).toBe(4);
         expect(
             await db
                 .select()
@@ -508,7 +575,14 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
                 .where(eq(schema.timeline_routes.id, drawn.routeId))
                 .get(),
         ).toBeUndefined();
-        expect(await readGroupPaths(db, timeline.id)).toEqual([]);
+        // Each a copy of its own; the links named the group path, which is gone
+        expect(
+            (await readGroupPaths(db, timeline.id)).map((p) => p.laneCount),
+        ).toEqual([1, 1, 1, 1]);
+        expect(
+            await db.select().from(schema.timeline_route_sources).all(),
+        ).toEqual([]);
+        expect(positions(await resolverOf(db), 30)).toEqual(walking);
         await expectOneUndoStep(db, before2);
     });
 
@@ -533,7 +607,11 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
         await expectRefused(
             db,
             () =>
-                ownPath({ db, timelineId: timeline.id, marcherIds: [ids[0]!] }),
+                detachFromGroupPath({
+                    db,
+                    timelineId: timeline.id,
+                    marcherIds: [ids[0]!],
+                }),
             /doesn't follow a group path/,
         );
         const drawn = await drawGroupRoute({
@@ -547,9 +625,44 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
             db,
             () =>
                 splitTimelineAtBeat({ db, timelineId: timeline.id, beat: 13 }),
-            /Own path/,
+            /remove the path first/,
         );
-        // A marcher with its own path refuses Own path
+        // Detaching a copy again is refused: it walks its own copy already
+        const { routes } = await detachFromGroupPath({
+            db,
+            timelineId: timeline.id,
+            marcherIds: [ids[0]!],
+        });
+        await expectRefused(
+            db,
+            () =>
+                detachFromGroupPath({
+                    db,
+                    timelineId: timeline.id,
+                    marcherIds: [ids[0]!],
+                }),
+            /already walks a copy of its own/,
+        );
+        // Split at the playhead on a Detached copy: refused too
+        await rejoinGroupPath({
+            db,
+            timelineId: timeline.id,
+            routeId: drawn.routeId,
+            marcherIds: [ids[0]!],
+        });
+        await detachFromGroupPath({
+            db,
+            timelineId: timeline.id,
+            marcherIds: [ids[0]!, ids[1]!],
+        });
+        await expectRefused(
+            db,
+            () =>
+                splitTimelineAtBeat({ db, timelineId: timeline.id, beat: 13 }),
+            /detached copy/,
+        );
+        expect(routes[ids[0]!]).toBeGreaterThan(0);
+        // A marcher with its own path refuses Detach
         await drawRoute({
             db,
             timelineId: timeline.id,
@@ -559,7 +672,11 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
         await expectRefused(
             db,
             () =>
-                ownPath({ db, timelineId: timeline.id, marcherIds: [ids[2]!] }),
+                detachFromGroupPath({
+                    db,
+                    timelineId: timeline.id,
+                    marcherIds: [ids[2]!],
+                }),
             /doesn't follow a group path/,
         );
         // Rejoin onto a route that isn't a group path
@@ -628,7 +745,7 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
                 compact: true,
             }),
         );
-        expect(await readGroupPaths(db, timeline.id)).toEqual([
+        expect(await readGroupPaths(db, timeline.id)).toMatchObject([
             {
                 routeId: drawn.routeId,
                 marcherIds: [...ids.slice(1)].sort((a, b) => a - b),
@@ -728,7 +845,7 @@ describeDbTests("Group paths (AP-R8 to AP-R10)", (it) => {
         const lane = (await laneOf(db, ids[0]!, timeline.id))!;
         expect(laneOffset(lane)).toBeNull();
         expect(lane.route_id).not.toBe(drawn.routeId);
-        expect(await readGroupPaths(db, timeline.id)).toEqual([
+        expect(await readGroupPaths(db, timeline.id)).toMatchObject([
             {
                 routeId: drawn.routeId,
                 marcherIds: [...ids.slice(1)].sort((a, b) => a - b),

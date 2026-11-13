@@ -33,6 +33,7 @@ import {
     findGroupTarget,
     findPathTarget,
     findRouteTarget,
+    drawnAsGroup,
     findTrailDrawTarget,
     findTrailRouteTarget,
     findTrailTarget,
@@ -61,7 +62,8 @@ import {
     escapePathObject,
     finishDrawing,
     openPath,
-    ownPathFor,
+    detachFor,
+    detachIdsOf,
     rejoinFor,
     removeLastPoint,
     removePath,
@@ -414,10 +416,12 @@ export function usePathPenActions(): void {
     useActionHandler("adjustAcknowledge", () => void acknowledgeOpenPath(), {
         enabled: rehomedOpen,
     });
-    // Own path and Rejoin (step 15), enabled whenever a group path is shown, closed too
-    const ownIds = usePathPenStore((s) => s.ownable);
+    // Detach and Rejoin (AP-R9, AP-R10), enabled whenever a group path is shown, closed too
+    const selectedMembers = usePathPenStore((s) => s.ownable);
+    const detachSession = usePathPenStore((s) => s.session);
+    const ownIds = detachIdsOf(selectedMembers, detachSession);
     const rejoin = usePathPenStore((s) => s.rejoin);
-    useActionHandler("ownPath", () => void ownPathFor(ownIds), {
+    useActionHandler("detachPath", () => void detachFor(ownIds), {
         enabled: ownIds.length > 0 && phase !== "drawing",
     });
     useActionHandler("rejoinPath", () => void rejoinFor(rejoin), {
@@ -477,8 +481,22 @@ export function usePathPenActions(): void {
                 if (ask !== asked.current) return;
                 const now = usePathPenStore.getState().session;
                 if (!now?.object || now.phase === "drawing") return;
-                // Own path and Rejoin act on selected marchers, and none are
-                setGroupCommands([], null);
+                // Detach and Rejoin act on selected marchers, and none are; but an open copy can
+                // go back to the group path it was Detached from (its walkers Rejoin)
+                const source = target?.lane?.detachedFrom ?? null;
+                setGroupCommands(
+                    [],
+                    target && source !== null
+                        ? {
+                              timelineId: target.timelineId,
+                              routeId: source,
+                              marcherIds:
+                                  target.group?.members.map(
+                                      (m) => m.marcherId,
+                                  ) ?? [],
+                          }
+                        : null,
+                );
                 if (target) showPath(target, drillOf(target, drills), true);
                 else clear();
             });
@@ -520,19 +538,34 @@ export function usePathPenActions(): void {
                 group === null && one
                     ? await findPathTarget(db, resolver, one.id, beat)
                     : null;
-            // Rejoin onto the move's only group path, with only marchers off it selected
+            // Rejoin onto the move's only group path (Detached copies aside), with only marchers
+            // off it selected; or, for a shown copy, onto the group path it came from
             let rejoinTarget: RejoinTarget | null = null;
-            if (group === null) {
-                const move = await groupMoveAt(db, selectedIds, beat);
-                if (move.kind === "move") {
-                    const groups = await readGroupPaths(db, move.timelineId);
-                    if (groups.length === 1)
-                        rejoinTarget = {
-                            timelineId: move.timelineId,
-                            routeId: groups[0]!.routeId,
-                            marcherIds: selectedIds,
-                        };
-                }
+            const move =
+                group === null || group.lane?.detachedFrom != null
+                    ? await groupMoveAt(db, selectedIds, beat)
+                    : null;
+            if (move?.kind === "move") {
+                const groups = await readGroupPaths(db, move.timelineId);
+                const source = group?.lane?.detachedFrom ?? null;
+                const onto =
+                    source !== null
+                        ? groups.find((g) => g.routeId === source)
+                        : (() => {
+                              const main = groups.filter(
+                                  (g) => g.detachedFrom === null,
+                              );
+                              return main.length === 1 ? main[0] : undefined;
+                          })();
+                const off = selectedIds.filter(
+                    (id) => !(onto?.marcherIds.includes(id) ?? true),
+                );
+                if (onto && off.length > 0)
+                    rejoinTarget = {
+                        timelineId: move.timelineId,
+                        routeId: onto.routeId,
+                        marcherIds: off,
+                    };
             }
             if (ask !== asked.current) return;
             const now = usePathPenStore.getState();
@@ -543,17 +576,26 @@ export function usePathPenActions(): void {
                 const members = new Set(
                     group.group!.members.map((m) => m.marcherId),
                 );
-                showPath(group, `${members.size}`);
+                // A Detached copy is its marcher's path: named by its drill number
+                showPath(
+                    group,
+                    group.lane && members.size === 1
+                        ? group.group!.members[0]!.drill
+                        : `${members.size}`,
+                );
                 const outside = group.group!.outside.map((m) => m.marcherId);
                 setGroupCommands(
-                    selectedIds.filter((id) => members.has(id)),
+                    // A one-lane path has nobody to Detach from
+                    group.lane
+                        ? []
+                        : selectedIds.filter((id) => members.has(id)),
                     outside.length > 0
                         ? {
                               timelineId: group.timelineId,
                               routeId: group.routeId!,
                               marcherIds: outside,
                           }
-                        : null,
+                        : rejoinTarget,
                 );
                 return;
             }
@@ -597,9 +639,11 @@ export function usePathPenActions(): void {
 const drillOf = (target: PathTarget, drills: ReadonlyMap<number, string>) =>
     target.trail
         ? `${target.trail.members.length}`
-        : target.group
-          ? `${target.group.members.length}`
-          : (drills.get(target.marcherId) ?? `${target.marcherId}`);
+        : target.lane && target.group?.members.length === 1
+          ? target.group.members[0]!.drill
+          : target.group
+            ? `${target.group.members.length}`
+            : (drills.get(target.marcherId) ?? `${target.marcherId}`);
 
 /** How many points an own path object's drawn walk is sampled at, for its click test */
 const WALK_SAMPLES = 96;
@@ -649,7 +693,7 @@ function objectOf(
         o = {
             target,
             drill: drillOf(target, drills),
-            walk: target.group ? null : () => walkOf(target),
+            walk: drawnAsGroup(target) ? null : () => walkOf(target),
         };
         objectsByTarget.set(target, o);
     }

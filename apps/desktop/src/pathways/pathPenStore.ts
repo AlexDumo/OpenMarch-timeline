@@ -28,7 +28,7 @@ import type { RehomeReport } from "@/db-functions/timelineRouteGeometry";
 import type { AdjustProfile } from "@openmarch/core";
 import {
     drawGroupRoute,
-    ownPath,
+    detachFromGroupPath,
     rejoinGroupPath,
 } from "@/db-functions/timelineGroupRoutes";
 import { subscribeHistoryChanges } from "@/db-functions/history";
@@ -37,7 +37,7 @@ import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import tolgee from "@/global/singletons/Tolgee";
 import type { XY } from "@/shapes/types";
 import { SMOOTH } from "@/shapes/line/lineGeometry";
-import type { GroupMember, PathTarget } from "./pathTarget";
+import { drawnAsGroup, type GroupMember, type PathTarget } from "./pathTarget";
 import { dragTrail } from "@/db-functions/timelineTrailDrag";
 import { invalidatePlacedBoxes } from "@/shapes/placed/placedBoxStore";
 import { followSpacingOf, type FollowDrag } from "./followDrag";
@@ -149,11 +149,11 @@ interface PathPenState {
      */
     hidden: boolean;
     /**
-     * After Own path for one marcher (step 15): that marcher's own path opens once it's read
-     * again, as the spec's "its own path is then shown, open" says; null otherwise
+     * After Detach for one marcher (AP-R9): that marcher's copy opens once it's read again, as the
+     * spec's "its own path is then shown, open" says; null otherwise
      */
     openNext: number | null;
-    /** Selected marchers on the shown group path, whom Own path gives a lane each (step 15) */
+    /** Selected marchers on the shown group path, whom Detach gives a copy each (AP-R9) */
     ownable: readonly number[];
     /** Whom Rejoin puts on which group path, or null when it isn't offered (step 15) */
     rejoin: RejoinTarget | null;
@@ -168,7 +168,28 @@ export interface RejoinTarget {
     marcherIds: readonly number[];
 }
 
-/** What Own path and Rejoin act on for the selection now (spec Appendix I.8) */
+/**
+ * Whom Detach acts on (AP-R9): the selected members of the shown group path, or, with none
+ * selected, the member whose lane is picked on the open group path (decision C's pick), so a
+ * group path opened as an object (a click on its line lets go of the marchers) can still Detach a
+ * spot from its bar. None on a one-lane path, which has nobody to Detach from.
+ */
+export function detachIdsOf(
+    ownable: readonly number[],
+    session: PathSession | null,
+): readonly number[] {
+    if (ownable.length > 0) return ownable;
+    if (
+        session?.phase !== "open" ||
+        !session.lane ||
+        !session.target.group ||
+        session.target.lane
+    )
+        return [];
+    return [session.lane.marcherId];
+}
+
+/** What Detach and Rejoin act on for the selection now (spec Appendix I.8) */
 export function setGroupCommands(
     ownable: readonly number[],
     rejoin: RejoinTarget | null,
@@ -251,7 +272,9 @@ export const pathMarcherIds = (
                 ? session.target.group.members.map((m) => m.marcherId)
                 : [session.target.marcherId];
     const drawn = objectsDrawn(objects, session, closedUnder).flatMap((o) =>
-        o.target.group ? o.target.group.members.map((m) => m.marcherId) : [],
+        o.target.group && drawnAsGroup(o.target)
+            ? o.target.group.members.map((m) => m.marcherId)
+            : [],
     );
     return drawn.length === 0 ? own : [...new Set([...own, ...drawn])];
 };
@@ -527,8 +550,13 @@ export function showPath(
     const { session } = usePathPenStore.getState();
     const points = pointsOf(target);
     const { openNext } = usePathPenStore.getState();
+    // A Detached copy is shown on its lane (`target.lane`), its marcher its one member
     const next =
-        openNext !== null && !target.group && target.marcherId === openNext;
+        openNext !== null &&
+        (target.lane
+            ? (target.group?.members.some((m) => m.marcherId === openNext) ??
+              false)
+            : !target.group && target.marcherId === openNext);
     if (next) usePathPenStore.setState({ openNext: null });
     // A path object is the same path while it's the same route (AP-O1)
     const same =
@@ -1288,25 +1316,42 @@ export async function reverseShownTrail(): Promise<void> {
 }
 
 /**
- * Own path (AP-R9, step 15): the selected marchers on the shown group path each get a copy of
- * their lane, one undo step. With one marcher, its own path is then shown, open (the hook reads
- * it again after the save and keeps it open).
+ * Detach (AP-R9, step 3c): the selected marchers on the shown group path each get a verbatim copy
+ * of it, keeping their offset and Adjust, so nobody moves; one undo step however many. With one
+ * marcher, its copy is then shown, open (the hook reads it again after the save and keeps it open).
  */
-export async function ownPathFor(marcherIds: readonly number[]): Promise<void> {
+export async function detachFor(marcherIds: readonly number[]): Promise<void> {
     const { session, saving } = usePathPenStore.getState();
     if (!session?.target.group || saving || marcherIds.length === 0) return;
+    const one = marcherIds.length === 1;
     // Opened again after the save (`openNext`), not kept open as the group path
-    if (marcherIds.length === 1) clearPath();
+    if (one && !session.object) clearPath();
     usePathPenStore.setState({ saving: true });
     try {
-        await ownPath({
+        const { routes } = await detachFromGroupPath({
             db,
             timelineId: session.target.timelineId,
             marcherIds,
         });
+        const copy = one ? routes[marcherIds[0]!] : undefined;
         usePathPenStore.setState((state) => ({
             saved: state.saved + 1,
-            openNext: marcherIds.length === 1 ? marcherIds[0]! : null,
+            openNext: one && !session.object ? marcherIds[0]! : null,
+            // A spot Detached from the group path open as an object: its copy is the object now,
+            // read again by its route and kept open
+            ...(copy !== undefined &&
+            session.object &&
+            state.session?.object &&
+            state.session.target.routeId === session.target.routeId
+                ? {
+                      session: {
+                          ...state.session,
+                          target: { ...state.session.target, routeId: copy },
+                          lane: null,
+                          selected: null,
+                      },
+                  }
+                : {}),
         }));
     } catch (error) {
         toastTimelineError(
@@ -1319,9 +1364,10 @@ export async function ownPathFor(marcherIds: readonly number[]): Promise<void> {
 }
 
 /**
- * Rejoin (AP-R10, step 15): the selected marchers off the group path follow it, one undo step: a
- * member that took Own path gets its lane back, another marcher joins the group. The group path
- * is the one shown, or with only marchers off any group path selected, the move's only one.
+ * Rejoin (AP-R10): the selected marchers off the group path follow it, one undo step: a Detached
+ * marcher goes back to its spot's lane without its copy or Adjust (owner Q4), another marcher joins
+ * the group. The group path is the one shown, the one a shown copy was Detached from, or with only
+ * marchers off any group path selected, the move's only one.
  */
 export async function rejoinFor(target: RejoinTarget | null): Promise<void> {
     const { saving } = usePathPenStore.getState();
@@ -1334,7 +1380,34 @@ export async function rejoinFor(target: RejoinTarget | null): Promise<void> {
             routeId: target.routeId,
             marcherIds: target.marcherIds,
         });
-        usePathPenStore.setState((state) => ({ saved: state.saved + 1 }));
+        usePathPenStore.setState((state) => {
+            const s = state.session;
+            // Rejoined from its copy open as an object: the copy is gone, so the group path it
+            // went back to is the object now, open, with the rejoined lane picked
+            const fromCopy =
+                s?.object &&
+                s.phase === "open" &&
+                s.target.lane?.detachedFrom === target.routeId;
+            return {
+                saved: state.saved + 1,
+                ...(fromCopy
+                    ? {
+                          session: {
+                              ...s,
+                              target: { ...s.target, routeId: target.routeId },
+                              selected: null,
+                              lane:
+                                  target.marcherIds.length === 1
+                                      ? {
+                                            marcherId: target.marcherIds[0]!,
+                                            key: null,
+                                        }
+                                      : null,
+                          },
+                      }
+                    : {}),
+            };
+        });
     } catch (error) {
         toastTimelineError(
             error,
