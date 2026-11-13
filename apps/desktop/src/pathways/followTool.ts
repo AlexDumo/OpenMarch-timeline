@@ -12,7 +12,7 @@ import {
     trailDragRefusal,
     type TrailWindow,
 } from "@/db-functions/timelineTrailDrag";
-import { readTrails } from "@/db-functions/timelineTrails";
+import { endSpotsInMove, readTrails } from "@/db-functions/timelineTrails";
 import { rippleFormAt } from "@/db-functions/timelineTrailRipple";
 import {
     rippleFormProblem,
@@ -67,7 +67,7 @@ export async function isTrailLineAt(
 
 /**
  * Keep end spots (AP-T9) by step 4's target rule: the one move every one of `ids` is in at `beat`
- * (the playhead), with each member's end spot there. Null when there's none.
+ * (the playhead), with each member's end spot there (its slot's stored destination). Null when there's none.
  */
 export async function followKeepAt(
     database: DbConnection,
@@ -85,14 +85,18 @@ export async function followKeepAt(
         return [x, y];
     });
     const along = await followOrderAt(database, sorted, move.start, at);
+    // Each end spot from its slot's stored destination, as Ripple in's write reads it (step 9)
+    const stored = await database.transaction((tx) =>
+        endSpotsInMove(tx, move.timelineId, sorted),
+    );
     return {
         timelineId: move.timelineId,
         start: move.start,
         end: move.end,
         spots: new Map(
             ids.map((m): [number, XY] => {
-                const [x, y] = resolver.positionAt(m, move.end);
-                return [m, { x, y }];
+                const p = stored?.get(m) ?? resolver.positionAt(m, move.end);
+                return [m, { x: p[0], y: p[1] }];
             }),
         ),
         ...(along

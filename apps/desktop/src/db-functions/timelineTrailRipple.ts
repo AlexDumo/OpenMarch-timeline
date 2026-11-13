@@ -16,14 +16,11 @@ import { readTimelineTables } from "@/timeline/timelineRows";
 import type { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 import { refuse } from "./timelineErrors";
-import {
-    destinationOf,
-    marcherName,
-    type RoutePointInput,
-} from "./timelineRoutes";
+import { marcherName, type RoutePointInput } from "./timelineRoutes";
 import { shapeRecipesOnly } from "./shapeRecipes";
-import { memberRows, readTimeline } from "./timelineMemberRows";
+import { readTimeline } from "./timelineMemberRows";
 import {
+    endSpotsInMove,
     followTrailInTransaction,
     trailRefusal,
     type FollowTrailResult,
@@ -178,21 +175,15 @@ export async function rippleTrailInTransaction(
     if (!order) refuse(trailDragRefusal.notAnEnd());
     const line = order.map((i) => ids[i]!);
     // Each member's end spot there, its slot's stored destination (as AP-T1 reads it)
-    const rows = await memberRows(tx, move);
-    const spots = new Map<number, XY>();
-    for (const m of ids) {
-        const row = rows.find((r) => r.assignment.marcher_id === m);
-        if (!row) refuse(trailDragRefusal.noSpots());
-        const [x, y] = await destinationOf(
-            tx,
-            row.transition,
-            row.assignment.slot_index,
-        );
-        spots.set(m, [x, y]);
-    }
+    const spots = await endSpotsInMove(tx, move, ids);
+    if (!spots) refuse(trailDragRefusal.noSpots());
     const form = await rippleFormAt(tx, ids, timeline.end_beat, spots);
     if (!form) refuse(rippleRefusal.notAForm());
-    const problem = rippleFormProblem(form.spots, starts);
+    // The line as it stands, in its own order (not by id), as the tool checks it
+    const problem = rippleFormProblem(
+        form.spots,
+        order.map((i) => starts[i]!),
+    );
     if (problem) refuse(problem);
     const plan = planRipple(
         order.map((i) => starts[i]!),

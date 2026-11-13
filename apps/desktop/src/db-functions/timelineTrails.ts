@@ -384,6 +384,31 @@ export async function refuseTrailRows(
     if (row) refuse(trailRefusal[why](await moveNameOf(tx, row.timelineId)));
 }
 
+/**
+ * Each of `ids`'s end spot in move `timelineId`: its slot's stored destination (R-13), as AP-T1
+ * reads it. Null when one of them has no row in the move. The Follow tool and Ripple in's write
+ * both read end spots this way (step 9), so they agree.
+ */
+export async function endSpotsInMove(
+    tx: DbTransaction,
+    timelineId: number,
+    ids: readonly number[],
+): Promise<Map<number, XY> | null> {
+    const rows = await memberRows(tx, timelineId);
+    const spots = new Map<number, XY>();
+    for (const m of ids) {
+        const row = rows.find((r) => r.assignment.marcher_id === m);
+        if (!row) return null;
+        const [x, y] = await destinationOf(
+            tx,
+            row.transition,
+            row.assignment.slot_index,
+        );
+        spots.set(m, [x, y]);
+    }
+    return spots;
+}
+
 // ---------------------------------------------------------------------------
 // AP-T1: Follow
 // ---------------------------------------------------------------------------

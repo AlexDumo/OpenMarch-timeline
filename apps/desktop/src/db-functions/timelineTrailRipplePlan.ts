@@ -11,17 +11,22 @@ import type { RoutePointInput } from "./timelineRoutes";
 export const rippleRefusal = {
     /** RP-2: the members' end spots don't stand in a line, curve or arc */
     notAForm: () => text.t("timeline.refusals.trail.notAForm"),
-    /** RP-2: the end spots close into a loop or fold into a block (steps 10 and 11) */
+    /** RP-2: the end spots close into a loop (a circle, a box outline: steps 10 and 11) */
     formLoop: () => text.t("timeline.refusals.trail.formLoop"),
+    /** RP-2: the end spots fold back close to themselves (a sharp V, or rows through a box) */
+    formFold: () => text.t("timeline.refusals.trail.formFold"),
     /** RP-2: the end spots lie on the line where it stands, so it would walk back through itself */
     formOverlap: () => text.t("timeline.refusals.trail.formOverlap"),
 };
 
 const dist = (a: XY, b: XY): number => Math.hypot(a[0] - b[0], a[1] - b[1]);
 
+/** The true median: the middle value, or the mean of the two middle ones */
 const median = (xs: readonly number[]): number => {
     const s = [...xs].sort((a, b) => a - b);
-    return s[Math.floor(s.length / 2)] ?? 0;
+    const k = s.length >> 1;
+    if (s.length === 0) return 0;
+    return s.length % 2 ? s[k]! : (s[k - 1]! + s[k]!) / 2;
 };
 
 /** The distance from `p` to the segment `a`–`b` */
@@ -45,9 +50,11 @@ function toSegment(p: XY, a: XY, b: XY): number {
  * (the median of its neighbor gaps):
  *
  * - **not a form**: a step more than 2.5 times the usual one (a zigzag through scattered spots);
- * - **a loop or a block**: the two ends within 1.5 `s` of each other (a circle, a box outline),
- *   or two spots three or more apart in the order within 1.5 `s` (an order snaking through a
- *   box or folding back on itself). Steps 10 and 11 follow outlines and snakes;
+ * - **a loop**: the two ends within 1.5 `s` of each other and within half the form's length (the
+ *   sum of its gaps), so a three-spot L or half circle isn't one (a circle, a box outline;
+ *   step 10 follows outlines);
+ * - **a fold**: two spots three or more apart in the order within 1.5 `s` (an order snaking
+ *   through a box, or a V sharper than about 47°; step 11 snakes);
  * - **overlap**: two or more spots within a quarter `s` of the line where it stands (the form slid
  *   along the line, or the line itself): the line would walk back through itself.
  */
@@ -61,12 +68,14 @@ export function rippleFormProblem(
     const s = median(steps);
     if (!(s > 0) || Math.max(...steps) > 2.5 * s)
         return rippleRefusal.notAForm();
-    if (n >= 3 && dist(spots[0]!, spots[n - 1]!) < 1.5 * s)
+    const ends = dist(spots[0]!, spots[n - 1]!);
+    const length = steps.reduce((a, b) => a + b, 0);
+    if (n >= 3 && ends < 1.5 * s && ends < length / 2)
         return rippleRefusal.formLoop();
     for (let i = 0; i < n; i++)
         for (let j = i + 3; j < n; j++)
             if (dist(spots[i]!, spots[j]!) < 1.5 * s)
-                return rippleRefusal.formLoop();
+                return rippleRefusal.formFold();
     const onLine = spots.filter((p) =>
         starts.length === 1
             ? dist(p, starts[0]!) < s / 4

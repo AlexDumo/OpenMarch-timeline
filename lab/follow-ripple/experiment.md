@@ -13,6 +13,7 @@ questions:
   - "The bar says on which count the leader reaches the form. The straight piece has no counts of its own: everyone walks their whole way at their own steady speed. Is the readout enough, or do you need to type how many counts the straight piece takes?"
   - "Add a corner or two before reaching the form. Did the line take the corners the way you wanted?"
   - "After a ripple, try Reverse leader and Remove trail. Did either do something you didn't expect?"
+  - "A V with a sharp point (under about 47°) is refused for now, because the two arms pass close to each other. Should a sharp V ripple anyway, with the collision warning showing?"
   - "Anything else about rippling into a form you'd change?"
 ---
 
@@ -46,8 +47,9 @@ questions:
 
 **Good to know**
 
-- Ripple in is greyed out when the end spots are scattered, close into a loop or fill a
-  block (a box or a circle), or lie on the line itself. Press it anyway and it says why (a
+- Ripple in is greyed out when the end spots are scattered, close into a loop (a circle or
+  a box outline), fold back close to themselves (rows through a box, or a V sharper than
+  about 47°), or lie on the line itself. Press it anyway and it says why (a
   tooltip with a mouse, a message with a finger). With no end spots on the page it says that
   placing them first unlocks it.
 - The line is read where its move starts, so a window starting on an earlier page still

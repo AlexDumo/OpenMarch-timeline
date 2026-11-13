@@ -728,7 +728,7 @@ class PathPenMode implements FieldMode {
             }
             // Pressed on the last point or the end spot and moved a little: still a finish
             if (p.moved && p.landed === null) {
-                void finishDrawing(enterAt(s, pointer.field));
+                void finishDrawing(enterAt(s, pointer.field, envOf(roles)));
                 return;
             }
             this.releaseDrawing(s, pointer, click, roles);
@@ -830,7 +830,7 @@ class PathPenMode implements FieldMode {
         }
         // On the last point (a Line's last point), or on the end spot the path goes to
         if (onFinishSpot(s, pointer.field, env)) {
-            void finishDrawing(enterAt(s, pointer.field));
+            void finishDrawing(enterAt(s, pointer.field, env));
             return;
         }
         const at = landCorner(shapeOf(s), pointer.field, env);
@@ -865,7 +865,7 @@ class PathPenMode implements FieldMode {
             intoEndSpots(s.follow) &&
             onEndSpot(s, pointer.field, env)
         ) {
-            void finishDrawing(enterAt(s, pointer.field));
+            void finishDrawing(enterAt(s, pointer.field, env));
             return;
         }
         if (p.moved && env) {
@@ -1580,7 +1580,7 @@ export const pathPenMode = new PathPenMode();
  */
 function onEndSpot(s: PathSession, at: XY, env: ToolEnv): boolean {
     if (s.follow && ripplesIn(s.follow))
-        return rippleEndAt(s.follow, at) !== null;
+        return rippleEndAt(s.follow, landedAt(s, at, env)) !== null;
     const points = pathPoints(shapeOf(s));
     const end = points[points.length - 1]!;
     return Math.hypot(end.x - at.x, end.y - at.y) <= env.hitRadius;
@@ -1590,8 +1590,16 @@ function onEndSpot(s: PathSession, at: XY, env: ToolEnv): boolean {
  * Ripple in (step 9, RP-4): the marcher whose spot at an end of the next form is under `at`, so a
  * finish there enters there; null otherwise, and for any other drawing
  */
-function enterAt(s: PathSession, at: XY): number | null {
-    return s.follow ? rippleEndAt(s.follow, at) : null;
+function enterAt(s: PathSession, at: XY, env: ToolEnv | null): number | null {
+    return s.follow && env ? rippleEndAt(s.follow, landedAt(s, at, env)) : null;
+}
+
+/**
+ * Where a press at `at` lands, as the drawing's pointer does (`landCorner`): Ripple in tests an
+ * end of the form with the same point the drawing shows the deal for (step 9 review)
+ */
+function landedAt(s: PathSession, at: XY, env: ToolEnv): XY {
+    return landCorner(shapeOf(s), at, env);
 }
 
 /** Whether `at` is on the drawing's last point or on the end spot the path goes to */
@@ -1603,7 +1611,7 @@ function onFinishSpot(s: PathSession, at: XY, env: ToolEnv): boolean {
     // Ripple in: on either end of the next form, by the drawing's own reach (RP-4)
     const onEnd =
         s.follow && ripplesIn(s.follow)
-            ? rippleEndAt(s.follow, at) !== null
+            ? rippleEndAt(s.follow, landedAt(s, at, env)) !== null
             : near(end);
     return (s.points.length > 0 && near(last)) || onEnd;
 }

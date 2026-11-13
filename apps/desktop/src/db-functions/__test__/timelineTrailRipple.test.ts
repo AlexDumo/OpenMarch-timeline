@@ -55,6 +55,7 @@ const dataOf = async (db: DbConnection) => {
 };
 const resolverOf = async (db: DbConnection): Promise<Resolver> =>
     createResolver((await readTimelineTables(db)).snapshot);
+const tuple = (p: { x: number; y: number }): XY => [p.x, p.y];
 const near = (a: readonly number[], b: readonly number[], eps = 1e-6) =>
     Math.abs(a[0]! - b[0]!) <= eps && Math.abs(a[1]! - b[1]!) <= eps;
 
@@ -425,6 +426,69 @@ describeDbTests("Ripple into the next form (AP-T12)", (it) => {
         );
     });
 
+    it("RP-2 (re-check): the overlap check reads the line in its own order, not by id", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { starts, step } = await setUp(db, { recipe: false });
+        const [x0, y0] = starts.get(1)!;
+        const at = (x: number, y: number): XY => [x0 + x * step, y0 + y * step];
+        // Page 1 ends with the line in an L whose ids don't run along it: M1 (0,0), M3 (2,0),
+        // M4 (4,0), M2 (4,2). In id order the line would cut across, from (0,0) to (4,2)
+        const L: Record<number, XY> = {
+            1: at(0, 0),
+            3: at(2, 0),
+            4: at(4, 0),
+            2: at(4, 2),
+        };
+        await moveMarchersInTarget({
+            db,
+            target: { kind: "range", start: 1, end: 9 },
+            moves: IDS.map((marcherId) => ({
+                marcherId,
+                x: L[marcherId]![0],
+                y: L[marcherId]![1],
+            })),
+        });
+        // The end spots: a straight line along that cut, off the real L
+        const form = [0.8, 1.6, 2.4, 3.2].map((t) => at(t, t / 2));
+        await moveMarchersInTarget({
+            db,
+            target: { kind: "range", ...WINDOW },
+            moves: IDS.map((marcherId, k) => ({
+                marcherId,
+                x: form[k]![0],
+                y: form[k]![1],
+            })),
+        });
+        const r0 = await resolverOf(db);
+        const page2 = (await db
+            .select()
+            .from(schema.timelines)
+            .where(eq(schema.timelines.start_beat, 9))
+            .get())!;
+        // The tool offers it
+        const keep = (await followKeepAt(db, r0, IDS, 17))!;
+        expect(keep.line!.order).toEqual([1, 3, 4, 2]);
+        const line = keep.line!.order.map((m) =>
+            tuple(keep.line!.starts.get(m)!),
+        );
+        const spots = IDS.map((m) => tuple(keep.spots.get(m)!));
+        expect(rippleFormProblem(spots, line)).toBeNull();
+        // In id order it would have looked like an overlap
+        expect(
+            JSON.stringify(
+                rippleFormProblem(
+                    spots,
+                    IDS.map((m) => tuple(keep.line!.starts.get(m)!)),
+                ),
+            ),
+        ).toMatch(/formOverlap/);
+        // And the write keeps it: no refusal at the finish
+        const result = await rippleTrail({ db, window: WINDOW, marcherIds: IDS, leaderId: 2, points: [], keepMove: page2.id }); // prettier-ignore
+        expect(result.marcherIds).toEqual([1, 3, 4, 2]);
+    });
+
     it("AP-T12 (review): an ungrouped mark in the move isn't dealt, only shapes are", async ({
         db,
         marchersAndPages: _,
@@ -524,7 +588,18 @@ describe("Ripple's plan (pure)", () => {
             ],
         );
         expect(why(away(half))).toBeNull();
-        // A 2×2 box around, a full circle, a 3×2 snake, a box outline: a loop or a block
+        // Three spots: a right-angle L, a half circle, an uneven straight line (review)
+        expect(why(away([[1, 0], [0, 0], [0, 1]]))).toBeNull(); // prettier-ignore
+        expect(why(away([[1, 0], [0, 1], [-1, 0]]))).toBeNull(); // prettier-ignore
+        expect(why(away([[0, 0], [1, 0], [3.6, 0]]))).toBeNull(); // prettier-ignore
+        // A V sharper than about 47° folds back close to itself: its own reason
+        const arm = (deg: number, r: number): XY => [
+            r * Math.cos((deg * Math.PI) / 180),
+            r * Math.sin((deg * Math.PI) / 180),
+        ];
+        const v = [arm(15, 3), arm(15, 2), arm(15, 1), [0, 0] as XY, arm(-15, 1), arm(-15, 2), arm(-15, 3)]; // prettier-ignore
+        expect(why(away(v))).toMatch(/formFold/);
+        // A 2×2 box around, a full circle, a 3×2 snake, a box outline: a loop
         expect(why(away([[0, 0], [2, 0], [2, 2], [0, 2]]))).toMatch(/formLoop/); // prettier-ignore
         const circle = [0, 1, 2, 3, 4, 5].map(
             (i): XY => [
