@@ -79,6 +79,11 @@ export interface Outline {
     loop: RoutePath;
     /** The farthest any marcher stands from it */
     residual: number;
+    /**
+     * Whether the marchers stand all the way round it; false for a line standing on part of a
+     * circle (an arc), which can go round the rest of it too (DO-2)
+     */
+    full: boolean;
 }
 
 const median = (xs: readonly number[]): number => {
@@ -256,6 +261,101 @@ function allRound(loop: RoutePath, starts: readonly XY[]): boolean {
 }
 
 /**
+ * The box outline round `starts` (`fitOutline`'s second candidate): the smallest box square to a
+ * hull edge, every start within `tol` of its sides, two or more on each side, all the way round.
+ * `cornered` says whether a start stands on one of its corners. Null when it doesn't fit.
+ */
+function boxCandidate(
+    starts: readonly XY[],
+    tol: number,
+): (Outline & { cornered: boolean }) | null {
+    const corners = smallestBox(starts);
+    if (!corners) return null;
+    const sides = corners.map((a, i) => [a, corners[(i + 1) % 4]!] as const);
+    const toSide = (p: XY, [a, b]: readonly [XY, XY]) => {
+        const dx = b[0] - a[0];
+        const dy = b[1] - a[1];
+        const l2 = dx * dx + dy * dy;
+        const f =
+            l2 > 0
+                ? Math.max(
+                      0,
+                      Math.min(
+                          1,
+                          ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2,
+                      ),
+                  )
+                : 0;
+        return Math.hypot(a[0] + dx * f - p[0], a[1] + dy * f - p[1]);
+    };
+    const near = starts.map((p) => sides.map((s) => toSide(p, s)));
+    const residual = Math.max(...near.map((ds) => Math.min(...ds)));
+    const onEach = sides.every(
+        (_, k) => near.filter((ds) => ds[k]! <= tol).length >= 2,
+    );
+    const wide = sides.every(
+        ([a, b]) => Math.hypot(b[0] - a[0], b[1] - a[1]) > tol,
+    );
+    if (!(residual <= tol && onEach && wide)) return null;
+    const geometry = boxOutline(corners);
+    const loop = makeLoop(geometry);
+    if (!loop || !allRound(loop, starts)) return null;
+    const cornered = corners.some((k) =>
+        starts.some((p) => Math.hypot(p[0] - k[0], p[1] - k[1]) <= tol),
+    );
+    return { kind: "box", geometry, loop, residual, cornered, full: true };
+}
+
+/** Whether every start lies within `tol` of one straight line (their principal axis) */
+function onALine(starts: readonly XY[], tol: number): boolean {
+    const n = starts.length;
+    const cx = starts.reduce((a, p) => a + p[0], 0) / n;
+    const cy = starts.reduce((a, p) => a + p[1], 0) / n;
+    let sxx = 0;
+    let sxy = 0;
+    let syy = 0;
+    for (const [x, y] of starts) {
+        sxx += (x - cx) ** 2;
+        sxy += (x - cx) * (y - cy);
+        syy += (y - cy) ** 2;
+    }
+    const a = 0.5 * Math.atan2(2 * sxy, sxx - syy);
+    const ux = Math.cos(a);
+    const uy = Math.sin(a);
+    return starts.every(
+        ([x, y]) => Math.abs(-(x - cx) * uy + (y - cy) * ux) <= tol,
+    );
+}
+
+/**
+ * The closed outline a line can go round (DO-2): {@link fitOutline}'s, or else the circle a line
+ * of three or more stands on part of (an arc, not a straight line), every one within a quarter of
+ * the usual spacing of it; `full` says which. Null when there's neither.
+ */
+export function outlineOf(starts: readonly XY[]): Outline | null {
+    const whole = fitOutline(starts);
+    if (whole || starts.length < 3) return whole;
+    const usual = median(nearestGaps(starts));
+    if (!(usual > EPS_GEOM)) return null;
+    const tol = usual / 4;
+    if (onALine(starts, tol)) return null;
+    const circle = fitCircle(starts.map(([x, y]) => ({ x, y })));
+    if (!circle || !(circle.r > usual / 2)) return null;
+    const c: XY = [circle.center.x, circle.center.y];
+    const residual = Math.max(
+        ...starts.map((p) =>
+            Math.abs(Math.hypot(p[0] - c[0], p[1] - c[1]) - circle.r),
+        ),
+    );
+    if (residual > tol) return null;
+    const geometry = circleOutline(c, circle.r);
+    const loop = makeLoop(geometry);
+    return loop
+        ? { kind: "circle", geometry, loop, residual, full: false }
+        : null;
+}
+
+/**
  * The closed outline the marchers stand on at the start flag (DO-2), fitted as the shape tools
  * draw it: a **circle** (the Arc kind's circle fit) or a **box outline** (the smallest box round
  * them, square to one of their hull's edges, at least two on each side, corners counting for
@@ -282,47 +382,16 @@ export function fitOutline(starts: readonly XY[]): Outline | null {
         const geometry = circleOutline(c, circle.r);
         const loop = makeLoop(geometry);
         if (residual <= tol && loop && allRound(loop, starts))
-            found.push({ kind: "circle", geometry, loop, residual });
+            found.push({
+                kind: "circle",
+                geometry,
+                loop,
+                residual,
+                full: true,
+            });
     }
-    const corners = smallestBox(starts);
-    if (corners) {
-        const sides = corners.map(
-            (a, i) => [a, corners[(i + 1) % 4]!] as const,
-        );
-        const toSide = (p: XY, [a, b]: readonly [XY, XY]) => {
-            const dx = b[0] - a[0];
-            const dy = b[1] - a[1];
-            const l2 = dx * dx + dy * dy;
-            const f =
-                l2 > 0
-                    ? Math.max(
-                          0,
-                          Math.min(
-                              1,
-                              ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2,
-                          ),
-                      )
-                    : 0;
-            return Math.hypot(a[0] + dx * f - p[0], a[1] + dy * f - p[1]);
-        };
-        const near = starts.map((p) => sides.map((s) => toSide(p, s)));
-        const residual = Math.max(...near.map((ds) => Math.min(...ds)));
-        const onEach = sides.every(
-            (_, k) => near.filter((ds) => ds[k]! <= tol).length >= 2,
-        );
-        const wide = sides.every(
-            ([a, b]) => Math.hypot(b[0] - a[0], b[1] - a[1]) > tol,
-        );
-        const cornered = corners.some((k) =>
-            starts.some((p) => Math.hypot(p[0] - k[0], p[1] - k[1]) <= tol),
-        );
-        if (residual <= tol && onEach && wide) {
-            const geometry = boxOutline(corners);
-            const loop = makeLoop(geometry);
-            if (loop && allRound(loop, starts))
-                found.push({ kind: "box", geometry, loop, residual, cornered });
-        }
-    }
+    const box = boxCandidate(starts, tol);
+    if (box) found.push(box);
     if (found.length === 0) return null;
     const best = found.reduce((a, b) =>
         b.residual < a.residual - 1e-9 ||
@@ -546,7 +615,7 @@ async function planInTransaction(
         const [x, y] = resolver.positionAt(m, window.start);
         return [x, y];
     });
-    const outline = fitOutline(starts);
+    const outline = outlineOf(starts);
     if (!outline) refuse(goRoundRefusal.notOutline());
     const leader = input.leaderId === null ? null : ids.indexOf(input.leaderId);
     const plan = planGoRound(starts, outline, {

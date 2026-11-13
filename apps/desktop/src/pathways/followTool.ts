@@ -15,8 +15,8 @@ import {
 import { readTrails, type MoveTrail } from "@/db-functions/timelineTrails";
 import {
     aroundTrailOver,
-    fitOutline,
     goRoundRefusalFor,
+    outlineOf,
 } from "@/db-functions/timelineTrailAround";
 import type { DbConnection } from "@/db-functions/types";
 import { isBasicMode } from "@/stores/EditorModeStore";
@@ -235,13 +235,15 @@ async function goRoundOffer(
         const p = f.starts.get(id)!;
         return [p.x, p.y];
     });
-    const outline = fitOutline(starts);
+    const outline = outlineOf(starts);
     if (!outline) return { around: null, refusal: null };
     const refusal = await db.transaction((tx) =>
         goRoundRefusalFor(tx, f.window, f.ids),
     );
     if (refusal) return { around: null, refusal };
-    const around = initialAround(f, outline, f.remembered, f.canDrag);
+    // On part of a circle (an arc), dragging a trail out stays the first choice
+    const first = initialAround(f, outline, f.remembered, f.canDrag);
+    const around = outline.full || !f.canDrag ? first : { ...first, on: false };
     const again = await aroundTrailOver(db, f.window, f.ids);
     return {
         around: again ? againAround(around, again, resolver, f) : around,

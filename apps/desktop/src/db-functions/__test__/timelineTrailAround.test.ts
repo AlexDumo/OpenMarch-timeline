@@ -27,6 +27,7 @@ import { dragTrail } from "../timelineTrailDrag";
 import {
     boxOutline,
     circleOutline,
+    outlineOf,
     defaultSpots,
     fitOutline,
     goRound,
@@ -208,6 +209,44 @@ describe("the outline and the plan (step 10, pure)", () => {
                 for (let y = 0; y < 3; y++) block.push([2 * x, 2 * y]);
             expect(fitOutline(block)).toBeNull();
             expect(fitOutline([[0, 0], [9, 1], [3, 7], [11, 13], [-4, 6]])).toBeNull(); // prettier-ignore
+        },
+    );
+
+    plainIt(
+        "outlineOf: a line on part of a circle (an arc) can go round the rest of it; a straight line and a scatter can't",
+        () => {
+            const arc = Array.from(
+                { length: 5 },
+                (_, i): XY => [
+                    8 * Math.cos((i * Math.PI) / 8),
+                    8 * Math.sin((i * Math.PI) / 8),
+                ],
+            );
+            expect(fitOutline(arc)).toBeNull();
+            const o = outlineOf(arc)!;
+            expect(o.kind).toBe("circle");
+            expect(o.full).toBe(false);
+            expect(o.loop.L).toBeCloseTo(16 * Math.PI, 6);
+            // the arc's spacing counts the spots all round: 16; the front of the arc leads
+            const plan = planGoRound(arc, o, {
+                reversed: false,
+                amount: 2,
+                unit: "spots",
+                step: 1,
+            });
+            expect(plan.spotCount).toBe(16);
+            expect(plan.line.at(-1)).toBe(4);
+            plan.line.forEach((i, q) => {
+                const want = [
+                    8 * Math.cos(((i + 2) * Math.PI) / 8),
+                    8 * Math.sin(((i + 2) * Math.PI) / 8),
+                ];
+                expect(near(plan.spots[q]!, want, 1e-9)).toBe(true);
+            });
+            expect(
+                outlineOf([0, 1, 2, 3].map((i): XY => [2 * i, 0])),
+            ).toBeNull();
+            expect(outlineOf(boxPlaces([0, 0], 2))?.full).toBe(true);
         },
     );
 

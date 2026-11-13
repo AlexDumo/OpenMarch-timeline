@@ -476,6 +476,46 @@ export function validateAdjustProfile(profile: unknown): ValidationResult {
 // Routes (I-R1, v0.9 step 1)
 // ---------------------------------------------------------------------------
 
+/** Why a stored leg bulge at `where` isn't one (R-14″) */
+const bulgeMessage = (where: string) =>
+    `${where} must be a number other than 0, at most ${MAX_ROUTE_BULGE} either way`;
+
+/** A route geometry's fields (spec 5.2; `closed` since pathways step 10) */
+const ROUTE_KEYS = ["v", "from", "to", "points", "toBulge", "closed"];
+
+/**
+ * R-13‴ (pathways step 10): a closed route returns to where it starts (`to` is `from`, bit for
+ * bit), has a point, and its points are corners or arc legs (no `tension`).
+ */
+function closedRouteProblems(
+    geometry: Record<string, unknown>,
+    push: (path: string, message: string) => void,
+): void {
+    if (geometry.closed === undefined) return;
+    if (geometry.closed !== true) {
+        push("closed", "closed must be true or absent");
+        return;
+    }
+    const { from, to } = geometry;
+    if (
+        !Array.isArray(from) ||
+        !Array.isArray(to) ||
+        from[0] !== to[0] ||
+        from[1] !== to[1]
+    )
+        push("to", "a closed route's to must be its from");
+    const points = geometry.points as unknown[];
+    if (points.length === 0)
+        push("points", "a closed route needs at least one point");
+    points.forEach((pt: unknown, i: number) => {
+        if (isRecord(pt) && "tension" in pt)
+            push(
+                `points[${i}].tension`,
+                `points[${i}] is on a closed route, so it must be a corner or an arc leg`,
+            );
+    });
+}
+
 /**
  * Validate a route's `geometry` (spec 5.2, I-R1): version 1, `from`, `to` and every point
  * finite and within the bound, point ids non-empty strings of at most 16 characters and unique,
@@ -490,18 +530,7 @@ export function validateRouteGeometry(geometry: unknown): ValidationResult {
         push("", "route geometry must be an object {v, from, to, points}");
         return result();
     }
-    noExtraKeys(
-        geometry,
-        ["v", "from", "to", "points", "toBulge", "closed"],
-        push,
-    );
-    // R-13‴ (pathways step 10): a closed outline returns to where it starts, and its points are
-    // corners or arc legs
-    const closed = geometry.closed;
-    if (closed !== undefined && closed !== true)
-        push("closed", "closed must be true or absent");
-    const bulgeMessage = (where: string) =>
-        `${where} must be a number other than 0, at most ${MAX_ROUTE_BULGE} either way`;
+    noExtraKeys(geometry, ROUTE_KEYS, push);
     if ("toBulge" in geometry && !isRouteBulge(geometry.toBulge))
         push("toBulge", bulgeMessage("toBulge"));
     if (geometry.v !== 1) push("v", "route geometry version must be 1");
@@ -556,25 +585,7 @@ export function validateRouteGeometry(geometry: unknown): ValidationResult {
         else ids.add(id);
         pointOf(pt.at, `${path}.at`, push);
     });
-    if (closed === true) {
-        const { from, to } = geometry as { from?: unknown; to?: unknown };
-        if (
-            !Array.isArray(from) ||
-            !Array.isArray(to) ||
-            from[0] !== to[0] ||
-            from[1] !== to[1]
-        )
-            push("to", "a closed route's to must be its from");
-        if (geometry.points.length === 0)
-            push("points", "a closed route needs at least one point");
-        geometry.points.forEach((pt: unknown, i: number) => {
-            if (isRecord(pt) && "tension" in pt)
-                push(
-                    `points[${i}].tension`,
-                    `points[${i}] is on a closed route, so it must be a corner or an arc leg`,
-                );
-        });
-    }
+    closedRouteProblems(geometry, push);
     // R-14″: a point at either end of an arc leg is a corner
     const points = geometry.points.filter(isRecord) as {
         tension?: number;
