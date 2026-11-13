@@ -1386,7 +1386,7 @@ For marcher `m` and beats `[from, to]`, the **drawable walked path** is a list o
 10. **Exports.** An individual drill chart draws, for the path from the previous page and the path to the next, the drawable walked path between the two pages' end beats, and puts the midpoint mark where the marcher is at the middle beat. When that path is one straight run from the first position to the second (only lines, every corner on the chord, none walked backward; a hold on the way counts as straight) the chart draws the straight line and its geometric midpoint exactly as before, so a show with no curves and no turns inside a page exports the same bytes. One export reads all its paths from one batch (`createWalkedPaths`, item 11). If a path can't be worked out the chart keeps its straight line and the error is logged with `console.error`; the export tests fail on any such log. Coordinate sheets don't draw paths and are unchanged. The video export draws no paths: it samples `positionsAt` per frame, so it already shows the walked path.
 11. **Batches.** `createWalkedPaths(snapshot, resolver)` gives the same paths as `walkedPath` and `walkedPathOfMove` for many marchers and ranges of one snapshot. It keeps what the marchers of a move share: each marcher's spans, a transition's destinations, a follow-the-leader transition's order and trail, a group path's schedule and each lane's resolved Adjust. A path then costs what its own segments cost; without it a follow-the-leader path costs the whole trail again on every call. A batch holds what it read, so a new one is made after the snapshot or resolver changes. `walkedPath` and `walkedPathOfMove` make a batch for the one call. A span's origin is read as `positionAt(m, s.start)`, which is `origin(s)` exactly (R-5's progress is 0 there and every walk returns its origin at 0).
 
-**Not in R-20 yet:** handoffs, pins, the entry rule and trail lanes (R-14′ items 3, 5 and 8, R-10′) are not in the resolver yet; when a step adds one to the resolver's walk it adds the matching segments here, and QA-WP's agreement rows fail until it does. `walkedPath` rebuilds a follow-the-leader trail from `ftlEntry` and the members' positions at the move's start, so a change to R-9's trail must be mirrored in it; QA-WP-15 fails with the show's seed when it is not.
+**Not in R-20 yet:** handoffs, the entry rule and trail lanes (R-14′ items 3, 5 and 8, R-10′; pins are in since plan step 5, Appendix M) are not in the resolver yet; when a step adds one to the resolver's walk it adds the matching segments here, and QA-WP's agreement rows fail until it does. `walkedPath` rebuilds a follow-the-leader trail from `ftlEntry` and the members' positions at the move's start, so a change to R-9's trail must be mirrored in it; QA-WP-15 fails with the show's seed when it is not.
 
 ---
 
@@ -3682,3 +3682,108 @@ data-visualization tools (light to dark carries the order in grey too).
 | QA-DL-39 | Nobody moves on page 3: an order set on page 2, then Clear on page 3; or instead an order 4→1 set on page 3 | Page 2 keeps its order each time; page 3 guesses, or shows 4→1                                            |
 | QA-DL-40 | A trail on page 2 and an order set on page 3 where nobody moves; the trail reversed     | Page 2 shows the trail's order; page 3 keeps the order set there                                            |
 | QA-DL-41 | A shape tool open, or a path open, then Shift+O; a path being drawn, then Shift+O        | The tool closes (undo brings the shape back) and Set order opens; while drawing it's unavailable, with its reason |
+
+## Appendix M: Design change: pins, midsets and quarter sets (plan step 5)
+
+**Change (plan step 5, ticket #647; built 2026-11-13 on the owner's standing brief).** A point of a
+drawn path can be **pinned to a count**: every marcher who walks the path passes that point on that
+count. A midset is a pin at the half, quarter sets are pins at the quarters, and a block letter's
+corners on set counts are pins on its corners. Between two pins (or an end and a pin) the path is
+walked at one steady speed, and the speed changes at the pin (register S-2, O-11: a pin is a
+boundary). The owner's decisions this step builds on are in the register: Q1 (a plain resize keeps
+pinned counts, Alt scales them, shrinking past a pin stops the drag), O-11, F-1 and S-2. Model C
+(ADR 0015): pins live on the route, so every lane of a group path shares them through the group
+clock (R-14′ item 2), and an Adjust, which is a place, follows them with no rule of its own.
+Precedents: keyframes on a motion path in After Effects and Blender (a keyframe ties a place to a
+time and the motion is re-timed between keys); warp markers in Ableton Live and Logic's Flex Time
+(a marker holds its beat when the region is trimmed, and moves with it when the region is
+time-stretched); Premiere's rate stretch, which is a separate gesture from a trim.
+
+### M.1 Rules
+
+| ID | Rule |
+| --- | --- |
+| **K1** | `timeline_routes.timing` (J.1), added by `ADD COLUMN` (migration 0024). JSON `{"v": 1, "pins": [{"point": "<id>", "at": <beats>}]}`, J.2's shape without `holds` and `handoff` (steps 14 and 25). `at` is beats from `T.start`. NULL means no pins: the app never writes an empty list. |
+| **I-P1** | As §6 says: every pin names a point id of its route, its `at` lies in `(0, c)` for the move its lanes are in, and pins are strictly increasing in `at` in route order. Ids and range are the commit view **E-R7** in `timeline_route_violations`; it also refuses a pin on a follow-the-leader trail route, and timing that isn't an object with a list of `{point, at}` objects (reported as a violation, never a raw SQL error) (trails take no pins in v1, draft-model §4.5; corner counts are step 6). Order and "two pins can't name one point" are the write path's. |
+| **I-P2** | **The app writes whole counts.** Every pin it writes has an integer `at` in `[1, c − 1]`. Typed counts, the playhead's count, Put corners on counts and Alt-scale all land on whole counts (step 16's "pins on the step grid" with one step per beat). The resolver reads any finite `at` (T-6). |
+| **R-15 (pins)** | **The clock with pins.** For a laned span (R-14′), let `u = β(b) − T.start` (the beats into the move) and let `path` be the walk the knots are measured on: the reference walk `W` for a group lane, the own path `walk(A, R.points, B)` for an own lane. **Knots** are `(0, 0)`, then `(at, D)` for each pin, `D` the place on `path` of the kept point that represents the pin's point (the last kept vertex whose stored index is at or before it, else 0; a point after the last kept one and within `ε_geom` of the walk's end, which cleaning drops there, reads as `L`), then `(c, L)`. T-6 drops a pin whose `at` isn't finite or isn't in `(0, c)`, or whose id isn't in the route; then, in route order (ties in stored order), it drops a pin whose `at` isn't strictly greater than the last kept knot's, or whose place is smaller. **When no pin survives, nothing below applies:** the walk is R-14′ item 9's, bit for bit. Otherwise `x(u)` is: the place of the knot when `u` equals a knot's beat; else `x_i + (u − u_i) · (x_{i+1} − x_i) / (u_{i+1} − u_i)` for the knots around `u`, in that order of operations. `u ≤ 0` is `A` and `u ≥ c` is `B`, exactly. |
+| **R-14′ (pins)** | **Where the marcher is, given `x`.** *Group lane, `m ≥ 1`:* `x < D_1` is the first leg at `x / D_1`; `D_1 ≤ x ≤ D_m` is `walk_x(W, x)` placed by `o` and the Adjust at `x` (items 5 to 7); `x > D_m` is the last leg at `(x − D_m) / (L − D_m)`. *Group lane, `m = 0`:* item 1's line (or `toBulge` arc) at `q = x / L`, or `u / c` when `L < ε_geom`. *Own lane:* `walk_x(path, x)` when `path` keeps an inner point; else its line or arc at `x / L` (`u / c` when `L < ε_geom`). Joins and resumes still walk straight (step 24), so pins don't touch them until the entry rule (step 12). |
+| **D-PIN** | Raised once per transition whose lane's route has a pin T-6 dropped (§8.9). |
+| **R-20 (pins)** | The drawn walked path is geometry, which pins don't change. Where a page flag cuts a move, the stretch drawn is the one walked between the two beats with pins applied: pieces are split at each knot's place and each piece's progress range is mapped through the clock. |
+| **AP-R4 (pins)** | J.8 AP-R4's pin rule. **Range writes** (`setTimelineRangeInTransaction`: resize, `shiftTimeline`, a fit's or split's range write), for every route with a lane in the move: **keep** (the default) changes nothing when both edges move by the same amount, and otherwise subtracts the start's change from `at`, so a pin keeps its count from the edge that didn't move; **scale** (Alt on a resize) is `at × c′ / c`, placed on whole counts by **M-COUNTS**. **The page and count ripple** (`rippleTimelineToPageGridInTransaction`: page-flag drags, counts inserted or deleted, page edits): each pin keeps its **beat**, mapped from the old grid to the new one as a row's end edge is (the end of its count). A flag drag renumbers no beats, so it is the keep rule; a count inserted before a pin inside its move moves the pin with its beat; a deleted count takes it to the end of the count before. A pin partway through a count (an older build's, or a hand edit's) goes with that count and keeps its fraction, as an order mark does. A pin that would leave `(0, c′)` refuses the edit ("The move would end before the pin on count 5", or "…start on or after…" for the start), and so do two pins that would land on one count ("This would put two pins of a drawn path on one count"). The limits stop a drag before either (below). |
+| **Resize limits** | `timelineResizeLimits` gains the stop kind `pin` (with the count). **Keep:** the end edge stops at `start + last pin + 1`, the start edge at `start + first pin − 1`, over every route of the move. **Scale:** a separate pair of bounds for the edges, stopping where the move would be shorter than `pins + 1` counts for the route with the most pins. The drag reads the scaled bounds while Alt is held. **Page flags:** `planPageFlagMoveLimits` asks the ripple's pin plan at each beat, so a flag stops where it would push a pin out of its move (block reason `pin`, with the count, worded on the drag tag: "Page 2's move has a pin on count 5"). |
+| **M-COUNTS** | **Placing places on whole counts** (Put corners on counts and Alt-scale). Given ideal counts `y_1 ≤ … ≤ y_n` and `c`: choose integers `1 ≤ n_1 < … < n_n ≤ c − 1` that minimize `Σ |y_i − n_i|`; among equal sums, the one that is earliest in lexicographic order. When two places round to one count, one of them takes the next count over: the **slot trade**. With `n > c − 1` there is no answer and the edit refuses. |
+| **AP-H1 (pins)** | Every writer of a route's geometry (`writeRouteGeometryInTransaction`) drops the pins on points the new geometry doesn't have, in the same edit, and the toast counts them ("1 pin removed"). A point delete, a redraw and a cut that drops a point therefore drop its pin. Pins on surviving ids stay on their counts: a point drag re-times the stretches either side of it. |
+| **AP-R7 (pins)** | Split at the playhead on an own lane: the cut place is `x(u_b)` with pins, and the cut point `C` the resolver's position at the count. The half before keeps the pins before `u_b`, unchanged; the half after keeps the pins after it, less `u_b`. A pin at `u_b` goes with its point (the point is `C`). The motion doesn't change: every stretch keeps its speed. Group lanes are still refused (step 17). |
+| **AP-R9 (pins)** | Own path for a group member copies the route's timing with its points, ids kept, so the member still passes each pinned point on its count. |
+
+### M.2 App procedures
+
+Each runs in one write-wrapper transaction: one undo step, and redo restores the same ids. Refusals
+are `E-ARGS` with a plain reason, decided before the first write. All of them write file version 15
+with a file's first pin.
+
+| ID | Procedure |
+| --- | --- |
+| **AP-P1** | **Pin a point to a count** (route `R`, point id, count `n`). Refused: `n` not a whole number, or outside `1 … c − 1` ("Pick a count from 1 to {last}"); `R` a trail ("A trail takes no pins"); the point not in `R`; `n` not after the pin before the point in route order or not before the pin after it ("This point comes after the pin on count 4: pick a count after 4"). A pin already on the point moves. |
+| **AP-P2** | **Pin at the playhead** (the marker drag). The open path shows a **playhead marker**, a ring on the path where its walker is at the playhead (the reference walk for a group path), while the playhead is inside the move. Dragged along the path and dropped **on a point**, it pins that point to the playhead's count (AP-P1). Dropped **on a straight stretch** of the path (a line leg; for a group path, between its first and last points), it adds a corner there, which doesn't change the path, and pins it, in one edit. Dropped on a curve or an arc it refuses ("Drop on a point, or add one here first"), and so it does with the playhead between counts or outside the move. |
+| **AP-P3** | **Remove a pin.** Writes NULL when it was the last. |
+| **AP-P4** | **Put corners on counts.** The corners are the route's kept inner points that aren't smooth. Their ideal counts are by length at one steady speed, `c · D / L` on the path the knots are measured on (R-15), ignoring the pins there are; M-COUNTS places them. Writes a pin on every corner and **replaces every other pin**. Refused: no corner ("This path has no corners"); more corners than counts between the ends ("6 corners but only 3 counts between the ends: lengthen the move or take out corners"); every corner already on those counts ("Every corner is already on its count"). Runs and flutters keep their steady speed until this is chosen (plan, "Steady speed stays the rule until pins"). |
+| **AP-P5** | **Resize with Alt** scales the pins (AP-R4 scale). A resize without Alt keeps them. After a resize that kept pins, the toast offers **Scale pins instead**, and the command **Scale pins with the move** does the same: an edit of its own that scales the pins read just before the resize to the length the resize gave the move, onto whole counts, as Alt would have. **The offer lives as long as its toast and its resize:** it goes when the toast closes, and with any edit, undo or redo after the resize; the command is unavailable without it. **The write is refused**, writing nothing, unless the move still has the range that resize gave it and its pins are exactly what the resize left ("The move changed after the resize…"), and when scaling would leave every pin on its count ("Scaling would leave every pin on the count it has"). So it only ever finishes that resize: it never undoes anything and never writes an empty undo step. |
+
+**On the field.** With a path open, each pinned point carries a tag with its count, and the
+playhead marker sits on the path. A selected point's count is on the floating path bar: a field
+showing its pin, or empty with the count it passes now as a hint; typing a count and Enter pins it
+(AP-P1), and the pin's × removes it (AP-P3). The point's right-click or long-press menu has **Pin to
+count…** (which selects the point and puts the cursor in that field) and **Remove pin**. **Put
+corners on counts** is a button on the bar and a command, and **Pin selected point at the playhead** is the
+marker's drop as a command. While a path is open, the timeline shows a short tick at each of its pinned counts, standing on
+the page row over the move (a click seeks there). **Big steps** (J.6) judges each stretch at its
+pinned speed: a leg's distance is scaled by the fastest stretch of the clock it crosses. Every
+control is a named action in the command palette.
+
+**Not in this step:** holds and stops (`timing.holds`, step 14); steps per count and pins on
+another step grid (16); pins on follow-the-leader trails (trails get corner counts, step 6); exact
+group splits keeping pins (17, still refused); the dot book listing pins by name (O-16). A
+per-member pin is a product limit (06 m10).
+
+### M.3 Storage and file version
+
+- **Migration 0024** adds `timeline_routes.timing` (`ADD COLUMN`, CHECK `json_valid`); no table is
+  rebuilt. Like 0021 it is a converter-schema migration, guarded against running twice
+  (`addColumnGuard`), because the resolver's cold build reads every column of `timeline_routes`.
+  It is numbered after step 3c's 0023 (open PR #900), which merges first; its journal time is later, since the
+  migration runner orders by time, not by number.
+- The routes' change-log image and history triggers carry `timing`.
+- **File version 15** with a file's first pin (`markPinModelInTransaction`): a build that doesn't
+  know pins would walk the path at one steady speed. A file without a pin stays at its version, and
+  the number isn't lowered when the last pin goes. v0.1.7 files have no routes and open unchanged.
+
+### M.4 New tests
+
+| ID | Setup | Expected |
+| --- | --- | --- |
+| QA-PIN-1 | One marcher, own path (0,0) → corner p1 (30,0) → (30,40) over 16 counts, p1 pinned at 4 | Beat 2: (15,0); beat 4: (30,0) bit for bit; beat 10: (30,20); beat 16: (30,40) |
+| QA-PIN-2 | A 2×2 group path with corners q1, q2 (the S-08 block), q2 pinned at 6; one member adjusted | Every member is at `W(q2) + o` (plus its Adjust there) at beat 6, bit for bit; continuous everywhere (P-14) |
+| QA-PIN-3 | Pins at 4 and 12 (quarter sets) on a straight path with points at ¼ and ¾ of its length; at 8 on its midpoint | Passes each point on its count; one steady speed between pins; equals the same path with no pins when the pins sit where steady speed already puts them, within 10⁻⁹ |
+| QA-PIN-4 | Random routes (corners, smooth points, arcs), random valid pins, group and own lanes | Resolver = `docs/timeline/ref` oracle bit for bit at every 1/16 beat |
+| QA-PIN-5 | T-6: a pin at 0, at `c`, at −1, NaN, on a missing id, out of order; two pins on one point at rising counts | The bad knots dropped, `D-PIN` raised, positions finite and continuous; the two on one point are kept, a stop there |
+| QA-PIN-6 | No pins; `timing` NULL; every pin dropped by T-6 | Bit-identical to the walk without timing |
+| QA-PIN-7 | Cached resolver: pin, move a pin, remove it, resize | Each seeds W-3 for the route's transitions; cached = fresh; closure holds |
+| QA-PIN-8 | R-20 with a pinned own path, a group path and a curve, whole and cut by page flags; a stop at a corner (two coincident points pinned on 4 and 8) and a stop at the start | The drawn stretch matches `positionAt` within 0.05 at every 1/16 beat: a piece leaves a stop on its last beat and arrives on its first |
+| QA-DB-P1 | E-R7: a pin at 0, at `c`, on a missing id, on a trail route; a pinned route's move shrunk by raw SQL past the pin; timing `5`, `"pins"`, pins `5` or an object, pin entries that aren't objects | `E-R7` each, as a violation (no raw SQL error); accepted with the pin inside |
+| QA-AP-P1 | AP-P1: pin, move the pin, a pin out of order, a count of 0, `c`, 2.5, a trail | Written as whole counts; refusals with their reasons; nothing written on refusal; one undo step each; file version 15 |
+| QA-AP-P2 | AP-P2: drop on a point; on a line leg (new corner, positions unchanged elsewhere); on a curve; playhead between counts | Pinned; corner added and pinned in one undo step; refused; refused |
+| QA-AP-P4 | AP-P4: three corners by length; two corners rounding to one count (trade); more corners than counts; again | Each on its count; the trade; refused; "already on its count" |
+| QA-AP-P5 | AP-R4: end-edge drag, start-edge drag, a shift, Alt-scale 16 → 12 and 16 → 10, a drag past a pin; page 2's move pinned on 2 and 5, page 1's flag dragged 9 → 10, page 2's flag dragged toward 14 | Counts kept; kept from the end; unchanged; scaled onto whole counts with trades; stops at `pin`; the flag drag gives 1 and 4 (each pin on its beat, as a clip resize), one undo step; page 2's flag stops at 15 and a drop at 14 is refused in words |
+| QA-AP-P8 | A count inserted between pins on 2 and 5, undone; that count deleted; the counts between pins on 2 and 4 deleted | 2 and 6 (the later pin moves with its beat); 2 and 5 again; 2 and 4; refused in words ("two pins … on one count"), nothing written |
+| QA-AP-P10 | A pin stored at 2.5 (by raw SQL); page 1's flag dragged 9 → 10; then a count inserted before the count holding it | 1.5 (kept on its beat, its half kept, no refusal); then 2.5 and 5, the move grown to [10, 18) |
+| QA-AP-P9 | Scale pins instead after a resize 8 → 12 of pins on 2 and 5; again after another edit came between; after the resize was undone; after a page-flag drag moved the resized move; a resize 8 → 9 of a pin on 3; the offer through an edit, an undo and its toast closing | 3 and 7 (7.5 ties to the earlier count), one undo step of its own; refused each time, nothing written, and the undone resize can still be redone; refused as no change (3 × 9 / 8 is still 3); the offer goes each time, and the command then does nothing |
+| QA-FZ-P1 | Fuzzers: pins (valid, and the kinds T-6 drops, and stops) on random routes in the walked-path shows (`withRandomPins`), the `ref` fuzz worlds and its `retime` edit, and the `ref` property worlds (P-15: each valid pin's point is passed on its beat; a pinned own path stays on its legs) | No divergence, no closure violation, no failure |
+| QA-AP-P6 | AP-H1: delete a pinned point; redraw; Re-fit | The pin goes and the toast counts it; pins on kept ids stay; Re-fit keeps them |
+| QA-AP-P7 | AP-R7 on a pinned own path at a count between pins, and on a pin | Motion unchanged at every 1/16 beat; pins split by count; the pin on the cut goes |
+| QA-MIG-P1 | A version-14 file with lanes, an Adjust and a trail | Opens; every row kept; `timing` NULL; version stays 14 until a pin |
+| QA-FV-P1 | File versions | 15 opens; 16 is refused |
+
+**Parity.** Shows with no pins resolve bit-identically before and after this step: a base-vs-branch
+script compares every marcher at every 1/16 beat (results in the step's pull request).

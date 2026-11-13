@@ -160,6 +160,7 @@ export function createOracle(db: TimelineSnapshot): Oracle {
             p,
             laneAt(t.id, sp.row.slot),
             kind(sp) === "founding",
+            b - t.start,
         );
     }
 
@@ -169,9 +170,11 @@ export function createOracle(db: TimelineSnapshot): Oracle {
             if (l.transition !== tid || l.slot !== slot) continue;
             const r = db.routes?.[l.route];
             if (!r) throw new Error(`lane on ${tid}:${slot} has no route`);
+            const t = T(tid);
             return {
                 route: r.geometry,
                 offset: l.offset,
+                ...(r.timing ? { timing: r.timing, c: t.end - t.start } : {}),
                 ...(l.offset && l.adjust
                     ? {
                           adjust: resolveAdjust(

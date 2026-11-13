@@ -37,8 +37,10 @@ import {
     adjustDiagnostics,
     groupSchedule,
     resolveAdjust,
+    routeClock,
     walkedPoint,
     type GroupSchedule,
+    type RouteClock,
     type LaneWalk,
     type ResolvedAdjust,
     type RouteWalk,
@@ -56,6 +58,7 @@ import type {
     InvalidationReport,
     LaneRow,
     OrderSource,
+    RouteTiming,
     Resolver,
     RowImage,
     SpanInfo,
@@ -352,7 +355,14 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
     // routeGeometry (9.2 #7): route -> points, from, to; and its group schedule (J.7), on first use
     const routeGeo = new Map<
         number,
-        { walk: RouteWalk; schedule: GroupSchedule | null }
+        {
+            walk: RouteWalk;
+            schedule: GroupSchedule | null;
+            /** Its pins (pathways step 5), or null */
+            timing: RouteTiming | null;
+            /** The group clock on the schedule's W for a move of `c` beats (J.7), on first use */
+            clock: { c: number; clock: RouteClock | null } | null;
+        }
     >();
     // ---- cascading caches (9.2 #5-6)
     const origins = new Map<string, XY>(); // `${m}|${start}` -> xy
@@ -431,6 +441,8 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
                         : { toBulge: r.geometry.toBulge }),
                 },
                 schedule: null,
+                timing: r.timing ?? null,
+                clock: null,
             });
     }
     for (const t of Object.values(host.transitions)) {
@@ -621,7 +633,8 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         const o = origin(s);
         if (t.style === FTL) return lerp(o, entry(t.id).target.get(s.m)!, p); // R-11
         const dst = dests.get(t.id)![s.row.slot]!;
-        // R-7, R-8, R-14′ (lane first) through the one walked-path seam
+        // R-7, R-8, R-14′ (lane first) through the one walked-path seam; `b − T.start` times a
+        // route's pins (R-15, Appendix M)
         return walkedPoint(
             t,
             o,
@@ -629,6 +642,7 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
             p,
             laneWalk(t.id, s.row.slot),
             founding(s),
+            b - t.start,
         );
     }
     /** R-14′: the lane on slot `slot` of `tid` with its route's cached geometry, if any. */
@@ -641,14 +655,37 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
             throw new Error(
                 `lane ${id} on ${tid}:${slot} has no route ${lane.route} (I-D3)`,
             );
-        if (lane.offset === null) return { route: geo.walk, offset: null };
+        const t = T(tid);
+        const c = t.end - t.start;
+        // pins (Appendix M): an own lane measures its clock on its own path, per evaluation
+        const timed = geo.timing ? { timing: geo.timing, c } : {};
+        if (lane.offset === null)
+            return { route: geo.walk, offset: null, ...timed };
         geo.schedule ??= groupSchedule(geo.walk);
         return {
             route: geo.walk,
             offset: lane.offset,
             schedule: geo.schedule,
             adjust: resolvedAdjust(id, lane),
+            ...(geo.timing ? { ...timed, clock: groupClock(geo, c) } : {}),
         };
+    }
+
+    /** The group clock of a route on its reference walk for a move of `c` beats, cached (J.7). */
+    function groupClock(
+        geo: NonNullable<ReturnType<typeof routeGeo.get>>,
+        c: number,
+    ): RouteClock | null {
+        if (geo.clock?.c === c) return geo.clock.clock;
+        geo.schedule ??= groupSchedule(geo.walk);
+        const clock = routeClock(
+            geo.schedule.W,
+            geo.walk.points,
+            geo.timing,
+            c,
+        );
+        geo.clock = { c, clock };
+        return clock;
     }
 
     /** R-14′ item 6: lane `id`'s profile on its route's schedule, cached (J.7); null without one */
@@ -1013,6 +1050,7 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
                         ),
                     );
             }
+            pinDiagnostics(t, out);
             return;
         }
         let hasFounder = false;
@@ -1042,6 +1080,34 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
                     message: `Transition ${t.id} could not inherit its order, so slot order was used`,
                 });
         }
+    }
+    /**
+     * D-PIN (Appendix M): once per transition whose lanes' routes have a pin T-6 dropped. Ids and
+     * beats don't depend on the path, and places rise along any path, so the reference walk's
+     * clock counts an own lane's drops too.
+     */
+    function pinDiagnostics(t: TransitionRow, out: Diagnostic[]) {
+        const c = t.end - t.start;
+        let dropped = 0;
+        const seen = new Set<number>();
+        for (let k = 0; k < t.slots; k++) {
+            const id = laneAt.get(slotKey(t.id, k));
+            if (id === undefined) continue;
+            const rid = laneRows.get(id)!.route;
+            const geo = routeGeo.get(rid);
+            if (!geo?.timing || seen.has(rid)) continue;
+            seen.add(rid);
+            dropped += groupClock(geo, c)?.dropped ?? 0;
+        }
+        if (dropped > 0)
+            out.push({
+                code: "D-PIN",
+                level: "warning",
+                transitionId: t.id,
+                marcherId: null,
+                slot: null,
+                message: `Transition ${t.id} has ${dropped} unusable pins`,
+            });
     }
     /** Span-level diagnostics (8.9): D-REBASE, D-FTL-NONFOUNDING. */
     function spanDiagnostic(s: RSpan, k: SpanKind): Diagnostic | null {

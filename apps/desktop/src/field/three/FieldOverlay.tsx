@@ -96,6 +96,13 @@ const CENTER_DOT_RADIUS = 5;
 const CENTER_DOT_RING = 2.5;
 const PIVOT_RADIUS = 4;
 const PIVOT_COLOR = "#facc15";
+/** A pinned point's count tag (pathways step 5), in CSS px */
+const PIN_TAG_PX = 10;
+const PIN_TAG_HEIGHT = 14;
+const PIN_TAG_PAD = 4;
+const PIN_TAG_CHAR_PX = 6;
+/** The playhead marker on an open path (pathways step 5): half its diagonal, in CSS px */
+const PIN_MARKER_RADIUS = 7;
 /** The pivot's crosshair once it's out of the center (#350): its arms and ring, in CSS px */
 const PIVOT_MARK_ARM = 9;
 const PIVOT_MARK_RING = 5;
@@ -1400,6 +1407,72 @@ function ModeDrawing({
                     />
                 );
             })}
+            {drawing.pinTags?.map(({ at: point, text }, i) => {
+                // A pinned point's count (pathways step 5): a small tag up and right of it
+                const p = at(point);
+                const w = PIN_TAG_PAD * 2 + text.length * PIN_TAG_CHAR_PX;
+                const x = p.x + SHAPE_HANDLE_SIZE / 2 + 2;
+                const y = p.y - SHAPE_HANDLE_SIZE / 2 - PIN_TAG_HEIGHT - 1;
+                return (
+                    <g
+                        key={`pin${i}`}
+                        style={controls}
+                        data-testid="fieldPathPinTag"
+                        data-count={text}
+                    >
+                        <rect
+                            x={x}
+                            y={y}
+                            width={w}
+                            height={PIN_TAG_HEIGHT}
+                            rx={PIN_TAG_HEIGHT / 2}
+                            fill={shape}
+                        />
+                        <text
+                            x={x + w / 2}
+                            y={y + PIN_TAG_HEIGHT / 2}
+                            fontSize={PIN_TAG_PX}
+                            className="font-sans"
+                            textAnchor="middle"
+                            dominantBaseline="central"
+                            fill="white"
+                        >
+                            {text}
+                        </text>
+                    </g>
+                );
+            })}
+            {drawing.pinMarker &&
+                (() => {
+                    // The playhead marker (pathways step 5): a diamond on the path where its walker
+                    // is at the playhead, in the playhead's yellow; filled while a drag would pin
+                    const { dragging, onTarget } = drawing.pinMarker;
+                    const p = at(drawing.pinMarker.at);
+                    const r = PIN_MARKER_RADIUS;
+                    const d = `M ${p.x} ${p.y - r} L ${p.x + r} ${p.y} L ${p.x} ${p.y + r} L ${p.x - r} ${p.y} Z`;
+                    return (
+                        <g
+                            data-testid="fieldPathPlayheadMarker"
+                            data-dragging={dragging ? "true" : undefined}
+                            data-on-target={onTarget ? "true" : undefined}
+                        >
+                            <path
+                                d={d}
+                                fill="none"
+                                stroke="black"
+                                strokeWidth={3.5}
+                            />
+                            <path
+                                d={d}
+                                fill={
+                                    dragging && onTarget ? PIVOT_COLOR : "white"
+                                }
+                                stroke={PIVOT_COLOR}
+                                strokeWidth={1.75}
+                            />
+                        </g>
+                    );
+                })()}
             {drawing.addHandles?.map((point, i) => {
                 const p = at(point);
                 return (

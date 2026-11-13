@@ -3,6 +3,11 @@
  * process and the convert-on-open worker (P9.8) can use them. `timelineTransitions.ts` re-exports
  * this module and adds the undoable one-edit wrappers.
  */
+import {
+    planPinRetime,
+    writePinRetime,
+    type PinRetime,
+} from "./timelineRoutePinRetime";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import {
     validateDestination,
@@ -382,11 +387,17 @@ export const setTimelineRangeInTransaction = async ({
     timelineId,
     start,
     end,
+    pins = "keep",
 }: {
     tx: DbTransaction;
     timelineId: number;
     start: number;
     end: number;
+    /**
+     * What the move's pins do (pathways step 5, AP-R4): keep their counts (from the edge that
+     * didn't move), or scale with the move (Alt on a resize). Planned, and refused, before any write
+     */
+    pins?: PinRetime;
 }): Promise<typeof schema.timelines.$inferSelect> => {
     const L = schema.timelines;
     const T = schema.timeline_transitions;
@@ -407,6 +418,14 @@ export const setTimelineRangeInTransaction = async ({
         .all();
     if (start === s0 && end === e0) return timeline;
     const ids = owned.map((t) => t.id);
+    // AP-R4: the pins of the move's routes, planned (and refused) before anything is written
+    const pinPlan = await planPinRetime(
+        tx,
+        ids,
+        { start: s0, end: e0 },
+        { start, end },
+        pins,
+    );
     const unionStart = Math.min(s0, start);
     const unionEnd = Math.max(e0, end);
     const setTimeline = (startBeat: number, endBeat: number) =>
@@ -457,6 +476,8 @@ export const setTimelineRangeInTransaction = async ({
             await setTransitions(start, end);
             row = await setTimeline(start, end);
         }
+        // 4. The pins, so they lie inside the new range at commit (E-R7)
+        await writePinRetime(tx, pinPlan);
         return row;
     });
 };

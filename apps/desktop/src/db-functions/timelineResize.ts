@@ -9,6 +9,7 @@ import { updateTimelineAssignmentsInTransaction } from "./timelineAssignments";
 import { pageTakeoverRefusal, readPageBoxes } from "./timelineMoveNames";
 import { pageTimelineIds } from "@/timeline/timelineViewModel";
 import { ensureCountsInTransaction } from "./endlessCounts";
+import { readMovePins } from "./timelineRoutePinRetime";
 
 /**
  * Resizing a move: dragging a clip's start or end edge changes its timeline's range
@@ -38,7 +39,13 @@ export type TimelineResizeStop =
           readonly end: number;
       }
     /** A marcher joins or leaves this move partway, here (resize-move E7) */
-    | { readonly kind: "member"; readonly beat: number };
+    | { readonly kind: "member"; readonly beat: number }
+    /**
+     * A drawn path's pin (pathways step 5, AP-R4): keeping its count, the move can't end on or
+     * before it (`count`, counts into the move); scaled, it can't be shorter than its pins
+     * plus one (`count` the number of pins)
+     */
+    | { readonly kind: "pin"; readonly count: number };
 
 export interface TimelineResizeBound {
     readonly beat: number;
@@ -59,6 +66,14 @@ export interface TimelineResizeLimits {
     readonly endEdge: {
         readonly min: TimelineResizeBound;
         readonly max: TimelineResizeBound;
+    };
+    /**
+     * The edges' limits when the drag scales the move's pins (Alt, AP-R4), which differ only at
+     * the shrinking end; absent when the move has no pins
+     */
+    readonly scaled?: {
+        readonly startEdge: TimelineResizeLimits["startEdge"];
+        readonly endEdge: TimelineResizeLimits["endEdge"];
     };
     /**
      * The ranges of other stored timelines that share a marcher with this one; a resize can't land
@@ -151,6 +166,7 @@ export function timelineResizeLimits({
     own,
     others,
     taken,
+    pins = [],
 }: {
     timelineId: number;
     start: number;
@@ -158,6 +174,8 @@ export function timelineResizeLimits({
     own: readonly ResizeRow[];
     others: readonly ResizeOtherRow[];
     taken: TimelineResizeLimits["taken"];
+    /** Each pinned route of the move: its first and last pinned counts and how many (AP-R4) */
+    pins?: readonly { first: number; last: number; count: number }[];
 }): TimelineResizeLimits {
     const ranges = new Map(taken.map((t) => [t.timelineId, t]));
     const moveStop = (o: ResizeOtherRow): TimelineResizeStop => {
@@ -226,12 +244,52 @@ export function timelineResizeLimits({
                 endMax = tighter(endMax, o.start, moveStop(o), false);
         }
     }
+    // AP-R4 (pathways step 5): keeping their counts, the shrinking edge stops short of the pins;
+    // scaling them, where the move would have fewer counts than its pins need
+    let keepStartMax = startMax;
+    let keepEndMin = endMin;
+    let scaleStartMax = startMax;
+    let scaleEndMin = endMin;
+    for (const p of pins) {
+        keepStartMax = tighter(
+            keepStartMax,
+            start + p.first - 1,
+            { kind: "pin", count: p.first },
+            false,
+        );
+        keepEndMin = tighter(
+            keepEndMin,
+            start + p.last + 1,
+            { kind: "pin", count: p.last },
+            true,
+        );
+        scaleStartMax = tighter(
+            scaleStartMax,
+            end - (p.count + 1),
+            { kind: "pin", count: p.count },
+            false,
+        );
+        scaleEndMin = tighter(
+            scaleEndMin,
+            start + p.count + 1,
+            { kind: "pin", count: p.count },
+            true,
+        );
+    }
     return {
         timelineId,
         start,
         end,
-        startEdge: { min: startMin, max: startMax },
-        endEdge: { min: endMin, max: endMax },
+        startEdge: { min: startMin, max: keepStartMax },
+        endEdge: { min: keepEndMin, max: endMax },
+        ...(pins.length > 0
+            ? {
+                  scaled: {
+                      startEdge: { min: startMin, max: scaleStartMax },
+                      endEdge: { min: scaleEndMin, max: endMax },
+                  },
+              }
+            : {}),
         taken,
     };
 }
@@ -248,6 +306,7 @@ async function readResizeInputs(
     own: (ResizeRow & { id: number })[];
     others: ResizeOtherRow[];
     taken: TimelineResizeLimits["taken"];
+    pins: { first: number; last: number; count: number }[];
 } | null> {
     const L = schema.timelines;
     const T = schema.timeline_transitions;
@@ -328,6 +387,7 @@ async function readResizeInputs(
         others: others.map((o) =>
             pages.has(o.timelineId) ? { ...o, pageMove: true } : o,
         ),
+        pins: await readMovePins(db, transitionIds),
         // Only moves with one of the same marchers: the rest may share the range (L-4). But not a
         // newer page's own move, which landing on its counts would take over (UI-25)
         taken: taken.flatMap((t) =>
@@ -394,6 +454,7 @@ export function timelineResizeRefusal(
     limits: TimelineResizeLimits,
     start: number,
     end: number,
+    scalePins = false,
 ): TimelineText | null {
     if (!Number.isInteger(start) || !Number.isInteger(end))
         return text.t("timeline.refusals.resize.wholeCounts");
@@ -404,9 +465,11 @@ export function timelineResizeRefusal(
             : beat > edge.max.beat
               ? edge.max
               : null;
+    const edges = (scalePins && limits.scaled) || limits;
+    const startBound =
+        start !== limits.start ? outside(edges.startEdge, start) : null;
     const bound =
-        (start !== limits.start && outside(limits.startEdge, start)) ||
-        (end !== limits.end && outside(limits.endEdge, end));
+        startBound || (end !== limits.end && outside(edges.endEdge, end));
     if (bound) {
         switch (bound.stop.kind) {
             case "show":
@@ -417,6 +480,15 @@ export function timelineResizeRefusal(
                 return text.t("timeline.refusals.resize.moveInTheWay");
             case "member":
                 return text.t("timeline.refusals.resize.memberChange");
+            case "pin":
+                return scalePins
+                    ? text.t("timeline.refusals.pin.noRoomToScale")
+                    : text.t(
+                          startBound
+                              ? "timeline.refusals.pin.pastPinStart"
+                              : "timeline.refusals.pin.pastPin",
+                          { count: bound.stop.count },
+                      );
         }
     }
     const same = limits.taken.find((t) => t.start === start && t.end === end);
@@ -444,11 +516,14 @@ export async function resizeTimelineInTransaction({
     timelineId,
     start,
     end,
+    scalePins = false,
 }: {
     tx: DbTransaction;
     timelineId: number;
     start: number;
     end: number;
+    /** Alt (or Scale pins instead): the move's pins scale with it instead of keeping their counts */
+    scalePins?: boolean;
 }): Promise<ResizeTimelineResult> {
     const inputs = await readResizeInputs(tx, timelineId);
     if (!inputs) refuse(`timeline ${timelineId} does not exist`);
@@ -456,7 +531,7 @@ export async function resizeTimelineInTransaction({
     const from = { start: limits.start, end: limits.end };
     if (start === from.start && end === from.end)
         return { timelineId, from, to: from };
-    const refusal = timelineResizeRefusal(limits, start, end);
+    const refusal = timelineResizeRefusal(limits, start, end, scalePins);
     if (refusal) refuse(refusal);
     // Over a page's own moves the rows go above them first, so the new range overlaps nothing on
     // their layer (I-A3) and overrides those moves there
@@ -474,7 +549,13 @@ export async function resizeTimelineInTransaction({
         });
     // A move may run past the show's end; the counts it lands on are stored (endless counts)
     await ensureCountsInTransaction({ tx, through: end });
-    await setTimelineRangeInTransaction({ tx, timelineId, start, end });
+    await setTimelineRangeInTransaction({
+        tx,
+        timelineId,
+        start,
+        end,
+        pins: scalePins ? "scale" : "keep",
+    });
     return { timelineId, from, to: { start, end } };
 }
 
@@ -487,11 +568,13 @@ export async function resizeTimeline({
     timelineId,
     start,
     end,
+    scalePins = false,
 }: {
     db: DbConnection;
     timelineId: number;
     start: number;
     end: number;
+    scalePins?: boolean;
 }): Promise<ResizeTimelineResult | null> {
     const current = await db
         .select()
@@ -501,6 +584,6 @@ export async function resizeTimeline({
     if (current && current.start_beat === start && current.end_beat === end)
         return null;
     return await transactionWithHistory(db, "resizeTimeline", (tx) =>
-        resizeTimelineInTransaction({ tx, timelineId, start, end }),
+        resizeTimelineInTransaction({ tx, timelineId, start, end, scalePins }),
     );
 }

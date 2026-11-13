@@ -5,7 +5,7 @@
 import { makeOracle } from './oracle.mjs';
 import { makeResolver } from './resolver.mjs';
 import { destinationsOf } from './geom.mjs';
-import { randArcRoute, toggleLeg, landOn, randAdjust, hasArc } from './arcroutes.mjs';
+import { randArcRoute, toggleLeg, landOn, randAdjust, hasArc, randTiming } from './arcroutes.mjs';
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const EXPECT_FAIL = process.argv.includes('--expect-fail');
@@ -89,6 +89,12 @@ function makeWorld(seed, withRoutes = false) {
     for (const t of Object.values(db.transitions)) {
       if (t.style === 'follow_the_leader') { if (R() < 0.6) t.route = newRoute([]); }
       else if (R() < 0.7) for (const [id, l] of laneSet(t)) db.lanes[id] = l;
+    }
+    // Pins on about half the lane routes (Appendix M), on their own stream so the worlds above are unchanged
+    const P = mulberry32(seed * 7 + 5);
+    for (const l of Object.values(db.lanes)) {
+      const r = db.routes[l.route], t = db.transitions[l.transition];
+      if (r.timing === undefined && P() < 0.5) { const timing = randTiming(P, r.geometry, t.end - t.start); if (timing) r.timing = timing; }
     }
   }
   const dropLanes = (tid) => lanesOf(tid).map(([id, l]) => { delete db.lanes[id]; return { before: l, after: null }; });
@@ -194,6 +200,11 @@ function makeWorld(seed, withRoutes = false) {
       const [id, l] = pick(ls), n = { ...l };
       if (R() < 0.5) n.offset = [ri(-3, 3), ri(-3, 3)]; else if (R() < 0.8) n.adjust = randAdjust(R, db.routes[l.route].geometry, 2); else delete n.adjust;
       db.lanes[id] = n; return { lanes: [{ before: l, after: n }] }; },
+    retime() { // pins (Appendix M): a route walked by lanes gains, changes or loses its timing
+      const ls = Object.values(db.lanes).filter((l) => db.transitions[l.transition]); if (!ls.length) return null;
+      const l = pick(ls), t = db.transitions[l.transition], r = db.routes[l.route];
+      const timing = R() < 0.2 ? null : randTiming(R, r.geometry, t.end - t.start);
+      db.routes[l.route] = timing ? { ...r, timing } : { geometry: r.geometry }; return { routes: [l.route] }; },
     trail() { // a follow-the-leader transition gains, changes or loses its trail route
       const ts = Object.values(db.transitions).filter((t) => t.style === 'follow_the_leader'); if (!ts.length) return null;
       const t = pick(ts), before = { ...t };

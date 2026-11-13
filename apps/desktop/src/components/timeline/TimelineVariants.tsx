@@ -1193,6 +1193,7 @@ const TimelineSurface = memo(function TimelineSurface({
                                     : undefined
                             }
                             keyframes={props.keyframes}
+                            pinTicks={props.pinTicks}
                             keyframeMenu={props.keyframeMenu}
                             heldBars={props.heldBars}
                             keepChains={props.keepChains}

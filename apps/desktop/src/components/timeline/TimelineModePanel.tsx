@@ -1,3 +1,5 @@
+import type { TimelinePinTick } from "./TimelinePinTicks";
+import { usePathPenStore } from "@/pathways/pathPenStore";
 import clsx from "clsx";
 import { TEMPO_BAND, useTempoModeStore } from "@/tempo/TempoBand";
 import { TempoModeButton } from "@/tempo/TempoModeButton";
@@ -78,7 +80,11 @@ import {
     splitMoveBlocker,
     splitAtPlayheadBlocker,
 } from "./useTimelineCommands";
-import { useTimelineClipResize } from "./useTimelineClipResize";
+import {
+    scaleLastResizePins,
+    useTimelineClipResize,
+    usePinsKeptOffer,
+} from "./useTimelineClipResize";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { useSplitMergeActions, useSplitMergeMoves } from "./useSplitMergeMoves";
 import { useTimelinePlayback } from "./useTimelinePlayback";
@@ -310,6 +316,20 @@ export default function TimelineModePanel() {
             }),
         [pages, selectedIdList, performers, entriesOn],
     );
+    // Pathways step 5: the open path's pinned counts as ticks over its move
+    const pinTarget = usePathPenStore((s) =>
+        s.session?.phase === "open" ? s.session.target : null,
+    );
+    const pinTicks = useMemo<readonly TimelinePinTick[] | undefined>(
+        () =>
+            pinTarget?.pins?.length
+                ? pinTarget.pins.map((pin) => ({
+                      beat: pinTarget.start + pin.at,
+                      count: pin.at,
+                  }))
+                : undefined,
+        [pinTarget],
+    );
     const { tracks: timelines, current: tracksCurrent } =
         useTimelineTracksState({
             database: db,
@@ -423,6 +443,16 @@ export default function TimelineModePanel() {
         !basic,
     );
     const clipResize = useTimelineClipResize({ database: db, timelines });
+    // AP-P5: Scale pins with the move, after a resize that kept a path's pins (the toast's button)
+    const pinsKept = usePinsKeptOffer((s) => s.offer !== null);
+    useActionHandler("scalePinsWithMove", () => scaleLastResizePins(), {
+        enabled: pinsKept,
+        disabledReason: () =>
+            tolgee.t(
+                "timeline.clipResize.scalePinsNeeds",
+                "Resize a move whose drawn path has pins first",
+            ),
+    });
     const queryClient = useQueryClient();
     // Moving a page flag (research/move-page-flag): the playhead and start flag on it go with it
     const { mutateAsync: movePageFlag } = useMutation(
@@ -604,6 +634,7 @@ export default function TimelineModePanel() {
                               : EXPERT_VIEW_CONTROLS
                     }
                     keyframes={keyframes}
+                    pinTicks={pinTicks}
                     keyframeMenu={keyframeMenu}
                     heldBars={heldBars}
                     keepChains={keepChains}
@@ -1033,6 +1064,11 @@ export function describePageFlagBlock(
             return tolgee.t("timeline.pageFlagBlock.sharesCounts", who);
         case "leftBehind":
             return tolgee.t("timeline.pageFlagBlock.startsOrEnds", who);
+        case "pin":
+            return tolgee.t("timeline.pageFlagBlock.pin", {
+                ...who,
+                count: block.count ?? 0,
+            });
         default:
             return tolgee.t("timeline.pageFlagBlock.inTheWay", who);
     }

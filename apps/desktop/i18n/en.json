@@ -196,7 +196,13 @@
             "setOrder": "Set order",
             "reverseOrder": "Reverse order",
             "clearOrder": "Clear order",
-            "orderKeywords": "order sequence leader tail first last line follow reverse numbers"
+            "orderKeywords": "order sequence leader tail first last line follow reverse numbers",
+            "pinToCount": "Pin to count…",
+            "removePin": "Remove pin",
+            "cornersOnCounts": "Put corners on counts",
+            "pinKeywords": "pin count midset quarter set corner timing keyframe",
+            "pinAtPlayhead": "Pin selected point at the playhead",
+            "scalePins": "Scale pins with the move"
         }
     },
     "analyticsOptIn": {
@@ -2214,7 +2220,8 @@
             "shapeOrDestinations": "A transition uses either a shape or one individual destination for every slot, never both and never fewer.",
             "slotOutOfRange": "That slot doesn't exist. A transition's slots are numbered from 0 up to one less than its slot count.",
             "transitionSpansTimeline": "A transition must span its whole timeline, starting and ending with it. Change the timeline's range instead, and its transitions move with it.",
-            "unknown": "The timeline couldn't make that change."
+            "unknown": "The timeline couldn't make that change.",
+            "pinOutsideMove": "A drawn path's pin would end up outside its move, or on a point the path doesn't have. Remove the pin, or keep the move long enough for it."
         },
         "heldBar": {
             "detail": "{held} of {total} selected",
@@ -2500,7 +2507,8 @@
             "startsOrEnds": "{who, select, page {Page {page}'s move} named {\"{name}\"} other {A move}} starts or ends on this flag",
             "inTheWay": "{who, select, page {Page {page}'s move} named {\"{name}\"} other {A move}} is in the way",
             "showStart": "The start of the show",
-            "showEnd": "The end of the show"
+            "showEnd": "The end of the show",
+            "pin": "{who, select, page {Page {page}'s move} named {\"{name}\"} other {A move}} has a pin on count {count}"
         },
         "pageFlag": {
             "readoutLine": "Page {page}: {before} → {after, plural, one {# count} other {# counts}}",
@@ -2617,7 +2625,12 @@
             "change": "{before} → {after, plural, one {# count} other {# counts}}",
             "changeNamed": "{label}: {before} → {after, plural, one {# count} other {# counts}}",
             "throughFlags": "{count, plural, one {through # page flag} other {through # page flags}}",
-            "withNote": "{change} · {note}"
+            "withNote": "{change} · {note}",
+            "pin": "pin on count {count}",
+            "pinsScaled": "too short for {count, plural, one {# pin} other {# pins}}",
+            "pinsKept": "Pins kept their counts",
+            "scalePinsInstead": "Scale pins instead",
+            "scalePinsNeeds": "Resize a move whose drawn path has pins first"
         },
         "pagesText": {
             "one": "Page {page}",
@@ -2746,7 +2759,28 @@
                 "notOneMove": "{marcher} can't join the rest of the line in one move here, so nothing was changed",
                 "noWindow": "Move the playhead past the start flag to drag out a trail",
                 "reverseAlong": "Reverse leader is off for a trail dragged out of a line. Drag the trail out of the other end instead."
+            },
+            "pin": {
+                "countRange": "Pick a whole count from 1 to {last}",
+                "afterPin": "This point comes after the pin on count {count}: pick a count after {count}",
+                "beforePin": "This point comes before the pin on count {count}: pick a count before {count}",
+                "trail": "A trail takes no pins",
+                "noPoint": "That point isn't on the path any more",
+                "dropOnPoint": "Drop on a point, or on a straight stretch of the path",
+                "playheadOff": "Put the playhead on a whole count inside the move to pin there",
+                "noCorners": "This path has no corners",
+                "tooManyCorners": "{corners, plural, one {# corner} other {# corners}} but only {counts, plural, one {# count} other {# counts}} between the ends: lengthen the move or take out corners",
+                "alreadyOnCounts": "Every corner is already on its count",
+                "pastPin": "The move would end before the pin on count {count}",
+                "noRoomToScale": "Too few counts for this path's pins: each needs a count of its own",
+                "pastPinStart": "The move would start on or after the pin on count {count}",
+                "collide": "This would put two pins of a drawn path on one count",
+                "moveChanged": "The move changed after the resize, so its pins weren't scaled",
+                "scaleNoChange": "Scaling would leave every pin on the count it has"
             }
+        },
+        "pinTicks": {
+            "title": "Pin on count {pin} of the move · Page {page}, count {count}"
         }
     },
     "titlebar": {
@@ -3825,7 +3859,13 @@
             "preview": "Preview",
             "previewTip": "Preview: the marchers walk the trail from start to end, again and again",
             "previewReduced": "Preview is off while your system asks for less motion",
-            "previewNothing": "Preview: place a point first"
+            "previewNothing": "Preview: place a point first",
+            "pinNeedsPoint": "Open a path and select one of its points to pin it",
+            "pinCountLabel": "Count this point is passed on: type a count from 1 to {last} and press Enter to pin it there",
+            "pinGroup": "Pin",
+            "cornersOnCountsTip": "Pin every corner to the whole count it reaches at a steady speed. Replaces the path's other pins",
+            "cornersOnCounts": "Corners on counts",
+            "pinAtPlayheadNeeds": "Open a path, select one of its points and put the playhead on a count inside its move"
         },
         "menu": {
             "pointType": "Corner type",
@@ -3840,14 +3880,16 @@
             "noCurve": "The path runs straight through here",
             "arc": "Arc",
             "besideArc": "A point at an end of an arc stays a corner",
-            "nextToArc": "An arc meets this leg at a corner"
+            "nextToArc": "An arc meets this leg at a corner",
+            "pinnedToCount": "Pinned to count {count}…"
         },
         "errors": {
             "save": "Couldn't save the path",
             "remove": "Couldn't remove the path",
             "adjust": "Couldn't adjust this spot",
             "refit": "Couldn't re-fit the path",
-            "reverse": "Couldn't reverse the trail"
+            "reverse": "Couldn't reverse the trail",
+            "pin": "Couldn't pin the point"
         },
         "refusals": {
             "noMove": "{marcher} has no move at the playhead to draw a path on",
@@ -3879,7 +3921,8 @@
             "rehomedCleared": "{count, plural, one {# spot} other {# spots}} lost their adjustment",
             "adjustsRemoved": "{count, plural, one {# adjustment} other {# adjustments}} removed: {count, plural, one {it was} other {they were}} on the old path",
             "removedTrail": "Removed the trail: {count, plural, one {# marcher walks} other {# marchers walk}} straight to the same end spots",
-            "reversed": "{marcher} leads now"
+            "reversed": "{marcher} leads now",
+            "pinsRemoved": "{count, plural, one {# pin} other {# pins}} removed with the points they were on"
         },
         "rings": {
             "group": "Follows the group path",

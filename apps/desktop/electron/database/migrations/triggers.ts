@@ -116,7 +116,9 @@ const views = {
      * own lane carries no Adjust (E-R4), an Adjust's anchors name points of its route (E-J3, I-J3)
      * and two keys on one straight corner-to-corner stretch are at least a step apart, 126.5625
      * being `s_min` squared (E-J5, I-J5; I-J4 in full needs `D` on curves and arcs, so the write
-     * path has it; an arc leg, R-14″, is not straight, so it is left out here). Apart from
+     * path has it; an arc leg, R-14″, is not straight, so it is left out here). Since step 5 every
+     * pin names a point of its route, inside `(0, c)` of the move its lanes are in, and a trail
+     * route has none (E-R7, I-P1; the pins' order is the write path's). Apart from
      * `timeline_commit_violations` for the same reason as `timeline_held_violations`: the write
      * wrapper reads it once the lanes table exists, and a view that names a missing table would
      * break a later table rebuild.
@@ -203,7 +205,35 @@ const views = {
                               * (json_extract(pb.value, '$.at[0]') - json_extract(pa.value, '$.at[0]'))
                             + (json_extract(pb.value, '$.at[1]') - json_extract(pa.value, '$.at[1]'))
                               * (json_extract(pb.value, '$.at[1]') - json_extract(pa.value, '$.at[1]')))
-                           < 126.5625));
+                           < 126.5625))
+            UNION ALL
+            SELECT 'E-R7' AS code, NULL AS transition_id,
+                   'route ' || r.id || ' has timing that is not an object with a list of pins' AS detail
+              FROM timeline_routes r
+             WHERE r.timing IS NOT NULL
+               AND (json_type(r.timing) <> 'object'
+                    OR coalesce(json_type(r.timing, '$.pins'), 'array') <> 'array')
+            UNION ALL
+            SELECT 'E-R7' AS code, NULL AS transition_id,
+                   'route ' || r.id || ' has a pin that is not {point, at}' AS detail
+              FROM timeline_routes r, json_each(r.timing, '$.pins') p
+             WHERE json_type(r.timing, '$.pins') = 'array' AND p.type <> 'object'
+            UNION ALL
+            SELECT 'E-R7' AS code, NULL AS transition_id,
+                   'route ' || r.id || ' has a pin on ' || coalesce(json_extract(p.value, '$.point'), '?')
+                       || ' that is not a point of a path inside its move' AS detail
+              FROM timeline_routes r, json_each(r.timing, '$.pins') p
+             WHERE json_type(r.timing, '$.pins') = 'array'
+               AND CASE WHEN p.type <> 'object' THEN 0 ELSE (
+                   NOT EXISTS (SELECT 1 FROM json_each(r.geometry, '$.points') q
+                                WHERE json_extract(q.value, '$.id') = json_extract(p.value, '$.point'))
+                OR EXISTS (SELECT 1 FROM timeline_transitions t WHERE t.route_id = r.id)
+                OR EXISTS (SELECT 1 FROM timeline_lanes l
+                             JOIN timeline_transitions t ON t.id = l.transition_id
+                            WHERE l.route_id = r.id
+                              AND NOT (json_type(p.value, '$.at') IN ('integer', 'real')
+                                       AND json_extract(p.value, '$.at') > 0
+                                       AND json_extract(p.value, '$.at') < t.end_beat - t.start_beat))) END;
     `,
     timeline_held_violations: `
         CREATE VIEW IF NOT EXISTS timeline_held_violations AS
@@ -467,7 +497,7 @@ function timelineChangeLogTriggers(
             logicalName: "routes",
             rowId: (r) => `${r}.id`,
             image: (r) =>
-                `json_object('id', ${r}.id, 'geometry', json(${r}.geometry))`,
+                `json_object('id', ${r}.id, 'geometry', json(${r}.geometry), 'timing', json(${r}.timing))`,
         },
         {
             // Lanes are logged like routes (spec v0.10 J.1, §10.2); the resolver reads them from

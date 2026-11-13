@@ -25,6 +25,10 @@ import {
     routePath,
     routePoint,
     validateRouteGeometry,
+    routeClock,
+    clockPlace,
+    type RoutePin,
+    type RouteTiming,
     type RoutePath,
     type AdjustProfile,
     type RouteGeometry,
@@ -48,6 +52,7 @@ import {
     writeRouteGeometryInTransaction,
     type RehomeReport,
 } from "./timelineRouteGeometry";
+import { timingJson } from "./timelineRoutePinRetime";
 import {
     firstLanedRow,
     laneOn,
@@ -250,6 +255,8 @@ export interface MoveRoute {
     /** The spot's Adjust, or null (spec J.2) */
     adjust: AdjustProfile | null;
     geometry: RouteGeometry;
+    /** The route's pins, in route order (pathways step 5, spec Appendix M) */
+    pins: RoutePin[];
 }
 
 /**
@@ -278,6 +285,7 @@ export async function readRoutes(
             offsetX: L.offset_x,
             offsetY: L.offset_y,
             adjust: L.adjust,
+            timing: R.timing,
         })
         .from(L)
         .innerJoin(R, eq(R.id, L.route_id))
@@ -296,8 +304,12 @@ export async function readRoutes(
         )
         .orderBy(asc(R.id), asc(A.marcher_id), asc(A.start_beat))
         .all();
-    return rows.map(({ offsetX, offsetY, geometry, adjust, ...r }) => ({
+    return rows.map(({ offsetX, offsetY, geometry, adjust, timing, ...r }) => ({
         ...r,
+        pins:
+            timing === null
+                ? []
+                : ((JSON.parse(timing) as RouteTiming).pins ?? []),
         offset:
             offsetX === null || offsetY === null ? null : [offsetX, offsetY],
         adjust: adjust === null ? null : (JSON.parse(adjust) as AdjustProfile),
@@ -667,6 +679,13 @@ export interface RouteCut {
     before: RouteGeometry;
     /** Where the marcher is on the route at the count */
     C: XY;
+    /**
+     * Pins (pathways step 5, AP-R7): the half before keeps those before the count as they were;
+     * the half after those after it, less the counts before it. A pin on the count goes with its
+     * point, which is `C`
+     */
+    pinsBefore: RoutePin[];
+    pinsAfter: RoutePin[];
 }
 
 /**
@@ -725,26 +744,45 @@ export async function planRouteCut(
     const B = await destinationOf(tx, t, row.slot_index);
     // R-14 with the route's tensions and the ends it was drawn against (step 2)
     const path = routePath(A, geometry.points, B, geometry);
-    const pB = (beat - t.start_beat) / (t.end_beat - t.start_beat);
-    const d = pB * path.L;
-    const C = routePoint(path, pB);
+    const counts = t.end_beat - t.start_beat;
+    const uB = beat - t.start_beat;
+    const pB = uB / counts;
+    // Pins (AP-R7, Appendix M): the cut is where the pinned clock has the marcher at the count
+    const timing =
+        route.timing === null
+            ? null
+            : (JSON.parse(route.timing) as RouteTiming);
+    const clock = routeClock(path, geometry.points, timing, counts);
+    const d = clock?.active ? clockPlace(clock, uB) : pB * path.L;
+    const C = clock?.active
+        ? resolver.positionAt(m, beat)
+        : routePoint(path, pB);
     const far = (k: number) =>
         Math.hypot(path.V[k]![0] - C[0], path.V[k]![1] - C[1]) >= EPS_GEOM;
     const inner = path.source
         .map((src, k) => ({ src, k }))
         .filter(({ src }) => src >= 0);
+    const halves = cutHalves(
+        geometry,
+        path,
+        d,
+        C,
+        inner.filter(({ k }) => far(k)),
+    );
+    const idsOf = (g: RouteGeometry) => new Set(g.points.map((p) => p.id));
+    const beforeIds = idsOf(halves.before);
+    const afterIds = idsOf(halves.after);
+    const pins = timing?.pins ?? [];
     return {
         transitionId: t.id,
         slot: lane.slot_index,
         routeId: route.id,
         C,
-        ...cutHalves(
-            geometry,
-            path,
-            d,
-            C,
-            inner.filter(({ k }) => far(k)),
-        ),
+        ...halves,
+        pinsBefore: pins.filter((p) => p.at < uB && beforeIds.has(p.point)),
+        pinsAfter: pins
+            .filter((p) => p.at > uB && afterIds.has(p.point))
+            .map((p) => ({ point: p.point, at: p.at - uB })),
     };
 }
 
@@ -869,7 +907,10 @@ export async function writeRouteCutBeforeInTransaction(
     assertValid(validateRouteGeometry(cut.before), "route");
     const route = (await tx
         .insert(schema.timeline_routes)
-        .values({ geometry: JSON.stringify(cut.before) })
+        .values({
+            geometry: JSON.stringify(cut.before),
+            timing: timingJson(cut.pinsBefore),
+        })
         .returning()
         .get())!;
     await markArcsInTransaction(tx, cut.before);
@@ -906,10 +947,14 @@ export async function writeRouteCutBeforeInTransaction(
     });
 }
 
-/** Updates the route from the count in place, keeping its id (AP-R7). */
+/** Updates the route from the count in place, keeping its id and its pins after it (AP-R7). */
 export async function writeRouteCutAfterInTransaction(
     tx: DbTransaction,
     cut: RouteCut,
 ): Promise<void> {
     await writeRouteGeometryInTransaction(tx, cut.routeId, cut.after);
+    await tx
+        .update(schema.timeline_routes)
+        .set({ timing: timingJson(cut.pinsAfter) })
+        .where(eq(schema.timeline_routes.id, cut.routeId));
 }

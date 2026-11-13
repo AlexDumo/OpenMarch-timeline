@@ -50,6 +50,12 @@ import {
     resetSpot,
     memberOf,
     refitOpenPath,
+    pinOf,
+    pointIdOf,
+    putCornersOnCountsOpen,
+    pinAtPlayheadOpen,
+    requestPinFocus,
+    unpinSelectedPoint,
     selectLane,
     setGroupCommands,
     setPathObjects,
@@ -382,6 +388,77 @@ export function usePathPenActions(): void {
     useActionHandler("refitPath", () => void refitOpenPath(), {
         enabled: canRefit,
     });
+    // Pins (pathways step 5): on the open path, not a trail; the selected point's for the first two
+    const takesPinsNow = usePathPenStore(
+        (s) =>
+            s.session?.phase === "open" &&
+            s.session.target.routeId !== null &&
+            !s.session.target.trail,
+    );
+    const pickedPoint = usePathPenStore((s) =>
+        s.session?.phase === "open" ? pointIdOf(s.session) : null,
+    );
+    const pickedPinned = usePathPenStore(
+        (s) => pickedPoint !== null && !!pinOf(s.session, pickedPoint),
+    );
+    useActionHandler(
+        "pathPinToCount",
+        () => {
+            const s = usePathPenStore.getState().session;
+            if (s?.selected) requestPinFocus(s.selected);
+        },
+        {
+            enabled: takesPinsNow && pickedPoint !== null,
+            disabledReason: () =>
+                tolgee.t(
+                    "pathways.editor.pinNeedsPoint",
+                    "Open a path and select one of its points to pin it",
+                ),
+        },
+    );
+    useActionHandler("pathRemovePin", () => void unpinSelectedPoint(), {
+        enabled: takesPinsNow && pickedPinned,
+    });
+    useActionHandler(
+        "putCornersOnCounts",
+        () => void putCornersOnCountsOpen(),
+        { enabled: takesPinsNow },
+    );
+    // The playhead marker's drop on the selected point, as a command (AP-P2): the palette's way
+    const playheadCount = usePathPenStore((s) =>
+        s.session?.phase === "open"
+            ? playheadBeat - s.session.target.start
+            : null,
+    );
+    const playheadOnACount =
+        playheadCount !== null &&
+        Number.isInteger(playheadCount) &&
+        playheadCount > 0 &&
+        usePathPenStore.getState().session !== null &&
+        playheadCount <
+            usePathPenStore.getState().session!.target.end -
+                usePathPenStore.getState().session!.target.start;
+    useActionHandler(
+        "pathPinAtPlayhead",
+        () => {
+            const s = usePathPenStore.getState().session;
+            const id = pointIdOf(s);
+            const count = s
+                ? useTimelineSelectionStore.getState().playheadBeat -
+                  s.target.start
+                : NaN;
+            if (id)
+                void pinAtPlayheadOpen(count, { kind: "point", pointId: id });
+        },
+        {
+            enabled: takesPinsNow && pickedPoint !== null && playheadOnACount,
+            disabledReason: () =>
+                tolgee.t(
+                    "pathways.editor.pinAtPlayheadNeeds",
+                    "Open a path, select one of its points and put the playhead on a count inside its move",
+                ),
+        },
+    );
     // Adjust's named actions, on the lane or key picked on the open group path (decision C)
     const lane = usePathPenStore((s) =>
         s.session?.phase === "open" ? (s.session.lane ?? null) : null,

@@ -7,6 +7,12 @@ import { moveInSentence } from "@/timeline/timelineRangeWords";
 import { readPageGrid, type GridPage, type PageGrid } from "./timelinePageGrid";
 import { rippleOrderMarksInTransaction } from "./shapeRecipes";
 import {
+    planPinRipple,
+    readPinnedRoutes,
+    writePinRetime,
+    type RipplePinnedRoute,
+} from "./timelineRoutePinRetime";
+import {
     readHeldMarkArrivals,
     type HeldMarkArrival,
 } from "./timelineHeldArrival";
@@ -291,6 +297,11 @@ export interface RippleRows {
      * being converted)
      */
     marks?: readonly HeldMarkArrival[];
+    /**
+     * The routes with pins and the transitions their lanes are on (pathways step 5); none in a
+     * file without them
+     */
+    pinnedRoutes?: readonly RipplePinnedRoute[];
 }
 
 /** Reads every timeline, transition and assignment row, and the marchers' labels (`RippleRows`). */
@@ -316,7 +327,15 @@ export async function readRippleRows(tx: DbTransaction): Promise<RippleRows> {
         marchers.map((m) => [m.id, `${m.prefix}${m.order}`]),
     );
     const marks = await readHeldMarkArrivals(tx);
-    return { timelines, transitions, assignments, marcherLabels, marks };
+    const pinnedRoutes = await readPinnedRoutes(tx);
+    return {
+        timelines,
+        transitions,
+        assignments,
+        marcherLabels,
+        marks,
+        pinnedRoutes,
+    };
 }
 
 /**
@@ -335,6 +354,7 @@ export function planTimelineRipple(
         assignments,
         marcherLabels,
         marks = [],
+        pinnedRoutes = [],
     }: RippleRows,
 ) {
     const map = new GridEdgeMap(before, after);
@@ -487,6 +507,21 @@ export function planTimelineRipple(
         newAssignment,
     );
 
+    // AP-R4 (pathways step 5): each pin keeps its beat, so a flag drag keeps its count from the
+    // edge that didn't move and a count inserted before it inside the move moves it along
+    const removedSet = new Set(removed);
+    const { newPins, problem: pinProblem } = planPinRipple(
+        pinnedRoutes,
+        new Map(
+            transitions
+                .filter((t) => !removedSet.has(t.id))
+                .map((t) => [t.id, [t.start_beat, t.end_beat] as const]),
+        ),
+        (id) => newTransition.get(id),
+        (b) => map.beatEnd(b),
+        (b) => map.beatStart(b),
+    );
+
     return {
         removed,
         emptied,
@@ -498,6 +533,8 @@ export function planTimelineRipple(
         chains,
         newMark,
         droppedMarks,
+        newPins,
+        pinProblem,
     };
 }
 
@@ -587,7 +624,11 @@ export async function rippleTimelineToPageGridInTransaction({
         chains,
         newMark,
         droppedMarks,
+        newPins,
+        pinProblem,
     } = planTimelineRipple(before, after, rows);
+    // A pin that would leave its move, or meet another, refuses before anything is written
+    if (pinProblem) refuse(pinProblem.message);
 
     const T = schema.timeline_transitions;
     const L = schema.timelines;
@@ -666,6 +707,12 @@ export async function rippleTimelineToPageGridInTransaction({
         // 5, 6. Shrink transitions, then timelines, to the target
         await shrink(T, transitions, newTransition);
         await shrink(L, rippled, newTimeline);
+
+        // 6b. Pins on their beats (pathways step 5), inside their moves' new ranges (E-R7)
+        await writePinRetime(
+            tx,
+            [...newPins].map(([routeId, pins]) => ({ routeId, pins })),
+        );
 
         // 7. Held marks: the dropped ones, then each moved one. One marcher's starts keep their
         // order, so moving the later ones first when they move later (the earlier ones first when

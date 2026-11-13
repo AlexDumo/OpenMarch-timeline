@@ -25,7 +25,14 @@ import {
     setAdjustKey,
 } from "@/db-functions/timelinePathAdjust";
 import type { RehomeReport } from "@/db-functions/timelineRouteGeometry";
-import type { AdjustProfile } from "@openmarch/core";
+import type { AdjustProfile, RoutePin } from "@openmarch/core";
+import {
+    pinAtPlayhead,
+    pinPoint,
+    putCornersOnCounts,
+    removePin,
+    type PinDrop,
+} from "@/db-functions/timelineRoutePins";
 import {
     drawGroupRoute,
     ownPath,
@@ -46,6 +53,7 @@ import {
     besideArcReason,
     isSmooth,
     pointKey,
+    pointOf,
     splitLeg,
     withoutPoint,
     withTension,
@@ -159,6 +167,11 @@ interface PathPenState {
     rejoin: RejoinTarget | null;
     /** The paths Paths All draws as objects at the playhead, or none (step 3a, AP-O2) */
     objects: readonly PathObject[];
+    /**
+     * Counts "Pin to count…" requests (pathways step 5): the path bar puts the cursor in the
+     * selected point's count field each time it changes
+     */
+    pinFocus: number;
 }
 
 /** Rejoin's target (AP-R10): the group path in a move, and the selected marchers off it */
@@ -265,6 +278,7 @@ export function setPathHidden(hidden: boolean): void {
 export const usePathPenStore = create<PathPenState>(() => ({
     hidden: false,
     objects: [],
+    pinFocus: 0,
     openNext: null,
     ownable: [],
     rejoin: null,
@@ -1047,8 +1061,115 @@ export function reportRehome(report: RehomeReport): void {
                 { count: report.clearedSpots },
             ),
         );
+    // AP-H1 (pins, step 5): a pin goes with its point, never silently
+    if (report.droppedPins > 0)
+        parts.push(
+            tolgee.t(
+                "pathways.toasts.pinsRemoved",
+                "{count, plural, one {# pin} other {# pins}} removed with the points they were on",
+                { count: report.droppedPins },
+            ),
+        );
     if (parts.length > 0) toastWithUndo(parts.join(" · "));
 }
+
+// ---------------------------------------------------------------------------
+// Pins (pathways step 5, spec Appendix M)
+// ---------------------------------------------------------------------------
+
+const pinFallback = () =>
+    tolgee.t("pathways.errors.pin", "Couldn't pin the point");
+
+/** The open path's route and its selected point's id, for a pin write */
+function pinTarget(): { routeId: number; pointId: string | null } | null {
+    const { session } = usePathPenStore.getState();
+    if (!session || session.phase !== "open" || session.target.routeId === null)
+        return null;
+    if (session.target.trail) return null;
+    const index = pointOf(shapeOf(session), session.selected);
+    return {
+        routeId: session.target.routeId,
+        pointId: index >= 0 ? (session.target.points[index]?.id ?? null) : null,
+    };
+}
+
+/** AP-P1: pins the open path's selected point to `count`, or moves its pin. One undo step. */
+export async function pinSelectedPoint(count: number): Promise<boolean> {
+    const at = pinTarget();
+    if (!at?.pointId) return false;
+    const { routeId, pointId } = at;
+    return await adjustWrite(pinFallback, async () => {
+        await pinPoint({ db, routeId, pointId, count });
+    });
+}
+
+/** AP-P3: takes the pin off the open path's selected point. One undo step. */
+export async function unpinSelectedPoint(): Promise<boolean> {
+    const at = pinTarget();
+    if (!at?.pointId) return false;
+    const { routeId, pointId } = at;
+    if (!pinOf(usePathPenStore.getState().session, pointId)) return false;
+    return await adjustWrite(pinFallback, () =>
+        removePin({ db, routeId, pointId }),
+    );
+}
+
+/** AP-P4: a pin on every corner of the open path, by length. One undo step. */
+export async function putCornersOnCountsOpen(): Promise<boolean> {
+    const at = pinTarget();
+    if (!at) return false;
+    return await adjustWrite(pinFallback, async () => {
+        await putCornersOnCounts({ db, routeId: at.routeId });
+    });
+}
+
+/** AP-P2: the playhead marker dropped on the open path. One undo step. */
+export async function pinAtPlayheadOpen(
+    count: number,
+    drop: PinDrop,
+): Promise<boolean> {
+    const at = pinTarget();
+    if (!at) return false;
+    return await adjustWrite(pinFallback, async () => {
+        const pointId = await pinAtPlayhead({
+            db,
+            routeId: at.routeId,
+            count,
+            drop,
+        });
+        // The pinned point is selected, so its count shows on the bar
+        if (drop.kind === "point") selectPoint(pointKey(pointIndexOf(pointId)));
+    });
+}
+
+/** The pin on point `pointId` of the session's path, if any */
+export function pinOf(
+    session: PathSession | null,
+    pointId: string | null | undefined,
+): RoutePin | undefined {
+    if (!session || !pointId) return undefined;
+    return session.target.pins?.find((p) => p.point === pointId);
+}
+
+/** The stored id of the session's selected point, or null (none selected, or a new one) */
+export function pointIdOf(session: PathSession | null): string | null {
+    if (!session) return null;
+    const index = pointOf(shapeOf(session), session.selected);
+    return index >= 0 ? (session.target.points[index]?.id ?? null) : null;
+}
+
+/** "Pin to count…": selects point `key` and asks the bar to put the cursor in its count field */
+export function requestPinFocus(key: string): void {
+    selectPoint(key);
+    usePathPenStore.setState((s) => ({ pinFocus: s.pinFocus + 1 }));
+}
+
+const pointIndexOf = (pointId: string): number => {
+    const { session } = usePathPenStore.getState();
+    return session
+        ? session.target.points.findIndex((p) => p.id === pointId)
+        : -1;
+};
 
 /** AP-R8's and AP-R1's toast: a new path took the place of one a spot had an Adjust on */
 function reportAdjustsRemoved(count: number): void {

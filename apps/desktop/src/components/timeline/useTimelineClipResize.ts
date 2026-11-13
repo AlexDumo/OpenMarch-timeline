@@ -1,5 +1,14 @@
 import { useMemo } from "react";
+import { toast } from "sonner";
 import tolgee from "@/global/singletons/Tolgee";
+import { readMovePinSets } from "@/db-functions/timelineRoutePins";
+import {
+    closePinsKeptOffer,
+    openPinsKeptOffer,
+    takePinsKeptOffer,
+    type PinsKeptOffer,
+} from "@/timeline/pinsKeptOffer";
+
 import {
     readTimelineResizeLimits,
     resizeTimeline,
@@ -15,6 +24,8 @@ import type {
     ClipResizeLimits,
     TimelineClipResizeCommands,
 } from "./TimelineClipResize";
+
+export { usePinsKeptOffer } from "@/timeline/pinsKeptOffer";
 
 /**
  * The panel's side of resizing a clip (docs/timeline/research/resize-move): the limits a drag
@@ -64,7 +75,48 @@ export function resizeBoundReason(
             return tolgee.t("timeline.clipResize.stopsAt", {
                 name: nameOf(bound.stop, bound.stop.timelineId),
             });
+        case "pin":
+            return tolgee.t("timeline.clipResize.pin", {
+                count: bound.stop.count,
+            });
     }
+}
+
+/** A bound of the scaled limits (Alt over a move with pins): its pins need that many counts */
+const scaledReason = (bound: TimelineResizeBound): string | null =>
+    bound.stop.kind === "pin"
+        ? tolgee.t("timeline.clipResize.pinsScaled", {
+              count: bound.stop.count,
+          })
+        : null;
+
+/** The toast offering Scale pins instead, by id (not shown text) */
+const PINS_KEPT_TOAST = "timeline-pins-kept"; // i18n-ignore: a toast id, never shown
+
+/**
+ * AP-P5: scales the pins of the last resize that kept them, as one edit of their own (the toast's
+ * Scale pins instead, and the **Scale pins with the move** command). Nothing when there's none.
+ */
+export function scaleLastResizePins(): void {
+    void takePinsKeptOffer().catch(refused);
+}
+
+/**
+ * After a resize that kept a move's pins on their counts (AP-P5): the toast offers to scale them
+ * instead (`pinsKeptOffer`). The offer goes when the toast closes and with any other edit, undo
+ * or redo; the toast goes with the offer.
+ */
+function offerScalePins(offer: PinsKeptOffer): void {
+    openPinsKeptOffer(offer, () => toast.dismiss(PINS_KEPT_TOAST));
+    toast.success(tolgee.t("timeline.clipResize.pinsKept"), {
+        id: PINS_KEPT_TOAST,
+        action: {
+            label: tolgee.t("timeline.clipResize.scalePinsInstead"),
+            onClick: () => scaleLastResizePins(),
+        },
+        onDismiss: () => closePinsKeptOffer(),
+        onAutoClose: () => closePinsKeptOffer(),
+    });
 }
 
 /** Why an edge can't land where another move has exactly the range it would give */
@@ -90,6 +142,8 @@ export function useTimelineClipResize({
     timelines: readonly TimelineInput[];
 }): TimelineClipResizeCommands {
     return useMemo((): TimelineClipResizeCommands => {
+        // Which moves had pins when their drag's limits were read (for the Scale pins offer)
+        const pinnedMoves = new Map<number, boolean>();
         const timelineIdOf = (trackId: string | number) => {
             const track = timelines.find((t) => t.id === trackId);
             return track?.linkId === undefined ? null : Number(track.linkId);
@@ -114,6 +168,12 @@ export function useTimelineClipResize({
                     beat: b.beat,
                     reason: resizeBoundReason(b, nameOf),
                 });
+                const scaledBound = (
+                    b: TimelineResizeBound,
+                ): ClipResizeBound => ({
+                    beat: b.beat,
+                    reason: scaledReason(b) ?? resizeBoundReason(b, nameOf),
+                });
                 const result: ClipResizeLimits = {
                     startEdge: {
                         min: bound(limits.startEdge.min),
@@ -133,7 +193,31 @@ export function useTimelineClipResize({
                             t.pageTakeover,
                         ),
                     })),
+                    // Alt scales the move's pins (AP-R4): the shrinking edges stop elsewhere
+                    ...(limits.scaled
+                        ? {
+                              scaled: {
+                                  startEdge: {
+                                      min: scaledBound(
+                                          limits.scaled.startEdge.min,
+                                      ),
+                                      max: scaledBound(
+                                          limits.scaled.startEdge.max,
+                                      ),
+                                  },
+                                  endEdge: {
+                                      min: scaledBound(
+                                          limits.scaled.endEdge.min,
+                                      ),
+                                      max: scaledBound(
+                                          limits.scaled.endEdge.max,
+                                      ),
+                                  },
+                              },
+                          }
+                        : {}),
                 };
+                pinnedMoves.set(timelineId, limits.scaled !== undefined);
                 return result;
             },
             commit: (change) => {
@@ -149,17 +233,41 @@ export function useTimelineClipResize({
                     start: change.startBeatIndex,
                     end: change.endBeatIndex,
                 };
-                return resizeTimeline({
-                    db: database,
-                    timelineId,
-                    ...to,
-                }).then((result) => {
-                    if (result)
-                        useTimelineSelectionStore
-                            .getState()
-                            .followTimelineRange(from, to, timelineId);
-                    return result !== null;
-                }, refused);
+                const scalePins = change.scalePins === true;
+                const pinsBefore = pinnedMoves.get(timelineId)
+                    ? readMovePinSets(database, timelineId)
+                    : Promise.resolve([]);
+                return pinsBefore.then((pinsBeforeResize) =>
+                    resizeTimeline({
+                        db: database,
+                        timelineId,
+                        ...to,
+                        scalePins,
+                    }).then((result) => {
+                        if (result) {
+                            useTimelineSelectionStore
+                                .getState()
+                                .followTimelineRange(from, to, timelineId);
+                            // The shrinking or growing changed the counts between pins: offer to
+                            // scale them instead (AP-P5)
+                            const lengthChanged =
+                                to.end - to.start !== from.end - from.start;
+                            if (
+                                !scalePins &&
+                                lengthChanged &&
+                                pinsBeforeResize.length > 0
+                            )
+                                offerScalePins({
+                                    database,
+                                    timelineId,
+                                    before: from,
+                                    after: to,
+                                    pinsBefore: pinsBeforeResize,
+                                });
+                        }
+                        return result !== null;
+                    }, refused),
+                );
             },
         };
     }, [database, timelines]);

@@ -300,7 +300,7 @@ export function walkedPathShow(seed: number, S: number): TimelineSnapshot {
             rid++;
         }
     }
-    return {
+    const show = {
         marchers,
         shapes,
         transitions,
@@ -308,4 +308,50 @@ export function walkedPathShow(seed: number, S: number): TimelineSnapshot {
         routes,
         lanes,
     } as TimelineSnapshot;
+    withRandomPins(show, seed);
+    return show;
+}
+
+/**
+ * Pins (spec Appendix M, pathways step 5) on about half the routes walked by lanes, on their own
+ * random stream so every show is otherwise what it was before pins: mostly valid (rising whole
+ * counts on points in route order), sometimes a pin T-6 drops (a missing id, at 0 or `c`, out of
+ * order, NaN), or two pins on one point (a stop).
+ */
+export function withRandomPins(show: TimelineSnapshot, seed: number): void {
+    const R = mulberry32(seed * 104723 + 41);
+    const done = new Set<number>();
+    for (const lane of Object.values(show.lanes ?? {})) {
+        const route = show.routes?.[lane.route];
+        const t = show.transitions[lane.transition];
+        if (!route || !t || done.has(lane.route)) continue;
+        done.add(lane.route);
+        if (R() < 0.5) continue;
+        const c = t.end - t.start;
+        const ids = route.geometry.points.map((p) => p.id);
+        if (ids.length === 0 || c < 2) continue;
+        const pins: { point: string; at: number }[] = [];
+        let at = 0;
+        for (const id of ids) {
+            if (R() < 0.5) continue;
+            const room = c - 1 - at;
+            if (room < 1) break;
+            at += 1 + Math.floor(R() * Math.min(room, 3));
+            pins.push({ point: id, at });
+        }
+        if (R() < 0.2) {
+            const bad = [
+                { point: "gone", at: 1 },
+                { point: ids[0]!, at: 0 },
+                { point: ids[0]!, at: c },
+                { point: ids.at(-1)!, at: 0.5 },
+                { point: ids[0]!, at: Number.NaN },
+            ];
+            pins.push(bad[Math.floor(R() * bad.length)]!);
+        }
+        const last = pins.at(-1);
+        if (R() < 0.1 && last && last.at < c - 1)
+            pins.push({ point: last.point, at: last.at + 1 });
+        if (pins.length > 0) route.timing = { v: 1, pins };
+    }
 }

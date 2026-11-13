@@ -32,6 +32,15 @@ import type { ToolEnv } from "@/shapes/tool/toolKind";
 import type { XY } from "@/shapes/types";
 import { refitNeeded, type PathTarget } from "./pathTarget";
 import {
+    formatCount,
+    markerDragAt,
+    pinTags,
+    playheadMarkerAt,
+    takesPins,
+} from "./pathPins";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import type { PinDrop } from "@/db-functions/timelineRoutePins";
+import {
     followEnds,
     followHit,
     followDrawnPlanOf,
@@ -101,6 +110,10 @@ import {
     endNewPoint,
     finishDrawing,
     openPath,
+    pinAtPlayheadOpen,
+    pinOf,
+    requestPinFocus,
+    unpinSelectedPoint,
     removeLastPoint,
     selectPoint,
     setPointSmooth,
@@ -127,8 +140,56 @@ const honored = (shape: PathShape, key: string | null): HonoredRoles => ({
     snaps: true,
 });
 
-/** The handle-menu `kind` the path's menus go through, as a shape's do */
-const MENU_KIND = { menu: PATH_MENU };
+/**
+ * The handle-menu `kind` the path's menus go through, as a shape's do. On the open path a point's
+ * menu also has Pin to count… and, with a pin, Remove pin (pathways step 5); the app runs those
+ */
+const MENU_KIND = {
+    menu: {
+        ...PATH_MENU,
+        sections(shape: PathShape, n: number, key: string) {
+            const sections = PATH_MENU.sections(shape, n, key);
+            const s = usePathPenStore.getState().session;
+            const index = pointOf(shape, key);
+            const id = index >= 0 ? shape.points[index]?.id : undefined;
+            if (!sections || !s || s.phase !== "open" || !id) return sections;
+            if (!takesPins(s.target)) return sections;
+            const pin = pinOf(s, id);
+            return [
+                ...sections.slice(0, -1),
+                {
+                    items: [
+                        {
+                            value: "pinToCount",
+                            label: pin
+                                ? tolgee.t(
+                                      "pathways.menu.pinnedToCount",
+                                      "Pinned to count {count}…",
+                                      { count: formatCount(pin.at) },
+                                  )
+                                : tolgee.t(
+                                      "actions.path.pinToCount",
+                                      "Pin to count…",
+                                  ),
+                        },
+                        ...(pin
+                            ? [
+                                  {
+                                      value: "removePin",
+                                      label: tolgee.t(
+                                          "actions.path.removePin",
+                                          "Remove pin",
+                                      ),
+                                  },
+                              ]
+                            : []),
+                    ],
+                },
+                ...sections.slice(-1),
+            ];
+        },
+    },
+};
 
 /** What the field's menu offers on a path: open it, or take it away (one undo step) */
 export const PATH_FIELD_MENU = ["editPath", "removePath"] as const;
@@ -271,6 +332,63 @@ class PathPenMode implements FieldMode {
         usePathPenStore.subscribe(() => {
             for (const l of this.listeners) l();
         });
+        // The playhead marker (pathways step 5) follows the playhead on the open path
+        useTimelineSelectionStore.subscribe((state, before) => {
+            if (state.playheadBeat === before.playheadBeat) return;
+            if (usePathPenStore.getState().session?.phase !== "open") return;
+            for (const l of this.listeners) l();
+        });
+    }
+
+    /** The playhead marker under `pointer` on the open path, if it's there (AP-P2) */
+    private markerAt(s: PathSession, pointer: Pick<FieldPointer, "field">) {
+        const env = envOf();
+        if (s.phase !== "open" || !env || laneInFocus(s) !== null) return null;
+        const at = playheadMarkerAt(
+            s.target,
+            shapeOf(s),
+            useTimelineSelectionStore.getState().playheadBeat,
+        );
+        return at &&
+            Math.hypot(at.x - pointer.field.x, at.y - pointer.field.y) <=
+                env.hitRadius
+            ? at
+            : null;
+    }
+
+    private notify() {
+        for (const l of this.listeners) l();
+    }
+
+    /** The marker dropped (AP-P2): pins the drop to the playhead's count, or says why not */
+    private dropMarker(s: PathSession) {
+        const drag = markerDrag;
+        markerDrag = null;
+        this.notify();
+        if (!drag || !drag.moved) return;
+        const count =
+            useTimelineSelectionStore.getState().playheadBeat - s.target.start;
+        if (!Number.isInteger(count) || count <= 0) {
+            toast.error(
+                tolgee.t(
+                    "timeline.refusals.pin.playheadOff",
+                    "Put the playhead on a whole count inside the move to pin there",
+                ),
+                { id: "path-pin" },
+            );
+            return;
+        }
+        if (!drag.drop) {
+            toast.error(
+                tolgee.t(
+                    "timeline.refusals.pin.dropOnPoint",
+                    "Drop on a point, or on a straight stretch of the path",
+                ),
+                { id: "path-pin" },
+            );
+            return;
+        }
+        void pinAtPlayheadOpen(count, drag.drop);
     }
 
     private get session() {
@@ -415,6 +533,8 @@ class PathPenMode implements FieldMode {
         if (s.phase === "drawing") return true;
         if (usePathPenStore.getState().saving) return false;
         if (this.handleAt(s, pointer) !== null) return true;
+        // The playhead marker (AP-P2): after the path's handles, before a dot under it
+        if (this.markerAt(s, pointer) !== null) return true;
         return !press.onDot() && this.laneAt(s, pointer) !== null;
     }
 
@@ -461,6 +581,18 @@ class PathPenMode implements FieldMode {
             s.phase === "open"
                 ? (this.handleAt(s, pointer)?.key ?? null)
                 : null;
+        // The playhead marker, grabbed (AP-P2): dragged along the path until its release
+        const marker = key === null ? this.markerAt(s, pointer) : null;
+        if (marker) {
+            markerDrag = {
+                at: marker,
+                drop: null,
+                start: pointer.screen,
+                moved: false,
+            };
+            this.notify();
+            return;
+        }
         const lane = key === null ? this.laneAt(s, pointer) : null;
         const keys = holdGesture<FieldPointer>(
             pointer,
@@ -682,6 +814,28 @@ class PathPenMode implements FieldMode {
     }
 
     move(pointer: FieldPointer): void {
+        const s = this.session;
+        if (markerDrag && s) {
+            const env = envOf();
+            const next = markerDragAt(
+                s.target,
+                shapeOf(s),
+                pointer.field,
+                env?.hitRadius ?? 0,
+            );
+            markerDrag = {
+                ...markerDrag,
+                ...next,
+                moved:
+                    markerDrag.moved ||
+                    Math.hypot(
+                        pointer.screen.x - markerDrag.start.x,
+                        pointer.screen.y - markerDrag.start.y,
+                    ) >= CLICK_SLOP,
+            };
+            this.notify();
+            return;
+        }
         const p = this.held;
         if (!p) {
             if (this.session?.phase === "drawing")
@@ -703,6 +857,10 @@ class PathPenMode implements FieldMode {
         pointer: FieldPointer,
         click: { double: boolean; ownFirst: boolean } | null,
     ): void {
+        if (markerDrag && this.session) {
+            this.dropMarker(this.session);
+            return;
+        }
         const p = this.held;
         const roles = p?.keys.roles();
         this.endHeld();
@@ -846,6 +1004,10 @@ class PathPenMode implements FieldMode {
     }
 
     cancel(): void {
+        if (markerDrag) {
+            markerDrag = null;
+            this.notify();
+        }
         const p = this.held;
         this.endHeld();
         this.dropPendingPointer();
@@ -884,6 +1046,9 @@ class PathPenMode implements FieldMode {
             this.preview(pointer, rolesOf(pointer, "shape"));
             return "crosshair";
         }
+        if (markerDrag) return "grab";
+        if (!this.handleAt(s, pointer) && this.markerAt(s, pointer))
+            return "grab";
         const handle = this.handleAt(s, pointer);
         if (handle) {
             setHoverLane(null);
@@ -954,6 +1119,16 @@ class PathPenMode implements FieldMode {
                 }
                 if (value === "resetSpot" && lane) {
                     void resetSpot(lane.marcherId);
+                    return null;
+                }
+                // Pins (step 5): the bar's count field takes the count; Remove pin writes
+                if (value === "pinToCount") {
+                    requestPinFocus(key);
+                    return null;
+                }
+                if (value === "removePin") {
+                    selectPoint(key);
+                    void unpinSelectedPoint();
                     return null;
                 }
                 const shape = shapeOf(now);
@@ -1050,10 +1225,24 @@ class PathPenMode implements FieldMode {
     }
 }
 
-let last: { session: PathSession | null; drawing: FieldModeDrawing | null } = {
+let last: {
+    session: PathSession | null;
+    drawing: FieldModeDrawing | null;
+    beat?: number;
+    marker?: MarkerDrag | null;
+} = {
     session: null,
     drawing: null,
 };
+
+/** The playhead marker while it's dragged along the open path (AP-P2), or null */
+interface MarkerDrag {
+    at: XY;
+    drop: PinDrop | null;
+    start: { x: number; y: number };
+    moved: boolean;
+}
+let markerDrag: MarkerDrag | null = null;
 
 /**
  * What the pen draws: the path from where the marcher starts (its ghost) through the corners to
@@ -1066,13 +1255,23 @@ let last: { session: PathSession | null; drawing: FieldModeDrawing | null } = {
 export function drawingOf(
     session: PathSession | null,
 ): FieldModeDrawing | null {
-    if (session === last.session) return last.drawing;
+    // The open path's playhead marker moves with the playhead and with its drag (step 5)
+    const beat =
+        session?.phase === "open"
+            ? useTimelineSelectionStore.getState().playheadBeat
+            : undefined;
+    if (
+        session === last.session &&
+        beat === last.beat &&
+        markerDrag === last.marker
+    )
+        return last.drawing;
     const drawing = session
         ? session.follow
             ? followDrawing(session)
             : buildDrawing(session)
         : null;
-    last = { session, drawing };
+    last = { session, drawing, beat, marker: markerDrag };
     return drawing;
 }
 
@@ -1284,7 +1483,9 @@ function buildDrawing(session: PathSession): FieldModeDrawing {
     const { lanes, memberRings, laneHighlights, lanePicked, adjustHandles } =
         target.trail ? trailParts(target.trail) : groupParts(session, shape);
     const laneTip = moving ? null : laneTipOf(session);
+    const pins = pinDrawing(session, shape);
     return {
+        ...pins,
         outline,
         openOutline: true,
         pathLine: pathLineOf(session),
@@ -1314,6 +1515,42 @@ function buildDrawing(session: PathSession): FieldModeDrawing {
         ...guidesFor(moving ? [moving] : [], outline),
         ...(tipText && moving ? { tip: { at: moving, text: tipText } } : {}),
         ...(laneTip ? { tip: laneTip } : {}),
+    };
+}
+
+/**
+ * Pins on the open path (pathways step 5): each pinned point's count tag, and the playhead marker
+ * where the walker is at the playhead (where it's dragged, while it is)
+ */
+function pinDrawing(
+    session: PathSession,
+    shape: PathShape,
+): Pick<FieldModeDrawing, "pinTags" | "pinMarker"> {
+    if (session.phase !== "open" || !takesPins(session.target)) return {};
+    const tags = pinTags(session.target, shape).map(({ at, text }) => ({
+        at,
+        text,
+    }));
+    const at =
+        markerDrag?.at ??
+        (laneInFocus(session) === null
+            ? playheadMarkerAt(
+                  session.target,
+                  shape,
+                  useTimelineSelectionStore.getState().playheadBeat,
+              )
+            : null);
+    return {
+        ...(tags.length > 0 ? { pinTags: tags } : {}),
+        ...(at
+            ? {
+                  pinMarker: {
+                      at,
+                      dragging: markerDrag !== null,
+                      onTarget: markerDrag ? markerDrag.drop !== null : false,
+                  },
+              }
+            : {}),
     };
 }
 

@@ -232,6 +232,17 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
     // is left as it is, as for 0019: re-running 0022 rebuilds the table and copies every row.
     // 0022's own test restores the older CHECK itself.
     22: () => {},
+    // Pins, pathways step 5: the column goes, once what reads it is off the table
+    24: (db) =>
+        db.exec(`
+            DROP VIEW IF EXISTS timeline_route_violations;
+            DROP TRIGGER IF EXISTS timeline_log_routes_ins;
+            DROP TRIGGER IF EXISTS timeline_log_routes_upd;
+            DROP TRIGGER IF EXISTS timeline_log_routes_del;
+            DROP TRIGGER IF EXISTS timeline_routes_ut;
+            DROP TRIGGER IF EXISTS timeline_routes_dt;
+            ALTER TABLE timeline_routes DROP COLUMN timing;
+        `),
 };
 
 /**

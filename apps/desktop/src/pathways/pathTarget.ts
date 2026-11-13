@@ -3,6 +3,7 @@ import {
     routeEndsChanged,
     type AdjustProfile,
     type Resolver,
+    type RoutePin,
     type RoutePoint,
 } from "@openmarch/core";
 import { schema } from "@/global/database/db";
@@ -48,6 +49,11 @@ export interface PathTarget {
     ends: { from: XY; to: XY } | null;
     /** The route's last leg's bulge (`toBulge`, R-14″, step 10a); absent for none */
     toBulge?: number;
+    /**
+     * Its points pinned to counts (pathways step 5, spec Appendix M), counts into the move, in
+     * route order; absent or empty for none (a trail has none)
+     */
+    pins?: readonly RoutePin[];
     /**
      * A group path (pathways step 15), or null for one marcher's own path. For a group the
      * target's `from` and `to` are the reference line's ends (F and G), `routeId` the group path
@@ -250,6 +256,7 @@ export async function findGroupTarget(
         to: xy(g.to),
         routeId: group.routeId,
         points: g.points,
+        pins: route[0]!.pins,
         ends: { from: xy(g.from), to: xy(g.to) },
         ...toBulgeOf(g),
         drawnEnds: drawnEndsOf(members),
@@ -324,6 +331,7 @@ export async function findGroupDrawTarget(
         to: xy(G),
         routeId: existing?.routeId ?? null,
         points: existing?.geometry.points ?? [],
+        pins: existing?.pins ?? [],
         ...(existing ? toBulgeOf(existing.geometry) : {}),
         ends: existing
             ? {
@@ -564,6 +572,7 @@ export async function findPathTarget(
         to: xy(resolver.positionAt(marcherId, transition.end_beat)),
         routeId: ownRouteId,
         points: route?.geometry.points ?? [],
+        pins: route?.pins ?? [],
         ...(route ? toBulgeOf(route.geometry) : {}),
         ends: route
             ? { from: xy(route.geometry.from), to: xy(route.geometry.to) }
@@ -617,6 +626,7 @@ export function targetOfRoute(
             to: xy(resolver.positionAt(r.marcherId, r.end)),
             routeId: r.routeId,
             points: g.points,
+            pins: r.pins,
             ends: { from: xy(g.from), to: xy(g.to) },
             ...toBulgeOf(g),
             group: null,
@@ -651,6 +661,7 @@ export function targetOfRoute(
         to: xy(g.to),
         routeId: first.routeId,
         points: g.points,
+        pins: first.pins,
         ends: { from: xy(g.from), to: xy(g.to) },
         ...toBulgeOf(g),
         drawnEnds: drawnEndsOf(members),

@@ -343,6 +343,14 @@ export type FieldModeDrawing = {
     lanePicked?: number;
     /** An adjusted lane's keys, small round handles while its path is open (pathways step 3b) */
     adjustHandles?: readonly { at: FieldPoint; selected: boolean }[];
+    /** Each pinned point's count, a small tag beside it while its path is open (pathways step 5) */
+    pinTags?: readonly { at: FieldPoint; text: string }[];
+    /**
+     * The playhead marker (pathways step 5): where the open path's walker is at the playhead, a
+     * diamond to drag onto a point (or a straight stretch) to pin it there; `onTarget` while a
+     * drag would pin where it is
+     */
+    pinMarker?: { at: FieldPoint; dragging: boolean; onTarget: boolean };
     /**
      * Rings round marchers' starts (pathways step 15): `group` on each member of the group path
      * shown ("Follows the group path"), `own` on a selected marcher in the move that isn't on it
