@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Checkpoint, FieldProperties } from "@openmarch/core";
 import clsx from "clsx";
-import { useTranslate } from "@tolgee/react";
+import { T, useTranslate } from "@tolgee/react";
+import Shortcut from "@/components/ui/Shortcut";
 import { useFieldViewStore } from "@/field/three/fieldView";
 import { useIsTouchMode } from "@/stores/InputModeStore";
 import { isToggleOn } from "@/stores/TouchModifierStore";
@@ -659,6 +660,21 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
                             }
                         />
                     )}
+                </div>
+            )}
+
+            {/* What Edit lines does, and how to stop, as the shape tools say (#824) */}
+            {!drag && !menu && !editing && (
+                <div
+                    data-testid="field-edit-hint"
+                    className="rounded-6 border-stroke bg-modal text-body text-text shadow-modal pointer-events-none absolute bottom-12 left-1/2 z-20 -translate-x-1/2 border px-12 py-6 whitespace-nowrap"
+                >
+                    <T
+                        keyName="fieldEditMode.lines.canvasHint"
+                        params={{
+                            keys: () => <Shortcut binding="Escape" />,
+                        }}
+                    />
                 </div>
             )}
 

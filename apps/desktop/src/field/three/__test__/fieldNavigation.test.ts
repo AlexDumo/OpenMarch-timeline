@@ -88,4 +88,18 @@ describe("the Edit field mode's view", () => {
         expect(back.panX).toBeCloseTo(START.panX);
         expect(back.panY).toBeCloseTo(START.panY);
     });
+
+    it("reads 100% at the view from before when the panel closes (sims: it read 146%)", async () => {
+        fieldEditMode.enter();
+        enterFieldEditView();
+        await settleAll();
+        // The pane is narrowed by the panel while it's open
+        useFieldViewStore.setState({ width: 700 });
+        fieldEditMode.exit();
+        leaveFieldEditView();
+        await settleAll();
+        const back = useFieldViewStore.getState();
+        expect(back.baseZoom).toBe(2);
+        expect(back.zoom / back.baseZoom).toBeCloseTo(1);
+    });
 });

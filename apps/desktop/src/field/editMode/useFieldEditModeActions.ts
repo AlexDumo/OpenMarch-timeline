@@ -106,6 +106,29 @@ export function keyIsForLines(): boolean {
     return !active || active.closest(OWNS_KEYS) === null;
 }
 
+/**
+ * What Escape belongs to before the panel: a menu, a dialog or picker, and a text or number field.
+ * A focused tab, switch or button doesn't keep it, so Escape there still steps back.
+ */
+const OWNS_ESCAPE = [
+    "[role=menu]",
+    "[role=menuitem]",
+    "[role=dialog]",
+    "[role=alertdialog]",
+    "[role=listbox]:not([data-field-line-list])",
+    "input:not([type=checkbox]):not([type=radio])",
+    "textarea",
+    "select",
+    "[contenteditable]:not([contenteditable=false])",
+    "[role=combobox]",
+].join(", ");
+
+/** Whether Escape is the panel's (Done's ladder) rather than a control's */
+export function escapeIsForPanel(): boolean {
+    const active = keyTarget();
+    return !active || active.closest(OWNS_ESCAPE) === null;
+}
+
 /** Selects the lines an add made, so the next key (Enter, H, Delete) acts on them */
 export function selectAdded(result: FieldEditResult | null) {
     const added = result?.diff.ok ? result.diff.checkpoints.added : [];
@@ -114,12 +137,17 @@ export function selectAdded(result: FieldEditResult | null) {
     if (lead) fieldEditMode.select([toRef(lead)]);
 }
 
-/** Edit field (#824), the one action of the mode that works outside it: enter, or Done */
+/**
+ * Opening the Field panel (#824) and Edit lines: the two of its actions that work while it's
+ * shut. The panel opens on Setup; Edit lines from the palette opens it with Edit lines on.
+ */
 export function useFieldEditModeEntry() {
+    const { t } = useTranslate();
     const databaseReady = useDatabaseReady();
     const { setSelectedMarchers } = useSelectedMarchers() ?? {};
-    // The mode belongs to the show that's open: a show opening starts outside it, and closing
-    // the show (or switching to another) leaves it, with nothing picked, open or dragged
+    const editingLines = useFieldEditModeStore((s) => s.active && s.lines);
+    // The panel belongs to the show that's open: a show opening starts with it shut, and closing
+    // the show (or switching to another) shuts it, with nothing picked, open or dragged
     useEffect(() => {
         fieldEditMode.exit();
         return () => fieldEditMode.exit();
@@ -133,34 +161,81 @@ export function useFieldEditModeEntry() {
             }),
         [],
     );
-    // Preview edits nothing: switching to it leaves the mode
+    // Preview edits nothing: switching to it shuts the panel
     const preview = useIsPreviewMode();
     useEffect(() => {
         if (preview) fieldEditMode.exit();
     }, [preview]);
+    const open = (lines: boolean) => {
+        // The drill can't be picked while the panel is open: nothing stays selected to be
+        // nudged or deleted by a key meant for the field
+        setSelectedMarchers?.([]);
+        // Remembered for the panel's X, before anything can change
+        beginFieldEditSession();
+        fieldEditMode.enter({ lines });
+    };
+    const enabled = () => databaseReady && !isPreviewMode();
     useActionHandler(
         "fieldEditMode",
         () => {
-            if (fieldEditMode.isActive()) {
-                fieldEditMode.exit();
-                return;
-            }
-            // Marchers can't be picked while the field is edited: nothing stays selected to be
-            // nudged or deleted by a key meant for a line
-            setSelectedMarchers?.([]);
-            // Remembered for the panel's X, before anything can change
-            beginFieldEditSession();
-            fieldEditMode.enter();
+            if (fieldEditMode.isActive()) fieldEditMode.exit();
+            else open(false);
         },
-        { enabled: () => databaseReady && !isPreviewMode() },
+        { enabled },
+    );
+    useActionHandler(
+        "fieldEditLines",
+        () => {
+            if (!fieldEditMode.isActive()) return open(true);
+            fieldEditMode.setLines(!fieldEditMode.isEditingLines());
+        },
+        {
+            enabled,
+            label: t(
+                editingLines
+                    ? "actions.field.editLinesOff"
+                    : "actions.field.editLinesOn",
+            ),
+        },
     );
 }
 
 /**
- * The mode's keys and commands (#824). Mounted only while the mode is on, so outside it none of
- * these is in the palette and their keys are the canvas's again.
+ * The Field panel's own keys (#824): Done, X, the image's commands and F6. Mounted only while the
+ * panel is open, so outside it none of these is in the palette.
  */
-export function useFieldEditModeActions() {
+export function useFieldPanelActions() {
+    const fp = useFieldProperties();
+    useFieldImageActions(fp);
+
+    // Done (the panel, the palette) shuts the panel at once. Escape steps back one thing at a
+    // time: the line menu or popover, then the pick, then Edit lines, then the panel
+    useActionHandler("fieldEditDone", () => fieldEditMode.exit(), {
+        onPress: () => {
+            const state = fieldEditMode.get();
+            if (state.menu) return fieldEditMode.openMenu(null);
+            if (state.editing) return fieldEditMode.edit(null);
+            if (state.selection.length > 0) return fieldEditMode.select([]);
+            if (state.lines) return fieldEditMode.setLines(false);
+            fieldEditMode.exit();
+        },
+        // Escape in a menu, dialog, picker or field is that control's
+        enabled: escapeIsForPanel,
+    });
+
+    useFieldEditDiscard();
+
+    // F6 and Shift+F6: the keyboard's way between the field (where Tab walks lines) and
+    // the Field panel
+    useActionHandler("fieldEditNextPane", () => focusFieldEditPane(1));
+    useActionHandler("fieldEditPreviousPane", () => focusFieldEditPane(-1));
+}
+
+/**
+ * Edit lines' keys and commands (#824). Mounted only while Edit lines is on, so otherwise none of
+ * these is in the palette and their keys do nothing (the drill's are off while the panel is open).
+ */
+export function useFieldLineActions() {
     const { t } = useTranslate();
     const fp = useFieldProperties();
     const apply = useApplyFieldEdits();
@@ -176,21 +251,6 @@ export function useFieldEditModeActions() {
     const now = () =>
         fp ? existingSelection(fp, fieldEditMode.get().selection) : [];
     const mirrorNow = () => fieldEditMode.get().mirror;
-    useFieldImageActions(fp);
-
-    // Done (the panel, the palette) leaves at once; Escape first closes the menu or popover, then
-    // drops the pick, then leaves
-    useActionHandler("fieldEditDone", () => fieldEditMode.exit(), {
-        onPress: () => {
-            const state = fieldEditMode.get();
-            if (state.menu) return fieldEditMode.openMenu(null);
-            if (state.editing) return fieldEditMode.edit(null);
-            if (state.selection.length > 0) return fieldEditMode.select([]);
-            fieldEditMode.exit();
-        },
-    });
-
-    useFieldEditDiscard();
 
     useActionHandler(
         "fieldEditMirror",
@@ -202,11 +262,6 @@ export function useFieldEditModeActions() {
             enabled: keyIsForLines,
         },
     );
-
-    // F6 and Shift+F6: the keyboard's way between the field (where Tab walks lines) and
-    // the Field panel
-    useActionHandler("fieldEditNextPane", () => focusFieldEditPane(1));
-    useActionHandler("fieldEditPreviousPane", () => focusFieldEditPane(-1));
 
     const addAt = (axis: "x" | "y") => {
         if (!fp) return;
@@ -337,7 +392,7 @@ export function useFieldEditModeActions() {
 }
 
 /**
- * The panel's X: leaves at once and puts the field back as it was when the panel opened, as one
+ * The panel's X: shuts it at once and puts the field back as it was when the panel opened, as one
  * undo step, so undo brings the discarded changes back
  */
 function useFieldEditDiscard() {

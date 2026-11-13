@@ -243,6 +243,7 @@ export function glideTo(next: FieldView): number | null {
 let beforeFieldEdit: {
     view: FieldView;
     field: { width: number; height: number };
+    baseZoom: number;
 } | null = null;
 
 /**
@@ -250,8 +251,12 @@ let beforeFieldEdit: {
  * holds until the mode ends.
  */
 export function enterFieldEditView() {
-    const { width, height, zoom, panX, panY, field } = view();
-    beforeFieldEdit = { view: { width, height, zoom, panX, panY }, field };
+    const { width, height, zoom, panX, panY, field, baseZoom } = view();
+    beforeFieldEdit = {
+        view: { width, height, zoom, panX, panY },
+        field,
+        baseZoom,
+    };
     glideToFit();
 }
 
@@ -264,7 +269,7 @@ export function leaveFieldEditView() {
     beforeFieldEdit = null;
     // Switching to Preview ends the mode: Preview's own glide takes the view
     if (isPreviewMode()) return;
-    const { field, width, height } = view();
+    const { field } = view();
     // The pane's size changes as the Field panel closes beside it: the glide keeps the zoom and the
     // top-left as a resize does. Only a field of another size goes back to the fit
     const unchanged =
@@ -272,10 +277,9 @@ export function leaveFieldEditView() {
         before.field.width === field.width &&
         before.field.height === field.height;
     if (!unchanged) return glideToFit();
-    // 100% in the zoom controls is the usual fit again
-    useFieldViewStore.setState({
-        baseZoom: centerAtBase(width, height, field).zoom,
-    });
+    // 100% in the zoom controls is the usual fit again. It's the one from before: the pane is
+    // still narrowed by the panel here, so a fit measured now would read the view as zoomed in
+    useFieldViewStore.setState({ baseZoom: before.baseZoom });
     glideTo(before.view);
 }
 

@@ -43,7 +43,7 @@ export function FieldEditKeysHelp() {
                     data-testid="field-edit-keys"
                     aria-label={t("fieldEditMode.help.button")}
                     title={t("fieldEditMode.help.button")}
-                    className={`${getButtonClassName({ variant: "secondary", size: "compact", content: "icon" })} text-body`}
+                    className={`${getButtonClassName({ variant: "ghost", size: "compact", content: "icon" })} text-text-subtitle`}
                 >
                     <KeyboardIcon size={16} />
                 </button>

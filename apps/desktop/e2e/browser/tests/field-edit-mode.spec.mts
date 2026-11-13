@@ -58,12 +58,86 @@ async function savedXSteps(show: {
         .sort((a, b) => a - b);
 }
 
-async function enterFromSidebar(page: Page) {
+async function openPanel(page: Page) {
     await waitForField(page);
     await waitForSettledField(page);
     await page.locator("#sidebar-launcher-field").click();
     await expect(page.getByTestId("field-edit-panel")).toBeVisible();
+}
+
+/** Turns Edit lines on, on the Lines tab of an open Field panel */
+async function editLines(page: Page) {
+    await page.getByTestId("field-tab-lines").click();
+    await page.getByTestId("field-edit-lines").click();
+    await expect(page.getByTestId("field-edit-lines")).toHaveAttribute(
+        "aria-pressed",
+        "true",
+    );
     await editState(page);
+}
+
+async function enterFromSidebar(page: Page) {
+    await openPanel(page);
+    await editLines(page);
+}
+
+test("the panel opens on Setup with the field shown, and Edit lines is a mode on the Lines tab", async ({
+    show,
+}) => {
+    const { page } = show;
+    await waitForField(page);
+    await createMarchers(page, { quantity: 4, section: "Baritone" });
+    await openPanel(page);
+    await expect(page.getByTestId("field-tab-setup")).toHaveAttribute(
+        "data-state",
+        "active",
+    );
+    // Nothing on the field is edited yet: no rulers, the drill as it is
+    await expect(page.getByTestId("field-edit-overlay")).toHaveCount(0);
+    await expect
+        .poll(async () => (await drawnMarchers(page)).some((m) => m.dimmed))
+        .toBe(false);
+    // A line key does nothing, and doesn't reach the drill (Y is Lock Y there)
+    const before = await savedXSteps(show);
+    await page.keyboard.press("x");
+    await expect.poll(() => savedXSteps(show)).toEqual(before);
+
+    await editLines(page);
+    await expect(page.getByTestId("field-edit-overlay")).toBeVisible();
+    await expect(page.getByTestId("field-edit-hint")).toBeVisible();
+    await expect
+        .poll(async () => (await drawnMarchers(page)).every((m) => m.dimmed))
+        .toBe(true);
+
+    // Another tab ends Edit lines
+    await page.getByTestId("field-tab-appearance").click();
+    await expect(page.getByTestId("field-edit-overlay")).toHaveCount(0);
+    await page.getByTestId("field-tab-lines").click();
+    await expect(page.getByTestId("field-edit-lines")).toHaveAttribute(
+        "aria-pressed",
+        "false",
+    );
+
+    // A row clicked with Edit lines off starts it, with that line picked
+    await page
+        .getByTestId("field-lines-x")
+        .locator("[data-field-line-row='x:" + (await line0(page)) + "']")
+        .click();
+    await expect(page.getByTestId("field-edit-lines")).toHaveAttribute(
+        "aria-pressed",
+        "true",
+    );
+    await expect(page.getByTestId("field-edit-picked")).toBeVisible();
+});
+
+/** The id of the first row in the X list (the 50) */
+async function line0(page: Page) {
+    const key = await page
+        .getByTestId("field-lines-x")
+        .locator("[data-field-line-row]")
+        .first()
+        .getAttribute("data-field-line-row");
+    return key!.split(":")[1];
 }
 
 test("enter the mode, drag a mirrored line out of the ruler, undo, and leave with Escape", async ({
@@ -135,12 +209,15 @@ test("enter the mode, drag a mirrored line out of the ruler, undo, and leave wit
     await expect
         .poll(async () => (await editState(page)).lines.some((l) => l.selected))
         .toBe(false);
+    // Then Edit lines, then the panel
     await page.keyboard.press("Escape");
     await expect.poll(() => fieldEdit(page)).toBeNull();
-    await expect(page.getByTestId("field-edit-panel")).toBeHidden();
+    await expect(page.getByTestId("field-edit-panel")).toBeVisible();
     await expect
         .poll(async () => (await drawnMarchers(page)).some((m) => m.dimmed))
         .toBe(false);
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("field-edit-panel")).toBeHidden();
 });
 
 test("box-select, keep every other and delete the ten 5-yard lines, as one undo step", async ({
@@ -149,9 +226,10 @@ test("box-select, keep every other and delete the ten 5-yard lines, as one undo 
     const { page } = show;
     await waitForField(page);
     await waitForSettledField(page);
-    // The mode's own key
+    // The panel's own key
     await page.keyboard.press("ControlOrMeta+Shift+e");
     await expect(page.getByTestId("field-edit-panel")).toBeVisible();
+    await editLines(page);
     const before = await savedXSteps(show);
 
     // A thin box across the field, between the front sideline and the front hash, from just
@@ -176,10 +254,8 @@ test("box-select, keep every other and delete the ten 5-yard lines, as one undo 
         )
         .toBe(19);
 
-    await page
-        .getByTestId("field-edit-panel")
-        .getByRole("button", { name: /Every other/ })
-        .click();
+    await page.getByTestId("field-edit-more").click();
+    await page.getByRole("menuitem", { name: /Keep every other/ }).click();
     await expect
         .poll(async () =>
             (await editState(page)).lines
@@ -278,34 +354,29 @@ test("the panel's X puts the field back as it was when it opened, and undo bring
     await expect.poll(() => savedXSteps(show)).not.toContain(16);
 });
 
-test("the Field panel holds the field's settings: a new width moves the outer lines, one undo step", async ({
+test("the Field panel's tabs hold the field's settings, each change one undo step", async ({
     show,
 }) => {
     const { page } = show;
-    await enterFromSidebar(page);
+    await openPanel(page);
     const panel = page.getByTestId("field-edit-panel");
-    for (const [section, inside] of [
-        ["Size and steps", "Step size"],
-        ["Template and files", "Field Template"],
-        ["Name and sides", "Side Descriptions"],
-        ["Markings and labels", "Yard numbers"],
-        ["Background image", "Show Background Image"],
-        ["Colors", "Marchers and paths"],
+    for (const [tab, inside] of [
+        ["setup", "Step size"],
+        ["setup", "Side Descriptions"],
+        ["appearance", "Yard numbers"],
+        ["appearance", "Show Background Image"],
+        ["appearance", "Marchers and paths"],
     ] as const) {
-        await panel.getByRole("button", { name: section }).click();
+        await page.getByTestId(`field-tab-${tab}`).click();
         await expect(panel.getByText(inside).first()).toBeVisible();
     }
 
-    // Width: the goal lines move out to ±88, the lines inside stay (owner, #824)
-    const before = await savedXSteps(show);
-    await page.getByTestId("field-width").fill("176");
-    await page.getByTestId("field-width").press("Enter");
-    await expect
-        .poll(() => savedXSteps(show))
-        .toEqual([-88, ...before.slice(1, -1), 88]);
-    await expect(page.getByTestId("field-size")).toContainText("176 ×");
+    // Width and depth are read, not typed (owner, #824: a later issue)
+    await page.getByTestId("field-tab-setup").click();
+    await expect(page.getByTestId("field-width")).toContainText("160 steps");
 
     // The yard numbers' placement can be typed (B9)
+    await page.getByTestId("field-tab-appearance").click();
     const yard = page.getByTestId("field-yard-homeStepsFromFrontToOutside");
     await yard.fill("12");
     await yard.press("Enter");
@@ -319,12 +390,9 @@ test("the Field panel holds the field's settings: a new width moves the outer li
         })
         .toBe(12);
 
-    // Each is its own undo step, and the inputs follow the undo (B1)
+    // Its own undo step, and the input follows the undo (B1)
     await page.keyboard.press("ControlOrMeta+z");
     await expect(yard).not.toHaveValue("12");
-    await page.keyboard.press("ControlOrMeta+z");
-    await expect.poll(() => savedXSteps(show)).toEqual(before);
-    await expect(page.getByTestId("field-width")).toHaveValue("160");
 });
 
 /** The saved X checkpoints, with what H and R change */
@@ -528,10 +596,9 @@ test("the list's + adds a mirrored line halfway, and the template sheet keeps th
     expect(await savedXSteps(show)).toHaveLength(before.length + 2);
 
     // Hide the top labels (part of the look), then switch templates keeping the look
-    const panel = page.getByTestId("field-edit-panel");
-    await panel.getByRole("button", { name: "Markings and labels" }).click();
+    await page.getByTestId("field-tab-appearance").click();
     await page.getByTestId("field-labels-top").click();
-    await panel.getByRole("button", { name: "Template and files" }).click();
+    await page.getByTestId("field-tab-setup").click();
     await page.getByTestId("field-template-select").click();
     await page
         .getByRole("option", { name: "College football field (no end zones)" })
@@ -558,11 +625,11 @@ test("the list's + adds a mirrored line halfway, and the template sheet keeps th
     expect(await savedXSteps(show)).not.toContain(4);
 
     // Add a line, then reset to the template: back to its lines
+    await editLines(page);
+    await list.getByTestId("field-lines-insert").first().hover();
     await list.getByTestId("field-lines-insert").first().click();
     await expect.poll(() => savedXSteps(show)).toContain(4);
-    await expect(page.getByTestId("field-template-reset")).toContainText(
-        "Reset to College football field (no end zones)",
-    );
+    await page.getByTestId("field-tab-setup").click();
     await page.getByTestId("field-template-reset").click();
     await expect(sheet).toContainText("Reset to College football");
     await page.getByTestId("field-template-apply").click();

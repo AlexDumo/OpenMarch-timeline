@@ -31,6 +31,7 @@ import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates
 import { baseTemplateOf, changesFromTemplate } from "../fieldEditPlans";
 import { fieldSizeSteps } from "../lines";
 import { useApplyFieldEdits } from "../useApplyFieldEdits";
+import { Group, Row } from "./settingsInputs";
 
 const idOfName = (name: string): FieldTemplateId | undefined =>
     FIELD_TEMPLATE_IDS.find(
@@ -70,11 +71,22 @@ export function TemplateSection({ fp }: { fp: FieldProperties }) {
     const after = preview ? fieldSizeSteps(preview.next) : before;
 
     return (
-        <div className="flex flex-col gap-12">
-            <label className="flex flex-col gap-4">
-                <span className="text-sub text-text/60">
-                    {t("fieldProperties.fieldTemplate.label")}
+        <Group
+            title={t("fieldEditMode.panel.sections.template")}
+            testId="field-template"
+            note={
+                <span data-testid="field-edit-based-on">
+                    <span data-testid="field-edit-changes">
+                        {base
+                            ? t("fieldEditMode.panel.changes", {
+                                  count: changes,
+                              })
+                            : t("fieldEditMode.panel.custom")}
+                    </span>
                 </span>
+            }
+        >
+            <Row label={t("fieldEditMode.template.basedOn")}>
                 <Select
                     value={base?.template.name ?? ""}
                     onValueChange={(name) => {
@@ -86,7 +98,7 @@ export function TemplateSection({ fp }: { fp: FieldProperties }) {
                     }}
                 >
                     <SelectTriggerButton
-                        className="h-26 w-full px-8"
+                        className="h-26 w-[20rem] px-8"
                         label={
                             base?.template.name ??
                             t("fieldProperties.customFieldName")
@@ -117,27 +129,27 @@ export function TemplateSection({ fp }: { fp: FieldProperties }) {
                         </SelectGroup>
                     </SelectContent>
                 </Select>
-            </label>
-            {base && (
-                <Button
-                    variant="secondary"
-                    size="compact"
-                    className="w-fit"
-                    data-testid="field-template-reset"
-                    disabled={changes === 0}
-                    onClick={() => {
-                        setKeepLook(true);
-                        setPicked(base.id);
-                    }}
-                >
-                    {t("fieldEditMode.template.reset", {
-                        template: base.template.name,
-                    })}
-                </Button>
-            )}
-            <FieldIoButtons />
+            </Row>
+            <div className="flex flex-wrap items-center gap-8 px-12">
+                {base && (
+                    <Button
+                        variant="secondary"
+                        size="compact"
+                        className="w-fit"
+                        data-testid="field-template-reset"
+                        disabled={changes === 0}
+                        onClick={() => {
+                            setKeepLook(true);
+                            setPicked(base.id);
+                        }}
+                    >
+                        {t("fieldEditMode.template.resetShort")}
+                    </Button>
+                )}
+                <FieldIoButtons />
+            </div>
             <a
-                className="text-sub text-accent w-fit hover:underline"
+                className="text-sub text-accent mx-12 w-fit hover:underline"
                 href={siteUrl("/guides/editing-the-grid")}
                 target="_blank"
                 rel="noreferrer"
@@ -248,6 +260,6 @@ export function TemplateSection({ fp }: { fp: FieldProperties }) {
                     </div>
                 </AlertDialogContent>
             </AlertDialog>
-        </div>
+        </Group>
     );
 }

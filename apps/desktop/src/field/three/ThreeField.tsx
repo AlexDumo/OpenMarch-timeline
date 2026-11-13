@@ -19,7 +19,10 @@ import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { LABEL_SIZE_SCALE, useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useIsPreviewMode } from "@/stores/PreviewModeStore";
-import { useIsFieldEditMode } from "@/field/editMode/fieldEditModeStore";
+import {
+    useIsEditingFieldLines,
+    useIsFieldEditMode,
+} from "@/field/editMode/fieldEditModeStore";
 import { FieldEditOverlay } from "@/field/editMode/FieldEditOverlay";
 import { onScreenToggles } from "@/stores/TouchModifierStore";
 import {
@@ -333,11 +336,13 @@ function ThreeFieldView() {
     });
     const { dimming, look } = timeline;
     useShapeFocus(dimming);
-    // #824: while the field is edited the drill steps back, and can't be picked
+    // #824: while the Field panel is open the drill can't be picked, and while its lines are
+    // edited the drill steps back
     const fieldEditing = useIsFieldEditMode() && !preview;
+    const editingLines = useIsEditingFieldLines() && !preview;
     useEffect(
-        () => dimming.setEveryoneDimmed(fieldEditing),
-        [dimming, fieldEditing],
+        () => dimming.setEveryoneDimmed(editingLines),
+        [dimming, editingLines],
     );
     const root = useRef<HTMLDivElement>(null);
 
@@ -717,8 +722,8 @@ function ThreeFieldView() {
                 {fieldProperties && (
                     <ShapeEditor stepPx={fieldProperties.pixelsPerStep} />
                 )}
-                {/* The Edit field mode's rulers and lines, over everything that edits the drill */}
-                {fieldProperties && fieldEditing && (
+                {/* Edit lines' rulers and lines, over everything that edits the drill */}
+                {fieldProperties && editingLines && (
                     <FieldEditOverlay fp={fieldProperties} />
                 )}
                 {/* Fine, Equal, From center, Add and Snap for a tablet: touch layout only */}

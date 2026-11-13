@@ -2,7 +2,6 @@ import { Fragment, useMemo } from "react";
 import type { Checkpoint, FieldProperties } from "@openmarch/core";
 import { useTranslate } from "@tolgee/react";
 import clsx from "clsx";
-import { Switch } from "@openmarch/ui";
 import {
     CrosshairSimpleIcon,
     EyeIcon,
@@ -98,12 +97,22 @@ export function xLinesAsymmetric(fp: Pick<FieldProperties, "xCheckpoints">) {
 }
 
 /**
- * The Field panel's list of lines (#824), linked to the field: one row per line (a mirrored pair is
- * one row), a + in each gap that adds a line halfway, and the same pick and hover as the field
- * (a row lights its line, a line lights its row). Each row's eye and target hide or show the line
- * and make it a reference or not (H and R on the pick).
+ * The Field panel's list of lines on one axis (#824), linked to the field, one line per row like
+ * the Marchers list (a mirrored pair is one row). While Edit lines is off the rows only say what
+ * each line is (an eye-slash for a hidden one, a target for a reference); clicking one turns Edit
+ * lines on with that line picked. While it's on the rows share the field's pick and hover, each
+ * row's eye and target hide or show its line and make it a reference or not (H and R on the
+ * pick), and a + in each gap adds a line halfway.
  */
-export function LinesList({ fp }: { fp: FieldProperties }) {
+export function LinesList({
+    fp,
+    axis,
+    editing,
+}: {
+    fp: FieldProperties;
+    axis: "x" | "y";
+    editing: boolean;
+}) {
     const { t } = useTranslate();
     const apply = useApplyFieldEdits();
     const isTouch = useIsTouchMode();
@@ -120,224 +129,199 @@ export function LinesList({ fp }: { fp: FieldProperties }) {
         [fp, selection, mirror],
     );
 
-    const axisList = (axis: "x" | "y") => {
-        const rows = lineRows(fp, axis, mirror);
-        const sides = fp.sideDescriptions;
-        const whereText = (row: LineRow) =>
-            row.where === "y"
-                ? t("fieldEditMode.list.behind", { steps: row.distance })
-                : row.where === "center"
-                  ? t("fieldEditMode.list.center")
-                  : row.where === "both"
-                    ? t("fieldEditMode.list.bothSides", {
-                          left: sides.terseLeft,
-                          right: sides.terseRight,
-                          steps: row.distance,
-                      })
-                    : t("fieldEditMode.list.oneSide", {
-                          side:
-                              row.where === "left"
-                                  ? sides.terseLeft
-                                  : sides.terseRight,
-                          steps: row.distance,
-                      });
-        const pick = (row: LineRow, additive: boolean) =>
-            fieldEditMode.select(
-                clickLine(selection, toRef(row.lead), additive),
-            );
-        const toggle = (row: LineRow, key: "visible" | "useAsReference") => {
-            const edit = toggleLinesEdit(fp, row.lines.map(toRef), key, false);
-            if (edit) void apply(edit);
-        };
-        const insert = (a: LineRow, b: LineRow) =>
-            void apply(
-                insertBetweenEdit(axis, [a.lead.id, b.lead.id], mirror),
-            ).then(selectAdded);
-        return (
-            <div
-                className="flex flex-col"
-                role="listbox"
-                data-field-line-list
-                aria-multiselectable
-                aria-label={t(
-                    axis === "x"
-                        ? "fieldEditMode.list.xHeading"
-                        : "fieldEditMode.list.yHeading",
-                )}
-                data-testid={`field-lines-${axis}`}
-            >
-                {rows.map((row, i) => {
-                    const ref = toRef(row.lead);
-                    const selected = row.lines.some((c) =>
-                        lit.has(lineKey(toRef(c))),
-                    );
-                    const hovered =
-                        hover !== null &&
-                        row.lines.some((c) => sameLine(hover, toRef(c)));
-                    const next = rows[i + 1];
-                    return (
-                        <Fragment key={lineKey(ref)}>
-                            <div
-                                role="option"
-                                aria-selected={selected}
-                                tabIndex={-1}
-                                data-field-line-row={lineKey(ref)}
+    const rows = lineRows(fp, axis, mirror);
+    const sides = fp.sideDescriptions;
+    const whereText = (row: LineRow) =>
+        row.where === "y"
+            ? t("fieldEditMode.list.behind", { steps: row.distance })
+            : row.where === "center"
+              ? t("fieldEditMode.list.center")
+              : row.where === "both"
+                ? t("fieldEditMode.list.bothSides", {
+                      left: sides.terseLeft,
+                      right: sides.terseRight,
+                      steps: row.distance,
+                  })
+                : t("fieldEditMode.list.oneSide", {
+                      side:
+                          row.where === "left"
+                              ? sides.terseLeft
+                              : sides.terseRight,
+                      steps: row.distance,
+                  });
+    const pick = (row: LineRow, additive: boolean) => {
+        // A row clicked with Edit lines off starts it, with that line picked
+        if (!editing) {
+            fieldEditMode.setLines(true);
+            fieldEditMode.select([toRef(row.lead)]);
+            return;
+        }
+        fieldEditMode.select(clickLine(selection, toRef(row.lead), additive));
+    };
+    const toggle = (row: LineRow, key: "visible" | "useAsReference") => {
+        const edit = toggleLinesEdit(fp, row.lines.map(toRef), key, false);
+        if (edit) void apply(edit);
+    };
+    const insert = (a: LineRow, b: LineRow) =>
+        void apply(
+            insertBetweenEdit(axis, [a.lead.id, b.lead.id], mirror),
+        ).then(selectAdded);
+    return (
+        <div
+            className="flex flex-col"
+            role="listbox"
+            data-field-line-list
+            aria-multiselectable
+            aria-label={t(
+                axis === "x"
+                    ? "fieldEditMode.list.xHeading"
+                    : "fieldEditMode.list.yHeading",
+            )}
+            data-testid={`field-lines-${axis}`}
+        >
+            {rows.map((row, i) => {
+                const ref = toRef(row.lead);
+                const selected =
+                    editing &&
+                    row.lines.some((c) => lit.has(lineKey(toRef(c))));
+                const hovered =
+                    editing &&
+                    hover !== null &&
+                    row.lines.some((c) => sameLine(hover, toRef(c)));
+                const next = rows[i + 1];
+                return (
+                    <Fragment key={lineKey(ref)}>
+                        <div
+                            role="option"
+                            aria-selected={selected}
+                            tabIndex={-1}
+                            data-field-line-row={lineKey(ref)}
+                            className={clsx(
+                                "rounded-6 touch:min-h-44 grid min-h-32 cursor-default grid-cols-[2.5rem_minmax(0,1fr)_auto_3.5rem] items-center gap-8 border px-12",
+                                selected
+                                    ? "border-stroke bg-fg-2"
+                                    : hovered
+                                      ? "bg-text/5 border-transparent"
+                                      : "hover:bg-text/5 border-transparent",
+                                !row.lead.visible && "text-text-subtitle",
+                            )}
+                            onClick={(e) =>
+                                pick(
+                                    row,
+                                    e.shiftKey ||
+                                        fieldEditMode.get().selectMany,
+                                )
+                            }
+                            onDoubleClick={() => {
+                                if (!editing) fieldEditMode.setLines(true);
+                                fieldEditMode.edit(ref);
+                            }}
+                            onPointerEnter={() =>
+                                editing && fieldEditMode.setHover(ref)
+                            }
+                            onPointerLeave={() =>
+                                editing && fieldEditMode.setHover(null)
+                            }
+                        >
+                            <span
                                 className={clsx(
-                                    "group rounded-4 touch:min-h-44 grid cursor-default grid-cols-[3rem_1fr_auto_auto] items-center gap-6 px-6 py-2",
-                                    selected
-                                        ? "bg-accent/20"
-                                        : hovered
-                                          ? "bg-text/10"
-                                          : "hover:bg-text/5",
-                                    !row.lead.visible && "text-text-subtitle",
+                                    "text-body truncate font-mono",
+                                    selected && "text-accent",
                                 )}
-                                onClick={(e) =>
-                                    pick(
-                                        row,
-                                        e.shiftKey ||
-                                            fieldEditMode.get().selectMany,
-                                    )
-                                }
-                                onDoubleClick={() => fieldEditMode.edit(ref)}
-                                onPointerEnter={() =>
-                                    fieldEditMode.setHover(ref)
-                                }
-                                onPointerLeave={() =>
-                                    fieldEditMode.setHover(null)
-                                }
                             >
-                                <span className="text-body truncate font-medium tabular-nums">
-                                    {row.lead.terseName}
-                                </span>
-                                <span className="text-sub flex min-w-0 flex-col">
-                                    <span className="truncate">
-                                        {row.lead.name}
-                                    </span>
-                                    <span className="text-text-subtitle tabular-nums">
-                                        {whereText(row)}
-                                    </span>
-                                </span>
-                                <RowToggle
-                                    on={row.lead.visible}
-                                    label={t(
-                                        row.lead.visible
-                                            ? "fieldEditMode.menu.hide"
-                                            : "fieldEditMode.menu.show",
-                                    )}
-                                    onClick={() => toggle(row, "visible")}
-                                    icon={
-                                        row.lead.visible ? (
-                                            <EyeIcon size={16} />
-                                        ) : (
-                                            <EyeSlashIcon size={16} />
-                                        )
-                                    }
-                                />
-                                <RowToggle
-                                    on={row.lead.useAsReference}
-                                    label={t(
-                                        row.lead.useAsReference
-                                            ? "fieldEditMode.menu.stopReference"
-                                            : "fieldEditMode.menu.useAsReference",
-                                    )}
-                                    onClick={() =>
-                                        toggle(row, "useAsReference")
-                                    }
-                                    icon={
-                                        <CrosshairSimpleIcon
-                                            size={16}
-                                            weight={
-                                                row.lead.useAsReference
-                                                    ? "bold"
-                                                    : "regular"
+                                {row.lead.terseName}
+                            </span>
+                            <span className="text-body truncate">
+                                {row.lead.name}
+                            </span>
+                            <span className="text-sub text-text-subtitle truncate tabular-nums">
+                                {whereText(row)}
+                            </span>
+                            <span className="flex items-center justify-end gap-4">
+                                {editing ? (
+                                    <>
+                                        <RowToggle
+                                            on={row.lead.visible}
+                                            label={t(
+                                                row.lead.visible
+                                                    ? "fieldEditMode.menu.hide"
+                                                    : "fieldEditMode.menu.show",
+                                            )}
+                                            onClick={() =>
+                                                toggle(row, "visible")
+                                            }
+                                            icon={
+                                                row.lead.visible ? (
+                                                    <EyeIcon size={16} />
+                                                ) : (
+                                                    <EyeSlashIcon size={16} />
+                                                )
                                             }
                                         />
-                                    }
-                                />
+                                        <RowToggle
+                                            on={row.lead.useAsReference}
+                                            label={t(
+                                                row.lead.useAsReference
+                                                    ? "fieldEditMode.menu.stopReference"
+                                                    : "fieldEditMode.menu.useAsReference",
+                                            )}
+                                            onClick={() =>
+                                                toggle(row, "useAsReference")
+                                            }
+                                            icon={
+                                                <CrosshairSimpleIcon
+                                                    size={16}
+                                                    weight={
+                                                        row.lead.useAsReference
+                                                            ? "bold"
+                                                            : "regular"
+                                                    }
+                                                />
+                                            }
+                                        />
+                                    </>
+                                ) : (
+                                    <>
+                                        {!row.lead.visible && (
+                                            <EyeSlashIcon
+                                                size={16}
+                                                aria-label={t(
+                                                    "fieldEditMode.list.hidden",
+                                                )}
+                                            />
+                                        )}
+                                    </>
+                                )}
+                            </span>
+                        </div>
+                        {next && editing && (
+                            <div className="group/gap relative h-4">
+                                <button
+                                    type="button"
+                                    data-testid="field-lines-insert"
+                                    aria-label={t("fieldEditMode.list.insert", {
+                                        a: row.lead.terseName,
+                                        b: next.lead.terseName,
+                                    })}
+                                    title={t("fieldEditMode.list.insert", {
+                                        a: row.lead.terseName,
+                                        b: next.lead.terseName,
+                                    })}
+                                    className={clsx(
+                                        "border-stroke bg-bg-1 text-text-subtitle hover:text-accent hover:border-accent focus-visible:border-accent absolute top-1/2 left-4 z-10 flex size-18 -translate-y-1/2 items-center justify-center rounded-full border duration-150 ease-out focus-visible:opacity-100",
+                                        isTouch
+                                            ? "touch:size-28 opacity-100"
+                                            : "opacity-0 group-hover/gap:opacity-100",
+                                    )}
+                                    onClick={() => insert(row, next)}
+                                >
+                                    <PlusIcon size={12} weight="bold" />
+                                </button>
                             </div>
-                            {next && (
-                                <div className="group/gap relative h-6">
-                                    <button
-                                        type="button"
-                                        data-testid="field-lines-insert"
-                                        aria-label={t(
-                                            "fieldEditMode.list.insert",
-                                            {
-                                                a: row.lead.terseName,
-                                                b: next.lead.terseName,
-                                            },
-                                        )}
-                                        title={t("fieldEditMode.list.insert", {
-                                            a: row.lead.terseName,
-                                            b: next.lead.terseName,
-                                        })}
-                                        className={clsx(
-                                            "border-stroke bg-bg-1 text-text-subtitle hover:text-accent hover:border-accent focus-visible:border-accent absolute top-1/2 left-12 z-10 flex size-18 -translate-y-1/2 items-center justify-center rounded-full border duration-150 ease-out focus-visible:opacity-100",
-                                            isTouch
-                                                ? "touch:size-28 opacity-100"
-                                                : "opacity-0 group-hover/gap:opacity-100",
-                                        )}
-                                        onClick={() => insert(row, next)}
-                                    >
-                                        <PlusIcon size={12} weight="bold" />
-                                    </button>
-                                </div>
-                            )}
-                        </Fragment>
-                    );
-                })}
-            </div>
-        );
-    };
-
-    return (
-        <div className="flex flex-col gap-12">
-            <p className="text-sub text-text/60">
-                {t("fieldEditMode.list.hint")}
-            </p>
-            <div className="flex items-baseline justify-between">
-                <p className="text-body font-medium">
-                    {t("fieldEditMode.list.xHeading")}
-                </p>
-                <span className="text-sub text-text/60">
-                    {fp.xCheckpoints.length}
-                </span>
-            </div>
-            {xLinesAsymmetric(fp) && (
-                <p
-                    role="status"
-                    data-testid="field-lines-asymmetric"
-                    className="rounded-6 border-red/40 bg-red/10 text-red text-sub border px-8 py-6"
-                >
-                    {t("fieldEditMode.list.asymmetric")}
-                </p>
-            )}
-            {axisList("x")}
-            <div className="flex items-center justify-between gap-8">
-                <p className="text-body font-medium">
-                    {t("fieldEditMode.list.yHeading")}{" "}
-                    <span className="text-sub text-text/60 font-normal">
-                        {fp.yCheckpoints.length}
-                    </span>
-                </p>
-                <label
-                    className="text-sub flex items-center gap-6"
-                    title={t("fieldProperties.tooltips.useHashes")}
-                >
-                    {t("fieldEditMode.list.drawAsHashes")}
-                    <Switch
-                        checked={fp.useHashes}
-                        data-testid="field-use-hashes"
-                        onCheckedChange={(on) =>
-                            void apply({
-                                edit: "setFieldSettings",
-                                args: { patch: { useHashes: on } },
-                            })
-                        }
-                    />
-                </label>
-            </div>
-            {axisList("y")}
+                        )}
+                    </Fragment>
+                );
+            })}
         </div>
     );
 }
@@ -360,8 +344,8 @@ function RowToggle({
             aria-pressed={on}
             title={label}
             className={clsx(
-                "touch:size-44 hover:text-accent flex size-24 items-center justify-center rounded-full",
-                on ? "text-text" : "text-text-subtitle opacity-60",
+                "rounded-4 touch:size-44 enabled:hover:bg-fg-2 hover:text-accent flex size-24 items-center justify-center duration-150 ease-out",
+                on ? "text-text" : "text-text-subtitle",
             )}
             onClick={(e) => {
                 e.stopPropagation();

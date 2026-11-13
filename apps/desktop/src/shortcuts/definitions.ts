@@ -957,14 +957,24 @@ const STATIC_ACTIONS = {
             },
         ],
     },
-    // Edit field mode (#824): the main canvas edits the field's lines. Entering is global; the
-    // rest are the mode's keys, handled only while it's on (useFieldEditModeActions)
+    // The Field panel (#824). Opening it is global; the rest are the panel's keys, handled only
+    // while it's open, and the line keys only while Edit lines is on (useFieldEditModeActions)
     fieldEditMode: {
         labelKey: "actions.field.editField",
         keywordsKey: "actions.field.editFieldKeywords",
         category: "field",
         scope: "global",
         defaultBindings: ["$mod+Shift+E", "Control+Shift+E"],
+    },
+    // Edit lines on the Field panel's Lines tab (#824). No key: E is the next page everywhere
+    fieldEditLines: {
+        labelKey: "actions.field.editLines",
+        toggleOnKey: "actions.field.editLinesOn",
+        toggleOffKey: "actions.field.editLinesOff",
+        keywordsKey: "actions.field.checkpointKeywords",
+        category: "field",
+        scope: "global",
+        defaultBindings: [],
     },
     fieldEditDone: {
         labelKey: "actions.field.done",

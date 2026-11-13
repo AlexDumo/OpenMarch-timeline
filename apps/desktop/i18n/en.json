@@ -91,7 +91,10 @@
             "importImage": "Import field background image…",
             "removeImage": "Remove field background image",
             "imageKeywords": "picture photo aerial background image field",
-            "halfStep": "half step"
+            "halfStep": "half step",
+            "editLines": "Edit lines",
+            "editLinesOn": "Edit lines on the field",
+            "editLinesOff": "Stop editing lines"
         },
         "file": {
             "closeFile": "Close file",
@@ -3811,30 +3814,29 @@
             "discard": "Discard changes",
             "discardTip": "Put the field back as it was when you opened this panel. Undo brings the changes back.",
             "discarded": "Field changes discarded. Undo brings them back.",
-            "basedOn": "Based on {template}",
             "custom": "Custom field",
             "changes": "{count, plural, =0 {No changes} one {# change} other {# changes}}",
             "addX": "X line",
             "addY": "Y line",
             "edit": "Edit…",
-            "hideShow": "Hide/Show",
             "reference": "Reference",
-            "everyOther": "Every other",
             "delete": "Delete",
             "selectMany": "Select many",
             "mirror": "Mirror sides",
             "mirrorOnTip": "Mirror sides is on: an edit on one side of the 50 also edits its twin",
             "mirrorOffTip": "Mirror sides is off: each line is edited on its own",
-            "undo": "Undo",
-            "redo": "Redo",
             "sections": {
-                "lines": "Lines",
                 "size": "Size and steps",
-                "template": "Template and files",
-                "names": "Name and sides",
+                "template": "Template",
+                "names": "Names and sides",
                 "markings": "Markings and labels",
                 "image": "Background image",
                 "colors": "Colors"
+            },
+            "tabs": {
+                "setup": "Setup",
+                "lines": "Lines",
+                "appearance": "Appearance"
             }
         },
         "ruler": {
@@ -3889,7 +3891,6 @@
         },
         "namesAlreadyAutomatic": "Those lines already have the names their position gives them",
         "list": {
-            "hint": "Click a line to pick it, Shift-click to add. The field and this list share the pick. + between rows adds a line halfway.",
             "xHeading": "X · side to side",
             "yHeading": "Y · front to back",
             "center": "center",
@@ -3898,19 +3899,15 @@
             "behind": "{steps} back",
             "insert": "Add a line halfway between {a} and {b}",
             "drawAsHashes": "Draw as hashes",
-            "asymmetric": "The outermost X lines aren't the same distance from the center, so the field is drawn off-center. Move one of them until both sides match."
+            "asymmetric": "The outermost X lines aren't the same distance from the center, so the field is drawn off-center. Move one of them until both sides match.",
+            "hidden": "Hidden"
         },
         "size": {
-            "readout": "{width} × {depth} steps ({widthLength} × {depthLength})",
             "width": "Width",
             "depth": "Depth",
-            "widthHint": "Moves the outermost X lines, keeping the field centered",
-            "depthHint": "Moves the back line",
-            "outerLinesNote": "Width and depth move the outer lines. The lines inside stay where they are.",
             "steps": "steps",
             "stepsTo5": "{steps} to 5",
-            "tooSmall": "That's too small: a line inside would end up on or past the new edge. Delete or move it first.",
-            "invalid": "Type a size of more than 0 steps"
+            "extent": "{steps} steps · {length}"
         },
         "names": {
             "fieldNameHint": "The 3D View picks its venue from this name"
@@ -3946,15 +3943,28 @@
             "undoNote": "This is one step to undo.",
             "cancel": "Cancel",
             "apply": "Switch",
-            "reset": "Reset to {template}",
             "resetTitle": "Reset to {template}?",
-            "resetApply": "Reset"
+            "resetApply": "Reset",
+            "basedOn": "Based on",
+            "resetShort": "Reset to template"
         },
         "fieldPane": "Field lines",
         "help": {
             "button": "Keyboard",
             "title": "Keyboard",
             "route": "<tab></tab> picks the next line while the field has the keyboard. <pane></pane> moves between the field, this bar and the inspector."
+        },
+        "lines": {
+            "edit": "Edit lines",
+            "editing": "Editing lines",
+            "offHint": "Turn on Edit lines to pick, drag and add lines on the field, or click a line below.",
+            "onHint": "Click a line on the field or in the list to pick it. Shift-click picks more. Drag out of a ruler to add one.",
+            "pickedMany": "{count} lines picked",
+            "more": "More",
+            "axis": "Which lines",
+            "xTab": "Side to side · {count}",
+            "yTab": "Front to back · {count}",
+            "canvasHint": "Click a line to pick it · Drag out of a ruler to add one · <keys></keys> to stop editing lines"
         }
     }
 }

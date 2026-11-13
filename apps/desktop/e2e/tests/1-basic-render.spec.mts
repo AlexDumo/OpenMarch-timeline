@@ -112,30 +112,28 @@ test("Field panel sections are visible", async ({ electronApp }) => {
     await page.locator("#sidebar-launcher-field").click();
     const inspector = page.getByTestId("field-edit-panel");
     await expect(inspector).toBeVisible();
-    // Lines starts open
-    await inspector.getByRole("button", { name: "Size and steps" }).click();
-    await expect(inspector.getByText("X · side to side")).toBeVisible();
-    await expect(inspector.getByText("Y · front to back")).toBeVisible();
-    await expect(inspector.getByText("Draw as hashes")).toBeVisible();
+    // It opens on Setup; Lines and Appearance are the other tabs
     await expect(
         inspector.getByText("Step Size", { exact: true }),
     ).toBeVisible();
     await expect(inspector.getByText("Measurement System")).toBeVisible();
-    for (const [section, inside] of [
-        ["Template and files", "Field Template"],
-        ["Name and sides", "Side Descriptions"],
-        ["Markings and labels", "Yard numbers"],
-        ["Background image", "Show Background Image"],
-        ["Colors", "Marchers and paths"],
-    ] as const) {
-        await inspector.getByRole("button", { name: section }).click();
+    await expect(inspector.getByText("Side Descriptions")).toBeVisible();
+    await page.getByTestId("field-tab-lines").click();
+    await expect(page.getByTestId("field-lines-axis")).toBeVisible();
+    await expect(page.getByTestId("field-edit-lines")).toBeVisible();
+    await page.getByTestId("field-tab-appearance").click();
+    for (const inside of [
+        "Yard numbers",
+        "Show Background Image",
+        "Marchers and paths",
+    ])
         await expect(inspector.getByText(inside)).toBeVisible();
-    }
-    await expect(
-        inspector.getByRole("button", { name: "Import Field" }),
-    ).toBeVisible();
     await expect(
         inspector.getByRole("button", { name: "Import Image" }),
+    ).toBeVisible();
+    await page.getByTestId("field-tab-setup").click();
+    await expect(
+        inspector.getByRole("button", { name: "Import Field" }),
     ).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(inspector).toBeHidden();

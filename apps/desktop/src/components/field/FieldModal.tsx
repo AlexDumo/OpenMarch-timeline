@@ -14,8 +14,8 @@ import {
 import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 
 /**
- * The sidebar's Field button: opens the Field panel (#824), and while it's open the canvas edits
- * the field's lines in place. Pressed again, it's Done.
+ * The sidebar's Field button: opens the Field panel (#824) on Setup, with the field shown whole
+ * beside it. Pressed again, it's Done.
  */
 export default function FieldModal() {
     const { t } = useTranslate();
@@ -39,10 +39,10 @@ export default function FieldModal() {
 }
 
 /**
- * Keeps the Field panel and the Edit field mode together: the mode starting (this button, the
- * palette, the field's menu) opens the panel; the mode ending closes it; and the panel closing
- * or giving its place to another panel (Marchers, Show settings) ends the mode, keeping the
- * changes, as Done does.
+ * Keeps the Field panel's sidebar slot and its state together: opening it (this button, the
+ * palette, the field's menu) shows the panel; Done or X closes it; and the panel closing or
+ * giving its place to another panel (Marchers, Show settings) ends it, keeping the changes, as
+ * Done does.
  */
 export function useFieldEditPanel() {
     useEffect(() => {

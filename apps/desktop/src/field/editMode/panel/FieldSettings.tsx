@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import {
     DEFAULT_FIELD_THEME,
     FieldProperties,
@@ -6,7 +6,6 @@ import {
     type RgbaColor,
 } from "@openmarch/core";
 import { useTolgee, useTranslate } from "@tolgee/react";
-import { toast } from "sonner";
 import {
     Button,
     getButtonClassName,
@@ -17,7 +16,6 @@ import {
     SelectTriggerButton,
     Slider,
 } from "@openmarch/ui";
-import { InspectorCollapsible } from "@/components/inspector/InspectorCollapsible";
 import ColorPicker from "@/components/ui/ColorPicker";
 import { fieldLengthText } from "@/components/field/customizer/fieldSizeText";
 import { shapeIcons, shapeOptions } from "@/components/field/customizer/utils";
@@ -26,67 +24,51 @@ import ActionButton from "@/shortcuts/ActionButton";
 import type { FieldSettingsPatch } from "@/field/edits";
 import { useApplyFieldEdits } from "../useApplyFieldEdits";
 import { fieldSizeSteps } from "../lines";
-import { resizeField } from "../fieldEditPlans";
 import {
     CommitInput,
+    Group,
+    Hint,
     parseNumber,
+    Row,
     SubHeading,
     SwitchRow,
 } from "./settingsInputs";
-import { LinesList } from "./LinesList";
 import { TemplateSection } from "./TemplateSection";
 
 /**
- * The Field panel's sections (#824), below its commands: Lines (the list linked to the field)
- * open, then size and steps, the template and files, names and sides, markings and labels
- * (yard-number placement included, B9), the background image and the colors, folded. Every
- * change is a field edit, one undo step.
+ * The Field panel's Setup tab (#824): what the field is based on, its size and steps, and its
+ * names. Every change is a field edit, one undo step.
  */
-export function FieldSettingsSections({ fp }: { fp: FieldProperties }) {
+export function SetupTab({ fp }: { fp: FieldProperties }) {
+    const { t } = useTranslate();
     return (
         <>
-            <Section titleKey="fieldEditMode.panel.sections.lines" defaultOpen>
-                <LinesList fp={fp} />
-            </Section>
-            <Section titleKey="fieldEditMode.panel.sections.size">
+            <TemplateSection fp={fp} />
+            <Group title={t("fieldEditMode.panel.sections.size")}>
                 <SizeSection fp={fp} />
-            </Section>
-            <Section titleKey="fieldEditMode.panel.sections.template">
-                <TemplateSection fp={fp} />
-            </Section>
-            <Section titleKey="fieldEditMode.panel.sections.names">
+            </Group>
+            <Group title={t("fieldEditMode.panel.sections.names")}>
                 <NamesSection fp={fp} />
-            </Section>
-            <Section titleKey="fieldEditMode.panel.sections.markings">
-                <MarkingsSection fp={fp} />
-            </Section>
-            <Section titleKey="fieldEditMode.panel.sections.image">
-                <ImageSection fp={fp} />
-            </Section>
-            <Section titleKey="fieldEditMode.panel.sections.colors">
-                <ColorsSection fp={fp} />
-            </Section>
+            </Group>
         </>
     );
 }
 
-function Section({
-    titleKey,
-    defaultOpen,
-    children,
-}: {
-    titleKey: string;
-    defaultOpen?: boolean;
-    children: ReactNode;
-}) {
+/** The Field panel's Appearance tab (#824): markings and labels, the background image, colors */
+export function AppearanceTab({ fp }: { fp: FieldProperties }) {
+    const { t } = useTranslate();
     return (
-        <InspectorCollapsible
-            translatableTitle={{ keyName: titleKey }}
-            defaultOpen={defaultOpen}
-            className="mt-12 flex flex-col gap-12"
-        >
-            {children}
-        </InspectorCollapsible>
+        <>
+            <Group title={t("fieldEditMode.panel.sections.markings")}>
+                <MarkingsSection fp={fp} />
+            </Group>
+            <Group title={t("fieldEditMode.panel.sections.image")}>
+                <ImageSection fp={fp} />
+            </Group>
+            <Group title={t("fieldEditMode.panel.sections.colors")}>
+                <ColorsSection fp={fp} />
+            </Group>
+        </>
     );
 }
 
@@ -100,7 +82,6 @@ const fmt = (n: number) => String(Number(n.toFixed(2)));
 
 function SizeSection({ fp }: { fp: FieldProperties }) {
     const { t, i18n } = useTranslateWithLanguage();
-    const apply = useApplyFieldEdits();
     const set = useSettings();
     const size = fieldSizeSteps(fp);
     const metric = fp.measurementSystem === "metric";
@@ -111,20 +92,6 @@ function SizeSection({ fp }: { fp: FieldProperties }) {
     );
     const toInches = (value: number) =>
         metric ? FieldProperties.centimetersToInches(value) : value;
-    const resize = (axis: "x" | "y", value: number) => {
-        const plan = resizeField(fp, axis, value);
-        if (!plan.ok) {
-            toast.error(
-                t(
-                    plan.reason === "too-small"
-                        ? "fieldEditMode.size.tooSmall"
-                        : "fieldEditMode.size.invalid",
-                ),
-            );
-            return;
-        }
-        void apply(plan.edits);
-    };
     const length = (steps: number) =>
         fieldLengthText(
             steps * fp.stepSizeInches,
@@ -133,47 +100,24 @@ function SizeSection({ fp }: { fp: FieldProperties }) {
             i18n,
         );
     const threshold = fp.stepSizeWarningThresholdInches;
+    // Width and depth follow the outer lines; they're read here, not typed (changing them is
+    // a later issue: moving the outer lines renamed them and left the drill behind)
+    const extent = (steps: number, testId: string) => (
+        <span className="tabular-nums" data-testid={testId}>
+            {t("fieldEditMode.size.extent", {
+                steps: fmt(steps),
+                length: length(steps),
+            })}
+        </span>
+    );
     return (
         <>
-            <p className="text-sub text-text/60" data-testid="field-size">
-                {t("fieldEditMode.size.readout", {
-                    width: fmt(size.width),
-                    depth: fmt(size.depth),
-                    widthLength: length(size.width),
-                    depthLength: length(size.depth),
-                })}
-            </p>
-            <div className="grid grid-cols-2 gap-8">
-                <CommitInput
-                    label={t("fieldEditMode.size.width")}
-                    unit={t("fieldEditMode.size.steps")}
-                    stored={fmt(size.width)}
-                    current={size.width}
-                    parse={(text) =>
-                        parseNumber(text, { min: 0, exclusive: true })
-                    }
-                    onCommit={(value) => resize("x", value)}
-                    numeric
-                    testId="field-width"
-                    title={t("fieldEditMode.size.widthHint")}
-                />
-                <CommitInput
-                    label={t("fieldEditMode.size.depth")}
-                    unit={t("fieldEditMode.size.steps")}
-                    stored={fmt(size.depth)}
-                    current={size.depth}
-                    parse={(text) =>
-                        parseNumber(text, { min: 0, exclusive: true })
-                    }
-                    onCommit={(value) => resize("y", value)}
-                    numeric
-                    testId="field-depth"
-                    title={t("fieldEditMode.size.depthHint")}
-                />
-            </div>
-            <p className="text-sub text-text/60">
-                {t("fieldEditMode.size.outerLinesNote")}
-            </p>
+            <Row label={t("fieldEditMode.size.width")}>
+                {extent(size.width, "field-width")}
+            </Row>
+            <Row label={t("fieldEditMode.size.depth")}>
+                {extent(size.depth, "field-depth")}
+            </Row>
             <CommitInput
                 label={t("fieldProperties.labels.stepSize")}
                 title={t("fieldProperties.tooltips.stepSize")}
@@ -207,10 +151,7 @@ function SizeSection({ fp }: { fp: FieldProperties }) {
                 numeric
                 testId="field-step-warning"
             />
-            <label className="flex flex-col gap-4">
-                <span className="text-sub text-text/60">
-                    {t("fieldProperties.labels.measurementSystem")}
-                </span>
+            <Row label={t("fieldProperties.labels.measurementSystem")}>
                 <Select
                     value={fp.measurementSystem}
                     onValueChange={(value) =>
@@ -220,7 +161,7 @@ function SizeSection({ fp }: { fp: FieldProperties }) {
                     }
                 >
                     <SelectTriggerButton
-                        className="h-26 w-full px-8"
+                        className={SELECT}
                         label={t("fieldProperties.labels.measurementSystem")}
                     />
                     <SelectContent>
@@ -234,10 +175,13 @@ function SizeSection({ fp }: { fp: FieldProperties }) {
                         </SelectGroup>
                     </SelectContent>
                 </Select>
-            </label>
+            </Row>
         </>
     );
 }
+
+/** A select in a row */
+const SELECT = "h-26 w-[10rem] px-8";
 
 /** `t` and the app language, for number and length text */
 function useTranslateWithLanguage() {
@@ -271,6 +215,7 @@ function NamesSection({ fp }: { fp: FieldProperties }) {
             parse={text()}
             onCommit={(value) => set({ sideDescriptions: { [key]: value } })}
             testId={`field-side-${key}`}
+            wide={key.startsWith("verbose")}
         />
     );
     return (
@@ -283,11 +228,12 @@ function NamesSection({ fp }: { fp: FieldProperties }) {
                 parse={text(1, 120)}
                 onCommit={(name) => set({ name })}
                 testId="field-name"
+                wide
             />
             <SubHeading>
                 {t("fieldProperties.sections.sideDescriptions")}
             </SubHeading>
-            <div className="grid grid-cols-2 gap-8">
+            <div className="flex flex-col gap-10">
                 {side(
                     "verboseLeft",
                     t("fieldProperties.labels.directorsLeft"),
@@ -350,7 +296,7 @@ function MarkingsSection({ fp }: { fp: FieldProperties }) {
     };
     return (
         <>
-            <div className="grid grid-cols-2 gap-8">
+            <div className="flex flex-col gap-10">
                 <CommitInput
                     label={t("fieldProperties.labels.halfLineXInterval")}
                     title={t("fieldProperties.tooltips.halfLineXInterval")}
@@ -406,10 +352,8 @@ function MarkingsSection({ fp }: { fp: FieldProperties }) {
                 testId="field-labels-right"
             />
             <SubHeading>{t("fieldEditMode.markings.yardNumbers")}</SubHeading>
-            <p className="text-sub text-text/60">
-                {t("fieldEditMode.markings.yardNumbersHint")}
-            </p>
-            <div className="grid grid-cols-2 gap-8">
+            <Hint>{t("fieldEditMode.markings.yardNumbersHint")}</Hint>
+            <div className="flex flex-col gap-10">
                 {yard(
                     "homeStepsFromFrontToOutside",
                     t("fieldEditMode.markings.homeBottom"),
@@ -452,13 +396,10 @@ function ImageSection({ fp }: { fp: FieldProperties }) {
                 onChange={(on) => set({ showFieldImage: on })}
                 testId="field-image-show"
             />
-            <label className="flex flex-col gap-4">
-                <span
-                    className="text-sub text-text/60"
-                    title={t("fieldProperties.tooltips.conformMethod")}
-                >
-                    {t("fieldProperties.labels.conformMethod")}
-                </span>
+            <Row
+                label={t("fieldProperties.labels.conformMethod")}
+                title={t("fieldProperties.tooltips.conformMethod")}
+            >
                 <Select
                     value={fp.imageFillOrFit}
                     onValueChange={(value) =>
@@ -466,7 +407,7 @@ function ImageSection({ fp }: { fp: FieldProperties }) {
                     }
                 >
                     <SelectTriggerButton
-                        className="h-26 w-full px-8"
+                        className={SELECT}
                         label={t("fieldProperties.labels.conformMethod")}
                     />
                     <SelectContent>
@@ -480,17 +421,25 @@ function ImageSection({ fp }: { fp: FieldProperties }) {
                         </SelectGroup>
                     </SelectContent>
                 </Select>
-            </label>
-            <label className="flex flex-col gap-4">
-                <span className="text-sub text-text/60">
-                    {t("fieldProperties.labels.backgroundImageOpacity")}{" "}
-                    {Math.round((opacity ?? fp.backgroundImageOpacity) * 100)}%
-                </span>
+            </Row>
+            <Row
+                label={
+                    <>
+                        {t("fieldProperties.labels.backgroundImageOpacity")}{" "}
+                        <span className="text-text-subtitle tabular-nums">
+                            {Math.round(
+                                (opacity ?? fp.backgroundImageOpacity) * 100,
+                            )}
+                            %
+                        </span>
+                    </>
+                }
+            >
                 <Slider
                     aria-label={t(
                         "fieldProperties.labels.backgroundImageOpacity",
                     )}
-                    className="w-full"
+                    className="w-[10rem]"
                     min={0}
                     max={100}
                     step={1}
@@ -501,8 +450,8 @@ function ImageSection({ fp }: { fp: FieldProperties }) {
                         set({ backgroundImageOpacity: (v ?? 0) / 100 });
                     }}
                 />
-            </label>
-            <div className="flex flex-wrap gap-8">
+            </Row>
+            <div className="flex flex-wrap gap-8 px-12">
                 <ActionButton
                     action="fieldEditImportImage"
                     data-testid="field-image-import"
@@ -520,15 +469,14 @@ function ImageSection({ fp }: { fp: FieldProperties }) {
                     </ActionButton>
                 )}
             </div>
-            <p
-                className="text-sub text-text/60"
-                data-testid="field-image-ratio"
-            >
-                {t("fieldEditMode.image.ratios", {
-                    field: ratio(fp.width, fp.height),
-                    image: image ? ratio(image.width, image.height) : "–",
-                })}
-            </p>
+            <span data-testid="field-image-ratio">
+                <Hint>
+                    {t("fieldEditMode.image.ratios", {
+                        field: ratio(fp.width, fp.height),
+                        image: image ? ratio(image.width, image.height) : "–",
+                    })}
+                </Hint>
+            </span>
         </>
     );
 }
@@ -599,10 +547,7 @@ function ColorsSection({ fp }: { fp: FieldProperties }) {
             {marcher("outline", t("fieldProperties.labels.marcherOutline"))}
             {marcher("label", t("fieldProperties.labels.marcherText"))}
             {color("shape", t("fieldProperties.labels.shapes"))}
-            <label className="flex flex-col gap-4">
-                <span className="text-sub text-text/60">
-                    {t("fieldProperties.labels.shapeType")}
-                </span>
+            <Row label={t("fieldProperties.labels.shapeType")}>
                 <Select
                     value={theme.shapeType ?? "circle"}
                     onValueChange={(value) =>
@@ -610,7 +555,7 @@ function ColorsSection({ fp }: { fp: FieldProperties }) {
                     }
                 >
                     <SelectTriggerButton
-                        className="h-26 w-full px-8"
+                        className={SELECT}
                         label={t("fieldProperties.labels.shapeType")}
                     />
                     <SelectContent>
@@ -628,11 +573,11 @@ function ColorsSection({ fp }: { fp: FieldProperties }) {
                         </SelectGroup>
                     </SelectContent>
                 </Select>
-            </label>
+            </Row>
             <Button
                 size="compact"
                 variant="secondary"
-                className="w-fit"
+                className="mx-12 w-fit"
                 title={t("fieldProperties.tooltips.resetTheme")}
                 onClick={() => set({ theme: { ...DEFAULT_FIELD_THEME } })}
             >

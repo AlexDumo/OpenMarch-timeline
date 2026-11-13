@@ -1,6 +1,6 @@
 ---
 title: Edit the field
-description: Choose a field template, then add, move and delete the field's lines on the field itself, and set its size, labels, image and colors.
+description: Choose a field template, set the field's steps, names, labels, image and colors, and add, move and delete its lines on the field itself.
 type: how-to
 covers:
   - apps/desktop/src/field/editMode
@@ -9,6 +9,7 @@ covers:
   - apps/desktop/src/global/classes/fieldTemplates
   - apps/desktop/src/components/launchpage/settings/FieldSettings.tsx
   - action:fieldEditMode
+  - action:fieldEditLines
   - action:fieldEditDone
   - action:fieldEditDiscard
   - action:fieldEditMirror
@@ -44,22 +45,77 @@ import { Steps, Aside } from "@astrojs/starlight/components";
 
 The field is the surface you write for: its size, its step size, the lines that marchers' coordinates are measured from, and how it looks. Every show has one. Start from the template closest to where you perform, then change what's different about your field or floor.
 
-You edit the field on the field itself. Select <Ui k="sidebar.field" /> in the sidebar, or press <Kbd action="fieldEditMode" />. The <Ui k="fieldEditMode.panel.title" /> panel opens beside the field, as the other sidebar panels do, with the line commands, the list of lines and the field's settings. Rulers appear along the top and left of the field, and the marchers fade and can't be picked. The whole field is fitted in the room beside the panel and holds still: you can't pan or zoom until you're done. The toolbar, the inspector and the timeline stay as they are. You can also choose <Ui k="actions.field.editField" /> from the field's right-click menu or the command palette.
+Select <Ui k="sidebar.field" /> in the sidebar, or press <Kbd action="fieldEditMode" />. The <Ui k="fieldEditMode.panel.title" /> panel opens beside the field, as the other sidebar panels do, and the whole field is fitted in the room beside it and holds still: you can't pan or zoom until you're done. The marchers can't be picked while the panel is open. The toolbar, the inspector and the timeline stay as they are. You can also choose <Ui k="actions.field.editField" /> from the field's right-click menu or the command palette.
+
+The panel has three tabs:
+
+- <Ui k="fieldEditMode.panel.tabs.setup" />, where it opens: the template the field is based on, its size and steps, and its names.
+- <Ui k="fieldEditMode.panel.tabs.lines" />: the list of the field's lines, and <Ui k="fieldEditMode.lines.edit" />, to change them on the field itself.
+- <Ui k="fieldEditMode.panel.tabs.appearance" />: markings and labels, the background image and the colors.
+
+<Media
+  id="field-inspector"
+  alt="The Field panel as it opens: Done and its X, the Setup, Lines and Appearance tabs, and the Setup tab with the template the field is based on, its size and steps, and its names."
+  maxWidth={480}
+/>
 
 When you're finished, select <Ui k="fieldEditMode.panel.done" /> or press <Kbd action="fieldEditDone" /> to keep your changes. To throw them away, close the panel with its X (<Ui k="actions.field.discard" />): the field goes back to how it was when you opened the panel, as one step to undo, so <Kbd action="performUndo" /> brings the changes back if you change your mind. Opening another sidebar panel keeps your changes, as <Ui k="fieldEditMode.panel.done" /> does. Either way, the view goes back to where it was.
 
+Every change shows on the field at once and is one step to undo with <Kbd action="performUndo" />.
+
+## Setup
+
+### Template
+
+Next to <Ui k="fieldEditMode.panel.sections.template" />, the panel says how many changes you've made to the template the field is based on. To choose another, see [Choose another template](#choose-another-template).
+
+### Size and steps
+
+- <Ui k="fieldEditMode.size.width" /> and <Ui k="fieldEditMode.size.depth" />, in steps and in feet or meters. They follow the outermost lines: to change them, move those lines on the <Ui k="fieldEditMode.panel.tabs.lines" /> tab, or choose another template.
+- <Ui k="fieldProperties.labels.stepSize" />: the length of one step on this field, with the drill writers' "8 to 5" under it. It sets how far apart the grid lines are and how step sizes are worked out.
+- <Ui k="fieldProperties.labels.stepSizeWarningThreshold" />: the longest step before a move is marked as too big. See [Step size warnings](/guides/field/step-size-warnings/).
+- <Ui k="fieldProperties.labels.measurementSystem" />: inches (<Ui k="fieldProperties.options.imperial" />) or centimeters (<Ui k="fieldProperties.options.metric" />).
+
+<Aside type="caution">Marchers don't move when the field's size or step size changes. They keep their place on the drawing, so they can end up somewhere else in steps, or off the field. Change the field before you write drill, or check every page after.</Aside>
+
+### Choose another template
+
+Choose another template from <Ui k="fieldEditMode.template.basedOn" />. A sheet says how the lines and the size change before anything happens. <Ui k="fieldEditMode.template.keepLook" /> is on: the template's lines and sizes come in, and your colors, labels, image settings and side names stay. Select <Ui k="fieldEditMode.template.apply" /> to switch.
+
+To undo your changes to the lines and go back to the template the field is based on, select <Ui k="fieldEditMode.template.resetShort" />, then <Ui k="fieldEditMode.template.resetApply" /> in the sheet. Turn off <Ui k="fieldEditMode.template.keepLook" /> there to reset the look too.
+
 <Media
-  id="field-edit-mode"
-  alt="The window while the field is edited: the Field panel beside the field with Done, the line commands and the list of lines, rulers along the top and left of the field, faded marchers, and the 40 yard lines on both sides picked."
+  id="field-template"
+  alt="The sheet for switching to Indoor 50x70 - 24-inch steps: lines added, removed and renamed, the size before and after, the warning that marchers stay where they are on the canvas, and Keep my look turned on."
+  maxWidth={480}
 />
 
-Every change shows on the field at once and is one step to undo with <Kbd action="performUndo" />.
+The templates are:
+
+- <Ui k="fieldProperties.fieldTemplate.football" />: high school, college and pro football fields, each with or without end zones, at 8 to 5 (22.5-inch steps).
+- <Ui k="fieldProperties.fieldTemplate.grid" />: indoor floors of 40 × 60, 50 × 70, 50 × 80 and 50 × 90 feet, with 24-inch steps or 6 to 5 steps, and SoundSport fields at 8 to 5 or 6 to 5.
+
+To use a field in another show, select <Ui k="field.general.exportField" /> and save the `.fieldots` file, then in the other show select <Ui k="field.general.importField" /> and choose it. The window reloads with the new field. The file doesn't include the field's image.
+
+### Names and sides
+
+- <Ui k="fieldProperties.labels.fieldName" />: the field's name. The 3D View picks its venue from it, so a football field should keep "football" in its name.
+- <Ui k="fieldProperties.sections.sideDescriptions" />: the names of the two sides and their short forms, used in coordinates; for example Side 1 and Side 2, Audience Left and Audience Right, or Stage Right and Stage Left.
 
 ## Lines
 
 The lines are the field's checkpoints: X lines run across the field, such as yard lines, and Y lines run from side to side, such as hashes and sidelines. A marcher's coordinate reads like "2 steps outside the 35, 4 steps behind the front hash".
 
-<Ui k="fieldEditMode.panel.mirror" /> is on when you start: a change to an X line on one side of the 50 makes the same change to its twin on the other side. Turn it off in the panel, or press <Kbd action="fieldEditMirror" />, to change one side only.
+The <Ui k="fieldEditMode.panel.tabs.lines" /> tab lists them, one way at a time: choose <Ui k="fieldEditMode.lines.xTab" values={{ count: 21 }} /> or <Ui k="fieldEditMode.lines.yTab" values={{ count: 5 }} /> above the list. A hidden line shows a crossed-out eye.
+
+To change lines, select <Ui k="fieldEditMode.lines.edit" />, or click a line in the list. The button turns to <Ui k="fieldEditMode.lines.editing" />, rulers appear along the top and left of the field, the marchers fade, and a note over the field says what to do. Select the button again, press <Kbd keys="Escape" /> with nothing picked, or switch tabs to stop. It's also in the command palette, as <Ui k="actions.field.editLines" />.
+
+<Media
+  id="field-edit-mode"
+  alt="The window with Edit lines on: the Lines tab with Editing lines and Mirror sides pressed, the picked 45 yard line's Edit, Hide, Reference and Delete, the list of side-to-side lines, rulers along the top and left of the field, faded marchers, and the note over the field."
+/>
+
+<Ui k="fieldEditMode.panel.mirror" /> is on when you start: a change to an X line on one side of the 50 makes the same change to its twin on the other side. Turn it off with its button next to <Ui k="fieldEditMode.lines.editing" />, or press <Kbd action="fieldEditMirror" />, to change one side only.
 
 ### Add a line
 
@@ -72,7 +128,7 @@ Drag out of the ruler along the top to add an X line, or out of the ruler down t
 
 You can also:
 
-- Press <Kbd action="fieldEditAddXLine" /> or <Kbd action="fieldEditAddYLine" />, or select <Ui k="fieldEditMode.panel.addX" /> or <Ui k="fieldEditMode.panel.addY" />. The line goes where the pointer is over the field, or halfway into the largest gap.
+- Press <Kbd action="fieldEditAddXLine" /> or <Kbd action="fieldEditAddYLine" />, or select <Ui k="fieldEditMode.panel.addX" /> or <Ui k="fieldEditMode.panel.addY" /> next to the list. The line goes where the pointer is over the field, or halfway into the largest gap.
 - Select the **+** between two rows of the panel's list to add a line halfway between them.
 - Double-click a ruler to add a line there.
 
@@ -87,22 +143,22 @@ To add many lines at once, use the command palette (<Kbd action="openCommandPale
 - Click a line, or its tab on the ruler, to pick it. <Kbd keys="Shift" gesture="click" /> adds a line to the pick or takes it out.
 - Drag a box over the field to pick the lines it crosses. A thin box across the field between the hashes picks the yard lines and no hash.
 - Press <Kbd action="fieldEditNextLine" /> and <Kbd action="fieldEditPreviousLine" /> to walk through the lines, and <Kbd keys="Mod+A" /> to pick them all.
-- With several picked, <Ui k="fieldEditMode.panel.everyOther" /> keeps the first, third, fifth and so on picked.
+- With several picked, <Ui k="actions.field.everyOther" /> in the picked lines' **⋯** menu keeps the first, third, fifth and so on picked.
 
-The panel's list shares the pick: clicking a row picks its line, and the line under the pointer lights its row.
+The panel's list shares the pick: clicking a row picks its line, and the line under the pointer lights its row. Above the list, the picked line's name and its buttons appear.
 
-To delete every 5-yard line on a football field, drag a box from inside one goal line to inside the other, crossing every yard line between, select <Ui k="fieldEditMode.panel.everyOther" />, then press <Kbd action="fieldEditDeleteLines" />.
+To delete every 5-yard line on a football field, drag a box from inside one goal line to inside the other, crossing every yard line between, choose <Ui k="actions.field.everyOther" /> from the **⋯** menu, then press <Kbd action="fieldEditDeleteLines" />.
 
 ### Move, hide and delete lines
 
 - Drag a line, or slide its tab along the ruler, to move it. With several picked on the same axis, they move together. Picked lines also move a step at a time with the arrow keys, half a step with <Kbd keys="Shift" />. Press <Kbd keys="Escape" /> during a drag to let go without changing anything.
-- Press <Kbd action="fieldEditToggleVisible" /> or select <Ui k="fieldEditMode.panel.hideShow" /> to hide or show the picked lines. A hidden line isn't drawn but can still be used for coordinates; in this mode it shows as a faint dashed line so you can find it.
-- Press <Kbd action="fieldEditToggleReference" /> or select <Ui k="fieldEditMode.panel.reference" /> to choose whether coordinates are measured from them. Turn it off for lines you want to see but not count from, such as the real hash next to the grid hash.
+- Press <Kbd action="fieldEditToggleVisible" />, select <Ui k="fieldEditMode.menu.hide" /> (or <Ui k="fieldEditMode.menu.show" />), or select the eye on a line's row to hide or show the picked lines. A hidden line isn't drawn but can still be used for coordinates; in this mode it shows as a faint dashed line so you can find it.
+- Press <Kbd action="fieldEditToggleReference" />, select <Ui k="fieldEditMode.panel.reference" />, or select the target on a line's row to choose whether coordinates are measured from them. Turn it off for lines you want to see but not count from, such as the real hash next to the grid hash.
 - Drag lines back into their ruler, press <Kbd action="fieldEditDeleteLines" />, or select <Ui k="fieldEditMode.panel.delete" /> to delete them. A drag that starts on a ruler tab deletes only once it has left the ruler and come back. A field needs at least two lines each way.
 
 Right-click a line, or touch and hold it, for a menu with all of these. In the menu, the arrow keys move between its entries, <Kbd keys="Enter" /> runs one and <Kbd keys="Escape" /> closes it.
 
-If the outermost X lines end up different distances from the center, a red note above the X lines in the panel says so until you move one of them back: the field is drawn centered between them.
+If the outermost X lines end up different distances from the center, a note above the side-to-side list says so until you move one of them back: the field is drawn centered between them.
 
 ### Exact values
 
@@ -124,7 +180,7 @@ Nothing changes until you press <Kbd keys="Enter" /> or select <Ui k="fieldEditM
 
 ### Use the keyboard
 
-When you start, the field has the keyboard: <Kbd action="fieldEditNextLine" /> and <Kbd action="fieldEditPreviousLine" /> pick lines, and the keys above act on them. Press <Kbd action="fieldEditNextPane" /> to move to the panel, and again to come back to the field (<Kbd action="fieldEditPreviousPane" /> does the same). In the panel, <Kbd keys="Tab" /> moves between its controls. The keyboard button in the panel lists the mode's keys.
+When you turn on <Ui k="fieldEditMode.lines.edit" />, the field has the keyboard: <Kbd action="fieldEditNextLine" /> and <Kbd action="fieldEditPreviousLine" /> pick lines, and the keys above act on them. Press <Kbd action="fieldEditNextPane" /> to move to the panel, and again to come back to the field (<Kbd action="fieldEditPreviousPane" /> does the same). In the panel, <Kbd keys="Tab" /> moves between its controls. The keyboard button next to <Ui k="fieldEditMode.lines.editing" /> lists these keys. <Kbd keys="Escape" /> steps back one thing at a time: it closes a line's menu or values, then drops the pick, then turns off <Ui k="fieldEditMode.lines.edit" />, then closes the panel. While <Ui k="fieldEditMode.lines.edit" /> is off, the line keys do nothing, and the drill's keys wait until the panel closes.
 
 <Media
   id="field-keys-help"
@@ -134,59 +190,16 @@ When you start, the field has the keyboard: <Kbd action="fieldEditNextLine" /> a
 
 ### On a tablet
 
-In the touch layout the rulers and the strip along each line are a finger wide (44 pixels), and desktop keeps its thin ones. Touch and hold a line for its menu, tap a picked line for its values, and turn on <Ui k="fieldEditMode.panel.selectMany" /> in the panel to pick several lines with taps.
+In the touch layout the rulers and the strip along each line are a finger wide (44 pixels), and desktop keeps its thin ones. Touch and hold a line for its menu, tap a picked line for its values, and turn on <Ui k="fieldEditMode.panel.selectMany" />, next to <Ui k="fieldEditMode.lines.editing" />, to pick several lines with taps.
 
-## Settings in the panel
-
-Below the lines, the panel has the rest of the field's settings, in sections you open and close.
-
-<Media
-  id="field-inspector"
-  alt="The Field panel: Done and its X, what the field is based on, the line commands, and the Lines section with the X lines from the 50 out, each with an eye and a reference button, and a plus between two rows."
-  maxWidth={420}
-/>
-
-### Size and steps
-
-- <Ui k="fieldEditMode.size.width" /> and <Ui k="fieldEditMode.size.depth" />, in steps: typing a new size moves the outermost lines (the depth moves the back line). The lines inside stay where they are.
-- <Ui k="fieldProperties.labels.stepSize" />: the length of one step on this field, with the drill writers' "8 to 5" under it. It sets how far apart the grid lines are and how step sizes are worked out.
-- <Ui k="fieldProperties.labels.stepSizeWarningThreshold" />: the longest step before a move is marked as too big. See [Step size warnings](/guides/field/step-size-warnings/).
-- <Ui k="fieldProperties.labels.measurementSystem" />: inches (<Ui k="fieldProperties.options.imperial" />) or centimeters (<Ui k="fieldProperties.options.metric" />).
-
-<Aside type="caution">Marchers don't move when the field's size or step size changes. They keep their place on the drawing, so they can end up somewhere else in steps, or off the field. Change the field before you write drill, or check every page after.</Aside>
-
-### Template and files
-
-Choose another template from <Ui k="fieldProperties.fieldTemplate.label" />. A sheet says how the lines and the size change before anything happens. <Ui k="fieldEditMode.template.keepLook" /> is on: the template's lines and sizes come in, and your colors, labels, image settings and side names stay. Select <Ui k="fieldEditMode.template.apply" /> to switch.
-
-To undo your changes to the lines and go back to the template the field is based on, select the reset button under the template list (it names the template), then <Ui k="fieldEditMode.template.resetApply" /> in the sheet. Turn off <Ui k="fieldEditMode.template.keepLook" /> there to reset the look too.
-
-<Media
-  id="field-template"
-  alt="The sheet for switching to Indoor 50x70 - 24-inch steps: lines added, removed and renamed, the size before and after, the warning that marchers stay where they are on the canvas, and Keep my look turned on."
-  maxWidth={480}
-/>
-
-The templates are:
-
-- <Ui k="fieldProperties.fieldTemplate.football" />: high school, college and pro football fields, each with or without end zones, at 8 to 5 (22.5-inch steps).
-- <Ui k="fieldProperties.fieldTemplate.grid" />: indoor floors of 40 × 60, 50 × 70, 50 × 80 and 50 × 90 feet, with 24-inch steps or 6 to 5 steps, and SoundSport fields at 8 to 5 or 6 to 5.
-
-The panel shows which template the field is based on and how many changes you've made to it.
-
-To use a field in another show, select <Ui k="field.general.exportField" /> and save the `.fieldots` file, then in the other show select <Ui k="field.general.importField" /> and choose it. The window reloads with the new field. The file doesn't include the field's image.
-
-### Name and sides
-
-- <Ui k="fieldProperties.labels.fieldName" />: the field's name. The 3D View picks its venue from it, so a football field should keep "football" in its name.
-- <Ui k="fieldProperties.sections.sideDescriptions" />: the names of the two sides and their short forms, used in coordinates; for example Side 1 and Side 2, Audience Left and Audience Right, or Stage Right and Stage Left.
+## Appearance
 
 ### Markings and labels
 
 - <Ui k="fieldProperties.labels.halfLineXInterval" /> and <Ui k="fieldProperties.labels.halfLineYInterval" />: every how many steps a half line is drawn, from the center and from the front. Leave one empty for no half lines that way. Half lines don't change coordinates.
 - <Ui k="fieldEditMode.markings.edgeLabels" />: whether the line names outside the field show on each edge.
 - <Ui k="fieldEditMode.markings.yardNumbers" />: how many steps from the front the painted numbers' edges are. Clear the home numbers to paint none.
-- <Ui k="fieldEditMode.list.drawAsHashes" />, above the Y lines in <Ui k="fieldEditMode.panel.sections.lines" />: draw Y lines as short hash marks, as on a football field, instead of lines across the field.
+- <Ui k="fieldEditMode.list.drawAsHashes" />, above the front-to-back list on the <Ui k="fieldEditMode.panel.tabs.lines" /> tab: draw Y lines as short hash marks, as on a football field, instead of lines across the field.
 
 ### Background image
 
@@ -194,7 +207,7 @@ Put a picture under the field, such as a floor tarp design or a photo of your fi
 
 <Steps>
 
-1. Open <Ui k="fieldEditMode.panel.sections.image" /> and select <Ui k="fieldProperties.buttons.importImage" />, then choose an image file.
+1. On the <Ui k="fieldEditMode.panel.tabs.appearance" /> tab, under <Ui k="fieldEditMode.panel.sections.image" />, select <Ui k="fieldProperties.buttons.importImage" />, then choose an image file.
 2. In <Ui k="fieldProperties.labels.conformMethod" />, choose <Ui k="fieldProperties.options.fit" /> to fit the whole image inside the field, or <Ui k="fieldProperties.options.fill" /> to fill the field and let the image's edges run over. The image keeps its shape either way.
 3. Drag <Ui k="fieldProperties.labels.backgroundImageOpacity" /> to fade it.
 

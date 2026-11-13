@@ -25,11 +25,19 @@ async function openPanel(page, wait, contentId) {
     await wait(600);
 }
 
-/** Puts the canvas into the Edit field mode (#824) from the sidebar, and waits for it */
-async function editField(page, wait) {
+/** Opens the Field panel (#824) from the sidebar, on its Setup tab, and waits for it */
+async function openFieldPanel(page, wait) {
     await tidy(page);
     await page.locator("#sidebar-launcher-field").click();
     await page.getByTestId("field-edit-panel").waitFor();
+    await wait(800);
+}
+
+/** Opens the Field panel and turns Edit lines on, on its Lines tab, and waits for it */
+async function editField(page, wait) {
+    await openFieldPanel(page, wait);
+    await page.getByTestId("field-tab-lines").click();
+    await page.getByTestId("field-edit-lines").click();
     await page.waitForFunction(() => window.fieldTest?.fieldEdit?.() != null);
     await wait(800);
 }
@@ -66,8 +74,8 @@ const shots = [
     {
         id: "field-edit-mode",
         kind: "still",
-        // The whole window while the field is edited: the Field panel with its list of lines, the
-        // rulers and the dimmed drill
+        // The whole window while Edit lines is on: the Lines tab with the picked line's commands,
+        // the rulers, the hint and the dimmed drill
         async setup({ page, wait }) {
             await wait(3000);
             await editField(page, wait);
@@ -126,12 +134,11 @@ const shots = [
     {
         id: "field-inspector",
         kind: "still",
-        // The Field panel: Done and X, the commands and the list of lines, with a + between rows
+        // The Field panel as it opens: Done and X, the tabs, and Setup (template, size, names)
         async setup({ page, wait, around }) {
             await wait(3000);
-            await editField(page, wait);
-            const row = page.locator("[data-field-line-row]").nth(2);
-            await row.hover();
+            await openFieldPanel(page, wait);
+            await page.mouse.move(800, 990);
             await wait(500);
             return {
                 box: await around(page.getByTestId("field-edit-panel"), 6),
@@ -158,12 +165,7 @@ const shots = [
         // Another template picked: the sheet says what changes before it switches
         async setup({ page, wait, around }) {
             await wait(3000);
-            await editField(page, wait);
-            const panel = page.getByTestId("field-edit-panel");
-            await panel
-                .getByRole("button", { name: "Template and files" })
-                .click();
-            await wait(400);
+            await openFieldPanel(page, wait);
             await page.getByTestId("field-template-select").click();
             await page
                 .getByRole("option", { name: "Indoor 50x70 - 24-inch steps" })
@@ -182,12 +184,7 @@ const shots = [
         // The threshold lowered to 8 to 5 (22.5 in), so this page's long moves show in red
         async setup({ page, wait }) {
             await wait(3000);
-            await editField(page, wait);
-            await page
-                .getByTestId("field-edit-panel")
-                .getByRole("button", { name: "Size and steps" })
-                .click();
-            await wait(400);
+            await openFieldPanel(page, wait);
             const input = page.getByTestId("field-step-warning");
             await input.fill(STEP_WARNING_INCHES);
             await input.press("Enter");
