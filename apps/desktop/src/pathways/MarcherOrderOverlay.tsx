@@ -365,31 +365,31 @@ function drawLine({
     const xs = washPoints.map((p) => p.x);
     const ys = washPoints.map((p) => p.y);
     const pad = Math.max(halfWidth * 2.2 + 4, tipHalf * 0.2 + halfWidth + 6);
-    // What's drawn, tightly: the lane round its points (the thread is thinner) and the tip's corners
-    const reach = kind === "crossed" ? 2 : halfWidth;
-    const inked = [
-        ...points,
-        ...(tip?.points.split(" ").map((p) => {
+    // What's drawn, tightly: the lane and its wash (on past the leader, under the tip) as wide as
+    // they're drawn with the rim (the thread is thinner), and the tip's corners
+    // Half the wash stroke (LaneGround: the lane plus 3, or 6 for a thread) plus its 1.2 px rim
+    const reach = kind === "crossed" ? 4.2 : halfWidth + 2.7;
+    const tipCorners =
+        tip?.points.split(" ").map((p) => {
             const [x, y] = p.split(",").map(Number);
             return { x: x!, y: y! };
-        }) ?? []),
-    ];
+        }) ?? [];
     const extent = {
         minX: Math.min(
-            ...points.map((p) => p.x - reach),
-            ...inked.map((p) => p.x),
+            ...washPoints.map((p) => p.x - reach),
+            ...tipCorners.map((p) => p.x),
         ),
         minY: Math.min(
-            ...points.map((p) => p.y - reach),
-            ...inked.map((p) => p.y),
+            ...washPoints.map((p) => p.y - reach),
+            ...tipCorners.map((p) => p.y),
         ),
         maxX: Math.max(
-            ...points.map((p) => p.x + reach),
-            ...inked.map((p) => p.x),
+            ...washPoints.map((p) => p.x + reach),
+            ...tipCorners.map((p) => p.x),
         ),
         maxY: Math.max(
-            ...points.map((p) => p.y + reach),
-            ...inked.map((p) => p.y),
+            ...washPoints.map((p) => p.y + reach),
+            ...tipCorners.map((p) => p.y),
         ),
     };
     return {
