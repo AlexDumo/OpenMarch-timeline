@@ -16,6 +16,7 @@
 import { brassHorn } from "./brass";
 import type { Vec3 } from "./mesh";
 import type { BrassModelId } from "./model";
+import { saxStack } from "./saxophones";
 
 export type HoldState = "up" | "carry" | "trail";
 export const HOLD_STATES: readonly HoldState[] = ["up", "carry", "trail"];
@@ -33,6 +34,7 @@ export type HoldFamily =
     | "clarinet"
     | "bassClarinet"
     | "sax"
+    | "bariSax"
     | "snare"
     | "tenors"
     | "bass"
@@ -802,28 +804,25 @@ const CLARINET: Record<HoldState, Hold> = {
 };
 
 /**
- * Saxes hang from the neck strap in front of the body: the neck brings the
- * body out in front of the mouth and the body runs straight down to the bow
- * at the stomach, parallel to the performer. The model turns its body
- * under the neck as a sax is played (`SAX_BODY_TURN` in saxophones.ts): the
- * bell stands in front of the body tube, a little to the player's left,
- * opening forward and up, and the pearls face the player's front-right.
- * The hands wrap the body from the sides, fingers across the front: left
- * hand on the upper stack, right hand on the lower, elbows out.
+ * Saxes hang from the neck strap in front of the body (owner, 2026-11-14):
+ * the instrument stands straight up and down, the mouthpiece straight back
+ * into the mouth and the bell straight away from the player, directly in
+ * front of the body tube (`SAX_BODY_TURN` in saxophones.ts turns the body
+ * under the neck so they line up). The body runs straight down to the bow
+ * at the stomach, parallel to the performer, and the pearls face the
+ * performer's right. The hands come from `saxHands`: the left in front of
+ * the upper stack, its fingers wrapping round to the pearls, the right on
+ * the lower stack from the right side, elbows relaxed near the body.
  *
  * Carry (owner, 2026-10-09; turned 2026-11-09 with the model): vertical
  * just in front of the body exactly as it is played, raised so the
- * mouthpiece sits at eye level: the body tube on the center line 0.24 m
- * out, the bell in front of it. The hands stay where they play, left on
- * the upper stack from the left side, right on the lower stack from the
- * right, fingers in across the tube.
+ * mouthpiece sits at eye level: the body tube on the center line, the bell
+ * in front of it. The hands stay where they play.
  *
  * Trail: level at the right side, front to back like the brass trail, the
  * fist round the body tube 0.37 m along with the mouthpiece in front. The
- * alto's and bari's body tubes run through the fist; the tenor's longer
- * neck puts its tube 0.07 m out. The frame is turned about the body tube by
- * the model's body turn, so the bow and bell hang below the tube and the
- * keys face out and down, away from the leg.
+ * frame is turned about the body tube by the model's body turn, so the bow
+ * and bell hang below the tube and the keys face out, away from the leg.
  */
 const SAX: Record<HoldState, Hold> = {
     up: {
@@ -842,7 +841,7 @@ const SAX: Record<HoldState, Hold> = {
         },
         instrument: {
             origin: [0, 1.52, 0.13],
-            bellAxis: [0.03, -0.99, 0.0],
+            bellAxis: [0, -1, 0],
             capsAxis: [0.0, 0.0, 1.0],
         },
     },
@@ -875,7 +874,7 @@ const SAX: Record<HoldState, Hold> = {
         instrument: {
             origin: [-0.222, 0.978, 0.4],
             bellAxis: [0, 0, -1],
-            capsAxis: [-0.423, -0.906, 0],
+            capsAxis: [0, -1, 0],
         },
     },
 };
@@ -1456,7 +1455,7 @@ function withHands(h: Hold, right: ArmPlan, left: ArmPlan): Hold {
  * and saxes' elbows hang at the sides and the forearms come forward and in.
  */
 const WOODWIND_HANDS: Record<
-    "flute" | "piccolo" | "clarinet" | "bassClarinet" | "sax",
+    "flute" | "piccolo" | "clarinet" | "bassClarinet",
     { right: ArmPlan; left: ArmPlan }
 > = {
     piccolo: {
@@ -1507,18 +1506,6 @@ const WOODWIND_HANDS: Record<
             elbow: [-0.191, 1.197, 0.038],
         },
     },
-    sax: {
-        left: {
-            wrist: [0.063, 1.354, 0.252],
-            fingers: [-0.55, 0.45, 0.7],
-            elbow: [0.21, 1.214, 0.084],
-        },
-        right: {
-            wrist: [-0.051, 1.201, 0.271],
-            fingers: [0.55, 0.12, 0.83],
-            elbow: [-0.194, 1.2, 0.049],
-        },
-    },
 };
 const playedBy = (family: keyof typeof WOODWIND_HANDS, h: Hold): Hold =>
     withHands(h, WOODWIND_HANDS[family].right, WOODWIND_HANDS[family].left);
@@ -1540,25 +1527,128 @@ function clarinetOut(h: Hold): Hold {
 }
 
 /**
- * The saxes up (photos, 2026-11-10): the bottom kicked forward 12 degrees.
- * The hands come from `WOODWIND_HANDS`: the left up on the upper stack at
- * the chest, the right on the lower stack, elbows relaxed near the body.
+ * A curved sax's hands on its stacks, from the model's own body (owner,
+ * 2026-11-14), so the hands land on the pearls whatever the sax's size;
+ * a hold shared by several saxes puts them between their stacks. In the
+ * instrument frame the pearls face −X (the performer's right when the sax
+ * hangs straight), +Y is forward and +Z down the body. The left hand's
+ * knuckles sit in front of the upper stack, its fingers wrapping round to
+ * the pearls; the right hand's sit at the front edge of the lower stack on
+ * the right, clear of the bell in front. Each hand carries straight on from
+ * its forearm (`straightArm`), the elbows out to the sides and down.
+ * `stacks` are the two hands' places down the body, from its top (0) to the
+ * bow (1).
  */
-const SAX_KICK_DEG = 12;
-function saxForward(h: Hold): Hold {
-    const k = (SAX_KICK_DEG * Math.PI) / 180;
-    const down = unit(h.instrument.bellAxis);
-    const bell: Vec3 = unit([
-        down[0],
-        down[1] * Math.cos(k),
-        -down[1] * Math.sin(k),
-    ]);
-    const moved = reframed(h, {
-        origin: h.instrument.origin,
-        bellAxis: bell,
-        capsAxis: [0, Math.sin(k), Math.cos(k)],
-    });
-    return moved;
+function saxHands(
+    h: Hold,
+    ids: ("altoSax" | "tenorSax" | "bariSax")[],
+    stacks: [number, number] = [0.3, 0.66],
+): Pick<Hold, "left" | "right"> {
+    const f = frameOf(h.instrument);
+    const at = (k: number, p: Vec3) =>
+        toBody(f, add(mean(ids.map((id) => saxStack(id, k))), p));
+    const leftKnuckles = at(stacks[0], [0.015, 0.035, 0]);
+    const rightKnuckles = at(stacks[1], [-0.025, 0.015, 0]);
+    const out = (v: Vec3) => dirToBody(f, v);
+    return {
+        left: straightArm(
+            "left",
+            leftKnuckles,
+            add(out([1, 0, 0]), [0, -0.8, -0.2]),
+            out([-0.6, 0.3, 0.3]),
+        ),
+        right: straightArm(
+            "right",
+            rightKnuckles,
+            add(out([-1, 0, 0]), [0, -0.8, -0.2]),
+            out([0.4, 0.8, 0.2]),
+        ),
+    };
+}
+
+/**
+ * The bari up (owner, 2026-11-14, with marching photos): too long to hang
+ * straight in front, it is worn on a harness sideways down the body, the
+ * top of the horn out by the left shoulder and the bow at the right hip,
+ * the bell opening forward. The sax hold turned `BARI_YAW_DEG` toward the
+ * performer's left about the vertical, which carries the body out to the
+ * left with the neck coming in to the mouth from there, then rolled
+ * `BARI_ROLL_DEG` about the forward axis so the bottom swings across to the
+ * right hip, and its bottom tipped back `BARI_PITCH_DEG` so the bow rests
+ * against the hip rather than hanging out in front. The mouthpiece stays at
+ * the lips; the hands follow the stacks.
+ */
+const BARI_YAW_DEG = 35;
+const BARI_ROLL_DEG = 22;
+const BARI_PITCH_DEG = 10;
+function bariUp(): Hold {
+    const base = withMouth(SAX.up);
+    const y = (BARI_YAW_DEG * Math.PI) / 180;
+    const r = (BARI_ROLL_DEG * Math.PI) / 180;
+    const p = (BARI_PITCH_DEG * Math.PI) / 180;
+    // pitch about +X (the bottom back toward the body), yaw about +Y (forward
+    // toward the left), then roll about +Z (down toward the right)
+    const turn = (v0: Vec3): Vec3 => {
+        const v: Vec3 = [
+            v0[0],
+            v0[1] * Math.cos(p) - v0[2] * Math.sin(p),
+            v0[1] * Math.sin(p) + v0[2] * Math.cos(p),
+        ];
+        const a: Vec3 = [
+            v[0] * Math.cos(y) + v[2] * Math.sin(y),
+            v[1],
+            -v[0] * Math.sin(y) + v[2] * Math.cos(y),
+        ];
+        return [
+            a[0] * Math.cos(r) + a[1] * Math.sin(r),
+            -a[0] * Math.sin(r) + a[1] * Math.cos(r),
+            a[2],
+        ];
+    };
+    const h: Hold = {
+        ...base,
+        family: "bariSax",
+        instrument: {
+            origin: base.instrument.origin,
+            bellAxis: turn([0, -1, 0]),
+            capsAxis: turn([0, 0, 1]),
+        },
+    };
+    return { ...h, ...saxHands(h, ["bariSax"]) };
+}
+
+/**
+ * Where the trail puts a sax's body tube: through the right fist, level,
+ * the mouthpiece forward. The sax trail's frame hangs the bow and bell
+ * straight down below the tube, so the mouthpiece sits the body's axis
+ * height (`saxStack`'s y at the top) above it; a hold shared by several
+ * saxes splits the difference. The bari's wide bell hangs further out, so
+ * its tube does too.
+ */
+const SAX_TRAIL_TUBE: Vec3 = [-0.268, 0.88, 0.4];
+function saxTrail(
+    family: HoldFamily,
+    ids: ("altoSax" | "tenorSax" | "bariSax")[],
+    tube = SAX_TRAIL_TUBE,
+): Hold {
+    const yb = mean(ids.map((id) => saxStack(id, 0)))[1];
+    return {
+        ...SAX.trail,
+        family,
+        instrument: {
+            ...SAX.trail.instrument,
+            origin: round3(add(tube, [0, yb, 0])),
+        },
+    };
+}
+
+/** The alto and tenor share a hold: their hands go between their stacks. */
+const ALTO_TENOR: ("altoSax" | "tenorSax")[] = ["altoSax", "tenorSax"];
+
+/** The alto and tenor up: straight up and down. */
+function saxUp(): Hold {
+    const h = withMouth(SAX.up);
+    return { ...h, ...saxHands(h, ALTO_TENOR) };
 }
 
 /**
@@ -1625,7 +1715,22 @@ const TABLE: Record<HoldFamily, () => Record<HoldState, Hold>> = {
         ...BASS_CLARINET,
         up: playedBy("bassClarinet", withMouth(BASS_CLARINET.up)),
     }),
-    sax: () => ({ ...SAX, up: playedBy("sax", saxForward(withMouth(SAX.up))) }),
+    sax: () => ({
+        ...SAX,
+        up: saxUp(),
+        carry: { ...SAX.carry, ...saxHands(SAX.carry, ALTO_TENOR) },
+        trail: saxTrail("sax", ALTO_TENOR),
+    }),
+    bariSax: () => ({
+        up: bariUp(),
+        carry: {
+            ...SAX.carry,
+            family: "bariSax",
+            // raised to eye level, the long bari's hands reach its upper stacks
+            ...saxHands(SAX.carry, ["bariSax"], [0.2, 0.42]),
+        },
+        trail: saxTrail("bariSax", ["bariSax"], [-0.29, 0.88, 0.4]),
+    }),
     // battery (drum corps photos, 2026-11-10): the upper arms hang close to
     // the ribs, 10 to 20 degrees off vertical, the forearms reach forward
     snare: () =>
