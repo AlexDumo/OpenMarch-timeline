@@ -2955,5 +2955,6 @@
     "timeline.touchTransport.fit": "Short caption under the button (tablet timeline controls) that zooms the timeline so the whole show fits; pressing it again goes back. Keep it to one short word.",
     "timeline.touchTransport.atPlayhead": "Heading over buttons in the tablet timeline's \"More\" panel that add a new page, or a subset page, at the playhead (the timeline's current position line).",
     "timeline.touchTransport.newPage": "Short caption under the button (tablet timeline controls) that creates a page at the playhead.",
-    "timeline.touchTransport.newSubset": "Short caption under the button (tablet timeline controls) that creates a subset page (a page numbered between two pages, such as 2A) at the playhead."
+    "timeline.touchTransport.newSubset": "Short caption under the button (tablet timeline controls) that creates a subset page (a page numbered between two pages, such as 2A) at the playhead.",
+    "timeline.touchTransport.compact": "Short caption under the button (tablet timeline controls) that shows the timeline as a thin strip or in full. Keep it to one short word."
 }

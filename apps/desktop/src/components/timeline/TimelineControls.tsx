@@ -239,7 +239,7 @@ export function TimelineCompactButton() {
             type="button"
             data-testid="timeline-compact"
             className={clsx(
-                "rounded-4 enabled:hover:bg-fg-2 focus-visible:ring-accent flex size-24 items-center justify-center outline-hidden duration-150 ease-out focus-visible:ring-2",
+                "rounded-4 enabled:hover:bg-fg-2 focus-visible:ring-accent touch:size-44 flex size-24 items-center justify-center outline-hidden duration-150 ease-out focus-visible:ring-2",
                 compact
                     ? "text-accent bg-accent/10"
                     : "text-text enabled:hover:text-accent",

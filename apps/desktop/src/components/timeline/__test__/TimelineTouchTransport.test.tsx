@@ -53,7 +53,10 @@ const layout = (preference: "touch" | "mouse") =>
         useInputModeStore.getState().setPreference(preference);
     });
 
-function renderTimeline({ isPlaying = false }: { isPlaying?: boolean } = {}) {
+function renderTimeline({
+    isPlaying = false,
+    playOnly,
+}: { isPlaying?: boolean; playOnly?: string } = {}) {
     return render(
         <ExpandedTimeline
             model={timelineStoryModel}
@@ -64,6 +67,7 @@ function renderTimeline({ isPlaying = false }: { isPlaying?: boolean } = {}) {
             onPlayingChange={() => {}}
             onPlayFromPlayhead={() => {}}
             onPlayOn={() => {}}
+            playOnly={playOnly}
         />,
         { wrapper: Providers },
     );
@@ -197,6 +201,45 @@ describe("the compact touch transport", () => {
         ).toBeTruthy();
         expect(
             panel.querySelector("[data-testid=timeline-sound]"),
+        ).toBeTruthy();
+    });
+
+    it("with no variants (tempo mode), a long press on Play still plays, as a tap", () => {
+        layout("touch");
+        vi.useFakeTimers();
+        const play = handle("playPause");
+        renderTimeline({ playOnly: "Play from the playhead" });
+        const button = screen.getByTestId("timeline-play");
+        expect(button.getAttribute("aria-label")).toBe(
+            "Play from the playhead",
+        );
+        expect(button.hasAttribute("aria-haspopup")).toBe(false);
+        pointer("pointerdown", button, "touch");
+        act(() => {
+            vi.advanceTimersByTime(600);
+        });
+        pointer("pointerup", button, "touch");
+        fireEvent.click(button);
+        expect(play).toHaveBeenCalledTimes(1);
+        expect(screen.queryByTestId("timeline-play-menu")).toBeNull();
+    });
+
+    it("in tempo mode while playing, Play is named Stop here", () => {
+        layout("touch");
+        renderTimeline({ isPlaying: true, playOnly: "Play from the playhead" });
+        expect(
+            screen.getByTestId("timeline-play").getAttribute("aria-label"),
+        ).toBe("Stop here");
+    });
+
+    it("Expert's Compact is in the '…'", () => {
+        layout("touch");
+        renderTimeline();
+        fireEvent.click(screen.getByTestId("timeline-touch-more"));
+        expect(
+            screen
+                .getByTestId("timeline-touch-more-panel")
+                .querySelector("[data-testid=timeline-compact]"),
         ).toBeTruthy();
     });
 });

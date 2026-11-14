@@ -2795,7 +2795,8 @@
             "fit": "Fit",
             "atPlayhead": "At the playhead",
             "newPage": "New page",
-            "newSubset": "New subset"
+            "newSubset": "New subset",
+            "compact": "Compact"
         }
     },
     "titlebar": {

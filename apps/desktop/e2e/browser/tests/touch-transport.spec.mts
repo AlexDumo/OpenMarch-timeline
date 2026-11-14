@@ -245,3 +245,53 @@ test('Loop and "New page" in the "…" run their actions', async ({ show }) => {
         panel.getByTestId("timeline-touch-tempo-mode"),
     ).toHaveAttribute("aria-pressed", "false");
 });
+
+test("Shift+T and tempo mode's key guard work in the touch layout", async ({
+    show,
+}) => {
+    const { page } = show;
+    // Shift+T turns Edit music on, with no Edit music button in the row
+    await page.keyboard.press("Shift+T");
+    let panel = await openMore(page);
+    await expect(
+        panel.getByTestId("timeline-touch-tempo-mode"),
+    ).toHaveAttribute("aria-pressed", "true");
+    const fit = panel.getByTestId("timeline-touch-fit");
+    const fitted = await fit.getAttribute("aria-pressed");
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeHidden();
+    // The guard keeps Shift+Z (the timeline's own Fit key) from the timeline in tempo mode
+    await page.keyboard.press("Shift+Z");
+    panel = await openMore(page);
+    await expect(panel.getByTestId("timeline-touch-fit")).toHaveAttribute(
+        "aria-pressed",
+        fitted ?? "",
+    );
+    await page.keyboard.press("Escape");
+    // Shift+T leaves, and Shift+Z fits again
+    await page.keyboard.press("Shift+T");
+    await page.keyboard.press("Shift+Z");
+    panel = await openMore(page);
+    await expect(
+        panel.getByTestId("timeline-touch-tempo-mode"),
+    ).toHaveAttribute("aria-pressed", "false");
+    await expect(panel.getByTestId("timeline-touch-fit")).not.toHaveAttribute(
+        "aria-pressed",
+        fitted ?? "",
+    );
+});
+
+test('on a short screen (744 × 500) the "…" panel fits on screen and scrolls', async ({
+    show,
+}) => {
+    const { page } = show;
+    await page.setViewportSize({ width: 744, height: 500 });
+    const panel = await openMore(page);
+    const box = (await panel.boundingBox())!;
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.y + box.height).toBeLessThanOrEqual(500);
+    // Its last button can be scrolled to and pressed
+    const last = panel.getByTestId("timeline-touch-add-subset");
+    await last.scrollIntoViewIfNeeded();
+    await expect(last).toBeInViewport();
+});

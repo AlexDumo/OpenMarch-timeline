@@ -563,7 +563,7 @@ export const playGuideRows = (
  * Tempo mode's one Play (owner, 2026-10-30): one row, named for what it does now, and
  * Stop stays where it stopped
  */
-const playOnlyGuide = (
+export const playOnlyGuide = (
     label: string,
     isPlaying: boolean,
 ): readonly TransportGuideRow<TransportPlayMode>[] => [

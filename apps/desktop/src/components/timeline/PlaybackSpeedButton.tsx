@@ -95,8 +95,13 @@ export function PlaybackSpeedButton({
     const { t } = useTranslate();
     const [open, setOpen] = useState(false);
     const showHints = useShowShortcutHints();
-    // The kind of pointer that pressed last, read by the click it makes
+    // The kind of pointer that pressed last, read by the click it makes, and whether the popover
+    // was open then (the press itself closes it, as a press outside it)
     const pressedWith = useRef<string | undefined>(undefined);
+    const openAtPress = useRef(false);
+    const forgetPress = () => {
+        pressedWith.current = undefined;
+    };
     const shown = formatPlaybackSpeed(playing, t);
     const label = t("timeline.playbackSpeed.current", { speed: shown });
     return (
@@ -116,13 +121,22 @@ export function PlaybackSpeedButton({
                         onMouseDown={(event) => event.preventDefault()}
                         onPointerDown={(event) => {
                             pressedWith.current = event.pointerType;
+                            openAtPress.current = open;
+                        }}
+                        onPointerCancel={forgetPress}
+                        // Slid off while still down; a finger also "leaves" once it lifts,
+                        // before its click, and that must keep the press
+                        onPointerLeave={(event) => {
+                            if (event.buttons !== 0) forgetPress();
                         }}
                         onClick={(event) => {
                             const tapped = speedTapOpensPopover(
                                 pressedWith.current,
                             );
-                            pressedWith.current = undefined;
-                            if (tapped) setOpen(true);
+                            forgetPress();
+                            // A tap on the open popover's button closes it, rather than
+                            // closing and opening it again
+                            if (tapped) setOpen(!openAtPress.current);
                             else onStep(event.shiftKey);
                         }}
                         onContextMenu={(event) => {

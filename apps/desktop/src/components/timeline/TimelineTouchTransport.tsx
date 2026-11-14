@@ -53,9 +53,13 @@ import {
     MENU_CONTENT_CLASS,
     POPOVER_CLASS,
 } from "@/components/ui/popupClasses";
-import { TimelineSoundButton, TimelineSpeedButton } from "./TimelineControls";
+import {
+    TimelineCompactButton,
+    TimelineSoundButton,
+    TimelineSpeedButton,
+} from "./TimelineControls";
 import { TimelineTouchZoom } from "./TimelineTouchZoom";
-import { playGuideRows } from "./TransportButtons";
+import { playGuideRows, playOnlyGuide } from "./TransportButtons";
 import { touchPlayVariants } from "./touchPlayMenu";
 import { START_INK } from "./startFlagInk";
 
@@ -65,7 +69,8 @@ const ROW_BUTTON_CLASS =
 
 /** One of the "…" panel's buttons: the icon over its caption */
 const CELL_CLASS =
-    "rounded-4 text-text flex min-h-56 min-w-0 flex-col items-center justify-center gap-4 px-2 py-4 touch-none select-none enabled:active:bg-fg-2 aria-pressed:text-accent";
+    "rounded-4 text-text flex min-h-56 min-w-0 flex-col items-center justify-center gap-4 px-2 py-4 touch-none select-none enabled:active:bg-fg-2 aria-pressed:text-accent [&_[data-touch-caption]]:text-center [&_[data-touch-caption]]:leading-tight [&_[data-touch-caption]]:whitespace-normal";
+// (A caption wraps under its icon when a translation is longer than the cell)
 
 export function TimelineTouchTransport({
     isPlaying,
@@ -178,15 +183,11 @@ function TouchPlayButton({
     ]);
     const canPlay = enabled[0] === "1";
     const hasMenu = variants.length > 0;
-    const longPress = useLongPress(
-        useCallback(() => {
-            if (hasMenu) setOpen(true);
-        }, [hasMenu]),
-    );
-    const label =
-        playOnly !== undefined && !isPlaying
-            ? playOnly
-            : (guide.find((row) => row.mode === "play")?.label ?? "");
+    const longPress = useLongPress(useCallback(() => setOpen(true), []));
+    // Tempo mode's one Play names what it does now ("Stop here" while playing), as on desktop
+    const label = (
+        playOnly !== undefined ? playOnlyGuide(playOnly, isPlaying) : guide
+    ).find((row) => row.mode === "play")?.label;
     return (
         <Popover.Root open={open && hasMenu} onOpenChange={setOpen}>
             <Popover.Anchor asChild>
@@ -198,8 +199,10 @@ function TouchPlayButton({
                     aria-haspopup={hasMenu ? "menu" : undefined}
                     aria-expanded={hasMenu ? open : undefined}
                     disabled={!canPlay}
-                    data-own-long-press
-                    {...longPress}
+                    // Only with a menu to open: a long press with nothing to show (tempo mode,
+                    // Preview) would otherwise eat the tap that follows it
+                    data-own-long-press={hasMenu || undefined}
+                    {...(hasMenu ? longPress : {})}
                     onClick={() => runAction("playPause")}
                     className={clsx(
                         ROW_BUTTON_CLASS,
@@ -292,10 +295,7 @@ function MoreCell({
     return (
         <div className="flex min-h-56 min-w-0 flex-col items-center justify-center gap-4">
             {children}
-            <span
-                aria-hidden
-                className="text-sub leading-none whitespace-nowrap"
-            >
+            <span aria-hidden className="text-sub text-center leading-tight">
                 {caption}
             </span>
         </div>
@@ -349,7 +349,9 @@ function TouchTransportMore({
                     onOpenAutoFocus={(event) => event.preventDefault()}
                     className={clsx(
                         POPOVER_CLASS,
-                        "z-[100] flex w-[min(352px,calc(100vw-16px))] flex-col gap-8",
+                        // Scrolls on a short screen (a phone-sized window, a tablet with its
+                        // keyboard up) rather than running off it
+                        "z-[100] flex max-h-[var(--radix-popover-content-available-height)] w-[min(352px,calc(100vw-16px))] flex-col gap-8 overflow-y-auto overscroll-contain",
                     )}
                 >
                     <MoreGroup label={t("timeline.touchTransport.goTo")}>
@@ -445,6 +447,16 @@ function TouchTransportMore({
                                         weight={tempoMode ? "bold" : "regular"}
                                     />
                                 </ActionButton>
+                            )}
+                            {/* Expert's Compact (UI-12), as the desktop row's view controls have it */}
+                            {editing && !basic && (
+                                <MoreCell
+                                    caption={t(
+                                        "timeline.touchTransport.compact",
+                                    )}
+                                >
+                                    <TimelineCompactButton />
+                                </MoreCell>
                             )}
                         </MoreGroup>
                     )}
