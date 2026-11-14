@@ -17,6 +17,7 @@ import {
 } from "@phosphor-icons/react";
 import ActionButton from "@/shortcuts/ActionButton";
 import Shortcut from "@/components/ui/Shortcut";
+import { Tip } from "@/components/ui/Tip";
 import {
     MENU_CONTENT_CLASS,
     MENU_ITEM_CLASS,
@@ -207,14 +208,18 @@ export function LinesTab({ fp }: { fp: FieldProperties }) {
                             {t("fieldEditMode.panel.delete")}
                         </ActionButton>
                         <DropdownMenu.Root>
-                            <DropdownMenu.Trigger
-                                className={`${getButtonClassName({ variant: "ghost", size: "compact", content: "icon" })} ml-auto`}
-                                aria-label={t("fieldEditMode.lines.more")}
-                                title={t("fieldEditMode.lines.more")}
-                                data-testid="field-edit-more"
+                            <Tip
+                                label={t("fieldEditMode.lines.more")}
+                                disabled={isTouch}
                             >
-                                <DotsThreeIcon size={20} />
-                            </DropdownMenu.Trigger>
+                                <DropdownMenu.Trigger
+                                    className={`${getButtonClassName({ variant: "ghost", size: "compact", content: "icon" })} ml-auto`}
+                                    aria-label={t("fieldEditMode.lines.more")}
+                                    data-testid="field-edit-more"
+                                >
+                                    <DotsThreeIcon size={20} />
+                                </DropdownMenu.Trigger>
+                            </Tip>
                             <DropdownMenu.Portal>
                                 <DropdownMenu.Content
                                     align="end"

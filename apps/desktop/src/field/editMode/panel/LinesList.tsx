@@ -8,6 +8,7 @@ import {
     EyeSlashIcon,
     PlusIcon,
 } from "@phosphor-icons/react";
+import { Tip } from "@/components/ui/Tip";
 import { useIsTouchMode } from "@/stores/InputModeStore";
 import { fieldEditMode, useFieldEditModeStore } from "../fieldEditModeStore";
 import { lineKey, linesOn, sameLine, toRef, type FieldLineRef } from "../lines";
@@ -293,27 +294,34 @@ export function LinesList({
                         </div>
                         {next && editing && (
                             <div className="group/gap relative h-4">
-                                <button
-                                    type="button"
-                                    data-testid="field-lines-insert"
-                                    aria-label={t("fieldEditMode.list.insert", {
+                                <Tip
+                                    label={t("fieldEditMode.list.insert", {
                                         a: row.lead.terseName,
                                         b: next.lead.terseName,
                                     })}
-                                    title={t("fieldEditMode.list.insert", {
-                                        a: row.lead.terseName,
-                                        b: next.lead.terseName,
-                                    })}
-                                    className={clsx(
-                                        "border-stroke bg-bg-1 text-text-subtitle hover:text-accent hover:border-accent focus-visible:border-accent absolute top-1/2 left-4 z-10 flex size-18 -translate-y-1/2 items-center justify-center rounded-full border duration-150 ease-out focus-visible:opacity-100",
-                                        isTouch
-                                            ? "touch:size-28 opacity-100"
-                                            : "opacity-0 group-hover/gap:opacity-100",
-                                    )}
-                                    onClick={() => insert(row, next)}
+                                    disabled={isTouch}
                                 >
-                                    <PlusIcon size={12} weight="bold" />
-                                </button>
+                                    <button
+                                        type="button"
+                                        data-testid="field-lines-insert"
+                                        aria-label={t(
+                                            "fieldEditMode.list.insert",
+                                            {
+                                                a: row.lead.terseName,
+                                                b: next.lead.terseName,
+                                            },
+                                        )}
+                                        className={clsx(
+                                            "border-stroke bg-bg-1 text-text-subtitle hover:text-accent hover:border-accent focus-visible:border-accent absolute top-1/2 left-4 z-10 flex size-18 -translate-y-1/2 items-center justify-center rounded-full border duration-150 ease-out focus-visible:opacity-100",
+                                            isTouch
+                                                ? "touch:size-28 opacity-100"
+                                                : "opacity-0 group-hover/gap:opacity-100",
+                                        )}
+                                        onClick={() => insert(row, next)}
+                                    >
+                                        <PlusIcon size={12} weight="bold" />
+                                    </button>
+                                </Tip>
                             </div>
                         )}
                     </Fragment>
@@ -334,24 +342,26 @@ function RowToggle({
     onClick: () => void;
     icon: React.ReactNode;
 }) {
+    const isTouch = useIsTouchMode();
     return (
-        <button
-            type="button"
-            aria-label={label}
-            aria-pressed={on}
-            title={label}
-            className={clsx(
-                "rounded-4 touch:size-44 enabled:hover:bg-fg-2 hover:text-accent flex size-24 items-center justify-center duration-150 ease-out",
-                on ? "text-text" : "text-text-subtitle",
-            )}
-            onClick={(e) => {
-                e.stopPropagation();
-                onClick();
-            }}
-            onDoubleClick={(e) => e.stopPropagation()}
-        >
-            {icon}
-        </button>
+        <Tip label={label} disabled={isTouch}>
+            <button
+                type="button"
+                aria-label={label}
+                aria-pressed={on}
+                className={clsx(
+                    "rounded-4 touch:size-44 enabled:hover:bg-fg-2 hover:text-accent flex size-24 items-center justify-center duration-150 ease-out",
+                    on ? "text-text" : "text-text-subtitle",
+                )}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onClick();
+                }}
+                onDoubleClick={(e) => e.stopPropagation()}
+            >
+                {icon}
+            </button>
+        </Tip>
     );
 }
 

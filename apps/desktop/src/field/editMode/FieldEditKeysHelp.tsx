@@ -5,6 +5,8 @@ import { getButtonClassName } from "@openmarch/ui";
 import { KeyboardIcon } from "@phosphor-icons/react";
 import { POPOVER_CLASS } from "@/components/ui/popupClasses";
 import Shortcut from "@/components/ui/Shortcut";
+import { Tip } from "@/components/ui/Tip";
+import { useIsTouchMode } from "@/stores/InputModeStore";
 import type { ActionId } from "@/shortcuts/definitions";
 import { getActionLabel } from "@/shortcuts/labels";
 
@@ -33,21 +35,23 @@ const KEYS: readonly ActionId[] = [
 export function FieldEditKeysHelp() {
     const { t } = useTranslate();
     const [open, setOpen] = useState(false);
+    const isTouch = useIsTouchMode();
     const translate = (key: string, params?: Record<string, string | number>) =>
         t(key, params as never);
     return (
         <Popover.Root open={open} onOpenChange={setOpen}>
-            <Popover.Trigger asChild>
-                <button
-                    type="button"
-                    data-testid="field-edit-keys"
-                    aria-label={t("fieldEditMode.help.button")}
-                    title={t("fieldEditMode.help.button")}
-                    className={`${getButtonClassName({ variant: "ghost", size: "compact", content: "icon" })} text-text-subtitle`}
-                >
-                    <KeyboardIcon size={16} />
-                </button>
-            </Popover.Trigger>
+            <Tip label={t("fieldEditMode.help.button")} disabled={isTouch}>
+                <Popover.Trigger asChild>
+                    <button
+                        type="button"
+                        data-testid="field-edit-keys"
+                        aria-label={t("fieldEditMode.help.button")}
+                        className={`${getButtonClassName({ variant: "ghost", size: "compact", content: "icon" })} text-text-subtitle`}
+                    >
+                        <KeyboardIcon size={16} />
+                    </button>
+                </Popover.Trigger>
+            </Tip>
             <Popover.Portal>
                 <Popover.Content
                     side="bottom"

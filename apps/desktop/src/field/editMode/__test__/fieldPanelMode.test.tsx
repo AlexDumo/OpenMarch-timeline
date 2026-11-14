@@ -270,6 +270,23 @@ describe("the Lines tab", () => {
         });
     });
 
+    it("gives a row's eye and target the app's tooltip, not a browser title", async () => {
+        act(() => fieldEditMode.enter({ lines: true }));
+        const view = render(
+            <Providers>
+                <LinesTab fp={college} />
+            </Providers>,
+        );
+        const row = view.container.querySelector("[data-field-line-row]")!;
+        const [eye, target] = row.querySelectorAll("button");
+        for (const button of [eye!, target!])
+            expect(button.hasAttribute("title")).toBe(false);
+        act(() => eye!.focus());
+        expect((await view.findByRole("tooltip")).textContent).toContain(
+            eye!.getAttribute("aria-label")!,
+        );
+    });
+
     it("lists the front-to-back lines back to front, top to bottom as the field is drawn", () => {
         const steps = lineRows(college, "y", true).map(
             (r) => r.lead.stepsFromCenterFront,
