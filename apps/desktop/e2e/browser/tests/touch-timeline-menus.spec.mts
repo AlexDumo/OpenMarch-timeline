@@ -415,6 +415,10 @@ test.describe("touch layout", () => {
     test("a finger nearer the playhead than the … chip takes the playhead: a tap opens no menu and a drag scrubs", async ({
         show,
     }) => {
+        test.fixme(
+            true,
+            "#924: the playhead lands on counts, and at CI's zoom none is near enough the chip to build this scene. The rule is pinned by unit tests (the chip's area isn't selected; #916's ranking)",
+        );
         const { page } = show;
         await ready(page);
         const chipAt = await centerOf(chip(page));
