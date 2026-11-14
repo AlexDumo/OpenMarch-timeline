@@ -200,8 +200,9 @@ test.describe("touch layout", () => {
         const at = await centerOf(chip(page));
         expect(at.x).toBeGreaterThan(box.x);
         expect(at.x).toBeLessThan(box.x + box.width);
-        // A finger 14 px beside the 18 px chip still takes it (its 44 px area)
-        await tap(page, { x: at.x - 9 - 14, y: at.y });
+        // A finger 10 px beside the 18 px chip still takes it (its 44 px area reaches 22 px
+        // either side of the chip's middle)
+        await tap(page, { x: at.x - 9 - 10, y: at.y });
         await expect(rangeMenu(page)).toBeVisible();
         const entries = rangeMenu(page).getByRole("menuitem");
         await expect(entries.first()).toHaveText("Edit move");
