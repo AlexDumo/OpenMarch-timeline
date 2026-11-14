@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# om-claim: mark who is working on an OpenMarch fork issue, on the "OpenMarch fork" project board.
+# cspell:words esac
+# om-claim: mark who is working on an OpenMarch fork issue, on the fork's project board (project 5).
 #
 #   om-claim <issue> [--branch <name>] [--user <login>] [--status <Todo|Ready|In progress|In review|Done>]
 #       Assign --user (default: you) if they can be assigned, add the issue to the project if
