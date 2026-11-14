@@ -8,16 +8,25 @@ const BUTTON_CLASS =
 /**
  * Zoom out and Zoom in over the timeline in the touch layout (tablet 3.2, #885), for when a pinch
  * is awkward: one hand on the tablet, or a precise step. They run the `timelineZoomOut` and
- * `timelineZoomIn` actions, so each greys out at its zoom limit. They float at the timeline's
- * bottom right, where a right thumb reaches; the compact touch transport (3.5, #888) may take
- * them in later, so they stand alone and only need `className` to move.
+ * `timelineZoomIn` actions, so each greys out at its zoom limit. With the compact touch transport
+ * (3.5, #888) they sit in its row, beside its "…" (`inline`); without a transport they float at
+ * the timeline's bottom right, where a right thumb reaches (`className` places them).
  */
-export function TimelineTouchZoom({ className }: { className?: string }) {
+export function TimelineTouchZoom({
+    className,
+    inline = false,
+}: {
+    className?: string;
+    /** In a row (the touch transport's), rather than floating over the timeline */
+    inline?: boolean;
+}) {
     return (
         <div
             data-testid="timeline-touch-zoom"
             className={clsx(
-                "border-stroke bg-modal shadow-modal rounded-6 pointer-events-auto absolute z-[70] flex items-center gap-2 border p-2",
+                inline
+                    ? "flex shrink-0 items-center gap-2"
+                    : "border-stroke bg-modal shadow-modal rounded-6 pointer-events-auto absolute z-[70] flex items-center gap-2 border p-2",
                 className,
             )}
         >
