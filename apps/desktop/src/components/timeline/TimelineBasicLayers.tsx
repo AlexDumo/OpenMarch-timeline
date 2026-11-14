@@ -126,6 +126,8 @@ export const TimelineBasicPoints = memo(function TimelineBasicPoints({
                             type="button"
                             data-testid="basic-point-tick"
                             data-timeline-interactive="true"
+                            // A finger's long press opens its menu (tablet 3.4), not the hint
+                            data-own-long-press={onRemove ? "" : undefined}
                             aria-label={t("timeline.basic.point.label", {
                                 count: point.count,
                                 page: point.page,

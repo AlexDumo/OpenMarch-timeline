@@ -2342,6 +2342,7 @@
                 "subsetToggle": "Subset"
             },
             "label": "Page {pageName}",
+            "optionsLabel": "Page {pageName} options",
             "homeTooltip": "Home: the start of the show (page {page}'s set)"
         },
         "rangeMenu": {
