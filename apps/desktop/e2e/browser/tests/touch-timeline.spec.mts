@@ -21,8 +21,7 @@ import { emptyField, goToPage, pageBox } from "../timeline.mjs";
 // timeline on and off; + Add N-Count Page takes a finger; a two-finger tap
 // undoes one edit, and quick Undo presses are all kept. Cases already covered
 // elsewhere (touch-timeline-gestures, -zoom, -hit-areas, touch-transport) aren't
-// repeated. The page's "…" chip and long-press menus are #887's, so those cases
-// wait as test.fixme.
+// repeated. The page's "…" chip and the menus it opens are #887's.
 
 const desktop = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
@@ -303,22 +302,57 @@ test("a finger's tap on the selected page's box opens no menu, and the page stay
     );
 });
 
-// needs #887: the '…' chip on the selected page box
-test.fixme("a finger's tap on the selected page's … chip opens the page menu", async () => {});
+const pageChip = (page: Page) => page.getByTestId("timeline-page-menu-button");
+const rangeMenu = (page: Page) => page.getByTestId("timeline-range-menu");
 
-// needs #887: the '…' chip on the selected page box
-test.fixme("a two-finger pan that lands on the selected page's … chip doesn't open its menu", async ({
+test("a finger's tap on the selected page's … chip opens the page menu", async ({
     show,
 }) => {
     const { page } = show;
-    const chip = page.getByRole("button", { name: /options/i });
-    await twoFingerPan(page, await centerOf(chip), { x: -160, y: 0 });
+    await expect(pageChip(page)).toHaveCount(1);
+    await tapOn(page, pageChip(page));
+    await expect(rangeMenu(page)).toBeVisible();
+    await expect(
+        rangeMenu(page).getByTestId("timeline-range-menu-edit-move"),
+    ).toBeVisible();
+    await expect(
+        rangeMenu(page).getByTestId("timeline-range-menu-delete-flag"),
+    ).toBeVisible();
+    // Still open once the finger is up
+    await page.waitForTimeout(400);
+    await expect(page.locator('[role="menu"]')).toHaveCount(1);
+});
+
+test("a two-finger pan that lands on the selected page's … chip doesn't open its menu", async ({
+    show,
+}) => {
+    const { page } = show;
+    await expect(pageChip(page)).toHaveCount(1);
+    await twoFingerPan(page, await centerOf(pageChip(page)), {
+        x: -160,
+        y: 0,
+    });
     await page.waitForTimeout(400);
     await expect(page.locator('[role="menu"]')).toHaveCount(0);
 });
 
-// needs #887: the page menu opened by touch (its '…' chip or a long press)
-test.fixme("a long press inside the page menu doesn't open a second menu", async () => {});
+test("a long press inside the page menu doesn't open a second menu", async ({
+    show,
+}) => {
+    const { page } = show;
+    await tapOn(page, pageChip(page));
+    await expect(rangeMenu(page)).toBeVisible();
+    await page.waitForTimeout(400);
+    // On the menu's own padding, above its first entry: a long press on an entry would pick it
+    const box = (await rangeMenu(page).boundingBox())!;
+    await touchGesture(page, [[{ x: box.x + box.width / 2, y: box.y + 2 }]], {
+        holdMs: 800,
+    });
+    await page.waitForTimeout(400);
+    await expect(page.locator('[role="menu"]')).toHaveCount(1);
+    await expect(rangeMenu(page)).toBeVisible();
+    await expect(page.getByTestId("long-press-bubble")).toBeHidden();
+});
 
 test("a slow finger tap on the delete toast's Undo puts the page back", async ({
     show,

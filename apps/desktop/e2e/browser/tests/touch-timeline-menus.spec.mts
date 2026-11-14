@@ -411,30 +411,60 @@ test.describe("touch layout", () => {
         await expect(page.getByTestId("timeline-keyframe-menu")).toBeVisible();
         await expect(bubble(page)).toBeHidden();
     });
+
     test("a finger nearer the playhead than the … chip takes the playhead: a tap opens no menu and a drag scrubs", async ({
         show,
     }) => {
         const { page } = show;
         await ready(page);
         const chipAt = await centerOf(chip(page));
-        // Inside the chip's 44 px area, 12 px off its edge
-        const press = { x: chipAt.x - 21, y: chipAt.y };
         const chipLeft = (await chip(page).boundingBox())!.x;
-        // The playhead near there, with a tap on the tracks (it lands on a count)
-        const before = await playheadAt(page);
-        await tap(page, { x: press.x, y: await bareY(page) });
-        await expect.poll(() => playheadAt(page)).not.toBe(before);
-        const line = (await centerOf(playhead(page))).x;
+        /**
+         * A press inside the chip's 44 px area (within 22 px of its middle) that's nearer the
+         * playhead's line than the chip's edge, by a margin, and beside the line rather than on
+         * its 12 px button where possible; null when the line is too far
+         */
+        const pressBeside = (line: number) => {
+            const fits = (x: number) =>
+                chipAt.x - x < 21 &&
+                x < chipLeft &&
+                Math.abs(x - line) + 3 < chipLeft - x;
+            const xs = Array.from(
+                { length: 21 },
+                (_, i) => Math.ceil(chipAt.x - 20) + i,
+            ).filter(fits);
+            return xs.find((x) => Math.abs(x - line) >= 8) ?? xs[0] ?? null;
+        };
+        // Put the playhead just left of the chip with a tap on the tracks; it lands on a count,
+        // so measure where it went, and try again a little further along if that's too far
+        let press: Point | null = null;
+        for (const offset of [24, 30, 18, 36, 12]) {
+            const before = await playheadAt(page);
+            await tap(page, { x: chipAt.x - offset, y: await bareY(page) });
+            await expect
+                .poll(() => playheadAt(page))
+                .not.toBe(before)
+                .catch(() => {});
+            const line = (await centerOf(playhead(page))).x;
+            const x = pressBeside(line);
+            if (x !== null) {
+                press = { x, y: chipAt.y };
+                break;
+            }
+        }
         expect(
-            Math.abs(press.x - line),
-            "the press is nearer the playhead's line than the chip",
-        ).toBeLessThan(chipLeft - press.x);
-        await tap(page, press);
+            press,
+            "a press nearer the playhead than the chip",
+        ).not.toBeNull();
+        const line = (await centerOf(playhead(page))).x;
+        expect(Math.abs(press!.x - line)).toBeLessThan(chipLeft - press!.x);
+        expect(chipAt.x - press!.x).toBeLessThan(22);
+        await tap(page, press!);
         await page.waitForTimeout(300);
         await expect(rangeMenu(page)).toBeHidden();
         const at = await playheadAt(page);
         const f = await finger(page);
-        await f.down(press);
+        await f.down(press!);
         await f.move(-80, 0, 8);
         await f.up();
         await expect.poll(() => playheadAt(page)).not.toBe(at);
