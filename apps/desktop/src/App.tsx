@@ -37,6 +37,7 @@ import { useIsPreviewMode } from "./stores/PreviewModeStore";
 import { PreviewModeHost } from "./components/preview/PreviewMode";
 import WorkspaceViewSwitch from "./components/toolbar/WorkspaceViewSwitch";
 import { useEditorModeStore } from "./stores/EditorModeStore";
+import { useIsFieldEditMode } from "./field/editMode/fieldEditModeStore";
 import ErrorBoundary from "./ErrorBoundary";
 import {
     QueryCache,
@@ -245,6 +246,7 @@ function App() {
     // Tempo mode: the tempo lanes are the only thing in focus; the rest steps back and
     // takes no input until tempo mode is done
     const tempoMode = useTempoModeStore((s) => s.on);
+    const fieldEditing = useIsFieldEditMode();
     const tempoModeClass = clsx(
         "transition-opacity duration-200",
         tempoMode && "pointer-events-none opacity-30 select-none",
@@ -341,23 +343,30 @@ function App() {
                                                             inert={tempoMode}
                                                         >
                                                             {!preview && (
-                                                                <>
+                                                                <div className="flex h-full min-h-0 shrink-0">
                                                                     <Sidebar />
                                                                     <SidebarModal />
-                                                                </>
+                                                                </div>
                                                             )}
                                                             <Suspense>
                                                                 <ThreeField />
                                                             </Suspense>
-                                                            <CanvasZoomControls
-                                                                canvas={
-                                                                    threeZoomControls
-                                                                }
-                                                            />
-                                                            <FieldDisplayBar />
+                                                            {/* The Edit field mode holds the view still, fitted inside its rulers */}
+                                                            {!fieldEditing && (
+                                                                <>
+                                                                    <CanvasZoomControls
+                                                                        canvas={
+                                                                            threeZoomControls
+                                                                        }
+                                                                    />
+                                                                    <FieldDisplayBar />
+                                                                </>
+                                                            )}
                                                         </div>
                                                         <TimelineSplitter>
-                                                            <TimelineContainer />
+                                                            <div className="flex min-h-0 flex-1 flex-col">
+                                                                <TimelineContainer />
+                                                            </div>
                                                         </TimelineSplitter>
                                                     </div>
                                                     {!preview && (
