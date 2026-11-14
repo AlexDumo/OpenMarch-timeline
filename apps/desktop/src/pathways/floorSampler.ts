@@ -17,11 +17,26 @@ const ROWS = 60;
 const brightness = (r: number, g: number, b: number) =>
     (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
 
-/** A floor that's one color everywhere */
-export const solidFloor = (background: Rgb): FloorSampler => {
+/**
+ * A floor that's one color on the field (`width` × `height`, field units) and `outside` beyond it,
+ * where the app's own background shows through the field canvas
+ */
+export const solidFloor = (
+    background: Rgb,
+    field?: { width: number; height: number; outside: number },
+): FloorSampler => {
     const v = brightness(background.r, background.g, background.b);
-    return { brightnessAt: () => v };
+    return {
+        brightnessAt: (x, y) =>
+            field && isOutside(x, y, field) ? field.outside : v,
+    };
 };
+
+const isOutside = (
+    x: number,
+    y: number,
+    { width, height }: { width: number; height: number },
+) => x < 0 || y < 0 || x > width || y > height;
 
 /**
  * The floor of a field `width` × `height` (field units): `background`, with `image` drawn at
@@ -34,13 +49,17 @@ export function makeFloorSampler({
     placement,
     width,
     height,
+    outside = 1,
 }: {
     background: Rgb;
     image: CanvasImageSource | null;
     placement: FieldPlanImage | null;
     width: number;
     height: number;
+    /** Brightness beyond the field, where the app's background shows (0 to 1) */
+    outside?: number;
 }): FloorSampler {
+    const field = { width, height, outside };
     if (
         !image ||
         !placement ||
@@ -48,11 +67,11 @@ export function makeFloorSampler({
         width <= 0 ||
         height <= 0
     )
-        return solidFloor(background);
+        return solidFloor(background, field);
     try {
         const canvas = new OffscreenCanvas(COLUMNS, ROWS);
         const ctx = canvas.getContext("2d", { willReadFrequently: true });
-        if (!ctx) return solidFloor(background);
+        if (!ctx) return solidFloor(background, field);
         ctx.fillStyle = `rgb(${background.r},${background.g},${background.b})`;
         ctx.fillRect(0, 0, COLUMNS, ROWS);
         ctx.globalAlpha = placement.opacity;
@@ -75,6 +94,7 @@ export function makeFloorSampler({
             );
         return {
             brightnessAt: (x, y) => {
+                if (isOutside(x, y, field)) return outside;
                 const c = Math.min(
                     COLUMNS - 1,
                     Math.max(0, Math.floor(x * sx)),
@@ -84,6 +104,6 @@ export function makeFloorSampler({
             },
         };
     } catch {
-        return solidFloor(background);
+        return solidFloor(background, field);
     }
 }

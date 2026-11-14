@@ -113,7 +113,6 @@ interface OrderInk {
     readonly thread: string;
     readonly guess: string;
     readonly guessTip: string;
-    readonly dart: string;
 }
 
 function orderInk(dark: boolean): OrderInk {
@@ -122,13 +121,11 @@ function orderInk(dark: boolean): OrderInk {
               thread: "rgba(255,255,255,0.85)",
               guess: "rgba(255,255,255,0.9)",
               guessTip: "rgba(255,255,255,0.15)",
-              dart: LANE_INK,
           }
         : {
               thread: "rgba(28,31,38,0.55)",
               guess: "rgba(28,31,38,0.6)",
               guessTip: "#fff",
-              dart: LANE_INK,
           };
 }
 
@@ -293,6 +290,7 @@ function drawLine({
     dots,
     others = [],
     floorAt,
+    labels = [],
 }: {
     points: readonly XY[];
     marchers: number;
@@ -306,6 +304,8 @@ function drawLine({
     others?: readonly OtherLane[];
     /** How bright the floor is under a point (on screen, pan left out), 0 to 1 */
     floorAt: (p: XY) => number;
+    /** Every drawn marcher's name label on screen: those the lane reaches are cut out of it */
+    labels?: readonly Box[];
 }): DrawnLine {
     const own = points.slice(0, marchers);
     // On the marchers only: Set order's pointer sits on the dot it just picked and crosses earlier
@@ -354,10 +354,11 @@ function drawLine({
                   others,
               })
             : { badges: [], crowded: false };
-    const xs = points.map((p) => p.x);
-    const ys = points.map((p) => p.y);
-    // Room for the tip past the leader, which the dots mask cuts too
-    const pad = halfWidth * 2.2 + 4;
+    // The lane's box: its points and the wash on past the leader, with room for the tip, the
+    // wash's round end and the rim
+    const xs = washPoints.map((p) => p.x);
+    const ys = washPoints.map((p) => p.y);
+    const pad = Math.max(halfWidth * 2.2 + 4, tipHalf * 0.2 + halfWidth + 6);
     return {
         kind,
         guessed,
@@ -369,7 +370,7 @@ function drawLine({
         along: alongFractions(points),
         wash,
         washPoints,
-        labelHoles: busy.filter(
+        labelHoles: labels.filter(
             (b) =>
                 b.maxX >= Math.min(...xs) - pad &&
                 b.minX <= Math.max(...xs) + pad &&
@@ -561,6 +562,20 @@ export default function MarcherOrderOverlay({
                 const box = p ? labelBox(id, p) : null;
                 return box ? [box] : [];
             });
+        // Every drawn marcher's name: those under a lane are cut out of it, not only its own
+        // marchers' (a neighboring rank's names sit on a selected rank's lane)
+        const allLabels: Box[] = [];
+        if (labels) {
+            const { positions, hidden, isItem } = marchers;
+            for (let i = 0; i < marchers.ids.length; i++) {
+                if (hidden[i] || isItem[i]) continue;
+                const box = labelBox(marchers.ids[i]!, {
+                    x: positions[i * 2]!,
+                    y: positions[i * 2 + 1]!,
+                });
+                if (box) allLabels.push(box);
+            }
+        }
         if (sweep) {
             const points = sweep.picked.flatMap((id) => {
                 const p = sweep.at.get(id);
@@ -581,6 +596,7 @@ export default function MarcherOrderOverlay({
                     busy: busyOf(sweep.ids, sweep.at),
                     dots: everyone,
                     floorAt,
+                    labels: allLabels,
                 }),
             ];
         }
@@ -619,9 +635,11 @@ export default function MarcherOrderOverlay({
                     o === l ? [] : [{ points, halfWidth: halfWidths[o]! }],
                 ),
                 floorAt,
+                labels: allLabels,
             }),
         );
     }, [
+        marchers,
         floor,
         sweep,
         lines,
@@ -662,14 +680,19 @@ export default function MarcherOrderOverlay({
         () =>
             sweep
                 ? sweep.picked
-                : lines
-                      .filter((l) => !l.guessed || alt)
-                      .flatMap((l) => l.order),
-        [sweep, lines, alt],
+                : // A guess is only a hollow dashed outline: no halos
+                  lines.filter((l) => !l.guessed).flatMap((l) => l.order),
+        [sweep, lines],
+    );
+    const indexOf = useMemo(
+        () => new Map(marchers.ids.map((id, i) => [id, i])),
+        // `marchers.ids` is replaced whenever who is drawn changes
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [marchers, marchers.ids],
     );
     const halos = useMemo(() => {
         void version;
-        const index = new Map(marchers.ids.map((id, i) => [id, i]));
+        const index = indexOf;
         const width = haloWidth(dotRadius);
         return haloIds.flatMap((id) => {
             const p = (sweep ? sweep.at : linesAt).get(id);
@@ -677,7 +700,13 @@ export default function MarcherOrderOverlay({
             if (!p || i === undefined) return [];
             const look = resolveMarcherLook(marchers.stacks[i] ?? [], theme);
             if (!look.visible) return [];
-            const fill = look.shape === "cross" ? look.crossColor : look.fill;
+            // A hollow dot is seen by its outline, not its (invisible) fill
+            const fill =
+                look.shape === "cross"
+                    ? look.crossColor
+                    : look.fill.a < 0.2
+                      ? look.outline
+                      : look.fill;
             const inner =
                 selectedSet.has(id) || sweep ? reach : dotRadius + 0.5;
             return [
@@ -695,6 +724,7 @@ export default function MarcherOrderOverlay({
         linesAt,
         marchers,
         version,
+        indexOf,
         theme,
         dotRadius,
         reach,
@@ -951,15 +981,17 @@ const LaneGround = memo(function LaneGround({
                 )}
             </defs>
             {!crossed && (
-                <rect
-                    x={line.box.minX - 4}
-                    y={line.box.minY - 4}
-                    width={line.box.maxX - line.box.minX + 8}
-                    height={line.box.maxY - line.box.minY + 8}
-                    fill="rgba(28,31,38,0.22)"
-                    mask={`url(#${id}-rim)`}
-                    data-testid="marcherOrderRim"
-                />
+                <g mask={`url(#${id}-holes)`}>
+                    <rect
+                        x={line.box.minX - 4}
+                        y={line.box.minY - 4}
+                        width={line.box.maxX - line.box.minX + 8}
+                        height={line.box.maxY - line.box.minY + 8}
+                        fill="rgba(28,31,38,0.22)"
+                        mask={`url(#${id}-rim)`}
+                        data-testid="marcherOrderRim"
+                    />
+                </g>
             )}
             {wash > 0 && (
                 <path
@@ -1066,7 +1098,7 @@ const LaneMarks = memo(function LaneMarks({
     line: DrawnLine;
     ink: OrderInk;
 }) {
-    const { kind, guessed, tip, tipOutlined, darts } = line;
+    const { guessed, tip, tipOutlined, darts } = line;
     return (
         <g>
             {tip && (
@@ -1090,7 +1122,7 @@ const LaneMarks = memo(function LaneMarks({
                 <polygon
                     key={i}
                     points={points}
-                    fill={kind === "crossed" ? LANE_INK : ink.dart}
+                    fill={LANE_INK}
                     opacity={0.65}
                 />
             ))}
