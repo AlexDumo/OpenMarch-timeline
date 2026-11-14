@@ -11,8 +11,8 @@ questions:
   - "Click one lane of those four. The whole group of four got picked. Click it again and only that lane is picked; drag it a step further. Did the other three stay put, and did that one keep the shared bend under its own? Is 'click picks the group, click again picks one' the right way in, or would you rather double-click (as Figma does) or use a button?"
   - "Drag a point of the group path, then delete a point the bend sits on. The bend rode along, then moved to the nearest points left with a 're-homed' note. Did it end up where you expected?"
   - "With the group picked, press Reset shared adjustment (or Delete). Only the shared bend went: the one bent on its own kept its own bend. Is that what Reset should do, or should it also offer to clear everyone's own bends?"
-  - "Shift-click a fourth lane that isn't in the group onto the picked group and drag. It's refused: a marcher can share only one bend, so reset theirs first or pick exactly the group. Would you rather it moved that marcher into the group after asking?"
-  - "With the group picked, press Detach. The four get one shared copy of the path, keeping the shared bend, and nobody moves. Then Rejoin them. Is one shared copy what you expected, or one copy each?"
+  - "Shift-click a fourth lane that isn't in the group onto the picked group and drag. That marcher joins the group's bend. Now make a second group and try to pick one lane of each: that's refused (a marcher shares one bend at most). Would you rather it moved a marcher from one group to the other after asking?"
+  - "With the group picked, press Detach. The four get one shared copy of the path, keeping the shared bend, and nobody moves. The copy opens with Rejoin on its bar; press it and they go back onto the group path, without their bends. Is one shared copy what you expected, or one copy each?"
   - "Try picking and bending lanes with a finger or pencil: tap a lane, long-press another for 'Add to picked lanes' (or use the pill's Add), then drag. Did that work for you?"
   - "Anything else about bending several lanes together you'd change?"
 ---
@@ -53,15 +53,21 @@ questions:
 
 **Good to know**
 
-- A spot can share one bend at most. A pick that mixes a group with other spots, or takes
-  only part of a group, is refused with a reason when you drag.
+- A spot can share one bend at most. Picking a whole group plus marchers with no shared bend
+  and dragging adds them to the group; a pick spanning two groups, or only part of one, is
+  refused with a reason when you drag.
+- When only one marcher is left sharing a bend (the others drew their own paths or
+  rejoined), its bend's points still show on its lane, and Reset shared adjustment or Delete
+  removes it.
+- Detach isn't offered when the picked group is every marcher on the path (there's no group
+  to detach from).
 - Older builds can't play a file with a shared bend (they'd walk those spots without it), so
   a file with one is saved as a newer version.
 
 **Not in this step, on purpose**
 
 - **Moving a spot from one group to another** (with a confirm) isn't built: reset its group
-  first, or pick the whole group.
+  first.
 - **Nested groups inside groups**: one level only, the group's bend plus each spot's own.
 - **A "Reset all"** that clears the shared bend and every spot's own bend at once.
 - **Group bends on follow-the-leader trails** are a later step (27).

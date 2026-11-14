@@ -677,21 +677,10 @@ async function copyLinkedAdjust(
 }
 
 /**
- * AP-R12 "Detach the sub-group" (pathways step 26): every spot sharing linked Adjust
- * `groupAdjustId` moves to **one** shared copy of the group path, with one shared copy of the
- * linked Adjust, so the sub-group stays a group (its own path, its shared tweak, each spot's own
- * tweak) and nobody moves (AP-R9: every input is the same). One K6 link records the group path,
- * its `from` and each lane's offset, so Rejoin brings each spot back as AP-R10 says. Refused when
- * a spot is held by two marchers (D-22). The original linked Adjust and, if nobody is left on it,
- * the group path go (AP-H3). One undo step.
+ * AP-R12's Detach of a sub-group: the lanes sharing linked Adjust `groupAdjustId` that someone
+ * holds, and their route, after its refusals (D-22, and every held spot of the route)
  */
-export async function detachSubgroupInTransaction({
-    tx,
-    groupAdjustId,
-}: {
-    tx: DbTransaction;
-    groupAdjustId: number;
-}): Promise<{ routeId: number }> {
+async function heldSharers(tx: DbTransaction, groupAdjustId: number) {
     const L = schema.timeline_lanes;
     const sharing = await tx
         .select()
@@ -739,6 +728,27 @@ export async function detachSubgroupInTransaction({
         if (await holderOf(lane)) held.push(lane);
     if (held.every((l) => lanes.some((m) => m.id === l.id)))
         refuse(routeRefusal.subgroupIsWholePath());
+    return { lanes, routeId };
+}
+
+/**
+ * AP-R12 "Detach the sub-group" (pathways step 26): every spot sharing linked Adjust
+ * `groupAdjustId` moves to **one** shared copy of the group path, with one shared copy of the
+ * linked Adjust, so the sub-group stays a group (its own path, its shared tweak, each spot's own
+ * tweak) and nobody moves (AP-R9: every input is the same). One K6 link records the group path,
+ * its `from` and each lane's offset, so Rejoin brings each spot back as AP-R10 says. Refused when
+ * a spot is held by two marchers (D-22). The original linked Adjust and, if nobody is left on it,
+ * the group path go (AP-H3). One undo step.
+ */
+export async function detachSubgroupInTransaction({
+    tx,
+    groupAdjustId,
+}: {
+    tx: DbTransaction;
+    groupAdjustId: number;
+}): Promise<{ routeId: number }> {
+    const L = schema.timeline_lanes;
+    const { lanes, routeId } = await heldSharers(tx, groupAdjustId);
     const R = schema.timeline_routes;
     const source = await tx.select().from(R).where(eq(R.id, routeId)).get();
     if (!source) refuse(`route ${routeId} does not exist`);
