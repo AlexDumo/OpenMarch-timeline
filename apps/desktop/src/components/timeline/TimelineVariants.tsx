@@ -66,6 +66,9 @@ import {
     type TimelineNavigationStep,
 } from "./timelineGestures";
 import { TimelineAppendAtPlayhead } from "./TimelineAppendAtPlayhead";
+import { TimelineTouchZoom } from "./TimelineTouchZoom";
+import { useActionHandler } from "@/shortcuts/useActionHandler";
+import { useIsTouchMode } from "@/stores/InputModeStore";
 import { useViewportExtent } from "./useViewportExtent";
 import {
     createLiveValue,
@@ -386,6 +389,27 @@ const useTimelineZoom = ({
         viewport.scrollLeft = target.scrollLeft;
     })!;
 
+    const canZoomIn = pixelsPerBeat < TIMELINE_MAX_PX_PER_BEAT - 0.001;
+    const canZoomOut = pixelsPerBeat > minimum + 0.01;
+    // Tablet 3.2 (#885): the touch layout's ± buttons and the palette step the zoom as tempo
+    // mode's transport buttons do. Only a timeline that owns its zoom registers them
+    useActionHandler(
+        "timelineZoomIn",
+        () => step(1),
+        {
+            enabled: canZoomIn,
+        },
+        onPixelsPerBeatChange !== undefined,
+    );
+    useActionHandler(
+        "timelineZoomOut",
+        () => step(-1),
+        {
+            enabled: canZoomOut,
+        },
+        onPixelsPerBeatChange !== undefined,
+    );
+
     return {
         fit,
         fitted: isFitted,
@@ -395,8 +419,8 @@ const useTimelineZoom = ({
         currentPixelsPerBeat: () => latest.current.pixelsPerBeat,
         viewportWidth,
         step,
-        canZoomIn: pixelsPerBeat < TIMELINE_MAX_PX_PER_BEAT - 0.001,
-        canZoomOut: pixelsPerBeat > minimum + 0.01,
+        canZoomIn,
+        canZoomOut,
     };
 };
 
@@ -857,6 +881,11 @@ const TimelineSurface = memo(function TimelineSurface({
         onFittedChange: props.onZoomFittedChange,
         followAnchor,
     });
+    const isTouch = useIsTouchMode();
+    const touchZoom =
+        isTouch &&
+        props.onPixelsPerBeatChange !== undefined &&
+        !(showTransport && props.zoomButtons);
     // UI-23: the view follows the playhead
     const follow = useTimelineFollow({
         viewportRef,
@@ -1102,13 +1131,19 @@ const TimelineSurface = memo(function TimelineSurface({
             className={className}
             pinnedHeight={audioTop}
             overlay={
-                follow.offscreen && (
-                    <TimelinePlayheadChip
-                        side={follow.offscreen}
-                        top={TIMELINE_PAGE_ROW_TOP + 4}
-                        onClick={follow.revealPlayhead}
-                    />
-                )
+                <>
+                    {follow.offscreen && (
+                        <TimelinePlayheadChip
+                            side={follow.offscreen}
+                            top={TIMELINE_PAGE_ROW_TOP + 4}
+                            onClick={follow.revealPlayhead}
+                        />
+                    )}
+                    {/* Tablet 3.2: ± where a thumb reaches, unless the transport has them */}
+                    {touchZoom && (
+                        <TimelineTouchZoom className="right-20 bottom-24" />
+                    )}
+                </>
             }
             transport={
                 showTransport ? (

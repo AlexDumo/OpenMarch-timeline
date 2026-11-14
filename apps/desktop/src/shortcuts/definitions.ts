@@ -926,6 +926,23 @@ const STATIC_ACTIONS = {
         scope: "global",
         defaultBindings: [],
     },
+
+    // Tablet 3.2 (#885): one step of the timeline's zoom, about the playhead when it's in view.
+    // The touch layout's ± buttons and tempo mode's transport buttons; no key (Mod+scroll zooms)
+    timelineZoomIn: {
+        labelKey: "actions.timeline.zoomIn",
+        keywordsKey: "actions.timeline.zoomKeywords",
+        category: "timeline",
+        scope: "global",
+        defaultBindings: [],
+    },
+    timelineZoomOut: {
+        labelKey: "actions.timeline.zoomOut",
+        keywordsKey: "actions.timeline.zoomKeywords",
+        category: "timeline",
+        scope: "global",
+        defaultBindings: [],
+    },
 } satisfies Record<string, ActionDefinition>;
 
 export const ACTIONS = {

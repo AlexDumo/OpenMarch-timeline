@@ -9,6 +9,8 @@ covers:
   - action:playPause
   - action:nextPage
   - action:previousPage
+  - action:timelineZoomIn
+  - action:timelineZoomOut
   - i18n:timeline.readout
   - i18n:timeline.windowLine
   - i18n:timeline.terms
@@ -96,7 +98,8 @@ On a touch screen, where a finger lands decides what it does:
 - On the page boxes, or the measure numbers under them, one finger drags the playhead, as dragging with a mouse does. A tap on a page box selects it.
 - On a move's bar, one finger drags the bar to new counts, as a mouse does.
 - On empty space below the measure numbers, one finger scrolls the timeline sideways, and up and down when there are more rows than fit. A tap there moves the playhead to that count, as a click does.
-- Two fingers scroll the timeline anywhere on it, and pinching with two fingers zooms it in and out around your fingers.
+- Two fingers scroll the timeline anywhere on it, and pinching with two fingers zooms it in and out around your fingers. The counts under your fingers stay under them, and spreading your fingers twice as far apart makes the counts twice as wide. Zooming out stops once the whole show fits.
+- The **−** and **+** buttons at the bottom right of the timeline (<Ui k="actions.timeline.zoomOut" /> and <Ui k="actions.timeline.zoomIn" />) zoom a step at a time, around the playhead when it's in view.
 
 If a second finger touches the timeline while one finger is dragging the playhead or a bar, the drag is cancelled: the playhead or the bar goes back to where it was, and nothing changes. The two fingers then scroll and zoom.
 

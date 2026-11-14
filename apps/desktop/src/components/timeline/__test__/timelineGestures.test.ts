@@ -266,6 +266,163 @@ describe("TimelineGestures", () => {
     });
 });
 
+describe("pinch zoom (tablet 3.2)", () => {
+    /** The beat under client x `x` in the fake view (beat 0 at content x 0) */
+    const beatAt = (
+        view: { scrollLeft: number; pixelsPerBeat: number },
+        x: number,
+    ) => (view.scrollLeft + x) / view.pixelsPerBeat;
+
+    /**
+     * Two fingers either side of `mid`, `from` px apart, spread to `to` px apart in `steps`
+     * moves of both fingers; `midTo` moves the midpoint along the way. Calls `each` after
+     * every move with the midpoint and spread then.
+     */
+    function pinch(
+        send: ReturnType<typeof setup>["send"],
+        {
+            mid,
+            midTo = mid,
+            from,
+            to,
+            steps = 20,
+            vertical = false,
+            each,
+        }: {
+            mid: { x: number; y: number };
+            midTo?: { x: number; y: number };
+            from: number;
+            to: number;
+            steps?: number;
+            vertical?: boolean;
+            each?: (mid: { x: number; y: number }, spread: number) => void;
+        },
+    ) {
+        const fingers = (m: { x: number; y: number }, spread: number) =>
+            vertical
+                ? [
+                      { x: m.x, y: m.y - spread / 2 },
+                      { x: m.x, y: m.y + spread / 2 },
+                  ]
+                : [
+                      { x: m.x - spread / 2, y: m.y },
+                      { x: m.x + spread / 2, y: m.y },
+                  ];
+        const [a, b] = fingers(mid, from);
+        send("pointerdown", 1, a.x, a.y);
+        send("pointerdown", 2, b.x, b.y);
+        let last = { mid, spread: from };
+        for (let i = 1; i <= steps; i++) {
+            const m = {
+                x: mid.x + ((midTo.x - mid.x) * i) / steps,
+                y: mid.y + ((midTo.y - mid.y) * i) / steps,
+            };
+            const spread = from + ((to - from) * i) / steps;
+            const [p, q] = fingers(m, spread);
+            // Each finger moves on its own, as a browser reports them
+            send("pointermove", 1, p.x, p.y);
+            send("pointermove", 2, q.x, q.y);
+            last = { mid: m, spread };
+            each?.(m, spread);
+        }
+        return last;
+    }
+
+    it("follows the spread 1:1 over many moves, without compounding", () => {
+        const { send, view } = setup(() => "body");
+        // The field's pinch once gave ×5 for a ×2.6 spread: each move scaled the zoom again
+        pinch(send, { mid: { x: 300, y: 100 }, from: 100, to: 260 });
+        expect(view.pixelsPerBeat).toBeCloseTo(26, 9);
+        pinch(send, { mid: { x: 300, y: 100 }, from: 200, to: 100 });
+        expect(view.pixelsPerBeat).toBeCloseTo(13, 9);
+    });
+
+    it("scales by the spread at every move, not only at the end", () => {
+        const { send, view } = setup(() => "body");
+        pinch(send, {
+            mid: { x: 300, y: 100 },
+            from: 80,
+            to: 240,
+            each: (_mid, spread) =>
+                expect(view.pixelsPerBeat).toBeCloseTo((10 * spread) / 80, 9),
+        });
+    });
+
+    it("keeps the beat under the fingers' midpoint under it, while it moves", () => {
+        const { send, view } = setup(() => "body");
+        view.scrollLeft = 140;
+        const anchor = beatAt(view, 300);
+        pinch(send, {
+            mid: { x: 300, y: 100 },
+            midTo: { x: 180, y: 120 },
+            from: 120,
+            to: 300,
+            each: (mid) => expect(beatAt(view, mid.x)).toBeCloseTo(anchor, 9),
+        });
+        // And the tracks scrolled with the midpoint's 20 px down
+        expect(view.scrollTop).toBe(-20);
+    });
+
+    it("measures the spread however the fingers lie", () => {
+        const { send, view } = setup(() => "body");
+        pinch(send, {
+            mid: { x: 300, y: 200 },
+            from: 100,
+            to: 150,
+            vertical: true,
+        });
+        expect(view.pixelsPerBeat).toBeCloseTo(15, 9);
+    });
+
+    it("stops at the zoom limits without overshoot, and comes back from them", () => {
+        // Limits 1 to 100 px per beat (setup's clampZoom)
+        const { send, view } = setup(() => "body");
+        const anchor = beatAt(view, 300);
+        const seen: number[] = [];
+        // ×20 spread in, then back to where it started, in one press
+        const [a, b] = [
+            { x: 250, y: 100 },
+            { x: 350, y: 100 },
+        ];
+        send("pointerdown", 1, a.x, a.y);
+        send("pointerdown", 2, b.x, b.y);
+        for (const spread of [200, 600, 1000, 2000, 1000, 400, 100]) {
+            send("pointermove", 1, 300 - spread / 2, 100);
+            send("pointermove", 2, 300 + spread / 2, 100);
+            seen.push(view.pixelsPerBeat);
+            expect(beatAt(view, 300)).toBeCloseTo(anchor, 9);
+        }
+        expect(Math.max(...seen)).toBe(100);
+        expect(seen).toEqual([20, 60, 100, 100, 100, 40, 10]);
+        send("pointerup", 1, 300 - 50, 100);
+        send("pointerup", 2, 300 + 50, 100);
+
+        // Out past the lower limit: stops at 1, never under it
+        pinch(send, {
+            mid: { x: 300, y: 100 },
+            from: 400,
+            to: 10,
+            each: () => expect(view.pixelsPerBeat).toBeGreaterThanOrEqual(1),
+        });
+        expect(view.pixelsPerBeat).toBe(1);
+    });
+
+    it("keeps the zoom when a finger lifts mid-pinch, and goes on from there", () => {
+        const { send, view } = setup(() => "body");
+        send("pointerdown", 1, 200, 100);
+        send("pointerdown", 2, 300, 100);
+        send("pointermove", 2, 400, 100);
+        expect(view.pixelsPerBeat).toBe(20);
+        // A third finger lands and the second lifts: no jump
+        send("pointerdown", 3, 500, 100);
+        send("pointerup", 2, 400, 100);
+        expect(view.pixelsPerBeat).toBe(20);
+        // Fingers 1 and 3 (300 apart) spread to 600: twice again
+        send("pointermove", 3, 800, 100);
+        expect(view.pixelsPerBeat).toBeCloseTo(40, 9);
+    });
+});
+
 describe("a finger the adapter never hears lift", () => {
     it("holds the gesture open until it's dropped, then lets the next press through", () => {
         const { gestures, send, env } = setup(() => "control");

@@ -157,7 +157,10 @@
             "toggleEditorModeToBasic": "Switch to Basic (Expert is on)",
             "toggleEditorModeToExpert": "Switch to Expert (Basic is on)",
             "splitSelectedIntoNewMove": "Split selected marchers into a new move",
-            "mergeMoveIntoPage": "Merge this move into its page"
+            "mergeMoveIntoPage": "Merge this move into its page",
+            "zoomIn": "Zoom the timeline in",
+            "zoomOut": "Zoom the timeline out",
+            "zoomKeywords": "zoom magnify timeline wider narrower closer farther scale plus minus"
         },
         "ui": {
             "openFieldMenu": "Open the field menu",
