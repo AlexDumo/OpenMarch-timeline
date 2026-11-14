@@ -1,6 +1,7 @@
 import type { FieldProperties } from "@openmarch/core";
 import {
     autoCheckpointNames,
+    type CheckpointNamer,
     type FieldAxis,
     type FieldEditRequest,
 } from "@/field/edits";
@@ -90,25 +91,6 @@ export function addLineEdit(
     };
 }
 
-/** Add a line halfway between two neighbors (the list's + in a gap) */
-export function insertBetweenEdit(
-    axis: FieldAxis,
-    between: readonly [number, number],
-    mirror: boolean,
-): FieldEditRequest {
-    return {
-        edit: "addCheckpoint",
-        args: {
-            axis,
-            between: [
-                { axis, id: between[0] },
-                { axis, id: between[1] },
-            ],
-            ...(axis === "x" && mirror ? { mirror: true } : {}),
-        },
-    };
-}
-
 /**
  * Give lines back the names their position gives them ("47.5 yard line", "47.5"), and the yard
  * number when the position has one. Each line (and with mirror its twin) gets its own names.
@@ -117,6 +99,8 @@ export function resetNamesEdits(
     fp: FieldProperties,
     lines: readonly FieldLineRef[],
     mirror: boolean,
+    /** The words, in the app's language (`createCheckpointNamer`); English without one */
+    namer?: CheckpointNamer,
 ): FieldEditRequest[] {
     return selectionWithTwins(fp, lines, mirror).flatMap((ref) => {
         const line = findLine(fp, ref);
@@ -125,6 +109,7 @@ export function resetNamesEdits(
             fp,
             line.axis,
             line.stepsFromCenterFront,
+            namer,
         );
         if (
             line.name === auto.name &&

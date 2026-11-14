@@ -285,6 +285,21 @@ describe("fieldEditFit (#824)", () => {
         expect(top - 22).toBeCloseTo(600 - bottom);
     });
 
+    it("leaves room past the edges for the labels outside the field", () => {
+        const room = { x: 64, y: 32 };
+        const fit = fieldEditFit(1000, 600, field, 22, room);
+        expect(fit.zoom).toBeLessThan(fieldEditFit(1000, 600, field, 22).zoom);
+        // The labels' reach fits inside the rulers and the pane
+        expect(fit.panX - room.x * fit.zoom).toBeGreaterThanOrEqual(22);
+        expect(fit.panY - room.y * fit.zoom).toBeGreaterThanOrEqual(22);
+        expect(
+            fit.panX + (field.width + room.x) * fit.zoom,
+        ).toBeLessThanOrEqual(1000);
+        expect(
+            fit.panY + (field.height + room.y) * fit.zoom,
+        ).toBeLessThanOrEqual(600);
+    });
+
     it("makes room for the touch layout's thicker rulers", () => {
         expect(fieldEditFit(1000, 600, field, 44).zoom).toBeLessThan(
             fieldEditFit(1000, 600, field, 22).zoom,

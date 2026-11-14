@@ -14,6 +14,7 @@ import type {
     FieldEditResult,
 } from "@/field/edits";
 import { fieldEditIssueMessage } from "@/field/edits/messages";
+import { trackFieldEdit } from "./fieldEditSession";
 
 /**
  * Warnings worth a toast: what the edit did that you may not have meant (the X lines are no
@@ -43,7 +44,7 @@ export function useApplyFieldEdits(): (
         async (edits) => {
             if (Array.isArray(edits) && edits.length === 0) return null;
             try {
-                const result = await mutateAsync(edits);
+                const result = await trackFieldEdit(mutateAsync(edits));
                 const issue = result.diff.errors[0];
                 if (issue) toast.error(fieldEditIssueMessage(issue, t));
                 else

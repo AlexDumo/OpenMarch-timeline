@@ -2,6 +2,7 @@ import { isPreviewMode } from "@/stores/PreviewModeStore";
 import { useInputModeStore } from "@/stores/InputModeStore";
 import { fieldEditMode } from "@/field/editMode/fieldEditModeStore";
 import { rulerPx } from "@/field/editMode/lines";
+import { OUTSIDE_LABEL_ROOM } from "@/field/fieldPlan";
 import {
     centerAtBase,
     clampPan,
@@ -74,7 +75,14 @@ function fittedView(): FieldView | null {
     if (width <= 0 || height <= 0) return null;
     if (viewLocked()) {
         const touch = useInputModeStore.getState().mode === "touch";
-        return fieldEditFit(width, height, field, rulerPx(touch));
+        // The labels outside the field show too (owner: "zoom out so I can see all of the labels")
+        return fieldEditFit(
+            width,
+            height,
+            field,
+            rulerPx(touch),
+            OUTSIDE_LABEL_ROOM,
+        );
     }
     if (isPreviewMode())
         return previewFit(

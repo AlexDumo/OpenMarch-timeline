@@ -31,6 +31,7 @@ import {
     toggleLinesEdit,
 } from "./lineCommands";
 import type { FieldEditResult } from "@/field/edits";
+import { createCheckpointNamer } from "@/field/edits/messages";
 import { focusFieldEditPane } from "./fieldEditPanes";
 import { useFieldImageActions } from "./useFieldImageActions";
 import {
@@ -360,7 +361,12 @@ export function useFieldLineActions() {
         "fieldEditResetNames",
         () => {
             if (!fp) return;
-            const edits = resetNamesEdits(fp, now(), mirrorNow());
+            const edits = resetNamesEdits(
+                fp,
+                now(),
+                mirrorNow(),
+                createCheckpointNamer(t),
+            );
             if (edits.length === 0) {
                 toast.message(t("fieldEditMode.namesAlreadyAutomatic"));
                 return;

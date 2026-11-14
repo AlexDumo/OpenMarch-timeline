@@ -25,13 +25,28 @@ export function endFieldEditSession() {
     started = null;
 }
 
+/** Field edits still being written */
+const inFlight = new Set<Promise<unknown>>();
+
 /**
- * Puts the field back as it was when the panel opened, and forgets it. Resolves with whether
- * anything changed.
+ * Notes a field edit being written until it settles, so X waits for it: clicking X blurs a text
+ * field first, and the save that starts must not land after the field is put back
+ */
+export function trackFieldEdit<T>(write: Promise<T>): Promise<T> {
+    inFlight.add(write);
+    const done = () => inFlight.delete(write);
+    write.then(done, done);
+    return write;
+}
+
+/**
+ * Puts the field back as it was when the panel opened, and forgets it, once the edits still being
+ * written have landed. Resolves with whether anything changed.
  */
 export async function discardFieldEditSession(): Promise<boolean> {
     const pending = started;
     started = null;
+    await Promise.allSettled([...inFlight]);
     const snapshot = pending ? await pending : null;
     if (!snapshot) return false;
     return await restoreFieldSnapshot({ db, snapshot });
