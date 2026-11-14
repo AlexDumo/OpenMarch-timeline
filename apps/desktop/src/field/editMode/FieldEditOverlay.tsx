@@ -467,14 +467,14 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
                             y1={y1}
                             x2={x2}
                             y2={y2}
-                            // A hovered line is faint accent, so it never reads as picked (roast)
+                            // A picked line is thick accent; a hovered one is a little thinner and faint, so it never reads as picked (roast)
                             className={clsx(
                                 lit || hovered
                                     ? "stroke-accent"
                                     : "stroke-text-subtitle",
                                 moving && "opacity-40",
                             )}
-                            strokeWidth={lit ? 2.5 : hovered ? 1.5 : 1}
+                            strokeWidth={lit ? 4 : hovered ? 3 : 1}
                             strokeDasharray={
                                 c.visible ? undefined : lit ? "6 4" : "3 5"
                             }
