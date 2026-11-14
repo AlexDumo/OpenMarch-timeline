@@ -16,6 +16,7 @@ import {
 } from "./areaGestures";
 import {
     boundsOf,
+    frameEdges,
     centerOf,
     handleAt,
     handleCursor,
@@ -112,6 +113,13 @@ export type FieldEditorPorts = {
      * selection, and its handles (#198) sit on it. 0 when omitted.
      */
     selectionBoxPadding?(): number;
+    /**
+     * Ground the selection box also stands clear of, in field units: the order
+     * lane drawn on the selection, with its tip and its marchers' names (pathways
+     * step 4j). The box grows to take it in, a drag from inside it moves the
+     * selection, and its handles sit on its edges. Null or omitted: none.
+     */
+    selectionCovers?(): FieldRect | null;
     /**
      * Draws these marchers at these positions instead of where the show has
      * them (a drag, then a drop waiting to be saved); null draws the show.
@@ -568,6 +576,9 @@ export class FieldEditor {
     private gesture: FieldGesture | null = null;
     private gestureButton = 0;
     private hover: FieldCursor = "default";
+    private hoverHandle: HandleId | null = null;
+    /** The selection box's cover when a rotation started: the box turns with it until the release */
+    private rotateCovers: FieldRect | null = null;
     private lastClick: LastClick | null = null;
     /** The marquee or lasso last started, which the overlay draws while it's the gesture. */
     private area: AreaGesture | null = null;
@@ -737,6 +748,7 @@ export class FieldEditor {
                 return;
             }
             const handle = this.handleAt(pointer.field);
+            this.setHoverHandle(handle);
             this.setHover(
                 handle
                     ? handleCursor(handle)
@@ -910,6 +922,7 @@ export class FieldEditor {
     /** The pointer left the field with no button down. */
     pointerLeave(): void {
         this.mode?.leave?.();
+        this.setHoverHandle(null);
         this.setHover("default");
     }
 
@@ -1039,10 +1052,33 @@ export class FieldEditor {
      * press, turned by the angle drawn. The overlay draws it so until the
      * release, then the box fits the marchers again. Null otherwise.
      */
-    rotationFrame(): { box: FieldRect; angle: number } | null {
+    rotationFrame(): {
+        box: FieldRect;
+        angle: number;
+        covers: FieldRect | null;
+    } | null {
         return this.gesture instanceof RotateGesture
-            ? { box: this.gesture.box, angle: this.gesture.angle() }
+            ? {
+                  box: this.gesture.box,
+                  angle: this.gesture.angle(),
+                  covers: this.rotateCovers,
+              }
             : null;
+    }
+
+    /** What the selection box stands clear of besides its marchers (step 4j), or null. */
+    selectionCovers(): FieldRect | null {
+        return this.ports.selectionCovers?.() ?? null;
+    }
+
+    /**
+     * The selection box handle the pointer is over with no button down, or the
+     * one being dragged (the hover isn't updated during a drag); null with
+     * none. A box standing clear of an order lane draws its middle handles
+     * only while they're pointed at (step 4j).
+     */
+    hoveredHandle(): HandleId | null {
+        return this.hoverHandle;
     }
 
     /** Whether the selection can be scaled and rotated: two or more marchers drawn. */
@@ -1178,6 +1214,7 @@ export class FieldEditor {
             cancel: () => this.endLive(),
         };
         const keys = this.keysFor(press.start);
+        this.rotateCovers = this.selectionCovers();
         return press.handle === "rot"
             ? new RotateGesture(
                   press.start,
@@ -1209,7 +1246,12 @@ export class FieldEditor {
         const starts = this.drawnPositions(this.ports.selection.get());
         const box = boundsOf(starts);
         if (starts.length < 2 || !box) return null;
-        return { box, pad: this.ports.selectionBoxPadding?.() ?? 0, angle: 0 };
+        return {
+            box,
+            pad: this.ports.selectionBoxPadding?.() ?? 0,
+            angle: 0,
+            covers: this.selectionCovers(),
+        };
     }
 
     /** The handle of the selection box at `point`, or null. */
@@ -1449,14 +1491,19 @@ export class FieldEditor {
         if (selection.length < 2) return false;
         const starts = this.drawnPositions(selection);
         if (starts.length < 2) return false;
-        const pad = this.ports.selectionBoxPadding?.() ?? 0;
-        const xs = starts.map((p) => p.x);
-        const ys = starts.map((p) => p.y);
+        const box = boundsOf(starts);
+        if (!box) return false;
+        const { left, right, top, bottom } = frameEdges({
+            box,
+            pad: this.ports.selectionBoxPadding?.() ?? 0,
+            angle: 0,
+            covers: this.selectionCovers(),
+        });
         return (
-            point.x >= Math.min(...xs) - pad &&
-            point.x <= Math.max(...xs) + pad &&
-            point.y >= Math.min(...ys) - pad &&
-            point.y <= Math.max(...ys) + pad
+            point.x >= left &&
+            point.x <= right &&
+            point.y >= top &&
+            point.y <= bottom
         );
     }
 
@@ -1602,6 +1649,12 @@ export class FieldEditor {
         const gesture = this.gesture;
         this.gesture = null;
         gesture.cancel();
+        this.emit();
+    }
+
+    private setHoverHandle(handle: HandleId | null) {
+        if (handle === this.hoverHandle) return;
+        this.hoverHandle = handle;
         this.emit();
     }
 

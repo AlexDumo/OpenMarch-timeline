@@ -46,6 +46,8 @@ import type { FieldTheme } from "@openmarch/core";
 import { useFieldViewStore, type FieldView } from "@/field/three/fieldView";
 import { ordersInForce } from "@/db-functions/rememberedOrder";
 import { DOT_RADIUS } from "@/field/editor/hitTest";
+import { setSelectionCover } from "@/field/editor/selectionCoverStore";
+import type { FieldRect } from "@/field/editor/selectionArea";
 import { dotSizes, ringReach } from "@/field/three/selectionRing";
 import {
     labelBoxAt,
@@ -104,6 +106,8 @@ import { resolveMarcherLook } from "@/entity-components/appearance";
 
 /** The lane's dark ink: the tip, the leader's badge, the darts */
 const LANE_INK = "#1c1f26";
+/** How far the selection box stands clear of the selection's lane and names, in CSS px (step 4j) */
+const SELECTION_CLEARANCE = 5;
 
 /**
  * A guessed order's colors on a light or a dark field (its hollow dashed outline has no ground of
@@ -271,6 +275,8 @@ interface DrawnLine {
     readonly crowded: boolean;
     /** The lane's box, for the closer-zoom note */
     readonly box: Box;
+    /** What the lane covers as drawn: its points as wide as the lane, and the tip */
+    readonly extent: Box;
 }
 
 /**
@@ -359,7 +365,35 @@ function drawLine({
     const xs = washPoints.map((p) => p.x);
     const ys = washPoints.map((p) => p.y);
     const pad = Math.max(halfWidth * 2.2 + 4, tipHalf * 0.2 + halfWidth + 6);
+    // What's drawn, tightly: the lane round its points (the thread is thinner) and the tip's corners
+    const reach = kind === "crossed" ? 2 : halfWidth;
+    const inked = [
+        ...points,
+        ...(tip?.points.split(" ").map((p) => {
+            const [x, y] = p.split(",").map(Number);
+            return { x: x!, y: y! };
+        }) ?? []),
+    ];
+    const extent = {
+        minX: Math.min(
+            ...points.map((p) => p.x - reach),
+            ...inked.map((p) => p.x),
+        ),
+        minY: Math.min(
+            ...points.map((p) => p.y - reach),
+            ...inked.map((p) => p.y),
+        ),
+        maxX: Math.max(
+            ...points.map((p) => p.x + reach),
+            ...inked.map((p) => p.x),
+        ),
+        maxY: Math.max(
+            ...points.map((p) => p.y + reach),
+            ...inked.map((p) => p.y),
+        ),
+    };
     return {
+        extent,
         kind,
         guessed,
         points,
@@ -523,36 +557,40 @@ export default function MarcherOrderOverlay({
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [showing, labels, marchers, version],
     );
+    // Every drawn label's ink on screen, when labels are drawn and big enough to read: numbers
+    // keep clear of them, and the selection box stands clear of the selection's (step 4j)
+    const labelBox = useMemo(
+        () =>
+            (id: number, p: XY): Box | null => {
+                const text = labels?.text.get(id);
+                if (
+                    !labels ||
+                    !text ||
+                    labels.style.form === "off" ||
+                    labelSize * zoom <= labels.fadeFrom
+                )
+                    return null;
+                const box = labelBoxAt(
+                    p.x,
+                    p.y,
+                    labels.atlas.measure(text),
+                    labelSize,
+                    labels.style.beside,
+                    true,
+                );
+                return {
+                    minX: (box.x - box.width / 2) * zoom,
+                    minY: (box.y - box.height / 2) * zoom,
+                    maxX: (box.x + box.width / 2) * zoom,
+                    maxY: (box.y + box.height / 2) * zoom,
+                };
+            },
+        [labels, labelSize, zoom],
+    );
     const selectedSet = useMemo(() => new Set(ids), [ids]);
     const drawn = useMemo((): DrawnLine[] => {
         const onScreen = (p: XY): XY => ({ x: p.x * zoom, y: p.y * zoom });
         const floorAt = (p: XY) => floor.brightnessAt(p.x / zoom, p.y / zoom);
-        // Every drawn label's ink on screen, when labels are drawn and big enough to read: numbers
-        // keep clear of them
-        const labelBox = (id: number, p: XY): Box | null => {
-            const text = labels?.text.get(id);
-            if (
-                !labels ||
-                !text ||
-                labels.style.form === "off" ||
-                labelSize * zoom <= labels.fadeFrom
-            )
-                return null;
-            const box = labelBoxAt(
-                p.x,
-                p.y,
-                labels.atlas.measure(text),
-                labelSize,
-                labels.style.beside,
-                true,
-            );
-            return {
-                minX: (box.x - box.width / 2) * zoom,
-                minY: (box.y - box.height / 2) * zoom,
-                maxX: (box.x + box.width / 2) * zoom,
-                maxY: (box.y + box.height / 2) * zoom,
-            };
-        };
         const busyOf = (
             order: readonly number[],
             at: ReadonlyMap<number, XY>,
@@ -651,9 +689,58 @@ export default function MarcherOrderOverlay({
         alt,
         everyone,
         labels,
-        labelSize,
+        labelBox,
         selectedSet,
     ]);
+    // What the selection's own line covers (its lane, tip and names), for the selection box to stand
+    // clear of (step 4j): in field units, CLEARANCE screen px out. None for a guess (Alt shows it only
+    // for a moment) or while Set order draws its own lane
+    const cover = useMemo((): FieldRect | null => {
+        if (!showing || sweep) return null;
+        const shownLines = lines.filter((line) => !line.guessed || alt);
+        let box: Box | null = null;
+        const add = (b: Box) => {
+            box = box
+                ? {
+                      minX: Math.min(box.minX, b.minX),
+                      minY: Math.min(box.minY, b.minY),
+                      maxX: Math.max(box.maxX, b.maxX),
+                      maxY: Math.max(box.maxY, b.maxY),
+                  }
+                : b;
+        };
+        drawn.forEach((line, l) => {
+            const shown = shownLines[l];
+            if (!shown || shown.guessed) return;
+            if (!shown.order.some((id) => selectedSet.has(id))) return;
+            add(line.extent);
+            for (const id of shown.order) {
+                const p = linesAt.get(id);
+                const label = p && labelBox(id, p);
+                if (label) add(label);
+            }
+        });
+        const b = box as Box | null;
+        if (!b) return null;
+        return {
+            left: (b.minX - SELECTION_CLEARANCE) / zoom,
+            top: (b.minY - SELECTION_CLEARANCE) / zoom,
+            right: (b.maxX + SELECTION_CLEARANCE) / zoom,
+            bottom: (b.maxY + SELECTION_CLEARANCE) / zoom,
+        };
+    }, [
+        showing,
+        sweep,
+        lines,
+        alt,
+        drawn,
+        selectedSet,
+        linesAt,
+        labelBox,
+        zoom,
+    ]);
+    useEffect(() => setSelectionCover(cover), [cover]);
+    useEffect(() => () => setSelectionCover(null), []);
     // The dots the lanes are cut away from: everyone's dot, and a selected marcher's ring too
     const holes = useMemo(() => {
         const selectedAt = [

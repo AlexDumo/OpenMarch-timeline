@@ -107,6 +107,7 @@ import {
 } from "./fieldNavigation";
 import { GlyphAtlas } from "./sdfText";
 import { selectionBoxPadding } from "./selectionRing";
+import { useSelectionCoverStore } from "@/field/editor/selectionCoverStore";
 import { drawnSelectionBox, selectionHandles } from "./selectionFrame";
 import { createThreeFieldTestApi } from "./threeFieldTestApi";
 import FieldLayer from "./layers/FieldLayer";
@@ -453,6 +454,9 @@ function ThreeFieldView() {
                     takePress: () => menuShown.current || takeFieldPress(),
                     selectionBoxPadding: () =>
                         selectionBoxPadding(useFieldViewStore.getState().zoom),
+                    // Step 4j: the box stands clear of the order lane drawn on the selection
+                    selectionCovers: () =>
+                        useSelectionCoverStore.getState().covers,
                     showPositions: (positions) =>
                         marchers.setOverrides(positions),
                     // #196: drops go through the drop-to-timeline path
