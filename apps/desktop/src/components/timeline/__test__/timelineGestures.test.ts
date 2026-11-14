@@ -714,6 +714,29 @@ describe("touch hit areas (tablet 3.3)", () => {
         expect(findTouchHit(viewport, 115, 50)?.owner).toBe(pill);
     });
 
+    it("keeps a press on the add-page pill painted over a page flag grip, though the grip's button holds it (#920)", () => {
+        const { viewport } = mount();
+        // The last page's flag grip: its button is wide, and the press is inside it
+        const grip = target(viewport, 90, 130);
+        // Flipped to the playhead's left, the pill covers the grip; later in the DOM, on top
+        const pill = document.createElement("button");
+        pill.setAttribute("data-timeline-interactive", "true");
+        pill.getBoundingClientRect = () => rectOf(60, 140, 40, 60);
+        const label = document.createElement("span");
+        label.getBoundingClientRect = () => rectOf(80, 120, 45, 55);
+        pill.append(label);
+        viewport.append(pill);
+        expect(findTouchHit(viewport, 110, 50)).toEqual({
+            target: label,
+            owner: pill,
+        });
+        // Off the pill, the grip still takes it
+        expect(findTouchHit(viewport, 110, 30)?.target).toBe(grip.hit);
+        // Painted under the grip instead, the grip's button is on top and takes the press
+        viewport.insertBefore(pill, grip.button);
+        expect(findTouchHit(viewport, 110, 50)?.target).toBe(grip.hit);
+    });
+
     it("sends a finger's press near a target on to it, with its click; a mouse's stays where it landed", () => {
         const { viewport, bare } = mount();
         const { button } = target(viewport, 98, 102);

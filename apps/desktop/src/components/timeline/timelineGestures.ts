@@ -775,25 +775,34 @@ export type TouchPressTarget = { target: Element; owner: Element };
  * `root`, `pickTouchTarget` picks one. What's under the hit areas counts: on a control that keeps
  * its presses (a clip, the add-page pill, any timeline control but the page boxes, which yield),
  * only that control's own targets or a target the press is right on take it, and otherwise the
- * press goes to the control itself, even when a hit area over it was on top. Hit areas only show
- * in the touch layout, so in the mouse layout there are none.
+ * press goes to the control itself, even when a hit area over it was on top. A target painted under
+ * such a control isn't one the press is right on, though its own button holds the press: a mouse
+ * would take the control. Hit areas only show in the touch layout, so in the mouse layout there
+ * are none.
  */
 export function findTouchHit(
     root: Element,
     x: number,
     y: number,
 ): TouchPressTarget | null {
-    const under = root.ownerDocument.elementsFromPoint?.(x, y) ?? [];
-    const candidates: TouchHitCandidate<HTMLElement>[] = [];
+    const under = (root.ownerDocument.elementsFromPoint?.(x, y) ?? []).filter(
+        (element) => root.contains(element),
+    );
     /** The topmost element under the press that isn't a hit area */
-    let beneath: Element | null = null;
+    const beneath =
+        under.find((element) => !element.hasAttribute("data-touch-hit")) ??
+        null;
+    const control = keepingControl(beneath, root);
+    const candidates: TouchHitCandidate<HTMLElement>[] = [];
+    /** Past the control that keeps the press: the hit areas from here on are painted under it */
+    let covered = false;
     for (const element of under) {
-        if (!root.contains(element)) continue;
-        if (!element.hasAttribute("data-touch-hit")) {
-            beneath ??= element;
+        if (element === beneath && control) covered = true;
+        if (
+            !element.hasAttribute("data-touch-hit") ||
+            !(element instanceof HTMLElement)
+        )
             continue;
-        }
-        if (!(element instanceof HTMLElement)) continue;
         const owner = element.parentElement ?? element;
         // Topmost first; the candidates go in paint order
         candidates.unshift({
@@ -802,12 +811,13 @@ export function findTouchHit(
             drawn: drawnOf(element).getBoundingClientRect(),
             selected: element.hasAttribute("data-touch-selected"),
             group: element.dataset.touchGroup,
-            // Right on it: in its own button, where a mouse would take it
-            on: isWithin(owner.getBoundingClientRect(), x, y),
+            // Right on it: in its own button, where a mouse would take it. Not when a control
+            // that keeps its presses is painted over it there (the add-page pill over the last
+            // page's flag grip, #920): a mouse would take that control
+            on: !covered && isWithin(owner.getBoundingClientRect(), x, y),
         });
     }
     if (candidates.length === 0) return null;
-    const control = keepingControl(beneath, root);
     const keep = control
         ? (control.getAttribute("data-touch-keep") ?? KEEP_CONTROL)
         : undefined;
