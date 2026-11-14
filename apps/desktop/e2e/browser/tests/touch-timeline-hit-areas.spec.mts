@@ -603,44 +603,6 @@ test.describe("touch layout", () => {
             .poll(async () => (await pane.boundingBox())!.height - height)
             .toBeGreaterThan(40);
     });
-
-    test("+ Add N-Count Page takes a finger where it sits over the last flag, and is 44 px tall (#920)", async ({
-        show,
-    }) => {
-        const { page } = show;
-        const pageCount = async () =>
-            (
-                await show.query<{ n: number }>(
-                    "SELECT COUNT(*) AS n FROM pages",
-                )
-            )[0]!.n;
-        const before = await pageCount();
-        // The paused playhead a few counts past the last page, from the "…" panel
-        await tap(
-            page,
-            await centerOf(page.getByTestId("timeline-touch-more")),
-        );
-        const panel = page.getByTestId("timeline-touch-more-panel");
-        await expect(panel).toBeVisible();
-        await tap(
-            page,
-            await centerOf(panel.getByTestId("timeline-touch-last")),
-        );
-        for (let i = 0; i < 4; i++)
-            await tap(
-                page,
-                await centerOf(panel.getByTestId("timeline-touch-next-beat")),
-            );
-        await page.keyboard.press("Escape");
-        await expect(panel).toBeHidden();
-        const add = page.getByTestId("timeline-append-at-playhead");
-        await expect(add).toBeVisible();
-        // Near the view's right edge it sits on the playhead's left, over the last page's flag
-        await expect(add).toHaveClass(/\bright-8\b/);
-        expect((await add.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-        await tap(page, await centerOf(add));
-        await expect.poll(pageCount).toBe(before + 1);
-    });
 });
 
 // A hold's end (as `hold-reach-back.spec.mts`): pages flag at beats 9, 17, 25

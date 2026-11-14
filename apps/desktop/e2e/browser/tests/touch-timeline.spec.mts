@@ -469,8 +469,9 @@ test("a finger's tap on + Add N-Count Page past the last page adds the page", as
         .toBe(before.length + 1);
 });
 
-// #920: flipped to the playhead's left, the pill loses a finger tap to the last flag's hit area
-test.fixme("+ Add N-Count Page takes a finger where it sits over the last flag", async ({
+// Flipped to the playhead's left, the pill sits over the last flag, whose hit area
+// is painted under it: the pill keeps the tap (#920)
+test("+ Add N-Count Page takes a finger where it sits over the last flag", async ({
     show,
 }) => {
     const { page } = show;
@@ -483,8 +484,8 @@ test.fixme("+ Add N-Count Page takes a finger where it sits over the last flag",
         .toBe(before.length + 1);
 });
 
-// #920: the pill is 16 px tall in the touch layout, with no 44 px hit area
-test.fixme("+ Add N-Count Page is finger sized in the touch layout", async ({
+// The pill is drawn 16 px tall, in a 44 px-tall button in the touch layout (#920)
+test("+ Add N-Count Page is finger sized in the touch layout", async ({
     show,
 }) => {
     const { page } = show;
