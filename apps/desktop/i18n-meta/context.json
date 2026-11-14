@@ -2971,6 +2971,5 @@
     "fieldEditMode.line.mixed": "Field panel, Line section. Next to a switch when several lines are picked and only some of them have it on.",
     "fieldEditMode.line.add": "Field panel, Lines tab. Button that adds a line to the list showing (side to side or front to back).",
     "fieldEditMode.line.everyOther": "Field panel, Line section. Button with several lines picked: keeps every other one of them picked (to delete every other yard line, for example).",
-    "fieldEditMode.line.nameFromPosition": "Field panel, Line section. Button: gives the picked lines back the names their position gives them, such as '47.5 yard line'.",
     "fieldEditMode.list.reference": "Field panel, list of field lines. Screen-reader name of the small crosshair mark on a row whose line is used as a reference for written coordinates."
 }

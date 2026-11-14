@@ -5,7 +5,8 @@ import clsx from "clsx";
 import { getButtonClassName, SegmentedTextSwitch } from "@openmarch/ui";
 import ActionButton from "@/shortcuts/ActionButton";
 import { useIsTouchMode } from "@/stores/InputModeStore";
-import { mirrorTwin } from "@/field/edits";
+import { autoCheckpointNames, mirrorTwin } from "@/field/edits";
+import { createCheckpointNamer } from "@/field/edits/messages";
 import type { FieldEditRequest } from "@/field/edits";
 import { fieldEditMode, useFieldEditModeStore } from "../fieldEditModeStore";
 import { findLine, lineLabel, toRef } from "../lines";
@@ -37,7 +38,8 @@ function focusField() {
 /**
  * The Lines tab's Line section (#824): the picked lines, and the one place their values are shown
  * and changed. Nothing picked: how to pick. One line (a mirrored pair counts as one): its
- * position, names, yard number, Visible and Use as reference. Many: Visible and Use as reference
+ * position, names (cleared, the ones its position gives it), yard number, Visible and Use as
+ * reference. Many: Visible and Use as reference
  * for them all. Every change applies at once, one undo step each: switches on click, text on
  * Enter or leaving the field (Escape puts the text back), as in the Setup tab.
  */
@@ -100,12 +102,6 @@ export function LineDetail({ fp }: { fp: FieldProperties }) {
                             className={BUTTON}
                         >
                             {t("fieldEditMode.line.everyOther")}
-                        </ActionButton>
-                        <ActionButton
-                            action="fieldEditResetNames"
-                            className={BUTTON}
-                        >
-                            {t("fieldEditMode.line.nameFromPosition")}
                         </ActionButton>
                         <ActionButton
                             action="fieldEditDeleteLines"
@@ -175,6 +171,16 @@ function OneLine({
             args: { ids: [ref], patch, mirror: mirror && isX },
         } satisfies FieldEditRequest);
     const trimmed = (text: string) => ({ value: text.trim() });
+    // A cleared name is the one the line's position gives it ("45 yard line"), in the app's
+    // language: what it would be called had nobody typed one
+    const auto = autoCheckpointNames(
+        fp,
+        line.axis,
+        line.stepsFromCenterFront,
+        createCheckpointNamer(t),
+    );
+    const orAuto = (fallback: string) => (text: string) =>
+        text.trim() ? trimmed(text) : { value: fallback };
 
     return (
         <>
@@ -189,7 +195,8 @@ function OneLine({
                 label={t("fieldEditMode.popover.shortName")}
                 stored={line.terseName}
                 current={line.terseName}
-                parse={(text) => (text.trim() ? trimmed(text) : null)}
+                parse={orAuto(auto.terseName)}
+                placeholder={auto.terseName}
                 onCommit={(shortName) => rename({ shortName })}
                 testId="field-line-short-name"
                 afterEnter={focusField}
@@ -198,7 +205,8 @@ function OneLine({
                 label={t("fieldEditMode.popover.name")}
                 stored={line.name}
                 current={line.name}
-                parse={(text) => (text.trim() ? trimmed(text) : null)}
+                parse={orAuto(auto.name)}
+                placeholder={auto.name}
                 onCommit={(name) => rename({ name })}
                 testId="field-line-name"
                 afterEnter={focusField}
@@ -237,9 +245,6 @@ function OneLine({
                 </Hint>
             )}
             <div className="flex flex-wrap items-center gap-4 pt-4">
-                <ActionButton action="fieldEditResetNames" className={BUTTON}>
-                    {t("fieldEditMode.line.nameFromPosition")}
-                </ActionButton>
                 <ActionButton
                     action="fieldEditDeleteLines"
                     className={clsx(BUTTON, "text-red ml-auto")}

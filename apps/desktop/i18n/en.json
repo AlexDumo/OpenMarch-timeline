@@ -3949,8 +3949,7 @@
             "reference": "Use as reference",
             "mixed": "Mixed",
             "add": "Add line",
-            "everyOther": "Keep every other",
-            "nameFromPosition": "Name from position"
+            "everyOther": "Keep every other"
         }
     }
 }

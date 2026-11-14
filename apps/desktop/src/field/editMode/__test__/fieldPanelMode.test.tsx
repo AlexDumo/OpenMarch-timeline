@@ -395,6 +395,49 @@ describe("the Line section", () => {
         ).toBe("field");
     });
 
+    it("gives a cleared name back the one its position gives it, shown while the box is empty", () => {
+        const renamed = {
+            ...college,
+            xCheckpoints: college.xCheckpoints.map((c) =>
+                c.id === forty.id ? { ...c, name: "Home 40" } : c,
+            ),
+        } as typeof college;
+        act(() => {
+            fieldEditMode.enter({ lines: true });
+            fieldEditMode.select([toRef(forty)]);
+        });
+        const view = render(
+            <Providers>
+                <div data-field-edit-pane="field" tabIndex={-1} />
+                <LineDetail fp={renamed} />
+            </Providers>,
+        );
+        const name = view.getByTestId("field-line-name") as HTMLInputElement;
+        expect(name.placeholder).toBe("40 yard line");
+        name.focus();
+        fireEvent.change(name, { target: { value: "  " } });
+        act(() => {
+            fireEvent.keyDown(name, { key: "Enter" });
+        });
+        expect(apply).toHaveBeenCalledTimes(1);
+        expect(apply.mock.calls[0]![0]).toMatchObject({
+            edit: "updateCheckpoints",
+            args: { patch: { name: "40 yard line" } },
+        });
+    });
+
+    it("saves nothing when a cleared name already is the automatic one", () => {
+        const view = show([forty]);
+        const name = view.getByTestId("field-line-name") as HTMLInputElement;
+        name.focus();
+        fireEvent.change(name, { target: { value: "" } });
+        act(() => {
+            fireEvent.keyDown(name, { key: "Enter" });
+        });
+        expect(apply).not.toHaveBeenCalled();
+        expect(name.value).toBe("40 yard line");
+    });
+
     it("puts the typing back on Escape and saves nothing", () => {
         const view = show([forty]);
         const position = view.getByTestId(
