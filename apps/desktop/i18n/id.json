@@ -2009,9 +2009,6 @@
                 "ringHintKeys": "Tahan <keys></keys> di lapangan untuk membuka cincin bentuk"
             }
         },
-        "transform": {
-            "title": "Transformasi"
-        },
         "validate": {
             "noPosition": "Bentuk memiliki titik tanpa posisi",
             "offField": "{count, plural, other {# pemain akan berada}} di luar lapangan",

@@ -184,10 +184,17 @@
         "width": 1012,
         "height": 1040
     },
-    "marchers-rotate": {
+    "marchers-pivot": {
         "chapter": "marchers",
         "kind": "clip",
         "width": 1240,
+        "height": 960,
+        "seconds": 6.7
+    },
+    "marchers-rotate": {
+        "chapter": "marchers",
+        "kind": "clip",
+        "width": 1120,
         "height": 840,
         "seconds": 4.5
     },

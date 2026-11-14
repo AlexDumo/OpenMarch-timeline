@@ -513,6 +513,7 @@ function ThreeFieldView() {
                         selectionHandles(box, useFieldViewStore.getState().zoom)
                     );
                 },
+                selectionPivot: () => editor.selectionPivot(),
                 modeDrawing: () => editor.modeDrawing(),
                 placedBoxes: drawnPlacedBoxes,
                 items,

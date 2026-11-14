@@ -47,6 +47,7 @@ import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import { TagButtons } from "./marcher/TagEditor";
 import TimelineHoldLine, { TimelineHeldCount } from "./TimelineHoldLine";
 import MovePad from "./marcher/MovePad";
+import MarcherRotationInput from "./marcher/MarcherRotationInput";
 import { sectionDisplayName } from "@/components/marcher/sectionDisplayName";
 import { formatList } from "@/utilities/formatList";
 
@@ -741,6 +742,14 @@ function MarcherEditor() {
 
                                     {/* Alignment, distribution, and transformation buttons */}
                                     <AlignmentButtons />
+
+                                    {/* Turns the selection around its pivot, the crosshair on the field */}
+                                    <div className="flex flex-col gap-8">
+                                        <h5 className="text-h5">
+                                            <T keyName="inspector.marcher.rotateHeading" />
+                                        </h5>
+                                        <MarcherRotationInput />
+                                    </div>
 
                                     <TagButtons
                                         selectedMarcherIds={

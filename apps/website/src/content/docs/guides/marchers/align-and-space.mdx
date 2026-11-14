@@ -8,6 +8,7 @@ covers:
   - apps/desktop/src/shortcuts/handlers/useAlignmentActionHandlers.ts
   - apps/desktop/src/field/editor/groupTransform.ts
   - apps/desktop/src/field/editor/transformGestures.ts
+  - apps/desktop/src/field/editor/selectionPivot.ts
   - apps/desktop/src/field/three/FieldContextMenu.tsx
   - apps/desktop/src/components/toolbar/ClearPageMenuItems.tsx
   - action:alignVertically
@@ -72,14 +73,14 @@ The last two <Ui k="inspector.marcher.alignHeading" /> buttons mirror the select
 
 ## Turn and resize a group
 
-Select two or more marchers. The frame around them has square handles on its corners and sides, and a round one above the top edge.
+Select two or more marchers. The frame around them has square handles on its corners and sides, and a round one above the top edge. A yellow crosshair in the middle is the pivot: the point the group turns around.
 
 <Media
   id="marchers-rotate"
-  alt="A selected block of marchers with a frame and handles around it. The handle above the frame is dragged around, and the block turns about its center."
+  alt="A selected block of marchers with a frame and handles around it, and a yellow crosshair in its middle. The handle above the frame is dragged around, and the block turns about the crosshair at its center."
 />
 
-- Drag the round handle above the frame to turn the group about its center. It turns in 15° steps. Hold <Kbd keys="Shift" gesture="drag" /> to turn in whole degrees, or turn <Ui k="toolbar.alignment.snapToggleCaption" /> off in the <Ui k="inspector.shape.alignmentTab" /> tab to turn freely.
+- Drag the round handle above the frame to turn the group around the pivot. It turns in 15° steps. Hold <Kbd keys="Shift" gesture="drag" /> to turn in whole degrees, or turn <Ui k="toolbar.alignment.snapToggleCaption" /> off in the <Ui k="inspector.shape.alignmentTab" /> tab to turn freely.
 - Drag a corner handle to stretch or shrink the group in both directions. Hold <Kbd keys="Mod" gesture="drag" /> to keep its proportions.
 - Drag a side handle to stretch or shrink it in one direction only. Hold <Kbd keys="Mod" gesture="drag" /> to scale the other direction along with it.
 - Hold <Kbd keys="Alt" gesture="drag" /> while resizing to resize from the group's center instead of the opposite edge.
@@ -87,7 +88,14 @@ Select two or more marchers. The frame around them has square handles on its cor
 
 Only positions change: dots and drill numbers stay upright and the same size. Dragging a handle past the opposite side stops the group at its smallest size instead of flipping it. One marcher on its own has no handles.
 
-To turn the group by an exact angle, use <Ui k="shapes.transform.title" /> in the inspector. Choose the point to turn around in its grid, then type an angle in the <Ui k="inspector.marcher.rotation" plain /> box or drag across it. The group turns on the field as you change the angle, and the turn is saved when you leave the box.
+To turn the group around another point, drag the pivot crosshair there first. It snaps onto any marcher and onto the frame's corners, side middles and center, and otherwise to the half-step grid. Hold <Kbd keys="Shift" gesture="drag" />, or turn <Ui k="toolbar.alignment.snapToggleCaption" /> off, to place it freely. The pivot stays with the group while you move it, and goes back to the center when you select different marchers, when you drag it back onto the center, or when you double-click it.
+
+<Media
+  id="marchers-pivot"
+  alt="The yellow crosshair in the middle of a selected block is dragged onto the marcher at the block's back-left corner and snaps there. Then the round handle above the frame is dragged a quarter turn, and the block turns around that corner marcher."
+/>
+
+To turn the group by an exact angle, type an angle in the <Ui k="inspector.marcher.rotation" plain /> box under <Ui k="inspector.marcher.rotateHeading" /> in the inspector, or drag across it. The group turns around the pivot as you change the angle, and the turn is saved when you leave the box.
 
 ## Swap two marchers
 

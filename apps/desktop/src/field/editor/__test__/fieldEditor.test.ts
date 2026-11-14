@@ -1727,6 +1727,7 @@ describe("FieldEditor scale and rotate handles (#198)", () => {
         expect(editor.rotationFrame()).toEqual({
             box: { left: 100, top: 100, right: 400, bottom: 100 },
             angle: 90,
+            around: { x: 250, y: 100 },
         });
         editor.pointerUp(at(280, 100));
         expect(editor.rotationFrame()).toBeNull();
@@ -1795,6 +1796,128 @@ describe("FieldEditor scale and rotate handles (#198)", () => {
         await Promise.resolve();
         await Promise.resolve();
         expect(state.shown).toBeNull();
+    });
+});
+
+describe("FieldEditor a plain selection's pivot", () => {
+    // Marchers 1 to 4 selected: their box runs from (100, 100) to (400, 100), center (250, 100),
+    // on empty field between marchers 2 and 3
+    const ALL = [1, 2, 3, 4];
+    const CENTER = { x: 250, y: 100 };
+
+    it("sits on the center of the selection's box until it's moved, and needs two marchers", () => {
+        expect(setup({ selected: ALL }).editor.selectionPivot()).toEqual({
+            at: CENTER,
+            own: false,
+        });
+        expect(setup({ selected: [1] }).editor.selectionPivot()).toBeNull();
+    });
+
+    it("drags with its crosshair, snapping onto a marcher, and saves nothing", () => {
+        const { editor, state } = setup({ selected: ALL });
+        editor.pointerDown(at(CENTER.x, CENTER.y));
+        editor.pointerMove(at(200, 104));
+        expect(editor.activeGesture()).toBe("pivot");
+        editor.pointerMove(at(103, 102));
+        expect(editor.selectionPivot()).toEqual({
+            at: { x: 100, y: 100 },
+            own: true,
+        });
+        editor.pointerUp(at(103, 102));
+        expect(editor.activeGesture()).toBeNull();
+        expect(editor.selectionPivot()).toEqual({
+            at: { x: 100, y: 100 },
+            own: true,
+        });
+        expect(state.drops).toEqual([]);
+        expect(state.selected).toEqual(ALL);
+    });
+
+    it("turns the selection around the pivot with the rotate handle", () => {
+        const { editor, state } = setup({ selected: ALL });
+        drag(editor, CENTER, { x: 100, y: 100 });
+        // The knob at (250, 70) is (150, -30) from the pivot; a quarter turn takes it to (30, 150)
+        editor.pointerDown(at(250, 70));
+        editor.pointerMove(at(240, 160));
+        editor.pointerMove(at(130, 250));
+        expect(editor.rotationFrame()?.around).toEqual({ x: 100, y: 100 });
+        editor.pointerUp(at(130, 250));
+        expect(state.drops[0].positions).toEqual([
+            { id: 1, x: 100, y: 100 },
+            { id: 2, x: 100, y: 200 },
+            { id: 3, x: 100, y: 300 },
+            { id: 4, x: 100, y: 400 },
+        ]);
+    });
+
+    it("turns the selection around the pivot when a rotation is typed", () => {
+        const { editor, state } = setup({ selected: ALL });
+        drag(editor, CENTER, { x: 400, y: 100 });
+        editor.rotateSelection(90);
+        editor.endRotation();
+        expect(state.drops[0].positions).toEqual([
+            { id: 1, x: 400, y: -200 },
+            { id: 2, x: 400, y: -100 },
+            { id: 3, x: 400, y: 0 },
+            { id: 4, x: 400, y: 100 },
+        ]);
+    });
+
+    it("leaves the selection be on a click, unless it's on the center over a marcher", () => {
+        const moved = setup({ selected: ALL });
+        drag(moved.editor, CENTER, { x: 100, y: 100 });
+        click(moved.editor, 100, 100);
+        expect(moved.state.selected).toEqual(ALL);
+        expect(moved.editor.selectionPivot()?.own).toBe(true);
+        const empty = setup({ selected: ALL });
+        click(empty.editor, CENTER.x, CENTER.y);
+        expect(empty.state.selected).toEqual(ALL);
+        // Marchers 1 and 3 selected: the center is on marcher 2, which a click selects
+        const over = setup({ selected: [1, 3] });
+        click(over.editor, 200, 100);
+        expect(over.state.selected).toEqual([2]);
+    });
+
+    it("follows the marchers when they all move together, and stays put when they turn", () => {
+        const positions = [100, 100, 200, 100, 300, 100, 400, 100];
+        const { editor } = setup({ selected: ALL, positions });
+        drag(editor, CENTER, { x: 100, y: 100 });
+        expect(editor.selectionPivot()?.at).toEqual({ x: 100, y: 100 });
+        for (let i = 0; i < positions.length; i += 2) {
+            positions[i] += 50;
+            positions[i + 1] += 20;
+        }
+        expect(editor.selectionPivot()?.at).toEqual({ x: 150, y: 120 });
+        // Spread apart: a scale or a turn leaves the pivot where it is
+        positions[6] += 100;
+        expect(editor.selectionPivot()?.at).toEqual({ x: 150, y: 120 });
+    });
+
+    it("goes back to the center when the selection changes, or when dragged onto the center", () => {
+        const { editor, state } = setup({ selected: ALL });
+        drag(editor, CENTER, { x: 100, y: 100 });
+        drag(editor, { x: 100, y: 100 }, { x: 251, y: 101 });
+        expect(editor.selectionPivot()).toEqual({ at: CENTER, own: false });
+        drag(editor, CENTER, { x: 100, y: 100 });
+        state.selected = [1, 2];
+        editor.selectionChanged();
+        state.selected = ALL;
+        expect(editor.selectionPivot()).toEqual({ at: CENTER, own: false });
+    });
+
+    it("goes back to the center on a double-click", () => {
+        const { editor, clock } = setup({ selected: ALL });
+        drag(editor, CENTER, { x: 150, y: 150 });
+        click(editor, 150, 150);
+        clock.now += 100;
+        click(editor, 150, 150);
+        expect(editor.selectionPivot()).toEqual({ at: CENTER, own: false });
+    });
+
+    it("has no crosshair while a mode with its own handles is on", () => {
+        const { editor } = setup({ selected: ALL });
+        editor.setMode(fakeMode({ claims: () => false }).mode);
+        expect(editor.selectionPivot()).toBeNull();
     });
 });
 

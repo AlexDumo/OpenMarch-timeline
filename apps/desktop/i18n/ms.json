@@ -2009,9 +2009,6 @@
                 "ringHintKeys": "Tahan <keys></keys> pada padang untuk lingkaran bentuk"
             }
         },
-        "transform": {
-            "title": "Transformasi"
-        },
         "validate": {
             "noPosition": "Bentuk mempunyai tempat tanpa kedudukan",
             "offField": "{count, plural, other {# pemain akan berdiri}} di luar padang",

@@ -815,6 +815,7 @@
             "removeFromTagCaption": "Remove",
             "alignHeading": "Align",
             "distributeHeading": "Distribute",
+            "rotateHeading": "Rotate",
             "distributeStepsPlaceholder": "Steps",
             "coords": {
                 "x": "X",
@@ -2117,9 +2118,6 @@
                 "kinds": "Shape kinds",
                 "ringHintKeys": "Hold <keys></keys> on the field for the shape ring"
             }
-        },
-        "transform": {
-            "title": "Transform"
         },
         "validate": {
             "noPosition": "The shape has a spot with no position",

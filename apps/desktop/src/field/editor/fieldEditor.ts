@@ -43,6 +43,13 @@ import {
 } from "./moveGesture";
 import type { FieldRect } from "./selectionArea";
 import { selectionAfterClick } from "./selectionRules";
+import {
+    boxPoints,
+    PIVOT_REACH_PX,
+    PivotGesture,
+    snapPivot,
+    uniformShift,
+} from "./selectionPivot";
 import { RotateGesture, ScaleGesture } from "./transformGestures";
 import { isPanButton } from "./view";
 
@@ -244,6 +251,11 @@ export type FieldPress = {
     hit: number | null;
     /** The selection box's handle pressed on (#198), which wins over a marcher under it. */
     handle: HandleId | null;
+    /**
+     * The press is on the selection's pivot crosshair: a drag moves the pivot. A click leaves
+     * the selection be, but on the center pivot over a marcher it's the click on that marcher.
+     */
+    pivot?: boolean;
     /** The second press of a double-click on empty field, or on the marcher `hit`. */
     double: boolean;
     /** The pill's Add was on at the press: the add choice, as Shift is. */
@@ -259,6 +271,8 @@ type LastClick = {
     screen: FieldPoint;
     hit: number | null;
     mode?: boolean;
+    /** It was on the selection's pivot crosshair: a second click there sends it back to the center */
+    pivot?: boolean;
 };
 
 export type FieldCursor =
@@ -483,6 +497,17 @@ type TypedRotation = {
     degrees: number;
 };
 
+/**
+ * A plain selection's pivot once it's out of its box's center (`selectionPivot.ts`): for the
+ * selection `ids`, at `at`. `basis` is where the marchers were drawn when it was last read, so a
+ * move of them all carries it along.
+ */
+type OwnPivot = {
+    ids: readonly number[];
+    at: FieldPoint;
+    basis: readonly MarcherPosition[];
+};
+
 export class FieldEditor {
     private press: FieldPress | null = null;
     /** The button of a drag that became no gesture: its moves and release do nothing. */
@@ -503,6 +528,9 @@ export class FieldEditor {
     /** Where the marchers being dragged are drawn, or null with no drag. */
     private live: readonly MarcherPosition[] | null = null;
     private typed: TypedRotation | null = null;
+    private ownPivot: OwnPivot | null = null;
+    /** Where the pivot is drawn while its crosshair is dragged */
+    private pivotDrag: FieldPoint | null = null;
     /** Counts typed rotations ended, saved or not, so the inspector's input starts over after each. */
     private rotationsEnded = 0;
     /** The mode taking presses first, while one is on. */
@@ -616,12 +644,15 @@ export class FieldEditor {
         }
         // A press on the field saves a rotation typed in the inspector first
         this.endRotation();
-        const handle = this.handleAt(pointer.field);
+        // The pivot wins over a handle and a marcher under it, as a handle does
+        const pivot = this.pivotAt(pointer.field);
+        const handle = pivot ? null : this.handleAt(pointer.field);
         const hit = handle ? null : this.marcherAt(pointer.field);
         this.press = {
             start: pointer,
             hit,
             handle,
+            pivot,
             double: !handle && this.isDoubleClick(pointer, hit),
             add: this.options.onScreen?.add() ?? false,
         };
@@ -652,6 +683,10 @@ export class FieldEditor {
             const modeCursor = this.mode?.cursorAt(pointer) ?? null;
             if (modeCursor) {
                 this.setHover(modeCursor);
+                return;
+            }
+            if (this.pivotAt(pointer.field)) {
+                this.setHover("move");
                 return;
             }
             const handle = this.handleAt(pointer.field);
@@ -750,6 +785,24 @@ export class FieldEditor {
         // A click on a handle does nothing, and is no half of a double-click
         if (press.handle) {
             this.lastClick = null;
+            return;
+        }
+        // A click on a pivot that was moved, or on nothing but the pivot, leaves the selection
+        // be; a second one soon after sends a moved pivot back to the center, as on a shape. On
+        // the center over a marcher, it's the click on that marcher
+        if (press.pivot && (this.ownPivot || press.hit === null)) {
+            const last = this.lastClick;
+            if (last?.pivot && this.isSoonAfter(last, press.start)) {
+                this.lastClick = null;
+                this.resetSelectionPivot();
+                return;
+            }
+            this.lastClick = {
+                time: this.now(),
+                screen: press.start.screen,
+                hit: null,
+                pivot: true,
+            };
             return;
         }
         // A double-click's second click starts no third
@@ -932,10 +985,116 @@ export class FieldEditor {
      * press, turned by the angle drawn. The overlay draws it so until the
      * release, then the box fits the marchers again. Null otherwise.
      */
-    rotationFrame(): { box: FieldRect; angle: number } | null {
+    rotationFrame(): {
+        box: FieldRect;
+        angle: number;
+        around: FieldPoint;
+    } | null {
         return this.gesture instanceof RotateGesture
-            ? { box: this.gesture.box, angle: this.gesture.angle() }
+            ? {
+                  box: this.gesture.box,
+                  angle: this.gesture.angle(),
+                  around: this.gesture.center,
+              }
             : null;
+    }
+
+    /**
+     * The plain selection's pivot, which the field draws as a crosshair that drags (see
+     * `selectionPivot.ts`): `at` where it is, `own` once it's out of the box's center. Null while
+     * the selection can't be turned: fewer than two marchers drawn, one item (its own frame), a
+     * mode with its own handles, the prop tool, or read-only.
+     */
+    selectionPivot(): { at: FieldPoint; own: boolean } | null {
+        if (this.propTool || !this.canTransform()) return null;
+        if (this.modeOwnsSelectionBox() || this.selectedItem()) return null;
+        if (this.pivotDrag) return { at: this.pivotDrag, own: true };
+        const starts = this.drawnPositions(this.ports.selection.get());
+        const box = boundsOf(starts);
+        if (!box) return null;
+        const own = this.readOwnPivot(starts);
+        return own ? { at: own, own: true } : { at: centerOf(box), own: false };
+    }
+
+    /** Puts the pivot back on the selection's center. */
+    resetSelectionPivot(): void {
+        if (!this.ownPivot) return;
+        this.ownPivot = null;
+        this.emit();
+    }
+
+    /**
+     * The pivot set for the selection drawn at `starts`, carried along if they all moved since
+     * it was last read; null when none is set for this selection (it's the center then).
+     */
+    private readOwnPivot(
+        starts: readonly MarcherPosition[],
+    ): FieldPoint | null {
+        const own = this.ownPivot;
+        if (!own) return null;
+        if (!sameIds(own.ids, this.ports.selection.get())) {
+            this.ownPivot = null;
+            return null;
+        }
+        const shift = uniformShift(own.basis, starts);
+        if (shift) own.at = { x: own.at.x + shift.x, y: own.at.y + shift.y };
+        own.basis = starts;
+        return own.at;
+    }
+
+    /** Whether `point` is on the pivot's crosshair. */
+    private pivotAt(point: FieldPoint): boolean {
+        const pivot = this.selectionPivot();
+        if (!pivot) return false;
+        const reach = PIVOT_REACH_PX / (this.ports.zoom() || 1);
+        return Math.hypot(point.x - pivot.at.x, point.y - pivot.at.y) <= reach;
+    }
+
+    /**
+     * Dragging the pivot's crosshair: it snaps to the box's corners, edge middles and center and
+     * to any marcher within reach, else to the grid; fine or the Snap toggle off leaves it where
+     * the pointer is. Set on the center, it's the center again.
+     */
+    private startPivot(press: FieldPress): FieldGesture | null {
+        if (!press.pivot) return null;
+        const ids = this.ports.selection.get();
+        const starts = this.drawnPositions(ids);
+        const box = boundsOf(starts);
+        if (starts.length < 2 || !box) return null;
+        const center = centerOf(box);
+        const zoom = this.ports.zoom() || 1;
+        const { ids: drawn, positions, hidden } = this.ports.marchers();
+        const targets = boxPoints(box);
+        for (let i = 0; i < drawn.length; i++)
+            if (!hidden?.[i])
+                targets.push({ x: positions[i * 2], y: positions[i * 2 + 1] });
+        const grid = (p: FieldPoint) => this.ports.snap?.(p) ?? p;
+        return new PivotGesture(
+            this.keysFor(press.start),
+            (at, roles) =>
+                roles.fine || !(this.options.snap?.() ?? true)
+                    ? at
+                    : snapPivot(at, targets, PIVOT_REACH_PX / zoom, grid),
+            {
+                show: (at) => {
+                    this.pivotDrag = at;
+                    this.emit();
+                },
+                set: (at) => {
+                    this.pivotDrag = null;
+                    const onCenter =
+                        Math.hypot(at.x - center.x, at.y - center.y) < 1e-6;
+                    this.ownPivot = onCenter
+                        ? null
+                        : { ids: [...ids], at, basis: starts };
+                    this.emit();
+                },
+                cancel: () => {
+                    this.pivotDrag = null;
+                    this.emit();
+                },
+            },
+        );
     }
 
     /** Whether the selection can be scaled and rotated: two or more marchers drawn. */
@@ -957,24 +1116,21 @@ export class FieldEditor {
     }
 
     /**
-     * Turns the selection `degrees` clockwise about its box's center (or the
-     * point `around` picks on that box, the Transform section's pivot), from
-     * where it was when the typing started, as the rotate handle does (user
-     * story 54). Drawn until {@link endRotation} saves it. Refused during a
+     * Turns the selection `degrees` clockwise about its pivot (its box's
+     * center unless the pivot was dragged elsewhere), from where it was when
+     * the typing started, as the rotate handle does (user story 54). Drawn until {@link endRotation} saves it. Refused during a
      * drag and while a mode that locks the selection is on. Over a drop still
      * saving it starts from where that drop is drawn, and is dropped if that
      * drop is refused.
      */
-    rotateSelection(
-        degrees: number,
-        around: (box: FieldRect) => FieldPoint = centerOf,
-    ): void {
+    rotateSelection(degrees: number): void {
         if (this.gesture || this.modePress || this.mode?.locksSelection) return;
         if (!this.typed) {
             const starts = this.drawnPositions(this.ports.selection.get());
             const box = boundsOf(starts);
             if (starts.length < 2 || !box) return;
-            this.typed = { starts, center: around(box), degrees: 0 };
+            const center = this.readOwnPivot(starts) ?? centerOf(box);
+            this.typed = { starts, center, degrees: 0 };
         }
         this.typed.degrees = degrees;
         this.showLive(
@@ -1014,6 +1170,14 @@ export class FieldEditor {
 
     /** Drops a typed rotation whose marchers aren't the selection any more. */
     selectionChanged(): void {
+        // A pivot is the selection's: a new one starts on its center
+        if (
+            this.ownPivot &&
+            !sameIds(this.ownPivot.ids, this.ports.selection.get())
+        ) {
+            this.ownPivot = null;
+            this.emit();
+        }
         if (!this.typed) return;
         if (
             !sameIds(
@@ -1049,6 +1213,7 @@ export class FieldEditor {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     protected startDrag(press: FieldPress, pointer: FieldPointer) {
         return (
+            this.startPivot(press) ??
             this.startTransform(press) ??
             this.startMove(press) ??
             (press.hit === null ? this.startArea(press) : null)
@@ -1079,6 +1244,7 @@ export class FieldEditor {
                   box,
                   keys,
                   this.options.snap,
+                  this.readOwnPivot(starts) ?? undefined,
               )
             : new ScaleGesture(
                   press.start,

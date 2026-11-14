@@ -1,4 +1,10 @@
-import { memo, useCallback, useMemo, useSyncExternalStore } from "react";
+import {
+    memo,
+    useCallback,
+    useMemo,
+    useSyncExternalStore,
+    type CSSProperties,
+} from "react";
 import { GlyphText } from "@/shapes/editor/GlyphText";
 import { rgbaToString, type FieldTheme } from "@openmarch/core";
 import type { FieldEditor, FieldModeDrawing } from "@/field/editor/fieldEditor";
@@ -165,6 +171,20 @@ export default function FieldOverlay({
     const area = useSyncExternalStore(subscribeEditor, () =>
         editor.areaShape(),
     );
+    // As a string, as the box is: it moves with the marchers
+    const pivot = useSyncExternalStore(
+        useCallback(
+            (listener: () => void) => {
+                const off = [
+                    marchers.subscribe(listener),
+                    subscribeEditor(listener),
+                ];
+                return () => off.forEach((unsubscribe) => unsubscribe());
+            },
+            [marchers, subscribeEditor],
+        ),
+        () => JSON.stringify(editor.selectionPivot()),
+    );
     const drawn = useSyncExternalStore(subscribeEditor, () =>
         editor.modeDrawing(),
     );
@@ -188,6 +208,7 @@ export default function FieldOverlay({
                 <SelectionBox
                     frame={JSON.parse(box) as DrawnSelectionBox | null}
                 />
+                <SelectionPivot pivot={JSON.parse(pivot)} />
                 {area?.kind === "marquee" && (
                     <Marquee
                         rect={area.rect}
@@ -270,6 +291,70 @@ function SelectionBox({ frame }: { frame: DrawnSelectionBox | null }) {
                 ),
             )}
         </g>
+    );
+}
+
+/**
+ * A pivot's crosshair, at `at` in element px: yellow arms and ring on a dark edge, so it reads on
+ * grass and on white. A shape's once it's out of the center (#350), and a plain selection's.
+ */
+function PivotCrosshair({
+    at: p,
+    style,
+    opacity,
+    testId,
+}: {
+    at: { x: number; y: number };
+    style?: CSSProperties;
+    opacity?: number;
+    testId: string;
+}) {
+    const r = PIVOT_MARK_ARM;
+    const cross = `M ${p.x - r} ${p.y} H ${p.x + r} M ${p.x} ${p.y - r} V ${p.y + r}`;
+    return (
+        <g data-testid={testId} style={style} opacity={opacity}>
+            <path d={cross} stroke="black" strokeWidth={3.5} />
+            <circle
+                cx={p.x}
+                cy={p.y}
+                r={PIVOT_MARK_RING}
+                fill="none"
+                stroke="black"
+                strokeWidth={3.5}
+            />
+            <path d={cross} stroke={PIVOT_COLOR} strokeWidth={1.5} />
+            <circle
+                cx={p.x}
+                cy={p.y}
+                r={PIVOT_MARK_RING}
+                fill="none"
+                stroke={PIVOT_COLOR}
+                strokeWidth={1.5}
+            />
+        </g>
+    );
+}
+
+/** How strong a plain selection's pivot is while it sits on the center, its default */
+const CENTER_PIVOT_OPACITY = 0.6;
+
+/**
+ * A plain selection's pivot (`selectionPivot.ts`): the crosshair the rotate knob and the
+ * inspector's rotation turn the selection around, which drags. Quieter while it's on the center.
+ */
+function SelectionPivot({
+    pivot,
+}: {
+    pivot: { at: { x: number; y: number }; own: boolean } | null;
+}) {
+    const view = useFieldViewStore();
+    if (!pivot) return null;
+    return (
+        <PivotCrosshair
+            at={fieldToElement(view, pivot.at.x, pivot.at.y)}
+            opacity={pivot.own ? 1 : CENTER_PIVOT_OPACITY}
+            testId="fieldSelectionPivot"
+        />
     );
 }
 
@@ -1126,39 +1211,13 @@ function ModeDrawing({
                     />
                 );
             })}
-            {drawing.pivotMark &&
-                (() => {
-                    const p = at(drawing.pivotMark);
-                    const r = PIVOT_MARK_ARM;
-                    const cross = `M ${p.x - r} ${p.y} H ${p.x + r} M ${p.x} ${p.y - r} V ${p.y + r}`;
-                    return (
-                        <g data-testid="fieldShapePivotMark" style={controls}>
-                            {/* A dark edge under the yellow, so it reads on grass and on white */}
-                            <path d={cross} stroke="black" strokeWidth={3.5} />
-                            <circle
-                                cx={p.x}
-                                cy={p.y}
-                                r={PIVOT_MARK_RING}
-                                fill="none"
-                                stroke="black"
-                                strokeWidth={3.5}
-                            />
-                            <path
-                                d={cross}
-                                stroke={PIVOT_COLOR}
-                                strokeWidth={1.5}
-                            />
-                            <circle
-                                cx={p.x}
-                                cy={p.y}
-                                r={PIVOT_MARK_RING}
-                                fill="none"
-                                stroke={PIVOT_COLOR}
-                                strokeWidth={1.5}
-                            />
-                        </g>
-                    );
-                })()}
+            {drawing.pivotMark && (
+                <PivotCrosshair
+                    at={at(drawing.pivotMark)}
+                    style={controls}
+                    testId="fieldShapePivotMark"
+                />
+            )}
             {drawing.pivotPreview &&
                 (() => {
                     // A cell of the editor's pivot menu pointed at (#437): the pivot mark a

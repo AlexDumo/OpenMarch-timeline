@@ -2009,9 +2009,6 @@
                 "ringHintKeys": "กด <keys></keys> ค้างไว้บนสนามเพื่อเปิดวงรูปทรง"
             }
         },
-        "transform": {
-            "title": "การแปลง"
-        },
         "validate": {
             "noPosition": "รูปทรงมีจุดที่ไม่มีตำแหน่ง",
             "offField": "{count, plural, other {ผู้แสดง # คนจะยืน}}นอกสนาม",

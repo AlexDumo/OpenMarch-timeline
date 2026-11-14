@@ -417,6 +417,79 @@ const shots = [
         },
     },
     {
+        id: "marchers-pivot",
+        kind: "clip",
+        // Dragging a selected block's pivot onto its corner marcher, then turning around it
+        async setup({ page, wait }) {
+            await toPage1(page, wait);
+            const all = await marchers(page);
+            const block = named(all, [
+                ...range("U", 1, 4),
+                ...range("B", 1, 8),
+            ]);
+            await shiftSelect(page, block, wait);
+            const b = bounds(block);
+            return {
+                box: boxAround(
+                    {
+                        x: (b.left + b.right) / 2 - 30,
+                        y: (b.top + b.bottom) / 2 - 20,
+                    },
+                    620,
+                    480,
+                ),
+            };
+        },
+        async perform({ page, film, overlay }) {
+            await overlay.enable();
+            const pivot = await page.evaluate(() =>
+                window.fieldTest.selectionPivot(),
+            );
+            const handles = await page.evaluate(() =>
+                window.fieldTest.handles(),
+            );
+            // The marcher nearest the frame's back-left corner
+            const block = named(await marchers(page), [
+                ...range("U", 1, 4),
+                ...range("B", 1, 8),
+            ]);
+            const near = (m) =>
+                Math.hypot(m.x - handles.nw.x, m.y - handles.nw.y);
+            const nearest = block.reduce((a, m) => (near(m) < near(a) ? m : a));
+            const corner = { x: nearest.x, y: nearest.y };
+            const rest = { x: pivot.screen.x + 60, y: pivot.screen.y + 50 };
+            await page.mouse.move(rest.x, rest.y);
+            await film.hold(0.3);
+            await film.moveTo(page, rest, pivot.screen, 0.5);
+            await page.mouse.down();
+            await film.moveTo(page, pivot.screen, corner, 0.9);
+            await page.mouse.up();
+            await film.hold(0.6);
+            // Turn a quarter around it with the round handle
+            const rot = handles.rot;
+            const r = Math.hypot(rot.x - corner.x, rot.y - corner.y);
+            const start = Math.atan2(rot.y - corner.y, rot.x - corner.x);
+            await film.moveTo(page, corner, rot, 0.5);
+            await page.mouse.down();
+            let last = rot;
+            const steps = 36;
+            for (let i = 1; i <= steps; i++) {
+                const a = start + (i / steps) * (Math.PI / 2);
+                const p = {
+                    x: corner.x + r * Math.cos(a),
+                    y: corner.y + r * Math.sin(a),
+                };
+                await page.mouse.move(p.x, p.y);
+                await film.frame();
+                last = p;
+            }
+            await film.hold(0.3);
+            await page.mouse.up();
+            await page.mouse.move(last.x + 40, last.y + 40);
+            await film.hold(1.2);
+        },
+    },
+    {
         id: "marchers-appearance",
         kind: "still",
         // The Appearance panel's Section tab with a style for the Trumpets
