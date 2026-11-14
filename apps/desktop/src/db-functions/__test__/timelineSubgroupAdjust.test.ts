@@ -21,7 +21,7 @@ import { keepFixturesInPageMode } from "@/test/timelineMode";
 import { convertPagesToTimeline } from "@/test/convertPages";
 import { readTimelineTables } from "@/timeline/timelineRows";
 import { performRedo, performUndo, transactionWithHistory } from "../history";
-import { removeRoute } from "../timelineRoutes";
+import { drawRoute, removeRoute } from "../timelineRoutes";
 import {
     detachFromGroupPath,
     detachSubgroup,
@@ -279,12 +279,15 @@ describeDbTests("Sub-group Adjust (step 26)", (it) => {
         expect((await laneRow(db, f.laneOf(m2).id)).adjust).not.toBeNull();
     });
 
-    it("refuses one lane, a pick mixing a sub-group with another spot, and a plain lane plus a sub-group member, writing nothing", async ({
+    it("refuses one lane, a pick spanning two sub-groups and part of a sub-group, writing nothing; a sub-group plus a plain spot grows it", async ({
         db,
         marchersAndPages: _,
     }) => {
         const f = await fixture(db);
-        const fourth = { laneId: f.laneOf(f.ms[3]).id, marcherId: f.ms[3] };
+        const lane = (i: number) => ({
+            laneId: f.laneOf(f.ms[i]!).id,
+            marcherId: f.ms[i]!,
+        });
         const refusal = async (p: Promise<unknown>) => {
             try {
                 await p;
@@ -293,40 +296,26 @@ describeDbTests("Sub-group Adjust (step 26)", (it) => {
             }
             throw new Error("not refused");
         };
+        const at = { x: f.placeP + 100, d: [0, 30] as [number, number] };
         expect(
-            await refusal(
-                adjustSubgroup({
-                    db,
-                    lanes: f.sub.slice(0, 1),
-                    x: f.placeP + 100,
-                    d: [0, 30],
-                }),
-            ),
+            await refusal(adjustSubgroup({ db, lanes: [lane(0)], ...at })),
         ).toMatch(/E-ARGS: Pick two or more/);
-        await adjustSubgroup({
-            db,
-            lanes: f.sub,
-            x: f.placeP + 100,
-            d: [0, 30],
-        });
+        await adjustSubgroup({ db, lanes: [lane(0), lane(1)], ...at });
+        await adjustSubgroup({ db, lanes: [lane(2), lane(3)], ...at });
         const before = await dataOf(db);
+        // one spot of each sub-group
         expect(
             await refusal(
-                adjustSubgroup({
-                    db,
-                    lanes: [...f.sub, fourth],
-                    x: f.placeP + 100,
-                    d: [0, 9],
-                }),
+                adjustSubgroup({ db, lanes: [lane(1), lane(2)], ...at }),
             ),
         ).toMatch(/already shares an adjustment/);
+        // all of one and part of the other
         expect(
             await refusal(
                 adjustSubgroup({
                     db,
-                    lanes: f.sub.slice(0, 2),
-                    x: f.placeP + 100,
-                    d: [0, 9],
+                    lanes: [lane(0), lane(1), lane(2)],
+                    ...at,
                 }),
             ),
         ).toMatch(/already shares an adjustment/);
@@ -621,6 +610,128 @@ describeDbTests("Sub-group Adjust (step 26)", (it) => {
             linked[0]!.id,
         );
         await expectOneUndoStep(db, before);
+    });
+
+    it("review of #908 (S2): Detach again on the shared copy, whose sub-group is every spot on it, is refused, writing nothing", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const f = await fixture(db);
+        await adjustSubgroup({
+            db,
+            lanes: f.sub,
+            x: f.placeP + 100,
+            d: [0, 30],
+        });
+        await detachSubgroup({
+            db,
+            groupAdjustId: (await linkedRows(db))[0]!.id,
+        });
+        const before = await dataOf(db);
+        let text = "";
+        try {
+            await detachSubgroup({
+                db,
+                groupAdjustId: (await linkedRows(db))[0]!.id,
+            });
+        } catch (e) {
+            text = refusalText(e);
+        }
+        expect(text).toMatch(/every marcher on this path/);
+        expect(await dataOf(db)).toEqual(before);
+    });
+
+    it("review of #908 (S1): a shared tweak left with one spot is edited, grown and reset; own path says the tweak went", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const f = await fixture(db);
+        const { groupAdjustId } = await adjustSubgroup({
+            db,
+            lanes: f.sub,
+            x: f.placeP + 100,
+            d: [0, 30],
+        });
+        // Two of the three draw own paths: the third is the last sharing the tweak
+        for (const m of f.ms.slice(0, 2)) {
+            const r = await resolverOf(db);
+            const A = r.positionAt(m, 9);
+            const drawn = await drawRoute({
+                db,
+                timelineId: f.timeline.id,
+                marcherId: m,
+                points: [{ at: [A[0] + 20, A[1] - 40] }],
+            });
+            expect(drawn.adjustRemoved).toBe(true);
+        }
+        const lone = f.sub[2]!;
+        expect((await laneRow(db, lone.laneId)).group_adjust_id).toBe(
+            groupAdjustId,
+        );
+        // Dragged alone, its shared tweak is edited
+        let before = await dataOf(db);
+        await adjustSubgroup({
+            db,
+            lanes: [lone],
+            x: f.placeP + 100,
+            d: [0, 12],
+        });
+        expect((await linkedProfile(db, groupAdjustId!)).keys[1]!.d).toEqual([
+            0, 12,
+        ]);
+        await expectOneUndoStep(db, before);
+        // Picked with a spot that shares nothing, the sub-group grows
+        const fourth = { laneId: f.laneOf(f.ms[3]).id, marcherId: f.ms[3] };
+        before = await dataOf(db);
+        await adjustSubgroup({
+            db,
+            lanes: [lone, fourth],
+            x: f.placeP + 100,
+            d: [0, 18],
+        });
+        expect((await laneRow(db, fourth.laneId)).group_adjust_id).toBe(
+            groupAdjustId,
+        );
+        await expectOneUndoStep(db, before);
+        // Reset by its id
+        await resetSubgroup({ db, groupAdjustId: groupAdjustId! });
+        expect(await linkedRows(db)).toEqual([]);
+    });
+
+    it("review of #908 (S3): with a sharer's spot vacant, the others are still exactly the sharers; Detach leaves the vacant spot on the group path", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const f = await fixture(db);
+        const { groupAdjustId } = await adjustSubgroup({
+            db,
+            lanes: f.sub,
+            x: f.placeP + 100,
+            d: [0, 30],
+        });
+        // The third sharer leaves the move: its spot is vacant, its lane kept (owner Q1)
+        const gone = f.sub[2]!;
+        const lane = await laneRow(db, gone.laneId);
+        await transactionWithHistory(db, "vacateForTest", async (tx) => {
+            await tx.run(
+                sql`DELETE FROM timeline_assignments WHERE transition_id = ${lane.transition_id} AND slot_index = ${lane.slot_index}`,
+            );
+        });
+        const two = f.sub.slice(0, 2);
+        await adjustSubgroup({ db, lanes: two, x: f.placeP + 100, d: [0, 40] });
+        expect((await linkedProfile(db, groupAdjustId!)).keys[1]!.d).toEqual([
+            0, 40,
+        ]);
+        const { routeId: copy } = await detachSubgroup({
+            db,
+            groupAdjustId: groupAdjustId!,
+        });
+        expect((await lanesOf(db, copy)).map((l) => l.id).sort()).toEqual(
+            two.map((l) => l.laneId).sort(),
+        );
+        const left = await laneRow(db, gone.laneId);
+        expect(left.route_id).toBe(f.routeId);
+        expect(left.group_adjust_id).toBe(groupAdjustId);
     });
 
     it("E-J1 and E-J2 refuse at commit", async ({

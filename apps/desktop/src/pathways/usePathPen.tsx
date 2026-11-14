@@ -42,6 +42,7 @@ import {
     refitNeeded,
     readPathObjectIndex,
     rejoinTargetOf,
+    copySourceOf,
     type PathObjectIndex,
     type PathTarget,
 } from "./pathTarget";
@@ -52,6 +53,7 @@ import {
     deleteOnSubgroup,
     detachPickedSubgroup,
     resetPickedSubgroup,
+    resetSharedAdjust,
     sharedAdjustOf,
     resetSpot,
     memberOf,
@@ -400,8 +402,9 @@ export function usePathPenActions(): void {
     );
     const rehomedOpen = usePathPenStore(
         (s) =>
-            s.session?.target.group?.members.some((m) => m.adjust?.rehomed) ??
-            false,
+            s.session?.target.group?.members.some(
+                (m) => m.adjust?.rehomed || m.linked?.rehomed,
+            ) ?? false,
     );
     // Several lanes picked (step 26), and whether they share a tweak
     const subgroup = usePathPenStore((s) =>
@@ -426,9 +429,23 @@ export function usePathPenActions(): void {
                 (subgroupShared && subgroup?.key != null),
         },
     );
-    useActionHandler("adjustResetGroup", () => void resetPickedSubgroup(), {
-        enabled: subgroupShared,
-    });
+    // A lane picked alone in a sub-group, or the last to share its tweak (step 26)
+    const laneShared = usePathPenStore((s) =>
+        s.session?.phase === "open" && s.session.lane
+            ? (memberOf(s.session, s.session.lane.marcherId)?.groupAdjustId ??
+              null)
+            : null,
+    );
+    useActionHandler(
+        "adjustResetGroup",
+        () =>
+            void (subgroupShared
+                ? resetPickedSubgroup()
+                : laneShared !== null
+                  ? resetSharedAdjust(laneShared)
+                  : undefined),
+        { enabled: subgroupShared || laneShared !== null },
+    );
     useActionHandler(
         "adjustResetSpot",
         () => {
@@ -514,7 +531,7 @@ export function usePathPenActions(): void {
                 if (!now?.object || now.phase === "drawing") return;
                 // Detach and Rejoin act on selected marchers, and none are; but an open copy can
                 // go back to the group path it was Detached from (its walkers Rejoin)
-                const source = target?.lane?.detachedFrom ?? null;
+                const source = copySourceOf(target);
                 setGroupCommands(
                     [],
                     target && source !== null
@@ -572,7 +589,7 @@ export function usePathPenActions(): void {
             // Where Rejoin goes (AP-R10): read the move's group paths unless a group path that
             // isn't a copy is shown (its outside marchers are the only ones it takes)
             const move =
-                group === null || group.lane?.detachedFrom != null
+                group === null || copySourceOf(group) !== null
                     ? await groupMoveAt(db, selectedIds, beat)
                     : null;
             const rejoinTarget: RejoinTarget | null =
@@ -811,6 +828,11 @@ export function PathPenKeys(): null {
     const object = usePathPenStore((s) => s.session?.object ?? false);
     const pickedLane = usePathPenStore((s) => s.session?.lane ?? null);
     const pickedGroup = usePathPenStore((s) => s.session?.subgroup ?? null);
+    const pickedGroupShared = usePathPenStore((s) =>
+        s.session?.subgroup
+            ? sharedAdjustOf(s.session, s.session.subgroup.marcherIds) !== null
+            : false,
+    );
     const drawing = phase === "drawing";
     const objectSelected = object && phase === "closed";
     useActionHandler(
@@ -870,10 +892,13 @@ export function PathPenKeys(): null {
                 : pickedGroup?.key != null
                   ? tolgee.t("actions.path.removeKey", "Remove key")
                   : pickedGroup
-                    ? tolgee.t(
-                          "actions.path.resetShared",
-                          "Reset shared adjustment",
-                      )
+                    ? // Delete with picked lanes that share nothing does nothing: its own name
+                      pickedGroupShared
+                        ? tolgee.t(
+                              "actions.path.adjustResetGroup",
+                              "Reset shared adjustment",
+                          )
+                        : undefined
                     : pickedLane?.key != null
                       ? tolgee.t("actions.path.removeKey", "Remove key")
                       : pickedLane

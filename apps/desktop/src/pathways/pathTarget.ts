@@ -147,7 +147,19 @@ export interface GroupTarget {
         /** Walks a copy Detached from this group path (AP-R9), which Rejoin brings back */
         detached?: boolean;
     }[];
+    /**
+     * The group path this one is a copy of (K6 `detached_from`), or null: a Detached copy, one
+     * lane (also `PathTarget.lane`) or a Detached sub-group's shared copy of several (step 26)
+     */
+    detachedFrom?: number | null;
 }
+
+/**
+ * The group path `target` was Detached from (K6), whether it is one marcher's copy shown on its
+ * lane or a sub-group's shared copy (step 26); null when it isn't a copy
+ */
+export const copySourceOf = (target: PathTarget | null | undefined) =>
+    target?.lane?.detachedFrom ?? target?.group?.detachedFrom ?? null;
 
 /**
  * `target`, a group path with one lane, as that lane (`PathTarget.lane`): the route's ends and
@@ -206,7 +218,7 @@ export function rejoinTargetOf(
     timelineId: number,
     selectedIds: readonly number[],
 ): { timelineId: number; routeId: number; marcherIds: number[] } | null {
-    const copyOf = shown?.lane?.detachedFrom ?? null;
+    const copyOf = copySourceOf(shown);
     if (shown && copyOf === null) {
         const outside = shown.group?.outside.map((m) => m.marcherId) ?? [];
         return outside.length > 0 && shown.routeId !== null
@@ -401,7 +413,7 @@ export async function findGroupTarget(
         ends: { from: xy(g.from), to: xy(g.to) },
         ...toBulgeOf(g),
         drawnEnds: drawnEndsOf(members),
-        group: { members, outside },
+        group: { members, outside, detachedFrom: group.detachedFrom },
     };
     return group.laneCount === 1
         ? onItsLane(target, members[0]!.offset, group.detachedFrom)
@@ -807,7 +819,7 @@ export function targetOfRoute(
         ends: { from: xy(g.from), to: xy(g.to) },
         ...toBulgeOf(g),
         drawnEnds: drawnEndsOf(members),
-        group: { members, outside: [] },
+        group: { members, outside: [], detachedFrom: first.detachedFrom },
         span,
     };
     return first.laneCount === 1

@@ -36,7 +36,7 @@ import {
 } from "@/shapes/editor/EditorBarParts";
 import type { XY } from "@/shapes/types";
 import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
-import { refitNeeded } from "./pathTarget";
+import { copySourceOf, refitNeeded } from "./pathTarget";
 import {
     EVEN_FIRST,
     EVEN_STEP,
@@ -513,7 +513,7 @@ function PathEditorBar({
     const detachedOutside =
         session.target.group?.outside.filter((m) => m.detached).length ?? 0;
     const detachedNote =
-        session.target.lane?.detachedFrom != null
+        copySourceOf(session.target) !== null
             ? tolgee.t("pathways.editor.detachedNote", "Detached")
             : detachedOutside > 0
               ? tolgee.t("pathways.editor.detachedCount", "{count} detached", {
@@ -920,6 +920,23 @@ function PathEditorBar({
                                             runAction("adjustResetSpot")
                                         }
                                         testId="path-adjust-reset"
+                                    >
+                                        <ArrowCounterClockwiseIcon size={14} />
+                                    </IconButton>
+                                )}
+                                {laneMember.groupAdjustId != null && (
+                                    // The spot's sub-group's shared tweak, also when it is the
+                                    // last spot sharing it (step 26)
+                                    <IconButton
+                                        label={tolgee.t(
+                                            "pathways.editor.resetGroupTip",
+                                            "Take away the adjustment these spots share. Each spot keeps its own adjustment",
+                                        )}
+                                        action="adjustResetGroup"
+                                        onClick={() =>
+                                            runAction("adjustResetGroup")
+                                        }
+                                        testId="path-adjust-reset-lane-group"
                                     >
                                         <ArrowCounterClockwiseIcon size={14} />
                                     </IconButton>

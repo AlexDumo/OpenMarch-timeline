@@ -446,8 +446,9 @@ describeDbTests("timeline schema and triggers", (it) => {
             const triggers = allTriggers.filter(
                 ([name]) => !isHistoryTrigger(name),
             );
-            // + 3 lane change-log and 3 I-LN1 triggers (v0.10)
-            expect(triggers.length).toBe(40);
+            // + 3 lane change-log and 3 I-LN1 triggers (v0.10), and 3 linked-Adjust change-log
+            // triggers (pathways step 26)
+            expect(triggers.length).toBe(43);
             for (const [name, triggerSql] of triggers) {
                 const body = triggerSql
                     .slice(triggerSql.search(/\bBEGIN\b/))

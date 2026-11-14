@@ -1667,7 +1667,7 @@
                 },
                 "timeline_route_adjusts_profile_check": {
                     "name": "timeline_route_adjusts_profile_check",
-                    "value": "json_valid(profile)"
+                    "value": "json_valid(profile) AND json_type(profile) = 'object'"
                 }
             }
         },

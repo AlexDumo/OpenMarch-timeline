@@ -597,7 +597,10 @@ export const timeline_route_adjusts = sqliteTable(
     },
     (table) => [
         integerTypeCheck("timeline_route_adjusts", "route_id"),
-        check("timeline_route_adjusts_profile_check", sql`json_valid(profile)`),
+        check(
+            "timeline_route_adjusts_profile_check",
+            sql`json_valid(profile) AND json_type(profile) = 'object'`,
+        ),
         index("timeline_idx_route_adjusts_route").on(table.route_id),
     ],
 );

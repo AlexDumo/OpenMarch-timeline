@@ -161,13 +161,41 @@ async function writeShared(
     });
 }
 
+/** The lanes of `lanes` whose spot someone holds at some beat of the move */
+async function occupied(
+    tx: DbTransaction,
+    lanes: readonly DatabaseTimelineLane[],
+): Promise<DatabaseTimelineLane[]> {
+    const A = schema.timeline_assignments;
+    const out: DatabaseTimelineLane[] = [];
+    for (const lane of lanes)
+        if (
+            await tx
+                .select({ id: A.id })
+                .from(A)
+                .where(
+                    and(
+                        eq(A.transition_id, lane.transition_id),
+                        eq(A.slot_index, lane.slot_index),
+                    ),
+                )
+                .get()
+        )
+            out.push(lane);
+    return out;
+}
+
 /**
- * AP-R12's refusals for a drag on the lanes `lanes`, and what it writes to: the linked Adjust they
- * are exactly the sharers of, or null for a new one.
+ * AP-R12's refusals for a drag on the lanes `lanes`, and what it writes to (`editing`: the linked
+ * Adjust edited, or null for a new one) and which picked lanes join it (`joining`). The pick may
+ * be every occupied sharer of one linked Adjust (a vacant spot still sharing it doesn't count),
+ * with or without spots that share nothing, which then join it: so a sub-group grows, and a lone
+ * sharer is edited, or joined by others. Refused: fewer than two lanes and none of them sharing,
+ * lanes of two paths or not on a group path, D-22, two linked Adjusts in one pick, and part of
+ * one's sharers.
  */
 async function readPick(tx: DbTransaction, lanes: readonly SubgroupLane[]) {
     const ids = [...new Set(lanes.map((l) => l.laneId))];
-    if (ids.length < 2) refuse(subgroupRefusal.tooFew());
     const L = schema.timeline_lanes;
     const rows = await tx
         .select()
@@ -188,33 +216,36 @@ async function readPick(tx: DbTransaction, lanes: readonly SubgroupLane[]) {
     if (new Set(rows.map((l) => l.route_id)).size > 1)
         refuse(subgroupRefusal.twoPaths());
     await refuseSharedLanes(tx, rows, (lane) => marcherOfLane.get(lane.id));
-    const groups = new Set(rows.map((l) => l.group_adjust_id));
-    const only = groups.size === 1 ? [...groups][0]! : undefined;
-    let editing: number | null = null;
-    if (only !== undefined && only !== null) {
-        const sharing = await lanesSharing(tx, only);
-        if (
-            sharing.length !== rows.length ||
-            sharing.some((l) => !ids.includes(l.id))
-        )
-            refuse(subgroupRefusal.mixed(await nameOf(rows[0]!)));
-        editing = only;
-    } else if (only === undefined) {
-        const inOne = rows.find((l) => l.group_adjust_id !== null)!;
-        refuse(subgroupRefusal.mixed(await nameOf(inOne)));
+    const groups = [
+        ...new Set(
+            rows.flatMap((l) =>
+                l.group_adjust_id === null ? [] : [l.group_adjust_id],
+            ),
+        ),
+    ];
+    if (groups.length === 0) {
+        if (ids.length < 2) refuse(subgroupRefusal.tooFew());
+        return { ids, rows, editing: null, joining: [] as number[] };
     }
-    return { ids, rows, editing };
+    const inOne = rows.find((l) => l.group_adjust_id !== null)!;
+    if (groups.length > 1) refuse(subgroupRefusal.mixed(await nameOf(inOne)));
+    const editing = groups[0]!;
+    const sharers = await occupied(tx, await lanesSharing(tx, editing));
+    if (sharers.some((l) => !ids.includes(l.id)))
+        refuse(subgroupRefusal.mixed(await nameOf(inOne)));
+    const joining = rows
+        .filter((l) => l.group_adjust_id === null)
+        .map((l) => l.id);
+    return { ids, rows, editing: editing as number | null, joining };
 }
 
 /**
  * AP-R12 by a lane drag with several lanes picked: the sub-group of `lanes` is displaced by `d` at
  * place `x` along its route, `d` being the shared profile's whole value there (the grabbed lane's
- * displacement less its own Adjust). When the lanes are exactly the sharers of one linked Adjust,
- * that one is edited; when none of them shares one, a new one is made for them. Refused for fewer
- * than two, lanes of different paths or not on a group path, a spot held by two marchers (D-22),
- * and a pick that mixes a sub-group with others (a spot can share only one tweak; resetting it
- * first, or picking the whole sub-group, is the way). Returns the linked Adjust's id, or null when
- * the edit left nothing that displaces (it is then reset).
+ * displacement less its own Adjust). When the lanes hold every occupied sharer of one linked
+ * Adjust, that one is edited, and any picked spot sharing nothing joins it; when none of them
+ * shares one, a new one is made for them. Refusals: `readPick`. Returns the linked Adjust's id, or
+ * null when the edit left nothing that displaces (it is then reset).
  */
 export async function adjustSubgroupInTransaction({
     tx,
@@ -227,7 +258,7 @@ export async function adjustSubgroupInTransaction({
     x: number;
     d: XY;
 }): Promise<{ groupAdjustId: number | null }> {
-    const { ids, rows, editing } = await readPick(tx, lanes);
+    const { ids, rows, editing, joining } = await readPick(tx, lanes);
     const routeId = rows[0]!.route_id;
     const { geometry, schedule } = await routeOf(tx, routeId);
     const G = schema.timeline_route_adjusts;
@@ -246,6 +277,12 @@ export async function adjustSubgroupInTransaction({
     });
     if (!placed.ok) refuse(refusalText(placed.reason));
     if (editing !== null) {
+        // Spots that shared nothing join it first (a sub-group grows, or a lone sharer is joined)
+        if (joining.length > 0)
+            await tx
+                .update(schema.timeline_lanes)
+                .set({ group_adjust_id: editing })
+                .where(inArray(schema.timeline_lanes.id, joining));
         await writeShared(tx, editing, geometry, schedule, placed.profile);
         return { groupAdjustId: placed.profile ? editing : null };
     }

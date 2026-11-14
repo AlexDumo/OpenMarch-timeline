@@ -3,6 +3,7 @@ import type { Resolver } from "@openmarch/core";
 import type { MoveRoute } from "@/db-functions/timelineRoutes";
 import { laneOutline, memberWalkOf, scheduleOf } from "../pathEdit";
 import {
+    copySourceOf,
     groupToShow,
     refitNeeded,
     rejoinTargetOf,
@@ -164,6 +165,31 @@ describe("where Rejoin goes (rejoinTargetOf, AP-R10)", () => {
             timelineId: 1,
             routeId: 5,
             marcherIds: [7, 13],
+        });
+    });
+
+    it("a Detached sub-group's shared copy (several lanes) goes back onto its group path (step 26)", () => {
+        const shared = targetOfRoute(
+            [
+                { ...copyEntry(2), detachedFrom: 5 },
+                {
+                    ...copyEntry(2),
+                    laneId: 4,
+                    slot: 3,
+                    marcherId: 8,
+                    detachedFrom: 5,
+                },
+            ],
+            resolver,
+            drills,
+        )!;
+        expect(shared.lane).toBeUndefined();
+        expect(copySourceOf(shared)).toBe(5);
+        const copy78 = { routeId: 9, marcherIds: [7, 8], detachedFrom: 5 };
+        expect(rejoinTargetOf(shared, [R, copy78], 1, [7, 8])).toEqual({
+            timelineId: 1,
+            routeId: 5,
+            marcherIds: [7, 8],
         });
     });
 

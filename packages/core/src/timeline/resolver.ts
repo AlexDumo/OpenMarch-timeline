@@ -326,7 +326,7 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
     const adjustLanes = new Map<number, Set<number>>();
     const linkedAdjust = new Map<
         number,
-        { route: number; resolved: ResolvedAdjust }
+        { route: number; profile: string; resolved: ResolvedAdjust }
     >();
     const slotKey = (tid: number, slot: number) => `${tid}|${slot}`;
     /** Re-indexes lane `id` as `row` (null: gone); returns the transitions it was and is on. */
@@ -683,6 +683,7 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
             geo.schedule ??= groupSchedule(geo.walk);
             cached = {
                 route: row.route,
+                profile: JSON.stringify(row.profile),
                 resolved: resolveAdjust(
                     geo.schedule,
                     geo.walk.points,
@@ -1217,7 +1218,11 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         }
         for (const [gid, cached] of linkedAdjust) {
             const h = host.routeAdjusts?.[gid];
-            if (!h || h.route !== cached.route)
+            if (
+                !h ||
+                h.route !== cached.route ||
+                JSON.stringify(h.profile) !== cached.profile
+            )
                 return `stale linked Adjust ${gid}`;
         }
         for (const l of spans.values())

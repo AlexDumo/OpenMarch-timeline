@@ -693,23 +693,18 @@ export async function detachSubgroupInTransaction({
     groupAdjustId: number;
 }): Promise<{ routeId: number }> {
     const L = schema.timeline_lanes;
-    const lanes = await tx
+    const sharing = await tx
         .select()
         .from(L)
         .where(eq(L.group_adjust_id, groupAdjustId))
         .orderBy(asc(L.id))
         .all();
-    if (lanes.length === 0)
+    if (sharing.length === 0)
         refuse(`linked Adjust ${groupAdjustId} does not exist`);
     const T = schema.timeline_transitions;
     const A = schema.timeline_assignments;
-    for (const lane of lanes) {
-        const t = (await tx
-            .select()
-            .from(T)
-            .where(eq(T.id, lane.transition_id))
-            .get())!;
-        const holder = await tx
+    const holderOf = (lane: DatabaseTimelineLane) =>
+        tx
             .select({ m: A.marcher_id })
             .from(A)
             .where(
@@ -720,9 +715,30 @@ export async function detachSubgroupInTransaction({
             )
             .orderBy(asc(A.start_beat), asc(A.id))
             .get();
-        if (holder) await refuseSharedSpot(tx, t, lane.slot_index, holder.m);
+    // Only spots someone holds go to the copy; a vacant spot still sharing the tweak stays on the
+    // group path with it (owner Q1: a vacant lane waits for whoever is cast there next)
+    const lanes: DatabaseTimelineLane[] = [];
+    for (const lane of sharing) {
+        const holder = await holderOf(lane);
+        if (!holder) continue;
+        const t = (await tx
+            .select()
+            .from(T)
+            .where(eq(T.id, lane.transition_id))
+            .get())!;
+        await refuseSharedSpot(tx, t, lane.slot_index, holder.m);
+        lanes.push(lane);
     }
+    if (lanes.length === 0)
+        refuse(`linked Adjust ${groupAdjustId} is shared by nobody here`);
     const routeId = lanes[0]!.route_id;
+    // Every spot someone holds on the path: there's no group to detach from (as AP-R9's "only
+    // marcher on its path"), and the route and its links would be swept
+    const held = [];
+    for (const lane of await lanesOfRoute(tx, routeId))
+        if (await holderOf(lane)) held.push(lane);
+    if (held.every((l) => lanes.some((m) => m.id === l.id)))
+        refuse(routeRefusal.subgroupIsWholePath());
     const R = schema.timeline_routes;
     const source = await tx.select().from(R).where(eq(R.id, routeId)).get();
     if (!source) refuse(`route ${routeId} does not exist`);

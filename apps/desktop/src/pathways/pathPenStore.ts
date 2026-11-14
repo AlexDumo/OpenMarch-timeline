@@ -44,7 +44,12 @@ import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import tolgee from "@/global/singletons/Tolgee";
 import type { XY } from "@/shapes/types";
 import { SMOOTH } from "@/shapes/line/lineGeometry";
-import { drawnAsGroup, type GroupMember, type PathTarget } from "./pathTarget";
+import {
+    copySourceOf,
+    drawnAsGroup,
+    type GroupMember,
+    type PathTarget,
+} from "./pathTarget";
 import { dragTrail } from "@/db-functions/timelineTrailDrag";
 import { invalidatePlacedBoxes } from "@/shapes/placed/placedBoxStore";
 import { followSpacingOf, type FollowDrag } from "./followDrag";
@@ -207,8 +212,14 @@ export function detachIdsOf(
         session.target.lane
     )
         return [];
-    // Several lanes picked (step 26): their spots; a sub-group sharing a tweak gets one shared copy
-    if (session.subgroup) return session.subgroup.marcherIds;
+    // Several lanes picked (step 26): their spots; a sub-group sharing a tweak gets one shared copy,
+    // but not when it is every spot on the path: there's no group to detach from (AP-R12)
+    if (session.subgroup)
+        return sharedAdjustOf(session, session.subgroup.marcherIds) !== null &&
+            session.subgroup.marcherIds.length ===
+                session.target.group.members.length
+            ? []
+            : session.subgroup.marcherIds;
     return session.lane ? [session.lane.marcherId] : [];
 }
 
@@ -776,6 +787,32 @@ export function sharedAdjustOf(
         return null;
     const sharing = members.filter((m) => m.groupAdjustId === id);
     return sharing.length === picked.length ? id : null;
+}
+
+/**
+ * What a drag on the lanes of `marcherIds` writes to (AP-R12 as `readPick` judges it, step 26):
+ * the linked Adjust they hold every sharer of (spots sharing nothing then join it), null for a new
+ * one, or `"mixed"` for two linked Adjusts, or part of one's sharers
+ */
+export function sharedOfPick(
+    s: PathSession,
+    marcherIds: readonly number[],
+): number | null | "mixed" {
+    const members = s.target.group?.members ?? [];
+    const picked = members.filter((m) => marcherIds.includes(m.marcherId));
+    const ids = [
+        ...new Set(
+            picked.flatMap((m) =>
+                m.groupAdjustId == null ? [] : [m.groupAdjustId],
+            ),
+        ),
+    ];
+    if (ids.length === 0) return null;
+    if (ids.length > 1) return "mixed";
+    const sharers = members.filter((m) => m.groupAdjustId === ids[0]);
+    return sharers.every((m) => marcherIds.includes(m.marcherId))
+        ? ids[0]!
+        : "mixed";
 }
 
 /** The sub-group the spot of `marcherId` shares a tweak with (itself included), or null */
@@ -1364,7 +1401,20 @@ export async function deleteOnLane(
     lane: NonNullable<PathSession["lane"]>,
 ): Promise<void> {
     if (lane.key !== null) await deleteAdjustKey(lane.marcherId, lane.key);
-    else if (!lane.keyGone) await resetSpot(lane.marcherId);
+    else if (!lane.keyGone) {
+        const { session } = usePathPenStore.getState();
+        const member = session ? memberOf(session, lane.marcherId) : undefined;
+        // A spot with no tweak of its own that is the last to share one (step 26): that one goes
+        if (
+            session &&
+            member &&
+            !member.adjust &&
+            member.groupAdjustId != null &&
+            sharedAdjustOf(session, [lane.marcherId]) !== null
+        )
+            await resetSharedAdjust(member.groupAdjustId);
+        else await resetSpot(lane.marcherId);
+    }
 }
 
 /** The lanes of `marcherIds` on the session's group path, for a sub-group write (step 26) */
@@ -1495,6 +1545,16 @@ export async function detachPickedSubgroup(): Promise<void> {
     } finally {
         usePathPenStore.setState({ saving: false });
     }
+}
+
+/**
+ * Reset a shared tweak by its id (AP-R12), whoever is picked: a lone sharer's too (step 26). Each
+ * spot keeps its own tweak. One undo step.
+ */
+export async function resetSharedAdjust(groupAdjustId: number): Promise<void> {
+    await adjustWrite(subgroupFallback, () =>
+        resetSubgroup({ db, groupAdjustId }),
+    );
 }
 
 /** Re-fit (decision A), by the session's route. One undo step. */
@@ -1681,7 +1741,7 @@ export async function rejoinFor(target: RejoinTarget | null): Promise<void> {
             const fromCopy =
                 s?.object &&
                 s.phase === "open" &&
-                s.target.lane?.detachedFrom === target.routeId;
+                copySourceOf(s.target) === target.routeId;
             return {
                 saved: state.saved + 1,
                 ...(fromCopy

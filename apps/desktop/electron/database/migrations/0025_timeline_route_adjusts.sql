@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS `timeline_route_adjusts` (
 	`profile` text NOT NULL,
 	FOREIGN KEY (`route_id`) REFERENCES `timeline_routes`(`id`) ON UPDATE no action ON DELETE restrict,
 	CONSTRAINT "timeline_route_adjusts_route_id_type_check" CHECK(typeof(route_id) = 'integer'),
-	CONSTRAINT "timeline_route_adjusts_profile_check" CHECK(json_valid(profile))
+	CONSTRAINT "timeline_route_adjusts_profile_check" CHECK(json_valid(profile) AND json_type(profile) = 'object')
 );
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS `timeline_idx_route_adjusts_route` ON `timeline_route_adjusts` (`route_id`);--> statement-breakpoint

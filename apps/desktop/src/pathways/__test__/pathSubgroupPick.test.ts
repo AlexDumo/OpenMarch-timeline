@@ -26,7 +26,9 @@ vi.doMock("@/db-functions/timelineSubgroupAdjust", async (importOriginal) => ({
 }));
 const {
     clearPath,
+    deleteOnLane,
     deleteOnSubgroup,
+    detachIdsOf,
     openPath,
     selectLane,
     showPath,
@@ -236,14 +238,71 @@ describe("picking several lanes (step 26)", () => {
         expect(Math.abs(own.d[1] - 2 * STEP)).toBeLessThanOrEqual(STEP / 2);
     });
 
-    it("a drag on a pick mixing a sub-group with another spot is refused, writing nothing", () => {
+    it("a drag on a sub-group plus a spot sharing nothing grows the sub-group; across two sub-groups it is refused (review of #908)", () => {
         open(group(BULGE));
         click(onLane(11));
         click(onLane(13), true);
         expect(session().subgroup?.marcherIds).toEqual([10, 11, 12, 13]);
-        // dragging would make one tweak for all four, but three of them share one already
+        drag(onLane(13), 2 * STEP);
+        expect(adjustSubgroup).toHaveBeenCalledTimes(1);
+        expect(
+            (
+                adjustSubgroup.mock.calls[0] as unknown as [
+                    { lanes: { marcherId: number }[] },
+                ]
+            )[0].lanes.map((l) => l.marcherId),
+        ).toEqual([10, 11, 12, 13]);
+        adjustSubgroup.mockClear();
+        // 13 in a sub-group of its own: one spot of each is refused
+        const two = group(BULGE);
+        two.group = {
+            ...two.group!,
+            members: two.group!.members.map((m) =>
+                m.marcherId === 13
+                    ? { ...m, groupAdjustId: 8, linked: BULGE }
+                    : m,
+            ),
+        };
+        showPath(two, "2");
+        selectLane(null);
+        click(onLane(12));
+        click(onLane(13), true);
         drag(onLane(13), 2 * STEP);
         expect(adjustSubgroup).not.toHaveBeenCalled();
+    });
+
+    it("a lone sharer (review of #908, S1): its shared keys show, Delete and the bar's Reset reset it by its id; Detach is off for a sub-group that is every spot", async () => {
+        const lone = group(null);
+        lone.group = {
+            ...lone.group!,
+            members: lone.group!.members.map((m) =>
+                m.marcherId === 12
+                    ? { ...m, groupAdjustId: 9, linked: BULGE }
+                    : m,
+            ),
+        };
+        open(lone);
+        // nothing picked: its shared tweak's three keys show on its lane
+        expect(drawn().adjustHandles).toHaveLength(3);
+        selectLane({ marcherId: 12, key: null });
+        await deleteOnLane(session().lane!);
+        expect(resetSubgroup).toHaveBeenCalledWith(
+            expect.objectContaining({ groupAdjustId: 9 }),
+        );
+        // Detach: a picked sub-group sharing a tweak that is every spot of the path has none
+        const all = group(BULGE);
+        all.group = {
+            ...all.group!,
+            members: all.group!.members.map((m) => ({
+                ...m,
+                groupAdjustId: 7,
+                linked: BULGE,
+            })),
+        };
+        showPath(all, "2");
+        click(onLane(10));
+        expect(session().subgroup?.marcherIds).toEqual([10, 11, 12, 13]);
+        expect(detachIdsOf([], session())).toEqual([]);
     });
 
     it("Delete with a sub-group picked resets its shared tweak, or removes its picked key", async () => {

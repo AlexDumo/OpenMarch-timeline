@@ -90,8 +90,9 @@ import {
     commitSubgroupKey,
     deleteOnSubgroup,
     pickSubgroup,
-    resetPickedSubgroup,
+    resetSharedAdjust,
     sharedAdjustOf,
+    sharedOfPick,
     subgroupOfMember,
     toggleLaneInPick,
     commitPoints,
@@ -203,8 +204,12 @@ function adjustNow(s: PathSession, marcherId: number) {
  * they are exactly its sharers (a drag's preview included), else null, a new one
  */
 function linkedNow(s: PathSession, marcherIds: readonly number[]) {
-    if (sharedAdjustOf(s, marcherIds) === null) return null;
-    const member = memberOf(s, marcherIds[0]!);
+    const gid = sharedOfPick(s, marcherIds);
+    if (gid === null || gid === "mixed") return null;
+    // a sharer's shared tweak as drawn now; spots sharing nothing join it on the drag (step 26)
+    const member = s.target.group?.members.find(
+        (m) => m.groupAdjustId === gid && marcherIds.includes(m.marcherId),
+    );
     return member ? (memberNow(s, member).linked ?? null) : null;
 }
 
@@ -398,11 +403,7 @@ class PathPenMode implements FieldMode {
         // (step 26); otherwise each lane's own keys
         const shared = sharedFocus(s);
         for (const { marcherId, walk } of walks)
-            for (const h of shared
-                ? shared.includes(marcherId)
-                    ? adjustHandlesOf(walk, { linked: true })
-                    : []
-                : adjustHandlesOf(walk)) {
+            for (const h of keyHandlesOf(s, marcherId, walk, shared)) {
                 const d = Math.hypot(
                     h.at.x - pointer.field.x,
                     h.at.y - pointer.field.y,
@@ -416,14 +417,14 @@ class PathPenMode implements FieldMode {
                             x: h.x,
                             at: h.at,
                             plain: lanePlain(walk, h.x),
-                            base: shared
-                                ? linkedNow(s, shared)
+                            base: h.linked
+                                ? linkedNow(s, h.linked)
                                 : adjustNow(s, marcherId),
                             refused: false,
                             d: null,
                             stacked: 1,
                             next: marcherId,
-                            linkedTo: shared,
+                            linkedTo: h.linked,
                             add: false,
                         },
                     };
@@ -690,11 +691,7 @@ class PathPenMode implements FieldMode {
             env,
         );
         // A pick that mixes a sub-group with other spots can't share one tweak (AP-R12)
-        if (
-            hold.linkedTo &&
-            sharedAdjustOf(s, hold.linkedTo) === null &&
-            hold.linkedTo.some((id) => memberOf(s, id)?.groupAdjustId != null)
-        ) {
+        if (hold.linkedTo && sharedOfPick(s, hold.linkedTo) === "mixed") {
             this.refuseLane(hold, "mixed");
             return;
         }
@@ -944,7 +941,8 @@ class PathPenMode implements FieldMode {
         // What was just bent is what's being worked on, as a drag selects in a drawing app
         if (hold.linkedTo) {
             pickSubgroup(hold.linkedTo, hold.index);
-            const shared = s ? sharedAdjustOf(s, hold.linkedTo) : null;
+            const pick = s ? sharedOfPick(s, hold.linkedTo) : null;
+            const shared = typeof pick === "number" ? pick : null;
             if (hold.index !== null && shared !== null)
                 void commitSubgroupKey(shared, hold.index, hold.d);
             else if (hold.index === null)
@@ -1530,11 +1528,9 @@ function runLaneMenu(
     else if ((value === "pickAdd" || value === "pickRemove") && lane)
         toggleLaneInPick(lane.marcherId);
     else if (value === "resetShared" && lane) {
-        const theirs = subgroupOfMember(now, lane.marcherId);
-        if (theirs) {
-            pickSubgroup(theirs);
-            void resetPickedSubgroup();
-        }
+        // by its id, so a shared tweak left with one spot resets too (step 26)
+        const gid = memberOf(now, lane.marcherId)?.groupAdjustId;
+        if (gid != null) void resetSharedAdjust(gid);
     } else return false;
     return true;
 }
@@ -1703,19 +1699,36 @@ function handlesDrawn(
     shared: readonly number[] | null,
     picked: PathSession["lane"] | null,
 ): NonNullable<FieldModeDrawing["adjustHandles"]> {
-    return walks.flatMap(({ marcherId, walk }) => {
-        if (shared)
-            return shared.includes(marcherId)
-                ? adjustHandlesOf(walk, { linked: true }).map((h) => ({
-                      at: h.at,
-                      selected: session.subgroup?.key === h.index,
-                  }))
-                : [];
-        return adjustHandlesOf(walk).map((h) => ({
+    return walks.flatMap(({ marcherId, walk }) =>
+        keyHandlesOf(session, marcherId, walk, shared).map((h) => ({
             at: h.at,
-            selected: picked?.marcherId === marcherId && picked.key === h.index,
+            selected: h.linked
+                ? shared !== null && session.subgroup?.key === h.index
+                : picked?.marcherId === marcherId && picked.key === h.index,
+        })),
+    );
+}
+
+/**
+ * The key handles on lane `marcherId`: with a sub-group in focus, its shared tweak's keys on its
+ * lanes; otherwise each lane's own keys, and a lone sharer's shared keys too (step 26), so a
+ * shared tweak left with one spot can still be edited. `linked` is whose shared tweak a handle is.
+ */
+function keyHandlesOf(
+    s: PathSession,
+    marcherId: number,
+    walk: GroupMemberWalk,
+    shared: readonly number[] | null,
+): { index: number; x: number; at: XY; linked: readonly number[] | null }[] {
+    const sharedKeys = (ids: readonly number[]) =>
+        adjustHandlesOf(walk, { linked: true }).map((h) => ({
+            ...h,
+            linked: ids,
         }));
-    });
+    if (shared) return shared.includes(marcherId) ? sharedKeys(shared) : [];
+    const own = adjustHandlesOf(walk).map((h) => ({ ...h, linked: null }));
+    const lone = subgroupOfMember(s, marcherId)?.length === 1;
+    return lone ? [...own, ...sharedKeys([marcherId])] : own;
 }
 
 /** Guides along the field's lines that `points` lie on, as a shape's are drawn while it's edited */

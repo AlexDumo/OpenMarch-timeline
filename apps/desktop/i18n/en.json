@@ -200,8 +200,7 @@
             "clearOrder": "Clear order",
             "orderKeywords": "order sequence leader tail first last line follow reverse numbers",
             "adjustResetGroup": "Reset shared adjustment",
-            "deselectSpots": "Deselect spots",
-            "resetShared": "Reset shared adjustment"
+            "deselectSpots": "Deselect spots"
         }
     },
     "analyticsOptIn": {
@@ -2735,7 +2734,8 @@
                 "smoothBesideArc": "A point at an end of an arc must be a corner",
                 "subgroupTooFew": "Pick two or more marchers' lanes to adjust them together",
                 "subgroupTwoPaths": "These marchers walk different paths, so they can't share an adjustment",
-                "subgroupMixed": "{marcher} already shares an adjustment with other marchers; pick all of them, or reset theirs first"
+                "subgroupMixed": "{marcher} already shares an adjustment with other marchers; pick all of them, or reset theirs first",
+                "subgroupIsWholePath": "These are every marcher on this path, so there's no group to detach from"
             },
             "trail": {
                 "tooFew": "Follow is for two or more marchers",
