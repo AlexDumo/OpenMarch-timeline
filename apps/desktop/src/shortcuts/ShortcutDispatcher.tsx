@@ -85,7 +85,7 @@ export default function ShortcutDispatcher({
                 readShortcutContext(),
                 // No nudge on a timeline move control (code review). While the Field panel is
                 // open (#824) the drill's canvas keys are off: a line key that can't run now
-                // (H with nothing picked, X with Edit lines off) must not fall through to the
+                // (H with nothing picked, X on another tab) must not fall through to the
                 // drill command on the same key
                 (id) =>
                     isActionEnabled(id) &&

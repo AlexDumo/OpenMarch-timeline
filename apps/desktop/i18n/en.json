@@ -71,7 +71,7 @@
             "mirrorOff": "Turn Mirror sides off",
             "addXLine": "Add X line",
             "addYLine": "Add Y line",
-            "editLine": "Edit line…",
+            "editLine": "Type the picked line's position",
             "deleteLines": "Delete lines",
             "toggleVisible": "Hide or show lines",
             "toggleReference": "Use lines as reference or not",
@@ -92,9 +92,7 @@
             "removeImage": "Remove field background image",
             "imageKeywords": "picture photo aerial background image field",
             "halfStep": "half step",
-            "editLines": "Edit lines",
-            "editLinesOn": "Edit lines on the field",
-            "editLinesOff": "Stop editing lines"
+            "editLines": "Edit field lines"
         },
         "file": {
             "closeFile": "Close file",
@@ -3816,11 +3814,6 @@
             "discarded": "Field changes discarded. Undo brings them back.",
             "custom": "Custom field",
             "changes": "{count, plural, =0 {No changes from the template} one {# change from the template} other {# changes from the template}}",
-            "addX": "X line",
-            "addY": "Y line",
-            "edit": "Edit…",
-            "reference": "Reference",
-            "delete": "Delete",
             "selectMany": "Select many",
             "mirror": "Mirror sides",
             "mirrorOnTip": "Mirror sides is on: an edit on one side of the 50 also edits its twin",
@@ -3853,10 +3846,7 @@
             "releaseToDelete": "{count, plural, one {Let go to delete this line} other {Let go to delete these # lines}}",
             "dragOut": "Drag onto the field to add a line"
         },
-        "xLine": "X line",
-        "yLine": "Y line",
         "popover": {
-            "close": "Close",
             "position": "Position",
             "side": "Side",
             "stepsFromCenter": "steps from the center",
@@ -3872,22 +3862,14 @@
             "yardNumberHint": "The number painted on the field at this line, if any",
             "none": "none",
             "visible": "Visible",
-            "reference": "Reference",
             "mirrored": "Mirrored with {twin}: edits apply to both",
-            "delete": "Delete",
-            "done": "Done"
+            "delete": "Delete"
         },
         "numberPad": {
             "label": "Number pad",
             "back": "Delete last character",
             "clear": "Clear",
             "clearShort": "C"
-        },
-        "menu": {
-            "hide": "Hide",
-            "show": "Show",
-            "useAsReference": "Use as reference",
-            "stopReference": "Stop using as reference"
         },
         "namesAlreadyAutomatic": "Those lines already have the names their position gives them",
         "list": {
@@ -3897,10 +3879,10 @@
             "bothSides": "{left}+{right} · {steps}",
             "oneSide": "{side} · {steps}",
             "behind": "{steps} back",
-            "insert": "Add a line halfway between {a} and {b}",
             "drawAsHashes": "Draw as hashes",
             "asymmetric": "The outermost X lines aren't the same distance from the center, so the field is drawn off-center. Move one of them until both sides match.",
-            "hidden": "Hidden"
+            "hidden": "Hidden",
+            "reference": "Reference"
         },
         "size": {
             "width": "Width",
@@ -3955,17 +3937,21 @@
             "route": "<tab></tab> picks the next line while the field has the keyboard. <pane></pane> moves between the field and the Field panel."
         },
         "lines": {
-            "edit": "Edit lines",
-            "editing": "Editing lines",
-            "offHint": "Turn on Edit lines to pick, drag and add lines on the field.",
-            "onHint": "Click a line on the field or in the list to pick it. Shift-click picks more. Drag out of a ruler to add one.",
             "pickedMany": "{count} lines picked",
-            "more": "More",
             "axis": "Which lines",
             "xTab": "Side to side · {count}",
             "yTab": "Front to back · {count}",
-            "canvasHint": "Click a line to pick it · Drag out of a ruler to add one · <keys></keys> to stop editing lines",
+            "canvasHint": "Click a line to pick it · Drag out of a ruler to add one · <keys></keys> to finish",
             "canvasHintPicked": "Drag the picked lines to move them · <keys></keys> to drop the pick"
+        },
+        "line": {
+            "title": "Line",
+            "noneHint": "Pick a line on the field or in the list. Shift-click picks more. Drag out of a ruler to add one.",
+            "reference": "Use as reference",
+            "mixed": "Mixed",
+            "add": "Add line",
+            "everyOther": "Keep every other",
+            "nameFromPosition": "Name from position"
         }
     }
 }

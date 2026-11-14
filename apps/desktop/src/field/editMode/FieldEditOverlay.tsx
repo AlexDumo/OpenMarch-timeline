@@ -13,7 +13,6 @@ import {
     dragSteps,
     fieldScreenRect,
     fieldToSteps,
-    findLine,
     lineKey,
     lineLabel,
     lineReadout,
@@ -51,13 +50,9 @@ import {
 } from "./lineCommands";
 import { selectAdded } from "./useFieldEditModeActions";
 import { LineReadoutText } from "./LineReadoutText";
-import { LineMenu } from "./LineMenu";
-import { LinePopover } from "./LinePopover";
 
 /** How far a press moves before it's a drag, in CSS px: a finger wanders more than a mouse */
 const DRAG_START_PX = { mouse: 3, touch: 8 } as const;
-/** How long a finger stays on a line to open its menu */
-const LONG_PRESS_MS = 500;
 
 type Press =
     | {
@@ -96,16 +91,17 @@ type Press =
 
 /**
  * The Edit field mode on the canvas (#824): rulers along the top (X lines) and left (Y lines),
- * the lines as things to pick and drag, a box to pick many, and the line's menu and exact-values
- * popover. Covers the field while the mode is on, so marchers can't be picked; the wheel and pan
+ * the lines as things to pick and drag, and a box to pick many. Only geometry happens here: a
+ * line's values are shown and changed in the Lines tab's Line section. Covers the field while the
+ * mode is on, so marchers can't be picked; the wheel and pan
  * drags still reach the field's navigation.
  *
  * - Drag out of a ruler to add a line (with Mirror on, its twin too), a line to move it, and a
  *   line back into its ruler to delete it. Whole steps; half steps with Shift (or the touch pill's
  *   Fine). A readout says where.
  * - Click a line or its ruler tab to pick it, Shift-click to add, drag a box over the field to
- *   pick the lines it crosses. Double-click (or tap a picked line) for exact values; right-click
- *   or a long press for its menu.
+ *   pick the lines it crosses. Double-click (or tap a picked line) to type its position in the
+ *   panel; right-click picks it.
  */
 export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
     const { t } = useTranslate();
@@ -116,8 +112,6 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
     const mirror = useFieldEditModeStore((s) => s.mirror);
     const hover = useFieldEditModeStore((s) => s.hover);
     const drag = useFieldEditModeStore((s) => s.drag);
-    const editing = useFieldEditModeStore((s) => s.editing);
-    const menu = useFieldEditModeStore((s) => s.menu);
     const selectMany = useFieldEditModeStore((s) => s.selectMany);
     const selection = existingSelection(fp, storedSelection);
     // With Mirror on, hovering a line lights its twin too, as picking it does
@@ -131,21 +125,14 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
         [fp, hover, mirror],
     );
     const hasPick = selection.length > 0;
-    // An undo can take a picked line away: forget it, and close its popover or menu
+    // An undo can take a picked line away: forget it
     useEffect(() => {
         if (selection !== storedSelection) fieldEditMode.select(selection);
     }, [selection, storedSelection]);
-    const editingGone = editing !== null && !findLine(fp, editing);
-    const menuGone = menu !== null && !findLine(fp, menu.line);
-    useEffect(() => {
-        if (editingGone) fieldEditMode.edit(null);
-        if (menuGone) fieldEditMode.openMenu(null);
-    }, [editingGone, menuGone]);
     const ruler = rulerPx(isTouch);
 
     const root = useRef<HTMLDivElement>(null);
     const press = useRef<Press | null>(null);
-    const longPress = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [box, setBox] = useState<{
         x0: number;
         y0: number;
@@ -167,13 +154,8 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
         event.shiftKey || isToggleOn("fine")
             ? FINE_DRAG_SNAP_STEPS
             : DRAG_SNAP_STEPS;
-    const clearLongPress = () => {
-        if (longPress.current !== null) clearTimeout(longPress.current);
-        longPress.current = null;
-    };
     const cancel = useCallback(() => {
         press.current = null;
-        clearLongPress();
         setBox(null);
         setPointerAt(null);
         fieldEditMode.setDrag(null);
@@ -194,10 +176,13 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
     // A press on the field takes the keyboard there, so Tab walks lines rather than the
     // panel's controls (F6 moves between the field and the Field panel)
     const focusField = () => root.current?.focus({ preventScroll: true });
-    // Entering the mode gives the field the keyboard, wherever it was entered from (the
-    // sidebar's button, the palette)
+    // Opening the Lines tab gives the field the keyboard, wherever it was opened from (the tab,
+    // the palette). After the press that opened it: a tab takes focus when it's pressed
     useEffect(() => {
-        root.current?.focus({ preventScroll: true });
+        const later = setTimeout(() =>
+            root.current?.focus({ preventScroll: true }),
+        );
+        return () => clearTimeout(later);
     }, []);
 
     const rect = fieldScreenRect(fp, view);
@@ -246,15 +231,6 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
                     : [ref],
             armed: !fromTab,
         };
-        if (event.pointerType !== "mouse") {
-            const at = local(event);
-            longPress.current = setTimeout(() => {
-                const p = press.current;
-                if (!p || p.kind !== "line" || p.dragging) return;
-                press.current = null;
-                fieldEditMode.openMenu({ line: ref, at });
-            }, LONG_PRESS_MS);
-        }
     };
 
     const onRulerDown = (event: React.PointerEvent, axis: "x" | "y") => {
@@ -316,7 +292,6 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
             Math.hypot(at.x - p.start.x, at.y - p.start.y) < threshold
         )
             return;
-        if (!p.dragging) clearLongPress();
         p.dragging = true;
         if (p.kind === "box") {
             if (p.pointerType === "touch") return;
@@ -352,7 +327,6 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
         const p = press.current;
         if (!p || p.pointerId !== event.pointerId) return;
         press.current = null;
-        clearLongPress();
         const current = fieldEditMode.get().drag;
         fieldEditMode.setDrag(null);
         setBox(null);
@@ -382,9 +356,10 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
             if (p.wasSelected && p.additive)
                 fieldEditMode.select(clickLine(selection, ref, true));
             else if (p.wasSelected && !p.additive) {
-                // A tap on a picked line opens its exact values (touch); a click picks it alone
+                // A tap on a picked line goes to its position in the panel (touch); a click picks
+                // it alone
                 if (p.pointerType !== "mouse" && selection.length === 1)
-                    fieldEditMode.edit(ref);
+                    fieldEditMode.editPosition(ref);
                 else fieldEditMode.select([ref]);
             }
             return;
@@ -432,6 +407,10 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
                 "focus-visible:outline-accent absolute inset-0 z-30 touch-none outline-none select-none focus-visible:outline-2 focus-visible:-outline-offset-2",
                 drag?.overRuler && "cursor-not-allowed",
             )}
+            // Presses take the keyboard themselves (focusField). The mouse events a browser sends
+            // after a tap mustn't take it back from the panel's Position, where a tap on a picked
+            // line puts it
+            onMouseDown={(e) => e.preventDefault()}
             onPointerMove={onMove}
             onPointerUp={onUp}
             onPointerCancel={onLostCapture}
@@ -516,7 +495,7 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
                 )}
             </svg>
 
-            {/* Each line, to pick, drag, double-click or open its menu */}
+            {/* Each line, to pick, drag or double-click */}
             {lines.map((c) => {
                 const at = lineScreen(fp, view, c);
                 const ref = toRef(c);
@@ -570,12 +549,12 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
                             sameLine(fieldEditMode.get().hover!, ref) &&
                             fieldEditMode.setHover(null)
                         }
-                        onDoubleClick={() => fieldEditMode.edit(ref)}
+                        onDoubleClick={() => fieldEditMode.editPosition(ref)}
+                        // Right-click only picks: a line's values are in the panel
                         onContextMenu={(e) => {
                             e.preventDefault();
                             if (!isSelected(selection, ref))
                                 fieldEditMode.select([ref]);
-                            fieldEditMode.openMenu({ line: ref, at: local(e) });
                         }}
                     />
                 );
@@ -593,7 +572,7 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
                 hoverKeys={hoverKeys}
                 onRulerDown={onRulerDown}
                 onLineDown={onLineDown}
-                onLineDoubleClick={(ref) => fieldEditMode.edit(ref)}
+                onLineDoubleClick={(ref) => fieldEditMode.editPosition(ref)}
                 onRulerDoubleClick={(axis, pixel) =>
                     void apply(
                         addLineEdit(
@@ -617,7 +596,7 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
                 hoverKeys={hoverKeys}
                 onRulerDown={onRulerDown}
                 onLineDown={onLineDown}
-                onLineDoubleClick={(ref) => fieldEditMode.edit(ref)}
+                onLineDoubleClick={(ref) => fieldEditMode.editPosition(ref)}
                 onRulerDoubleClick={(axis, pixel) =>
                     void apply(
                         addLineEdit(
@@ -677,8 +656,8 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
                 </div>
             )}
 
-            {/* What Edit lines does, and how to stop, as the shape tools say (#824) */}
-            {!drag && !menu && !editing && (
+            {/* What Escape does next, as the shape tools say (#824) */}
+            {!drag && (
                 <div
                     data-testid="field-edit-hint"
                     className="rounded-6 border-stroke bg-modal text-body text-text shadow-modal pointer-events-none absolute bottom-12 left-1/2 z-20 -translate-x-1/2 border px-12 py-6 whitespace-nowrap"
@@ -694,24 +673,6 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
                         }}
                     />
                 </div>
-            )}
-
-            {menu && (
-                <LineMenu
-                    fp={fp}
-                    line={menu.line}
-                    at={menu.at}
-                    bounds={{ width, height }}
-                />
-            )}
-            {editing && (
-                <LinePopover
-                    key={lineKey(editing)}
-                    fp={fp}
-                    line={editing}
-                    view={view}
-                    bounds={{ width, height }}
-                />
             )}
         </div>
     );

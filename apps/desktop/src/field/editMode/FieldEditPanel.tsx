@@ -88,6 +88,8 @@ export function FieldEditPanel() {
                         <TabContent
                             key={id}
                             value={id}
+                            // The Lines tab scrolls its list and pins its Line section; only a
+                            // window too short for both scrolls the whole tab
                             className="flex min-h-0 flex-1 flex-col gap-24 overflow-y-auto pr-4 pb-12"
                         >
                             {id === "setup" && <SetupTab fp={fp} />}

@@ -33,11 +33,10 @@ async function openFieldPanel(page, wait) {
     await wait(800);
 }
 
-/** Opens the Field panel and turns Edit lines on, on its Lines tab, and waits for it */
+/** Opens the Field panel on its Lines tab (the mode for lines), and waits for it */
 async function editField(page, wait) {
     await openFieldPanel(page, wait);
     await page.getByTestId("field-tab-lines").click();
-    await page.getByTestId("field-edit-lines").click();
     await page.waitForFunction(() => window.fieldTest?.fieldEdit?.() != null);
     await wait(800);
 }
@@ -74,8 +73,8 @@ const shots = [
     {
         id: "field-edit-mode",
         kind: "still",
-        // The whole window while Edit lines is on: the Lines tab with the picked line's commands,
-        // the rulers, the hint and the dimmed drill
+        // The whole window on the Lines tab: the list and the picked line's Line section, the
+        // rulers, the hint and the dimmed drill
         async setup({ page, wait }) {
             await wait(3000);
             await editField(page, wait);
@@ -109,26 +108,19 @@ const shots = [
         },
     },
     {
-        id: "field-line-popover",
+        id: "field-line-detail",
         kind: "still",
-        // A line's exact values, opened with a double-click
-        async setup({ page, wait }) {
+        // The Lines tab's Line section for a picked yard line: its values, all changed here
+        async setup({ page, wait, around }) {
             await wait(3000);
             await editField(page, wait);
             const [line] = await sideTwoPair(page);
-            await page.mouse.dblclick(line.screen.x, line.screen.y);
-            const popover = page.getByTestId("field-line-popover");
-            await popover.waitFor();
+            await page.mouse.click(line.screen.x, line.screen.y);
+            await page.mouse.move(800, 990);
+            const detail = page.getByTestId("field-line-detail");
+            await detail.getByTestId("field-line-position").waitFor();
             await wait(500);
-            const p = await popover.boundingBox();
-            return {
-                box: {
-                    x: line.screen.x - 60,
-                    y: p.y - 16,
-                    width: p.x + p.width + 16 - (line.screen.x - 60),
-                    height: p.height + 32,
-                },
-            };
+            return { box: await around(detail, 8) };
         },
     },
     {

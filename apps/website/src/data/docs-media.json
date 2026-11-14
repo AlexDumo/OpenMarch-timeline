@@ -86,11 +86,11 @@
         "width": 672,
         "height": 888
     },
-    "field-line-popover": {
+    "field-line-detail": {
         "chapter": "field",
         "kind": "still",
-        "width": 120,
-        "height": 712
+        "width": 912,
+        "height": 612
     },
     "field-ruler-drag": {
         "chapter": "field",

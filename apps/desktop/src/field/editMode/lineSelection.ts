@@ -36,6 +36,27 @@ export function clickLine(
         : [...selection, ref];
 }
 
+/**
+ * Shift-click in the list: the rows from the last picked one (that's in `rows`) to `ref`, in the
+ * list's order; just `ref` when nothing in the list is picked
+ */
+export function rangeOf(
+    rows: readonly FieldLineRef[],
+    selection: LineSelection,
+    ref: FieldLineRef,
+): LineSelection {
+    const to = rows.findIndex((r) => sameLine(r, ref));
+    const anchor = [...selection]
+        .reverse()
+        .map((s) => rows.findIndex((r) => sameLine(r, s)))
+        .find((i) => i >= 0);
+    if (to < 0 || anchor === undefined) return [ref];
+    const [a, b] = anchor <= to ? [anchor, to] : [to, anchor];
+    const range = rows.slice(a, b + 1);
+    // The clicked row last, so it's the one the Line section and Tab go from
+    return [...range.filter((r) => !sameLine(r, ref)), ref];
+}
+
 /** A box: its lines, added to the selection with `additive` */
 export function boxSelect(
     selection: LineSelection,

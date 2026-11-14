@@ -10,9 +10,10 @@ import {
     waitForSettledField,
 } from "../app.mjs";
 
-// The Edit field mode (#824): the canvas edits the field's lines. Rulers to drag lines out of
-// (with Mirror sides on, the twin comes too), lines to pick, box-select and delete, an exact
-// position typed in a line's popover, every edit one undo step, and Done or Escape to leave.
+// The Field panel (#824): its Lines tab is the mode where the canvas edits the field's lines.
+// Rulers to drag lines out of (with Mirror sides on, the twin comes too), lines to pick,
+// box-select and delete, an exact position typed in the tab's Line section, every edit one undo
+// step, and Done or Escape to leave.
 // The blank show's field is the high school football field (no end zones): X lines every 8 steps
 // from -80 to 80, so S1 45 is -8 and S2 40 is 16.
 
@@ -65,14 +66,9 @@ async function openPanel(page: Page) {
     await expect(page.getByTestId("field-edit-panel")).toBeVisible();
 }
 
-/** Turns Edit lines on, on the Lines tab of an open Field panel */
+/** Opens the Lines tab of an open Field panel: the mode for lines */
 async function editLines(page: Page) {
     await page.getByTestId("field-tab-lines").click();
-    await page.getByTestId("field-edit-lines").click();
-    await expect(page.getByTestId("field-edit-lines")).toHaveAttribute(
-        "aria-pressed",
-        "true",
-    );
     await editState(page);
 }
 
@@ -81,7 +77,7 @@ async function enterFromSidebar(page: Page) {
     await editLines(page);
 }
 
-test("the panel opens on Setup with the field shown, and Edit lines is a mode on the Lines tab", async ({
+test("the panel opens on Setup with the field shown, and the Lines tab is the mode for lines", async ({
     show,
 }) => {
     const { page } = show;
@@ -108,27 +104,23 @@ test("the panel opens on Setup with the field shown, and Edit lines is a mode on
     await expect
         .poll(async () => (await drawnMarchers(page)).every((m) => m.dimmed))
         .toBe(true);
-
-    // Another tab ends Edit lines
-    await page.getByTestId("field-tab-appearance").click();
-    await expect(page.getByTestId("field-edit-overlay")).toHaveCount(0);
-    await page.getByTestId("field-tab-lines").click();
-    await expect(page.getByTestId("field-edit-lines")).toHaveAttribute(
-        "aria-pressed",
-        "false",
+    await expect(page.getByTestId("field-line-detail")).toContainText(
+        "Pick a line",
     );
 
-    // With Edit lines off a row is only read: a click picks nothing and starts nothing
+    // A row click picks its line, and the Line section shows it
     await page
         .getByTestId("field-lines-x")
         .locator("[data-field-line-row]")
         .first()
         .click();
-    await expect(page.getByTestId("field-edit-lines")).toHaveAttribute(
-        "aria-pressed",
-        "false",
-    );
-    await expect(page.getByTestId("field-edit-picked")).toHaveCount(0);
+    await expect(page.getByTestId("field-line-position")).toBeVisible();
+
+    // Another tab ends it, with nothing picked
+    await page.getByTestId("field-tab-appearance").click();
+    await expect(page.getByTestId("field-edit-overlay")).toHaveCount(0);
+    await page.getByTestId("field-tab-lines").click();
+    await expect(page.getByTestId("field-line-position")).toHaveCount(0);
 });
 
 test("enter the mode, drag a mirrored line out of the ruler, undo, and leave with Escape", async ({
@@ -180,10 +172,6 @@ test("enter the mode, drag a mirrored line out of the ruler, undo, and leave wit
     const added = await line(page, "x", 12);
     expect(added.selected).toBe(true);
     expect((await line(page, "x", -12)).highlighted).toBe(true);
-    await expect(page.getByTestId("field-edit-changes")).toContainText(
-        "2 changes",
-    );
-
     // One undo step takes both away
     await page.keyboard.press("ControlOrMeta+z");
     await expect.poll(() => xSteps(page)).toEqual(before);
@@ -200,15 +188,13 @@ test("enter the mode, drag a mirrored line out of the ruler, undo, and leave wit
     await expect
         .poll(async () => (await editState(page)).lines.some((l) => l.selected))
         .toBe(false);
-    // Then Edit lines, then the panel
+    // Then the panel, keeping the changes
     await page.keyboard.press("Escape");
     await expect.poll(() => fieldEdit(page)).toBeNull();
-    await expect(page.getByTestId("field-edit-panel")).toBeVisible();
+    await expect(page.getByTestId("field-edit-panel")).toBeHidden();
     await expect
         .poll(async () => (await drawnMarchers(page)).some((m) => m.dimmed))
         .toBe(false);
-    await page.keyboard.press("Escape");
-    await expect(page.getByTestId("field-edit-panel")).toBeHidden();
 });
 
 test("box-select, keep every other and delete the ten 5-yard lines, as one undo step", async ({
@@ -245,8 +231,10 @@ test("box-select, keep every other and delete the ten 5-yard lines, as one undo 
         )
         .toBe(19);
 
-    await page.getByTestId("field-edit-more").click();
-    await page.getByRole("menuitem", { name: /Keep every other/ }).click();
+    await page
+        .getByTestId("field-line-detail")
+        .getByRole("button", { name: "Keep every other" })
+        .click();
     await expect
         .poll(async () =>
             (await editState(page)).lines
@@ -280,22 +268,36 @@ test("drag a line, type its exact position, and drag it back into the ruler to d
     await expect.poll(() => savedXSteps(show)).toContain(14);
     expect(await savedXSteps(show)).toContain(-14);
 
-    // Double-click it and type the 47.5 yard line: 4 steps from the 50, still on side 2
+    // Double-click it: the keyboard goes to its Position in the panel. Type the 47.5 yard line:
+    // 4 steps from the 50, still on side 2. Enter saves it and gives the keyboard back to the field
     const moved = await line(page, "x", 14);
     await page.mouse.dblclick(moved.screen.x, moved.screen.y);
-    const popover = page.getByTestId("field-line-popover");
-    await expect(popover).toBeVisible();
-    await page.getByTestId("field-line-position").fill("47.5yd");
-    await expect(popover).toContainText("47.5 yard line");
-    await page.getByTestId("field-line-short-name").fill("47.5");
+    const position = page.getByTestId("field-line-position");
+    await expect(position).toBeFocused();
+    await position.fill("47.5yd");
+    await expect(page.getByTestId("field-line-detail")).toContainText(
+        "47.5 yard line",
+    );
     await page.keyboard.press("Enter");
-    await expect(popover).toBeHidden();
     await waitForIdle(page);
     await expect.poll(() => savedXSteps(show)).toContain(4);
     expect(await savedXSteps(show)).toContain(-4);
-    expect((await line(page, "x", 4)).shortName).toBe("47.5");
+    await expect(position).not.toBeFocused();
 
-    // Position and name were one step: one undo puts the line back at 14
+    // Moving it named it from its new place; a name typed is its own step
+    expect((await line(page, "x", 4)).shortName).toBe("47.5");
+    const shortName = page.getByTestId("field-line-short-name");
+    await shortName.fill("H47");
+    await shortName.press("Enter");
+    await expect
+        .poll(async () => (await line(page, "x", 4)).shortName)
+        .toBe("H47");
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect
+        .poll(async () => (await line(page, "x", 4)).shortName)
+        .toBe("47.5");
+
+    // One more undo puts the line back at 14
     await page.keyboard.press("ControlOrMeta+z");
     await expect.poll(() => savedXSteps(show)).toContain(14);
     await expect.poll(() => xSteps(page)).toContain(14);
@@ -571,20 +573,20 @@ test("Tab walks the lines from the field, and F6 takes the keyboard to the Field
     await expect(page.getByTestId("field-edit-keys-help")).toContainText("F6");
 });
 
-test("the list's + adds a mirrored line halfway, and the template sheet keeps the look or resets", async ({
+test("Add line adds a mirrored line, and the template sheet keeps the look or resets", async ({
     show,
 }) => {
     const { page } = show;
     await enterFromSidebar(page);
     const before = await savedXSteps(show);
 
-    // Mirror on: the first gap is between the 50 and the 45s, so the new pair is at ±4
-    const list = page.getByTestId("field-lines-x");
-    await list.getByTestId("field-lines-insert").first().hover();
-    await list.getByTestId("field-lines-insert").first().click();
-    await expect.poll(() => savedXSteps(show)).toContain(4);
-    expect(await savedXSteps(show)).toContain(-4);
-    expect(await savedXSteps(show)).toHaveLength(before.length + 2);
+    // Mirror on: a pair, halfway into a gap (all gaps are 8 steps, so 4 steps off a line)
+    await page.getByTestId("field-lines-add").click();
+    await expect
+        .poll(async () => (await savedXSteps(show)).length)
+        .toBe(before.length + 2);
+    const added = (await savedXSteps(show)).filter((s) => !before.includes(s));
+    expect(added[0]).toBe(-added[1]!);
 
     // Hide the top labels (part of the look), then switch templates keeping the look
     await page.getByTestId("field-tab-appearance").click();
@@ -599,7 +601,7 @@ test("the list's + adds a mirrored line halfway, and the template sheet keeps th
     await expect(page.getByTestId("field-template-diff")).toBeVisible();
     await expect(page.getByTestId("field-template-keep-look")).toBeChecked();
     await page.getByTestId("field-template-apply").click();
-    await expect(page.getByTestId("field-edit-based-on")).toContainText(
+    await expect(page.getByTestId("field-template-select")).toContainText(
         "College football field (no end zones)",
     );
     const saved = async () => {
@@ -612,19 +614,21 @@ test("the list's + adds a mirrored line halfway, and the template sheet keeps th
         };
     };
     expect((await saved()).topLabelsVisible).toBe(false);
-    // The template's own lines: the pair at ±4 is gone
-    expect(await savedXSteps(show)).not.toContain(4);
+    // The template's own lines: the added pair is gone
+    const template = await savedXSteps(show);
+    expect(template).not.toContain(added[1]);
 
     // Add a line, then reset to the template: back to its lines
     await editLines(page);
-    await list.getByTestId("field-lines-insert").first().hover();
-    await list.getByTestId("field-lines-insert").first().click();
-    await expect.poll(() => savedXSteps(show)).toContain(4);
+    await page.getByTestId("field-lines-add").click();
+    await expect
+        .poll(async () => (await savedXSteps(show)).length)
+        .toBe(template.length + 2);
     await page.getByTestId("field-tab-setup").click();
     await page.getByTestId("field-template-reset").click();
     await expect(sheet).toContainText("Reset to College football");
     await page.getByTestId("field-template-apply").click();
-    await expect.poll(() => savedXSteps(show)).not.toContain(4);
+    await expect.poll(() => savedXSteps(show)).toEqual(template);
     // The kept look (the top labels hidden) is the one change left
     await expect(page.getByTestId("field-edit-changes")).toContainText(
         "1 change",
@@ -666,7 +670,7 @@ test.describe("touch", () => {
         await cdp.detach();
     }
 
-    test("a finger gets 44 px rulers, a long press opens the line's menu, and a tap on a picked line its values", async ({
+    test("a finger gets 44 px rulers, and a tap on a picked line goes to its position with the number pad", async ({
         show,
     }) => {
         const { page } = show;
@@ -679,26 +683,21 @@ test.describe("touch", () => {
         expect(state.rulers.x.from.y - box.y).toBeCloseTo(22, 0);
         expect(state.rulers.y.from.x - box.x).toBeCloseTo(22, 0);
 
+        // A tap picks; Visible in the Line section hides the line and its twin
         const forty = await line(page, "x", 16);
-        await touch(page, forty.screen, 700);
-        const menu = page.getByTestId("field-line-menu");
-        await expect(menu).toBeVisible();
+        await touch(page, forty.screen);
         await expect
-            .poll(async () => (await editState(page)).menu)
-            .toEqual({
-                axis: "x",
-                id: forty.id,
-            });
-        // Hide from the menu: the line and its twin
-        await menu.getByRole("menuitem", { name: /Hide/ }).click();
+            .poll(async () => (await line(page, "x", 16)).selected)
+            .toBe(true);
+        await page.getByTestId("field-line-visible").click();
         await expect
             .poll(async () => (await savedX(show, 16))?.visible)
             .toBe(false);
         expect((await savedX(show, -16))?.visible).toBe(false);
 
-        // The line is picked: a tap opens its exact values, with the number pad
+        // A tap on the picked line goes to its position, with the number pad
         await touch(page, forty.screen);
-        await expect(page.getByTestId("field-line-popover")).toBeVisible();
+        await expect(page.getByTestId("field-line-position")).toBeFocused();
         await expect(
             page.getByRole("group", { name: "Number pad" }),
         ).toBeVisible();

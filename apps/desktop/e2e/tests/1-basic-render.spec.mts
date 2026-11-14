@@ -120,7 +120,7 @@ test("Field panel sections are visible", async ({ electronApp }) => {
     await expect(inspector.getByText("Side Descriptions")).toBeVisible();
     await page.getByTestId("field-tab-lines").click();
     await expect(page.getByTestId("field-lines-axis")).toBeVisible();
-    await expect(page.getByTestId("field-edit-lines")).toBeVisible();
+    await expect(page.getByTestId("field-line-detail")).toBeVisible();
     await page.getByTestId("field-tab-appearance").click();
     for (const inside of ["Yard numbers", "Marchers and paths"])
         await expect(inspector.getByText(inside)).toBeVisible();

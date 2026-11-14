@@ -40,9 +40,9 @@ import {
 } from "./fieldEditSession";
 
 /**
- * What owns its own keys when it has focus: a menu (the line menu), a dialog (the line popover,
- * the template sheet) and form controls (switches, inputs, sliders, selects, segmented
- * switches). A key pressed there is the control's, never the mode's.
+ * What owns its own keys when it has focus: a menu, a dialog (the template sheet) and form
+ * controls (switches, inputs, sliders, selects, segmented switches). A key pressed there is the
+ * control's, never the mode's.
  */
 const OWNS_KEYS = [
     "[role=menu]",
@@ -80,7 +80,7 @@ function keyTarget(): HTMLElement | null {
 /**
  * Whether Tab or Enter belongs to the field rather than a control: on a focused button, field
  * or row in the Field panel they're that control's (Tab moves on, Enter presses it),
- * and in the line menu and popover they're theirs. Anything that isn't a key press (a menu
+ * and in a menu, dialog or field they're theirs. Anything that isn't a key press (a menu
  * entry, a button, the palette) is the field's.
  */
 export function keyIsForField(): boolean {
@@ -90,16 +90,16 @@ export function keyIsForField(): boolean {
     return (
         active.closest("[data-field-edit-overlay]") !== null ||
         active.closest("[data-testid='threeField']") !== null ||
-        // Enter on a row of the Field panel's list edits its line
+        // Enter on a row of the Field panel's list goes to its line's Position
         active.closest("[data-field-line-list] [role=option]") !== null
     );
 }
 
 /**
  * Whether a single key (Delete, H, R, M, X, Y, the arrows, ⌘A) acts on the lines: anywhere but
- * in the line menu, the line popover, a dialog or a form control, whose keys are their own (an
- * arrow moves a slider, H in the popover is typed or ignored). A focused button keeps none of
- * these, so after clicking Hide/Show in the panel, H still hides.
+ * in a menu, a dialog or a form control, whose keys are their own (an arrow moves a slider, H in
+ * a name is typed). A focused button keeps none of these, so after clicking Delete in the panel
+ * the arrows still nudge.
  */
 export function keyIsForLines(): boolean {
     const active = keyTarget();
@@ -138,14 +138,12 @@ export function selectAdded(result: FieldEditResult | null) {
 }
 
 /**
- * Opening the Field panel (#824) and Edit lines: the two of its actions that work while it's
- * shut. The panel opens on Setup; Edit lines from the palette opens it with Edit lines on.
+ * Opening the Field panel (#824): the two of its actions that work while it's shut. Edit field
+ * opens it on Setup (or shuts it); Edit field lines opens it on Lines.
  */
 export function useFieldEditModeEntry() {
-    const { t } = useTranslate();
     const databaseReady = useDatabaseReady();
     const { setSelectedMarchers } = useSelectedMarchers() ?? {};
-    const editingLines = useFieldEditModeStore((s) => s.active && s.lines);
     // The panel belongs to the show that's open: a show opening starts with it shut, and closing
     // the show (or switching to another) shuts it, with nothing picked, open or dragged
     useEffect(() => {
@@ -166,7 +164,7 @@ export function useFieldEditModeEntry() {
     useEffect(() => {
         if (preview) fieldEditMode.exit();
     }, [preview]);
-    const open = (lines: boolean) => {
+    const open = (lines = false) => {
         // The drill can't be picked while the panel is open: nothing stays selected to be
         // nudged or deleted by a key meant for the field
         setSelectedMarchers?.([]);
@@ -179,24 +177,17 @@ export function useFieldEditModeEntry() {
         "fieldEditMode",
         () => {
             if (fieldEditMode.isActive()) fieldEditMode.exit();
-            else open(false);
+            else open();
         },
         { enabled },
     );
     useActionHandler(
         "fieldEditLines",
         () => {
-            if (!fieldEditMode.isActive()) return open(true);
-            fieldEditMode.setLines(!fieldEditMode.isEditingLines());
+            if (fieldEditMode.isActive()) fieldEditMode.setTab("lines");
+            else open(true);
         },
-        {
-            enabled,
-            label: t(
-                editingLines
-                    ? "actions.field.editLinesOff"
-                    : "actions.field.editLinesOn",
-            ),
-        },
+        { enabled },
     );
 }
 
@@ -208,15 +199,12 @@ export function useFieldPanelActions() {
     const fp = useFieldProperties();
     useFieldImageActions(fp);
 
-    // Done (the panel, the palette) shuts the panel at once. Escape steps back one thing at a
-    // time: the line menu or popover, then the pick, then Edit lines, then the panel
+    // Done (the panel, the palette) shuts the panel at once. Escape drops the pick first, then
+    // shuts the panel as Done does
     useActionHandler("fieldEditDone", () => fieldEditMode.exit(), {
         onPress: () => {
-            const state = fieldEditMode.get();
-            if (state.menu) return fieldEditMode.openMenu(null);
-            if (state.editing) return fieldEditMode.edit(null);
-            if (state.selection.length > 0) return fieldEditMode.select([]);
-            if (state.lines) return fieldEditMode.setLines(false);
+            if (fieldEditMode.get().selection.length > 0)
+                return fieldEditMode.select([]);
             fieldEditMode.exit();
         },
         // Escape in a menu, dialog, picker or field is that control's
@@ -225,12 +213,13 @@ export function useFieldPanelActions() {
 
     useFieldEditDiscard();
 
-    // ⌘A / Ctrl+A: never the marchers while the panel is open (they can't be picked); the lines
-    // while Edit lines is on, and nothing otherwise. Here rather than in the line keys, so it's
-    // on top of the drill's own handler from the moment the panel opens
+    // ⌘A / Ctrl+A: never the marchers while the panel is open (they can't be picked); on the
+    // Lines tab the lines of the list showing, and nothing otherwise. Here rather than in the line
+    // keys, so it's on top of the drill's own handler from the moment the panel opens
     useActionHandler(
         "selectAllMarchers",
-        () => fp && fieldEditMode.select(selectAll(fp)),
+        () =>
+            fp && fieldEditMode.select(selectAll(fp, fieldEditMode.get().axis)),
         {
             enabled: () =>
                 !!fp && fieldEditMode.isEditingLines() && keyIsForLines(),
@@ -244,7 +233,7 @@ export function useFieldPanelActions() {
 }
 
 /**
- * Edit lines' keys and commands (#824). Mounted only while Edit lines is on, so otherwise none of
+ * The Lines tab's keys and commands (#824). Mounted only while it's showing, so otherwise none of
  * these is in the palette and their keys do nothing (the drill's are off while the panel is open).
  */
 export function useFieldLineActions() {
@@ -300,7 +289,7 @@ export function useFieldLineActions() {
         () => {
             const current = now();
             const last = current[current.length - 1];
-            if (last) fieldEditMode.edit(last);
+            if (last) fieldEditMode.editPosition(last);
         },
         { enabled: () => hasSelection && keyIsForField() },
     );

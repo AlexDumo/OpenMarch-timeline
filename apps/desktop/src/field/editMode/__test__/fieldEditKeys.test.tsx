@@ -10,8 +10,7 @@ import type { ActionId } from "@/shortcuts/definitions";
 import { registerActionHandler } from "@/shortcuts/registry";
 import { fieldEditMode } from "../fieldEditModeStore";
 import { focusFieldEditPane } from "../fieldEditPanes";
-import { LineMenu } from "../LineMenu";
-import { LinePopover } from "../LinePopover";
+import { LineDetail } from "../panel/LineDetail";
 import { toRef } from "../lines";
 import {
     keyIsForField,
@@ -20,8 +19,8 @@ import {
 } from "../useFieldEditModeActions";
 
 /**
- * The Edit field mode's keys (#824 review): Tab, Enter, H, the arrows, Delete and Space belong to
- * the line menu, the line popover and form controls while they have focus; F6 moves between the
+ * The Field panel's keys (#824 review): Tab, Enter, H, the arrows, Delete and Space belong to
+ * the Line section's fields and other form controls while they have focus; F6 moves between the
  * field and the Field panel; and the mode ends with the show.
  */
 
@@ -84,12 +83,6 @@ const press = (key: string, init: KeyboardEventInit = {}) =>
         key,
         ...init,
     });
-
-/** The field's keys and plain keys, on whatever has focus now (Tab last: it closes the menu) */
-function pressEveryKey() {
-    for (const key of ["h", "Delete", "ArrowRight", "Enter", " ", "Tab"])
-        press(key, { code: key === " " ? "Space" : undefined });
-}
 
 describe("which keys are the field's", () => {
     it("are the field's from the body, the field and a plain button", () => {
@@ -162,138 +155,35 @@ describe("which keys are the field's", () => {
     });
 });
 
-describe("the line menu", () => {
+describe("the Line section", () => {
     const open = () => {
-        fieldEditMode.enter();
+        fieldEditMode.enter({ lines: true });
         fieldEditMode.select([toRef(forty)]);
-        const view = render(
-            <Providers>
-                <ShortcutDispatcher />
-                <div data-field-edit-overlay tabIndex={-1} data-testid="field">
-                    <LineMenu
-                        fp={college}
-                        line={toRef(forty)}
-                        at={{ x: 900, y: 700 }}
-                        bounds={{ width: 1000, height: 800 }}
-                    />
-                </div>
-            </Providers>,
-        );
-        return view;
-    };
-
-    it("keeps its keys: the field's shortcuts and Space don't run from it", () => {
-        const keys = modeKeys();
-        const view = open();
-        const items = view.getAllByRole("menuitem");
-        expect(document.activeElement).toBe(
-            items.find((item) => !(item as HTMLButtonElement).disabled),
-        );
-        pressEveryKey();
-        for (const run of Object.values(keys)) expect(run).not.toBeCalled();
-    });
-
-    it("moves between its entries with the arrows, Home and End", () => {
-        modeKeys();
-        const view = open();
-        const enabled = view
-            .getAllByRole("menuitem")
-            .filter((item) => !(item as HTMLButtonElement).disabled);
-        expect(enabled.length).toBeGreaterThan(2);
-        press("ArrowDown");
-        expect(document.activeElement).toBe(enabled[1]);
-        press("End");
-        expect(document.activeElement).toBe(enabled[enabled.length - 1]);
-        press("ArrowDown");
-        expect(document.activeElement).toBe(enabled[0]);
-        press("ArrowUp");
-        expect(document.activeElement).toBe(enabled[enabled.length - 1]);
-        press("Home");
-        expect(document.activeElement).toBe(enabled[0]);
-    });
-
-    it("closes on Escape and gives the keyboard back to the field, without leaving the mode", () => {
-        const done = handle("fieldEditDone");
-        modeKeys();
-        const view = open();
-        fieldEditMode.openMenu({ line: toRef(forty), at: { x: 0, y: 0 } });
-        press("Escape");
-        expect(fieldEditMode.get().menu).toBeNull();
-        expect(fieldEditMode.isActive()).toBe(true);
-        expect(done).not.toBeCalled();
-        expect(document.activeElement).toBe(view.getByTestId("field"));
-    });
-
-    it("stays inside the field when it opens near an edge", () => {
-        const view = open();
-        const menu = view.getByTestId("field-line-menu");
-        // jsdom has no layout: the menu is 0 × 0, so it moves in to 8 px from the far edges
-        expect(menu.style.left).toBe("900px");
-        Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
-            configurable: true,
-            get: () => 220,
-        });
-        Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
-            configurable: true,
-            get: () => 300,
-        });
-        try {
-            cleanup();
-            const again = open();
-            const moved = again.getByTestId("field-line-menu");
-            expect(moved.style.left).toBe(`${1000 - 220 - 8}px`);
-            expect(moved.style.top).toBe(`${800 - 300 - 8}px`);
-        } finally {
-            delete (HTMLElement.prototype as { offsetWidth?: number })
-                .offsetWidth;
-            delete (HTMLElement.prototype as { offsetHeight?: number })
-                .offsetHeight;
-        }
-    });
-});
-
-describe("the line popover", () => {
-    const open = () => {
-        fieldEditMode.enter();
-        fieldEditMode.edit(toRef(forty));
         return render(
             <Providers>
                 <ShortcutDispatcher />
-                <div data-field-edit-overlay tabIndex={-1} data-testid="field">
-                    <LinePopover
-                        fp={college}
-                        line={toRef(forty)}
-                        view={{ zoom: 1, panX: 0, panY: 0 }}
-                        bounds={{ width: 1200, height: 900 }}
-                    />
-                </div>
+                <div data-field-edit-pane="field" tabIndex={-1} />
+                <LineDetail fp={college} />
             </Providers>,
         );
     };
 
-    it("keeps its keys on its switches and buttons", () => {
+    it("keeps its keys in Position, the names and its switches", () => {
         const keys = modeKeys();
         const view = open();
-        expect(document.activeElement).toBe(
-            view.getByTestId("field-line-position"),
-        );
-        view.getByTestId("field-line-visible").focus();
-        pressEveryKey();
-        view.getByTestId("field-line-done").focus();
-        pressEveryKey();
+        for (const id of [
+            "field-line-position",
+            "field-line-name",
+            "field-line-visible",
+        ]) {
+            view.getByTestId(id).focus();
+            // Enter in a field saves it and gives the keyboard back to the field: its own test
+            for (const key of ["h", "Delete", "ArrowRight", " ", "Tab"])
+                press(key, { code: key === " " ? "Space" : undefined });
+        }
+        view.getByTestId("field-line-position").focus();
+        press("Enter");
         for (const run of Object.values(keys)) expect(run).not.toBeCalled();
-    });
-
-    it("holds a flipped switch as a draft until Done, and Escape drops it", () => {
-        const view = open();
-        const visible = view.getByTestId("field-line-visible");
-        expect(visible.getAttribute("aria-checked")).toBe("true");
-        act(() => visible.click());
-        expect(visible.getAttribute("aria-checked")).toBe("false");
-        press("Escape");
-        expect(fieldEditMode.get().editing).toBeNull();
-        expect(fieldEditMode.isActive()).toBe(true);
-        expect(document.activeElement).toBe(view.getByTestId("field"));
     });
 
     it("still lets ⌘/Ctrl chords and F6 through", () => {
@@ -342,7 +232,7 @@ describe("the mode and the show", () => {
         return null;
     }
 
-    it("ends with the show: closing it leaves the mode, with nothing picked, open or dragged", () => {
+    it("ends with the show: closing it leaves the mode, with nothing picked or dragged", () => {
         const view = render(
             <Providers>
                 <Entry />
@@ -351,7 +241,6 @@ describe("the mode and the show", () => {
         act(() => {
             fieldEditMode.enter();
             fieldEditMode.select([toRef(forty)]);
-            fieldEditMode.edit(toRef(forty));
             fieldEditMode.setDrag({
                 kind: "move",
                 axis: "x",
@@ -364,9 +253,7 @@ describe("the mode and the show", () => {
         expect(fieldEditMode.get()).toMatchObject({
             active: false,
             selection: [],
-            editing: null,
             drag: null,
-            menu: null,
         });
     });
 

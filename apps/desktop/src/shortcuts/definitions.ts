@@ -966,11 +966,9 @@ const STATIC_ACTIONS = {
         scope: "global",
         defaultBindings: ["$mod+Shift+E", "Control+Shift+E"],
     },
-    // Edit lines on the Field panel's Lines tab (#824). No key: E is the next page everywhere
+    // Opens the Field panel on its Lines tab (#824). No key: E is the next page everywhere
     fieldEditLines: {
         labelKey: "actions.field.editLines",
-        toggleOnKey: "actions.field.editLinesOn",
-        toggleOffKey: "actions.field.editLinesOff",
         keywordsKey: "actions.field.checkpointKeywords",
         category: "field",
         scope: "global",

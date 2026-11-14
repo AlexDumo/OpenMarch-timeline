@@ -22,6 +22,7 @@ export function CommitInput<T>({
     placeholder,
     title,
     wide,
+    afterEnter,
 }: {
     label: string;
     /** The stored value as the input shows it */
@@ -39,6 +40,8 @@ export function CommitInput<T>({
     title?: string;
     /** Room for words (names), not a number */
     wide?: boolean;
+    /** After Enter has saved it: where the keyboard goes next (the Line section's field) */
+    afterEnter?: () => void;
 }) {
     const [draft, setDraft] = useDraft(stored);
     const parsed = parse(draft);
@@ -76,7 +79,13 @@ export function CommitInput<T>({
                         onChange={(e) => setDraft(e.target.value)}
                         onBlur={commit}
                         onKeyDown={(e) => {
-                            if (e.key === "Enter") e.currentTarget.blur();
+                            if (e.key === "Enter") {
+                                // The field's: it doesn't also reach the app's Enter
+                                e.preventDefault();
+                                e.stopPropagation();
+                                e.currentTarget.blur();
+                                afterEnter?.();
+                            }
                             if (e.key === "Escape") {
                                 // The field's, not the panel's: it doesn't also step back
                                 e.preventDefault();

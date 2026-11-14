@@ -85,7 +85,5 @@ export function fieldEditTestState(
             steps: state.drag.steps,
             overRuler: state.drag.overRuler,
         },
-        editing: state.editing && { ...state.editing },
-        menu: state.menu && { ...state.menu.line },
     };
 }

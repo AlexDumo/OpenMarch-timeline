@@ -204,10 +204,6 @@ export type FieldTestFieldEdit = {
         steps: number;
         overRuler: boolean;
     } | null;
-    /** The line whose exact-values popover is open */
-    editing: { axis: "x" | "y"; id: number } | null;
-    /** The line whose menu is open */
-    menu: { axis: "x" | "y"; id: number } | null;
 };
 
 /** The prop tool as the field shows it. */

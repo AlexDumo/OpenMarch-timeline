@@ -15,14 +15,23 @@ import {
 } from "../useFieldEditModeActions";
 import { CommitInput, parseNumber } from "../panel/settingsInputs";
 import { LinesTab } from "../panel/LinesTab";
+import { LineDetail } from "../panel/LineDetail";
 import { lineRows } from "../panel/LinesList";
 import { FieldEditOverlay } from "../FieldEditOverlay";
 
 /**
- * The Field panel and Edit lines (#824): the panel opens on Setup with line editing off, Edit
- * lines belongs to the Lines tab, Escape steps back one thing at a time, and the drill's canvas
- * keys are off while the panel is open.
+ * The Field panel (#824): it opens on Setup, the Lines tab is the mode for lines, Escape drops the
+ * pick and then shuts the panel, the drill's canvas keys are off while it's open, and the Lines
+ * tab's Line section is the one place a line's values change.
  */
+
+const apply = vi.hoisted(() =>
+    vi.fn(async (..._args: unknown[]) => ({ diff: { ok: true } })),
+);
+vi.mock("../useApplyFieldEdits", async (original) => ({
+    ...(await original<typeof import("../useApplyFieldEdits")>()),
+    useApplyFieldEdits: () => apply,
+}));
 
 const college = FieldPropertiesTemplates.COLLEGE_FOOTBALL_FIELD_NO_END_ZONES;
 const forty = college.xCheckpoints.find((c) => c.stepsFromCenterFront === 16)!;
@@ -36,6 +45,9 @@ afterEach(() => {
     cleanup();
     offs.splice(0).forEach((off) => off());
     fieldEditMode.exit();
+    fieldEditMode.setMirror(true);
+    fieldEditMode.setAxis("x");
+    apply.mockClear();
 });
 
 function Providers({ children }: { children: ReactNode }) {
@@ -58,9 +70,9 @@ describe("the panel and Edit lines", () => {
         });
     });
 
-    it("turns Edit lines on on the Lines tab, and another tab turns it off with nothing picked", () => {
+    it("makes the Lines tab the mode: another tab ends it, with nothing picked", () => {
         fieldEditMode.enter();
-        fieldEditMode.setLines(true);
+        fieldEditMode.setTab("lines");
         expect(fieldEditMode.get()).toMatchObject({
             lines: true,
             tab: "lines",
@@ -74,18 +86,15 @@ describe("the panel and Edit lines", () => {
         });
     });
 
-    it("keeps Mirror sides when Edit lines turns off", () => {
-        fieldEditMode.enter();
-        fieldEditMode.setLines(true);
+    it("keeps Mirror sides across tabs", () => {
+        fieldEditMode.enter({ lines: true });
         fieldEditMode.setMirror(false);
-        fieldEditMode.setLines(false);
+        fieldEditMode.setTab("setup");
+        fieldEditMode.setTab("lines");
         expect(fieldEditMode.get().mirror).toBe(false);
-        fieldEditMode.setMirror(true);
     });
 
-    it("has no Edit lines while the panel is shut", () => {
-        fieldEditMode.setLines(true);
-        expect(fieldEditMode.get().lines).toBe(false);
+    it("has no lines mode while the panel is shut", () => {
         fieldEditMode.enter({ lines: true });
         expect(fieldEditMode.get()).toMatchObject({
             lines: true,
@@ -106,7 +115,7 @@ describe("keys while the panel is open", () => {
         return null;
     }
 
-    it("Escape drops the pick, then Edit lines, then shuts the panel", () => {
+    it("Escape drops the pick, then shuts the panel", () => {
         render(
             <Providers>
                 <ShortcutDispatcher />
@@ -126,11 +135,6 @@ describe("keys while the panel is open", () => {
             active: true,
             lines: true,
             selection: [],
-        });
-        escape();
-        expect(fieldEditMode.get()).toMatchObject({
-            active: true,
-            lines: false,
         });
         escape();
         expect(fieldEditMode.isActive()).toBe(false);
@@ -252,39 +256,45 @@ describe("the Lines tab", () => {
         expect(view.queryByTestId("field-lines-x")).toBeNull();
     });
 
-    it("reads its rows only while Edit lines is off: a click picks nothing", () => {
-        const view = render(
-            <Providers>
-                <LinesTab fp={college} />
-            </Providers>,
-        );
-        act(() => fieldEditMode.enter());
-        act(() => {
-            fireEvent.click(
-                view.container.querySelector("[data-field-line-row]")!,
-            );
-        });
-        expect(fieldEditMode.get()).toMatchObject({
-            lines: false,
-            selection: [],
-        });
-    });
-
-    it("gives a row's eye and target the app's tooltip, not a browser title", async () => {
+    it("picks from the list: click, Ctrl-click to add, Shift-click for a range", () => {
         act(() => fieldEditMode.enter({ lines: true }));
         const view = render(
             <Providers>
                 <LinesTab fp={college} />
             </Providers>,
         );
-        const row = view.container.querySelector("[data-field-line-row]")!;
-        const [eye, target] = row.querySelectorAll("button");
-        for (const button of [eye!, target!])
-            expect(button.hasAttribute("title")).toBe(false);
-        act(() => eye!.focus());
-        expect((await view.findByRole("tooltip")).textContent).toContain(
-            eye!.getAttribute("aria-label")!,
+        const rows = [
+            ...view.container.querySelectorAll<HTMLElement>(
+                "[data-field-line-row]",
+            ),
+        ];
+        const ids = () => fieldEditMode.get().selection.map((r) => r.id);
+        const rowId = (i: number) =>
+            Number(rows[i]!.dataset.fieldLineRow!.split(":")[1]);
+        act(() => {
+            fireEvent.click(rows[1]!);
+        });
+        expect(ids()).toEqual([rowId(1)]);
+        act(() => {
+            fireEvent.click(rows[3]!, { ctrlKey: true });
+        });
+        expect(ids()).toEqual([rowId(1), rowId(3)]);
+        act(() => {
+            fireEvent.click(rows[5]!, { shiftKey: true });
+        });
+        expect(ids()).toEqual([rowId(3), rowId(4), rowId(5)]);
+    });
+
+    it("has no buttons on its rows: they change nothing themselves", () => {
+        act(() => fieldEditMode.enter({ lines: true }));
+        const view = render(
+            <Providers>
+                <LinesTab fp={college} />
+            </Providers>,
         );
+        expect(
+            view.container.querySelectorAll("[data-field-line-row] button"),
+        ).toHaveLength(0);
     });
 
     it("lists the front-to-back lines back to front, top to bottom as the field is drawn", () => {
@@ -319,4 +329,132 @@ describe("hovering a line on the field", () => {
             ).toHaveLength(count);
         },
     );
+});
+
+describe("the Line section", () => {
+    const show = (picked: (typeof forty)[]) => {
+        act(() => {
+            fieldEditMode.enter({ lines: true });
+            fieldEditMode.select(picked.map(toRef));
+        });
+        return render(
+            <Providers>
+                <div data-field-edit-pane="field" tabIndex={-1} />
+                <LineDetail fp={college} />
+            </Providers>,
+        );
+    };
+
+    it("says how to pick while nothing is", () => {
+        const view = show([]);
+        expect(view.getByTestId("field-line-detail").textContent).toContain(
+            "Pick a line",
+        );
+        expect(view.queryByTestId("field-line-position")).toBeNull();
+    });
+
+    it("moves the line (and its twin) when a position is typed, as one edit", () => {
+        const view = show([forty]);
+        const position = view.getByTestId(
+            "field-line-position",
+        ) as HTMLInputElement;
+        expect(position.value).toBe("16");
+        position.focus();
+        fireEvent.change(position, { target: { value: "+4" } });
+        act(() => {
+            fireEvent.keyDown(position, { key: "Enter" });
+        });
+        expect(apply).toHaveBeenCalledTimes(1);
+        expect(apply.mock.calls[0]![0]).toMatchObject({
+            edit: "moveCheckpoints",
+            args: { to: 20, mirror: true },
+        });
+        // Enter gives the keyboard back to the field
+        expect(
+            document.activeElement?.getAttribute("data-field-edit-pane"),
+        ).toBe("field");
+    });
+
+    it("saves a name on Enter, as one edit, and gives the keyboard back to the field", () => {
+        const view = show([forty]);
+        const name = view.getByTestId(
+            "field-line-short-name",
+        ) as HTMLInputElement;
+        name.focus();
+        fireEvent.change(name, { target: { value: "H40" } });
+        act(() => {
+            fireEvent.keyDown(name, { key: "Enter" });
+        });
+        expect(apply).toHaveBeenCalledTimes(1);
+        expect(apply.mock.calls[0]![0]).toMatchObject({
+            edit: "updateCheckpoints",
+            args: { patch: { shortName: "H40" }, mirror: true },
+        });
+        expect(
+            document.activeElement?.getAttribute("data-field-edit-pane"),
+        ).toBe("field");
+    });
+
+    it("puts the typing back on Escape and saves nothing", () => {
+        const view = show([forty]);
+        const position = view.getByTestId(
+            "field-line-position",
+        ) as HTMLInputElement;
+        position.focus();
+        fireEvent.change(position, { target: { value: "30" } });
+        act(() => {
+            fireEvent.keyDown(position, { key: "Escape" });
+        });
+        expect(position.value).toBe("16");
+        expect(apply).not.toHaveBeenCalled();
+        expect(fieldEditMode.get().selection).toHaveLength(1);
+    });
+
+    it("flips Visible at once, one edit", () => {
+        const view = show([forty]);
+        act(() => {
+            fireEvent.click(view.getByTestId("field-line-visible"));
+        });
+        expect(apply).toHaveBeenCalledTimes(1);
+        expect(apply.mock.calls[0]![0]).toMatchObject({
+            edit: "updateCheckpoints",
+            args: { patch: { visible: false } },
+        });
+    });
+
+    it("says Mixed for a switch some picked lines have on", () => {
+        const fortyFive = college.xCheckpoints.find(
+            (c) => c.stepsFromCenterFront === 8,
+        )!;
+        const fp = {
+            ...college,
+            xCheckpoints: college.xCheckpoints.map((c) => ({
+                ...c,
+                visible: c.id !== fortyFive.id,
+            })),
+        } as typeof college;
+        act(() => {
+            fieldEditMode.enter({ lines: true });
+            fieldEditMode.select([toRef(forty), toRef(fortyFive)]);
+        });
+        const view = render(
+            <Providers>
+                <LineDetail fp={fp} />
+            </Providers>,
+        );
+        const detail = view.getByTestId("field-line-detail");
+        expect(detail.textContent).toContain("2 lines");
+        expect(detail.textContent).toContain("Mixed");
+        expect(
+            view.getByTestId("field-line-visible").getAttribute("aria-checked"),
+        ).toBe("false");
+    });
+
+    it("comes to Position with its text picked on a double-click or Enter", () => {
+        const view = show([]);
+        act(() => fieldEditMode.editPosition(toRef(forty)));
+        const position = view.getByTestId("field-line-position");
+        expect(document.activeElement).toBe(position);
+        expect(fieldEditMode.get().focusPosition).toBe(false);
+    });
 });
