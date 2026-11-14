@@ -120,6 +120,16 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
     const menu = useFieldEditModeStore((s) => s.menu);
     const selectMany = useFieldEditModeStore((s) => s.selectMany);
     const selection = existingSelection(fp, storedSelection);
+    // With Mirror on, hovering a line lights its twin too, as picking it does
+    const hoverKeys = useMemo(
+        () =>
+            new Set(
+                selectionWithTwins(fp, hover ? [hover] : [], mirror).map((r) =>
+                    lineKey(r),
+                ),
+            ),
+        [fp, hover, mirror],
+    );
     const hasPick = selection.length > 0;
     // An undo can take a picked line away: forget it, and close its popover or menu
     useEffect(() => {
@@ -442,7 +452,7 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
                     const key = lineKey(toRef(c));
                     const at = lineScreen(fp, view, c);
                     const lit = highlighted.has(key);
-                    const hovered = hover && sameLine(hover, toRef(c));
+                    const hovered = hoverKeys.has(key);
                     const moving = dragged.has(key);
                     // Hidden lines are drawn faint here, so they can be found and picked
                     if (!lit && !hovered && c.visible && !moving) return null;
@@ -580,7 +590,7 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
                 thickness={ruler}
                 touch={isTouch}
                 highlighted={highlighted}
-                hover={hover}
+                hoverKeys={hoverKeys}
                 onRulerDown={onRulerDown}
                 onLineDown={onLineDown}
                 onLineDoubleClick={(ref) => fieldEditMode.edit(ref)}
@@ -604,7 +614,7 @@ export function FieldEditOverlay({ fp }: { fp: FieldProperties }) {
                 thickness={ruler}
                 touch={isTouch}
                 highlighted={highlighted}
-                hover={hover}
+                hoverKeys={hoverKeys}
                 onRulerDown={onRulerDown}
                 onLineDown={onLineDown}
                 onLineDoubleClick={(ref) => fieldEditMode.edit(ref)}
@@ -763,7 +773,7 @@ function Ruler({
     thickness,
     touch,
     highlighted,
-    hover,
+    hoverKeys,
     onRulerDown,
     onLineDown,
     onLineDoubleClick,
@@ -779,7 +789,8 @@ function Ruler({
     thickness: number;
     touch: boolean;
     highlighted: ReadonlySet<string>;
-    hover: FieldLineRef | null;
+    /** The hovered line, and with Mirror on its twin */
+    hoverKeys: ReadonlySet<string>;
     onRulerDown: (event: React.PointerEvent, axis: "x" | "y") => void;
     onLineDown: (
         event: React.PointerEvent,
@@ -888,7 +899,7 @@ function Ruler({
                 const ref = toRef(c);
                 const key = lineKey(ref);
                 const lit = highlighted.has(key);
-                const hovered = hover && sameLine(hover, ref);
+                const hovered = hoverKeys.has(key);
                 const named = roomy(i);
                 const along = tabLength(i, named);
                 return (

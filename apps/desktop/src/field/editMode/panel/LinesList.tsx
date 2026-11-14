@@ -28,7 +28,7 @@ export interface LineRow {
 }
 
 /**
- * The list's rows (#824): Y front to back; X side 1 to side 2, or with Mirror on, the pairs as one
+ * The list's rows (#824): Y back to front, top to bottom as the field is drawn; X side 1 to side 2, or with Mirror on, the pairs as one
  * row from the center out (a line without a twin keeps its own row, after its pair's place).
  */
 export function lineRows(
@@ -38,7 +38,7 @@ export function lineRows(
 ): LineRow[] {
     const lines = linesOn(fp, axis);
     if (axis === "y")
-        return lines.map((c) => ({
+        return [...lines].reverse().map((c) => ({
             lead: c,
             lines: [c],
             distance: Math.abs(c.stepsFromCenterFront),

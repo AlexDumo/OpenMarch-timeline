@@ -15,6 +15,8 @@ import {
 } from "../useFieldEditModeActions";
 import { CommitInput, parseNumber } from "../panel/settingsInputs";
 import { LinesTab } from "../panel/LinesTab";
+import { lineRows } from "../panel/LinesList";
+import { FieldEditOverlay } from "../FieldEditOverlay";
 
 /**
  * The Field panel and Edit lines (#824): the panel opens on Setup with line editing off, Edit
@@ -267,4 +269,37 @@ describe("the Lines tab", () => {
             selection: [],
         });
     });
+
+    it("lists the front-to-back lines back to front, top to bottom as the field is drawn", () => {
+        const steps = lineRows(college, "y", true).map(
+            (r) => r.lead.stepsFromCenterFront,
+        );
+        expect(steps[steps.length - 1]).toBe(0);
+        expect(steps).toEqual([...steps].sort((a, b) => a - b));
+    });
+});
+
+describe("hovering a line on the field", () => {
+    it.each([
+        [true, 2],
+        [false, 1],
+    ])(
+        "with Mirror %s, draws %i hovered lines (a yard line and its twin)",
+        (mirror, count) => {
+            act(() => fieldEditMode.enter({ lines: true }));
+            act(() => fieldEditMode.setMirror(mirror));
+            const view = render(
+                <Providers>
+                    <FieldEditOverlay fp={college} />
+                </Providers>,
+            );
+            act(() => fieldEditMode.setHover(toRef(forty)));
+            // A hovered line is the faint accent one
+            expect(
+                view.container.querySelectorAll(
+                    'line.stroke-accent[opacity="0.4"]',
+                ),
+            ).toHaveLength(count);
+        },
+    );
 });
