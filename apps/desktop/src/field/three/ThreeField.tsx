@@ -136,6 +136,7 @@ import PropDrawingNotice from "@/components/items/PropDrawingNotice";
 import { threeFieldView } from "@/field/benchmark/fieldScenarios";
 import { r3fFrames } from "./benchmarkFrames";
 import { makeFloorSampler } from "@/pathways/floorSampler";
+import { useTheme } from "@/context/ThemeContext";
 import {
     CHECKPOINT_FONT,
     COLLISION_FONT,
@@ -225,6 +226,7 @@ function ThreeFieldView() {
                 : null,
         [fieldProperties, fieldImage],
     );
+    const { theme: appTheme } = useTheme();
     // How bright the floor is under the order lanes (step 4i): background and field image, read once
     const orderFloor = useMemo(
         () =>
@@ -238,8 +240,14 @@ function ThreeFieldView() {
                 placement: fieldImagePlan,
                 width: fieldProperties?.width ?? 0,
                 height: fieldProperties?.height ?? 0,
+                // Beyond the field the app's own background shows through the canvas
+                outside: document.documentElement.classList.contains("dark")
+                    ? 0.06
+                    : 0.92,
             }),
-        [fieldProperties, fieldImage, fieldImagePlan],
+        // `appTheme` is what the dark class follows
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [fieldProperties, fieldImage, fieldImagePlan, appTheme],
     );
     const appearanceSteps = useMarcherAppearanceSteps(true);
     const { mutateAsync: moveMarchers } = useMutation(
