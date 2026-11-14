@@ -3685,3 +3685,169 @@ data-visualization tools (light to dark carries the order in grey too).
 | QA-DL-42 | A row's order on a white field, green turf, a wood or checker field image, a mid-gray floor | No wash on white; on the others a light wash under the lane and tip; the leader end darkest on every floor |
 | QA-DL-43 | The same order with red, white, yellow, mid-gray and black dots                          | A light halo round red, mid-gray and black dots, a dark one round white and yellow; every dot stands clear of the lane |
 | QA-DL-44 | A 4 × 4 box at 2 steps, its order a snake across the ranks                                 | Four separate rank lanes with gaps between them, the front rank darkest; the tip past the leader at full size |
+
+### L.9 Step 6: corner counts for block letters
+
+**Change (plan step 6, ticket #648; built 2026-11-13 on the owner's standing brief, decisions
+below for the owner to confirm).** The owner asked for follow the leader "with block letters with
+a clear count at each corner". In follow the leader every marcher passes a corner at its own
+count, the leader first. So for each corner of a trail the field shows **which count each marcher
+turns on**, and warns when one turns **between counts**.
+
+**O-1 settled as the draft model proposed (§4.5).** A turning count on a trail is **derived, not
+pinned**: it comes from where the corner is, where each member starts and ends, and the move's
+counts. There are no time pins on a trail. To put a turn on a count, the designer moves the
+corner, changes the spacing, or changes the move's length, and watches the count update.
+
+Precedents: Blender's motion paths (frame numbers drawn at a path's keyed points), a map app's
+turn-by-turn list (each turn with when it comes), and a DAW's quantize grid (a note off the grid
+is flagged, not moved).
+
+| ID   | Rule |
+| ---- | ---- |
+| TC-1 | **A corner** is a place where the way the line walks turns by **20° or more**: the leader's start where the line-up meets the drawn part, a drawn Corner point, an end of an arc leg (measured along the arc's own tangent), the entrance into the end line, and a bend in the line-up (at a member's start) or in the end line (at a slot's spot). **A bend in the line-up or the end line must also stand out**: it turns at least 20° more than each neighboring bend there. So a line standing in a curve, a circle or an arc (every bend alike) gets no corner at each marcher, while the bend of an L-shaped line does; the leader's start and the entrance take the plain 20° rule. A Smooth point has no corner however slight its roundness, because the curve's direction doesn't jump there; make it a Corner to get a count. The way is the resolver's own (R-9′, R-13′, R-13″): the line-up through the members' starts, the drawn part, then the end line through the slots' destinations (none when the ends are along the way). |
+| TC-2 | **A member turns at a corner** when it passes it: it reaches the corner more than a twentieth of a count after its move starts, and more than a twentieth before it stops walking the way **and before its founding span ends**. A member that starts on the corner (the leader at its own start), stops on it, or reaches it within that twentieth of its start or stop doesn't turn there: a hand-drawn trail rarely puts a marcher's end exactly on a corner, and a turn on the move's last instant isn't one anyone marches. **A founder taken over partway** (by a higher layer, or another row) leaves the trail when its founding span ends, so it turns at no corner it would reach after that, even if it resumes later: a member that joins or resumes partway (R-11) walks straight and turns at no corner of the trail. Members who stop or leave before a corner are counted, not listed (TC-6). |
+| TC-3 | **The turning count** of member `q` at a corner at distance `c` on the way is `x = (c − startDist[q]) / (endDist[q] − startDist[q] + straight[q]) · N`, where `N` is the move's counts and `straight[q]` is R-13″'s straight leg to its spot (0 otherwise). It is counted from the move's start (its first flag is count 0), as Big steps counts a group path's legs. This is R-10's steady speed read backward, so the resolver has the member exactly at the corner at beat `start + x`. It is listed only when `x` is before the member's founding span ends, `until − start`, by more than a twentieth of a count (TC-2). |
+| TC-4 | **On a count.** A count is shown rounded to a tenth, `round(10x) / 10` (`7.5`). A turn is on a count when that shown value is a whole number; otherwise the member turns between counts `floor(x)` and `ceil(x)`. The number shown and the warning come from that one rounding, so a whole number is never warned about and a warned one never shows whole (0.95 shows `1`, on a count; 2.05 shows `2.1`, between counts). At an 8-to-5 step a twentieth of a count is about an inch. |
+| TC-5 | **The count chip.** Each corner that a member turns at gets a chip on the field, just outside the turn. It shows the first and last turning counts (`6–20`), or the one count when one member turns there. When any member turns between counts there, the chip has the warning color and icon. Chips show whenever the trail shows: its line selected (the trail shown closed, with the leader's mark), open, being drawn, or being dragged out of a line (step 4b, live with the pointer as DL-20 shows the end spots), with Ends From trail or Keep end spots. They hide while the trail is hidden (playback, or the Paths level turning it off), as the leader's mark does. **A chip that would sit on one already placed** (a dense block, or zoomed out: its middle within about a chip's width and height of another's) is left out, the first along the way kept; zooming in shows it, and the path bar's warning still counts its turns. |
+| TC-6 | **The corner's list.** A click or tap on a chip opens a list of every member who turns there, leader first, each with its name and count (`U8` · `count 4`). A turn between counts shows in the warning color as `7.5 · between 7 and 8`. Members who stop before the corner (or on it), or leave the trail first, are counted at the bottom ("5 stop or leave the trail before turning here"). A click elsewhere, Escape, or the chip again closes it. Chips are buttons, so Tab reaches them, and Enter or Space opens the list: Space on a chip reached by keyboard is the chip's, not Play's (the shortcut dispatcher spares `data-shape-ui` controls). |
+| TC-7 | **The path bar's warning.** When a turn falls between counts at any corner, the trail's path bar shows **Turns between counts** in the warning color, beside Big steps. Its detail says how many turns fall between counts and at how many corners, and what puts a turn on a count. Hovering shows the detail as a tip; a click or tap opens it as a popover, so a finger or pencil reaches it too. |
+| TC-8 | **Nothing is stored.** Counts are read, not written: no migration, no file version, no undo step. Every edit changes them only through what it already changes. Resizing the move scales `N`; a page-flag drag changes `N` the same way; a trail point edit, Reverse, an end-spot edit, split by marchers and merge change the way or who walks it. v0.1.7 files open unchanged. |
+
+**On the field.** A chip is the shape editor's small surface (`rounded-6`, `text-sub`), a step or
+so outside the corner along the line that halves the turn, so it never covers the corner's point
+handle or a dot on it. The list is a popover (`POPOVER_CLASS`) anchored to the chip.
+
+**Not in this step:** pins on a trail, and a "Put corners on counts" for trails. Pins are step
+5's, for drawn paths. Moving a trail's corner onto a count for the designer would also move it for
+every other member, so it needs its own design. Also left out: counts printed in a dot book (O-16),
+corners inside a shape's own path (a trail into a stored shape, which the app never writes), a turn
+for a member's straight leg to its spot off the way (R-13″), and corner counts for a group path or
+a single marcher's path. Those paths have no follow order, and their counts are step 5's pins.
+
+| QA       | Setup | Expected |
+| -------- | ----- | -------- |
+| QA-TC-1  | QA-TR-1: M1, M2, M3 at (0,0), (4,0), (8,0) over 16 counts, trail corners (14,0) and (14,10), into the line (20,10)–(20,22) | Corners at (14,0), (14,10) and the entrance (20,10); none at the leader's start (no turn). Counts at (14,0): M3 2.8, M2 5, M1 7.5; at (14,10): M3 7.5, M2 10, M1 12.8; at the entrance: M3 10.4, M2 13, and M1 stops there (no turn). Every one is the beat at which the resolver has that marcher on the corner |
+| QA-TC-2  | Four marchers 2 apart from (0,0), M4 leading, a trail up 8 to (6,8) then right 8 to (14,8), ends along the way, Keep spacing, 16 counts | Corners at the leader's start (6,0): M3 2, M2 4, M1 6; and at (6,8): M4 8, M3 10, M2 12, M1 14. Every turn on a count: no warning |
+| QA-TC-3  | QA-TC-2 over 12 counts | (6,8): M4 6, M3 7.5, M2 9, M1 10.5: M3 and M1 between counts, so the corner warns |
+| QA-TC-4  | A smooth point; a corner bending 15°; one bending 20° | No corner; no corner; a corner |
+| QA-TC-5  | A straight leg into a half-circle arc leg (bulge −1/2), then a straight leg on; a quarter-bulge arc (1/4) between two straight legs | The half circle carries straight on from the first leg (no corner) and arrives heading back, so the last leg is a half turn: one corner, at its end. The quarter bulge turns `2·atan(1/2)` (about 53°) at each end: two corners |
+| QA-TC-6  | Random trails (corners, smooth points, arc legs; ends along the way or into an end line; reversed or not; now and then a member taken over partway) | At every listed turn, the resolver's position at `start + x` is the corner within `10⁻⁶`; counts increase from the leader back |
+| QA-TC-7  | A stored trail selected; open; drawn; dragged out with the pointer moving | Chips at the corners with the counts of TC-3; a tap opens the list, Escape closes it; nothing is written (the undo stack is unchanged) |
+| QA-TC-8  | QA-TC-3's warning | The chip in the warning color; its list shows `7.5 · between 7 and 8` for M3; the path bar shows Turns between counts |
+| QA-TC-9  | QA-TC-2 with M1 taken over at count 9 (its row ends there) | M1 still turns at the leader's start on 6; at (6,8) it isn't listed (it would turn on 14) and is counted as leaving first |
+| QA-TC-10 | A line standing on a circle of 8, 12, 16 or 18 (18 bends exactly 20°), the trail leaving the leader straight out; an L-shaped line, four along then two up | No corner at any marcher of the circle, every run (no flicker at 20°); the L's bend is a corner |
+| QA-TC-11 | A trail into an end line of five spots on a quarter circle | The trail's own corner only; none at the arc's spots |
+| QA-TC-12 | Counts 0.95, 2.05, 1.94, 7.45, 6.04 | Shown `1`, `2.1`, `1.9`, `7.5`, `6`; on a count exactly when shown whole |
+| QA-TC-13 | Three corners whose chips would sit 30 px apart, then 100 px | The second is left out, the first and third shown |
+| QA-TC-14 | A stored trail with a member taken over over [12, 13) and a gap in its end line | Every member's end spot is read by its slot (`endAt`), never by coordinates; the taken-over member's founding span ends at 12 (`until`) |
+
+**Built (step 6, 2026-11-13).** Settled in the build, for the owner to confirm:
+
+- **The rules are core's** (`trailCornerCounts`, `wayCorners`, `cornerCounts` in
+  `packages/core/src/timeline/trailCorners.ts`). They build the way with the resolver's own
+  `makeTrail` and `makeAlongTrail`, so a listed count is the beat at which the resolver has that
+  marcher on the corner (QA-TC-6 checks it on 300 random trails). The resolver itself is
+  unchanged.
+- **The app reads the trail as drawn now**, so the chips follow a point drag before it's saved,
+  and the pointer while a trail is dragged out. A stored trail into end spots reads the whole end
+  line, vacant slots included (`TrailTarget.endLine`), as R-13′ does. A trail nobody founds shows
+  no chips.
+- **Start and stop tolerance (TC-2).** The first lab run showed a marcher "turning" on count 8 of
+  8: a hand-drawn trail rarely ends a marcher exactly on a corner. Within a twentieth of a count of
+  its start or stop now counts as starting or stopping there.
+- **Review fixes (2026-11-13).** A founder taken over partway turns at no corner after it leaves
+  (TC-2, `WayWalk.until`); line-up and end-line bends must stand out from their neighbors, so a
+  line in a small circle or an arc no longer gets an amber chip at every marcher (TC-1); "on a
+  count" and the number shown come from one rounding (TC-4); overlapping chips are thinned
+  (TC-5); a member's end spot is read by its slot (`TrailTarget` members' `endAt`), so an end line
+  that touches itself can't pick the wrong spot; Space opens a chip's list (TC-6); the bar's
+  warning opens its detail on a tap (TC-7).
+- **Chips follow the trail's own visibility.** A closed trail is hidden when start flag
+  positions' paths are off (and after a drag-out the end shape opens in the shape tools, which
+  hides it too), so its chips are hidden with it; tapping **N** shows them. Whether a selected
+  line's chips should show even then is an owner question.
+
+### L.10 Step 9: ripple into the next form
+
+**Change (plan step 9, ticket #650; built 2026-11-13 on the owner's standing brief, decisions
+below for the owner to confirm).** A line standing in one form (a Line, an Arc, a Curve or the end
+of a trail) **ripples into the form its end spots make**, in one follow move: the leader walks a
+straight **connector** from its start to the near end of the next form, then along it, and
+everyone follows through the same corner. Register E-4 and J-7: a ripple from route A onto route
+B is **one** follow-the-leader move whose trail runs from the marchers' current line, through the
+connector, onto B. The owner's first words were "a straight line over N counts to the next route";
+after rereading R-9 and R-10 (2026-11-02) the connector is **a trail segment, not a timed entry**:
+every member moves for the whole move at its own constant speed (R-10), so the connector has no
+counts of its own. This needs no resolver change: it is R-9′ with the connector as the drawn part
+and the next form as R-13′'s destination path.
+
+| ID   | Decision |
+| ---- | -------- |
+| RP-1 | **Ripple in** is a third choice on the Follow tool's **Ends** (DL-8), beside From trail and Keep end spots, offered when Keep end spots is: the line's members all have end spots in the move at the playhead (step 4's target rule). From trail stays the default (DL-8). The Ends group shows before an end is grabbed too, so Ripple in can be chosen first and one drag from an end onto the form does it. **The three choices are commands** (From trail, Keep end spots, Ripple in: the bar's buttons run them, and the palette and a custom key reach them; no key by default). Ripple in greyed out says why: on its tooltip, and as a toast when it's pressed, since a finger gets no tooltip. With no end spots here the Ends group isn't shown (DL-8), but a greyed-out Ripple in is, saying that end spots placed on this page unlock it. |
+| RP-2 | **The next form** is the members' end spots in that move (each slot's stored destination, as AP-T1 reads them; the Follow tool reads the same, `endSpotsInMove`), in the order the show remembers for them at the move's end (DL-21, `followOrderAt`: a placed Line, Arc or Curve, a trail, an order set by hand), or else the order `followSource` guesses from the spots. Either order is then **checked** (`rippleFormProblem`), with `s` the true median gap between neighbours in it (the mean of the two middle gaps when their number is even): a gap more than `2.5 s` is no form ("Their end spots don't stand in a line, curve or arc"); the two ends within `1.5 s` of each other **and** within half the form's length (the sum of its gaps) is a **closed loop** (a circle, a box outline: "…close into a loop…", step 10), which a three-spot L or half circle is not; two spots three or more apart in the order within `1.5 s` is a **fold** (an order snaking through a box, or a V sharper than about 47°: "…fold back close to themselves…", step 11); two or more spots within `s / 4` of the line where it stands, the line read in its own order (not by id), is the form on the line itself (slid along it, or the line unmoved: "…the line would walk back through itself…"). Each disables Ripple in with its reason and refuses the write. |
+| RP-3 | **Who stands where (register S-10, "the destination supplies the slots").** The next form's spots are dealt in trail order: the tail takes the spot at the end the line enters (the **entrance**), the leader the far end, each member between the next spot along the form. The set of spots doesn't change; who stands on which can. This is what a follow the leader does: nobody passes anyone, so the order along the new form is the order along the trail. Keep end spots stays for a line that must keep each marcher's own spot. |
+| RP-4 | **The entrance** is the end of the next form nearer where the drawing arrives: the last placed point, or the leader's start when nothing is placed (ties: the form's first end in its order). **On an end** means within two steps of its spot (one reach for what is shown and for a finish, wide enough for a finger), tested at the point a press lands on, as the drawing's pointer is (`landCorner`): a finish there enters there. While drawing, the pointer counts as the last point for what is shown (DL-20), and on an end it enters there instead of adding a corner. **What's written is what's shown:** a finish that names no end (Enter, Finish on the bar or in the palette, a double-click) writes the entrance the drawing shows at that moment, the pointer counted as shown; the connector written is the placed points only (DL-20). |
+| RP-5 | **The connector.** With nothing drawn it is the straight leg from the leader's start to the entrance; clicks add corners to it as on any trail, and smooth points and arc legs work as they do there. It is part of the trail, so each member's speed is its whole way over the whole move (R-10): the leader reaches the form on whichever count its share of the way gives. The path bar says it ("Leader reaches the form on count 6½", to the nearest half count, or "Leader starts at the form" when that is under a quarter count); lengthening the move or the connector changes it. A typed count for the connector would be a pin (step 5) or a timed entry, which E-4 rules out. |
+| RP-6 | **Finishing with nothing drawn** is allowed with Ripple in and with Keep end spots (step 4's "none for a straight way in"): after an end is grabbed, a release or click on an end of the form, Enter, or Finish on the bar. A double-click elsewhere places a corner with its first click, as on any trail, so it finishes with that corner. From trail still needs a drawn trail (AP-T8's "a trail shorter than ε_geom"). |
+| RP-7 | **Where the line is read** (step 9 review). With Keep end spots and Ripple in, the line's starts and its order (so its two ends) are read where the kept move starts, which is where AP-T1's trail starts, not at the start flag: a window from an earlier flag into a later move used to draw the line, the preview and the nearest end from the wrong place. This amends AP-T9 too. From trail still reads the start flag (AP-T8: its move fills the window). Switching Ends lets go of a grabbed marcher that isn't an end of the line read there, and the ends pulse again. |
+
+**Rules.** The move written is step 4's follow move (AP-T1, I-T5′): no shape, a trail route,
+`order_mode = 'slot'`, `path_params = {"waypoints": []}`, no `ends`. So R-9′, R-12′, R-13′ and
+R-10 resolve it as written, with no new rule:
+
+- the trail is the line-up through the members' starts, then the drawn part `W =
+  walk(leader's start, R.points, entrance)` (the connector), then `destPath` = the line through
+  the dealt spots in slot order (the next form, entrance first);
+- with no point drawn, `W` keeps no inner point and the trail is R-9's with `waypoints = []`, bit
+  for bit (QA-TR-2): the connector is the chord from the leader's start to the entrance;
+- member `q` (tail first) is in slot `q` and its target is the `q`-th dealt spot, so `endDist`
+  increases with `q` (R-13′) and nobody overtakes (P-5);
+- on an Arc or Curve form, `destPath` runs through the spots, so between spots members walk the
+  chords, as the line-up does (L.3, "The line-up is chords").
+
+**Storage.** None: no column, no migration, no file version beyond step 4's 13 (written by the
+first Follow, `markTrailModelInTransaction`). v0.1.7 files open unchanged.
+
+| ID     | Procedure |
+| ------ | --------- |
+| AP-T12 | **Ripple in.** Inputs: the selected marchers `S` (two or more), the window, the grabbed end (the leader), the drawn points (possibly none), the move `K` they have end spots in (step 4's target), and optionally the entrance (the marcher whose spot it is: the end the finish was on, or the one the drawing showed, RP-4). Reads: the line's starts and order at `K`'s start (RP-7, `followOrderAt` as AP-T8 reads it), each member's end spot in `K` from its slot's stored destination, and the next form's order at `K`'s end, checked (RP-2). **Deal:** orient the form from the entrance (RP-4); the line's `q`-th marcher (tail first) takes the `q`-th spot. **Writes**, in one write-wrapper transaction: AP-T1 in `K` in the same trail order, each slot's placed destination its dealt spot and the route's `to` the entrance (the tail's spot); then every **shape** recipe of `K` (not an ungrouped mark or an order mark, `shapeRecipesOnly`) deals its members' rows again: the row of a spot names whoever now stands on it, keeping its id, slot and point, so the recipe reopens with everyone on a spot and its order agrees with the trail (DL-21, DL-23). Each row is deleted and written again with its id (the unique `(recipe, marcher)` pair forbids swapping in place); undo restores every row and id. **Refused**, nothing written: AP-T1's refusals (a member with a drawn path, taken over at the start, in part of the move, part of another follow line, sharing a stored shape with marchers who stay); AP-T8's (not an end, a source that isn't a line); no move with end spots for every member (`noSpots`); RP-2's (`notAForm`, `formLoop`, `formOverlap`); the line already a trail's line in `K` ("already follows"). |
+
+**After it is written** the move is an ordinary step 4 trail, so every edit of K.3 applies as it
+is: AP-T2 point edits reshape the connector; AP-T3 Reverse lets the old tail lead into the far end
+(everyone keeps the dealt spot); AP-T4 Remove trail walks everyone straight to the dealt spot;
+split at a count refuses (AP-T5); split by marchers, merge, resize and page-flag drags keep it
+(AP-T5 to AP-T7). Step 4f reads the trail's order at `K`'s end (a trail has the last word at its
+beat, DL-22), and the re-dealt recipe agrees with it.
+
+**On the field.** The Ends group reads **From trail | Keep end spots | Ripple in**. With Ripple
+in, the drawing shows the connector from the leader's start (through any corners) to the
+entrance, the next form's line, and the line's real marchers on their dealt spots with their
+starts as ghosts (DL-16); ▶ Preview loops the walk (R-10 on the trail, as written); the bar shows
+the leader's count into the form; Big steps tests each member's whole way. The entrance follows
+the pointer while drawing (RP-4), so the dealt spots flip when the pointer nears the other end.
+Pencil and finger: the bar's Ends, Preview and Finish are buttons; a drag from an end released on
+an end of the form finishes; a greyed-out Ripple in says why when pressed; nothing needs hover or
+a modifier.
+
+**Not in this step:** rippling into a box, a circle or an outline (steps 10 and 11; refused, RP-2);
+a form lying on the line itself (refused, RP-2); a form with more spots than
+the line (vacancies), or into another move's trail (joining two moves); a count typed for the
+connector (a pin, step 5); following the true arc of the source form (step 10); corner counts on
+the connector (step 6).
+
+| ID      | Case | Expected |
+| ------- | ---- | -------- |
+| QA-RP-1 | Six in a line (0,0)–(10,0) at 2 steps; their end spots a line (20,10)–(30,10) dealt right to left; grab the right end; nothing drawn | One follow move; the tail's spot is (20,10) (the entrance, nearer the leader's start), the leader's (30,10); the trail is R-9's with `waypoints = []` bit for bit; positions at every quarter beat equal the drawing's preview; nobody overtakes |
+| QA-RP-2 | QA-RP-1 with one corner at (10,10) | The connector bends there; the ends dealt the same; `startDist` and `endDist` as R-9′ gives |
+| QA-RP-3 | QA-RP-1 finished on the far end's spot (30,10) | That end is the entrance: the tail takes (30,10), the leader (20,10) |
+| QA-RP-4 | The next form is a placed Line recipe; ripple; open the Line | Every recipe row names whoever stands on its spot, same row ids; the Line reads back with nobody moved; its order agrees with the trail's |
+| QA-RP-5 | End spots: three in a row and one off it; a 2×2 block; a full circle; a 3×2 snake; a V of 30°; the line slid two steps along itself; the line itself; a curved line whose ids don't run along it, with the form along the chord its id order would cut | Ripple in disabled with the reason (not a form; a loop; a fold; walks back through itself); the write refuses the same, nothing written. A line, an L, a half circle of five, and three-spot forms (a right-angle L, a half circle, an uneven straight line (0,0) (1,0) (3.6,0)) pass; the out-of-order line is offered and written |
+| QA-RP-6 | Keep end spots with nothing drawn | Step 4's trail with no route points; each keeps its own spot |
+| QA-RP-7 | After QA-RP-1: Reverse, Remove trail, resize, split at the playhead, split off the middle two by marchers | Reverse and Remove keep the dealt spots; resize keeps positions by share; split at a count refuses with its reason; split by marchers leaves a gap |
+| QA-RP-8 | Resolver vs the reference oracle (`docs/timeline/ref`) on random ripples: a straight or cornered connector, either end entered, a line or an arc form | Within 10⁻⁹ at every 1/8 beat |
+| QA-RP-9 | (Review blocker.) Grab the right end, the pointer six steps below the form's far end (nearer it, not on it), Enter | The drawing deals from the far end; the write gets that entrance and deals the same; within two steps of an end counts as on it, for the drawing and the finish alike |
+| QA-RP-10 | A window from page 1's start flag into page 2's move, the line moved on page 1 | The tool's line (starts, order) and the write's are read at page 2's start; positions equal the drawing's preview at every half beat |
+| QA-RP-11 | An ungrouped mark beside a Line recipe in the move | The Line's rows are dealt again; the mark's rows are untouched |
+| QA-RP-12 | The Ends commands from the palette; Ripple in with no form, then with no end spots | Each sets its choice; greyed out, Ripple in gives the form's reason, then the end-spots hint |
+| QA-UNDO-RP | Each write above | One undo step restores every row (transition, assignments, destinations, route, recipe rows) and id; redo restores the same rows |
