@@ -943,6 +943,24 @@ const STATIC_ACTIONS = {
         scope: "global",
         defaultBindings: [],
     },
+    // Tablet 3.5 (#888): Fit the show in view, or back to the zoom from before, for the touch
+    // transport's "…" and the palette. Shift+Z stays the timeline's own key (`useTimelineZoom`)
+    timelineFit: {
+        labelKey: "actions.timeline.fit",
+        keywordsKey: "actions.timeline.zoomKeywords",
+        category: "timeline",
+        scope: "global",
+        defaultBindings: [],
+    },
+    // Tablet 3.5 (#888): tempo mode ("Edit music") on or off, for the touch transport's "…" and
+    // the palette. Shift+T stays tempo mode's own key (`TempoModeButton`)
+    toggleTempoMode: {
+        labelKey: "actions.timeline.toggleTempoMode",
+        keywordsKey: "actions.timeline.toggleTempoModeKeywords",
+        category: "timeline",
+        scope: "global",
+        defaultBindings: [],
+    },
 } satisfies Record<string, ActionDefinition>;
 
 export const ACTIONS = {
