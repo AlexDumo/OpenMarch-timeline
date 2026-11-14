@@ -20,32 +20,65 @@ import {
 import { usePanelInsets } from "./touchPanelInsets";
 
 /**
- * Touch layout: each tab's controls are one row that scrolls sideways, so the panel keeps its
- * height whatever the tab shows and never wraps over more of the field.
+ * Touch layout: each tab's controls wrap onto another line where the panel is too narrow for
+ * them (iPad portrait, tablet plan 2.2), so none is cut off at its edge. The panel floats over
+ * the field, so a taller panel moves nothing.
  */
-const touchTabRowClassName =
-    "[&>div]:flex-nowrap [&>div]:overflow-x-auto [&>div]:[scrollbar-width:none] [&>div>*]:shrink-0";
+const touchTabRowClassName = "[&>div]:flex-wrap [&>div>*]:max-w-full";
+
+/**
+ * The touch title bar row is a size container (`row`). Below 480 px all four tabs, the
+ * chevron and the row's end don't fit side by side, so the tabs get shorter (Alignment → Align,
+ * smaller text, less padding) and the chevron goes: tapping a tab opens the panel, and tapping
+ * the open tab closes it. On the iPad web build (no window buttons) the row is about 400 px at
+ * 744 px portrait and 467 px at 1024 px landscape, where the full tabs miss by a few pixels.
+ */
+// Written out in full in each class, so Tailwind finds them
+const narrowTabsClassName =
+    "@max-[480px]/row:[&>button]:px-6 @max-[480px]/row:[&>button]:text-sub";
 
 const isToolbarTab = (value: string): value is ToolbarTab =>
     TOOLBAR_TABS.includes(value as ToolbarTab);
 
 function ToolbarTabsList({
     tabProps,
+    touch = false,
 }: {
     tabProps?: (
         value: ToolbarTab,
     ) => Omit<React.ComponentProps<typeof TabItem>, "value" | "children">;
+    /** In the touch title bar: shorter tabs when the row is narrow */
+    touch?: boolean;
 }) {
+    const { t } = useTranslate();
     const props = (value: ToolbarTab) =>
         tabProps ? tabProps(value) : undefined;
     return (
-        <TabsList className="gap-0 border-none">
+        <TabsList
+            className={clsx("gap-0 border-none", touch && narrowTabsClassName)}
+        >
             <TabItem value="file" {...props("file")}>
                 <T keyName="inspector.shape.fileTab" />
             </TabItem>
-            <TabItem value="alignment" {...props("alignment")}>
-                <T keyName="inspector.shape.alignmentTab" />
-            </TabItem>
+            {touch ? (
+                // The short name only where the row is narrow; the tab keeps its full name
+                <TabItem
+                    value="alignment"
+                    aria-label={t("inspector.shape.alignmentTab")}
+                    {...props("alignment")}
+                >
+                    <span className="@max-[480px]/row:hidden">
+                        <T keyName="inspector.shape.alignmentTab" />
+                    </span>
+                    <span className="hidden @max-[480px]/row:inline">
+                        <T keyName="toolbar.alignmentTabShort" />
+                    </span>
+                </TabItem>
+            ) : (
+                <TabItem value="alignment" {...props("alignment")}>
+                    <T keyName="inspector.shape.alignmentTab" />
+                </TabItem>
+            )}
             <TabItem
                 value="shapes"
                 data-testid="toolbar-shapes-tab"
@@ -251,7 +284,7 @@ function TouchToolbar({
                     // When the row is short of room the tabs scroll sideways
                     <div
                         className={clsx(
-                            "@container flex w-full min-w-0 items-center gap-8",
+                            "@container/row flex w-full min-w-0 items-center gap-8",
                             tempoModeClass,
                         )}
                         inert={tempoMode}
@@ -262,7 +295,7 @@ function TouchToolbar({
                                 ref={tabRow}
                                 className="min-w-0 overflow-x-auto [scrollbar-width:none]"
                             >
-                                <ToolbarTabsList tabProps={tabProps} />
+                                <ToolbarTabsList tabProps={tabProps} touch />
                             </div>
                             <button
                                 type="button"
@@ -275,7 +308,7 @@ function TouchToolbar({
                                 )}
                                 onClick={() => setOpen(!open)}
                                 data-testid="toolbar-panel-toggle"
-                                className="hover:text-accent text-text focus-visible:text-accent flex size-44 shrink-0 cursor-pointer items-center justify-center rounded-full outline-hidden duration-150 ease-out"
+                                className="hover:text-accent text-text focus-visible:text-accent flex size-44 shrink-0 cursor-pointer items-center justify-center rounded-full outline-hidden duration-150 ease-out @max-[480px]/row:hidden"
                             >
                                 {open ? (
                                     <CaretUpIcon size={18} />

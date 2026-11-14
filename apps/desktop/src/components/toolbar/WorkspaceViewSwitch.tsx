@@ -1,3 +1,4 @@
+import clsx from "clsx";
 import { T, useTranslate } from "@tolgee/react";
 import { SegmentedTextSwitch } from "@openmarch/ui";
 import { usePreviewModeStore } from "@/stores/PreviewModeStore";
@@ -33,7 +34,8 @@ export default function WorkspaceViewSwitch({
                 if ((v === "preview") !== preview) runAction("togglePreview");
             }}
             ariaLabel={t("workspace.label")}
-            className={className}
+            // One line in the touch title bar; the other switches may wrap
+            className={clsx("touch:flex-nowrap", className)}
             testId="workspace-view-switch"
         />
     );

@@ -55,25 +55,24 @@ const panel = (page: Page) => page.getByTestId("toolbar-panel");
 
 const fieldBox = (page: Page) => page.getByTestId("fieldCanvas").boundingBox();
 
-/** The middle of the part of a tab that the title bar's scrolling tab row shows */
-const visibleMiddle = (locator: Locator) =>
-    locator.evaluate((element) => {
-        const box = element.getBoundingClientRect();
-        const row = element
-            .closest(".overflow-x-auto")!
-            .getBoundingClientRect();
-        const left = Math.max(box.left, row.left);
-        const right = Math.min(box.right, row.right);
-        if (right - left < 24)
-            throw new Error("Less than a fingertip of the tab is on screen");
-        return { x: (left + right) / 2, y: box.top + box.height / 2 };
-    });
-
 /** Whether the title bar's tab row is narrower than its tabs */
 const tabRowOverflows = (page: Page) =>
     titleBarTabs(page)
         .locator(".overflow-x-auto")
         .evaluate((row) => row.scrollWidth > row.clientWidth);
+
+/** Whether every control in the open panel's tab lies inside the panel, none cut off at its edge */
+const panelRowsFit = (page: Page) =>
+    panel(page).evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        const row = element.querySelector(
+            '[role="tabpanel"][data-state="active"] > div',
+        )!;
+        return [...row.children].every((child) => {
+            const r = child.getBoundingClientRect();
+            return r.left >= box.left - 1 && r.right <= box.right + 1;
+        });
+    });
 
 /** Whether a finger at the middle of `locator` lands on it, not on something over it */
 const tappable = (locator: Locator) =>
@@ -214,31 +213,96 @@ test("with the interface set to Mouse, the toolbar is the desktop one", async ({
     await expect(page.getByTestId("toolbar-panel")).toHaveCount(0);
 });
 
-test("on a narrow screen the 3D View and the switch stay in the title bar, and the tabs scroll", async ({
+test("on a narrow screen the tabs get shorter, and all four fit beside the 3D View and the switch", async ({
     show,
 }) => {
     const { page } = show;
-    // An iPad held upright. This target draws the desktop title bar (menu, reload, window
-    // buttons), which a tablet's browser doesn't have: at 834 px its tab row is about as wide
-    // as an iPad mini's at 744 px, and still too short for all four tabs
-    await page.setViewportSize({ width: 834, height: 1000 });
+    // An iPad mini held upright (tablet plan 2.2). This target draws the desktop title bar
+    // (menu, reload, window buttons), which a tablet's browser doesn't have, so its row at
+    // 900 px is about as wide as the iPad web build's at 744 px (about 400 px)
+    await page.setViewportSize({ width: 900, height: 1100 });
     await expect(titleBarTabs(page).getByTestId("open-view3d")).toBeVisible();
     await expect(
         titleBarTabs(page).getByTestId("workspace-view-switch"),
     ).toBeVisible();
-    // The row is narrower than the tabs: it scrolls
-    expect(await tabRowOverflows(page)).toBe(true);
-    // Every tab can still be reached: scroll the row to it, and tap the part on screen
+    // Alignment shows as "Align", and keeps its name; the chevron gives its room to the tabs
+    const alignmentLabel = (text: string) =>
+        tab(page, "Alignment").getByText(text, { exact: true });
+    await expect(alignmentLabel("Align")).toBeVisible();
+    await expect(alignmentLabel("Alignment")).toBeHidden();
+    await expect(page.getByTestId("toolbar-panel-toggle")).toBeHidden();
+    // Every tab is on screen whole: nothing to scroll
+    expect(await tabRowOverflows(page)).toBe(false);
     for (const name of ["File", "Alignment", "Shapes", "Select"]) {
-        await tab(page, name).scrollIntoViewIfNeeded();
-        await tap(page, await visibleMiddle(tab(page, name)));
+        await tapOn(page, tab(page, name));
         await expect(tab(page, name)).toHaveAttribute("aria-selected", "true");
         await expect(panel(page)).toBeVisible();
     }
+    // The open tab again closes the panel, with no chevron
+    await tapOn(page, tab(page, "Select"));
+    await expect(panel(page)).toBeHidden();
+    await tapOn(page, tab(page, "Select"));
     await expect(
         panel(page).getByRole("button", { name: "Select all" }),
     ).toBeVisible();
     await page.screenshot({ path: test.info().outputPath("narrow-open.png") });
+
+    // The panel's controls wrap rather than run off its edge
+    await tapOn(page, tab(page, "Alignment"));
+    expect(await panelRowsFit(page)).toBe(true);
+    await page.screenshot({
+        path: test.info().outputPath("narrow-alignment.png"),
+    });
+
+    // Wide again, the full tabs and the chevron are back
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await expect(alignmentLabel("Alignment")).toBeVisible();
+    await expect(alignmentLabel("Align")).toBeHidden();
+    await expect(page.getByTestId("toolbar-panel-toggle")).toBeVisible();
+});
+
+test("the Shapes tab has a Ring button, and no Hold R hint until a key is pressed", async ({
+    show,
+}) => {
+    const { page } = show;
+    await tapOn(page, tab(page, "Shapes"));
+    await expect(panel(page)).toBeVisible();
+    // Each kind is captioned, as its tooltip can't be seen
+    await expect(
+        panel(page).getByRole("button", { name: "Box" }),
+    ).toContainText("Box");
+    await expect(page.getByTestId("shapes-tab-ring-hint")).toHaveCount(0);
+
+    // The Ring button opens the ring the R key does, over the field, kept open for a tap
+    await tapOn(page, page.getByTestId("shapes-tab-ring"));
+    const ring = page.getByTestId("shape-ring");
+    await expect(ring).toBeVisible();
+    await expect(ring).toHaveAttribute("data-latched", "true");
+    const field = (await fieldBox(page))!;
+    const ringBox = (await page
+        .getByTestId("shape-ring-center")
+        .boundingBox())!;
+    const middle = (box: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+    }) => ({
+        x: box.x + box.width / 2,
+        y: box.y + box.height / 2,
+    });
+    expect(Math.abs(middle(ringBox).x - middle(field).x)).toBeLessThanOrEqual(
+        2,
+    );
+    // Nobody is selected: it says so, and a tap anywhere closes it
+    await expect(page.getByTestId("shape-ring-reason")).toBeVisible();
+    await tap(page, { x: field.x + 20, y: field.y + field.height - 20 });
+    await expect(ring).toHaveCount(0);
+
+    // Once a keyboard is used, the hint is back
+    await page.keyboard.press("Shift");
+    await expect(page.getByTestId("shapes-tab-ring-hint")).toBeVisible();
+    await page.screenshot({ path: test.info().outputPath("shapes-open.png") });
 });
 
 test("Editor to Preview and back keeps the field where it is", async ({

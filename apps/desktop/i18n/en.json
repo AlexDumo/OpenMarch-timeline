@@ -2135,7 +2135,8 @@
             "tab": {
                 "greyed": "{name}: {reason}",
                 "kinds": "Shape kinds",
-                "ringHintKeys": "Hold <keys></keys> on the field for the shape ring"
+                "ringHintKeys": "Hold <keys></keys> on the field for the shape ring",
+                "ringCaption": "Ring"
             }
         },
         "transform": {
@@ -2852,7 +2853,8 @@
             "shapesAlways": "Always",
             "shapesOff": "Off",
             "shapesSelected": "When selected"
-        }
+        },
+        "alignmentTabShort": "Align"
     },
     "updates": {
         "pill": {
