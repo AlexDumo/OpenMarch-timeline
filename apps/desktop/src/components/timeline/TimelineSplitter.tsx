@@ -179,9 +179,11 @@ export function TimelineSplitter({ children }: { children: ReactNode }) {
                     aria-valuenow={shown}
                     tabIndex={0}
                     data-testid="timeline-splitter"
-                    // In the touch layout a 44px hit area (tablet plan 3.3) centered on the 8px
-                    // divider, over the field above and the timeline below
-                    className="group touch:relative touch:z-10 -mt-6 flex h-8 shrink-0 cursor-row-resize touch-none items-center justify-center outline-none"
+                    // In the touch layout a 44px hit area (tablet plan 3.3) from the divider's
+                    // bottom up, over the field's bottom edge. Never down: the transport bar
+                    // below keeps its taps. No z-index, so the field's floating controls (the
+                    // zoom and drag pills, z-indexed) stay above it
+                    className="group touch:relative -mt-6 flex h-8 shrink-0 cursor-row-resize touch-none items-center justify-center outline-none"
                     onPointerDown={onPointerDown}
                     onPointerMove={onPointerMove}
                     onPointerUp={onPointerUp}
@@ -190,7 +192,7 @@ export function TimelineSplitter({ children }: { children: ReactNode }) {
                     onKeyDown={onKeyDown}
                 >
                     <div className="bg-stroke group-hover:bg-accent group-focus-visible:bg-accent h-2 w-48 rounded-full transition-colors" />
-                    <TouchHitArea className="touch:block pointer-events-auto absolute inset-x-0 top-1/2 hidden h-44 -translate-y-1/2" />
+                    <TouchHitArea className="touch:block pointer-events-auto absolute inset-x-0 bottom-0 hidden h-44" />
                 </div>
             )}
             <div className="flex min-h-0 flex-1 flex-col">

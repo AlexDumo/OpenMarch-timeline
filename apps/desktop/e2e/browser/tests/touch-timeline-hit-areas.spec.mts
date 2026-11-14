@@ -476,6 +476,16 @@ test.describe("touch layout", () => {
         const pane = page.getByTestId("timeline-pane");
         const height = (await pane.boundingBox())!.height;
         const bar = await centerOf(page.getByTestId("timeline-splitter"));
+        // It reaches up over the field, never down over the transport bar under it
+        expect(
+            await page.evaluate(
+                ([x, y]) =>
+                    document
+                        .elementFromPoint(x!, y!)
+                        ?.hasAttribute("data-touch-hit") ?? false,
+                [bar.x, bar.y + 12],
+            ),
+        ).toBe(false);
         await drag(page, { x: bar.x, y: bar.y - OFF }, 0, -60);
         await expect
             .poll(async () => (await pane.boundingBox())!.height - height)
