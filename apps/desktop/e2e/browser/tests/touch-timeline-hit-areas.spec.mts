@@ -317,6 +317,12 @@ test.describe("touch layout", () => {
             .toBeGreaterThan(0.5);
         const grip = await centerOf(end);
         const width = (await pageBox(page, PAGE_START).boundingBox())!.width;
+        // The playhead sits on this flag, and a line on a flag wins (UI-21): move it into the
+        // page first, with a tap on bare track space
+        const box = (await pageBox(page, PAGE_START).boundingBox())!;
+        const playhead = await playheadAt(page);
+        await tap(page, { x: box.x + box.width / 2, y: await bareY(page) });
+        await expect.poll(() => playheadAt(page)).not.toBe(playhead);
         const f = await finger(page);
         // Inside the page, 18 px left of its flag
         await f.down({ x: grip.x - OFF, y: grip.y });
@@ -333,6 +339,95 @@ test.describe("touch layout", () => {
         expect(
             (await pageBox(page, PAGE_START).boundingBox())!.width,
         ).toBeCloseTo(width, 0);
+    });
+
+    test("where the start flag, the playhead and the loop's start sit on the selected page's flags, a finger right on them takes the line", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await ready(page);
+        const readout = page.getByTestId("timeline-page-flag-readout");
+        const width = async () =>
+            (await pageBox(page, PAGE_START).boundingBox())!.width;
+        const before = await width();
+        const grips = page.locator(
+            '[data-testid="timeline-page-flag-grip"][data-selected-page]',
+        );
+        await expect(grips).toHaveCount(2);
+        const gripY = (await centerOf(grips.first())).y;
+
+        // The start flag's line, in the page row over the page's start flag
+        const flag = await startFlagX(page);
+        let f = await finger(page);
+        await f.down({ x: flag, y: gripY });
+        await f.move(50);
+        await expect
+            .poll(async () => (await startFlagX(page)) - flag)
+            .toBeGreaterThan(25);
+        await expect(readout).toBeHidden();
+        await f.up();
+        expect(await width()).toBeCloseTo(before, 0);
+        await goToPage(page, PAGE_START);
+        await expect.poll(() => startFlagX(page)).toBeCloseTo(flag, 0);
+
+        // The playhead's line, over the page's end flag
+        const line = await centerX(page.getByTestId("timeline-playhead"));
+        const playhead = await playheadAt(page);
+        f = await finger(page);
+        await f.down({ x: line, y: gripY });
+        await f.move(-50);
+        await expect.poll(() => playheadAt(page)).not.toBe(playhead);
+        await expect(readout).toBeHidden();
+        await f.up();
+        expect(await width()).toBeCloseTo(before, 0);
+        await goToPage(page, PAGE_START);
+
+        // The loop's start, in the headroom over the page's start flag
+        await page.keyboard.press("c");
+        const loopStart = page.getByTestId("timeline-loop-start");
+        await expect(loopStart).toBeVisible();
+        const label = await loopStart.getAttribute("aria-label");
+        const bar = (await page.getByTestId("timeline-loop-bar").boundingBox())!;
+        f = await finger(page);
+        // Just outside the bar's start, on the loop start's own handle, clear of the pennant
+        await f.down({ x: bar.x - 3, y: bar.y + 4 });
+        await f.move(-50);
+        await f.up();
+        await expect.poll(() => loopStart.getAttribute("aria-label")).not.toBe(label);
+        expect(await width()).toBeCloseTo(before, 0);
+    });
+
+    test("a tap on an unselected clip 15 px from the playhead selects it; on the selected clip beside the start flag it takes the clip's start", async ({
+        show,
+    }) => {
+        const { page } = show;
+        const clip = await splitIntoClip(show);
+        await ready(page);
+        // Back to the page: the clip isn't selected, and the playhead is on its end
+        await goToPage(page, PAGE_START);
+        await clip.scrollIntoViewIfNeeded();
+        await expect(clip).toHaveAttribute("data-selected", "false");
+        const box = (await clip.boundingBox())!;
+        const y = box.y + box.height / 2;
+        const line = await centerX(page.getByTestId("timeline-playhead"));
+        expect(Math.abs(line - (box.x + box.width))).toBeLessThan(4);
+        const playhead = await playheadAt(page);
+        await tap(page, { x: line - 15, y });
+        await expect(clip).toHaveAttribute("data-selected", "true");
+        expect(await playheadAt(page), "it didn't seek").toBe(playhead);
+        // Selected, its start reaches in: a drag 15 px from the start flag, on the clip, resizes it
+        // and doesn't drag the flag or scrub (at its end, 15 px in is its ⋯ chip)
+        const flag = await startFlagX(page);
+        expect(Math.abs(flag - box.x)).toBeLessThan(4);
+        const f = await finger(page);
+        await f.down({ x: flag + 15, y });
+        await f.move(40);
+        await expect(page.getByTestId("timeline-clip-resize-tag")).toBeVisible();
+        expect(await playheadAt(page)).toBe(playhead);
+        expect(await startFlagX(page)).toBeCloseTo(flag, 0);
+        await f.move(-40);
+        await f.up();
+        await expect(page.getByTestId("timeline-clip-resize-tag")).toBeHidden();
     });
 
     test("a loop end takes a finger 18 px off it, and needs 12 px before it drags", async ({
@@ -486,6 +581,17 @@ test.describe("touch layout", () => {
                 [bar.x, bar.y + 12],
             ),
         ).toBe(false);
+        // Nor over the field's zoom controls, near the field's bottom right corner
+        const zoom = page
+            .getByTestId("canvas-zoom-slider")
+            .locator("xpath=ancestor::div[contains(@class,'bottom-6')][1]");
+        const corner = (await zoom.boundingBox())!;
+        expect(
+            await zoom.evaluate(
+                (el, [x, y]) => el.contains(document.elementFromPoint(x!, y!)),
+                [corner.x + corner.width / 2, corner.y + corner.height - 3],
+            ),
+        ).toBe(true);
         await drag(page, { x: bar.x, y: bar.y - OFF }, 0, -60);
         await expect
             .poll(async () => (await pane.boundingBox())!.height - height)

@@ -440,7 +440,11 @@ export function attachTimelineGestures(
     /** The presses the adapter sent on to a hit area, which it mustn't send on again */
     const redirected = new WeakSet<Event>();
     /** The last finger press on a hit area's target (or sent on to it): its tap's click goes there */
-    let redirectedTap: { hit: HTMLElement; timeStamp: number } | null = null;
+    let redirectedTap: {
+        target: Element;
+        owner: Element;
+        timeStamp: number;
+    } | null = null;
     const onPointer = (event: PointerEvent) => {
         if (cancelling) return;
         if (event.type === "pointerdown" && !redirected.has(event)) {
@@ -456,7 +460,12 @@ export function attachTimelineGestures(
                 timelineGesturesOwn(event) && event.target instanceof Element
                     ? touchHitOf(event.target, viewport)
                     : null;
-            if (hit) redirectedTap = { hit, timeStamp: event.timeStamp };
+            if (hit)
+                redirectedTap = {
+                    target: hit,
+                    owner: hit.parentElement ?? hit,
+                    timeStamp: event.timeStamp,
+                };
         }
         handlePointer(event);
     };
@@ -467,15 +476,9 @@ export function attachTimelineGestures(
      */
     const redirectToTouchHit = (event: PointerEvent): boolean => {
         const natural = event.target instanceof Element ? event.target : null;
-        const hit = findTouchHit(
-            viewport,
-            event.clientX,
-            event.clientY,
-            natural,
-        );
-        const owner = hit?.parentElement;
-        if (!hit || !owner || (natural && owner.contains(natural)))
-            return false;
+        const found = findTouchHit(viewport, event.clientX, event.clientY);
+        if (!found || (natural && found.owner.contains(natural))) return false;
+        const { target, owner } = found;
         event.stopPropagation();
         // The browser holds a finger's pointer for the element it landed on: let it go, so the
         // target's own handlers can take it
@@ -483,16 +486,16 @@ export function attachTimelineGestures(
             natural.releasePointerCapture(event.pointerId);
         const press = clonePointerEvent(event);
         redirected.add(press);
-        hit.dispatchEvent(press);
+        target.dispatchEvent(press);
         if (press.defaultPrevented) event.preventDefault();
         // A target that doesn't capture its presses still hears their moves and release
-        if (!holdsCapture(hit, event.pointerId))
+        if (!holdsCapture(target, event.pointerId))
             try {
-                hit.setPointerCapture?.(event.pointerId);
+                target.setPointerCapture?.(event.pointerId);
             } catch {
                 // Already lifted
             }
-        redirectedTap = { hit, timeStamp: event.timeStamp };
+        redirectedTap = { target, owner, timeStamp: event.timeStamp };
         return true;
     };
     // Any new press anywhere ends the wait for a redirected tap's click
@@ -508,9 +511,9 @@ export function attachTimelineGestures(
         const tap = redirectedTap;
         if (!tap || redirected.has(event)) return;
         redirectedTap = null;
-        const owner = tap.hit.parentElement;
+        const { owner } = tap;
         if (
-            !owner ||
+            !owner.isConnected ||
             event.timeStamp - tap.timeStamp > REDIRECTED_CLICK_MS ||
             (event.target instanceof Node && owner.contains(event.target))
         )
@@ -528,7 +531,7 @@ export function attachTimelineGestures(
             screenY: event.screenY,
         });
         redirected.add(click);
-        tap.hit.dispatchEvent(click);
+        tap.target.dispatchEvent(click);
     };
     const handlePointer = (event: PointerEvent) => {
         if (gestures.handle(event)) event.stopPropagation();
@@ -604,45 +607,85 @@ export function attachTimelineGestures(
 /** How long after a press sent on to a hit area its tap's click may come */
 const REDIRECTED_CLICK_MS = 1000;
 
+/** Where a finger's press goes (`findTouchHit`): `target` gets it, `owner` is the control it's in */
+export type TouchPressTarget = { target: Element; owner: Element };
+
 /**
- * The small target (tablet plan 3.3) a finger's press at (`x`, `y`) belongs to: of the touch hit
- * areas (`data-touch-hit`, `TouchHitArea`) under it inside `root`, the one `pickTouchTarget`
- * picks, or null. `natural` is where the press landed: on an object that keeps its presses
- * (`data-touch-keep`, a clip), only that object's own targets or a target as drawn take it.
- * Hit areas only show in the touch layout, so in the mouse layout there are none.
+ * The small target (tablet plan 3.3) a finger's press at (`x`, `y`) belongs to, or null to leave
+ * it where it landed. Of the touch hit areas (`data-touch-hit`, `TouchHitArea`) under it inside
+ * `root`, `pickTouchTarget` picks one. What's under the hit areas counts: on a control that keeps
+ * its presses (a clip, the add-page pill, any timeline control but the page boxes, which yield),
+ * only that control's own targets or a target the press is right on take it, and otherwise the
+ * press goes to the control itself, even when a hit area over it was on top. Hit areas only show
+ * in the touch layout, so in the mouse layout there are none.
  */
 export function findTouchHit(
     root: Element,
     x: number,
     y: number,
-    natural: Element | null,
-): HTMLElement | null {
+): TouchPressTarget | null {
     const under = root.ownerDocument.elementsFromPoint?.(x, y) ?? [];
     const candidates: TouchHitCandidate<HTMLElement>[] = [];
-    // Topmost first; the candidates go in paint order
-    for (let i = under.length - 1; i >= 0; i--) {
-        const element = under[i];
-        if (
-            !(element instanceof HTMLElement) ||
-            !element.hasAttribute("data-touch-hit") ||
-            !root.contains(element)
-        )
+    /** The topmost element under the press that isn't a hit area */
+    let beneath: Element | null = null;
+    for (const element of under) {
+        if (!root.contains(element)) continue;
+        if (!element.hasAttribute("data-touch-hit")) {
+            beneath ??= element;
             continue;
-        candidates.push({
+        }
+        if (!(element instanceof HTMLElement)) continue;
+        const owner = element.parentElement ?? element;
+        // Topmost first; the candidates go in paint order
+        candidates.unshift({
             key: element,
             hit: element.getBoundingClientRect(),
             drawn: drawnOf(element).getBoundingClientRect(),
             selected: element.hasAttribute("data-touch-selected"),
             group: element.dataset.touchGroup,
+            // Right on it: in its own button, where a mouse would take it
+            on: isWithin(owner.getBoundingClientRect(), x, y),
         });
     }
     if (candidates.length === 0) return null;
-    const keep =
-        natural
-            ?.closest("[data-touch-keep]")
-            ?.getAttribute("data-touch-keep") ?? undefined;
-    return pickTouchTarget(x, y, candidates, keep);
+    const control = keepingControl(beneath, root);
+    const keep = control
+        ? (control.getAttribute("data-touch-keep") ?? KEEP_CONTROL)
+        : undefined;
+    const hit = pickTouchTarget(x, y, candidates, keep);
+    if (hit) return { target: hit, owner: hit.parentElement ?? hit };
+    return control && beneath ? { target: beneath, owner: control } : null;
 }
+
+/** The keep group of a control with none of its own: no hit area belongs to it */
+const KEEP_CONTROL = "\u0000control";
+
+/**
+ * The control `element` is in that keeps a finger's press from the hit areas over it: a clip
+ * (`data-touch-keep`) or another timeline control, but not a page box (`data-touch-yield`) and not
+ * a target with a hit area of its own (that one competes through its hit area)
+ */
+function keepingControl(
+    element: Element | null,
+    root: Element,
+): Element | null {
+    const control = element?.closest(
+        "[data-touch-keep], [data-timeline-interactive], button",
+    );
+    if (
+        !control ||
+        !root.contains(control) ||
+        control.hasAttribute("data-touch-yield") ||
+        [...control.children].some((child) =>
+            child.hasAttribute("data-touch-hit"),
+        )
+    )
+        return null;
+    return control;
+}
+
+const isWithin = (rect: DOMRect, x: number, y: number) =>
+    x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
 
 /**
  * What a hit area's target draws: its mark (`data-touch-drawn`: a flag's line, a grip's bar, a

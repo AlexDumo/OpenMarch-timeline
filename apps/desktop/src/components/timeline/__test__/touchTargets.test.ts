@@ -65,8 +65,33 @@ describe("pickTouchTarget", () => {
             target("selected grip", 120, { selected: true }),
         ];
         expect(pickTouchTarget(105, 50, targets)).toBe("selected grip");
-        // A press on a target as drawn still loses to the selected one's hit area
-        expect(pickTouchTarget(100, 50, targets)).toBe("selected grip");
+        // Outside the selected one's hit area, the other takes it
+        expect(pickTouchTarget(90, 50, targets)).toBe("grip");
+    });
+
+    it("gives a press right on a target to it, over the selected object's hit area (a line on a flag wins)", () => {
+        const targets = [
+            target("selected grip", 100, { selected: true }),
+            target("start flag", 104),
+        ];
+        // Right on the start flag's line, inside the selected grip's hit area
+        expect(pickTouchTarget(104, 50, targets)).toBe("start flag");
+        // `on`: inside the target's own button, though off its drawn line
+        expect(
+            pickTouchTarget(108, 50, [
+                targets[0]!,
+                { ...target("playhead", 112), on: true },
+            ]),
+        ).toBe("playhead");
+        // Off both, the selected one wins
+        expect(pickTouchTarget(109, 50, targets)).toBe("selected grip");
+    });
+
+    it("still gives a press off every target to the selected one", () => {
+        const targets = [
+            target("grip", 100),
+            target("selected grip", 120, { selected: true }),
+        ];
         // Outside the selected one's hit area, the other takes it
         expect(pickTouchTarget(90, 50, targets)).toBe("grip");
     });
@@ -123,8 +148,12 @@ describe("touchGrabOffset", () => {
         expect(touchGrabOffset("touch", 118, 100)).toBe(-18);
         expect(touchGrabOffset("touch", 84, 100)).toBe(16);
     });
-    it("is 0 for a mouse or pen, as before", () => {
-        expect(touchGrabOffset("mouse", 104, 100)).toBe(0);
-        expect(touchGrabOffset("pen", 104, 100)).toBe(0);
+    it("keeps a pen's offset in the touch layout, where the hit areas take it too", () => {
+        expect(touchGrabOffset("pen", 118, 100, true)).toBe(-18);
+    });
+    it("is 0 for a mouse, and for a pen in the mouse layout, as before", () => {
+        expect(touchGrabOffset("mouse", 104, 100, true)).toBe(0);
+        expect(touchGrabOffset("mouse", 104, 100, false)).toBe(0);
+        expect(touchGrabOffset("pen", 104, 100, false)).toBe(0);
     });
 });

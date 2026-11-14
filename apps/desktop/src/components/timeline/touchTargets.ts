@@ -37,6 +37,11 @@ export interface TouchHitCandidate<K> {
     readonly selected: boolean;
     /** The object it belongs to, such as its clip (`data-touch-group`) */
     readonly group?: string;
+    /**
+     * The press is right on the target, where a mouse would hit it (its own button, or its mark
+     * as drawn). Without it, only a press on `drawn` counts
+     */
+    readonly on?: boolean;
 }
 
 const contains = (rect: TouchRect, x: number, y: number) =>
@@ -53,13 +58,16 @@ export const distanceToRect = (rect: TouchRect, x: number, y: number) =>
  * Which target a finger's press at (`x`, `y`) belongs to, where hit areas overlap (tablet plan
  * 3.3). Of the targets whose hit area holds the press:
  *
- * 1. A press right on an object that keeps its presses (`keep`: a clip's body, named by its group)
- *    stays that object's, unless it's on one of that object's own targets or on a target as drawn.
- *    So a finger on a clip moves that clip, even inside the selected clip's edge hit areas next
- *    to it, while the clip's own edges reach inside it.
- * 2. A target of the selected object wins.
- * 3. Then the nearest target as drawn.
- * 4. Then the one on top (later in `candidates`, which is paint order).
+ * 1. A target the press is right on (`on`) wins, as it would for a mouse: of those, the nearest
+ *    mark, then the one on top. So where the start flag's line or the playhead sits on the selected
+ *    clip's end, a finger right on the line takes the line (UI-21), as a mouse does.
+ * 2. A press on an object that keeps its presses (`keep`: a clip's body or another control under
+ *    the hit areas, named by its group) stays that object's, unless it's on one of that object's
+ *    own targets. So a finger on a clip selects or moves that clip, even inside the playhead's or
+ *    the selected clip's hit areas over it, while the clip's own edges reach inside it.
+ * 3. A target of the selected object wins.
+ * 4. Then the nearest target as drawn.
+ * 5. Then the one on top (later in `candidates`, which is paint order).
  *
  * Returns null when no target takes the press: it goes where it landed.
  */
@@ -69,22 +77,27 @@ export function pickTouchTarget<K>(
     candidates: readonly TouchHitCandidate<K>[],
     keep?: string,
 ): K | null {
-    let best: { key: K; selected: boolean; distance: number } | null = null;
+    type Ranked = { key: K; on: boolean; selected: boolean; distance: number };
+    let best: Ranked | null = null;
+    // Better than `than`: right on it first, then (off every target) selected, then nearest; a
+    // tie goes to the later one, on top
+    const beats = (a: Ranked, than: Ranked) => {
+        if (a.on !== than.on) return a.on;
+        if (!a.on && a.selected !== than.selected) return a.selected;
+        return a.distance <= than.distance;
+    };
     for (const candidate of candidates) {
         if (!contains(candidate.hit, x, y)) continue;
         const distance = distanceToRect(candidate.drawn, x, y);
-        if (keep !== undefined && candidate.group !== keep && distance > 0)
-            continue;
-        const better =
-            best === null ||
-            (candidate.selected && !best.selected) ||
-            (candidate.selected === best.selected && distance <= best.distance);
-        if (better)
-            best = {
-                key: candidate.key,
-                selected: candidate.selected,
-                distance,
-            };
+        const on = candidate.on ?? distance === 0;
+        if (keep !== undefined && candidate.group !== keep && !on) continue;
+        const ranked = {
+            key: candidate.key,
+            on,
+            selected: candidate.selected,
+            distance,
+        };
+        if (best === null || beats(ranked, best)) best = ranked;
     }
     return best?.key ?? null;
 }
@@ -103,14 +116,24 @@ export const clipEdgeHitInside = (clipWidth: number, handleWidth: number) =>
 /**
  * Where a dragged target is drawn relative to a finger: a finger's press may land up to 22px off
  * a target (its hit area), and a drag that puts the target where the pointer is would jump it
- * there. So a finger's drag keeps the offset it was grabbed at: add this to each `clientX`. A
- * mouse's or pen's press is on the target, and keeps 0, as before.
+ * there. So a finger's drag keeps the offset it was grabbed at: add this to each `clientX`. So
+ * does a pen in the touch layout, where the widened hit areas take it too. A mouse's press (and a
+ * pen's in the mouse layout) is on the target, and keeps 0, as before.
  */
 export const touchGrabOffset = (
     pointerType: string,
     pressClientX: number,
     drawnClientX: number,
-) => (pointerType === "touch" ? drawnClientX - pressClientX : 0);
+    touchLayout: boolean = isTouchLayout(),
+) =>
+    pointerType === "touch" || (pointerType === "pen" && touchLayout)
+        ? drawnClientX - pressClientX
+        : 0;
+
+/** Whether the interface is laid out for touch (`<html data-input="touch">`, `InputModeStore`) */
+export const isTouchLayout = () =>
+    typeof document !== "undefined" &&
+    document.documentElement.dataset.input === "touch";
 
 /** The horizontal center of an element on screen */
 export const centerClientX = (element: Element) => {

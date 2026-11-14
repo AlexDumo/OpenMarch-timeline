@@ -842,7 +842,13 @@ export const TimelineRuler = memo(function TimelineRuler({
     height = TIMELINE_PAGE_ROW_BOTTOM,
     flagSnapPlayhead,
     scrubRestoreBeat,
+    lineBeats,
 }: {
+    /**
+     * Where the start flag and the playhead are drawn (view beats): a grip under one of them has
+     * no finger hit area, since the line wins there (UI-21)
+     */
+    lineBeats?: readonly number[];
     pages: readonly TimelinePageMarker[];
     measures: readonly TimelineMeasureMarker[];
     beatCount: number;
@@ -1037,6 +1043,7 @@ export const TimelineRuler = memo(function TimelineRuler({
                     onPreviewChange={setFlagPreview}
                     onSelectPage={selectPage}
                     selectedBoxIds={selectedBoxIds}
+                    lineBeats={lineBeats}
                 />
             )}
             {holds && (
@@ -1122,6 +1129,7 @@ const TimelineRulerBoxes = memo(function TimelineRulerBoxes({
                 <button
                     type="button"
                     data-timeline-interactive="true"
+                    data-touch-yield=""
                     data-testid="timeline-initial-page"
                     aria-label={t("timeline.page.label", {
                         pageName: initialPage.label,
@@ -1189,6 +1197,8 @@ const TimelinePageBox = memo(function TimelinePageBox({
         <button
             type="button"
             data-timeline-interactive="true"
+            // A finger near a flag, grip or keyframe over the box takes that target (3.3)
+            data-touch-yield=""
             {...timelineRangeTargetProps(range, undefined, page.id)}
             aria-label={t("timeline.page.label", { pageName: page.label })}
             aria-pressed={selected}

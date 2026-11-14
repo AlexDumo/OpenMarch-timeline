@@ -653,23 +653,64 @@ describe("touch hit areas (tablet 3.3)", () => {
         const { viewport } = mount();
         const grip = target(viewport, 98, 102);
         const loopEnd = target(viewport, 128, 132);
-        expect(findTouchHit(viewport, 110, 50, null)).toBe(grip.hit);
-        expect(findTouchHit(viewport, 121, 50, null)).toBe(loopEnd.hit);
-        expect(findTouchHit(viewport, 200, 50, null)).toBeNull();
+        expect(findTouchHit(viewport, 110, 50)?.target).toBe(grip.hit);
+        expect(findTouchHit(viewport, 121, 50)?.target).toBe(loopEnd.hit);
+        expect(findTouchHit(viewport, 200, 50)).toBeNull();
         const selected = target(viewport, 138, 142, { selected: true });
-        expect(findTouchHit(viewport, 121, 50, null)).toBe(selected.hit);
+        expect(findTouchHit(viewport, 121, 50)?.target).toBe(selected.hit);
+        expect(findTouchHit(viewport, 121, 50)?.owner).toBe(selected.button);
     });
 
-    it("leaves a press on a clip's body to that clip, but not to its own edge", () => {
+    /** A clip under the playhead's full-height line, whose hit area is on top of it */
+    function clipUnderPlayhead() {
         const { viewport } = mount();
         const clip = document.createElement("button");
+        clip.setAttribute("data-timeline-interactive", "true");
         clip.setAttribute("data-touch-keep", "clip:1");
-        clip.getBoundingClientRect = () => rectOf(110, 200);
+        clip.getBoundingClientRect = () => rectOf(110, 200, 40, 60);
         viewport.append(clip);
-        target(viewport, 98, 102, { selected: true, group: "clip:2" });
-        expect(findTouchHit(viewport, 115, 50, clip)).toBeNull();
+        // Later in the DOM: painted over the clip, as the pinned layer's lines are
+        const playhead = target(viewport, 98, 102);
+        return { viewport, clip, playhead };
+    }
+
+    it("gives a press on a clip under the playhead's hit area to the clip, though the hit area is on top", () => {
+        const { viewport, clip, playhead } = clipUnderPlayhead();
+        // 15 px from the playhead, on the clip: the topmost element there is the hit area
+        expect(document.elementsFromPoint(115, 50)[0]).toBe(playhead.hit);
+        expect(findTouchHit(viewport, 115, 50)).toEqual({
+            target: clip,
+            owner: clip,
+        });
+        // Off the clip, the playhead takes it
+        expect(findTouchHit(viewport, 115, 80)?.target).toBe(playhead.hit);
+        // Right on the playhead's own button, over the clip, the line wins
+        expect(findTouchHit(viewport, 101, 50)?.target).toBe(playhead.hit);
+    });
+
+    it("lets a selected clip's own edge reach in over its body, but not another clip's", () => {
+        const { viewport, clip } = clipUnderPlayhead();
+        target(viewport, 104, 106, { selected: true, group: "clip:2" });
+        expect(findTouchHit(viewport, 120, 50)?.target).toBe(clip);
         const own = target(clip, 110, 114, { selected: true, group: "clip:1" });
-        expect(findTouchHit(viewport, 118, 50, clip)).toBe(own.hit);
+        expect(findTouchHit(viewport, 118, 50)?.target).toBe(own.hit);
+    });
+
+    it("leaves a press on a page box to the targets over it, and one on another control to that control", () => {
+        const { viewport } = mount();
+        const box = document.createElement("button");
+        box.setAttribute("data-timeline-interactive", "true");
+        box.setAttribute("data-touch-yield", "");
+        box.getBoundingClientRect = () => rectOf(0, 300, 40, 60);
+        viewport.append(box);
+        const flag = target(viewport, 98, 102);
+        expect(findTouchHit(viewport, 115, 50)?.target).toBe(flag.hit);
+        // The add-page pill beside the playhead
+        const pill = document.createElement("button");
+        pill.getBoundingClientRect = () => rectOf(110, 180, 40, 60);
+        viewport.append(pill);
+        // On top of the flag's hit area here, so the press already lands on the pill
+        expect(findTouchHit(viewport, 115, 50)?.owner).toBe(pill);
     });
 
     it("sends a finger's press near a target on to it, with its click; a mouse's stays where it landed", () => {

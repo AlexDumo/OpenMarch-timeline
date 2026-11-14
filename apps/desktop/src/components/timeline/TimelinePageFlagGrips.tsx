@@ -46,8 +46,10 @@ import type {
  *   nothing; so does a drag released where it started.
  * - **Keys** (case 18): ← and → move a focused grip one beat, as one edit each.
  * - **Touch** (tablet plan 3.3): in the touch layout each grip has a 44px hit area straddling its
- *   page line, and the selected page's two grips are drawn (a finger can't hover) and win where
- *   hit areas overlap. A finger's drag keeps the offset it grabbed the line at.
+ *   page line, from the page row's top down (the headroom stays the flags' tops'), and the
+ *   selected page's two grips are drawn (a finger can't hover) and win where hit areas overlap.
+ *   A grip under the start flag or the playhead has none: the line wins, as for a mouse. A
+ *   finger's drag keeps the offset it grabbed the line at.
  */
 
 /**
@@ -247,7 +249,10 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
     onPreviewChange,
     onSelectPage,
     selectedBoxIds = "",
+    lineBeats = [],
 }: {
+    /** Where the start flag and the playhead are: a grip under one has no finger hit area */
+    lineBeats?: readonly number[];
     /** The selected page boxes' ids, one per line: their grips show and win on a tablet */
     selectedBoxIds?: string;
     /** The page boxes as they are, without the preview */
@@ -508,6 +513,11 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
                 const ofSelected =
                     selectedIds.has(String(page.id)) ||
                     (next !== undefined && selectedIds.has(String(next)));
+                // Where a line is on a flag the line wins (UI-21), for a finger too: move the
+                // line off to drag the flag
+                const underLine = lineBeats.some(
+                    (line) => Math.round(line) === beat,
+                );
                 return (
                     <button
                         key={page.id}
@@ -566,7 +576,14 @@ export const TimelinePageFlagGrips = memo(function TimelinePageFlagGrips({
                                       ),
                             )}
                         />
-                        <TouchHitArea selected={ofSelected} />
+                        {!underLine && (
+                            // Straddles the line, from the page row's top down: the headroom
+                            // above is the flags' tops' and the loop ends' (UI-20)
+                            <TouchHitArea
+                                selected={ofSelected}
+                                className="touch:block pointer-events-auto absolute top-0 left-1/2 hidden h-44 w-44 -translate-x-1/2"
+                            />
+                        )}
                     </button>
                 );
             })}

@@ -423,7 +423,7 @@ describe("page flag grips on a tablet (3.3)", () => {
         expect(commit).toHaveBeenCalledWith(2, 12);
     });
 
-    it("every grip has a touch hit area, and the selected page's grips are marked selected", () => {
+    it("the selected page's grips are marked selected, and a grip under the start flag has no hit area", () => {
         render(
             <Timeline
                 mode="expanded"
@@ -447,7 +447,8 @@ describe("page flag grips on a tablet (3.3)", () => {
                 .querySelector("[data-touch-hit]")
                 ?.hasAttribute("data-touch-selected"),
         );
-        // Page 2 (spec beats 9–17) is selected: its start (page 1's flag) and its end
-        expect(hits).toEqual([true, true]);
+        // Page 2 (spec beats 9–17) is selected: its end grip is selected. Its start grip
+        // (page 1's flag) has the start flag on it, where the line wins: no hit area
+        expect(hits).toEqual([undefined, true]);
     });
 });
