@@ -49,9 +49,13 @@ export function FieldEditPanel() {
                     <ActionButton
                         action="fieldEditDone"
                         data-testid="field-edit-done"
-                        className={`${getButtonClassName({ variant: "primary", size: "compact" })} text-body enabled:hover:text-text-invert`}
+                        // The size is on the label: ActionButton's twMerge reads `text-body` as a
+                        // color and would drop the primary's `text-text-invert` for it
+                        className={`${getButtonClassName({ variant: "primary", size: "compact" })} enabled:hover:text-text-invert`}
                     >
-                        {t("fieldEditMode.panel.done")}
+                        <span className="text-body">
+                            {t("fieldEditMode.panel.done")}
+                        </span>
                     </ActionButton>
                     <ActionButton
                         action="fieldEditDiscard"
