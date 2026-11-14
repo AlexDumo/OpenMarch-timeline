@@ -387,13 +387,17 @@ test.describe("touch layout", () => {
         const loopStart = page.getByTestId("timeline-loop-start");
         await expect(loopStart).toBeVisible();
         const label = await loopStart.getAttribute("aria-label");
-        const bar = (await page.getByTestId("timeline-loop-bar").boundingBox())!;
+        const bar = (await page
+            .getByTestId("timeline-loop-bar")
+            .boundingBox())!;
         f = await finger(page);
         // Just outside the bar's start, on the loop start's own handle, clear of the pennant
         await f.down({ x: bar.x - 3, y: bar.y + 4 });
         await f.move(-50);
         await f.up();
-        await expect.poll(() => loopStart.getAttribute("aria-label")).not.toBe(label);
+        await expect
+            .poll(() => loopStart.getAttribute("aria-label"))
+            .not.toBe(label);
         expect(await width()).toBeCloseTo(before, 0);
     });
 
@@ -422,7 +426,9 @@ test.describe("touch layout", () => {
         const f = await finger(page);
         await f.down({ x: flag + 15, y });
         await f.move(40);
-        await expect(page.getByTestId("timeline-clip-resize-tag")).toBeVisible();
+        await expect(
+            page.getByTestId("timeline-clip-resize-tag"),
+        ).toBeVisible();
         expect(await playheadAt(page)).toBe(playhead);
         expect(await startFlagX(page)).toBeCloseTo(flag, 0);
         await f.move(-40);
