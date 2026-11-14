@@ -1254,12 +1254,25 @@ export class FieldEditor {
         };
     }
 
-    /** The handle of the selection box at `point`, or null. */
+    /**
+     * The handle of the selection box at `point`, or null. On a box standing
+     * clear of an order lane (step 4j) the middle handles aren't drawn until
+     * pointed at, so one gives way to a marcher under the pointer: the grown
+     * box's sides can reach the next marcher along the line.
+     */
     private handleAt(point: FieldPoint): HandleId | null {
         const frame = this.selectionFrame();
         if (!frame) return null;
         const zoom = this.ports.zoom();
-        return handleAt(handlePoints(frame, zoom), point, zoom);
+        const handle = handleAt(handlePoints(frame, zoom), point, zoom);
+        if (
+            handle &&
+            frame.covers &&
+            MIDDLE_HANDLES.has(handle) &&
+            this.marcherAt(point) !== null
+        )
+            return null;
+        return handle;
     }
 
     /**
@@ -1668,6 +1681,9 @@ export class FieldEditor {
         for (const listener of this.listeners) listener();
     }
 }
+
+/** The selection box's middle handles: drawn on a box clear of an order lane only while pointed at */
+const MIDDLE_HANDLES: ReadonlySet<HandleId> = new Set(["n", "e", "s", "w"]);
 
 /** `base` with `positions` written over it. */
 const withPositions = (

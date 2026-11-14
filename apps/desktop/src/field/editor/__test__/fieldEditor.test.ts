@@ -1899,6 +1899,24 @@ describe("FieldEditor scale and rotate handles (#198)", () => {
             expect(editor.hoveredHandle()).toBeNull();
         });
 
+        it("lets a marcher under a hidden middle handle take the press", () => {
+            // The lane's box reaches marcher 1 (100, 100) with its left middle handle
+            const { editor, state } = setup({
+                selected: [2, 3, 4],
+                selectionCovers: () => ({
+                    left: 98,
+                    top: 85,
+                    right: 405,
+                    bottom: 115,
+                }),
+            });
+            editor.pointerMove(at(98, 100));
+            expect(editor.hoveredHandle()).toBeNull();
+            expect(editor.cursor()).toBe("pointer");
+            click(editor, 98, 100, { shift: true });
+            expect(state.selected).toEqual([2, 3, 4, 1]);
+        });
+
         it("turns with the cover it had at the press while a rotation is dragged", () => {
             const { editor } = lane();
             // The rotate handle sits 20 units above the grown box's top middle
