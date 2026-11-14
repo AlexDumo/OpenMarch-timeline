@@ -334,7 +334,9 @@ test("in tempo mode the title bar row steps back with the rest", async ({
     show,
 }) => {
     const { page } = show;
-    await tapOn(page, page.getByTestId("timeline-tempo-mode"));
+    // Edit music is in the touch transport's "…" (tablet 3.5)
+    await tapOn(page, page.getByTestId("timeline-touch-more"));
+    await tapOn(page, page.getByTestId("timeline-touch-tempo-mode"));
     await expect(page.getByRole("button", { name: "Done" })).toBeVisible();
     const row = page.getByTestId("touch-toolbar-row");
     await expect(row).toHaveAttribute("inert", "");

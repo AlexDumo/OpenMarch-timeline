@@ -1485,6 +1485,16 @@
         "category": "timeline",
         "bindings": []
     },
+    "timelineFit": {
+        "label": "Fit the show in the timeline",
+        "category": "timeline",
+        "bindings": []
+    },
+    "toggleTempoMode": {
+        "label": "Edit music on / off",
+        "category": "timeline",
+        "bindings": []
+    },
     "moveSelectedMarchersUp": {
         "label": "Nudge up",
         "category": "movement",
