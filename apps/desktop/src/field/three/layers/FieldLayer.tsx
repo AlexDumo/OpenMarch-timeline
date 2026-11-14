@@ -127,9 +127,9 @@ function rectsMesh(
 }
 
 /**
- * Filled shapes (the painted yard numbers, `fieldShapes.ts`). The fill is
- * inset half a device pixel and each edge gets a strip one pixel wide whose
- * alpha falls from 1 to 0 across it: the edges antialias, as the lines'
+ * Filled shapes (the painted yard numbers, `fieldShapes.ts`). Each edge gets
+ * a strip one pixel wide outside the fill whose alpha falls from 1 to 0
+ * across it: the edges antialias, as the lines'
  * (#249), with MSAA off.
  */
 const SHAPE_VERTEX = /* glsl */ `
@@ -150,7 +150,7 @@ const SHAPE_FRAGMENT = /* glsl */ `
 varying vec4 vColor;
 varying float vEdge;
 void main() {
-    float alpha = vColor.a * clamp(0.5 - vEdge, 0.0, 1.0);
+    float alpha = vColor.a * clamp(1.0 - vEdge, 0.0, 1.0);
     if (alpha <= 0.0) discard;
     gl_FragColor = vec4(vColor.rgb, alpha);
 }`;

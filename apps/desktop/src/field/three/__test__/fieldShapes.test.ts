@@ -25,7 +25,7 @@ const numberShape = (label: string, side: "home" | "away"): FieldPlanShape => ({
     })!,
 });
 
-/** The fill's area: its triangles where they sit before the zoom shifts their edges. */
+/** The fill's area: its triangles, which the zoom never moves. */
 function fillArea(mesh: FieldShapeMesh): number {
     const p = mesh.positions;
     let area = 0;
@@ -118,6 +118,15 @@ describe("fieldShapeMesh", () => {
     });
 
     it.each(cases)(
+        "never moves the fill of $label ($side), so its triangles can't flip",
+        ({ label, side }) => {
+            const mesh = fieldShapeMesh([numberShape(label, side)]);
+            for (let i = 0; i < mesh.fillIndexCount; i++)
+                expect(mesh.edges[mesh.indices[i]!]).toBe(0);
+        },
+    );
+
+    it.each(cases)(
         "points every edge strip of $label ($side) away from the fill",
         ({ label, side }) => {
             const shape = numberShape(label, side);
@@ -127,7 +136,7 @@ describe("fieldShapeMesh", () => {
             const eps = 0.05;
             let checked = 0;
             for (let v = 0; v < vertices; v++) {
-                if (mesh.edges[v] !== 0.5) continue;
+                if (mesh.edges[v] !== 1) continue;
                 const x = mesh.positions[v * 3]!;
                 const y = mesh.positions[v * 3 + 1]!;
                 const ox = mesh.offsets[v * 2]!;

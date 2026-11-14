@@ -5,19 +5,21 @@ import type { FieldPlanShape } from "@/field/fieldPlan";
  * The plan's filled shapes (the painted yard numbers) as triangles, built once
  * per plan: the field is static.
  *
- * Each outline is filled with triangles (three's ear clipping), inset by half
- * a device pixel, and edged with a one-pixel strip whose alpha falls from 1
- * to 0 across it. MSAA is off on the field (`fieldQuality.ts`), so the strip
+ * Each outline is filled with triangles (three's ear clipping) and edged with
+ * a one-pixel strip outside it whose alpha falls from 1 to 0 across it. The
+ * fill's vertices never move: shifting them by their miters would turn the
+ * ear clipping's thin slivers inside out, and they'd overlap. MSAA is off on the field (`fieldQuality.ts`), so the strip
  * is what smooths the edge, as the lines' shader does (#249). Both move with the zoom in the vertex
  * shader (`FieldLayer`), from each vertex's `offsets` (its miter, pointing
- * away from the fill) times its `edges` value in device pixels.
+ * away from the fill) times its `edges` value in device pixels; only the
+ * strip's outer edge has one.
  */
 export type FieldShapeMesh = {
     /** x, y, 0 per vertex, in field units. */
     positions: Float32Array;
     /** The unit miter away from the fill, x and y per vertex. */
     offsets: Float32Array;
-    /** Device pixels along the miter: -0.5 on the fill's edge, 0.5 on the strip's outer edge. */
+    /** Device pixels along the miter: 0 on the fill's edge (which never moves), 1 on the strip's outer edge. */
     edges: Float32Array;
     /** r, g, b, a per vertex, 0 to 1. */
     colors: Float32Array;
@@ -268,7 +270,7 @@ function addContour(
         }
         const cos = mx * after[0] + my * after[1];
         const scale = Math.min(1 / Math.max(cos, 1e-6), MITER_LIMIT);
-        for (const edge of [-0.5, 0.5]) {
+        for (const edge of [0, 1]) {
             out.positions.push(x, y, 0);
             out.offsets.push(mx * scale, my * scale);
             out.edges.push(edge);
