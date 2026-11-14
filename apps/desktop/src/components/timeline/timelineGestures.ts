@@ -7,6 +7,7 @@ import {
     type GestureState,
     type NavigationGeometry,
 } from "@/components/canvas/touch/touchGestures";
+import { pickTouchTarget, type TouchHitCandidate } from "./touchTargets";
 
 /**
  * The timeline's gesture adapter (tablet plan 3.1): where a finger's press on the timeline goes.
@@ -436,8 +437,100 @@ export function attachTimelineGestures(
             }
         },
     });
+    /** The presses the adapter sent on to a hit area, which it mustn't send on again */
+    const redirected = new WeakSet<Event>();
+    /** The last finger press on a hit area's target (or sent on to it): its tap's click goes there */
+    let redirectedTap: { hit: HTMLElement; timeStamp: number } | null = null;
     const onPointer = (event: PointerEvent) => {
         if (cancelling) return;
+        if (event.type === "pointerdown" && !redirected.has(event)) {
+            // A finger's first press near a small target (tablet plan 3.3) is that target's
+            if (
+                timelineGesturesOwn(event) &&
+                !gestures.active &&
+                redirectToTouchHit(event)
+            )
+                return;
+            // A finger right on a target with a hit area: its tap's click is that target's too
+            const hit =
+                timelineGesturesOwn(event) && event.target instanceof Element
+                    ? touchHitOf(event.target, viewport)
+                    : null;
+            if (hit) redirectedTap = { hit, timeStamp: event.timeStamp };
+        }
+        handlePointer(event);
+    };
+    /**
+     * Sends a finger's press on to the hit area it belongs to (`findTouchHit`) when it landed
+     * elsewhere: on the bare timeline, a page box, or another target's overlapping hit area.
+     * Returns whether it did; the press as it landed then goes no further.
+     */
+    const redirectToTouchHit = (event: PointerEvent): boolean => {
+        const natural = event.target instanceof Element ? event.target : null;
+        const hit = findTouchHit(
+            viewport,
+            event.clientX,
+            event.clientY,
+            natural,
+        );
+        const owner = hit?.parentElement;
+        if (!hit || !owner || (natural && owner.contains(natural)))
+            return false;
+        event.stopPropagation();
+        // The browser holds a finger's pointer for the element it landed on: let it go, so the
+        // target's own handlers can take it
+        if (natural?.hasPointerCapture?.(event.pointerId))
+            natural.releasePointerCapture(event.pointerId);
+        const press = clonePointerEvent(event);
+        redirected.add(press);
+        hit.dispatchEvent(press);
+        if (press.defaultPrevented) event.preventDefault();
+        // A target that doesn't capture its presses still hears their moves and release
+        if (!holdsCapture(hit, event.pointerId))
+            try {
+                hit.setPointerCapture?.(event.pointerId);
+            } catch {
+                // Already lifted
+            }
+        redirectedTap = { hit, timeStamp: event.timeStamp };
+        return true;
+    };
+    // Any new press anywhere ends the wait for a redirected tap's click
+    const onWindowPress = (event: PointerEvent) => {
+        if (!redirected.has(event)) redirectedTap = null;
+    };
+    // A finger's tap click doesn't always reach the target it pressed (Chrome sends it to the
+    // page's body after a press on a keyframe's hit area, and a press sent on to a target landed
+    // elsewhere): send it on to the target, so a tap 15px off a keyframe seeks as a tap on the
+    // diamond does. Heard window-wide: a menu the press opened (the ⋯ chip's) may now be under
+    // the finger, and must not take the click
+    const onClick = (event: MouseEvent) => {
+        const tap = redirectedTap;
+        if (!tap || redirected.has(event)) return;
+        redirectedTap = null;
+        const owner = tap.hit.parentElement;
+        if (
+            !owner ||
+            event.timeStamp - tap.timeStamp > REDIRECTED_CLICK_MS ||
+            (event.target instanceof Node && owner.contains(event.target))
+        )
+            return;
+        event.stopPropagation();
+        event.preventDefault();
+        const click = new MouseEvent("click", {
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+            detail: Math.max(1, event.detail),
+            clientX: event.clientX,
+            clientY: event.clientY,
+            screenX: event.screenX,
+            screenY: event.screenY,
+        });
+        redirected.add(click);
+        tap.hit.dispatchEvent(click);
+    };
+    const handlePointer = (event: PointerEvent) => {
         if (gestures.handle(event)) event.stopPropagation();
         // The fingers the adapter keeps are held by the viewport, so their moves and release
         // come here wherever they go: off the pane, or after the control they were on went
@@ -474,6 +567,8 @@ export function attachTimelineGestures(
     };
     for (const type of POINTER_TYPES)
         viewport.addEventListener(type, onPointer, { capture: true });
+    window.addEventListener("click", onClick, { capture: true });
+    window.addEventListener("pointerdown", onWindowPress, { capture: true });
     for (const type of CAPTURE_TYPES)
         viewport.addEventListener(type, onCapture, { capture: true });
     for (const type of RELEASE_TYPES)
@@ -488,6 +583,10 @@ export function attachTimelineGestures(
     return () => {
         for (const type of POINTER_TYPES)
             viewport.removeEventListener(type, onPointer, { capture: true });
+        window.removeEventListener("click", onClick, { capture: true });
+        window.removeEventListener("pointerdown", onWindowPress, {
+            capture: true,
+        });
         for (const type of CAPTURE_TYPES)
             viewport.removeEventListener(type, onCapture, { capture: true });
         for (const type of RELEASE_TYPES)
@@ -500,6 +599,135 @@ export function attachTimelineGestures(
         style.setProperty("-webkit-touch-callout", before.callout);
         gestures.dispose();
     };
+}
+
+/** How long after a press sent on to a hit area its tap's click may come */
+const REDIRECTED_CLICK_MS = 1000;
+
+/**
+ * The small target (tablet plan 3.3) a finger's press at (`x`, `y`) belongs to: of the touch hit
+ * areas (`data-touch-hit`, `TouchHitArea`) under it inside `root`, the one `pickTouchTarget`
+ * picks, or null. `natural` is where the press landed: on an object that keeps its presses
+ * (`data-touch-keep`, a clip), only that object's own targets or a target as drawn take it.
+ * Hit areas only show in the touch layout, so in the mouse layout there are none.
+ */
+export function findTouchHit(
+    root: Element,
+    x: number,
+    y: number,
+    natural: Element | null,
+): HTMLElement | null {
+    const under = root.ownerDocument.elementsFromPoint?.(x, y) ?? [];
+    const candidates: TouchHitCandidate<HTMLElement>[] = [];
+    // Topmost first; the candidates go in paint order
+    for (let i = under.length - 1; i >= 0; i--) {
+        const element = under[i];
+        if (
+            !(element instanceof HTMLElement) ||
+            !element.hasAttribute("data-touch-hit") ||
+            !root.contains(element)
+        )
+            continue;
+        candidates.push({
+            key: element,
+            hit: element.getBoundingClientRect(),
+            drawn: drawnOf(element).getBoundingClientRect(),
+            selected: element.hasAttribute("data-touch-selected"),
+            group: element.dataset.touchGroup,
+        });
+    }
+    if (candidates.length === 0) return null;
+    const keep =
+        natural
+            ?.closest("[data-touch-keep]")
+            ?.getAttribute("data-touch-keep") ?? undefined;
+    return pickTouchTarget(x, y, candidates, keep);
+}
+
+/**
+ * What a hit area's target draws: its mark (`data-touch-drawn`: a flag's line, a grip's bar, a
+ * diamond), or else the target itself (the hit area's parent)
+ */
+function drawnOf(hit: Element): Element {
+    const owner = hit.parentElement ?? hit;
+    return owner.querySelector(":scope > [data-touch-drawn]") ?? owner;
+}
+
+/**
+ * The touch hit area of the target `element` is in (a hit area itself, or inside a target that
+ * has one), up to `root`; null when it's in none
+ */
+function touchHitOf(element: Element, root: Element): HTMLElement | null {
+    for (
+        let current: Element | null = element;
+        current && current !== root;
+        current = current.parentElement
+    ) {
+        if (
+            current instanceof HTMLElement &&
+            current.hasAttribute("data-touch-hit")
+        )
+            return current;
+        for (const child of current.children)
+            if (
+                child instanceof HTMLElement &&
+                child.hasAttribute("data-touch-hit")
+            )
+                return child;
+    }
+    return null;
+}
+
+/** Whether `element` or one of its ancestors holds pointer `id`'s capture */
+function holdsCapture(element: Element, id: number): boolean {
+    for (
+        let current: Element | null = element;
+        current;
+        current = current.parentElement
+    )
+        if (current.hasPointerCapture?.(id)) return true;
+    return false;
+}
+
+/** A copy of a pointer event, to send to another element (a `MouseEvent` where there's no `PointerEvent`) */
+function clonePointerEvent(event: PointerEvent): Event {
+    if (typeof PointerEvent !== "function") {
+        const copy = new MouseEvent(event.type, {
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+            clientX: event.clientX,
+            clientY: event.clientY,
+            button: event.button,
+            buttons: event.buttons,
+        });
+        Object.defineProperties(copy, {
+            pointerId: { value: event.pointerId },
+            pointerType: { value: event.pointerType },
+        });
+        return copy;
+    }
+    return new PointerEvent(event.type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerId: event.pointerId,
+        pointerType: event.pointerType,
+        isPrimary: event.isPrimary,
+        width: event.width,
+        height: event.height,
+        pressure: event.pressure,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        screenX: event.screenX,
+        screenY: event.screenY,
+        button: event.button,
+        buttons: event.buttons,
+        altKey: event.altKey,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+    });
 }
 
 /** The `pointercancel` the adapter sends a finger's press (a `MouseEvent` where there's no `PointerEvent`) */

@@ -103,6 +103,17 @@ On a touch screen, where a finger lands decides what it does:
 
 If a second finger touches the timeline while one finger is dragging the playhead or a bar, the drag is cancelled: the playhead or the bar goes back to where it was, and nothing changes. The two fingers then scroll and zoom.
 
+The timeline's small handles don't need an exact touch. A finger that lands close to one, up to about a fingertip away, takes that handle:
+
+- the start flag and the playhead;
+- a page's flag, beside the line at the end of its box. The selected page's two flags are drawn, so you can see where to touch;
+- the ends of a move's bar and its ⋯ button, once you tap the bar to select it. The selected bar shows its ends;
+- the ends of a hold and the keyframe diamonds;
+- the ends of the loop bar, which start to move once your finger has moved a little, so a tap that wobbles changes nothing;
+- the divider above the timeline.
+
+Where two handles are close together, the one on the selected page or move wins, even over the start flag or the playhead on the same count; otherwise the one nearest your finger wins. A finger on a move's bar moves that bar, except near the ends of the selected bar, which drag those ends. A dragged handle, other than the playhead, stays the same distance from your finger as when you touched it, so it doesn't jump under your finger.
+
 ## Related
 
 - [Play the show](/guides/timeline/play-the-show/): play, stop, loop and jump to a page or measure.

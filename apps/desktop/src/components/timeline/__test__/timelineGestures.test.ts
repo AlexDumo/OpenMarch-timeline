@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
     attachTimelineGestures,
     fingerDragSlop,
+    findTouchHit,
     TimelineGestures,
     timelineNavigation,
     timelineTouchRegion,
@@ -567,6 +568,149 @@ describe("attachTimelineGestures", () => {
         control.remove();
         bare.dispatchEvent(fingerEvent("pointerdown", 2, 150));
         expect(cancelled).toEqual([holder]);
+        detach();
+    });
+});
+
+describe("touch hit areas (tablet 3.3)", () => {
+    afterEach(() => {
+        document.body.replaceChildren();
+        Reflect.deleteProperty(document, "elementsFromPoint");
+    });
+
+    const rectOf = (left: number, right: number, top = 0, bottom = 100) =>
+        ({
+            left,
+            right,
+            top,
+            bottom,
+            width: right - left,
+            height: bottom - top,
+            x: left,
+            y: top,
+            toJSON: () => ({}),
+        }) as DOMRect;
+
+    /** A target drawn at `left`..`right` with a 44px hit area around it */
+    function target(
+        parent: Element,
+        left: number,
+        right: number,
+        {
+            selected = false,
+            group,
+        }: { selected?: boolean; group?: string } = {},
+    ) {
+        const button = document.createElement("button");
+        button.setAttribute("data-timeline-interactive", "true");
+        button.getBoundingClientRect = () => rectOf(left, right);
+        const hit = document.createElement("span");
+        hit.setAttribute("data-touch-hit", "");
+        if (selected) hit.setAttribute("data-touch-selected", "true");
+        if (group) hit.dataset.touchGroup = group;
+        const mid = (left + right) / 2;
+        hit.getBoundingClientRect = () => rectOf(mid - 22, mid + 22);
+        button.append(hit);
+        parent.append(button);
+        return { button, hit };
+    }
+
+    /** `elementsFromPoint` for jsdom: every element whose rect holds the point, topmost first */
+    function stubElementsFromPoint(root: Element) {
+        Object.defineProperty(document, "elementsFromPoint", {
+            configurable: true,
+            value: (x: number, y: number) =>
+                [root, ...root.querySelectorAll("*")]
+                    .filter((element) => {
+                        const r = element.getBoundingClientRect();
+                        return (
+                            x >= r.left &&
+                            x <= r.right &&
+                            y >= r.top &&
+                            y <= r.bottom
+                        );
+                    })
+                    .reverse(),
+        });
+    }
+
+    function mount() {
+        const viewport = document.createElement("div");
+        viewport.getBoundingClientRect = () => rectOf(0, 1000);
+        const bare = document.createElement("div");
+        bare.getBoundingClientRect = () => rectOf(0, 1000);
+        viewport.append(bare);
+        document.body.append(viewport);
+        Object.assign(viewport, {
+            setPointerCapture: () => {},
+            hasPointerCapture: () => false,
+        });
+        stubElementsFromPoint(viewport);
+        return { viewport, bare };
+    }
+
+    it("finds the nearest target, the selected one first, and none outside the hit areas", () => {
+        const { viewport } = mount();
+        const grip = target(viewport, 98, 102);
+        const loopEnd = target(viewport, 128, 132);
+        expect(findTouchHit(viewport, 110, 50, null)).toBe(grip.hit);
+        expect(findTouchHit(viewport, 121, 50, null)).toBe(loopEnd.hit);
+        expect(findTouchHit(viewport, 200, 50, null)).toBeNull();
+        const selected = target(viewport, 138, 142, { selected: true });
+        expect(findTouchHit(viewport, 121, 50, null)).toBe(selected.hit);
+    });
+
+    it("leaves a press on a clip's body to that clip, but not to its own edge", () => {
+        const { viewport } = mount();
+        const clip = document.createElement("button");
+        clip.setAttribute("data-touch-keep", "clip:1");
+        clip.getBoundingClientRect = () => rectOf(110, 200);
+        viewport.append(clip);
+        target(viewport, 98, 102, { selected: true, group: "clip:2" });
+        expect(findTouchHit(viewport, 115, 50, clip)).toBeNull();
+        const own = target(clip, 110, 114, { selected: true, group: "clip:1" });
+        expect(findTouchHit(viewport, 118, 50, clip)).toBe(own.hit);
+    });
+
+    it("sends a finger's press near a target on to it, with its click; a mouse's stays where it landed", () => {
+        const { viewport, bare } = mount();
+        const { button } = target(viewport, 98, 102);
+        const downs: string[] = [];
+        const clicks: string[] = [];
+        button.addEventListener("pointerdown", (event) =>
+            downs.push(`target ${(event as PointerEvent).pointerType}`),
+        );
+        bare.addEventListener("pointerdown", (event) =>
+            downs.push(`bare ${(event as PointerEvent).pointerType}`),
+        );
+        button.addEventListener("click", () => clicks.push("target"));
+        bare.addEventListener("click", () => clicks.push("bare"));
+        const detach = attachTimelineGestures(viewport, {
+            region: (event) =>
+                event.target instanceof Element &&
+                event.target.closest("[data-timeline-interactive]")
+                    ? "control"
+                    : "body",
+            view: () => ({ scrollLeft: 0, scrollTop: 0, pixelsPerBeat: 10 }),
+            navigate: () => {},
+            leadingInset: () => 0,
+        });
+        // 18px off the drawn target, on bare track space
+        bare.dispatchEvent(fingerEvent("pointerdown", 1, 118, 50));
+        expect(downs).toEqual(["target touch"]);
+        bare.dispatchEvent(fingerEvent("pointerup", 1, 118, 50));
+        bare.dispatchEvent(
+            new MouseEvent("click", { bubbles: true, clientX: 118 }),
+        );
+        expect(clicks).toEqual(["target"]);
+        downs.length = 0;
+        clicks.length = 0;
+        bare.dispatchEvent(fingerEvent("pointerdown", 2, 118, 50, "mouse"));
+        bare.dispatchEvent(
+            new MouseEvent("click", { bubbles: true, clientX: 118 }),
+        );
+        expect(downs).toEqual(["bare mouse"]);
+        expect(clicks).toEqual(["bare"]);
         detach();
     });
 });

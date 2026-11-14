@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo } from "react";
 import type { KeyboardEvent } from "react";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import clsx from "clsx";
+import { TouchHitArea } from "./TouchHitArea";
 import tolgee from "@/global/singletons/Tolgee";
 import { holdTerms } from "@/timeline/holdTerms";
 import type { SelectionKeyframe } from "@/timeline/timelineSetFollowing";
@@ -183,6 +184,7 @@ const KeyframeDiamond = memo(function KeyframeDiamond({
         >
             <span
                 aria-hidden="true"
+                data-touch-drawn=""
                 className={clsx(
                     "border-text block rotate-45 border-[1.5px] group-hover/keyframe:scale-125",
                     filled ? "bg-text" : "bg-bg-1",
@@ -192,6 +194,7 @@ const KeyframeDiamond = memo(function KeyframeDiamond({
                     height: DIAMOND_SIZE - 2,
                 }}
             />
+            <TouchHitArea />
         </button>
     );
     // Without a menu, a right-click goes on to the timeline's own
