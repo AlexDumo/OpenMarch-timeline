@@ -243,9 +243,9 @@ export function plumeMaterial(
  *
  * The mesh then keeps whatever alpha is under it, so it draws after the sky
  * (the last opaque object), when everything behind it has set alpha to 1.
- * Drawn front to back with the rest, a plume against the sky landed on the
- * cleared canvas (alpha 0) and the sky failed the depth test behind it: the
- * plume's top showed the page through it.
+ * At the default render order it drew before the land, horizon and sky
+ * (998 to 1000): a plume against them landed on the cleared canvas (alpha
+ * 0), they failed the depth test behind it, and the page showed through.
  */
 export function keepCanvasOpaque(mesh: THREE.Object3D): void {
     mesh.renderOrder = SKY_RENDER_ORDER + 1;
