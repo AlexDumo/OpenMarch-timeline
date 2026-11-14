@@ -323,7 +323,9 @@
         "roundToHalf": "Round {axis} to nearest half step",
         "roundToSteps": "{steps, plural, one {Round {axis} to nearest # step} other {Round {axis} to nearest # steps}}",
         "xStepValue": "X: {value}",
-        "yStepValue": "Y: {value}"
+        "yStepValue": "Y: {value}",
+        "aboutSteps": "About the rounding steps",
+        "touchStepDescription": "Tap X or Y to step through the rounding options. To pick one directly, open Coordinate Rounding."
     },
     "coordinateSheet": {
         "countAbbreviation": "Ct",
