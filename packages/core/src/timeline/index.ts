@@ -57,6 +57,8 @@ export {
     groupMemberWalk,
     groupPoint,
     makeAlongTrail,
+    makeTrail,
+    pointsPath,
     alongEnds,
     alongPoint,
     placed,
