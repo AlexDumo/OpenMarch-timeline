@@ -20,6 +20,7 @@ import * as THREE from "three";
 import { writeMatrix } from "@/view3d/render/instanced-marchers.js";
 import { COMPOSED_BONE_SHADER, type Composer } from "@/view3d/render/composer";
 import { PART } from "@/view3d/core/marchers/looks";
+import { SKY_RENDER_ORDER } from "@/view3d/core/environment/sky";
 import {
     plumeGeometryData,
     type PlumeTier,
@@ -239,8 +240,15 @@ export function plumeMaterial(
  * page show through. Three sets the color mask from the material after this
  * hook, but its cache already says "all on", so it leaves the mask alone;
  * turning alpha back on after the draw matches its cache again.
+ *
+ * The mesh then keeps whatever alpha is under it, so it draws after the sky
+ * (the last opaque object), when everything behind it has set alpha to 1.
+ * Drawn front to back with the rest, a plume against the sky landed on the
+ * cleared canvas (alpha 0) and the sky failed the depth test behind it: the
+ * plume's top showed the page through it.
  */
 export function keepCanvasOpaque(mesh: THREE.Object3D): void {
+    mesh.renderOrder = SKY_RENDER_ORDER + 1;
     mesh.onBeforeRender = (renderer) =>
         renderer.getContext().colorMask(true, true, true, false);
     mesh.onAfterRender = (renderer) =>

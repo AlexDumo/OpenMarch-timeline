@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import * as THREE from "three";
+import { SKY_RENDER_ORDER } from "@/view3d/core/environment/sky";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { blockGeometry } from "@/view3d/render/instanced-marchers.js";
 import {
@@ -246,6 +247,12 @@ describe("an opaque canvas", () => {
             [true, true, true, false],
             [true, true, true, true],
         ]);
+    });
+
+    it("draws after the sky, so the canvas under it is already opaque", () => {
+        const mesh = new THREE.Mesh();
+        keepCanvasOpaque(mesh);
+        expect(mesh.renderOrder).toBeGreaterThan(SKY_RENDER_ORDER);
     });
 
     it("is only needed for the feather cards", async () => {
