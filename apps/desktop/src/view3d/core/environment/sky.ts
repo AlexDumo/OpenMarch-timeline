@@ -13,6 +13,9 @@ import { ft } from "./units";
 /** Radius of the sky dome in meters. The camera's far plane must exceed it. */
 export const SKY_RADIUS = ft(5000);
 
+/** The sky dome's render order: after the other opaque objects. */
+export const SKY_RENDER_ORDER = 1000;
+
 export interface SkyDome {
     mesh: Mesh;
     /** Overrides the zenith and horizon colors of the current preset. */
@@ -50,7 +53,7 @@ export function createSkyDome(
     mesh.frustumCulled = false;
     // Drawn after the other opaque objects, so the depth test skips the
     // shader wherever the venue already covers the sky.
-    mesh.renderOrder = 1000;
+    mesh.renderOrder = SKY_RENDER_ORDER;
 
     return {
         mesh,
