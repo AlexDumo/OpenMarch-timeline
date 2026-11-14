@@ -375,12 +375,29 @@ export function profileAt(keys, x) {
   return [p[0] + f * (q[0] - p[0]), p[1] + f * (q[1] - p[1])];
 }
 
-export function groupWalk(A, pts, B, F, G, o, adjust = null, toBulge = undefined) {
+/**
+ * Plan step 26 (J.1, T-10): the profile of the linked Adjust lane `l` shares with its sub-group, read from the host's
+ * `routeAdjusts`; null without one, and for one of another route (T-10 ignores it).
+ */
+export function linkedOf(db, l) {
+  if (!l.offset || l.groupAdjust == null) return null;
+  const row = db.routeAdjusts?.[l.groupAdjust];
+  return row && row.route === l.route ? row.profile : null;
+}
+
+export function groupWalk(A, pts, B, F, G, o, adjust = null, toBulge = undefined, linked = null) {
   const W = routeWalk(F, pts, G, F, G, toBulge), m = W.V.length - 2;
   const keys = laneProfile(W, pts, adjust).keys;
+  const shared = laneProfile(W, pts, linked).keys;       // plan step 26: the sub-group's linked Adjust δ_g
   const add = (q) => [q[0] + o[0], q[1] + o[1]];
-  // R-14′ item 7: ((q + o) + δ); nothing is added without a profile, so step 15's walk is bit-identical (item 9)
-  const placedAt = (q, x) => { const p = add(q); if (!keys.length) return p; const d = profileAt(keys, x); return [p[0] + d[0], p[1] + d[1]]; };
+  // R-14′ item 7: (((q + o) + δ_g) + δ_ℓ), one addition per coordinate each, in that order; nothing is added without a
+  // profile, so step 15's walk is bit-identical (item 9)
+  const placedAt = (q, x) => {
+    let p = add(q);
+    if (shared.length) { const d = profileAt(shared, x); p = [p[0] + d[0], p[1] + d[1]]; }
+    if (keys.length) { const d = profileAt(keys, x); p = [p[0] + d[0], p[1] + d[1]]; }
+    return p;
+  };
   if (m < 1) return { W, uFirst: NaN, uLast: NaN, first: null, last: null, at: (p) => (p <= 0 ? A : p >= 1 ? B : W.pieces[0] ? arcPoint(A, B, W.pieces[0].arc, p) : lerp(A, B, p)) };
   const uFirst = W.D[1] / W.L, uLast = W.D[m] / W.L;
   const K = 64;

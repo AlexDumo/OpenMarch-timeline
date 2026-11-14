@@ -249,7 +249,20 @@ const report = (name, bad) => { bad.length ? fail++ : pass++; console.log(`${bad
   if (!same(makeOracle(clamp).positionAt(2, 4), [50, 25])) bad5.push('T-3');
   const tie = adjShow({ v: 1, keys: [K('p', 'q', 0.5, [0, 10]), K('p', 'q', 0.5, [0, 20]), K('p', 'q', 0.5 + 1e-14, [0, 30]), K('p', 'q', 0.8, [0, 0])] });
   if (!same(makeOracle(tie).positionAt(2, 8), [100, 35])) bad5.push('T-4: the last stored key of the cluster stands');
-  report('QA-RT-L5', bad5); }
+  report('QA-RT-L5', bad5);
+  // QA-RT-L13 (plan step 26): a linked Adjust shared by both spots, and spot 2's own Adjust on top, added in R-14′ item 7's
+  // order ((q + o) + δ_g) + δ_ℓ (spot 2's own is constant 5 before its first key). T-10: a linked Adjust of another route is ignored.
+  const bad13 = [];
+  const linked = { ...adjShow({ v: 1, keys: [K('p', 'q', 0.5, [0, 5]), K('p', 'q', 0.75, [0, 0])] }),
+    routeAdjusts: { 7: { route: 1, profile: { v: 1, keys: [K('p', 'q', 0.25, [0, 0]), K('p', 'q', 0.5, [0, 20]), K('p', 'q', 0.75, [0, 0])] } } } };
+  linked.lanes[1].groupAdjust = 7; linked.lanes[2].groupAdjust = 7;
+  const lo = makeOracle(linked), lr = makeResolver(linked);
+  for (const [m, b, want] of [[1, 8, [100, 15]], [2, 8, [100, 30]], [2, 7, [87.5, 20]], [1, 4, [50, -5]], [2, 6, [75, 10]]])
+    if (!same(lo.positionAt(m, b), want)) bad13.push(`M${m}@${b}: ${lo.positionAt(m, b)} not ${want}`);
+  for (let t = 0; t <= 16; t += 0.0625) for (const m of [1, 2]) if (!same(lo.positionAt(m, t), lr.positionAt(m, t))) bad13.push(`M${m}@${t}`);
+  const other = { ...linked, routeAdjusts: { 7: { ...linked.routeAdjusts[7], route: 2 } } };   // T-10
+  if (!same(makeOracle(other).positionAt(1, 8), [100, -5])) bad13.push('T-10: a linked Adjust of another route moved spot 1');
+  report('QA-RT-L13', bad13); }
 
 // QA-TR (pathways step 4, R-9′ and R-12′): three marchers on a line at (0,0), (4,0), (8,0) follow the leader over
 // [0, 16) into the line (20,10) to (20,22), along a trail route with corners at (14,0) and (14,10). Line-up 8, drawn

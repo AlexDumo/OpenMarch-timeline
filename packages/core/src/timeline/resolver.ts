@@ -177,6 +177,7 @@ function coalesce(batch: ChangeBatch) {
         assignments: new Map<number, NetChange>(),
         routes: new Map<number, NetChange>(),
         lanes: new Map<number, NetChange>(),
+        route_adjusts: new Map<number, NetChange>(),
     };
     const destinations = new Set<number>();
     for (const c of batch.changes) {
@@ -206,6 +207,7 @@ function coalesce(batch: ChangeBatch) {
         assignments: live(byTable.assignments),
         routes: live(byTable.routes),
         lanes: live(byTable.lanes),
+        routeAdjusts: live(byTable.route_adjusts),
         destinations,
     };
 }
@@ -319,6 +321,13 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
     // profile[R, P] (J.7): each adjusted lane's resolved keys, on first use; dropped when the lane
     // or its route changes
     const laneAdjust = new Map<number, ResolvedAdjust>();
+    // linked Adjusts (J.7, pathways step 26): the lanes sharing each, and each one's resolved keys
+    // on its route's schedule, on first use; dropped when it or its route changes
+    const adjustLanes = new Map<number, Set<number>>();
+    const linkedAdjust = new Map<
+        number,
+        { route: number; profile: string; resolved: ResolvedAdjust }
+    >();
     const slotKey = (tid: number, slot: number) => `${tid}|${slot}`;
     /** Re-indexes lane `id` as `row` (null: gone); returns the transitions it was and is on. */
     const setLane = (id: number, row: LaneRow | null): number[] => {
@@ -332,6 +341,11 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
             const l = routeLanes.get(old.route);
             l?.delete(id);
             if (l && l.size === 0) routeLanes.delete(old.route);
+            if (old.groupAdjust != null) {
+                const g = adjustLanes.get(old.groupAdjust);
+                g?.delete(id);
+                if (g && g.size === 0) adjustLanes.delete(old.groupAdjust);
+            }
             laneRows.delete(id);
         }
         if (row) {
@@ -339,6 +353,8 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
             laneRows.set(id, copy);
             laneAt.set(slotKey(copy.transition, copy.slot), id);
             setOf(routeLanes, copy.route).add(id);
+            if (copy.groupAdjust != null)
+                setOf(adjustLanes, copy.groupAdjust).add(id);
             touched.push(copy.transition);
         }
         return touched;
@@ -648,7 +664,35 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
             offset: lane.offset,
             schedule: geo.schedule,
             adjust: resolvedAdjust(id, lane),
+            linked: resolvedLinked(lane),
         };
+    }
+
+    /**
+     * R-14′ item 6 for lane `lane`'s linked Adjust (step 26), cached per linked Adjust (J.7); null
+     * without one, and for one of another route (T-10)
+     */
+    function resolvedLinked(lane: LaneRow): ResolvedAdjust | null {
+        const gid = lane.groupAdjust;
+        if (gid == null) return null;
+        const row = host.routeAdjusts?.[gid];
+        if (!row || row.route !== lane.route) return null; // T-10
+        let cached = linkedAdjust.get(gid);
+        if (!cached) {
+            const geo = routeGeo.get(row.route)!;
+            geo.schedule ??= groupSchedule(geo.walk);
+            cached = {
+                route: row.route,
+                profile: JSON.stringify(row.profile),
+                resolved: resolveAdjust(
+                    geo.schedule,
+                    geo.walk.points,
+                    row.profile,
+                ),
+            };
+            linkedAdjust.set(gid, cached);
+        }
+        return cached.resolved;
     }
 
     /** R-14′ item 6: lane `id`'s profile on its route's schedule, cached (J.7); null without one */
@@ -927,12 +971,23 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         for (const id of net.lanes.keys())
             for (const tid of setLane(id, host.lanes?.[id] ?? null))
                 if (host.transitions[tid]) seedTs.add(tid);
+        // Linked Adjusts (J.7, step 26): drop the resolved keys; seed W-3 for every transition
+        // with a lane sharing it (a lane that starts or stops sharing it seeds above)
+        for (const gid of net.routeAdjusts.keys()) {
+            linkedAdjust.delete(gid);
+            for (const id of adjustLanes.get(gid) ?? []) {
+                const tid = laneRows.get(id)!.transition;
+                if (host.transitions[tid]) seedTs.add(tid);
+            }
+        }
         // Route geometry (9.4, J.7): recompute, create or drop; seed W-3 for every transition
         // with a lane on it (route -> lanes -> transitions). On insert or delete the same edit
         // writes a lane, which seeds above.
         for (const [rid, rc] of net.routes) {
             computeRoute(rid);
             for (const id of routeLanes.get(rid) ?? []) laneAdjust.delete(id);
+            for (const [gid, cached] of linkedAdjust)
+                if (cached.route === rid) linkedAdjust.delete(gid);
             // a trail route (R-9′): its follow-the-leader transitions, whether it was edited,
             // created or dropped
             for (const tid of byTrail.get(rid) ?? [])
@@ -1004,6 +1059,11 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
             for (let k = 0; k < t.slots; k++) {
                 const id = laneAt.get(slotKey(t.id, k));
                 const lane = id === undefined ? undefined : laneRows.get(id)!;
+                if (lane?.offset && lane.groupAdjust != null) {
+                    const linked = resolvedLinked(lane);
+                    if (linked)
+                        out.push(...adjustDiagnostics(linked, t.id, k, true));
+                }
                 if (lane?.offset && lane.adjust)
                     out.push(
                         ...adjustDiagnostics(
@@ -1150,10 +1210,20 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
                 h.transition !== l.transition ||
                 h.slot !== l.slot ||
                 h.route !== l.route ||
+                (h.groupAdjust ?? null) !== (l.groupAdjust ?? null) ||
                 JSON.stringify(h.adjust ?? null) !==
                     JSON.stringify(l.adjust ?? null)
             )
                 return `stale lane ${id}`;
+        }
+        for (const [gid, cached] of linkedAdjust) {
+            const h = host.routeAdjusts?.[gid];
+            if (
+                !h ||
+                h.route !== cached.route ||
+                JSON.stringify(h.profile) !== cached.profile
+            )
+                return `stale linked Adjust ${gid}`;
         }
         for (const l of spans.values())
             for (const s of l) {

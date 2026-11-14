@@ -116,7 +116,9 @@ const views = {
      * own lane carries no Adjust (E-R4), an Adjust's anchors name points of its route (E-J3, I-J3)
      * and two keys on one straight corner-to-corner stretch are at least a step apart, 126.5625
      * being `s_min` squared (E-J5, I-J5; I-J4 in full needs `D` on curves and arcs, so the write
-     * path has it; an arc leg, R-14″, is not straight, so it is left out here). Apart from
+     * path has it; an arc leg, R-14″, is not straight, so it is left out here). Since step 26 a
+     * linked Adjust is walked only by lanes of its own route (E-J1, I-J1), has a lane (E-J2,
+     * I-J2), and its profile meets E-J3 and E-J5 as a lane's does. Apart from
      * `timeline_commit_violations` for the same reason as `timeline_held_violations`: the write
      * wrapper reads it once the lanes table exists, and a view that names a missing table would
      * break a later table rebuild.
@@ -192,6 +194,54 @@ const views = {
                     SELECT 1 FROM timeline_routes r, json_each(r.geometry, '$.points') pa,
                                   json_each(r.geometry, '$.points') pb
                      WHERE r.id = l.route_id AND pb.key = pa.key + 1
+                       AND json_extract(pa.value, '$.id') = json_extract(k1.value, '$.a')
+                       AND json_extract(pb.value, '$.id') = json_extract(k1.value, '$.b')
+                       AND json_type(pa.value, '$.tension') IS NULL
+                       AND json_type(pb.value, '$.tension') IS NULL
+                       AND json_type(pb.value, '$.bulge') IS NULL
+                       AND (json_extract(k1.value, '$.f') - json_extract(k2.value, '$.f'))
+                           * (json_extract(k1.value, '$.f') - json_extract(k2.value, '$.f'))
+                           * ((json_extract(pb.value, '$.at[0]') - json_extract(pa.value, '$.at[0]'))
+                              * (json_extract(pb.value, '$.at[0]') - json_extract(pa.value, '$.at[0]'))
+                            + (json_extract(pb.value, '$.at[1]') - json_extract(pa.value, '$.at[1]'))
+                              * (json_extract(pb.value, '$.at[1]') - json_extract(pa.value, '$.at[1]')))
+                           < 126.5625))
+            UNION ALL
+            SELECT 'E-J1' AS code, l.transition_id AS transition_id,
+                   'the lane on slot ' || l.slot_index || ' shares an Adjust of another path'
+                       AS detail
+              FROM timeline_lanes l
+              JOIN timeline_route_adjusts g ON g.id = l.group_adjust_id
+             WHERE g.route_id <> l.route_id
+            UNION ALL
+            SELECT 'E-J2' AS code, NULL AS transition_id,
+                   'linked Adjust ' || g.id || ' is shared by no lane' AS detail
+              FROM timeline_route_adjusts g
+             WHERE NOT EXISTS (SELECT 1 FROM timeline_lanes l WHERE l.group_adjust_id = g.id)
+            UNION ALL
+            SELECT 'E-J3' AS code, NULL AS transition_id,
+                   'linked Adjust ' || g.id || ' names a missing point' AS detail
+              FROM timeline_route_adjusts g, json_each(g.profile, '$.keys') k, timeline_routes r
+             WHERE r.id = g.route_id
+               AND ((json_extract(k.value, '$.a') <> 'from' AND NOT EXISTS (
+                        SELECT 1 FROM json_each(r.geometry, '$.points') p
+                         WHERE json_extract(p.value, '$.id') = json_extract(k.value, '$.a')))
+                 OR (json_extract(k.value, '$.b') <> 'to' AND NOT EXISTS (
+                        SELECT 1 FROM json_each(r.geometry, '$.points') p
+                         WHERE json_extract(p.value, '$.id') = json_extract(k.value, '$.b'))))
+            UNION ALL
+            SELECT 'E-J5' AS code, NULL AS transition_id,
+                   'two keys of linked Adjust ' || g.id || ' are closer than a step' AS detail
+              FROM timeline_route_adjusts g, json_each(g.profile, '$.keys') k1,
+                   json_each(g.profile, '$.keys') k2
+             WHERE k2.key > k1.key
+               AND json_extract(k2.value, '$.a') = json_extract(k1.value, '$.a')
+               AND json_extract(k2.value, '$.b') = json_extract(k1.value, '$.b')
+               AND (json_extract(k1.value, '$.f') = json_extract(k2.value, '$.f')
+                 OR EXISTS (
+                    SELECT 1 FROM timeline_routes r, json_each(r.geometry, '$.points') pa,
+                                  json_each(r.geometry, '$.points') pb
+                     WHERE r.id = g.route_id AND pb.key = pa.key + 1
                        AND json_extract(pa.value, '$.id') = json_extract(k1.value, '$.a')
                        AND json_extract(pb.value, '$.id') = json_extract(k1.value, '$.b')
                        AND json_type(pa.value, '$.tension') IS NULL
@@ -479,7 +529,16 @@ function timelineChangeLogTriggers(
                 `json_object('id', ${r}.id, 'transition', ${r}.transition_id, 'slot', ${r}.slot_index, ` +
                 `'route', ${r}.route_id, 'offset', CASE WHEN ${r}.offset_x IS NULL THEN NULL ` +
                 `ELSE json_array(${exactReal(`${r}.offset_x`)}, ${exactReal(`${r}.offset_y`)}) END, ` +
-                `'adjust', json(${r}.adjust))`,
+                `'adjust', json(${r}.adjust), 'groupAdjust', ${r}.group_adjust_id)`,
+        },
+        {
+            // Linked Adjusts (step 26, spec J.1): logged like routes; the resolver reads them from
+            // the host mirror and seeds the transitions of the lanes sharing each
+            table: "timeline_route_adjusts",
+            logicalName: "route_adjusts",
+            rowId: (r) => `${r}.id`,
+            image: (r) =>
+                `json_object('id', ${r}.id, 'route', ${r}.route_id, 'profile', json(${r}.profile))`,
         },
         {
             table: "timeline_assignments",
@@ -573,7 +632,9 @@ export const triggerTable = (triggerSql: string): string => {
  */
 const triggerFits = (sql: string, tables: ReadonlySet<string>): boolean =>
     tables.has(triggerTable(sql)) &&
-    (!/\btimeline_lanes\b/.test(sql) || tables.has("timeline_lanes"));
+    (!/\btimeline_lanes\b/.test(sql) || tables.has("timeline_lanes")) &&
+    // the lanes' change-log image names `group_adjust_id`, which comes with this table (0025)
+    (!/\bgroup_adjust_id\b/.test(sql) || tables.has("timeline_route_adjusts"));
 
 /**
  * Only the triggers whose table the file has. A table a later migration adds, such as the routes

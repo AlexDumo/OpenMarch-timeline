@@ -825,11 +825,18 @@ const ShapeBody = memo(function ShapeBody({
                         vectorEffect="non-scaling-stroke"
                     />
                 ))}
-            {/* Over the muted group line: the one heavy line while a lane is worked on */}
-            {drawing.lanePicked !== undefined &&
-                drawing.lanes?.[drawing.lanePicked] && (
+            {/* Over the muted group line: the heavy lines while lanes are worked on (one, or a
+                sub-group's, step 26) */}
+            {[
+                ...(drawing.lanePicked !== undefined
+                    ? [drawing.lanePicked]
+                    : []),
+                ...(drawing.lanesPicked ?? []),
+            ].map((index) =>
+                drawing.lanes?.[index] ? (
                     <polyline
-                        points={drawing.lanes[drawing.lanePicked]!.map(
+                        key={`picked${index}`}
+                        points={drawing.lanes[index]!.map(
                             (p) => `${p.x},${p.y}`,
                         ).join(" ")}
                         fill="none"
@@ -840,7 +847,8 @@ const ShapeBody = memo(function ShapeBody({
                         vectorEffect="non-scaling-stroke"
                         data-testid="pathPickedLane"
                     />
-                )}
+                ) : null,
+            )}
             <StartMarks
                 drawing={drawing}
                 theme={theme}

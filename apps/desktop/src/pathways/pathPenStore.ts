@@ -25,10 +25,17 @@ import {
     setAdjustKey,
 } from "@/db-functions/timelinePathAdjust";
 import type { RehomeReport } from "@/db-functions/timelineRouteGeometry";
+import {
+    adjustSubgroup,
+    removeSubgroupKey,
+    resetSubgroup,
+    setSubgroupKey,
+} from "@/db-functions/timelineSubgroupAdjust";
 import type { AdjustProfile } from "@openmarch/core";
 import {
     drawGroupRoute,
-    ownPath,
+    detachFromGroupPath,
+    detachSubgroup,
     rejoinGroupPath,
 } from "@/db-functions/timelineGroupRoutes";
 import { subscribeHistoryChanges } from "@/db-functions/history";
@@ -37,7 +44,12 @@ import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import tolgee from "@/global/singletons/Tolgee";
 import type { XY } from "@/shapes/types";
 import { SMOOTH } from "@/shapes/line/lineGeometry";
-import type { GroupMember, PathTarget } from "./pathTarget";
+import {
+    copySourceOf,
+    drawnAsGroup,
+    type GroupMember,
+    type PathTarget,
+} from "./pathTarget";
 import { dragTrail } from "@/db-functions/timelineTrailDrag";
 import { invalidatePlacedBoxes } from "@/shapes/placed/placedBoxStore";
 import { followSpacingOf, type FollowDrag } from "./followDrag";
@@ -108,10 +120,25 @@ export interface PathSession {
         readonly at: XY;
         readonly stacked?: number;
     } | null;
-    /** While a lane or key is dragged: the Adjust it would have, drawn live and saved on release */
+    /**
+     * Several lanes picked at once (step 26, AP-R12): a sub-group's spots (a click on one of
+     * them), or lanes added to the pick with Shift or the touch pill's Add. A drag on any of them
+     * bends them together, as one shared tweak; `key` is a picked key of that shared tweak. Null
+     * while one lane (`lane`) or none is picked.
+     */
+    readonly subgroup?: {
+        readonly marcherIds: readonly number[];
+        readonly key: number | null;
+    } | null;
+    /**
+     * While a lane or key is dragged: the Adjust it would have, drawn live and saved on release.
+     * With `linkedTo`, it is the shared tweak of those marchers' spots (step 26) instead of
+     * `marcherId`'s own.
+     */
     readonly laneEdit?: {
         readonly marcherId: number;
         readonly adjust: AdjustProfile | null;
+        readonly linkedTo?: readonly number[];
     } | null;
     /**
      * The Follow tool's drag (pathways step 4b, AP-T8): a trail dragged out of an end of the
@@ -149,11 +176,11 @@ interface PathPenState {
      */
     hidden: boolean;
     /**
-     * After Own path for one marcher (step 15): that marcher's own path opens once it's read
-     * again, as the spec's "its own path is then shown, open" says; null otherwise
+     * After Detach for one marcher (AP-R9): that marcher's copy opens once it's read again, as the
+     * spec's "its own path is then shown, open" says; null otherwise
      */
     openNext: number | null;
-    /** Selected marchers on the shown group path, whom Own path gives a lane each (step 15) */
+    /** Selected marchers on the shown group path, whom Detach gives a copy each (AP-R9) */
     ownable: readonly number[];
     /** Whom Rejoin puts on which group path, or null when it isn't offered (step 15) */
     rejoin: RejoinTarget | null;
@@ -168,7 +195,35 @@ export interface RejoinTarget {
     marcherIds: readonly number[];
 }
 
-/** What Own path and Rejoin act on for the selection now (spec Appendix I.8) */
+/**
+ * Whom Detach acts on (AP-R9): the selected members of the shown group path, or, with none
+ * selected, the member whose lane is picked on the open group path (decision C's pick), so a
+ * group path opened as an object (a click on its line lets go of the marchers) can still Detach a
+ * spot from its bar. None on a one-lane path, which has nobody to Detach from.
+ */
+export function detachIdsOf(
+    ownable: readonly number[],
+    session: PathSession | null,
+): readonly number[] {
+    if (ownable.length > 0) return ownable;
+    if (
+        session?.phase !== "open" ||
+        !session.target.group ||
+        session.target.lane
+    )
+        return [];
+    // Several lanes picked (step 26): their spots; a sub-group sharing a tweak gets one shared copy,
+    // but not when it is every spot on the path: there's no group to detach from (AP-R12)
+    if (session.subgroup)
+        return sharedAdjustOf(session, session.subgroup.marcherIds) !== null &&
+            session.subgroup.marcherIds.length ===
+                session.target.group.members.length
+            ? []
+            : session.subgroup.marcherIds;
+    return session.lane ? [session.lane.marcherId] : [];
+}
+
+/** What Detach and Rejoin act on for the selection now (spec Appendix I.8) */
 export function setGroupCommands(
     ownable: readonly number[],
     rejoin: RejoinTarget | null,
@@ -251,7 +306,9 @@ export const pathMarcherIds = (
                 ? session.target.group.members.map((m) => m.marcherId)
                 : [session.target.marcherId];
     const drawn = objectsDrawn(objects, session, closedUnder).flatMap((o) =>
-        o.target.group ? o.target.group.members.map((m) => m.marcherId) : [],
+        o.target.group && drawnAsGroup(o.target)
+            ? o.target.group.members.map((m) => m.marcherId)
+            : [],
     );
     return drawn.length === 0 ? own : [...new Set([...own, ...drawn])];
 };
@@ -519,6 +576,33 @@ function laneAfterRead(
         : { marcherId: lane.marcherId, key: null, keyGone: true };
 }
 
+/**
+ * The picked lanes on the path as read again (step 26): those still on it, while two or more are.
+ * After a first shared drag, the pick is the sub-group it made, so its key handles show. A picked
+ * key is followed by its anchor, as `laneAfterRead`'s is.
+ */
+function subgroupAfterRead(
+    session: PathSession,
+    target: PathTarget,
+): PathSession["subgroup"] {
+    const pick = session.subgroup;
+    if (!pick || !target.group) return null;
+    const on = pick.marcherIds.filter((id) =>
+        target.group!.members.some((m) => m.marcherId === id),
+    );
+    if (on.length < 2) return null;
+    if (pick.key === null) return { marcherIds: on, key: null };
+    const linkedOf = (t: PathTarget) =>
+        t.group?.members.find((m) => m.marcherId === on[0])?.linked ?? null;
+    const was = linkedOf(session.target)?.keys[pick.key];
+    const key = was
+        ? (linkedOf(target)?.keys.findIndex(
+              (k) => k.a === was.a && k.b === was.b && k.f === was.f,
+          ) ?? -1)
+        : -1;
+    return { marcherIds: on, key: key >= 0 ? key : null };
+}
+
 export function showPath(
     target: PathTarget,
     drill: string,
@@ -527,8 +611,13 @@ export function showPath(
     const { session } = usePathPenStore.getState();
     const points = pointsOf(target);
     const { openNext } = usePathPenStore.getState();
+    // A Detached copy is shown on its lane (`target.lane`), its marcher its one member
     const next =
-        openNext !== null && !target.group && target.marcherId === openNext;
+        openNext !== null &&
+        (target.lane
+            ? (target.group?.members.some((m) => m.marcherId === openNext) ??
+              false)
+            : !target.group && target.marcherId === openNext);
     if (next) usePathPenStore.setState({ openNext: null });
     // A path object is the same path while it's the same route (AP-O1)
     const same =
@@ -555,6 +644,8 @@ export function showPath(
             dragging: null,
             object,
             lane: open && session ? laneAfterRead(session, target) : null,
+            subgroup:
+                open && session ? subgroupAfterRead(session, target) : null,
         },
     });
 }
@@ -665,10 +756,124 @@ export function selectLane(
     update((s) =>
         s.lane?.marcherId === lane?.marcherId &&
         s.lane?.key === lane?.key &&
-        !s.lane?.keyGone
+        !s.lane?.keyGone &&
+        !s.subgroup
             ? s
-            : { ...s, lane, selected: lane ? null : s.selected },
+            : {
+                  ...s,
+                  lane,
+                  subgroup: null,
+                  selected: lane ? null : s.selected,
+              },
     );
+}
+
+/**
+ * The linked Adjust shared by exactly the spots of `marcherIds` on the session's group path, or
+ * null when they don't share one, or share it with others too (step 26)
+ */
+export function sharedAdjustOf(
+    s: PathSession,
+    marcherIds: readonly number[],
+): number | null {
+    const members = s.target.group?.members ?? [];
+    const picked = members.filter((m) => marcherIds.includes(m.marcherId));
+    const id = picked[0]?.groupAdjustId ?? null;
+    if (
+        id === null ||
+        picked.length !== marcherIds.length ||
+        picked.some((m) => m.groupAdjustId !== id)
+    )
+        return null;
+    const sharing = members.filter((m) => m.groupAdjustId === id);
+    return sharing.length === picked.length ? id : null;
+}
+
+/**
+ * What a drag on the lanes of `marcherIds` writes to (AP-R12 as `readPick` judges it, step 26):
+ * the linked Adjust they hold every sharer of (spots sharing nothing then join it), null for a new
+ * one, or `"mixed"` for two linked Adjusts, or part of one's sharers
+ */
+export function sharedOfPick(
+    s: PathSession,
+    marcherIds: readonly number[],
+): number | null | "mixed" {
+    const members = s.target.group?.members ?? [];
+    const picked = members.filter((m) => marcherIds.includes(m.marcherId));
+    const ids = [
+        ...new Set(
+            picked.flatMap((m) =>
+                m.groupAdjustId == null ? [] : [m.groupAdjustId],
+            ),
+        ),
+    ];
+    if (ids.length === 0) return null;
+    if (ids.length > 1) return "mixed";
+    const sharers = members.filter((m) => m.groupAdjustId === ids[0]);
+    return sharers.every((m) => marcherIds.includes(m.marcherId))
+        ? ids[0]!
+        : "mixed";
+}
+
+/** The sub-group the spot of `marcherId` shares a tweak with (itself included), or null */
+export function subgroupOfMember(
+    s: PathSession,
+    marcherId: number,
+): readonly number[] | null {
+    const members = s.target.group?.members ?? [];
+    const id = members.find((m) => m.marcherId === marcherId)?.groupAdjustId;
+    if (id === null || id === undefined) return null;
+    return members
+        .filter((m) => m.groupAdjustId === id)
+        .map((m) => m.marcherId);
+}
+
+/**
+ * Picks several lanes at once (step 26), or, with fewer than two, the one left alone (or none).
+ * `key` picks a key of their shared tweak.
+ */
+export function pickSubgroup(
+    marcherIds: readonly number[],
+    key: number | null = null,
+): void {
+    const ids = [...new Set(marcherIds)].sort((a, b) => a - b);
+    if (ids.length < 2) {
+        selectLane(ids.length === 1 ? { marcherId: ids[0]!, key: null } : null);
+        return;
+    }
+    update((s) =>
+        s.subgroup?.key === key &&
+        s.subgroup.marcherIds.join(",") === ids.join(",")
+            ? s
+            : {
+                  ...s,
+                  lane: null,
+                  subgroup: { marcherIds: ids, key },
+                  selected: null,
+              },
+    );
+}
+
+/**
+ * Shift-click (or the pill's Add) on a lane: adds it to the picked lanes, or takes it out, as
+ * Shift-click does in Figma's layers. What was picked alone, or the whole sub-group a lane is in,
+ * counts as picked.
+ */
+export function toggleLaneInPick(marcherId: number): void {
+    const { session } = usePathPenStore.getState();
+    if (!session) return;
+    const now = session.subgroup
+        ? [...session.subgroup.marcherIds]
+        : session.lane
+          ? (subgroupOfMember(session, session.lane.marcherId) ?? [
+                session.lane.marcherId,
+            ])
+          : [];
+    const theirs = subgroupOfMember(session, marcherId) ?? [marcherId];
+    const next = now.includes(marcherId)
+        ? now.filter((id) => !theirs.includes(id))
+        : [...now, ...theirs];
+    pickSubgroup(next);
 }
 
 /** How far the pointer runs along a lane (field px) before its note moves to follow it */
@@ -696,11 +901,18 @@ export function setLaneEdit(laneEdit: PathSession["laneEdit"] | null): void {
     update((s) => ({ ...s, laneEdit }));
 }
 
-/** A group member as drawn now: a lane being dragged shows the Adjust it would have */
+/**
+ * A group member as drawn now: a lane being dragged shows the Adjust it would have, and every
+ * lane of a sub-group being dragged the shared tweak it would have (step 26)
+ */
 export function memberNow(s: PathSession, m: GroupMember): GroupMember {
-    return s.laneEdit?.marcherId === m.marcherId
-        ? { ...m, adjust: s.laneEdit.adjust }
-        : m;
+    const edit = s.laneEdit;
+    if (!edit) return m;
+    if (edit.linkedTo)
+        return edit.linkedTo.includes(m.marcherId)
+            ? { ...m, linked: edit.adjust }
+            : m;
+    return edit.marcherId === m.marcherId ? { ...m, adjust: edit.adjust } : m;
 }
 
 /** The member `marcherId` of the session's group path, or undefined */
@@ -1047,6 +1259,23 @@ export function reportRehome(report: RehomeReport): void {
                 { count: report.clearedSpots },
             ),
         );
+    // Step 26: a sub-group's shared tweak is re-homed and dropped by the same rule
+    if ((report.rehomedGroups ?? 0) > 0)
+        parts.push(
+            tolgee.t(
+                "pathways.toasts.rehomedGroups",
+                "Moved the shared adjustment of {count, plural, one {# group of spots} other {# groups of spots}} to the nearest points left",
+                { count: report.rehomedGroups },
+            ),
+        );
+    if ((report.clearedGroups ?? 0) > 0)
+        parts.push(
+            tolgee.t(
+                "pathways.toasts.rehomedGroupsCleared",
+                "{count, plural, one {# group of spots} other {# groups of spots}} lost their shared adjustment",
+                { count: report.clearedGroups },
+            ),
+        );
     if (parts.length > 0) toastWithUndo(parts.join(" · "));
 }
 
@@ -1172,7 +1401,160 @@ export async function deleteOnLane(
     lane: NonNullable<PathSession["lane"]>,
 ): Promise<void> {
     if (lane.key !== null) await deleteAdjustKey(lane.marcherId, lane.key);
-    else if (!lane.keyGone) await resetSpot(lane.marcherId);
+    else if (!lane.keyGone) {
+        const { session } = usePathPenStore.getState();
+        const member = session ? memberOf(session, lane.marcherId) : undefined;
+        // A spot with no tweak of its own that is the last to share one (step 26): that one goes
+        if (
+            session &&
+            member &&
+            !member.adjust &&
+            member.groupAdjustId != null &&
+            sharedAdjustOf(session, [lane.marcherId]) !== null
+        )
+            await resetSharedAdjust(member.groupAdjustId);
+        else await resetSpot(lane.marcherId);
+    }
+}
+
+/** The lanes of `marcherIds` on the session's group path, for a sub-group write (step 26) */
+const subgroupLanes = (marcherIds: readonly number[]) => {
+    const { session } = usePathPenStore.getState();
+    const lanes = marcherIds.flatMap((marcherId) => {
+        const laneId = session
+            ? memberOf(session, marcherId)?.laneId
+            : undefined;
+        return laneId === undefined ? [] : [{ laneId, marcherId }];
+    });
+    return lanes.length === marcherIds.length ? lanes : null;
+};
+
+const subgroupFallback = () =>
+    tolgee.t("pathways.errors.adjustGroup", "Couldn't adjust these spots");
+
+/**
+ * AP-R12 by a drag with several lanes picked: their shared tweak takes displacement `d` at place
+ * `x` (made for them when they don't share one yet). One undo step. The pick stays, so the shared
+ * tweak's keys show once the path is read again.
+ */
+export async function commitSubgroupAdjust(
+    marcherIds: readonly number[],
+    x: number,
+    d: [number, number],
+): Promise<void> {
+    const lanes = subgroupLanes(marcherIds);
+    if (
+        !lanes ||
+        !(await adjustWrite(subgroupFallback, async () => {
+            await adjustSubgroup({ db, lanes, x, d });
+        }))
+    )
+        setLaneEdit(null);
+}
+
+/** A shared key handle dragged: key `index` of linked Adjust `groupAdjustId` takes `d`. */
+export async function commitSubgroupKey(
+    groupAdjustId: number,
+    index: number,
+    d: [number, number],
+): Promise<void> {
+    if (
+        !(await adjustWrite(subgroupFallback, () =>
+            setSubgroupKey({ db, groupAdjustId, index, d }),
+        ))
+    )
+        setLaneEdit(null);
+}
+
+/**
+ * Delete with several lanes picked (step 26): a picked key of their shared tweak goes, or, with
+ * none picked, the shared tweak is reset. Each spot's own tweak stays. Never the path.
+ */
+export async function deleteOnSubgroup(
+    pick: NonNullable<PathSession["subgroup"]>,
+): Promise<void> {
+    const { session } = usePathPenStore.getState();
+    const id = session ? sharedAdjustOf(session, pick.marcherIds) : null;
+    if (id === null) return;
+    if (pick.key !== null) {
+        const key = pick.key;
+        if (
+            await adjustWrite(subgroupFallback, () =>
+                removeSubgroupKey({ db, groupAdjustId: id, index: key }),
+            )
+        )
+            update((s) =>
+                s.subgroup
+                    ? { ...s, subgroup: { ...s.subgroup, key: null } }
+                    : s,
+            );
+        return;
+    }
+    await resetPickedSubgroup();
+}
+
+/**
+ * Reset the picked sub-group (AP-R12): the shared tweak goes, each spot's own stays, and the
+ * spots stay picked. One undo step; nothing when they share no tweak.
+ */
+export async function resetPickedSubgroup(): Promise<void> {
+    const { session } = usePathPenStore.getState();
+    const pick = session?.subgroup;
+    const id =
+        session && pick ? sharedAdjustOf(session, pick.marcherIds) : null;
+    if (id === null) return;
+    await adjustWrite(subgroupFallback, () =>
+        resetSubgroup({ db, groupAdjustId: id }),
+    );
+}
+
+/**
+ * Detach the picked sub-group (AP-R12): one shared copy of the group path, with one copy of the
+ * shared tweak, for all its spots; nobody moves. One undo step. The copy opens, with its lanes
+ * picked as they were.
+ */
+export async function detachPickedSubgroup(): Promise<void> {
+    const { session, saving } = usePathPenStore.getState();
+    const pick = session?.subgroup;
+    const id =
+        session && pick ? sharedAdjustOf(session, pick.marcherIds) : null;
+    if (!session || !pick || id === null || saving) return;
+    usePathPenStore.setState({ saving: true });
+    try {
+        const { routeId } = await detachSubgroup({ db, groupAdjustId: id });
+        usePathPenStore.setState((state) => ({
+            saved: state.saved + 1,
+            // The copy is the path object now (read again by its route), kept open
+            ...(state.session?.target.routeId === session.target.routeId
+                ? {
+                      session: {
+                          ...state.session,
+                          target: { ...state.session.target, routeId },
+                          object: true,
+                          lane: null,
+                          selected: null,
+                      },
+                  }
+                : {}),
+        }));
+    } catch (error) {
+        toastTimelineError(
+            error,
+            tolgee.t("pathways.errors.save", "Couldn't save the path"),
+        );
+    } finally {
+        usePathPenStore.setState({ saving: false });
+    }
+}
+
+/**
+ * Reset a shared tweak by its id (AP-R12), whoever is picked: a lone sharer's too (step 26). Each
+ * spot keeps its own tweak. One undo step.
+ */
+export async function resetSharedAdjust(groupAdjustId: number): Promise<void> {
+    await adjustWrite(subgroupFallback, () =>
+        resetSubgroup({ db, groupAdjustId }),
+    );
 }
 
 /** Re-fit (decision A), by the session's route. One undo step. */
@@ -1288,25 +1670,42 @@ export async function reverseShownTrail(): Promise<void> {
 }
 
 /**
- * Own path (AP-R9, step 15): the selected marchers on the shown group path each get a copy of
- * their lane, one undo step. With one marcher, its own path is then shown, open (the hook reads
- * it again after the save and keeps it open).
+ * Detach (AP-R9, step 3c): the selected marchers on the shown group path each get a verbatim copy
+ * of it, keeping their offset and Adjust, so nobody moves; one undo step however many. With one
+ * marcher, its copy is then shown, open (the hook reads it again after the save and keeps it open).
  */
-export async function ownPathFor(marcherIds: readonly number[]): Promise<void> {
+export async function detachFor(marcherIds: readonly number[]): Promise<void> {
     const { session, saving } = usePathPenStore.getState();
     if (!session?.target.group || saving || marcherIds.length === 0) return;
+    const one = marcherIds.length === 1;
     // Opened again after the save (`openNext`), not kept open as the group path
-    if (marcherIds.length === 1) clearPath();
+    if (one && !session.object) clearPath();
     usePathPenStore.setState({ saving: true });
     try {
-        await ownPath({
+        const { routes } = await detachFromGroupPath({
             db,
             timelineId: session.target.timelineId,
             marcherIds,
         });
+        const copy = one ? routes[marcherIds[0]!] : undefined;
         usePathPenStore.setState((state) => ({
             saved: state.saved + 1,
-            openNext: marcherIds.length === 1 ? marcherIds[0]! : null,
+            openNext: one && !session.object ? marcherIds[0]! : null,
+            // A spot Detached from the group path open as an object: its copy is the object now,
+            // read again by its route and kept open
+            ...(copy !== undefined &&
+            session.object &&
+            state.session?.object &&
+            state.session.target.routeId === session.target.routeId
+                ? {
+                      session: {
+                          ...state.session,
+                          target: { ...state.session.target, routeId: copy },
+                          lane: null,
+                          selected: null,
+                      },
+                  }
+                : {}),
         }));
     } catch (error) {
         toastTimelineError(
@@ -1319,9 +1718,10 @@ export async function ownPathFor(marcherIds: readonly number[]): Promise<void> {
 }
 
 /**
- * Rejoin (AP-R10, step 15): the selected marchers off the group path follow it, one undo step: a
- * member that took Own path gets its lane back, another marcher joins the group. The group path
- * is the one shown, or with only marchers off any group path selected, the move's only one.
+ * Rejoin (AP-R10): the selected marchers off the group path follow it, one undo step: a Detached
+ * marcher goes back to its spot's lane without its copy or Adjust (owner Q4), another marcher joins
+ * the group. The group path is the one shown, the one a shown copy was Detached from, or with only
+ * marchers off any group path selected, the move's only one.
  */
 export async function rejoinFor(target: RejoinTarget | null): Promise<void> {
     const { saving } = usePathPenStore.getState();
@@ -1334,7 +1734,34 @@ export async function rejoinFor(target: RejoinTarget | null): Promise<void> {
             routeId: target.routeId,
             marcherIds: target.marcherIds,
         });
-        usePathPenStore.setState((state) => ({ saved: state.saved + 1 }));
+        usePathPenStore.setState((state) => {
+            const s = state.session;
+            // Rejoined from its copy open as an object: the copy is gone, so the group path it
+            // went back to is the object now, open, with the rejoined lane picked
+            const fromCopy =
+                s?.object &&
+                s.phase === "open" &&
+                copySourceOf(s.target) === target.routeId;
+            return {
+                saved: state.saved + 1,
+                ...(fromCopy
+                    ? {
+                          session: {
+                              ...s,
+                              target: { ...s.target, routeId: target.routeId },
+                              selected: null,
+                              lane:
+                                  target.marcherIds.length === 1
+                                      ? {
+                                            marcherId: target.marcherIds[0]!,
+                                            key: null,
+                                        }
+                                      : null,
+                          },
+                      }
+                    : {}),
+            };
+        });
     } catch (error) {
         toastTimelineError(
             error,

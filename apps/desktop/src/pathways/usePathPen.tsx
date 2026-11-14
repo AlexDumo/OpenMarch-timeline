@@ -33,6 +33,7 @@ import {
     findGroupTarget,
     findPathTarget,
     findRouteTarget,
+    drawnAsGroup,
     findTrailDrawTarget,
     findTrailRouteTarget,
     findTrailTarget,
@@ -40,6 +41,8 @@ import {
     pathObjectsAt,
     refitNeeded,
     readPathObjectIndex,
+    rejoinTargetOf,
+    copySourceOf,
     type PathObjectIndex,
     type PathTarget,
 } from "./pathTarget";
@@ -47,6 +50,11 @@ import {
     acknowledgeOpenPath,
     deleteAdjustKey,
     deleteOnLane,
+    deleteOnSubgroup,
+    detachPickedSubgroup,
+    resetPickedSubgroup,
+    resetSharedAdjust,
+    sharedAdjustOf,
     resetSpot,
     memberOf,
     refitOpenPath,
@@ -61,7 +69,8 @@ import {
     escapePathObject,
     finishDrawing,
     openPath,
-    ownPathFor,
+    detachFor,
+    detachIdsOf,
     rejoinFor,
     removeLastPoint,
     removePath,
@@ -393,16 +402,49 @@ export function usePathPenActions(): void {
     );
     const rehomedOpen = usePathPenStore(
         (s) =>
-            s.session?.target.group?.members.some((m) => m.adjust?.rehomed) ??
-            false,
+            s.session?.target.group?.members.some(
+                (m) => m.adjust?.rehomed || m.linked?.rehomed,
+            ) ?? false,
+    );
+    // Several lanes picked (step 26), and whether they share a tweak
+    const subgroup = usePathPenStore((s) =>
+        s.session?.phase === "open" ? (s.session.subgroup ?? null) : null,
+    );
+    const subgroupShared = usePathPenStore((s) =>
+        s.session?.phase === "open" && s.session.subgroup
+            ? sharedAdjustOf(s.session, s.session.subgroup.marcherIds) !== null
+            : false,
     );
     useActionHandler(
         "adjustRemoveKey",
         () => {
             if (lane && lane.key !== null)
                 void deleteAdjustKey(lane.marcherId, lane.key);
+            else if (subgroup && subgroup.key !== null)
+                void deleteOnSubgroup(subgroup);
         },
-        { enabled: lane !== null && lane.key !== null },
+        {
+            enabled:
+                (lane !== null && lane.key !== null) ||
+                (subgroupShared && subgroup?.key != null),
+        },
+    );
+    // A lane picked alone in a sub-group, or the last to share its tweak (step 26)
+    const laneShared = usePathPenStore((s) =>
+        s.session?.phase === "open" && s.session.lane
+            ? (memberOf(s.session, s.session.lane.marcherId)?.groupAdjustId ??
+              null)
+            : null,
+    );
+    useActionHandler(
+        "adjustResetGroup",
+        () =>
+            void (subgroupShared
+                ? resetPickedSubgroup()
+                : laneShared !== null
+                  ? resetSharedAdjust(laneShared)
+                  : undefined),
+        { enabled: subgroupShared || laneShared !== null },
     );
     useActionHandler(
         "adjustResetSpot",
@@ -414,12 +456,22 @@ export function usePathPenActions(): void {
     useActionHandler("adjustAcknowledge", () => void acknowledgeOpenPath(), {
         enabled: rehomedOpen,
     });
-    // Own path and Rejoin (step 15), enabled whenever a group path is shown, closed too
-    const ownIds = usePathPenStore((s) => s.ownable);
+    // Detach and Rejoin (AP-R9, AP-R10), enabled whenever a group path is shown, closed too
+    const selectedMembers = usePathPenStore((s) => s.ownable);
+    const detachSession = usePathPenStore((s) => s.session);
+    const ownIds = detachIdsOf(selectedMembers, detachSession);
     const rejoin = usePathPenStore((s) => s.rejoin);
-    useActionHandler("ownPath", () => void ownPathFor(ownIds), {
-        enabled: ownIds.length > 0 && phase !== "drawing",
-    });
+    // A picked sub-group sharing a tweak Detaches as one shared copy (AP-R12, step 26)
+    useActionHandler(
+        "detachPath",
+        () =>
+            void (subgroupShared && selectedMembers.length === 0
+                ? detachPickedSubgroup()
+                : detachFor(ownIds)),
+        {
+            enabled: ownIds.length > 0 && phase !== "drawing",
+        },
+    );
     useActionHandler("rejoinPath", () => void rejoinFor(rejoin), {
         enabled: rejoin !== null && phase !== "drawing",
     });
@@ -477,8 +529,22 @@ export function usePathPenActions(): void {
                 if (ask !== asked.current) return;
                 const now = usePathPenStore.getState().session;
                 if (!now?.object || now.phase === "drawing") return;
-                // Own path and Rejoin act on selected marchers, and none are
-                setGroupCommands([], null);
+                // Detach and Rejoin act on selected marchers, and none are; but an open copy can
+                // go back to the group path it was Detached from (its walkers Rejoin)
+                const source = copySourceOf(target);
+                setGroupCommands(
+                    [],
+                    target && source !== null
+                        ? {
+                              timelineId: target.timelineId,
+                              routeId: source,
+                              marcherIds:
+                                  target.group?.members.map(
+                                      (m) => m.marcherId,
+                                  ) ?? [],
+                          }
+                        : null,
+                );
                 if (target) showPath(target, drillOf(target, drills), true);
                 else clear();
             });
@@ -520,20 +586,28 @@ export function usePathPenActions(): void {
                 group === null && one
                     ? await findPathTarget(db, resolver, one.id, beat)
                     : null;
-            // Rejoin onto the move's only group path, with only marchers off it selected
-            let rejoinTarget: RejoinTarget | null = null;
-            if (group === null) {
-                const move = await groupMoveAt(db, selectedIds, beat);
-                if (move.kind === "move") {
-                    const groups = await readGroupPaths(db, move.timelineId);
-                    if (groups.length === 1)
-                        rejoinTarget = {
-                            timelineId: move.timelineId,
-                            routeId: groups[0]!.routeId,
-                            marcherIds: selectedIds,
-                        };
-                }
-            }
+            // Where Rejoin goes (AP-R10): read the move's group paths unless a group path that
+            // isn't a copy is shown (its outside marchers are the only ones it takes)
+            const move =
+                group === null || copySourceOf(group) !== null
+                    ? await groupMoveAt(db, selectedIds, beat)
+                    : null;
+            const rejoinTarget: RejoinTarget | null =
+                move === null
+                    ? rejoinTargetOf(
+                          group,
+                          null,
+                          group!.timelineId,
+                          selectedIds,
+                      )
+                    : move.kind === "move"
+                      ? rejoinTargetOf(
+                            group,
+                            await readGroupPaths(db, move.timelineId),
+                            move.timelineId,
+                            selectedIds,
+                        )
+                      : null;
             if (ask !== asked.current) return;
             const now = usePathPenStore.getState();
             if (now.session?.phase === "drawing") return;
@@ -543,17 +617,19 @@ export function usePathPenActions(): void {
                 const members = new Set(
                     group.group!.members.map((m) => m.marcherId),
                 );
-                showPath(group, `${members.size}`);
-                const outside = group.group!.outside.map((m) => m.marcherId);
+                // A Detached copy is its marcher's path: named by its drill number
+                showPath(
+                    group,
+                    group.lane && members.size === 1
+                        ? group.group!.members[0]!.drill
+                        : `${members.size}`,
+                );
                 setGroupCommands(
-                    selectedIds.filter((id) => members.has(id)),
-                    outside.length > 0
-                        ? {
-                              timelineId: group.timelineId,
-                              routeId: group.routeId!,
-                              marcherIds: outside,
-                          }
-                        : null,
+                    // A one-lane path has nobody to Detach from
+                    group.lane
+                        ? []
+                        : selectedIds.filter((id) => members.has(id)),
+                    rejoinTarget,
                 );
                 return;
             }
@@ -597,9 +673,11 @@ export function usePathPenActions(): void {
 const drillOf = (target: PathTarget, drills: ReadonlyMap<number, string>) =>
     target.trail
         ? `${target.trail.members.length}`
-        : target.group
-          ? `${target.group.members.length}`
-          : (drills.get(target.marcherId) ?? `${target.marcherId}`);
+        : target.lane && target.group?.members.length === 1
+          ? target.group.members[0]!.drill
+          : target.group
+            ? `${target.group.members.length}`
+            : (drills.get(target.marcherId) ?? `${target.marcherId}`);
 
 /** How many points an own path object's drawn walk is sampled at, for its click test */
 const WALK_SAMPLES = 96;
@@ -649,7 +727,7 @@ function objectOf(
         o = {
             target,
             drill: drillOf(target, drills),
-            walk: target.group ? null : () => walkOf(target),
+            walk: drawnAsGroup(target) ? null : () => walkOf(target),
         };
         objectsByTarget.set(target, o);
     }
@@ -749,12 +827,19 @@ export function PathPenKeys(): null {
     const picked = usePathPenStore((s) => s.session?.selected ?? null);
     const object = usePathPenStore((s) => s.session?.object ?? false);
     const pickedLane = usePathPenStore((s) => s.session?.lane ?? null);
+    const pickedGroup = usePathPenStore((s) => s.session?.subgroup ?? null);
+    const pickedGroupShared = usePathPenStore((s) =>
+        s.session?.subgroup
+            ? sharedAdjustOf(s.session, s.session.subgroup.marcherIds) !== null
+            : false,
+    );
     const drawing = phase === "drawing";
     const objectSelected = object && phase === "closed";
     useActionHandler(
         "cancelAlignmentUpdates",
         () => {
-            if (!drawing && pickedLane !== null) selectLane(null);
+            if (!drawing && (pickedLane !== null || pickedGroup !== null))
+                selectLane(null);
             else if (!drawing && picked !== null) selectPoint(null);
             else if (!drawing && escapePathObject()) return;
             // The Follow tool (step 4b): Escape cancels the trail drawn, then leaves the tool
@@ -764,13 +849,15 @@ export function PathPenKeys(): null {
         {
             label: drawing
                 ? tolgee.t("actions.path.cancel", "Cancel path")
-                : pickedLane !== null
-                  ? tolgee.t("actions.path.deselectSpot", "Deselect spot")
-                  : picked !== null
-                    ? tolgee.t("actions.path.deselectPoint", "Deselect point")
-                    : objectSelected
-                      ? tolgee.t("actions.path.deselect", "Deselect path")
-                      : tolgee.t("actions.path.close", "Close path"),
+                : pickedGroup !== null
+                  ? tolgee.t("actions.path.deselectSpots", "Deselect spots")
+                  : pickedLane !== null
+                    ? tolgee.t("actions.path.deselectSpot", "Deselect spot")
+                    : picked !== null
+                      ? tolgee.t("actions.path.deselectPoint", "Deselect point")
+                      : objectSelected
+                        ? tolgee.t("actions.path.deselect", "Deselect path")
+                        : tolgee.t("actions.path.close", "Close path"),
         },
     );
     useActionHandler(
@@ -787,6 +874,8 @@ export function PathPenKeys(): null {
             if (drawing) removeLastPoint();
             // A picked lane takes the key: its Adjust key goes, or the spot resets, never the path
             else if (pickedLane) void deleteOnLane(pickedLane);
+            // Several picked (step 26): a shared key goes, or the shared tweak resets
+            else if (pickedGroup) void deleteOnSubgroup(pickedGroup);
             else if (picked !== null) {
                 const index = Number(picked.slice(1));
                 if (Number.isInteger(index))
@@ -800,13 +889,23 @@ export function PathPenKeys(): null {
         {
             label: drawing
                 ? tolgee.t("actions.path.removeLastPoint", "Remove last point")
-                : pickedLane?.key != null
+                : pickedGroup?.key != null
                   ? tolgee.t("actions.path.removeKey", "Remove key")
-                  : pickedLane
-                    ? tolgee.t("actions.path.resetSpot", "Reset spot")
-                    : picked !== null
-                      ? tolgee.t("actions.path.deletePoint", "Delete point")
-                      : tolgee.t("actions.path.remove", "Remove path"),
+                  : pickedGroup
+                    ? // Delete with picked lanes that share nothing does nothing: its own name
+                      pickedGroupShared
+                        ? tolgee.t(
+                              "actions.path.adjustResetGroup",
+                              "Reset shared adjustment",
+                          )
+                        : undefined
+                    : pickedLane?.key != null
+                      ? tolgee.t("actions.path.removeKey", "Remove key")
+                      : pickedLane
+                        ? tolgee.t("actions.path.resetSpot", "Reset spot")
+                        : picked !== null
+                          ? tolgee.t("actions.path.deletePoint", "Delete point")
+                          : tolgee.t("actions.path.remove", "Remove path"),
         },
         drawing || phase === "open" || objectSelected,
     );

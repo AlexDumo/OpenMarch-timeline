@@ -76,6 +76,22 @@ export interface PathTarget {
      * and `transitionId` are the leader's.
      */
     trail?: TrailTarget | null;
+    /**
+     * A group path with one lane (a Detached copy, AP-R9, or a group path every other spot left),
+     * shown and edited as that lane: `from`, `to`, `ends` and `points` are the route's plus the
+     * lane's offset, and its one member's offset is zero, so the editor draws and hands back the
+     * copy where its marcher walks it; point edits by the route take them so (`editPathPoints`).
+     * Absent for every other path.
+     */
+    lane?: OneLane;
+}
+
+/** A one-lane path's lane (`PathTarget.lane`) */
+export interface OneLane {
+    /** The lane's offset, added to the route's points to show them */
+    offset: XY;
+    /** The group path it was Detached from (K6), or null */
+    detachedFrom: number | null;
 }
 
 /** The line that follows a trail: who, in what order, and where each starts and ends */
@@ -114,6 +130,9 @@ export interface GroupMember {
     laneId?: number;
     slot?: number;
     adjust?: AdjustProfile | null;
+    /** The linked Adjust its spot shares with its sub-group, and its profile (step 26) */
+    groupAdjustId?: number | null;
+    linked?: AdjustProfile | null;
 }
 
 /** Who walks a group path, and the selected marchers in the move who don't (step 15) */
@@ -125,7 +144,139 @@ export interface GroupTarget {
         drill: string;
         from: XY;
         ownPath: boolean;
+        /** Walks a copy Detached from this group path (AP-R9), which Rejoin brings back */
+        detached?: boolean;
     }[];
+    /**
+     * The group path this one is a copy of (K6 `detached_from`), or null: a Detached copy, one
+     * lane (also `PathTarget.lane`) or a Detached sub-group's shared copy of several (step 26)
+     */
+    detachedFrom?: number | null;
+}
+
+/**
+ * The group path `target` was Detached from (K6), whether it is one marcher's copy shown on its
+ * lane or a sub-group's shared copy (step 26); null when it isn't a copy
+ */
+export const copySourceOf = (target: PathTarget | null | undefined) =>
+    target?.lane?.detachedFrom ?? target?.group?.detachedFrom ?? null;
+
+/**
+ * `target`, a group path with one lane, as that lane (`PathTarget.lane`): the route's ends and
+ * points moved by the lane's offset, and the member's offset zero.
+ */
+export function onItsLane(
+    target: PathTarget,
+    offset: XY,
+    detachedFrom: number | null,
+): PathTarget {
+    const add = (p: XY): XY => ({ x: p.x + offset.x, y: p.y + offset.y });
+    return {
+        ...target,
+        from: add(target.from),
+        to: add(target.to),
+        points: target.points.map((p) => ({
+            ...p,
+            at: [p.at[0] + offset.x, p.at[1] + offset.y] as [number, number],
+        })),
+        ends: target.ends
+            ? { from: add(target.ends.from), to: add(target.ends.to) }
+            : null,
+        group: target.group && {
+            ...target.group,
+            members: target.group.members.map((m) => ({
+                ...m,
+                offset: { x: 0, y: 0 },
+            })),
+        },
+        lane: { offset, detachedFrom },
+    };
+}
+
+/** A group path in a move as `readGroupPaths` reads it */
+export interface GroupPathRow {
+    routeId: number;
+    marcherIds: readonly number[];
+    detachedFrom: number | null;
+}
+
+/**
+ * Where Rejoin puts the selected marchers (AP-R10), or null when it isn't offered:
+ *
+ * - a group path shown with selected marchers off it: onto it, those marchers;
+ * - a Detached copy shown: onto the group path it came from, never onto the copy (review of
+ *   #900, S1), its marcher and any other selected marcher off that path;
+ * - nothing shown: onto the one group path every selected copy came from (two detached members of
+ *   one group, with another group path in the move), else onto the move's only group path that
+ *   isn't a copy.
+ *
+ * `groups` are the move's group paths (`readGroupPaths`), needed unless a non-copy is shown.
+ */
+export function rejoinTargetOf(
+    shown: PathTarget | null,
+    groups: readonly GroupPathRow[] | null,
+    timelineId: number,
+    selectedIds: readonly number[],
+): { timelineId: number; routeId: number; marcherIds: number[] } | null {
+    const copyOf = copySourceOf(shown);
+    if (shown && copyOf === null) {
+        const outside = shown.group?.outside.map((m) => m.marcherId) ?? [];
+        return outside.length > 0 && shown.routeId !== null
+            ? {
+                  timelineId: shown.timelineId,
+                  routeId: shown.routeId,
+                  marcherIds: outside,
+              }
+            : null;
+    }
+    if (!groups) return null;
+    const selected = new Set(selectedIds);
+    const sources = new Set(
+        groups
+            .filter(
+                (g) =>
+                    g.detachedFrom !== null &&
+                    g.marcherIds.some((m) => selected.has(m)),
+            )
+            .map((g) => g.detachedFrom!),
+    );
+    const main = groups.filter((g) => g.detachedFrom === null);
+    const source = copyOf ?? (sources.size === 1 ? [...sources][0]! : null);
+    const onto =
+        source !== null
+            ? groups.find((g) => g.routeId === source)
+            : main.length === 1
+              ? main[0]
+              : undefined;
+    if (!onto) return null;
+    const off = selectedIds.filter((id) => !onto.marcherIds.includes(id));
+    return off.length > 0
+        ? { timelineId, routeId: onto.routeId, marcherIds: off }
+        : null;
+}
+
+/**
+ * Whether Paths All draws `target` as a group path object, its one line with faint lanes (AP-O7).
+ * A one-lane path (a Detached copy) is one marcher's path, so it draws as an own path does: its
+ * marcher's start flag positions' path, at the paths level's normal weight.
+ */
+export const drawnAsGroup = (target: PathTarget): boolean =>
+    target.group !== null && !target.lane;
+
+/**
+ * Of the group paths `on` that selected marchers walk, the one to show: the only one, or the only
+ * one that isn't a copy Detached from another of them (its detached members are then "outside" it,
+ * and Rejoin brings them back). Null when that doesn't pick one.
+ */
+export function groupToShow<
+    G extends { routeId: number; detachedFrom: number | null },
+>(on: readonly G[]): G | null {
+    if (on.length === 1) return on[0]!;
+    const ids = new Set(on.map((g) => g.routeId));
+    const main = on.filter(
+        (g) => g.detachedFrom === null || !ids.has(g.detachedFrom),
+    );
+    return main.length === 1 ? main[0]! : null;
 }
 
 const xy = (p: readonly [number, number]): XY => ({ x: p[0], y: p[1] });
@@ -201,8 +352,14 @@ export async function findGroupTarget(
     const groups = await readGroupPaths(db, move.timelineId);
     const selected = new Set(marcherIds);
     const on = groups.filter((g) => g.marcherIds.some((m) => selected.has(m)));
-    if (on.length !== 1) return null;
-    const group = on[0]!;
+    const group = groupToShow(on);
+    if (!group) return null;
+    // Selected marchers on copies Detached from it are off it, and can Rejoin
+    const detached = new Set(
+        on
+            .filter((g) => g.detachedFrom === group.routeId)
+            .flatMap((g) => g.marcherIds),
+    );
     const route = (await readRoutes(db, move.timelineId)).filter(
         (r) => r.routeId === group.routeId,
     );
@@ -223,6 +380,8 @@ export async function findGroupTarget(
             laneId: r.laneId,
             slot: r.slot,
             adjust: r.adjust,
+            groupAdjustId: r.groupAdjustId,
+            linked: r.linked,
         });
     }
     const outside: GroupTarget["outside"][number][] = [];
@@ -237,10 +396,11 @@ export async function findGroupTarget(
             drill: drills.get(id) ?? `${id}`,
             from: xy(resolver.explain(id, move.start).origin),
             ownPath: lane !== undefined && lane.offset_x === null,
+            ...(detached.has(id) ? { detached: true } : {}),
         });
     }
     const g = route[0]!.geometry;
-    return {
+    const target: PathTarget = {
         timelineId: move.timelineId,
         transitionId: members[0]!.transitionId,
         marcherId: members[0]!.marcherId,
@@ -253,8 +413,11 @@ export async function findGroupTarget(
         ends: { from: xy(g.from), to: xy(g.to) },
         ...toBulgeOf(g),
         drawnEnds: drawnEndsOf(members),
-        group: { members, outside },
+        group: { members, outside, detachedFrom: group.detachedFrom },
     };
+    return group.laneCount === 1
+        ? onItsLane(target, members[0]!.offset, group.detachedFrom)
+        : target;
 }
 
 /** The ends a saved group path's line is drawn between: its members' middles now (AP-R5) */
@@ -639,9 +802,11 @@ export function targetOfRoute(
             laneId: r.laneId,
             slot: r.slot,
             adjust: r.adjust,
+            groupAdjustId: r.groupAdjustId,
+            linked: r.linked,
         });
     }
-    return {
+    const target: PathTarget = {
         timelineId: first.timelineId,
         transitionId: members[0]!.transitionId,
         marcherId: members[0]!.marcherId,
@@ -654,9 +819,12 @@ export function targetOfRoute(
         ends: { from: xy(g.from), to: xy(g.to) },
         ...toBulgeOf(g),
         drawnEnds: drawnEndsOf(members),
-        group: { members, outside: [] },
+        group: { members, outside: [], detachedFrom: first.detachedFrom },
         span,
     };
+    return first.laneCount === 1
+        ? onItsLane(target, members[0]!.offset, first.detachedFrom)
+        : target;
 }
 
 /**
@@ -671,7 +839,12 @@ export function refitNeeded(target: PathTarget): boolean {
     const pair = (p: XY): [number, number] => [p.x, p.y];
     return routeEndsChanged(
         { from: pair(target.ends.from), to: pair(target.ends.to) },
-        { from: pair(now.from), to: pair(now.to) },
+        // A one-lane path keeps the group's `to`: its end side follows its end spot (AP-R5), so
+        // only a start that moved asks for Re-fit
+        {
+            from: pair(now.from),
+            to: pair(target.lane ? target.ends.to : now.to),
+        },
     );
 }
 

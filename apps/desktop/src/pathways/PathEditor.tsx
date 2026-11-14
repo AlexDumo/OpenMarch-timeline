@@ -36,7 +36,7 @@ import {
 } from "@/shapes/editor/EditorBarParts";
 import type { XY } from "@/shapes/types";
 import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
-import { refitNeeded } from "./pathTarget";
+import { copySourceOf, refitNeeded } from "./pathTarget";
 import {
     EVEN_FIRST,
     EVEN_STEP,
@@ -50,8 +50,10 @@ import {
     setFollowSpacing,
 } from "./followDrag";
 import {
+    detachIdsOf,
     memberNow,
     memberOf,
+    sharedAdjustOf,
     shapeOf,
     usePathPenStore,
     type PathSession,
@@ -408,7 +410,11 @@ function PathPenBanner({ session }: { session: PathSession }) {
                         esc,
                     }}
                 />
-            ) : session.target.group ? (
+            ) : session.target.group &&
+              !(
+                  session.target.lane &&
+                  session.target.group.members.length === 1
+              ) ? (
                 <T
                     keyName="pathways.banner.groupDrawing"
                     defaultValue="Group path for {count} marchers: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
@@ -498,11 +504,23 @@ function PathEditorBar({
     const smooth = picked >= 0 && isSmooth(shape, picked);
     // R-14″: a point at an end of an arc stays a corner, and Smooth says why
     const cornerOnly = picked >= 0 && !smooth && besideArc(shape, picked);
-    // Own path and Rejoin for a group path (step 15): who they act on comes from the selection
-    const ownable = usePathPenStore((s) => s.ownable);
+    // Detach and Rejoin for a group path (AP-R9, AP-R10): who they act on comes from the selection
+    const selectedMembers = usePathPenStore((s) => s.ownable);
+    const ownable = detachIdsOf(selectedMembers, session);
     const rejoin = usePathPenStore((s) => s.rejoin);
     const groupControls = !drawing && (ownable.length > 0 || rejoin !== null);
-    // Re-fit shows only when the ends have moved, as Own path shows only when it can act (decision A)
+    // Rejoin's marchers that were Detached: the copy shown, or the group's detached ones
+    const detachedOutside =
+        session.target.group?.outside.filter((m) => m.detached).length ?? 0;
+    const detachedNote =
+        copySourceOf(session.target) !== null
+            ? tolgee.t("pathways.editor.detachedNote", "Detached")
+            : detachedOutside > 0
+              ? tolgee.t("pathways.editor.detachedCount", "{count} detached", {
+                    count: detachedOutside,
+                })
+              : null;
+    // Re-fit shows only when the ends have moved, as Detach shows only when it can act (decision A)
     const refit = !drawing && refitNeeded(session.target);
     // The lane picked on the open group path (decision C), and any Adjust the app moved
     const laneMember =
@@ -511,7 +529,15 @@ function PathEditorBar({
             : undefined;
     const rehomed =
         !drawing &&
-        (session.target.group?.members.some((m) => m.adjust?.rehomed) ?? false);
+        (session.target.group?.members.some(
+            (m) => m.adjust?.rehomed || m.linked?.rehomed,
+        ) ??
+            false);
+    // Several lanes picked (step 26): how many, and whether they share a tweak
+    const pickedGroup = !drawing ? (session.subgroup ?? null) : null;
+    const pickedShared =
+        pickedGroup !== null &&
+        sharedAdjustOf(session, pickedGroup.marcherIds) !== null;
     // An open path is always a stored one, so the bar always holds a control
     const controls = drawing || stored;
     // While a new path is drawn for two or more marchers: Together (a group path) or Follow (a
@@ -722,25 +748,35 @@ function PathEditorBar({
                                 {ownable.length > 0 && (
                                     <IconButton
                                         label={tolgee.t(
-                                            "pathways.editor.ownPathTip",
-                                            "Give the selected marchers their own copy of their part of the path",
+                                            "pathways.editor.detachTip",
+                                            "Give the selected marchers, or the marcher whose lane is picked, their own copy of the group path. They walk in step with the group until you edit the copy",
                                         )}
-                                        action="ownPath"
-                                        onClick={() => runAction("ownPath")}
-                                        testId="path-own"
+                                        action="detachPath"
+                                        onClick={() => runAction("detachPath")}
+                                        testId="path-detach"
                                     >
                                         <ArrowsSplitIcon size={14} />
                                         {tolgee.t(
-                                            "actions.path.ownPath",
-                                            "Own path",
+                                            "actions.path.detach",
+                                            "Detach",
                                         )}
                                     </IconButton>
+                                )}
+                                {rejoin !== null && detachedNote && (
+                                    // Says in words what the Detached ring's tooltip says, so a
+                                    // finger reads it too (review of #900, N3)
+                                    <span
+                                        className="text-text-subtitle px-4"
+                                        data-testid="path-detached-note"
+                                    >
+                                        {detachedNote}
+                                    </span>
                                 )}
                                 {rejoin !== null && (
                                     <IconButton
                                         label={tolgee.t(
                                             "pathways.editor.rejoinTip",
-                                            "Put the selected marchers back on the group path, each from where it stands",
+                                            "Put the selected marchers back on the group path. A detached marcher's copy goes, and so does any adjustment on it",
                                         )}
                                         action="rejoinPath"
                                         onClick={() => runAction("rejoinPath")}
@@ -787,6 +823,63 @@ function PathEditorBar({
                             <Divider />
                         </>
                     )}
+                    {pickedGroup && (
+                        <>
+                            <span
+                                className="flex items-center gap-2 px-4"
+                                data-testid="path-subgroup-picked"
+                            >
+                                {pickedShared
+                                    ? tolgee.t(
+                                          "pathways.editor.subgroupShared",
+                                          "{count} spots · shared adjustment",
+                                          {
+                                              count: pickedGroup.marcherIds
+                                                  .length,
+                                          },
+                                      )
+                                    : tolgee.t(
+                                          "pathways.editor.subgroupPicked",
+                                          "{count} spots · drag one to bend them together",
+                                          {
+                                              count: pickedGroup.marcherIds
+                                                  .length,
+                                          },
+                                      )}
+                                {pickedShared && pickedGroup.key !== null && (
+                                    <IconButton
+                                        label={tolgee.t(
+                                            "pathways.menu.removeSharedKey",
+                                            "Remove shared adjustment point",
+                                        )}
+                                        action="adjustRemoveKey"
+                                        onClick={() =>
+                                            runAction("adjustRemoveKey")
+                                        }
+                                        testId="path-adjust-remove-shared-key"
+                                    >
+                                        <BackspaceIcon size={14} />
+                                    </IconButton>
+                                )}
+                                {pickedShared && (
+                                    <IconButton
+                                        label={tolgee.t(
+                                            "pathways.editor.resetGroupTip",
+                                            "Take away the adjustment these spots share. Each spot keeps its own adjustment",
+                                        )}
+                                        action="adjustResetGroup"
+                                        onClick={() =>
+                                            runAction("adjustResetGroup")
+                                        }
+                                        testId="path-adjust-reset-group"
+                                    >
+                                        <ArrowCounterClockwiseIcon size={14} />
+                                    </IconButton>
+                                )}
+                            </span>
+                            <Divider />
+                        </>
+                    )}
                     {laneMember && (
                         <>
                             <span
@@ -827,6 +920,23 @@ function PathEditorBar({
                                             runAction("adjustResetSpot")
                                         }
                                         testId="path-adjust-reset"
+                                    >
+                                        <ArrowCounterClockwiseIcon size={14} />
+                                    </IconButton>
+                                )}
+                                {laneMember.groupAdjustId != null && (
+                                    // The spot's sub-group's shared tweak, also when it is the
+                                    // last spot sharing it (step 26)
+                                    <IconButton
+                                        label={tolgee.t(
+                                            "pathways.editor.resetGroupTip",
+                                            "Take away the adjustment these spots share. Each spot keeps its own adjustment",
+                                        )}
+                                        action="adjustResetGroup"
+                                        onClick={() =>
+                                            runAction("adjustResetGroup")
+                                        }
+                                        testId="path-adjust-reset-lane-group"
                                     >
                                         <ArrowCounterClockwiseIcon size={14} />
                                     </IconButton>

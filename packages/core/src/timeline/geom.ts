@@ -1063,6 +1063,8 @@ export function adjustDiagnostics(
     adjust: ResolvedAdjust,
     transitionId: number,
     slot: number,
+    /** Whether it is the spot's linked Adjust (step 26), which the message then names */
+    linked = false,
 ): Diagnostic[] {
     const out: Diagnostic[] = [];
     const push = (code: Diagnostic["code"], message: string) =>
@@ -1074,7 +1076,7 @@ export function adjustDiagnostics(
             slot,
             message,
         });
-    const where = `the Adjust of slot ${slot} of transition ${transitionId}`;
+    const where = `the ${linked ? "linked " : ""}Adjust of slot ${slot} of transition ${transitionId}`;
     if (adjust.badAnchors > 0)
         push("D-ANCHOR", `${where} has ${adjust.badAnchors} unusable anchors`);
     if (adjust.clamped > 0)
@@ -1100,6 +1102,50 @@ export function adjustAt(adjust: ResolvedAdjust, x: number): XY {
     const a = ds[i]!;
     const b = ds[i + 1]!;
     return [a[0] + f * (b[0] - a[0]), a[1] + f * (b[1] - a[1])];
+}
+
+/**
+ * A lane's Adjusts as R-14′ item 7 adds them (pathways step 26): its sub-group's linked Adjust
+ * first, then the spot's own. Either may be absent.
+ */
+export interface LaneAdjusts {
+    /** The linked Adjust `δ_g` the spot shares with its sub-group; null or absent for none */
+    readonly linked?: ResolvedAdjust | null;
+    /** The spot's own Adjust `δ_ℓ`; null or absent for none */
+    readonly adjust?: ResolvedAdjust | null;
+}
+
+/** Whether either of a lane's Adjusts is there. */
+export const isAdjusted = (a: LaneAdjusts): boolean => !!(a.linked || a.adjust);
+
+/** Each of a lane's Adjusts' displacement at place `x`, in R-14′ item 7's order. */
+export function adjustsAt(a: LaneAdjusts, x: number): XY[] {
+    const out: XY[] = [];
+    if (a.linked) out.push(adjustAt(a.linked, x));
+    if (a.adjust) out.push(adjustAt(a.adjust, x));
+    return out;
+}
+
+/** `((q + d_1) + d_2)`: each displacement one float64 addition per coordinate, in order. */
+export function placedBy(q: XY, ds: readonly XY[]): XY {
+    let p = q;
+    for (const d of ds) p = placed(p, d);
+    return p;
+}
+
+/**
+ * R-14′ item 7: `(q + δ_g(x)) + δ_ℓ(x)` for a point `q` already placed by its offset. With no
+ * Adjust it is `q` itself, so a plain lane stays bit-identical (item 9), and with only the
+ * spot's own it is step 3b's `q + δ_ℓ(x)` exactly.
+ */
+export const adjustedAt = (q: XY, a: LaneAdjusts, x: number): XY =>
+    placedBy(q, adjustsAt(a, x));
+
+/** Every key place of a lane's Adjusts, increasing, without repeats: where its motion can bend. */
+export function adjustPlaces(a: LaneAdjusts): number[] {
+    if (!a.linked) return a.adjust ? a.adjust.xs : [];
+    if (!a.adjust) return a.linked.xs;
+    return [...new Set([...a.linked.xs, ...a.adjust.xs])].sort((p, q) => p - q);
 }
 
 /** A leg that is R-8's arc with bulge `k` (R-14″), measured exactly. */
@@ -1157,8 +1203,10 @@ export interface GroupMemberWalk {
     /** null when the reference walk kept no inner point (the member walks R-7's line) */
     first: GroupLeg | null;
     last: GroupLeg | null;
-    /** The lane's Adjust, resolved on this schedule; null without one (R-14′ item 6) */
+    /** The lane's own Adjust, resolved on this schedule; null without one (R-14′ item 6) */
     adjust: ResolvedAdjust | null;
+    /** Its sub-group's linked Adjust, added first (R-14′ item 7, step 26); null without one */
+    linked: ResolvedAdjust | null;
 }
 
 /**
@@ -1172,6 +1220,7 @@ export function groupMemberWalk(
     B: XY,
     offset: XY,
     adjust: ResolvedAdjust | null = null,
+    linked: ResolvedAdjust | null = null,
 ): GroupMemberWalk {
     const { W } = schedule;
     const m = W.V.length - 2;
@@ -1184,19 +1233,15 @@ export function groupMemberWalk(
             first: null,
             last: null,
             adjust: null,
+            linked: null,
         };
-    // R-14′ item 7: `((q + o) + δ)`, the placed points and handles reading δ at D_1 and D_m. With
-    // no Adjust nothing is added, so step 15's walk stays bit-identical (item 9).
-    const at1 = adjust ? adjustAt(adjust, W.D[1]!) : null;
-    const atm = adjust ? adjustAt(adjust, W.D[m]!) : null;
-    const placeFirst = (q: XY): XY => {
-        const p = placed(q, offset);
-        return at1 ? placed(p, at1) : p;
-    };
-    const placeLast = (q: XY): XY => {
-        const p = placed(q, offset);
-        return atm ? placed(p, atm) : p;
-    };
+    // R-14′ item 7: `(((q + o) + δ_g) + δ_ℓ)`, the placed points and handles reading δ at D_1 and
+    // D_m. With no Adjust nothing is added, so step 15's walk stays bit-identical (item 9).
+    const adjusts = { linked, adjust };
+    const at1 = adjustsAt(adjusts, W.D[1]!);
+    const atm = adjustsAt(adjusts, W.D[m]!);
+    const placeFirst = (q: XY): XY => placedBy(placed(q, offset), at1);
+    const placeLast = (q: XY): XY => placedBy(placed(q, offset), atm);
     const W1 = placeFirst(W.V[1]!);
     const Wm = placeLast(W.V[m]!);
     const p1 = W.pieces[0]!;
@@ -1230,7 +1275,7 @@ export function groupMemberWalk(
                     B[1] + (Wm[1] - B[1]) / 3,
                 ])
               : legOf(Wm, B, null, null);
-    return { schedule, A, B, offset, first, last, adjust };
+    return { schedule, A, B, offset, first, last, adjust, linked };
 }
 
 function legPoint(leg: GroupLeg, f: number): XY {
@@ -1254,7 +1299,7 @@ function straightOrArc(schedule: GroupSchedule, A: XY, B: XY, p: number): XY {
 
 /** R-14 group schedule item 6: where the member is at progress `p`. */
 export function groupPoint(walk: GroupMemberWalk, p: number): XY {
-    const { schedule, A, B, offset, first, last, adjust } = walk;
+    const { schedule, A, B, offset, first, last } = walk;
     if (p <= 0) return A;
     if (p >= 1) return B;
     if (!first || !last) return straightOrArc(schedule, A, B, p);
@@ -1262,7 +1307,7 @@ export function groupPoint(walk: GroupMemberWalk, p: number): XY {
     if (p < uFirst) return legPoint(first, p / uFirst);
     if (p <= uLast) {
         const q = placed(routePoint(schedule.W, p), offset);
-        return adjust ? placed(q, adjustAt(adjust, p * schedule.W.L)) : q;
+        return isAdjusted(walk) ? adjustedAt(q, walk, p * schedule.W.L) : q;
     }
     return legPoint(last, (p - uLast) / (1 - uLast));
 }
@@ -1285,8 +1330,10 @@ export interface LaneWalk {
     offset: XY | null;
     /** `groupSchedule(route)`, cached per route; computed here when absent */
     schedule?: GroupSchedule;
-    /** The lane's Adjust on `schedule`, cached per lane (J.7); null or absent for none */
+    /** The lane's own Adjust on `schedule`, cached per lane (J.7); null or absent for none */
     adjust?: ResolvedAdjust | null;
+    /** Its linked Adjust on `schedule`, cached per linked Adjust (J.7, step 26); null or absent for none */
+    linked?: ResolvedAdjust | null;
 }
 
 /**
@@ -1321,6 +1368,7 @@ export function walkedPoint(
                     B,
                     offset,
                     lane.adjust ?? null,
+                    lane.linked ?? null,
                 ),
                 p,
             );
