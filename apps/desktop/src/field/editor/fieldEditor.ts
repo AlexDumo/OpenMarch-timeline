@@ -708,6 +708,8 @@ export class FieldEditor {
         this.endRotation();
         const handle = this.handleAt(pointer.field);
         const hit = handle ? null : this.marcherAt(pointer.field);
+        // A press with no move before it (a pen, a tap) still shows the handle it drags
+        this.setHoverHandle(handle);
         this.press = {
             start: pointer,
             hit,
@@ -744,6 +746,7 @@ export class FieldEditor {
                     onDot: () => this.marcherAt(pointer.field) !== null,
                 }) ?? null;
             if (modeCursor) {
+                this.setHoverHandle(null);
                 this.setHover(modeCursor);
                 return;
             }
@@ -974,6 +977,7 @@ export class FieldEditor {
         this.unsubscribeMode?.();
         this.unsubscribeMode = null;
         this.mode = mode;
+        this.hoverHandle = null;
         if (mode) {
             this.cancelGesture();
             this.press = null;
@@ -1157,6 +1161,8 @@ export class FieldEditor {
 
     /** Drops a typed rotation whose marchers aren't the selection any more. */
     selectionChanged(): void {
+        // A handle pointed at belonged to the old selection's box
+        this.setHoverHandle(null);
         if (!this.typed) return;
         if (
             !sameIds(

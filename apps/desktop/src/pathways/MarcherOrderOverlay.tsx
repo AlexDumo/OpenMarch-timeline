@@ -21,6 +21,7 @@ import {
     memo,
     useEffect,
     useId,
+    useLayoutEffect,
     useMemo,
     useRef,
     useState,
@@ -374,22 +375,32 @@ function drawLine({
             const [x, y] = p.split(",").map(Number);
             return { x: x!, y: y! };
         }) ?? [];
+    // and the numbers, wherever they were placed
+    const badgeCorners = badges.flatMap(({ at, text }) => {
+        const w = badgeWidth(text) / 2;
+        const h = BADGE_HEIGHT / 2;
+        return [
+            { x: at.x - w, y: at.y - h },
+            { x: at.x + w, y: at.y + h },
+        ];
+    });
+    const marks = [...tipCorners, ...badgeCorners];
     const extent = {
         minX: Math.min(
             ...washPoints.map((p) => p.x - reach),
-            ...tipCorners.map((p) => p.x),
+            ...marks.map((p) => p.x),
         ),
         minY: Math.min(
             ...washPoints.map((p) => p.y - reach),
-            ...tipCorners.map((p) => p.y),
+            ...marks.map((p) => p.y),
         ),
         maxX: Math.max(
             ...washPoints.map((p) => p.x + reach),
-            ...tipCorners.map((p) => p.x),
+            ...marks.map((p) => p.x),
         ),
         maxY: Math.max(
             ...washPoints.map((p) => p.y + reach),
-            ...tipCorners.map((p) => p.y),
+            ...marks.map((p) => p.y),
         ),
     };
     return {
@@ -519,11 +530,18 @@ export default function MarcherOrderOverlay({
     );
     // Where the selection stands: the same map until one of them moves
     const ownAt = useDrawnAt(marchers, ids, version);
+    // The selection's own line
+    const own = useMemo(
+        (): ShownOrder | null =>
+            !showing || sweep || !ready
+                ? null
+                : shownOrderOf(forms, ids, beat, ownAt),
+        [showing, sweep, ready, forms, ids, beat, ownAt],
+    );
     const lines = useMemo((): ShownOrder[] => {
         if (!showing || sweep || !ready) return [];
-        const own = shownOrderOf(forms, ids, beat, ownAt);
         return always ? withOwnOrder(inForce, own) : own ? [own] : [];
-    }, [showing, sweep, ready, forms, ids, beat, ownAt, always, inForce]);
+    }, [showing, sweep, ready, own, always, inForce]);
 
     // Where the lines' marchers stand: the same map until one of them moves
     const lineIds = useMemo(() => lines.flatMap((l) => l.order), [lines]);
@@ -696,50 +714,42 @@ export default function MarcherOrderOverlay({
     // clear of (step 4j): in field units, CLEARANCE screen px out. None for a guess (Alt shows it only
     // for a moment) or while Set order draws its own lane
     const cover = useMemo((): FieldRect | null => {
-        if (!showing || sweep) return null;
+        // Only the selection's own line, and only when it's known: a guess isn't drawn at rest, and
+        // Always's other lines the selection is only part of keep today's box
+        if (!showing || sweep || ids.length < 2 || !own || own.guessed)
+            return null;
         const shownLines = lines.filter((line) => !line.guessed || alt);
-        let box: Box | null = null;
-        const add = (b: Box) => {
-            box = box
-                ? {
-                      minX: Math.min(box.minX, b.minX),
-                      minY: Math.min(box.minY, b.minY),
-                      maxX: Math.max(box.maxX, b.maxX),
-                      maxY: Math.max(box.maxY, b.maxY),
-                  }
-                : b;
+        const l = shownLines.findIndex(
+            (line) =>
+                !line.guessed &&
+                own.order.every((id) => line.order.includes(id)),
+        );
+        const line = l < 0 ? undefined : drawn[l];
+        if (!line || line.points.length === 0) return null;
+        let b: Box = line.extent;
+        const add = (o: Box) => {
+            b = {
+                minX: Math.min(b.minX, o.minX),
+                minY: Math.min(b.minY, o.minY),
+                maxX: Math.max(b.maxX, o.maxX),
+                maxY: Math.max(b.maxY, o.maxY),
+            };
         };
-        drawn.forEach((line, l) => {
-            const shown = shownLines[l];
-            if (!shown || shown.guessed) return;
-            if (!shown.order.some((id) => selectedSet.has(id))) return;
-            add(line.extent);
-            for (const id of shown.order) {
-                const p = linesAt.get(id);
-                const label = p && labelBox(id, p);
-                if (label) add(label);
-            }
-        });
-        const b = box as Box | null;
-        if (!b) return null;
-        return {
+        for (const id of shownLines[l]!.order) {
+            const p = linesAt.get(id);
+            const label = p && labelBox(id, p);
+            if (label) add(label);
+        }
+        const rect = {
             left: (b.minX - SELECTION_CLEARANCE) / zoom,
             top: (b.minY - SELECTION_CLEARANCE) / zoom,
             right: (b.maxX + SELECTION_CLEARANCE) / zoom,
             bottom: (b.maxY + SELECTION_CLEARANCE) / zoom,
         };
-    }, [
-        showing,
-        sweep,
-        lines,
-        alt,
-        drawn,
-        selectedSet,
-        linesAt,
-        labelBox,
-        zoom,
-    ]);
-    useEffect(() => setSelectionCover(cover), [cover]);
+        return Object.values(rect).every(Number.isFinite) ? rect : null;
+    }, [showing, sweep, ids, own, lines, alt, drawn, linesAt, labelBox, zoom]);
+    // Before paint, so the box drawn this frame stands round this frame's lane
+    useLayoutEffect(() => setSelectionCover(cover), [cover]);
     useEffect(() => () => setSelectionCover(null), []);
     // The dots the lanes are cut away from: everyone's dot, and a selected marcher's ring too
     const holes = useMemo(() => {
