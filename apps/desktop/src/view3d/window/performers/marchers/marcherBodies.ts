@@ -485,7 +485,7 @@ export class MarcherBodies {
         return { mesh, own };
     }
 
-    /** The hold id slot `slot` plays, for `rowKey`. */
+    /** The hold id slot `slot` plays, or `NO_HOLD` when it has none. */
     holdOf(slot: number): string {
         return this.holdIds[slot] ?? NO_HOLD;
     }
