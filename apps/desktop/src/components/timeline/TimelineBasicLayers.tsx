@@ -143,6 +143,12 @@ export const TimelineBasicPoints = memo(function TimelineBasicPoints({
                                 left: beatToX(point.beat, pixelsPerBeat),
                             }}
                             onClick={() => onSeek?.(point.beat)}
+                            // Kept from the menu's own long press, which opens while a finger
+                            // is still down: the timeline's opens it on release (tablet 3.4)
+                            onPointerDown={(event) => {
+                                if (event.pointerType === "touch")
+                                    event.preventDefault();
+                            }}
                             // The page menu on the surface must not open too
                             onContextMenu={(event) => event.stopPropagation()}
                         >

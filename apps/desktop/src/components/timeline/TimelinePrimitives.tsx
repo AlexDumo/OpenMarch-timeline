@@ -1270,9 +1270,10 @@ const PAGE_MENU_CHIP_INSET = 22;
  * can't right-click, so it opens the box's full menu, the right-click's entries with **Edit move**
  * first (a mouse double-clicks the box for that). Drawn as the clip's ⋯, with a hit area 44px wide
  * and as tall as the page row, so it never takes a scrub on the measure numbers, that follows the
- * press rules of tablet 3.3 (`findTouchHit`): it's the selected object's, so it
- * wins over another target's area beside it, but a line or grip the press is right on keeps it.
- * It sits inside the box's end, clear of the end flag's grip.
+ * press rules of tablet 3.3 (`findTouchHit`). It isn't marked as the selected object's: a finger
+ * nearer a keyframe, the playhead or the start flag than the chip takes that instead, so the
+ * chip never steals their near misses. A press right on the chip is the chip's. It sits inside
+ * the box's end, clear of the end flag's grip.
  */
 const TimelinePageMenuChip = memo(function TimelinePageMenuChip({
     page,
@@ -1337,7 +1338,6 @@ const TimelinePageMenuChip = memo(function TimelinePageMenuChip({
             {/* 44px wide and the page row's height: below the row the measure numbers scrub, and
                 above it the headroom is the pennant's and the loop ends' (UI-20) */}
             <TouchHitArea
-                selected
                 className="touch:block pointer-events-auto absolute left-1/2 hidden w-full min-w-44 -translate-x-1/2"
                 style={{ top: -inset, height: TIMELINE_PAGE_ROW_HEIGHT }}
             />
@@ -1931,6 +1931,8 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                 type="button"
                 data-timeline-interactive="true"
                 data-testid="timeline-clip"
+                // A finger's long press opens the move's menu (tablet 3.4), not the button's hint
+                data-own-long-press={moveMenu ? "" : undefined}
                 data-move-id={track.linkId}
                 data-selected={selected}
                 // A finger on the clip moves it, even inside another target's hit area (3.3)
@@ -2282,6 +2284,8 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                                 type="button"
                                 data-testid="timeline-clip-menu-button"
                                 data-timeline-interactive="true"
+                                // Its menu, not the button's hint, on a finger's long press
+                                data-own-long-press=""
                                 data-timeline-own-keys="true"
                                 // Space stays Play (UI-14 round-2 review): it doesn't open the menu
                                 onKeyDown={spaceStaysPlay}

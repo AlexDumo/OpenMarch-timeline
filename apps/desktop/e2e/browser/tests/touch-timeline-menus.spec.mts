@@ -165,6 +165,56 @@ async function selectMoveMarcher(show: Show) {
         .toEqual([marcher!.id]);
 }
 
+/** Every stored move's start beat, by id */
+const moveStarts = async (query: Show["query"]) =>
+    Object.fromEntries(
+        (
+            await query<{ id: number; start: number }>(
+                "SELECT id, start_beat AS start FROM timelines ORDER BY id",
+            )
+        ).map((r) => [r.id, r.start]),
+    );
+
+/**
+ * Splits one marcher of the beat-53 move into a new move, which has a clip
+ * (as `touch-timeline-hit-areas.spec.mts` does); returns the clip.
+ */
+async function splitIntoClip(show: Show): Promise<Locator> {
+    const { page, query } = show;
+    const before = await moveStarts(query);
+    await selectMoveMarcher(show);
+    await expect(async () => {
+        await pageBox(page, PAGE_START).click({ button: "right" });
+        await page
+            .getByRole("menuitem", { name: "Split 1 selected into new move" })
+            .click({ timeout: 1000 });
+    }).toPass();
+    await expect
+        .poll(async () => Object.keys(await moveStarts(query)).length)
+        .toBe(Object.keys(before).length + 1);
+    const splitId = Math.max(
+        ...Object.keys(await moveStarts(query)).map(Number),
+    );
+    await expect(page.getByTestId("timeline-isolation-bar")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("timeline-isolation-bar")).toBeHidden();
+    const clip = page.locator(
+        `[data-testid="timeline-clip"][data-move-id="${splitId}"]`,
+    );
+    await expect(clip).toBeVisible();
+    // Settled where it drops
+    let last = Number.NaN;
+    await expect
+        .poll(async () => {
+            const y = (await clip.boundingBox())!.y;
+            const still = Math.abs(y - last) < 0.5;
+            last = y;
+            return still;
+        })
+        .toBe(true);
+    return clip;
+}
+
 /** Puts the playhead in the middle of the beat-53 page, off its flags, with a tap on the tracks */
 async function playheadMidPage(page: Page) {
     const box = (await pageBox(page, PAGE_START).boundingBox())!;
@@ -360,6 +410,58 @@ test.describe("touch layout", () => {
         await shakyLongPress(page, target!);
         await expect(page.getByTestId("timeline-keyframe-menu")).toBeVisible();
         await expect(bubble(page)).toBeHidden();
+    });
+    test("a finger nearer the playhead than the … chip takes the playhead: a tap opens no menu and a drag scrubs", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await ready(page);
+        const chipAt = await centerOf(chip(page));
+        // Inside the chip's 44 px area, 12 px off its edge
+        const press = { x: chipAt.x - 21, y: chipAt.y };
+        const chipLeft = (await chip(page).boundingBox())!.x;
+        // The playhead near there, with a tap on the tracks (it lands on a count)
+        const before = await playheadAt(page);
+        await tap(page, { x: press.x, y: await bareY(page) });
+        await expect.poll(() => playheadAt(page)).not.toBe(before);
+        const line = (await centerOf(playhead(page))).x;
+        expect(
+            Math.abs(press.x - line),
+            "the press is nearer the playhead's line than the chip",
+        ).toBeLessThan(chipLeft - press.x);
+        await tap(page, press);
+        await page.waitForTimeout(300);
+        await expect(rangeMenu(page)).toBeHidden();
+        const at = await playheadAt(page);
+        const f = await finger(page);
+        await f.down(press);
+        await f.move(-80, 0, 8);
+        await f.up();
+        await expect.poll(() => playheadAt(page)).not.toBe(at);
+        await expect(rangeMenu(page)).toBeHidden();
+    });
+
+    test("a shaky long press on a move's bar opens the move's menu, with no hint", async ({
+        show,
+    }) => {
+        const { page, query } = show;
+        const clip = await splitIntoClip(show);
+        await ready(page);
+        await clip.evaluate((el) =>
+            el.scrollIntoView({ block: "nearest", inline: "center" }),
+        );
+        const before = await moveStarts(query);
+        const box = (await clip.boundingBox())!;
+        await shakyLongPress(page, {
+            x: box.x + Math.min(30, box.width / 3),
+            y: box.y + box.height / 2,
+        });
+        await expect(page.getByTestId("timeline-move-menu-edit")).toBeVisible();
+        await expect(bubble(page)).toBeHidden();
+        await page.waitForTimeout(300);
+        await expect(page.getByTestId("timeline-move-menu-edit")).toBeVisible();
+        // The wobble moved nothing
+        expect(await moveStarts(query)).toEqual(before);
     });
 });
 

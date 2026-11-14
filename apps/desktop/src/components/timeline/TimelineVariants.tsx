@@ -1190,7 +1190,7 @@ const TimelineSurface = memo(function TimelineSurface({
                     "relative",
                     // The page row steps back while a band is edited (tempo mode)
                     bandFocus &&
-                        "[&_[data-testid=timeline-page-ruler]]:opacity-50",
+                        "[&_[data-testid=timeline-page-menu-button]]:opacity-50 [&_[data-testid=timeline-page-ruler]]:opacity-50",
                 )}
                 style={{ width: surfaceWidth, height: surfaceHeight }}
                 onContextMenu={rangeMenu.onContextMenu}

@@ -104,6 +104,11 @@ describe("the page box menu on a tablet (3.4)", () => {
         const chips = screen.getAllByTestId("timeline-page-menu-button");
         expect(chips).toHaveLength(1);
         expect(chips[0]).toHaveAccessibleName("Page 2 options");
+        // Its finger area isn't the selected object's: a keyframe, the playhead or the start flag
+        // nearer the finger wins over it (tablet 3.3's rules)
+        const area = chips[0]!.querySelector("[data-touch-hit]");
+        expect(area).not.toBeNull();
+        expect(area!.hasAttribute("data-touch-selected")).toBe(false);
         fireEvent.click(chips[0]!);
         const ids = [...menuEntries()].map((entry) =>
             entry.getAttribute("data-testid"),
