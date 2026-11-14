@@ -1537,12 +1537,14 @@ function clarinetOut(h: Hold): Hold {
  * the right, clear of the bell in front. Each hand carries straight on from
  * its forearm (`straightArm`), the elbows out to the sides and down.
  * `stacks` are the two hands' places down the body, from its top (0) to the
- * bow (1).
+ * bow (1); `rightOut`, in the body's frame, replaces the right elbow's way
+ * out when given.
  */
 function saxHands(
     h: Hold,
     ids: ("altoSax" | "tenorSax" | "bariSax")[],
     stacks: [number, number] = [0.3, 0.66],
+    rightOut?: Vec3,
 ): Pick<Hold, "left" | "right"> {
     const f = frameOf(h.instrument);
     const at = (k: number, p: Vec3) =>
@@ -1560,7 +1562,7 @@ function saxHands(
         right: straightArm(
             "right",
             rightKnuckles,
-            add(out([-1, 0, 0]), [0, -0.8, -0.2]),
+            rightOut ?? add(out([-1, 0, 0]), [0, -0.8, -0.2]),
             out([0.4, 0.8, 0.2]),
         ),
     };
@@ -1581,6 +1583,8 @@ function saxHands(
 const BARI_YAW_DEG = 35;
 const BARI_ROLL_DEG = 22;
 const BARI_PITCH_DEG = 10;
+/** The bari's right elbow: down at the side, a little in and back, not winged. */
+const BARI_RIGHT_ELBOW_OUT: Vec3 = [-0.15, -1, -0.25];
 function bariUp(): Hold {
     const base = withMouth(SAX.up);
     const y = (BARI_YAW_DEG * Math.PI) / 180;
@@ -1614,7 +1618,12 @@ function bariUp(): Hold {
             capsAxis: turn([0, 0, 1]),
         },
     };
-    return { ...h, ...saxHands(h, ["bariSax"]) };
+    // the right elbow tucked in at the side, the forearm reaching down the
+    // horn to the lower stack (owner, 2026-11-14)
+    return {
+        ...h,
+        ...saxHands(h, ["bariSax"], undefined, BARI_RIGHT_ELBOW_OUT),
+    };
 }
 
 /**

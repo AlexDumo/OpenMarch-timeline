@@ -199,7 +199,14 @@ describe("the sax held in front", () => {
             // the left hand from the left, the right from the right
             expect(h.left.wrist[0]).toBeGreaterThan(h.right.wrist[0]);
             expect(h.left.fingers[0]).toBeLessThan(0);
-            expect(h.right.fingers[0]).toBeGreaterThan(0);
+            if (id === "bariSax") {
+                // the right elbow tucked in at the side, the forearm reaching
+                // down the horn to the stack at the right hip (owner, 2026-11-14)
+                expect(h.right.elbow[0]).toBeGreaterThan(-0.23);
+                expect(h.right.fingers[1]).toBeLessThan(-0.5);
+            } else {
+                expect(h.right.fingers[0]).toBeGreaterThan(0);
+            }
         });
     }
 
