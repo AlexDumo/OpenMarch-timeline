@@ -272,7 +272,7 @@ const NAVIGATION_TARGETS = {
     readonly [TimelineNavigation, TimelineNavigation]
 >;
 
-interface TransportGuideRow<Mode extends string = string> {
+export interface TransportGuideRow<Mode extends string = string> {
     readonly mode: Mode;
     readonly icon: ReactNode;
     /** What it does, for the button's name */
@@ -546,6 +546,18 @@ const stopGuide = (
         shortcut: TRANSPORT_SHORTCUTS.playPage,
     },
 ];
+
+/**
+ * What Play does with each modifier now, as the tooltip's guide lists it: the play guide, or the
+ * stop guide while playing. The touch transport's Play menu shows these rows (tablet 3.5).
+ */
+export const playGuideRows = (
+    isPlaying: boolean,
+    loops: boolean,
+    playsOn: boolean,
+    t: Translate,
+): readonly TransportGuideRow<TransportPlayMode>[] =>
+    isPlaying ? stopGuide(t) : playGuide(loops, playsOn, t);
 
 /**
  * Tempo mode's one Play (owner, 2026-10-30): one row, named for what it does now, and

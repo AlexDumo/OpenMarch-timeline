@@ -7,8 +7,8 @@ import { pinch, tap } from "../app.mjs";
 // Timeline zoom on a tablet (tablet plan 3.2, fork #885): a pinch follows the
 // fingers 1:1 (the zoom scales with their spread, and the beat under their
 // midpoint stays under it) and stops at the zoom limits without overshoot;
-// the touch layout's ± buttons step the zoom as the timelineZoomIn and
-// timelineZoomOut actions.
+// the touch layout's ± buttons, in the touch transport's row (3.5), step the
+// zoom as the timelineZoomIn and timelineZoomOut actions.
 
 const desktop = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
@@ -69,12 +69,16 @@ async function bareTrack(page: Page): Promise<Point> {
     return { x: view.x + view.width / 3, y: bottom - 12 };
 }
 
-/** Fits the show in view with the transport's Fit (Shift+Z), the zoom's lower limit */
+/** Fits the show in view, the zoom's lower limit, with the touch transport's Fit in its "…" (3.5) */
 async function fit(page: Page) {
-    const button = page.getByRole("button", { name: "Fit the show" });
+    await page.getByTestId("timeline-touch-more").click();
+    const button = page.getByTestId("timeline-touch-fit");
+    await expect(button).toBeVisible();
     if ((await button.getAttribute("aria-pressed")) !== "true")
-        await page.keyboard.press("Shift+Z");
+        await button.click();
     await expect(button).toHaveAttribute("aria-pressed", "true");
+    await page.keyboard.press("Escape");
+    await expect(button).toBeHidden();
 }
 
 /** Waits for the zoom to stop changing, and returns it */

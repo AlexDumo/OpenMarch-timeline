@@ -2938,5 +2938,22 @@
     "shapes.edit.pointsHintTouch": "Hint shown on a tablet while drawing a line point by point. \"Finish\" is the name of the button next to it; keep it the same as that button's text.",
     "shapes.edit.undoPoint": "Button shown on a tablet while drawing a line on the field point by point. Takes back the last point tapped.",
     "shapes.tool.tab.ringCaption": "Short caption under a button in the Shapes tab of the toolbar, shown only in the touch layout (tablet). The button opens the shape ring: a round menu of shape kinds (box, line, arc…) that opens over the field; the user taps a shape in it to pick it. Keep it one short word.",
-    "toolbar.alignmentTabShort": "Shortened name of the 'Alignment' toolbar tab, shown instead of it in the tablet layout when the screen is narrow (an iPad held upright), beside the tabs 'File', 'Shapes' and 'Select'. Keep it as short as possible, one word. Screen readers still say the full name, so where the language allows, use the start of the full tab name or a word inside it."
+    "toolbar.alignmentTabShort": "Shortened name of the 'Alignment' toolbar tab, shown instead of it in the tablet layout when the screen is narrow (an iPad held upright), beside the tabs 'File', 'Shapes' and 'Select'. Keep it as short as possible, one word. Screen readers still say the full name, so where the language allows, use the start of the full tab name or a word inside it.",
+    "actions.timeline.fit": "Name of an action in the command palette and on the tablet layout's timeline controls. Zooms the timeline (the strip of pages and counts under the field) so the whole show fits in view; running it again goes back to the zoom from before.",
+    "actions.timeline.toggleTempoMode": "Name of an action in the command palette and on the tablet layout's timeline controls. Turns \"Edit music\" on or off: a mode where the user lines the counts up with the music file (tempo, time signatures, rehearsal marks). Keep \"Edit music\" consistent with the button of that name.",
+    "actions.timeline.toggleTempoModeKeywords": "Extra search words, separated by spaces, that find the \"Edit music on / off\" action in the command palette. Translate each word; the list need not match English one to one.",
+    "timeline.touchTransport.playMenu": "Accessible name of the menu that opens on a long press of the Play button on a tablet. It lists the ways to play: from the start flag, on past the playhead, from the playhead, or pause while playing.",
+    "timeline.touchTransport.goTo": "Heading over buttons in the tablet timeline's \"More\" panel that move the playhead: to the start of the show, one count back, one count on, the end of the show.",
+    "timeline.touchTransport.start": "Short caption under a button (tablet timeline controls) that moves the playhead to the start of the show. Keep it to one short word.",
+    "timeline.touchTransport.countBack": "Short caption under a button (tablet timeline controls) that moves the playhead one count (beat) earlier. Keep it short.",
+    "timeline.touchTransport.countOn": "Short caption under a button (tablet timeline controls) that moves the playhead one count (beat) later. Keep it short.",
+    "timeline.touchTransport.end": "Short caption under a button (tablet timeline controls) that moves the playhead to the end of the show. Keep it to one short word.",
+    "timeline.touchTransport.playback": "Heading over the tablet timeline's playback buttons in its \"More\" panel: Loop, playback speed and sound.",
+    "timeline.touchTransport.speed": "Short caption under the playback speed button (tablet timeline controls). The button itself shows the speed, such as 1×.",
+    "timeline.touchTransport.sound": "Short caption under the sound button (tablet timeline controls), which opens the music volume, mute and metronome.",
+    "timeline.touchTransport.view": "Heading over the tablet timeline's view buttons in its \"More\" panel: fit the whole show in view, and Edit music.",
+    "timeline.touchTransport.fit": "Short caption under the button (tablet timeline controls) that zooms the timeline so the whole show fits; pressing it again goes back. Keep it to one short word.",
+    "timeline.touchTransport.atPlayhead": "Heading over buttons in the tablet timeline's \"More\" panel that add a new page, or a subset page, at the playhead (the timeline's current position line).",
+    "timeline.touchTransport.newPage": "Short caption under the button (tablet timeline controls) that creates a page at the playhead.",
+    "timeline.touchTransport.newSubset": "Short caption under the button (tablet timeline controls) that creates a subset page (a page numbered between two pages, such as 2A) at the playhead."
 }

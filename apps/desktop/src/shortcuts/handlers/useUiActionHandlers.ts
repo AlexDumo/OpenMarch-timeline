@@ -4,6 +4,7 @@ import { useShortcutsDialogStore } from "@/stores/ShortcutsDialogStore";
 import { isBasicMode, useEditorModeStore } from "@/stores/EditorModeStore";
 import tolgee from "@/global/singletons/Tolgee";
 import { useActionHandler } from "../useActionHandler";
+import { useTempoModeStore } from "@/tempo/tempoModeStore";
 
 export function useUiActionHandlers() {
     // Read when an action runs, so a settings change (such as a timeline zoom save) doesn't
@@ -28,6 +29,10 @@ export function useUiActionHandlers() {
                     ? startFlagKey().release()
                     : startFlagKey().blurRelease(),
         },
+    );
+    // Tablet 3.5 (#888): Edit music (tempo mode) on or off, as its button and Shift+T do
+    useActionHandler("toggleTempoMode", () =>
+        useTempoModeStore.getState().toggle(),
     );
     useActionHandler("openView3d", () => {
         void window.electron.openView3d();

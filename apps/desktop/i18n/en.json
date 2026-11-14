@@ -160,7 +160,10 @@
             "mergeMoveIntoPage": "Merge this move into its page",
             "zoomIn": "Zoom the timeline in",
             "zoomOut": "Zoom the timeline out",
-            "zoomKeywords": "zoom magnify timeline wider narrower closer farther scale plus minus"
+            "zoomKeywords": "zoom magnify timeline wider narrower closer farther scale plus minus",
+            "fit": "Fit the show in the timeline",
+            "toggleTempoMode": "Edit music on / off",
+            "toggleTempoModeKeywords": "edit music tempo time signature rehearsal marks audio align counts"
         },
         "ui": {
             "openFieldMenu": "Open the field menu",
@@ -2777,6 +2780,22 @@
         },
         "departure": {
             "title": "Moves again · Page {page}, count {count}"
+        },
+        "touchTransport": {
+            "playMenu": "Ways to play",
+            "goTo": "Go to",
+            "start": "Start",
+            "countBack": "Count back",
+            "countOn": "Count on",
+            "end": "End",
+            "playback": "Playback",
+            "speed": "Speed",
+            "sound": "Sound",
+            "view": "View",
+            "fit": "Fit",
+            "atPlayhead": "At the playhead",
+            "newPage": "New page",
+            "newSubset": "New subset"
         }
     },
     "titlebar": {
