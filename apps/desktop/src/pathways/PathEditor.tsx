@@ -38,6 +38,8 @@ import {
 import type { XY } from "@/shapes/types";
 import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
 import { refitNeeded } from "./pathTarget";
+import { OffCountWarning, TrailCornerCounts } from "./TrailCornerCounts";
+import { offCountTally, trailCornersOf } from "./trailCorners";
 import {
     EVEN_FIRST,
     EVEN_STEP,
@@ -322,6 +324,7 @@ export function PathEditor({
         return session.target.trail && (!hidden || session.object) ? (
             <RichTips>
                 <TrailLeaderMark session={session} />
+                <TrailCornerCounts session={session} />
             </RichTips>
         ) : null;
     return (
@@ -332,6 +335,7 @@ export function PathEditor({
                     <TrailLeaderMark session={session} />
                 </RichTips>
             )}
+            {session.target.trail && <TrailCornerCounts session={session} />}
             <RichTips>
                 <PathEditorBar
                     session={session}
@@ -508,6 +512,8 @@ function PathEditorBar({
         fieldHeight: size.fh,
     });
     const big = bigSteps(session, fieldProperties);
+    // Step 6 (TC-7): a trail's turns that fall between counts
+    const offCount = offCountTally(trailCornersOf(session));
     const drawing = session.phase === "drawing";
     const stored = session.target.routeId !== null;
     // The open path's selected point: Corner | Smooth for it, as its menu has (step 2)
@@ -610,7 +616,8 @@ function PathEditorBar({
                     </span>
                 </Tip>
             )}
-            {big && controls && <Divider />}
+            {offCount.turns > 0 && <OffCountWarning tally={offCount} />}
+            {(big || offCount.turns > 0) && controls && <Divider />}
             {drawing ? (
                 <>
                     {kindChoice && (
