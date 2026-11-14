@@ -3,6 +3,7 @@ import {
     attachTimelineGestures,
     fingerDragSlop,
     findTouchHit,
+    isTouchContextMenu,
     TimelineGestures,
     timelineNavigation,
     timelineTouchRegion,
@@ -775,6 +776,208 @@ describe("touch hit areas (tablet 3.3)", () => {
         );
         expect(downs).toEqual(["bare mouse"]);
         expect(clicks).toEqual(["bare"]);
+        detach();
+    });
+});
+
+describe("long press (tablet 3.4)", () => {
+    /** An adapter with a long press: `opens` says whether a menu takes it */
+    function setupLongPress(region: TimelineTouchRegion, opens: boolean) {
+        let due: { at: number; tick: () => void } | null = null;
+        const env = {
+            region: () => region,
+            local: (x: number, y: number) => ({ x, y }),
+            view: () => ({ scrollLeft: 0, scrollTop: 0, pixelsPerBeat: 10 }),
+            navigate: vi.fn(),
+            leadingInset: () => 0,
+            tap: vi.fn(),
+            cancelPress: vi.fn(),
+            longPress: vi.fn(() => opens),
+            schedule: (at: number, tick: () => void) => {
+                due = { at, tick };
+                return () => {
+                    due = null;
+                };
+            },
+        } satisfies TimelineGestureEnv;
+        const gestures = new TimelineGestures(env);
+        const send = (type: string, x: number, t: number) =>
+            gestures.handle({
+                type,
+                pointerId: 1,
+                pointerType: "touch",
+                clientX: x,
+                clientY: 20,
+                timeStamp: t,
+                target: null,
+            });
+        /** The hold timer comes due, if one is set */
+        const hold = () => {
+            const pending = due as { at: number; tick: () => void } | null;
+            due = null;
+            pending?.tick();
+            return pending !== null;
+        };
+        return { env, send, hold, due: () => due };
+    }
+
+    it("opens the right-click menu when a finger is held still and lifted, jitter and all", () => {
+        const { env, send, hold, due } = setupLongPress("control", true);
+        expect(send("pointerdown", 200, 0)).toBe(false);
+        expect(due()?.at).toBe(500);
+        // A finger's jitter, inside the long press slop, goes on to the control
+        expect(send("pointermove", 205, 100)).toBe(false);
+        expect(send("pointermove", 197, 300)).toBe(false);
+        expect(hold()).toBe(true);
+        expect(env.longPress).not.toHaveBeenCalled();
+        // Lifted: the menu, the release kept from the control, and the press cancelled
+        expect(send("pointerup", 198, 700)).toBe(true);
+        expect(env.longPress).toHaveBeenCalledTimes(1);
+        expect(env.longPress.mock.calls[0]).toEqual([
+            expect.objectContaining({ pointerId: 1, clientX: 200 }),
+            { x: 198, y: 20 },
+        ]);
+        expect(env.cancelPress).toHaveBeenCalledTimes(1);
+        expect(env.cancelPress.mock.calls[0][0]).toMatchObject({
+            type: "pointerdown",
+            clientX: 200,
+        });
+        expect(env.tap).not.toHaveBeenCalled();
+    });
+
+    it("is no long press when the finger moves past the slop, or lifts before the hold", () => {
+        const moved = setupLongPress("control", true);
+        moved.send("pointerdown", 200, 0);
+        moved.send("pointermove", 212, 100);
+        // The timer is dropped once the finger moves on
+        expect(moved.due()).toBeNull();
+        expect(moved.send("pointerup", 212, 700)).toBe(false);
+        expect(moved.env.longPress).not.toHaveBeenCalled();
+
+        const quick = setupLongPress("control", true);
+        quick.send("pointerdown", 200, 0);
+        expect(quick.send("pointerup", 200, 300)).toBe(false);
+        expect(quick.env.longPress).not.toHaveBeenCalled();
+        expect(quick.env.cancelPress).not.toHaveBeenCalled();
+    });
+
+    it("lets a hesitant finger drag on after the hold", () => {
+        const { env, send, hold } = setupLongPress("control", true);
+        send("pointerdown", 200, 0);
+        hold();
+        expect(send("pointermove", 240, 800)).toBe(false);
+        expect(send("pointerup", 260, 900)).toBe(false);
+        expect(env.longPress).not.toHaveBeenCalled();
+        expect(env.cancelPress).not.toHaveBeenCalled();
+    });
+
+    it("with no menu there, gives a control its slow tap and seeks on bare track space", () => {
+        const control = setupLongPress("control", false);
+        control.send("pointerdown", 200, 0);
+        control.hold();
+        expect(control.send("pointerup", 200, 700)).toBe(false);
+        expect(control.env.longPress).toHaveBeenCalledTimes(1);
+        expect(control.env.cancelPress).not.toHaveBeenCalled();
+
+        const bare = setupLongPress("body", false);
+        bare.send("pointerdown", 200, 0);
+        bare.hold();
+        expect(bare.send("pointerup", 203, 700)).toBe(true);
+        expect(bare.env.tap).toHaveBeenCalledWith(203);
+    });
+
+    it("opens a menu on bare track space without a seek, and cancels nothing there", () => {
+        const { env, send, hold } = setupLongPress("body", true);
+        send("pointerdown", 200, 0);
+        hold();
+        expect(send("pointerup", 200, 700)).toBe(true);
+        expect(env.longPress).toHaveBeenCalledTimes(1);
+        expect(env.tap).not.toHaveBeenCalled();
+        expect(env.cancelPress).not.toHaveBeenCalled();
+    });
+
+    it("has no long press without the seam, as before", () => {
+        const { gestures, send, env } = setup(() => "body");
+        send("pointerdown", 1, 200, 150);
+        gestures.tick(10_000);
+        send("pointerup", 1, 200, 150);
+        expect(env.tap).toHaveBeenCalledWith(200);
+    });
+});
+
+describe("attachTimelineGestures long press (tablet 3.4)", () => {
+    afterEach(() => {
+        vi.useRealTimers();
+        document.body.replaceChildren();
+    });
+
+    /** A finger event stamped on the page's clock, as a browser's is */
+    const stamped = (type: string, clientX: number, pointerType = "touch") => {
+        const event = fingerEvent(type, 1, clientX, 100, pointerType);
+        Object.defineProperty(event, "timeStamp", {
+            value: performance.now(),
+        });
+        Object.defineProperty(event, "cancelable", { value: true });
+        return event;
+    };
+
+    function mount(withMenu: boolean) {
+        vi.useFakeTimers();
+        const viewport = document.createElement("div");
+        const control = document.createElement("button");
+        control.setAttribute("data-timeline-interactive", "true");
+        viewport.append(control);
+        document.body.append(viewport);
+        const seen: string[] = [];
+        control.addEventListener("contextmenu", (event) => {
+            seen.push(
+                `menu ${isTouchContextMenu(event) ? "touch" : "native"} ${event.clientX}`,
+            );
+            if (withMenu) event.preventDefault();
+        });
+        for (const type of ["pointerup", "pointercancel", "click"])
+            control.addEventListener(type, () => seen.push(type));
+        const detach = attachTimelineGestures(viewport, {
+            region: () => "control",
+            view: () => ({ scrollLeft: 0, scrollTop: 0, pixelsPerBeat: 10 }),
+            navigate: () => {},
+            leadingInset: () => 0,
+        });
+        return { control, seen, detach };
+    }
+
+    it("sends the press a finger's contextmenu on release, cancels it and drops its click", () => {
+        const { control, seen, detach } = mount(true);
+        control.dispatchEvent(stamped("pointerdown", 50));
+        // The browser's own long-press menu, while the finger is still down, goes nowhere
+        const native = new MouseEvent("contextmenu", {
+            bubbles: true,
+            cancelable: true,
+        });
+        control.dispatchEvent(native);
+        expect(native.defaultPrevented).toBe(true);
+        control.dispatchEvent(stamped("pointermove", 54));
+        vi.advanceTimersByTime(600);
+        control.dispatchEvent(stamped("pointerup", 54));
+        control.dispatchEvent(
+            new MouseEvent("click", { bubbles: true, cancelable: true }),
+        );
+        expect(seen).toEqual(["menu touch 54", "pointercancel"]);
+        detach();
+    });
+
+    it("leaves a slow tap alone where no menu takes it, and a mouse's press always", () => {
+        const { control, seen, detach } = mount(false);
+        control.dispatchEvent(stamped("pointerdown", 50));
+        vi.advanceTimersByTime(600);
+        control.dispatchEvent(stamped("pointerup", 50));
+        control.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        expect(seen).toEqual(["menu touch 50", "pointerup", "click"]);
+        seen.length = 0;
+        control.dispatchEvent(stamped("pointerdown", 50, "mouse"));
+        vi.advanceTimersByTime(600);
+        control.dispatchEvent(stamped("pointerup", 50, "mouse"));
+        expect(seen).toEqual(["pointerup"]);
         detach();
     });
 });

@@ -78,6 +78,7 @@ import {
     TimelineMenuClose,
     TimelineMoveMenuItems,
     timelineRangeTargetProps,
+    type TimelineMenuTarget,
     type TimelineMoveCommands,
     type TimelineMoveMenuActions,
 } from "./TimelineRangeMenu";
@@ -863,12 +864,18 @@ export const TimelineRuler = memo(function TimelineRuler({
     flagSnapPlayhead,
     scrubRestoreBeat,
     lineBeats,
+    onOpenPageMenu,
 }: {
     /**
      * Where the start flag and the playhead are drawn (view beats): a grip under one of them has
      * no finger hit area, since the line wins there (UI-21)
      */
     lineBeats?: readonly number[];
+    /**
+     * Opens a page box's menu as a finger does (tablet 3.4), at a client point: the selected box's
+     * "…" chip, in the touch layout. Without it, no chip.
+     */
+    onOpenPageMenu?: (target: TimelineMenuTarget, x: number, y: number) => void;
     pages: readonly TimelinePageMarker[];
     measures: readonly TimelineMeasureMarker[];
     beatCount: number;
@@ -1048,6 +1055,7 @@ export const TimelineRuler = memo(function TimelineRuler({
                 initialPageWidth={initialPageWidth}
                 scrub={scrub}
                 onSelectPage={selectPage}
+                onOpenPageMenu={onOpenPageMenu}
             />
             {pageFlagMove && (
                 <TimelinePageFlagGrips
@@ -1116,6 +1124,7 @@ const TimelineRulerBoxes = memo(function TimelineRulerBoxes({
     initialPageWidth,
     scrub,
     onSelectPage,
+    onOpenPageMenu,
 }: {
     initialPage: TimelinePageMarker | undefined;
     pageBoxes: readonly {
@@ -1130,62 +1139,85 @@ const TimelineRulerBoxes = memo(function TimelineRulerBoxes({
     initialPageWidth: number;
     scrub: RulerScrub;
     onSelectPage: (page: TimelinePageMarker, extend?: boolean) => void;
+    /** Tablet 3.4: the selected page box's "…" chip opens its menu; without it, no chip */
+    onOpenPageMenu?: (target: TimelineMenuTarget, x: number, y: number) => void;
 }) {
     const { t } = useTranslate();
     const selectedIds = new Set(selectedBoxIds.split("\n"));
+    const openPageMenu = onOpenPageMenu ?? null;
     return (
-        <div
-            data-testid="timeline-page-ruler"
-            // Clipped without being a scroll container, so labels can stick to the viewport
-            className="border-stroke bg-fg-2 rounded-6 absolute overflow-clip border font-mono"
-            style={{
-                top: TIMELINE_PAGE_ROW_TOP,
-                height: TIMELINE_PAGE_ROW_HEIGHT,
-                left: -initialPageWidth,
-                width: beatCount * pixelsPerBeat + initialPageWidth,
-            }}
-        >
-            {initialPage && (
-                <button
-                    type="button"
-                    data-timeline-interactive="true"
-                    data-touch-yield=""
-                    data-testid="timeline-initial-page"
-                    aria-label={t("timeline.page.label", {
-                        pageName: initialPage.label,
-                    })}
-                    title={t("timeline.page.homeTooltip", {
-                        page: initialPage.label,
-                    })}
-                    aria-pressed={homeSelected}
-                    {...scrub.handlers}
-                    onClick={(event) => {
-                        if (!scrub.consumeClick(event))
-                            onSelectPage(initialPage);
-                    }}
-                    // eslint-disable-next-line no-restricted-syntax -- the inner corner of the rounded-6 page row inside its 1 px border
-                    className="border-stroke text-text focus-visible:ring-accent text-sub absolute top-0 left-0 flex h-full items-center justify-center rounded-l-[5px] border-r outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset aria-pressed:z-10 aria-pressed:ring-1 aria-pressed:ring-[var(--color-accent)] aria-pressed:ring-inset"
-                    style={{ width: initialPageWidth }}
-                >
-                    {/* UI-13: a house, so home's "0" isn't read as a count or a measure */}
-                    {HOUSE_ICON}
-                </button>
-            )}
-            {pageBoxes.map(({ page, range }) =>
-                range ? (
-                    <TimelinePageBox
-                        key={page.id}
-                        page={page}
-                        range={range}
-                        selected={selectedIds.has(String(page.id))}
-                        pixelsPerBeat={pixelsPerBeat}
-                        initialPageWidth={initialPageWidth}
-                        scrub={scrub}
-                        onSelectPage={onSelectPage}
-                    />
-                ) : null,
-            )}
-        </div>
+        <>
+            <div
+                data-testid="timeline-page-ruler"
+                // Clipped without being a scroll container, so labels can stick to the viewport
+                className="border-stroke bg-fg-2 rounded-6 absolute overflow-clip border font-mono"
+                style={{
+                    top: TIMELINE_PAGE_ROW_TOP,
+                    height: TIMELINE_PAGE_ROW_HEIGHT,
+                    left: -initialPageWidth,
+                    width: beatCount * pixelsPerBeat + initialPageWidth,
+                }}
+            >
+                {initialPage && (
+                    <button
+                        type="button"
+                        data-timeline-interactive="true"
+                        data-touch-yield=""
+                        data-testid="timeline-initial-page"
+                        aria-label={t("timeline.page.label", {
+                            pageName: initialPage.label,
+                        })}
+                        title={t("timeline.page.homeTooltip", {
+                            page: initialPage.label,
+                        })}
+                        aria-pressed={homeSelected}
+                        {...scrub.handlers}
+                        onClick={(event) => {
+                            if (!scrub.consumeClick(event))
+                                onSelectPage(initialPage);
+                        }}
+                        // eslint-disable-next-line no-restricted-syntax -- the inner corner of the rounded-6 page row inside its 1 px border
+                        className="border-stroke text-text focus-visible:ring-accent text-sub absolute top-0 left-0 flex h-full items-center justify-center rounded-l-[5px] border-r outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset aria-pressed:z-10 aria-pressed:ring-1 aria-pressed:ring-[var(--color-accent)] aria-pressed:ring-inset"
+                        style={{ width: initialPageWidth }}
+                    >
+                        {/* UI-13: a house, so home's "0" isn't read as a count or a measure */}
+                        {HOUSE_ICON}
+                    </button>
+                )}
+                {pageBoxes.map(({ page, range }) =>
+                    range ? (
+                        <TimelinePageBox
+                            key={page.id}
+                            page={page}
+                            range={range}
+                            selected={selectedIds.has(String(page.id))}
+                            hasMenuChip={
+                                openPageMenu !== null &&
+                                selectedIds.has(String(page.id))
+                            }
+                            pixelsPerBeat={pixelsPerBeat}
+                            initialPageWidth={initialPageWidth}
+                            scrub={scrub}
+                            onSelectPage={onSelectPage}
+                        />
+                    ) : null,
+                )}
+            </div>
+            {/* Outside the row's clip, so their finger areas take the row's full height, border too */}
+            {openPageMenu &&
+                pageBoxes.map(({ page, range }) =>
+                    range && selectedIds.has(String(page.id)) ? (
+                        <TimelinePageMenuChip
+                            key={`menu-${page.id}`}
+                            page={page}
+                            range={range}
+                            pixelsPerBeat={pixelsPerBeat}
+                            initialPageWidth={initialPageWidth}
+                            onOpen={openPageMenu}
+                        />
+                    ) : null,
+                )}
+        </>
     );
 });
 
@@ -1194,6 +1226,7 @@ const TimelinePageBox = memo(function TimelinePageBox({
     page,
     range,
     selected,
+    hasMenuChip,
     pixelsPerBeat,
     initialPageWidth,
     scrub,
@@ -1202,6 +1235,8 @@ const TimelinePageBox = memo(function TimelinePageBox({
     page: TimelinePageMarker;
     range: TimelineBeatRange;
     selected: boolean;
+    /** The box has the "…" chip in the touch layout (tablet 3.4): its label keeps clear of it */
+    hasMenuChip: boolean;
     pixelsPerBeat: number;
     initialPageWidth: number;
     scrub: RulerScrub;
@@ -1220,6 +1255,8 @@ const TimelinePageBox = memo(function TimelinePageBox({
             // A finger near a flag, grip or keyframe over the box takes that target (3.3)
             data-touch-yield=""
             {...timelineRangeTargetProps(range, undefined, page.id)}
+            // A finger's long press opens the box's menu (tablet 3.4), not the button's hint
+            data-own-long-press=""
             aria-label={t("timeline.page.label", { pageName: page.label })}
             aria-pressed={selected}
             {...scrub.handlers}
@@ -1228,13 +1265,102 @@ const TimelinePageBox = memo(function TimelinePageBox({
                 // macOS ctrl+click opens the context menu (UI-9: no selection change)
                 if (!event.ctrlKey) onSelectPage(page, event.shiftKey);
             }}
-            className="border-stroke text-text focus-visible:ring-accent text-sub absolute top-0 flex h-full items-center justify-end border-r px-8 outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset aria-pressed:z-10 aria-pressed:ring-1 aria-pressed:ring-[var(--color-accent)] aria-pressed:ring-inset"
+            className={clsx(
+                "border-stroke text-text focus-visible:ring-accent text-sub absolute top-0 flex h-full items-center justify-end border-r px-8 outline-hidden focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset aria-pressed:z-10 aria-pressed:ring-1 aria-pressed:ring-[var(--color-accent)] aria-pressed:ring-inset",
+                hasMenuChip && "touch:pr-48",
+            )}
             style={{
                 left: boxLeft,
                 width: boxWidth,
             }}
         >
             <PageBoxLabel label={page.label} shown={labelShown} />
+        </button>
+    );
+});
+
+/** The page box chip's drawn size, as the clip's ⋯ (UI-14) */
+const PAGE_MENU_CHIP_WIDTH = 18;
+const PAGE_MENU_CHIP_HEIGHT = 16;
+/** How far in from the box's end the chip sits: clear of the end flag's grip bar */
+const PAGE_MENU_CHIP_INSET = 22;
+
+/**
+ * The selected page box's "…" chip (tablet plan 3.4), shown only in the touch layout: a finger
+ * can't right-click, so it opens the box's full menu, the right-click's entries with **Edit move**
+ * first (a mouse double-clicks the box for that). Drawn as the clip's ⋯, with a hit area 44px wide
+ * and as tall as the page row, so it never takes a scrub on the measure numbers, that follows the
+ * press rules of tablet 3.3 (`findTouchHit`). It isn't marked as the selected object's: a finger
+ * nearer a keyframe, the playhead or the start flag than the chip takes that instead, so the
+ * chip never steals their near misses. A press right on the chip is the chip's. It sits inside
+ * the box's end, clear of the end flag's grip.
+ */
+const TimelinePageMenuChip = memo(function TimelinePageMenuChip({
+    page,
+    range,
+    pixelsPerBeat,
+    initialPageWidth,
+    onOpen,
+}: {
+    page: TimelinePageMarker;
+    range: TimelineBeatRange;
+    pixelsPerBeat: number;
+    initialPageWidth: number;
+    onOpen: (target: TimelineMenuTarget, x: number, y: number) => void;
+}) {
+    const { t } = useTranslate();
+    const boxLeft =
+        initialPageWidth + beatToX(range.startBeatIndex, pixelsPerBeat);
+    const boxRight =
+        initialPageWidth + beatToX(range.endBeatIndex, pixelsPerBeat);
+    // In the ruler's parent: the row's box starts `initialPageWidth` left of beat 0
+    const left =
+        Math.max(
+            boxLeft + 2,
+            boxRight - PAGE_MENU_CHIP_INSET - PAGE_MENU_CHIP_WIDTH,
+        ) - initialPageWidth;
+    // Centred in the page row, inside its 1px border
+    const inset = (TIMELINE_PAGE_ROW_HEIGHT - PAGE_MENU_CHIP_HEIGHT) / 2;
+    const open = (element: Element) => {
+        const rect = element.getBoundingClientRect();
+        onOpen({ range, pageId: String(page.id) }, rect.left, rect.bottom + 4);
+    };
+    return (
+        <button
+            type="button"
+            data-testid="timeline-page-menu-button"
+            data-timeline-interactive="true"
+            // Its long press opens the menu too, not the button's hint
+            data-own-long-press=""
+            aria-haspopup="menu"
+            aria-label={t("timeline.page.optionsLabel", {
+                pageName: page.label,
+            })}
+            // A press on it never scrubs
+            onPointerDown={(event) => event.stopPropagation()}
+            onDoubleClick={(event) => event.stopPropagation()}
+            onClick={(event) => open(event.currentTarget)}
+            // Its right-click (or a finger's long press on it) is the box's menu, too
+            onContextMenu={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                open(event.currentTarget);
+            }}
+            className="text-text bg-bg-1/70 hover:bg-fg-2 focus-visible:ring-accent rounded-4 touch:flex absolute z-20 hidden items-center justify-center outline-hidden focus-visible:ring-2"
+            style={{
+                left,
+                top: TIMELINE_PAGE_ROW_TOP + inset,
+                width: PAGE_MENU_CHIP_WIDTH,
+                height: PAGE_MENU_CHIP_HEIGHT,
+            }}
+        >
+            <DotsThreeIcon size={12} weight="bold" />
+            {/* 44px wide and the page row's height: below the row the measure numbers scrub, and
+                above it the headroom is the pennant's and the loop ends' (UI-20) */}
+            <TouchHitArea
+                className="touch:block pointer-events-auto absolute left-1/2 hidden w-full min-w-44 -translate-x-1/2"
+                style={{ top: -inset, height: TIMELINE_PAGE_ROW_HEIGHT }}
+            />
         </button>
     );
 });
@@ -1825,6 +1951,8 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                 type="button"
                 data-timeline-interactive="true"
                 data-testid="timeline-clip"
+                // A finger's long press opens the move's menu (tablet 3.4), not the button's hint
+                data-own-long-press={moveMenu ? "" : undefined}
                 data-move-id={track.linkId}
                 data-selected={selected}
                 // A finger on the clip moves it, even inside another target's hit area (3.3)
@@ -2176,6 +2304,8 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                                 type="button"
                                 data-testid="timeline-clip-menu-button"
                                 data-timeline-interactive="true"
+                                // Its menu, not the button's hint, on a finger's long press
+                                data-own-long-press=""
                                 data-timeline-own-keys="true"
                                 // Space stays Play (UI-14 round-2 review): it doesn't open the menu
                                 onKeyDown={spaceStaysPlay}
@@ -3076,6 +3206,8 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
                 type="button"
                 data-testid="timeline-playhead"
                 data-timeline-scrub="true"
+                // A finger's long press opens its menu (tablet 3.4), not the button's hint
+                data-own-long-press={onAddPage ? "" : undefined}
                 aria-label={t("timeline.playhead.label", {
                     position: getPlayheadReadout(model, positionBeat).spoken,
                 })}
@@ -3456,6 +3588,17 @@ export const useTimelinePointer = ({
                 const current = gesture.current;
                 if (!current) return;
                 if (current.mode === "scrub") {
+                    // A finger on the playhead drags it only once past a finger's slop, so one held
+                    // still with a little jitter (a long press for its menu, tablet 3.4) never
+                    // moves it
+                    if (
+                        current.touch &&
+                        current.onPlayhead &&
+                        !current.dragged &&
+                        Math.abs(event.clientX - current.startClientX) <
+                            timelineDragSlop("touch")
+                    )
+                        return;
                     seek(pointerBeat(event), event, "drag");
                     const surface = event.currentTarget;
                     const { clientX, altKey } = event;

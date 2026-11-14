@@ -1,5 +1,6 @@
 import { thresholdsFor } from "@/field/editor/pointerThresholds";
 import {
+    GESTURE_TIMING,
     initialGestureState,
     stepGesture,
     type GestureEffect,
@@ -22,6 +23,11 @@ import { pickTouchTarget, type TouchHitCandidate } from "./touchTargets";
  * - A finger on bare track space pans the timeline once it leaves the tap slop (sideways and,
  *   when the tracks overflow, up and down). A tap there seeks, as a click does.
  * - Two fingers pan and pinch anywhere ({@link timelineNavigation}).
+ * - A finger held still (within the gesture rules' long press slop, so a little jitter still
+ *   counts) and then lifted opens the menu a right-click opens there, as on the field (tablet
+ *   plan 3.4): the adapter sends a `contextmenu` to what the finger pressed. When a menu opened,
+ *   the press is cancelled (whatever it started goes back) and its click goes nowhere. With no
+ *   menu there, the press ends as a slow tap.
  * - A second finger cancels whatever the first one started: the first press gets a
  *   `pointercancel`, and every timeline drag puts its state back on one.
  *
@@ -166,6 +172,16 @@ export type TimelineGestureEnv = {
      * end that press as a cancelled one, so whatever it was dragging goes back.
      */
     cancelPress: (down: TimelineGestureEvent) => void;
+    /**
+     * A finger was held still and lifted at `point` (client pixels): open the menu a right-click
+     * on what `down` pressed opens. Returns whether one opened. Without it there's no long press.
+     */
+    longPress?: (
+        down: TimelineGestureEvent,
+        point: { x: number; y: number },
+    ) => boolean;
+    /** Calls `tick` at time `at` (the events' clock), for the long press; returns the cancel */
+    schedule?: (at: number, tick: () => void) => () => void;
 };
 
 const INPUT_TYPES: Record<string, "down" | "move" | "up" | "cancel"> = {
@@ -206,6 +222,13 @@ export class TimelineGestures {
         view: TimelineNavigationView;
         from: TimelineGeometry;
     } | null = null;
+    /** The long press timer's cancel */
+    private cancelTimer: (() => void) | null = null;
+    /**
+     * Set by a long press's release: whether that release is the adapter's alone (true: a menu
+     * opened, or the finger panned) or goes on to its control (false)
+     */
+    private releaseOwned: boolean | null = null;
 
     constructor(private readonly env: TimelineGestureEnv) {}
 
@@ -228,9 +251,12 @@ export class TimelineGestures {
         } as GestureInput;
         // Decided before the step, so a single finger's own release still goes on to its control
         const single = this.single;
+        this.releaseOwned = null;
         const result = stepGesture(this.state, input);
         this.state = result.state;
         for (const effect of result.effects) this.apply(effect, event);
+        this.scheduleTimer();
+        if (this.releaseOwned !== null) return this.releaseOwned;
         if (!result.passThrough) return true;
         // A single finger: its control's or the ruler's, unless it pans
         const own = this.single ?? single;
@@ -276,16 +302,37 @@ export class TimelineGestures {
         });
     }
 
+    /** The long press timer came due at `t`. */
+    tick(t: number): void {
+        const result = stepGesture(this.state, { type: "timer", t });
+        this.state = result.state;
+        for (const effect of result.effects) this.apply(effect);
+    }
+
     /** Stops: drops anything under way. */
     dispose(): void {
+        this.cancelTimer?.();
+        this.cancelTimer = null;
         this.single = null;
         this.navigation = null;
         this.state = initialGestureState();
     }
 
-    private apply(effect: GestureEffect, event: TimelineGestureEvent) {
+    private scheduleTimer() {
+        this.cancelTimer?.();
+        this.cancelTimer = null;
+        const at = this.state.longPressAt;
+        if (at === null || !this.env.longPress || !this.env.schedule) return;
+        this.cancelTimer = this.env.schedule(at, () => {
+            this.cancelTimer = null;
+            this.tick(at);
+        });
+    }
+
+    private apply(effect: GestureEffect, event?: TimelineGestureEvent) {
         switch (effect.type) {
             case "singleStart":
+                if (!event) break;
                 this.single = {
                     id: effect.id,
                     pans: this.env.region(event) === "body",
@@ -307,7 +354,7 @@ export class TimelineGestures {
                 this.single = null;
                 // A second finger (or the browser) took the press from its control: put back what
                 // it was dragging. A panning finger had nothing to put back.
-                if (single && !single.pans && event.type !== "pointercancel")
+                if (single && !single.pans && event?.type !== "pointercancel")
                     this.env.cancelPress(single.down);
                 break;
             }
@@ -334,12 +381,29 @@ export class TimelineGestures {
             case "navigationEnd":
                 this.navigation = null;
                 break;
-            // No long press (no timer is ever sent) and no multi-finger tap history on the
-            // timeline yet
+            case "longPressCommit": {
+                // Held still, then lifted without moving: the menu a right-click opens there.
+                // No `singleEnd` follows
+                const single = this.single;
+                this.single = null;
+                if (single?.id !== effect.id) break;
+                if (this.env.longPress?.(single.down, effect.point)) {
+                    // The menu takes the press: whatever it started goes back
+                    this.releaseOwned = true;
+                    if (!single.pans) this.env.cancelPress(single.down);
+                    break;
+                }
+                // No menu: a slow tap. A panning finger's tap is the adapter's; a control's
+                // release goes on to it
+                this.releaseOwned = single.pans;
+                if (single.pans) this.env.tap?.(effect.point.x);
+                break;
+            }
+            // Armed, the press carries on: a move after the hold is a drag or a pan as before.
+            // No multi-finger tap history on the timeline yet
             case "longPressArmed":
             case "longPressMoved":
             case "longPressCancelled":
-            case "longPressCommit":
             case "undo":
             case "redo":
                 break;
@@ -400,10 +464,23 @@ const RELEASE_TYPES = ["pointerup", "pointercancel"] as const;
 // eslint-disable-next-line max-lines-per-function
 export function attachTimelineGestures(
     viewport: HTMLElement,
-    env: Omit<TimelineGestureEnv, "cancelPress" | "local">,
+    env: Omit<
+        TimelineGestureEnv,
+        "cancelPress" | "local" | "longPress" | "schedule"
+    >,
 ): () => void {
     /** Set while the adapter sends its own cancel, which it mustn't step on */
     let cancelling = false;
+    /** A long press opened a menu: the click its release makes goes nowhere */
+    let menuClick: { timeStamp: number } | null = null;
+    /** The presses the adapter sent on to a hit area, which it mustn't send on again */
+    const redirected = new WeakSet<Event>();
+    /** The last finger press on a hit area's target (or sent on to it): its tap's click goes there */
+    let redirectedTap: {
+        target: Element;
+        owner: Element;
+        timeStamp: number;
+    } | null = null;
     /** The element holding each finger's pointer capture, inside the timeline */
     const captured = new Map<number, Element>();
     const gestures = new TimelineGestures({
@@ -436,15 +513,42 @@ export function attachTimelineGestures(
                     element.releasePointerCapture(down.pointerId);
             }
         },
+        longPress: (down, point) => {
+            // What the finger pressed (the target it was sent on to, near a hit area), as a
+            // right-click there would be
+            const pressed =
+                down.target instanceof Element && down.target.isConnected
+                    ? down.target
+                    : viewport.ownerDocument.elementFromPoint(point.x, point.y);
+            if (!pressed || !viewport.contains(pressed)) return false;
+            if (!openContextMenu(pressed, point.x, point.y)) return false;
+            redirectedTap = null;
+            menuClick = { timeStamp: performance.now() };
+            return true;
+        },
+        schedule: (at, tick) => {
+            let frame: number | null = null;
+            const timer = setTimeout(
+                () => {
+                    // Moves the browser has queued are handled at the start of the next frame:
+                    // count the hold only after them (as the field does)
+                    frame = requestAnimationFrame(() => {
+                        frame = null;
+                        tick();
+                    });
+                },
+                // Never longer than a hold, should an event's clock not be the page's
+                Math.min(
+                    Math.max(0, at - performance.now()),
+                    GESTURE_TIMING.longPressMs,
+                ),
+            );
+            return () => {
+                clearTimeout(timer);
+                if (frame !== null) cancelAnimationFrame(frame);
+            };
+        },
     });
-    /** The presses the adapter sent on to a hit area, which it mustn't send on again */
-    const redirected = new WeakSet<Event>();
-    /** The last finger press on a hit area's target (or sent on to it): its tap's click goes there */
-    let redirectedTap: {
-        target: Element;
-        owner: Element;
-        timeStamp: number;
-    } | null = null;
     const onPointer = (event: PointerEvent) => {
         if (cancelling) return;
         if (event.type === "pointerdown" && !redirected.has(event)) {
@@ -501,6 +605,7 @@ export function attachTimelineGestures(
     // Any new press anywhere ends the wait for a redirected tap's click
     const onWindowPress = (event: PointerEvent) => {
         if (!redirected.has(event)) redirectedTap = null;
+        menuClick = null;
     };
     // A finger's tap click doesn't always reach the target it pressed (Chrome sends it to the
     // page's body after a press on a keyframe's hit area, and a press sent on to a target landed
@@ -508,6 +613,18 @@ export function attachTimelineGestures(
     // diamond does. Heard window-wide: a menu the press opened (the ⋯ chip's) may now be under
     // the finger, and must not take the click
     const onClick = (event: MouseEvent) => {
+        // A long press's release opened a menu: its click mustn't select or seek, nor pick an
+        // entry of the menu now under the finger
+        if (menuClick) {
+            const late =
+                performance.now() - menuClick.timeStamp > REDIRECTED_CLICK_MS;
+            menuClick = null;
+            if (!late) {
+                event.stopPropagation();
+                event.preventDefault();
+                return;
+            }
+        }
         const tap = redirectedTap;
         if (!tap || redirected.has(event)) return;
         redirectedTap = null;
@@ -546,6 +663,13 @@ export function attachTimelineGestures(
             }
         }
     };
+    // The browser's own long-press menu event (Android, Chrome on Windows) comes while the finger
+    // is still down and ignores the jitter rules: only the adapter's, on release, opens a menu
+    const onNativeContextMenu = (event: MouseEvent) => {
+        if (touchContextMenus.has(event) || !gestures.active) return;
+        event.preventDefault();
+        event.stopPropagation();
+    };
     const onCapture = (event: PointerEvent) => {
         if (!timelineGesturesOwn(event) || !(event.target instanceof Element))
             return;
@@ -572,6 +696,9 @@ export function attachTimelineGestures(
         viewport.addEventListener(type, onPointer, { capture: true });
     window.addEventListener("click", onClick, { capture: true });
     window.addEventListener("pointerdown", onWindowPress, { capture: true });
+    viewport.addEventListener("contextmenu", onNativeContextMenu, {
+        capture: true,
+    });
     for (const type of CAPTURE_TYPES)
         viewport.addEventListener(type, onCapture, { capture: true });
     for (const type of RELEASE_TYPES)
@@ -590,6 +717,9 @@ export function attachTimelineGestures(
         window.removeEventListener("pointerdown", onWindowPress, {
             capture: true,
         });
+        viewport.removeEventListener("contextmenu", onNativeContextMenu, {
+            capture: true,
+        });
         for (const type of CAPTURE_TYPES)
             viewport.removeEventListener(type, onCapture, { capture: true });
         for (const type of RELEASE_TYPES)
@@ -606,6 +736,35 @@ export function attachTimelineGestures(
 
 /** How long after a press sent on to a hit area its tap's click may come */
 const REDIRECTED_CLICK_MS = 1000;
+
+/** The `contextmenu` events a finger's long press sent (tablet plan 3.4) */
+const touchContextMenus = new WeakSet<Event>();
+
+/**
+ * Whether a `contextmenu` event came from a finger's long press on the timeline, not a mouse's
+ * right-click: a menu opened by touch may offer what a mouse reaches another way (the page box
+ * menu's **Edit move**, a double-click for a mouse).
+ */
+export const isTouchContextMenu = (event: Event) =>
+    touchContextMenus.has(event);
+
+/**
+ * Sends `target` the `contextmenu` a right-click at (`x`, `y`) sends, marked as a finger's
+ * ({@link isTouchContextMenu}). Returns whether a menu took it (it prevented the default).
+ */
+export function openContextMenu(target: Element, x: number, y: number) {
+    const event = new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        clientX: x,
+        clientY: y,
+        button: 2,
+    });
+    touchContextMenus.add(event);
+    target.dispatchEvent(event);
+    return event.defaultPrevented;
+}
 
 /** Where a finger's press goes (`findTouchHit`): `target` gets it, `owner` is the control it's in */
 export type TouchPressTarget = { target: Element; owner: Element };

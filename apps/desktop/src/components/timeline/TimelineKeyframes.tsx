@@ -173,9 +173,16 @@ const KeyframeDiamond = memo(function KeyframeDiamond({
                 width: TARGET_SIZE,
                 height: TARGET_SIZE,
             }}
-            // A press here is the diamond's: the timeline under it mustn't scrub
-            onPointerDown={(event) => event.stopPropagation()}
+            // A press here is the diamond's: the timeline under it mustn't scrub. A finger's
+            // press is kept from the menu's own long press, which opens while the finger is
+            // still down: the timeline's long press opens it on release (tablet 3.4)
+            onPointerDown={(event) => {
+                event.stopPropagation();
+                if (event.pointerType === "touch") event.preventDefault();
+            }}
             onClick={() => onSeek?.(keyframe.beat)}
+            // With a menu, a finger's long press opens it (tablet 3.4), not the button's hint
+            data-own-long-press={menu ? "" : undefined}
             // With its own menu, the page menu on the surface must not open too
             onContextMenu={
                 menu ? (event) => event.stopPropagation() : undefined

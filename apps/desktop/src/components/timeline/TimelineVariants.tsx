@@ -1042,6 +1042,13 @@ const TimelineSurface = memo(function TimelineSurface({
                   return track ? (moveActions(track.id) ?? null) : null;
               }
             : undefined,
+        // Tablet 3.4: a finger's page box menu offers what a double-click on the box does
+        editMove: props.onOpenRange
+            ? {
+                  onEdit: props.onOpenRange,
+                  disabledReason: moveCommands?.disabledReason,
+              }
+            : undefined,
         resolveRange: (event: MouseEvent<HTMLElement>) => {
             const marked = markedRangeAt(event.target);
             if (marked) return marked;
@@ -1188,7 +1195,7 @@ const TimelineSurface = memo(function TimelineSurface({
                     "relative",
                     // The page row steps back while a band is edited (tempo mode)
                     bandFocus &&
-                        "[&_[data-testid=timeline-page-ruler]]:opacity-50",
+                        "[&_[data-testid=timeline-page-menu-button]]:opacity-50 [&_[data-testid=timeline-page-ruler]]:opacity-50",
                 )}
                 style={{ width: surfaceWidth, height: surfaceHeight }}
                 onContextMenu={rangeMenu.onContextMenu}
@@ -1341,6 +1348,12 @@ const TimelineSurface = memo(function TimelineSurface({
                         </div>
                         <TimelineRuler
                             pages={model.pages}
+                            // Tablet 3.4: the selected page box's "…" chip opens its menu
+                            onOpenPageMenu={
+                                props.pageMenu || props.onOpenRange
+                                    ? rangeMenu.openPageMenu
+                                    : undefined
+                            }
                             measures={model.measures}
                             beatCount={model.beatCount}
                             pixelsPerBeat={pixelsPerBeat}
