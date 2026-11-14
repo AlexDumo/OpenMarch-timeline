@@ -273,17 +273,12 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 ReturnType<typeof sectionCueCarry>,
             ][],
         );
-        return compileWindowCues(
-            marchers,
-            beats,
-            stepOffFoot,
-            {
-                sections: JSON.parse(cueSectionsKey) as CueSection[],
-                bandMoving: Array.from(bandMovingKey, Number),
-                holdWhileBandMoves,
-            },
-            (id) => carries.get(id) ?? "none",
-        );
+        return compileWindowCues(marchers, beats, stepOffFoot, {
+            sections: JSON.parse(cueSectionsKey) as CueSection[],
+            bandMoving: Array.from(bandMovingKey, Number),
+            holdWhileBandMoves,
+            carries: (id) => carries.get(id) ?? "none",
+        });
     }, [
         marchers,
         beats,
