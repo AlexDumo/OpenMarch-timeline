@@ -23,8 +23,13 @@ interface Candidate extends PillPosition {
     top: boolean;
 }
 
-/** Room left for the zoom buttons in the bottom-right corner */
-export const ZOOM_CONTROLS_CLEARANCE = 76;
+/**
+ * Room left for the zoom controls in the bottom-right corner: in the touch layout they stand
+ * 6 px off the bottom and about 99 px tall (a 44 px slider row over 48 px buttons,
+ * `CanvasZoomControls`), so the pill clears them with a small gap. The other spots are kept off
+ * the controls by `choosePillPosition`'s `controls`.
+ */
+export const ZOOM_CONTROLS_CLEARANCE = 112;
 export const PILL_EDGE = 12;
 
 const overlap = (a: Rect, b: Rect) => {
@@ -64,16 +69,20 @@ export function pillCandidates(
  *
  * @param field The field drawing, in container pixels (top-left origin)
  * @param marchers Marcher dots, in container pixels
+ * @param controls Controls over the field the pill must not cover (the zoom controls), in
+ *   container pixels (top-left origin). A spot over one loses to any spot that isn't.
  */
 // A spot at the top only wins when every bottom spot covers marchers: the pill
 // belongs within reach of the thumbs
 const TOP_PENALTY = 1e8;
+const CONTROL_PENALTY = 1e15;
 
 export function choosePillPosition(
     container: { width: number; height: number },
     pill: { width: number; height: number },
     field: Rect | null,
     marchers: { x: number; y: number }[],
+    controls: readonly Rect[] = [],
 ): PillPosition {
     const candidates = pillCandidates(container, pill);
     let best: PillPosition = candidates[0];
@@ -100,8 +109,12 @@ export function choosePillPosition(
                 m.y <= padded.top + padded.height,
         ).length;
         const fieldArea = field ? overlap(rect, field) : 0;
+        const overControl = controls.some((c) => overlap(rect, c) > 0);
         const score =
-            covered * 1e9 + (candidate.top ? TOP_PENALTY : 0) + fieldArea;
+            (overControl ? CONTROL_PENALTY : 0) +
+            covered * 1e9 +
+            (candidate.top ? TOP_PENALTY : 0) +
+            fieldArea;
         if (score < bestScore) {
             best = { left: candidate.left, bottom: candidate.bottom };
             bestScore = score;

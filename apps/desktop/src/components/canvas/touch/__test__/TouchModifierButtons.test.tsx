@@ -5,6 +5,7 @@ import {
     render,
     screen,
 } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TolgeeProvider } from "@tolgee/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import tolgee from "@/global/singletons/Tolgee";
@@ -17,6 +18,10 @@ import {
     useTouchModifierStore,
 } from "@/stores/TouchModifierStore";
 import "@/shapes/editor/__test__/pointerEvents";
+import { useAlignmentActionHandlers } from "@/shortcuts/handlers/useAlignmentActionHandlers";
+import { subscribeToActionRuns } from "@/shortcuts/registry";
+import type { ActionId } from "@/shortcuts/definitions";
+import { FIELD_DRAG_MODE_KEY, useFieldDragModeStore } from "../fieldDragMode";
 import TouchModifierButtons, {
     parseModifierPosition,
     TOUCH_MODIFIER_POSITION_KEY,
@@ -24,7 +29,7 @@ import TouchModifierButtons, {
 
 /**
  * The touch pill over the field: Fine, Equal and From center (held roles), Add (the old Shift)
- * and a magnet for the Snap toggle, each named by what it does, never by a key. Shown only in the
+ * and a magnet that runs the Toggle Snap action, each named by what it does, never by a key. Shown only in the
  * touch layout.
  */
 
@@ -72,6 +77,7 @@ afterEach(() => {
     useInputModeStore.getState().setPreference("auto");
     localStorage.removeItem(TOUCH_MODIFIER_POSITION_KEY);
     useUiSettingsStore.getState().setSnap(true);
+    useFieldDragModeStore.getState().setMode("auto");
 });
 
 describe("the pill", () => {
@@ -87,7 +93,14 @@ describe("the pill", () => {
         touchMode(true);
         renderPill();
         const pill = screen.getByTestId("touch-modifier-buttons");
-        for (const name of ["Fine", "Equal", "From center", "Add"])
+        for (const name of [
+            "Fine",
+            "Equal",
+            "From center",
+            "Add",
+            "Subtract",
+            "Drag:",
+        ])
             expect(pill.textContent).toContain(name);
         const labels = [...pill.querySelectorAll("[aria-label]")]
             .map((el) => el.getAttribute("aria-label"))
@@ -215,6 +228,7 @@ describe.each([
     ["constrain", "Equal", "Equal spacings"],
     ["fromCenter", "From center", "from their center"],
     ["add", "Add", "adds them to the selection"],
+    ["subtract", "Subtract", "out of the selection"],
 ] as const)("%s, for assistive tech", (toggle, name, hint) => {
     const pressed = () =>
         screen.getByRole("button", { name }).getAttribute("aria-pressed");
@@ -273,10 +287,32 @@ describe.each([
     });
 });
 
+/** The app's alignment handlers, Toggle Snap among them, as `ActionHandlers` mounts them */
+function AlignmentHandlers() {
+    useAlignmentActionHandlers();
+    return null;
+}
+
+/** The pill at a saved spot, with the Toggle Snap action's handler registered */
+function renderPlacedPillWithHandlers() {
+    localStorage.setItem(
+        TOUCH_MODIFIER_POSITION_KEY,
+        JSON.stringify({ left: 40, bottom: 60 }),
+    );
+    return render(
+        <QueryClientProvider client={new QueryClient()}>
+            <TolgeeProvider tolgee={tolgee} fallback="Loading...">
+                <AlignmentHandlers />
+                <TouchModifierButtons />
+            </TolgeeProvider>
+        </QueryClientProvider>,
+    );
+}
+
 describe("the magnet", () => {
     it("a tap turns the Snap toggle off, pressed, and another turns it back on", () => {
         touchMode(true);
-        renderPlacedPill();
+        renderPlacedPillWithHandlers();
         const magnet = screen.getByRole("button", { name: "Snap off" });
         expect(isSnapOn()).toBe(true);
         expect(magnet.getAttribute("aria-pressed")).toBe("false");
@@ -288,9 +324,31 @@ describe("the magnet", () => {
         expect(magnet.getAttribute("aria-pressed")).toBe("false");
     });
 
-    it("shows the Snap toggle turned off elsewhere (Shift+M)", () => {
+    it("runs the Toggle Snap action, as the toolbar's magnet and Shift+M do", () => {
+        touchMode(true);
+        renderPlacedPillWithHandlers();
+        const runs: ActionId[] = [];
+        const stop = subscribeToActionRuns((id) => runs.push(id));
+        try {
+            fireEvent.click(screen.getByRole("button", { name: "Snap off" }));
+        } finally {
+            stop();
+        }
+        expect(runs).toEqual(["toggleSnap"]);
+    });
+
+    it("is disabled while the action can't run, and a press then does nothing", () => {
         touchMode(true);
         renderPlacedPill();
+        const magnet = screen.getByRole("button", { name: "Snap off" });
+        expect(magnet).toHaveProperty("disabled", true);
+        fireEvent.click(magnet);
+        expect(isSnapOn()).toBe(true);
+    });
+
+    it("shows the Snap toggle turned off elsewhere (Shift+M)", () => {
+        touchMode(true);
+        renderPlacedPillWithHandlers();
         act(() => {
             useUiSettingsStore.getState().setSnap(false);
         });
@@ -349,5 +407,76 @@ describe("where it sits", () => {
         expect(parseModifierPosition('{"left":12}')).toBeNull();
         expect(parseModifierPosition('{"left":"12","bottom":30}')).toBeNull();
         expect(parseModifierPosition('{"left":null,"bottom":30}')).toBeNull();
+    });
+});
+
+describe("Subtract", () => {
+    it("a tap latches it, which the field reads as Alt's subtract, and lets go of Add", () => {
+        touchMode(true);
+        renderPill();
+        tap(button("add"));
+        tap(button("subtract"));
+        expect(button("subtract").getAttribute("aria-pressed")).toBe("true");
+        expect(button("add").getAttribute("aria-pressed")).toBe("false");
+        expect(isShiftHeld()).toBe(false);
+        expect(onScreenRoles().size).toBe(0);
+    });
+});
+
+describe("the drag mode menu (tablet 1.3)", () => {
+    it("says the mode on the button, Auto to start with", () => {
+        touchMode(true);
+        renderPlacedPill();
+        const mode = screen.getByTestId("field-drag-mode");
+        expect(mode.textContent).toContain("Auto");
+        expect(mode.getAttribute("aria-label")).toContain(
+            "One finger moves the view",
+        );
+        expect(mode.getAttribute("aria-expanded")).toBe("false");
+    });
+
+    it("opens a menu of the four modes, the current one checked", () => {
+        touchMode(true);
+        renderPlacedPill();
+        fireEvent.click(screen.getByTestId("field-drag-mode"));
+        const menu = screen.getByRole("menu", { name: "Drag on empty field" });
+        const entries = [
+            ...menu.querySelectorAll("[role='menuitemradio']"),
+        ] as HTMLElement[];
+        expect(entries.map((e) => e.textContent?.split(/One|\s/)[0])).toEqual([
+            "Auto",
+            "Box",
+            "Lasso",
+            "Pan",
+        ]);
+        expect(entries.map((e) => e.getAttribute("aria-checked"))).toEqual([
+            "true",
+            "false",
+            "false",
+            "false",
+        ]);
+        expect(menu.textContent).toContain("Two fingers move the view");
+    });
+
+    it("picking a mode keeps it on this device, shows it, and closes the menu", () => {
+        touchMode(true);
+        renderPlacedPill();
+        fireEvent.click(screen.getByTestId("field-drag-mode"));
+        fireEvent.click(screen.getByTestId("field-drag-mode-box"));
+        expect(useFieldDragModeStore.getState().mode).toBe("box");
+        expect(localStorage.getItem(FIELD_DRAG_MODE_KEY)).toBe("box");
+        expect(screen.queryByRole("menu")).toBeNull();
+        expect(screen.getByTestId("field-drag-mode").textContent).toContain(
+            "Box",
+        );
+    });
+
+    it("closes on a press elsewhere, which does nothing more, changing nothing", () => {
+        touchMode(true);
+        renderPlacedPill();
+        fireEvent.click(screen.getByTestId("field-drag-mode"));
+        fireEvent.pointerDown(document.body, { pointerId: 9 });
+        expect(screen.queryByRole("menu")).toBeNull();
+        expect(useFieldDragModeStore.getState().mode).toBe("auto");
     });
 });

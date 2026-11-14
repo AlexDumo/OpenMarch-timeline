@@ -4,16 +4,23 @@ import {
     useLayoutEffect,
     useRef,
     useState,
+    useSyncExternalStore,
 } from "react";
 import clsx from "clsx";
 import {
     ArrowsOutIcon,
+    CaretDownIcon,
     CrosshairSimpleIcon,
     DotsSixVerticalIcon,
     EqualsIcon,
+    HandIcon,
+    LassoIcon,
+    MagicWandIcon,
     MagnetIcon,
+    MinusCircleIcon,
     PlusCircleIcon,
     QuestionIcon,
+    SelectionIcon,
     type Icon,
 } from "@phosphor-icons/react";
 import { LongPressBubble, useLongPress } from "@openmarch/ui";
@@ -23,10 +30,21 @@ import { fieldToElement, useFieldViewStore } from "@/field/three/fieldView";
 import { useIsTouchMode } from "@/stores/InputModeStore";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
+    isActionEnabled,
+    runAction,
+    subscribeToActionHandlers,
+} from "@/shortcuts/registry";
+import {
     useTouchModifierStore,
     type TouchToggle,
 } from "@/stores/TouchModifierStore";
+import {
+    MENU_BUTTON_CLASS,
+    MENU_CONTENT_CLASS,
+    MENU_LABEL_CLASS,
+} from "@/components/ui/popupClasses";
 import { choosePillPosition, PILL_EDGE, type Rect } from "./pillPlacement";
+import { useFieldDragModeStore, type FieldDragMode } from "./fieldDragMode";
 import { swallowPress } from "./swallowPress";
 
 export const TOUCH_MODIFIER_POSITION_KEY = "openmarch:touchModifierPosition";
@@ -77,7 +95,7 @@ const writeStorage = (key: string, value: string) => {
     }
 };
 
-/** The pill's toggles, in order: the held roles, then Add. Named by role, never by key. */
+/** The pill's toggles, in order: the held roles, then Add and Subtract. Named by role, never by key. */
 const TOGGLES: readonly {
     toggle: TouchToggle;
     label: string;
@@ -109,6 +127,52 @@ const TOGGLES: readonly {
         hint: "touch.modifiers.addHint",
         Icon: PlusCircleIcon,
     },
+    {
+        toggle: "subtract",
+        label: "touch.modifiers.subtract",
+        hint: "touch.modifiers.subtractHint",
+        Icon: MinusCircleIcon,
+    },
+];
+
+/** Apple Pencil on Apple devices, a pen elsewhere: the `device` param of the drag mode texts */
+const PEN_DEVICE: "pencil" | "pen" =
+    typeof navigator !== "undefined" &&
+    /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent)
+        ? "pencil"
+        : "pen";
+
+/** The drag modes in the menu's order, with their name, what they do and icon */
+const DRAG_MODES: readonly {
+    mode: FieldDragMode;
+    label: string;
+    describe: string;
+    Icon: Icon;
+}[] = [
+    {
+        mode: "auto",
+        label: "touch.dragMode.auto",
+        describe: "touch.dragMode.autoDescribe",
+        Icon: MagicWandIcon,
+    },
+    {
+        mode: "box",
+        label: "touch.dragMode.box",
+        describe: "touch.dragMode.boxDescribe",
+        Icon: SelectionIcon,
+    },
+    {
+        mode: "lasso",
+        label: "touch.dragMode.lasso",
+        describe: "touch.dragMode.lassoDescribe",
+        Icon: LassoIcon,
+    },
+    {
+        mode: "pan",
+        label: "touch.dragMode.pan",
+        describe: "touch.dragMode.panDescribe",
+        Icon: HandIcon,
+    },
 ];
 
 const EXPLAIN = {
@@ -117,9 +181,14 @@ const EXPLAIN = {
     constrain: "touch.modifiers.explain.constrain",
     fromCenter: "touch.modifiers.explain.fromCenter",
     add: "touch.modifiers.explain.add",
+    subtract: "touch.modifiers.explain.subtract",
+    dragMode: "touch.modifiers.explain.dragMode",
     snap: "touch.modifiers.explain.snap",
     help: "touch.modifiers.explain.help",
-} as const satisfies Record<TouchToggle | "grip" | "snap" | "help", string>;
+} as const satisfies Record<
+    TouchToggle | "grip" | "dragMode" | "snap" | "help",
+    string
+>;
 type Explained = keyof typeof EXPLAIN;
 
 const HELP = [
@@ -127,6 +196,7 @@ const HELP = [
     "touch.modifiers.helpList.fine",
     "touch.modifiers.helpList.fromCenter",
     "touch.modifiers.helpList.add",
+    "touch.modifiers.helpList.dragMode",
 ] as const;
 
 /**
@@ -230,6 +300,22 @@ function useTogglePress(toggle: TouchToggle, onExplain: () => void) {
     };
 }
 
+/** The zoom controls' box in `parent`'s pixels, so the pill doesn't cover them */
+function zoomControlsIn(parent: HTMLElement): Rect[] {
+    const zoom = document.querySelector<HTMLElement>("[data-zoom-controls]");
+    if (!zoom) return [];
+    const at = parent.getBoundingClientRect();
+    const box = zoom.getBoundingClientRect();
+    return [
+        {
+            left: box.left - at.left,
+            top: box.top - at.top,
+            width: box.width,
+            height: box.height,
+        },
+    ];
+}
+
 /** The field drawing and the marchers, in the field element's pixels */
 function fieldLayout(marchers: FieldMarchers | null): {
     field: Rect | null;
@@ -257,18 +343,60 @@ function fieldLayout(marchers: FieldMarchers | null): {
     return { field, marchers: points };
 }
 
-/** One of the pill's segments: on is the accent on a light accent tint, as the shape editor's toggles */
-const segment = (on: boolean) =>
+/**
+ * One of the pill's segments: on is the accent on a light accent tint, as the shape editor's
+ * toggles. Compact (the pill doesn't fit its pane): the icon over a short caption.
+ */
+const segment = (on: boolean, compact = false) =>
     clsx(
-        "rounded-4 flex h-44 min-w-44 touch-none items-center justify-center gap-4 px-8 whitespace-nowrap select-none",
+        "rounded-4 flex h-44 min-w-44 touch-none items-center justify-center whitespace-nowrap select-none",
+        compact ? "text-sub flex-col gap-2 px-4 leading-none" : "gap-4 px-8",
         on ? "bg-accent/15 text-accent" : "hover:text-accent",
     );
+
+/**
+ * Whether the pill is too wide for the pane it floats in at full size (a 1024 px tablet with
+ * the Inspector open): then it shows its compact form. The full width is measured while the
+ * pill is full size, and again whenever the pane or what the pill says changes.
+ */
+function useCompactPill(
+    enabled: boolean,
+    pill: React.RefObject<HTMLElement | null>,
+    pane: () => HTMLElement | null,
+    content: unknown,
+) {
+    const [compact, setCompact] = useState(false);
+    const fullWidth = useRef(0);
+    useLayoutEffect(() => {
+        if (!enabled) return;
+        const measure = () => {
+            const el = pill.current;
+            const parent = pane();
+            if (!el || !parent) return;
+            if (!compact)
+                fullWidth.current = Math.max(el.offsetWidth, el.scrollWidth);
+            setCompact(parent.clientWidth - 2 * PILL_EDGE < fullWidth.current);
+        };
+        measure();
+        const parent = pane();
+        const observer =
+            parent && typeof ResizeObserver !== "undefined"
+                ? new ResizeObserver(measure)
+                : null;
+        if (parent) observer?.observe(parent);
+        return () => observer?.disconnect();
+    }, [enabled, compact, pill, pane, content]);
+    return compact;
+}
 
 /**
  * The floating pill over the field in the touch layout, where there is often no keyboard
  * (modifier roles, version A, "Touch and Apple Pencil"):
  * - Fine, Equal and From center: the held roles, as Shift, $mod and Alt are with a keyboard,
- * - Add: adds to the selection, as Shift at the press,
+ * - Add and Subtract: a press adds to the selection, as Shift does, or a box or lasso takes out
+ *   what it covers, as Alt does,
+ * - "Drag" and the mode: what one finger or the pen does on empty field (Auto, Box, Lasso, Pan;
+ *   `fieldDragMode.ts`), kept on this device,
  * - the magnet: the Snap toggle, pressed while snapping is off,
  * - "?" explains them. A long press on any of them explains it too.
  *
@@ -288,12 +416,18 @@ export default function TouchModifierButtons({
     const latched = useTouchModifierStore((s) => s.latched);
     const clear = useTouchModifierStore((s) => s.clear);
     const snapOff = useUiSettingsStore((s) => !s.uiSettings.snap);
-    const setSnap = useUiSettingsStore((s) => s.setSnap);
+    // The magnet runs the toolbar's Toggle Snap action: same handler, enabled state and run listeners
+    const snapRunnable = useSyncExternalStore(subscribeToActionHandlers, () =>
+        isActionEnabled("toggleSnap"),
+    );
     const [saved, setSaved] = useState<Position | null>(() =>
         parseModifierPosition(readStorage(TOUCH_MODIFIER_POSITION_KEY)),
     );
     const [auto, setAuto] = useState<Position | null>(null);
-    const [helpOpen, setHelpOpen] = useState(false);
+    const dragMode = useFieldDragModeStore((s) => s.mode);
+    const setDragMode = useFieldDragModeStore((s) => s.setMode);
+    /** The help list or the drag mode menu, whichever is open */
+    const [popup, setPopup] = useState<"help" | "dragMode" | null>(null);
     const [explained, setExplained] = useState<Explained | null>(null);
     const anchors = useRef<Partial<Record<Explained, HTMLElement | null>>>({});
     const rootRef = useRef<HTMLDivElement>(null);
@@ -311,7 +445,9 @@ export default function TouchModifierButtons({
             setExplained("fromCenter"),
         ),
         add: useTogglePress("add", () => setExplained("add")),
+        subtract: useTogglePress("subtract", () => setExplained("subtract")),
     } satisfies Record<TouchToggle, unknown>;
+    const dragModeLongPress = useLongPress(() => setExplained("dragMode"));
     const snapLongPress = useLongPress(() => setExplained("snap"));
     const helpLongPress = useLongPress(() => setExplained("help"));
     const gripLongPress = useLongPress(() => setExplained("grip"));
@@ -324,8 +460,11 @@ export default function TouchModifierButtons({
     }, [isTouchMode, clear]);
     useEffect(() => () => clear(), [clear]);
 
-    const container = () =>
-        (rootRef.current?.offsetParent as HTMLElement | null) ?? null;
+    const container = useCallback(
+        () => (rootRef.current?.offsetParent as HTMLElement | null) ?? null,
+        [],
+    );
+    const compact = useCompactPill(isTouchMode, pillRef, container, dragMode);
 
     const clamp = useCallback((p: Position): Position => {
         const pill = pillRef.current;
@@ -352,6 +491,7 @@ export default function TouchModifierButtons({
                 { width: pill.offsetWidth, height: pill.offsetHeight },
                 field,
                 dots,
+                zoomControlsIn(parent),
             ),
         );
     }, [marchers]);
@@ -377,22 +517,23 @@ export default function TouchModifierButtons({
             observer?.disconnect();
             offView();
         };
-    }, [isTouchMode, saved, placeAutomatically]);
+        // The compact form is narrower: a new spot for it
+    }, [isTouchMode, saved, placeAutomatically, compact, container]);
 
     // The help closes on a press anywhere else (which does nothing more), or
     // Escape. Registered as it appears, so no press slips through.
     useLayoutEffect(() => {
-        if (!helpOpen && !explained) return;
+        if (!popup && !explained) return;
         const onDown = (e: PointerEvent) => {
             if (rootRef.current?.contains(e.target as Node)) return;
             e.stopPropagation();
             e.preventDefault();
             swallowPress(e.pointerId);
-            setHelpOpen(false);
+            setPopup(null);
             setExplained(null);
         };
         const onKey = (e: KeyboardEvent) => {
-            if (e.key === "Escape") setHelpOpen(false);
+            if (e.key === "Escape") setPopup(null);
         };
         document.addEventListener("pointerdown", onDown, true);
         document.addEventListener("keydown", onKey);
@@ -400,7 +541,7 @@ export default function TouchModifierButtons({
             document.removeEventListener("pointerdown", onDown, true);
             document.removeEventListener("keydown", onKey);
         };
-    }, [helpOpen, explained]);
+    }, [popup, explained]);
 
     const onGripDown = (e: React.PointerEvent<HTMLDivElement>) => {
         gripLongPress.onPointerDown(e);
@@ -444,8 +585,8 @@ export default function TouchModifierButtons({
 
     if (!isTouchMode) return null;
 
-    // The help opens toward the middle of the field, on the side with room,
-    // and scrolls rather than run off the field
+    // The help and the menu open toward the middle of the field, on the side
+    // with room, and scroll rather than run off the field
     const parent = container();
     const pillWidth = pillRef.current?.offsetWidth ?? 0;
     const pillHeight = pillRef.current?.offsetHeight ?? 48;
@@ -462,6 +603,17 @@ export default function TouchModifierButtons({
     const setAnchor = (key: Explained) => (el: HTMLElement | null) => {
         anchors.current[key] = el;
     };
+    const popupStyle = {
+        maxHeight: Math.max(120, openBelow ? roomBelow : roomAbove),
+    };
+    const popupSide = clsx(
+        "absolute overflow-y-auto",
+        onRight ? "right-0" : "left-0",
+        openBelow ? "top-[calc(100%+8px)]" : "bottom-[calc(100%+8px)]",
+    );
+    const current =
+        DRAG_MODES.find((option) => option.mode === dragMode) ?? DRAG_MODES[0];
+    const describe = (key: string) => t(key, { device: PEN_DEVICE });
 
     return (
         <div
@@ -480,23 +632,15 @@ export default function TouchModifierButtons({
             onPointerDown={(e) => e.stopPropagation()}
             data-testid="touch-modifier-buttons"
         >
-            {helpOpen && (
+            {popup === "help" && (
                 <div
                     role="note"
-                    style={{
-                        maxHeight: Math.max(
-                            120,
-                            openBelow ? roomBelow : roomAbove,
-                        ),
-                    }}
+                    style={popupStyle}
                     className={clsx(
-                        "rounded-6 border-stroke bg-bg-1 bg-modal shadow-modal absolute w-[240px] max-w-[calc(100vw-24px)] overflow-y-auto border p-12 leading-snug",
-                        onRight ? "right-0" : "left-0",
-                        openBelow
-                            ? "top-[calc(100%+8px)]"
-                            : "bottom-[calc(100%+8px)]",
+                        popupSide,
+                        "rounded-6 border-stroke bg-bg-1 bg-modal shadow-modal w-[240px] max-w-[calc(100vw-24px)] border p-12 leading-snug",
                     )}
-                    onClick={() => setHelpOpen(false)}
+                    onClick={() => setPopup(null)}
                 >
                     <ul className="flex flex-col gap-4">
                         {HELP.map((key) => (
@@ -507,10 +651,54 @@ export default function TouchModifierButtons({
                     </ul>
                 </div>
             )}
+            {popup === "dragMode" && (
+                <div
+                    role="menu"
+                    aria-label={t("touch.dragMode.menu")}
+                    style={popupStyle}
+                    className={clsx(
+                        popupSide,
+                        MENU_CONTENT_CLASS,
+                        "w-280 max-w-[calc(100vw-24px)]",
+                    )}
+                    data-testid="field-drag-mode-menu"
+                >
+                    <div className={MENU_LABEL_CLASS}>
+                        {t("touch.dragMode.menu")}
+                    </div>
+                    {DRAG_MODES.map(({ mode, label, describe: text, Icon }) => (
+                        <button
+                            key={mode}
+                            type="button"
+                            role="menuitemradio"
+                            aria-checked={mode === dragMode}
+                            className={clsx(
+                                MENU_BUTTON_CLASS,
+                                "touch:min-h-44",
+                                mode === dragMode && "bg-accent/15",
+                            )}
+                            data-testid={`field-drag-mode-${mode}`}
+                            onClick={() => {
+                                setDragMode(mode);
+                                setPopup(null);
+                            }}
+                        >
+                            <Icon size={18} className="shrink-0" />
+                            <span className="flex flex-col">
+                                <span className="font-medium">{t(label)}</span>
+                                <span className="text-sub text-text-subtitle">
+                                    {describe(text)}
+                                </span>
+                            </span>
+                        </button>
+                    ))}
+                </div>
+            )}
             <div
                 ref={pillRef}
                 // These explain themselves on a long press (not the app-wide guard)
                 data-own-long-press
+                data-compact={compact || undefined}
                 className="rounded-6 border-stroke bg-bg-1 bg-modal shadow-modal flex items-center gap-2 border p-2"
             >
                 <div
@@ -528,6 +716,36 @@ export default function TouchModifierButtons({
                 >
                     <DotsSixVerticalIcon size={20} />
                 </div>
+                <button
+                    ref={setAnchor("dragMode")}
+                    type="button"
+                    aria-haspopup="menu"
+                    aria-expanded={popup === "dragMode"}
+                    aria-label={t("touch.dragMode.button", {
+                        label: t(current.label),
+                        describe: describe(current.describe),
+                    })}
+                    className={segment(popup === "dragMode", compact)}
+                    data-testid="field-drag-mode"
+                    {...dragModeLongPress}
+                    onClick={() =>
+                        setPopup((open) =>
+                            open === "dragMode" ? null : "dragMode",
+                        )
+                    }
+                >
+                    {!compact && (
+                        <span className="text-text-subtitle">
+                            {t("touch.dragMode.prefix")}
+                        </span>
+                    )}
+                    <current.Icon size={16} />
+                    <span className="flex items-center gap-2">
+                        {t(current.label)}
+                        <CaretDownIcon size={compact ? 10 : 12} />
+                    </span>
+                </button>
+                <span className="bg-stroke h-24 w-px" aria-hidden />
                 {TOGGLES.map(({ toggle, label, hint, Icon }) => {
                     const isOn = held[toggle] || latched[toggle];
                     return (
@@ -539,7 +757,7 @@ export default function TouchModifierButtons({
                             aria-label={t(label)}
                             title={t(hint)}
                             aria-pressed={isOn}
-                            className={segment(isOn)}
+                            className={segment(isOn, compact)}
                             data-testid={`touch-toggle-${toggle}`}
                             {...presses[toggle]}
                         >
@@ -558,10 +776,14 @@ export default function TouchModifierButtons({
                     aria-label={t("touch.modifiers.noSnap")}
                     title={t(EXPLAIN.snap)}
                     aria-pressed={snapOff}
-                    className={segment(snapOff)}
+                    disabled={!snapRunnable}
+                    className={clsx(
+                        segment(snapOff, compact),
+                        "disabled:pointer-events-none disabled:opacity-50",
+                    )}
                     data-testid="touch-snap"
                     {...snapLongPress}
-                    onClick={() => setSnap()}
+                    onClick={() => runAction("toggleSnap")}
                 >
                     <MagnetIcon
                         size={16}
@@ -573,10 +795,12 @@ export default function TouchModifierButtons({
                     ref={setAnchor("help")}
                     type="button"
                     aria-label={t("touch.modifiers.help")}
-                    aria-expanded={helpOpen}
+                    aria-expanded={popup === "help"}
                     className="rounded-4 text-text/60 hover:text-accent flex h-44 w-44 items-center justify-center"
                     {...helpLongPress}
-                    onClick={() => setHelpOpen((open) => !open)}
+                    onClick={() =>
+                        setPopup((open) => (open === "help" ? null : "help"))
+                    }
                 >
                     <QuestionIcon size={20} />
                 </button>
