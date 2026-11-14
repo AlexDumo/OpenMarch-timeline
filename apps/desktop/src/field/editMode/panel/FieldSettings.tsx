@@ -103,7 +103,10 @@ function SizeSection({ fp }: { fp: FieldProperties }) {
     // Width and depth follow the outer lines; they're read here, not typed (changing them is
     // a later issue: moving the outer lines renamed them and left the drill behind)
     const extent = (steps: number, testId: string) => (
-        <span className="tabular-nums" data-testid={testId}>
+        <span
+            className="text-text-subtitle text-right tabular-nums"
+            data-testid={testId}
+        >
             {t("fieldEditMode.size.extent", {
                 steps: fmt(steps),
                 length: length(steps),
@@ -126,19 +129,20 @@ function SizeSection({ fp }: { fp: FieldProperties }) {
                 current={fp.stepSizeInUnits}
                 parse={(text) => parseNumber(text, { min: 0, exclusive: true })}
                 onCommit={(value) => set({ stepSizeInches: toInches(value) })}
-                hint={t("fieldEditMode.size.stepsTo5", {
+                readout={t("fieldEditMode.size.stepsTo5", {
                     steps: fmt(180 / fp.stepSizeInches),
                 })}
                 numeric
                 testId="field-step-size"
             />
             <CommitInput
-                label={
+                label={t("fieldProperties.labels.stepSizeWarningThreshold")}
+                readout={
                     threshold > 0
-                        ? t("fieldProperties.labels.stepSizeWarningRatio", {
-                              steps: Math.round((180 / threshold) * 10) / 10,
+                        ? t("fieldEditMode.size.stepsTo5", {
+                              steps: fmt(180 / threshold),
                           })
-                        : t("fieldProperties.labels.stepSizeWarningThreshold")
+                        : undefined
                 }
                 title={t("fieldProperties.tooltips.stepSizeWarningThreshold")}
                 unit={unit}
@@ -181,7 +185,7 @@ function SizeSection({ fp }: { fp: FieldProperties }) {
 }
 
 /** A select in a row */
-const SELECT = "h-26 w-[10rem] px-8";
+const SELECT = "h-26 w-full px-8";
 
 /** `t` and the app language, for number and length text */
 function useTranslateWithLanguage() {
@@ -215,7 +219,6 @@ function NamesSection({ fp }: { fp: FieldProperties }) {
             parse={text()}
             onCommit={(value) => set({ sideDescriptions: { [key]: value } })}
             testId={`field-side-${key}`}
-            wide={key.startsWith("verbose")}
         />
     );
     return (
@@ -228,7 +231,7 @@ function NamesSection({ fp }: { fp: FieldProperties }) {
                 parse={text(1, 120)}
                 onCommit={(name) => set({ name })}
                 testId="field-name"
-                wide
+                stacked
             />
             <SubHeading>
                 {t("fieldProperties.sections.sideDescriptions")}
@@ -447,7 +450,7 @@ function ImageSection({ fp }: { fp: FieldProperties }) {
                             aria-label={t(
                                 "fieldProperties.labels.backgroundImageOpacity",
                             )}
-                            className="w-[10rem]"
+                            className="w-full"
                             min={0}
                             max={100}
                             step={1}

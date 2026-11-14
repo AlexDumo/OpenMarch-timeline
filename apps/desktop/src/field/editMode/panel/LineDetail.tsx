@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Checkpoint, FieldProperties } from "@openmarch/core";
 import { useTranslate } from "@tolgee/react";
 import clsx from "clsx";
-import { getButtonClassName, Input, SegmentedTextSwitch } from "@openmarch/ui";
+import { getButtonClassName, SegmentedTextSwitch } from "@openmarch/ui";
 import ActionButton from "@/shortcuts/ActionButton";
 import { useIsTouchMode } from "@/stores/InputModeStore";
 import { mirrorTwin } from "@/field/edits";
@@ -15,7 +15,14 @@ import { resolveTypedPosition, yardLineOf } from "../positionInput";
 import { useApplyFieldEdits } from "../useApplyFieldEdits";
 import { useDraft } from "../useDraft";
 import { Numpad } from "../Numpad";
-import { CommitInput, Hint, ROW, SwitchRow } from "./settingsInputs";
+import {
+    CommitInput,
+    CONTROL,
+    Hint,
+    ROW,
+    SettingBox,
+    SwitchRow,
+} from "./settingsInputs";
 import { lineWhere, useWhereText } from "./lineWhere";
 
 const BUTTON = `${getButtonClassName({ variant: "secondary", size: "compact" })} text-body whitespace-nowrap`;
@@ -185,7 +192,6 @@ function OneLine({
                 parse={(text) => (text.trim() ? trimmed(text) : null)}
                 onCommit={(shortName) => rename({ shortName })}
                 testId="field-line-short-name"
-                wide
                 afterEnter={focusField}
             />
             <CommitInput
@@ -195,7 +201,6 @@ function OneLine({
                 parse={(text) => (text.trim() ? trimmed(text) : null)}
                 onCommit={(name) => rename({ name })}
                 testId="field-line-name"
-                wide
                 afterEnter={focusField}
             />
             {isX && (
@@ -209,7 +214,6 @@ function OneLine({
                     }
                     placeholder={t("fieldEditMode.popover.none")}
                     testId="field-line-yard-number"
-                    wide
                     afterEnter={focusField}
                 />
             )}
@@ -295,7 +299,13 @@ function PositionRow({ fp, line }: { fp: FieldProperties; line: Checkpoint }) {
         const to = isX ? side * typed : -typed;
         void apply(moveLineEdit(ref, to === 0 ? 0 : to, mirror));
     };
+    // What the number counts, then what it is and what can be typed: one line
     const hint = [
+        t(
+            isX
+                ? "fieldEditMode.popover.stepsFromCenter"
+                : "fieldEditMode.popover.stepsBehindFront",
+        ),
         isX && football && typed !== null && yardLineOf(typed) !== null
             ? t("fieldEditMode.popover.yardLine", { yard: yardLineOf(typed)! })
             : null,
@@ -315,18 +325,14 @@ function PositionRow({ fp, line }: { fp: FieldProperties; line: Checkpoint }) {
                 <span className="min-w-0">
                     {t("fieldEditMode.popover.position")}
                 </span>
-                <span className="flex shrink-0 items-center gap-6">
-                    <Input
+                <span className={CONTROL}>
+                    <SettingBox
                         ref={input}
-                        compact
+                        numeric
                         data-testid="field-line-position"
                         inputMode={isTouch ? "none" : "decimal"}
-                        className={clsx(
-                            "w-[6rem] text-right tabular-nums",
-                            typed === null && "border-red",
-                        )}
+                        invalid={typed === null}
                         value={draft}
-                        aria-invalid={typed === null}
                         onChange={(e) => setDraft(e.target.value)}
                         onFocus={() => setFocused(true)}
                         onBlur={() => {
@@ -351,13 +357,6 @@ function PositionRow({ fp, line }: { fp: FieldProperties; line: Checkpoint }) {
                             }
                         }}
                     />
-                    <span className="text-sub text-text-subtitle w-[7.5rem] leading-tight">
-                        {t(
-                            isX
-                                ? "fieldEditMode.popover.stepsFromCenter"
-                                : "fieldEditMode.popover.stepsBehindFront",
-                        )}
-                    </span>
                 </span>
             </label>
             <Hint>{hint}</Hint>

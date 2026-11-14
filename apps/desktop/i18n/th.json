@@ -565,8 +565,7 @@
             "stepSize": "ขนาดก้าว",
             "stepSizeWarningThreshold": "เกณฑ์เตือนขนาดก้าว",
             "temporaryPath": "เส้นทางชั่วคราว",
-            "top": "บน",
-            "stepSizeWarningRatio": "เกณฑ์เตือนขนาดก้าว ({steps} ต่อ 5)"
+            "top": "บน"
         },
         "messages": {
             "noFloor": "ไม่มีพื้น",

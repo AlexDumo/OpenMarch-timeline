@@ -565,8 +565,7 @@
             "stepSize": "Ukuran langkah",
             "stepSizeWarningThreshold": "Ambang peringatan ukuran langkah",
             "temporaryPath": "Jalur sementara",
-            "top": "Atas",
-            "stepSizeWarningRatio": "Ambang peringatan ukuran langkah ({steps} banding 5)"
+            "top": "Atas"
         },
         "messages": {
             "noFloor": "Tidak ada lantai",

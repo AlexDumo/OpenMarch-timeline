@@ -565,8 +565,7 @@
             "stepSize": "步幅",
             "stepSizeWarningThreshold": "步幅警告阈值",
             "temporaryPath": "临时路径",
-            "top": "上",
-            "stepSizeWarningRatio": "步幅警告阈值（每5码{steps}步）"
+            "top": "上"
         },
         "messages": {
             "noFloor": "无地面",

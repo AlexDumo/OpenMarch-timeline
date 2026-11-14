@@ -566,8 +566,7 @@
             "stepSize": "Tamaño del paso",
             "stepSizeWarningThreshold": "Umbral de aviso de tamaño de paso",
             "temporaryPath": "Ruta temporal",
-            "top": "Superior",
-            "stepSizeWarningRatio": "Umbral de aviso de tamaño de paso ({steps} a 5)"
+            "top": "Superior"
         },
         "messages": {
             "noFloor": "Sin piso",

@@ -565,8 +565,7 @@
             "stepSize": "Saiz langkah",
             "stepSizeWarningThreshold": "Ambang amaran saiz langkah",
             "temporaryPath": "Laluan sementara",
-            "top": "Atas",
-            "stepSizeWarningRatio": "Ambang amaran saiz langkah ({steps} ke 5)"
+            "top": "Atas"
         },
         "messages": {
             "noFloor": "Tiada lantai",

@@ -566,8 +566,7 @@
             "stepSize": "Tamanho do passo",
             "stepSizeWarningThreshold": "Limite de aviso do tamanho do passo",
             "temporaryPath": "Caminho temporário",
-            "top": "Superior",
-            "stepSizeWarningRatio": "Limite de aviso do tamanho do passo ({steps} para 5)"
+            "top": "Superior"
         },
         "messages": {
             "noFloor": "Sem piso",

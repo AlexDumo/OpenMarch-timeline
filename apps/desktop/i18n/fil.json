@@ -565,8 +565,7 @@
             "stepSize": "Laki ng hakbang",
             "stepSizeWarningThreshold": "Hangganan ng babala sa laki ng hakbang",
             "temporaryPath": "Pansamantalang landas",
-            "top": "Itaas",
-            "stepSizeWarningRatio": "Hangganan ng babala sa laki ng hakbang ({steps} sa 5)"
+            "top": "Itaas"
         },
         "messages": {
             "noFloor": "Walang sahig",

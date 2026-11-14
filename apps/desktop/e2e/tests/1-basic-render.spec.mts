@@ -114,10 +114,10 @@ test("Field panel sections are visible", async ({ electronApp }) => {
     await expect(inspector).toBeVisible();
     // It opens on Setup; Lines and Appearance are the other tabs
     await expect(
-        inspector.getByText("Step Size", { exact: true }),
+        inspector.getByText("Step size", { exact: true }),
     ).toBeVisible();
-    await expect(inspector.getByText("Measurement System")).toBeVisible();
-    await expect(inspector.getByText("Side Descriptions")).toBeVisible();
+    await expect(inspector.getByText("Measurement system")).toBeVisible();
+    await expect(inspector.getByText("Side descriptions")).toBeVisible();
     await page.getByTestId("field-tab-lines").click();
     await expect(page.getByTestId("field-lines-axis")).toBeVisible();
     await expect(page.getByTestId("field-line-detail")).toBeVisible();

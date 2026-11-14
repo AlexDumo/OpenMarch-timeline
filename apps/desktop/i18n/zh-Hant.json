@@ -565,8 +565,7 @@
             "stepSize": "步幅",
             "stepSizeWarningThreshold": "步幅警告門檻",
             "temporaryPath": "暫時路徑",
-            "top": "上",
-            "stepSizeWarningRatio": "步幅警告門檻（{steps} 比 5）"
+            "top": "上"
         },
         "messages": {
             "noFloor": "無地板",

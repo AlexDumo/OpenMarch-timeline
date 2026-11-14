@@ -566,8 +566,7 @@
             "stepSize": "Longueur de pas",
             "stepSizeWarningThreshold": "Seuil d'alerte de longueur de pas",
             "temporaryPath": "Trajet temporaire",
-            "top": "Haut",
-            "stepSizeWarningRatio": "Seuil d'alerte de longueur de pas ({steps} pour 5)"
+            "top": "Haut"
         },
         "messages": {
             "noFloor": "Aucun sol",

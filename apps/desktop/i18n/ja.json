@@ -566,8 +566,7 @@
             "stepSize": "歩幅",
             "stepSizeWarningThreshold": "歩幅の警告しきい値",
             "temporaryPath": "一時パス",
-            "top": "上",
-            "stepSizeWarningRatio": "歩幅の警告しきい値（{steps}対5）"
+            "top": "上"
         },
         "messages": {
             "noFloor": "フロアなし",

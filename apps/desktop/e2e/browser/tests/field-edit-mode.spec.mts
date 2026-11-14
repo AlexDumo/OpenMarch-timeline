@@ -355,7 +355,7 @@ test("the Field panel's tabs hold the field's settings, each change one undo ste
     const panel = page.getByTestId("field-edit-panel");
     for (const [tab, inside] of [
         ["setup", "Step size"],
-        ["setup", "Side Descriptions"],
+        ["setup", "Side descriptions"],
         ["appearance", "Yard numbers"],
         ["appearance", "Import Image"],
         ["appearance", "Marchers and paths"],
