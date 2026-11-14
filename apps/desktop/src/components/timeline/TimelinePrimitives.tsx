@@ -9,6 +9,8 @@ import {
 } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { fingerDragSlop } from "./timelineGestures";
+import { touchGrabOffset } from "./touchTargets";
+import { TouchHitArea } from "./TouchHitArea";
 import { animated, useSpring } from "@react-spring/web";
 import { flushSync } from "react-dom";
 import {
@@ -840,7 +842,13 @@ export const TimelineRuler = memo(function TimelineRuler({
     height = TIMELINE_PAGE_ROW_BOTTOM,
     flagSnapPlayhead,
     scrubRestoreBeat,
+    lineBeats,
 }: {
+    /**
+     * Where the start flag and the playhead are drawn (view beats): a grip under one of them has
+     * no finger hit area, since the line wins there (UI-21)
+     */
+    lineBeats?: readonly number[];
     pages: readonly TimelinePageMarker[];
     measures: readonly TimelineMeasureMarker[];
     beatCount: number;
@@ -1034,6 +1042,8 @@ export const TimelineRuler = memo(function TimelineRuler({
                     preview={flagPreview}
                     onPreviewChange={setFlagPreview}
                     onSelectPage={selectPage}
+                    selectedBoxIds={selectedBoxIds}
+                    lineBeats={lineBeats}
                 />
             )}
             {holds && (
@@ -1119,6 +1129,7 @@ const TimelineRulerBoxes = memo(function TimelineRulerBoxes({
                 <button
                     type="button"
                     data-timeline-interactive="true"
+                    data-touch-yield=""
                     data-testid="timeline-initial-page"
                     aria-label={t("timeline.page.label", {
                         pageName: initialPage.label,
@@ -1186,6 +1197,8 @@ const TimelinePageBox = memo(function TimelinePageBox({
         <button
             type="button"
             data-timeline-interactive="true"
+            // A finger near a flag, grip or keyframe over the box takes that target (3.3)
+            data-touch-yield=""
             {...timelineRangeTargetProps(range, undefined, page.id)}
             aria-label={t("timeline.page.label", { pageName: page.label })}
             aria-pressed={selected}
@@ -1735,6 +1748,8 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
         resize,
         // An edge dragged during a dropped move's wait starts from the drop, which gives way
         held: movePreview,
+        selected,
+        touchGroup: `clip:${track.id}`,
         onDragStart: () => {
             releaseMove();
             setMovePreview(null);
@@ -1792,6 +1807,8 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                 data-testid="timeline-clip"
                 data-move-id={track.linkId}
                 data-selected={selected}
+                // A finger on the clip moves it, even inside another target's hit area (3.3)
+                data-touch-keep={`clip:${track.id}`}
                 // UI-14 review: its keys are its own; the app's Enter, arrows and WASD don't run
                 data-timeline-own-keys={moveMenu ? "true" : undefined}
                 ref={clipRef}
@@ -2165,6 +2182,12 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                                 }}
                             >
                                 <DotsThreeIcon size={12} weight="bold" />
+                                {/* A finger's 44px ⋯ chip (tablet plan 3.3); it opens the
+                                    same menu as a right-click on the clip */}
+                                <TouchHitArea
+                                    selected
+                                    group={`clip:${track.id}`}
+                                />
                             </button>
                         </DropdownMenu.Trigger>
                     </div>
@@ -2278,6 +2301,8 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
         moved: boolean;
         /** How far it moves before it drags: further for a finger (`timelineDragSlop`) */
         slop: number;
+        /** A finger's offset from the flag it grabbed (`touchGrabOffset`); 0 for a mouse */
+        grab: number;
     } | null>(null);
 
     // A new range replaces the preview in the same render, not in an effect after it: an effect
@@ -2397,7 +2422,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
             dragLive(
                 drag,
                 flagBeatAt(
-                    event.clientX,
+                    event.clientX + drag.grab,
                     drag.surface,
                     isPageSnapDisabled(event),
                 ),
@@ -2407,7 +2432,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
         }
         const next = updatePreview(
             drag.kind,
-            event.clientX,
+            event.clientX + drag.grab,
             drag.surface,
             isPageSnapDisabled(event),
             false,
@@ -2476,6 +2501,12 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                 lastBeat: null,
                 moved: false,
                 slop: timelineDragSlop(event.pointerType),
+                grab: touchGrabOffset(
+                    event.pointerType,
+                    event.clientX,
+                    surface.getBoundingClientRect().left +
+                        beatToX(beatIndex, pixelsPerBeat),
+                ),
             };
             event.currentTarget.setPointerCapture?.(event.pointerId);
         },
@@ -2492,7 +2523,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                 dragLive(
                     drag,
                     flagBeatAt(
-                        event.clientX,
+                        event.clientX + drag.grab,
                         drag.surface,
                         isPageSnapDisabled(event),
                     ),
@@ -2502,7 +2533,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
             }
             updatePreview(
                 kind,
-                event.clientX,
+                event.clientX + drag.grab,
                 drag.surface,
                 isPageSnapDisabled(event),
             );
@@ -2587,10 +2618,12 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                     style={{ left: x, height }}
                 >
                     <span
+                        data-touch-drawn=""
                         className="bg-accent pointer-events-none absolute top-0 left-1/2 w-px"
                         style={{ height }}
                     />
                     <span className="bg-accent rounded-l-4 absolute top-0 right-1/2 h-10 w-8" />
+                    {(onCommit || live(kind)) && <TouchHitArea />}
                 </button>
             );
         // UI-10, UI-11: the start flag, where movers leave from. No words: a line and a pennant,
@@ -2613,12 +2646,14 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                 >
                     {/* UI-20: 2px, from the headroom strip down */}
                     <span
+                        data-touch-drawn=""
                         className={clsx(
                             "pointer-events-none absolute top-0 left-1/2 w-[2px] -translate-x-1/2",
                             START_INK.bg,
                         )}
                         style={{ height }}
                     />
+                    {(onCommit || live(kind)) && <TouchHitArea />}
                 </button>
                 {/* The pennant is its own handle in the headroom strip (UI-20), above the
                     playhead's (z-50) and the loop's ends (z-58): after Stop the flag is drawn on
@@ -2650,6 +2685,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                             bar's top; its left side is the 2px stem */}
                         <path d="M0 0 L12 0 L0 12 Z" fill="currentColor" />
                     </svg>
+                    {(onCommit || live(kind)) && <TouchHitArea />}
                 </button>
             </>
         );
@@ -3060,6 +3096,7 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
                 {/* UI-20: a 2px line from the headroom strip down, and a head in the strip, centered on
                 the line, so its tip runs into the line */}
                 <span
+                    data-touch-drawn=""
                     className="bg-accent pointer-events-none absolute top-0 left-1/2 w-[2px] -translate-x-1/2"
                     style={{ height }}
                 />
@@ -3072,6 +3109,7 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
                 >
                     <path d="M0 0 H12 V6 L6 11 L0 6 Z" fill="currentColor" />
                 </svg>
+                {onSeek && <TouchHitArea />}
             </button>
         </AddPageFlagMenu>
     );

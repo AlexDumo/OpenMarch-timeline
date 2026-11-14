@@ -1364,6 +1364,17 @@ const TimelineSurface = memo(function TimelineSurface({
                             }
                             keyframes={props.keyframes}
                             keyframeMenu={props.keyframeMenu}
+                            lineBeats={[
+                                positionBeat,
+                                ...(selectionRange && !basic && !bandFocus
+                                    ? [
+                                          (selection?.kind === "range"
+                                              ? selection.startFlagBeatIndex
+                                              : undefined) ??
+                                              selectionRange.startBeatIndex,
+                                      ]
+                                    : []),
+                            ]}
                             holds={props.holds}
                             holdEdges={
                                 props.isPlaying || bandFocus
