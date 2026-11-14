@@ -1,7 +1,10 @@
 /**
- * A line's order on the field (pathways step 4h, design E "the lane"): a soft neutral lane under
- * the line's dots, cut away round every dot so dots and selection rings keep their own color, with a
- * solid tip past the leader (the drawing rules are `orderLane`). An order that runs back over its own
+ * A line's order on the field (pathways steps 4h and 4i): a lane under the line's dots, fading from
+ * dark at the leader to pale at the tail, cut away round every dot so dots and selection rings keep
+ * their own color, with a solid tip past the leader (the drawing rules are `orderLane`). It carries
+ * its own ground on any floor: a light wash just strong enough for the floor under it (`floor`; none
+ * on a white field), a faint rim, and a halo round each of its dots in the tone that sets that dot's
+ * color apart. The fade is multiplied onto the field, so it reads as ink. An order that runs back over its own
  * marchers loses the tip and shows its numbers; one whose legs cross thins to a thread with darts and
  * shows its numbers. A guessed order isn't drawn at rest; while Alt is held it shows hollow and
  * dashed. Position badges show while Alt is held, and always while Set order is on (touch has no
@@ -73,8 +76,19 @@ import {
     badgeWidth,
     classifyOrder,
     distanceToSegment,
-    laneDarts,
+    alongFractions,
+    FADE_LEAD,
+    FADE_TAIL,
+    fadeAt,
+    FOLDED_INK,
+    haloTone,
+    haloWidth,
     laneHalfWidth,
+    laneSamplePoints,
+    ownHalfWidth,
+    THREAD_LEAD,
+    THREAD_TAIL,
+    washAlpha,
     laneTip,
     neighborHalfWidths,
     placeNumbers,
@@ -85,43 +99,36 @@ import {
     type PlacedBadge,
 } from "./orderLane";
 import { usePathPenStore } from "./pathPenStore";
+import type { FloorSampler } from "./floorSampler";
+import { resolveMarcherLook } from "@/entity-components/appearance";
 
 /** The lane's dark ink: the tip, the leader's badge, the darts */
 const LANE_INK = "#1c1f26";
 
-/** The lane's colors on a light or a dark field: neutral only, so red stays marchers and blue selection */
-interface LaneInk {
-    readonly lane: string;
+/**
+ * A guessed order's colors on a light or a dark field (its hollow dashed outline has no ground of
+ * its own), and the darts' ink
+ */
+interface OrderInk {
     readonly thread: string;
     readonly guess: string;
     readonly guessTip: string;
-    readonly edge: string;
     readonly dart: string;
-    readonly threadDart: string;
-    readonly dartOpacity: number;
 }
 
-function laneInk(dark: boolean): LaneInk {
+function orderInk(dark: boolean): OrderInk {
     return dark
         ? {
-              lane: "rgba(255,255,255,0.30)",
               thread: "rgba(255,255,255,0.85)",
               guess: "rgba(255,255,255,0.9)",
               guessTip: "rgba(255,255,255,0.15)",
-              edge: "rgba(255,255,255,0.9)",
               dart: LANE_INK,
-              threadDart: "#fff",
-              dartOpacity: 0.75,
           }
         : {
-              lane: "rgba(28,31,38,0.15)",
               thread: "rgba(28,31,38,0.55)",
               guess: "rgba(28,31,38,0.6)",
               guessTip: "#fff",
-              edge: "none",
               dart: LANE_INK,
-              threadDart: LANE_INK,
-              dartOpacity: 0.5,
           };
 }
 
@@ -250,7 +257,18 @@ interface DrawnLine {
     readonly halfWidth: number;
     /** The solid tip past the leader (a plain lane only) */
     readonly tip: string | null;
+    /** The tip has a white outline: the floor round it is dark */
+    readonly tipOutlined: boolean;
+    /** A crossed order's thread darts */
     readonly darts: readonly string[];
+    /** How far along each point is (0 at the leader, 1 at the last), for the fade */
+    readonly along: readonly number[];
+    /** The light wash under the lane (0: none), for the floor beneath it */
+    readonly wash: number;
+    /** Where the wash runs: the lane, and on past the leader under the tip */
+    readonly washPoints: readonly XY[];
+    /** Name labels the lane reaches, cut out of it so names stay readable (their ink, 1 px clear) */
+    readonly labelHoles: readonly Box[];
     readonly numbers: readonly PlacedBadge[];
     /** Some numbers had no room: only the ends show, and the field asks for a closer zoom */
     readonly crowded: boolean;
@@ -274,6 +292,7 @@ function drawLine({
     busy,
     dots,
     others = [],
+    floorAt,
 }: {
     points: readonly XY[];
     marchers: number;
@@ -285,18 +304,44 @@ function drawLine({
     dots: readonly XY[];
     /** The other lines showing, whose lanes its numbers keep off */
     others?: readonly OtherLane[];
+    /** How bright the floor is under a point (on screen, pan left out), 0 to 1 */
+    floorAt: (p: XY) => number;
 }): DrawnLine {
     const own = points.slice(0, marchers);
     // On the marchers only: Set order's pointer sits on the dot it just picked and crosses earlier
     // legs on its way to the next, which would make every pick look like a fold or a crossing
     const kind = classifyOrder(own, dotRadius);
+    // The tip keeps the full width; the lane itself narrows where its own ranks are close
     const tip = kind === "lane" ? laneTip(points, halfWidth) : null;
-    const darts =
-        kind === "lane"
-            ? laneDarts(points, dotRadius)
-            : kind === "crossed"
-              ? threadDarts(points)
-              : [];
+    const tipHalf = halfWidth;
+    halfWidth = ownHalfWidth(own, halfWidth, dotRadius);
+    const darts = kind === "crossed" ? threadDarts(points) : [];
+    // The wash runs on under the tip, so the tip always sits on the lane's own ground
+    const lead = points[0];
+    const next = points[1];
+    const pastLead =
+        tip && lead && next
+            ? (() => {
+                  const d = Math.hypot(lead.x - next.x, lead.y - next.y) || 1;
+                  const reach = tipHalf * 1.9;
+                  return [
+                      {
+                          x: lead.x + ((lead.x - next.x) / d) * reach,
+                          y: lead.y + ((lead.y - next.y) / d) * reach,
+                      },
+                  ];
+              })()
+            : [];
+    const washPoints = [...pastLead, ...points];
+    const wash = washAlpha(
+        laneSamplePoints(
+            washPoints,
+            kind === "crossed" ? 3 : halfWidth,
+            Math.max(5, halfWidth),
+        ).map(floorAt),
+    );
+    const tipOutlined =
+        !!tip && !!lead && !!next && floorAt(pastLead[0] ?? lead) < 0.4;
     const { badges, crowded } =
         numbered || kind !== "lane"
             ? placeNumbers({
@@ -319,7 +364,18 @@ function drawLine({
         points,
         halfWidth,
         tip: tip?.points ?? null,
+        tipOutlined,
         darts,
+        along: alongFractions(points),
+        wash,
+        washPoints,
+        labelHoles: busy.filter(
+            (b) =>
+                b.maxX >= Math.min(...xs) - pad &&
+                b.minX <= Math.max(...xs) + pad &&
+                b.maxY >= Math.min(...ys) - pad &&
+                b.minY <= Math.max(...ys) + pad,
+        ),
         numbers: badges,
         crowded,
         box: {
@@ -348,10 +404,13 @@ export default function MarcherOrderOverlay({
     marchers,
     labels,
     theme,
+    floor,
 }: {
     marchers: FieldMarchers;
-    /** The field's colors: on a dark field the lane turns light */
+    /** The field's colors: a guessed order's outline turns light on a dark field */
     theme: FieldTheme;
+    /** How bright the floor is (background and field image), for the lane's wash */
+    floor: FloorSampler;
     /** The marchers' name labels as drawn; none: the line doesn't keep clear of them */
     labels?: OrderLabels;
 }) {
@@ -466,6 +525,7 @@ export default function MarcherOrderOverlay({
     const selectedSet = useMemo(() => new Set(ids), [ids]);
     const drawn = useMemo((): DrawnLine[] => {
         const onScreen = (p: XY): XY => ({ x: p.x * zoom, y: p.y * zoom });
+        const floorAt = (p: XY) => floor.brightnessAt(p.x / zoom, p.y / zoom);
         // Every drawn label's ink on screen, when labels are drawn and big enough to read: numbers
         // keep clear of them
         const labelBox = (id: number, p: XY): Box | null => {
@@ -520,6 +580,7 @@ export default function MarcherOrderOverlay({
                     dotRadius,
                     busy: busyOf(sweep.ids, sweep.at),
                     dots: everyone,
+                    floorAt,
                 }),
             ];
         }
@@ -557,9 +618,11 @@ export default function MarcherOrderOverlay({
                 others: pointsOf.flatMap((points, o) =>
                     o === l ? [] : [{ points, halfWidth: halfWidths[o]! }],
                 ),
+                floorAt,
             }),
         );
     }, [
+        floor,
         sweep,
         lines,
         lineIds,
@@ -590,15 +653,96 @@ export default function MarcherOrderOverlay({
     }, [sweep, ids, linesAt, everyone, zoom, dotRadius, reach]);
     const fieldBackground = theme.background;
     const ink = useMemo(
-        () => laneInk(isDarkField(fieldBackground)),
+        () => orderInk(isDarkField(fieldBackground)),
         [fieldBackground],
     );
+
+    // Each drawn line's marchers get a halo in the tone that sets their own color apart
+    const haloIds = useMemo(
+        () =>
+            sweep
+                ? sweep.picked
+                : lines
+                      .filter((l) => !l.guessed || alt)
+                      .flatMap((l) => l.order),
+        [sweep, lines, alt],
+    );
+    const halos = useMemo(() => {
+        void version;
+        const index = new Map(marchers.ids.map((id, i) => [id, i]));
+        const width = haloWidth(dotRadius);
+        return haloIds.flatMap((id) => {
+            const p = (sweep ? sweep.at : linesAt).get(id);
+            const i = index.get(id);
+            if (!p || i === undefined) return [];
+            const look = resolveMarcherLook(marchers.stacks[i] ?? [], theme);
+            if (!look.visible) return [];
+            const fill = look.shape === "cross" ? look.crossColor : look.fill;
+            const inner =
+                selectedSet.has(id) || sweep ? reach : dotRadius + 0.5;
+            return [
+                {
+                    at: { x: p.x * zoom, y: p.y * zoom },
+                    r: inner + width / 2,
+                    width,
+                    tone: haloTone(fill),
+                },
+            ];
+        });
+    }, [
+        haloIds,
+        sweep,
+        linesAt,
+        marchers,
+        version,
+        theme,
+        dotRadius,
+        reach,
+        selectedSet,
+        zoom,
+    ]);
 
     const prefix = useId().replace(/:/g, "");
     if (!showing) return null;
     return (
         <>
-            {/* Over the selection box and its handles, which still take the presses through it */}
+            {/*
+              Over the selection box and its handles, which still take the presses through it. Three
+              layers: the lanes' ground (wash and rim), their ink multiplied onto the field so it
+              reads as ink on any floor, then the marks (tips, darts, halos, numbers)
+            */}
+            <svg
+                className="pointer-events-none absolute inset-0 z-[5] h-full w-full"
+                data-testid="marcherOrderGround"
+            >
+                <g transform={`translate(${view.panX} ${view.panY})`}>
+                    {drawn.map((line, i) => (
+                        <LaneGround
+                            key={i}
+                            id={`${prefix}-g${i}`}
+                            line={line}
+                            ink={ink}
+                            holes={holes}
+                        />
+                    ))}
+                </g>
+            </svg>
+            <svg
+                className="pointer-events-none absolute inset-0 z-[5] h-full w-full"
+                style={{ mixBlendMode: "multiply" }}
+                data-testid="marcherOrderInk"
+            >
+                <g transform={`translate(${view.panX} ${view.panY})`}>
+                    {drawn.map((line, i) => (
+                        <LaneInk
+                            key={i}
+                            id={`${prefix}-i${i}`}
+                            line={line}
+                            holes={holes}
+                        />
+                    ))}
+                </g>
+            </svg>
             <svg
                 className="pointer-events-none absolute inset-0 z-[5] h-full w-full"
                 data-testid="marcherOrderOverlay"
@@ -610,12 +754,23 @@ export default function MarcherOrderOverlay({
                     fontFamily="Inter, system-ui, Arial, sans-serif"
                 >
                     {drawn.map((line, i) => (
-                        <OrderLine
+                        <LaneMarks key={i} line={line} ink={ink} />
+                    ))}
+                    {halos.map(({ at, r, width, tone }, i) => (
+                        <circle
                             key={i}
-                            id={`${prefix}-${i}`}
-                            line={line}
-                            ink={ink}
-                            holes={holes}
+                            cx={at.x}
+                            cy={at.y}
+                            r={r}
+                            fill="none"
+                            stroke={
+                                tone === "dark"
+                                    ? "rgba(28,31,38,0.9)"
+                                    : "rgba(255,255,255,0.92)"
+                            }
+                            strokeWidth={width}
+                            data-testid="marcherOrderHalo"
+                            data-tone={tone}
                         />
                     ))}
                     {drawn.flatMap((line, l) =>
@@ -647,28 +802,20 @@ export default function MarcherOrderOverlay({
 const pathOf = (points: readonly XY[]): string =>
     points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
 
-/**
- * One line: the soft lane (a thread when its legs cross), with every dot under it cut out so the
- * dots and their selection rings keep their own color; a guessed order as a hollow dashed outline;
- * then the tip and the darts
- */
-const OrderLine = memo(function OrderLine({
+/** The dots (and selection rings) a lane is cut away from, as an SVG mask: only those it reaches */
+function HolesMask({
     id,
     line,
-    ink,
     holes,
+    hollow = false,
 }: {
     id: string;
     line: DrawnLine;
-    ink: LaneInk;
-    /** The dots (and selection rings) the lane is cut away from: their middles and radii */
     holes: readonly { at: XY; r: number }[];
+    /** Also cut the lane's inside, leaving its outline (a guessed order) */
+    hollow?: boolean;
 }) {
-    const { kind, guessed, points, halfWidth, tip, darts, box } = line;
-    if (points.length < 2) return null;
-    const d = pathOf(points);
-    const width = halfWidth * 2;
-    // Only the dots the lane or its tip reach
+    const { points, washPoints, halfWidth, box } = line;
     const reach = halfWidth * 2.2 + 4;
     const near = holes.filter(
         ({ at, r }) =>
@@ -676,14 +823,15 @@ const OrderLine = memo(function OrderLine({
             at.x - r <= box.maxX &&
             at.y + r >= box.minY &&
             at.y - r <= box.maxY &&
-            points.some(
+            washPoints.some(
                 (p, i) =>
-                    distanceToSegment(at, p, points[i + 1] ?? p) <= reach + r,
+                    distanceToSegment(at, p, washPoints[i + 1] ?? p) <=
+                    reach + r,
             ),
     );
-    const mask = (
+    return (
         <mask
-            id={`${id}-holes`}
+            id={id}
             maskUnits="userSpaceOnUse"
             x={box.minX - 4}
             y={box.minY - 4}
@@ -697,12 +845,12 @@ const OrderLine = memo(function OrderLine({
                 height={box.maxY - box.minY + 8}
                 fill="white"
             />
-            {guessed && kind !== "crossed" && (
+            {hollow && (
                 <path
-                    d={d}
+                    d={pathOf(points)}
                     fill="none"
                     stroke="black"
-                    strokeWidth={Math.max(width - 2.4, 0)}
+                    strokeWidth={Math.max(halfWidth * 2 - 2.4, 0)}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                 />
@@ -710,45 +858,231 @@ const OrderLine = memo(function OrderLine({
             {near.map(({ at, r }, i) => (
                 <circle key={i} cx={at.x} cy={at.y} r={r} fill="black" />
             ))}
+            {line.labelHoles.map((b, i) => (
+                <rect
+                    key={`l${i}`}
+                    x={b.minX - 1}
+                    y={b.minY - 1}
+                    width={b.maxX - b.minX + 2}
+                    height={b.maxY - b.minY + 2}
+                    rx={1.5}
+                    fill="black"
+                />
+            ))}
         </mask>
     );
-    return (
-        <g
-            data-testid={guessed ? "marcherOrderGuess" : "marcherOrderLine"}
-            data-kind={kind}
-        >
-            <defs>{mask}</defs>
-            {kind === "crossed" ? (
+}
+
+/**
+ * A lane's ground: the light wash (just strong enough for the floor under it) and a faint rim just
+ * outside it, so a light lane keeps an edge on a mid-tone floor. A guessed order is a hollow dashed
+ * outline instead, with nothing under it.
+ */
+const LaneGround = memo(function LaneGround({
+    id,
+    line,
+    ink,
+    holes,
+}: {
+    id: string;
+    line: DrawnLine;
+    ink: OrderInk;
+    holes: readonly { at: XY; r: number }[];
+}) {
+    const { kind, guessed, points, washPoints, halfWidth, wash } = line;
+    if (points.length < 2) return null;
+    const width = halfWidth * 2;
+    if (guessed)
+        return (
+            <g data-testid="marcherOrderGuess" data-kind={kind}>
+                <defs>
+                    <HolesMask
+                        id={`${id}-holes`}
+                        line={line}
+                        holes={holes}
+                        hollow={kind !== "crossed"}
+                    />
+                </defs>
                 <path
-                    d={d}
+                    d={pathOf(points)}
                     fill="none"
-                    stroke={ink.thread}
-                    strokeWidth={1.25}
-                    strokeLinejoin="round"
-                    strokeDasharray={guessed ? "4 3" : undefined}
-                    mask={`url(#${id}-holes)`}
-                />
-            ) : (
-                <path
-                    d={d}
-                    fill="none"
-                    stroke={guessed ? ink.guess : ink.lane}
-                    strokeWidth={width}
+                    stroke={kind === "crossed" ? ink.thread : ink.guess}
+                    strokeWidth={kind === "crossed" ? 1.25 : width}
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    strokeDasharray={guessed ? "4 3" : undefined}
+                    strokeDasharray="4 3"
                     mask={`url(#${id}-holes)`}
                 />
+            </g>
+        );
+    const crossed = kind === "crossed";
+    const washWidth = crossed ? 6 : width + 3;
+    const d = pathOf(crossed ? points : washPoints);
+    return (
+        <g data-testid="marcherOrderLine" data-kind={kind} data-wash={wash}>
+            <defs>
+                <HolesMask id={`${id}-holes`} line={line} holes={holes} />
+                {!crossed && (
+                    <mask
+                        id={`${id}-rim`}
+                        maskUnits="userSpaceOnUse"
+                        x={line.box.minX - 4}
+                        y={line.box.minY - 4}
+                        width={line.box.maxX - line.box.minX + 8}
+                        height={line.box.maxY - line.box.minY + 8}
+                    >
+                        <path
+                            d={d}
+                            fill="none"
+                            stroke="white"
+                            strokeWidth={washWidth + 2.4}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        />
+                        <path
+                            d={d}
+                            fill="none"
+                            stroke="black"
+                            strokeWidth={washWidth}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        />
+                    </mask>
+                )}
+            </defs>
+            {!crossed && (
+                <rect
+                    x={line.box.minX - 4}
+                    y={line.box.minY - 4}
+                    width={line.box.maxX - line.box.minX + 8}
+                    height={line.box.maxY - line.box.minY + 8}
+                    fill="rgba(28,31,38,0.22)"
+                    mask={`url(#${id}-rim)`}
+                    data-testid="marcherOrderRim"
+                />
             )}
+            {wash > 0 && (
+                <path
+                    d={d}
+                    fill="none"
+                    stroke={`rgba(255,255,255,${wash.toFixed(3)})`}
+                    strokeWidth={washWidth}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    mask={`url(#${id}-holes)`}
+                    data-testid="marcherOrderWash"
+                />
+            )}
+        </g>
+    );
+});
+
+/** Lane ink as an opaque grey: multiplied onto the field it reads as the ink at strength `alpha` */
+const inkGrey = (alpha: number): string => {
+    const c = (v: number) => Math.round(255 - alpha * (255 - v));
+    return `rgb(${c(0x1c)},${c(0x1f)},${c(0x26)})`;
+};
+
+/**
+ * A lane's ink, multiplied onto the field: fading from `FADE_LEAD` at the leader to `FADE_TAIL` at
+ * the tail along a plain lane, one leg at a time so each leg carries its own part of the fade; flat
+ * on an order that doubles back (a fade would lie); a fading thread on one whose legs cross
+ */
+const LaneInk = memo(function LaneInk({
+    id,
+    line,
+    holes,
+}: {
+    id: string;
+    line: DrawnLine;
+    holes: readonly { at: XY; r: number }[];
+}) {
+    const { kind, guessed, points, halfWidth, along } = line;
+    if (points.length < 2 || guessed) return null;
+    const crossed = kind === "crossed";
+    const width = crossed ? 1.5 : halfWidth * 2;
+    const [lead, tail] = crossed
+        ? [THREAD_LEAD, THREAD_TAIL]
+        : kind === "folded"
+          ? [FOLDED_INK, FOLDED_INK]
+          : [FADE_LEAD, FADE_TAIL];
+    return (
+        <g data-testid="marcherOrderFade" data-kind={kind}>
+            <defs>
+                <HolesMask id={`${id}-holes`} line={line} holes={holes} />
+                {points.slice(1).map((b, k) => {
+                    const a = points[k]!;
+                    return (
+                        <linearGradient
+                            key={k}
+                            id={`${id}-leg${k}`}
+                            gradientUnits="userSpaceOnUse"
+                            x1={a.x}
+                            y1={a.y}
+                            x2={b.x}
+                            y2={b.y}
+                        >
+                            <stop
+                                offset="0"
+                                stopColor={inkGrey(
+                                    fadeAt(along[k]!, lead, tail),
+                                )}
+                            />
+                            <stop
+                                offset="1"
+                                stopColor={inkGrey(
+                                    fadeAt(along[k + 1]!, lead, tail),
+                                )}
+                            />
+                        </linearGradient>
+                    );
+                })}
+            </defs>
+            <g mask={`url(#${id}-holes)`}>
+                {points.slice(1).map((b, k) => {
+                    const a = points[k]!;
+                    if (a.x === b.x && a.y === b.y) return null;
+                    return (
+                        <path
+                            key={k}
+                            d={`M${a.x},${a.y} L${b.x},${b.y}`}
+                            fill="none"
+                            stroke={`url(#${id}-leg${k})`}
+                            strokeWidth={width}
+                            strokeLinecap="round"
+                        />
+                    );
+                })}
+            </g>
+        </g>
+    );
+});
+
+/** A lane's marks over everything: the solid tip past the leader, and a crossed order's darts */
+const LaneMarks = memo(function LaneMarks({
+    line,
+    ink,
+}: {
+    line: DrawnLine;
+    ink: OrderInk;
+}) {
+    const { kind, guessed, tip, tipOutlined, darts } = line;
+    return (
+        <g>
             {tip && (
                 <polygon
                     points={tip}
                     fill={guessed ? ink.guessTip : LANE_INK}
-                    stroke={guessed ? ink.guess : ink.edge}
+                    stroke={
+                        guessed
+                            ? ink.guess
+                            : tipOutlined
+                              ? "rgba(255,255,255,0.9)"
+                              : "none"
+                    }
                     strokeWidth={guessed ? 1.2 : 1}
                     strokeLinejoin="round"
                     paintOrder="stroke"
-                    mask={`url(#${id}-holes)`}
                     data-testid="marcherOrderTip"
                 />
             )}
@@ -756,8 +1090,8 @@ const OrderLine = memo(function OrderLine({
                 <polygon
                     key={i}
                     points={points}
-                    fill={kind === "crossed" ? ink.threadDart : ink.dart}
-                    opacity={kind === "crossed" ? 0.7 : ink.dartOpacity}
+                    fill={kind === "crossed" ? LANE_INK : ink.dart}
+                    opacity={0.65}
                 />
             ))}
         </g>

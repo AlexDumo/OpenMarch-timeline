@@ -135,6 +135,7 @@ import FieldBenchmark from "@/field/benchmark/FieldBenchmark";
 import PropDrawingNotice from "@/components/items/PropDrawingNotice";
 import { threeFieldView } from "@/field/benchmark/fieldScenarios";
 import { r3fFrames } from "./benchmarkFrames";
+import { makeFloorSampler } from "@/pathways/floorSampler";
 import {
     CHECKPOINT_FONT,
     COLLISION_FONT,
@@ -223,6 +224,22 @@ function ThreeFieldView() {
                   )
                 : null,
         [fieldProperties, fieldImage],
+    );
+    // How bright the floor is under the order lanes (step 4i): background and field image, read once
+    const orderFloor = useMemo(
+        () =>
+            makeFloorSampler({
+                background: fieldProperties?.theme.background ?? {
+                    r: 255,
+                    g: 255,
+                    b: 255,
+                },
+                image: fieldImage,
+                placement: fieldImagePlan,
+                width: fieldProperties?.width ?? 0,
+                height: fieldProperties?.height ?? 0,
+            }),
+        [fieldProperties, fieldImage, fieldImagePlan],
     );
     const appearanceSteps = useMarcherAppearanceSteps(true);
     const { mutateAsync: moveMarchers } = useMutation(
@@ -731,6 +748,7 @@ function ThreeFieldView() {
                         marchers={marchers}
                         labels={orderLabels}
                         theme={fieldProperties.theme}
+                        floor={orderFloor}
                     />
                 )}
                 {fieldProperties && (
