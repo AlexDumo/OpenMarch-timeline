@@ -409,6 +409,13 @@ const useTimelineZoom = ({
         },
         onPixelsPerBeatChange !== undefined,
     );
+    // Tablet 3.5 (#888): the touch transport's Fit, as Shift+Z
+    useActionHandler(
+        "timelineFit",
+        () => fit(),
+        undefined,
+        onPixelsPerBeatChange !== undefined,
+    );
 
     return {
         fit,
@@ -883,9 +890,7 @@ const TimelineSurface = memo(function TimelineSurface({
     });
     const isTouch = useIsTouchMode();
     const touchZoom =
-        isTouch &&
-        props.onPixelsPerBeatChange !== undefined &&
-        !(showTransport && props.zoomButtons);
+        isTouch && props.onPixelsPerBeatChange !== undefined && !showTransport;
     // UI-23: the view follows the playhead
     const follow = useTimelineFollow({
         viewportRef,
@@ -1146,7 +1151,7 @@ const TimelineSurface = memo(function TimelineSurface({
                             onClick={follow.revealPlayhead}
                         />
                     )}
-                    {/* Tablet 3.2: ± where a thumb reaches, unless the transport has them */}
+                    {/* Tablet 3.2: ± where a thumb reaches, unless the touch transport has them (3.5) */}
                     {touchZoom && (
                         <TimelineTouchZoom className="right-20 bottom-24" />
                     )}

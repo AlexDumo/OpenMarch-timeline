@@ -84,6 +84,8 @@ import {
 } from "./TimelineRangeMenu";
 import { MOVE_NAME_MAX_LENGTH } from "@/timeline/timelineViewModel";
 import { AddPageFlagMenu } from "./AddPageFlagMenu";
+import { useIsTouchMode } from "@/stores/InputModeStore";
+import { TimelineTouchTransport } from "./TimelineTouchTransport";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import {
     previewPagesForFlag,
@@ -228,6 +230,7 @@ export const TimelineTransport = memo(function TimelineTransport({
     onSelectionChange?: (selection: TimelineSelection) => void;
 }) {
     const { t } = useTranslate();
+    const isTouch = useIsTouchMode();
     const rowRef = useRef<HTMLDivElement>(null);
     const width = useElementWidth(rowRef);
     const folded = width > 0 && width < TRANSPORT_FOLD_PX;
@@ -303,7 +306,7 @@ export const TimelineTransport = memo(function TimelineTransport({
                 }}
                 onBlur={() => setGoTo(null)}
                 className={clsx(
-                    "bg-bg-1 text-text rounded-4 text-sub h-22 w-[150px] min-w-0 border px-6 font-mono outline-hidden",
+                    "bg-bg-1 text-text rounded-4 text-sub touch:h-44 h-22 w-[150px] min-w-0 border px-6 font-mono outline-hidden",
                     goToFailed ? "border-red" : "border-accent",
                 )}
             />
@@ -321,7 +324,7 @@ export const TimelineTransport = memo(function TimelineTransport({
                     key: "G",
                     modKey: goToMod,
                 })}
-                className="text-text rounded-4 enabled:hover:bg-fg-2 text-sub flex h-22 min-w-0 items-baseline gap-8 overflow-hidden px-4 font-mono leading-[22px] whitespace-nowrap"
+                className="text-text rounded-4 enabled:hover:bg-fg-2 text-sub touch:h-44 touch:items-center flex h-22 min-w-0 items-baseline gap-8 overflow-hidden px-4 font-mono leading-[22px] whitespace-nowrap"
             >
                 {/* UI-13: a minimum width, so the transport doesn't shift as the count changes */}
                 <span className="min-w-[15ch] shrink-0">
@@ -385,6 +388,23 @@ export const TimelineTransport = memo(function TimelineTransport({
     const divider = (
         <span aria-hidden="true" className="bg-stroke h-16 w-px shrink-0" />
     );
+    // Tablet 3.5 (#888): the touch layout has its own compact row, on the same actions
+    if (isTouch)
+        return (
+            <TransportTooltipProvider>
+                <TimelineTouchTransport
+                    isPlaying={isPlaying}
+                    playLoops={playLoops}
+                    playsOn={onPlayOn != null}
+                    fromPlayhead={onPlayFromPlayhead != null}
+                    playOnly={playOnly}
+                    clock={clock}
+                    readout={readout}
+                    canFit={onFit != null}
+                    fitted={fitted}
+                />
+            </TransportTooltipProvider>
+        );
     return (
         <TransportTooltipProvider>
             <div

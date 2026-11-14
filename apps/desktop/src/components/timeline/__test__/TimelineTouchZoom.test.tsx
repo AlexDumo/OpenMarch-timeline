@@ -29,10 +29,13 @@ function ZoomOwner({
     start = 16,
     zoomButtons = false,
     zoomOwner = true,
+    transport = true,
 }: {
     start?: number;
     zoomButtons?: boolean;
     zoomOwner?: boolean;
+    /** With the transport row */
+    transport?: boolean;
 }) {
     const [pixelsPerBeat, setPixelsPerBeat] = useState(start);
     zoom = pixelsPerBeat;
@@ -44,6 +47,7 @@ function ZoomOwner({
             pixelsPerBeat={pixelsPerBeat}
             onPixelsPerBeatChange={zoomOwner ? setPixelsPerBeat : undefined}
             zoomButtons={zoomButtons}
+            showTransport={transport}
         />
     );
 }
@@ -103,11 +107,24 @@ describe("the touch layout's ± buttons", () => {
         expect((zoomIn as HTMLButtonElement).disabled).toBe(false);
     });
 
-    it("leave it to the transport when the transport has zoom buttons (tempo mode)", () => {
+    it("sit in the touch transport's row when the timeline has a transport (3.5)", () => {
         touchLayout();
         render(<ZoomOwner zoomButtons />);
-        expect(screen.queryByTestId("timeline-touch-zoom")).toBeNull();
-        expect(screen.getByTestId("timeline-zoom-in")).toBeTruthy();
+        const zoom = screen.getByTestId("timeline-touch-zoom");
+        expect(screen.getByTestId("timeline-transport").contains(zoom)).toBe(
+            true,
+        );
+        // Once: the desktop row's own zoom buttons (tempo mode) aren't drawn too
+        expect(screen.getAllByTestId("timeline-touch-zoom")).toHaveLength(1);
+        expect(screen.queryByTestId("timeline-zoom-in")).toBeNull();
+    });
+
+    it("float over a timeline without a transport", () => {
+        touchLayout();
+        render(<ZoomOwner transport={false} />);
+        expect(screen.getByTestId("timeline-touch-zoom").className).toContain(
+            "absolute",
+        );
     });
 
     it("aren't there when the timeline doesn't own its zoom", () => {
