@@ -29,6 +29,16 @@ export interface Stage {
     clicks: number;
 }
 
+/** The theme's colors, read from the page's CSS */
+export interface Colors {
+    /** The marchers: the brand accent */
+    dot: string;
+    /** Hairlines (--color-stroke) */
+    line: string;
+    /** Text (--color-text), for drawing faint lines at a chosen strength */
+    ink: string;
+}
+
 export interface Variant {
     /** Pixels per 8-to-5 step at this width */
     stepFor(w: number): number;
@@ -39,7 +49,7 @@ export interface Variant {
     advance(stage: Stage, dt: number): void;
     marchers(): readonly XY[];
     /** Extra drawing under the marchers (the field's lines) */
-    under?(ctx: CanvasRenderingContext2D, stage: Stage, line: string): void;
+    under?(ctx: CanvasRenderingContext2D, stage: Stage, colors: Colors): void;
     /** Reduced motion: put the marchers where one still frame shows them */
     pose(stage: Stage): void;
 }
@@ -88,8 +98,8 @@ const WAYPOINTS: readonly XY[] = [
     { x: 0.8, y: 0.66 },
     { x: 0.2, y: 0.26 },
 ];
-const GLIDE = 1.7;
-const REST = 2.8;
+const GLIDE = 2.4;
+const REST = 4.5;
 /** Seconds after a person lets go before the autopilot takes over */
 const HAND_BACK = 1.4;
 
@@ -122,7 +132,11 @@ export function startHero(
         clicks: 0,
     };
     let step = 8;
-    let colors = { dot: "#6442ff", line: "rgba(0,0,0,0.1)" };
+    let colors: Colors = {
+        dot: "#6442ff",
+        line: "rgba(0,0,0,0.1)",
+        ink: "rgb(32,32,32)",
+    };
 
     // The autopilot: glide to a waypoint, rest, glide to the next
     let leg = 0;
@@ -144,6 +158,7 @@ export function startHero(
         colors = {
             dot: css.getPropertyValue("--color-accent").trim() || "#6442ff",
             line: css.getPropertyValue("--color-stroke").trim() || colors.line,
+            ink: css.getPropertyValue("--color-text").trim() || colors.ink,
         };
     }
 
@@ -168,7 +183,7 @@ export function startHero(
 
     function draw() {
         ctx.clearRect(0, 0, stage.w, stage.h);
-        variant.under?.(ctx, stage, colors.line);
+        variant.under?.(ctx, stage, colors);
         const r = Math.max(1.6, step * 0.34);
         ctx.fillStyle = colors.dot;
         ctx.globalAlpha = 0.9;

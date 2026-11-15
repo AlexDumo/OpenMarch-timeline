@@ -122,7 +122,7 @@ export function showVariant(): Variant {
             place(Math.min(1, clock / MOVE));
         },
         marchers: () => marchers,
-        under(ctx, stage, color) {
+        under(ctx, stage, { line: color }) {
             // Yard lines every 8 steps from the middle of the hero, fading out toward the
             // screenshots
             const fade = ctx.createLinearGradient(0, 0, 0, stage.open);

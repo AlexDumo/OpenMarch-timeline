@@ -30,7 +30,9 @@ const out = path.resolve(
 );
 fs.mkdirSync(out, { recursive: true });
 
-const VARIANTS = ["form", "show", "file"];
+const onlyAt = rest.indexOf("--only");
+const VARIANTS =
+    onlyAt >= 0 ? rest[onlyAt + 1].split(",") : ["form", "show", "file"];
 const FPS = 60;
 const GPU = [
     "--ignore-gpu-blocklist",
@@ -181,27 +183,20 @@ async function open(context, variant, query = "rec") {
 // What the pointer does in each variant's clip, on a 1280 × 720 page
 const DESKTOP = { width: 1280, height: 720 };
 const SCRIPTS = {
-    // Form: arrive, let it settle, wander, click through shapes, whip across, settle
+    // Form: stand (it changes form in place), drift (it marches after the pointer set by
+    // set), stand, cross, click, then a fast whip it chases over several sets
     form: {
-        start: { x: 1100, y: 40 },
+        start: { x: 640, y: 270 },
         legs: [
-            [0.9, 700, 250],
-            [1.3, 700, 250],
-            [0.9, 330, 300],
-            [1.2, 330, 300],
-            [0.2, 330, 300, "click"],
-            [1.4, 330, 300],
-            [0.7, 640, 170],
-            [0.5, 960, 330],
-            [1.5, 960, 330],
-            [0.2, 960, 330, "click"],
-            [1.2, 960, 330],
-            [0.35, 280, 200],
-            [0.35, 900, 380],
-            [0.4, 520, 250],
-            [1.8, 520, 250],
-            [0.2, 520, 250, "click"],
-            [1.6, 520, 250],
+            [3.6, 640, 270],
+            [3.0, 340, 330],
+            [3.4, 340, 330],
+            [2.4, 940, 250],
+            [3.0, 940, 250],
+            [0.2, 940, 250, "click"],
+            [2.2, 940, 250],
+            [0.6, 330, 240],
+            [6.0, 330, 240],
         ],
     },
     // Show: the band runs its sets while the pointer drifts and steers it
@@ -289,29 +284,31 @@ if (mode === "touch") {
         await context.close();
     }
     const all = path.join(out, "hero-touch.mp4");
-    await new Promise((r) =>
-        spawn(
-            "ffmpeg",
-            [
-                "-y",
-                "-loglevel",
-                "error",
-                ...files.flatMap((f) => ["-i", f]),
-                "-filter_complex",
-                "[0:v]pad=iw+16:ih:0:0:black[a];[1:v]pad=iw+16:ih:0:0:black[b];[a][b][2:v]hstack=inputs=3",
-                "-c:v",
-                "libx264",
-                "-crf",
-                "20",
-                "-pix_fmt",
-                "yuv420p",
-                "-movflags",
-                "+faststart",
-                all,
-            ],
-            { stdio: "inherit" },
-        ).on("close", r),
-    );
+    if (files.length === 1) fs.copyFileSync(files[0], all);
+    else
+        await new Promise((r) =>
+            spawn(
+                "ffmpeg",
+                [
+                    "-y",
+                    "-loglevel",
+                    "error",
+                    ...files.flatMap((f) => ["-i", f]),
+                    "-filter_complex",
+                    "[0:v]pad=iw+16:ih:0:0:black[a];[1:v]pad=iw+16:ih:0:0:black[b];[a][b][2:v]hstack=inputs=3",
+                    "-c:v",
+                    "libx264",
+                    "-crf",
+                    "20",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-movflags",
+                    "+faststart",
+                    all,
+                ],
+                { stdio: "inherit" },
+            ).on("close", r),
+        );
     console.log(all, `${seconds} s`);
 }
 
