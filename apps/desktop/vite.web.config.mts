@@ -1,3 +1,4 @@
+// cspell:words meshoptimizer meshoptimizer's ndarray premultiplying SCEN tris khronos meshopt webp
 import fs from "node:fs";
 import path from "node:path";
 import { defineConfig, loadEnv, type Plugin } from "vite";
@@ -350,6 +351,11 @@ export default defineConfig(({ mode, command }) => {
                 {
                     find: /^@om-electron\//,
                     replacement: path.join(__dirname, "electron") + "/",
+                },
+                // Spike #995: keep ndarray-ops' Function() out of the import worker
+                {
+                    find: /^ndarray-pixels$/,
+                    replacement: path.join(__dirname, "src/spike/ndarrayPixelsStub.ts"),
                 },
                 // Only the worker's main-process code imports these.
                 { find: /^(node:)?fs$/, replacement: web("worker/fs.ts") },

@@ -1,3 +1,4 @@
+// cspell:words meshoptimizer meshoptimizer's ndarray premultiplying SCEN tris khronos meshopt webp
 import { rmSync } from "node:fs";
 import path from "node:path";
 import { defineConfig } from "vite";
@@ -20,6 +21,8 @@ export default defineConfig(({ command }) => {
     const electronAlias = {
         "@": path.join(__dirname, "src"),
         "@om-electron": path.join(__dirname, "electron"),
+        // Spike #995: keep ndarray-ops' Function() out of the import worker
+        "ndarray-pixels": path.join(__dirname, "src/spike/ndarrayPixelsStub.ts"),
     };
 
     return {

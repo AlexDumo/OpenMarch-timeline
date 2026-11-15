@@ -24,6 +24,8 @@ import { initAnalyticsQuestionStore } from "@/stores/AnalyticsQuestionStore";
 import { startInputModeTracking } from "@/stores/InputModeStore";
 
 installClickFocusMarker();
+// Spike #995 (throwaway): model import worker test hooks
+import("@/spike/modelImportHook").catch((e) => console.error(e));
 
 const isSettingsWindow = window.location.hash === "#settings";
 
