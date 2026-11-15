@@ -3004,7 +3004,8 @@
             "guardUniforms": "Guard uniform",
             "brassFinish": "Brass finish",
             "tuba": "Tubas",
-            "silkShape": "Flag silk shape"
+            "silkShape": "Flag silk shape",
+            "silkArtwork": "Flag silk artwork"
         },
         "keys": {
             "playPause": "Play or pause",
@@ -3091,6 +3092,19 @@
             "wings": "Wings",
             "snake": "Snake",
             "swing": "Swing"
+        },
+        "silkArtwork": {
+            "none": "No artwork: the silks show the guard uniform's pattern or the section's color.",
+            "import": "Import PNG…",
+            "replace": "Replace…",
+            "remove": "Remove",
+            "template": "Template for {shape}:",
+            "preparing": "Preparing…",
+            "notPng": "That file isn't a PNG. Export your artwork as PNG and import it again.",
+            "tooLarge": "That PNG is larger than 32 MB. Export it smaller and import it again.",
+            "unreadable": "That PNG couldn't be read.",
+            "templateFailed": "The template couldn't be made.",
+            "saveFailed": "The flag silk artwork couldn't be saved."
         }
     },
     "web": {

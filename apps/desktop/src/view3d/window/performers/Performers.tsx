@@ -44,6 +44,7 @@ import { allSectionAppearancesQueryOptions } from "@/hooks/queries/useSectionApp
 import { useVenueSettings } from "@/hooks/queries/useVenueSettings";
 import { brassFinishOf, tubaModelOf } from "@/view3d/core/venueSettings";
 import { silkShapeOf } from "@/view3d/core/sizes/silkShapes";
+import { useSilkArtworkTexture } from "./marchers/useSilkArtworkTexture";
 import { cueSectionsOf } from "./cueSections";
 import {
     guardUniformPresetOf,
@@ -155,6 +156,8 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     const tuba = tubaModelOf(venue?.tuba);
     // the guard's flag silks' shape (fork #973)
     const silkShape = silkShapeOf(venue?.silkShape);
+    // and the Artwork they're painted with, once it's decoded
+    const silkArtwork = useSilkArtworkTexture(venue?.silkArtwork, silkShape);
     // om-pose marchers (ADR 0010 D-7); the cylinders stand in until they load.
     const { data: sectionAppearances } = useQuery(
         allSectionAppearancesQueryOptions(),
@@ -198,7 +201,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 undefined,
                 uniformPreset,
                 guardUniformPreset,
-                { finish: brassFinish, tuba, silkShape },
+                { finish: brassFinish, tuba, silkShape, silkArtwork },
             ),
             // no Silk cues yet: the silks take the uniform's carry (the
             // section's 2D fill, else the preset's color and pattern)
@@ -211,6 +214,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         brassFinish,
         tuba,
         silkShape,
+        silkArtwork,
     ]);
     const heightClasses = useMemo(
         () => [...new Set((marcherLooks ?? []).map((l) => l.body.heightClass))],

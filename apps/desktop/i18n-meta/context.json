@@ -3199,5 +3199,17 @@
     "view3d.silkShape.curvedAngle": "Option in the 3D View's flag silk shape picker, under a small picture of the shape: a large silk with a rounded top that swings down to a point, its inner edge a straight line. A common name color guards use for this shape; keep it short.",
     "view3d.silkShape.wings": "Option in the 3D View's flag silk shape picker, under a small picture of the shape: a half-circle silk with notches along its straight edge, worn like wings. A common name color guards use for this shape; keep it short.",
     "view3d.silkShape.snake": "Option in the 3D View's flag silk shape picker, under a small picture of the shape: a very long, narrow rectangular silk. A common name color guards use for this shape; keep it short.",
-    "view3d.silkShape.swing": "Option in the 3D View's flag silk shape picker, under a small picture of the shape: the swing flag's silk: its top corner rounded all the way down to a flat bottom. A common name color guards use for this shape; keep it short."
+    "view3d.silkShape.swing": "Option in the 3D View's flag silk shape picker, under a small picture of the shape: the swing flag's silk: its top corner rounded all the way down to a flat bottom. A common name color guards use for this shape; keep it short.",
+    "view3d.settings.silkArtwork": "Row label in the 3D View's View settings panel for the picture printed on the color guard's flag silks (the fabric part of a flag). The user downloads a template of the flag's shape, paints it in an image editor, and imports it here.",
+    "view3d.silkArtwork.none": "Shown in the flag silk artwork row when the show has no imported picture: what the flags look like instead. The guard uniform is a chosen preset; the section's color is the color set for the section in the editor.",
+    "view3d.silkArtwork.import": "Button: opens a file picker to choose a PNG image to print on the color guard's flag silks. The ellipsis means a file picker opens.",
+    "view3d.silkArtwork.replace": "Button shown when flag artwork is already imported: choose another PNG to use instead. The ellipsis means a file picker opens.",
+    "view3d.silkArtwork.remove": "Button: removes the imported flag silk artwork from the show (it can be undone).",
+    "view3d.silkArtwork.template": "Label before three small buttons named PNG, SVG and PDF that each download a printable template of the flag silk's shape and size, to paint on. {shape} is the shape's name, such as Teardrop or Swing.",
+    "view3d.silkArtwork.preparing": "Replaces a template download button's label while the file is being made, which can take a few seconds.",
+    "view3d.silkArtwork.notPng": "Error under the flag silk artwork row when the chosen file isn't a PNG image.",
+    "view3d.silkArtwork.tooLarge": "Error under the flag silk artwork row when the chosen PNG file is bigger than 32 megabytes.",
+    "view3d.silkArtwork.unreadable": "Error under the flag silk artwork row when the chosen PNG file is damaged or can't be opened.",
+    "view3d.silkArtwork.templateFailed": "Error under the flag silk artwork row when the template file couldn't be made for download.",
+    "view3d.silkArtwork.saveFailed": "Error message (toast) when the imported flag silk artwork couldn't be saved into the show."
 }
