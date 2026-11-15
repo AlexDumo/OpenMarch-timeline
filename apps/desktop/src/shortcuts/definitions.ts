@@ -644,6 +644,14 @@ const STATIC_ACTIONS = {
         scope: "global",
         defaultBindings: [],
     },
+    // Opens the one selected item's edit view (a prop, front ensemble equipment, a podium), as its
+    // row's edit button does; the field's right-click menu offers it on an item
+    editSelectedItem: {
+        labelKey: "actions.items.edit",
+        category: "edit",
+        scope: "global",
+        defaultBindings: [],
+    },
     // Opens the front ensemble's Add view (the pictures of every model), as its Add button does
     addFrontEnsembleEquipment: {
         labelKey: "actions.ui.addFrontEnsembleEquipment",

@@ -41,6 +41,7 @@ import {
     openFrontEnsembleAdd,
 } from "@/components/marcher/MarchersModal";
 import { registerActionHandler } from "@/shortcuts/registry";
+import { openItemEditor } from "@/components/items/openItemEditor";
 import SidebarModal from "@/components/sidebar/SidebarModal";
 import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 
@@ -121,6 +122,27 @@ const riser = (beatId: number) => ({
 });
 
 describeDbTests("Front ensemble panel", (it) => {
+    it("opens a piece of equipment's edit view from the field (right-click › Edit), with a way back", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        await createItems({ db, newItems: [marimba(await firstBeatId(db))] });
+        const [item] = await getItems({ db });
+        await setUpFeature(<SidebarModal />, PAGE, []);
+        await act(async () => openItemEditor(item));
+        expect(
+            await screen.findByRole("heading", { name: "Edit Equipment" }),
+        ).toBeTruthy();
+        expect(useSidebarModalStore.getState()).toMatchObject({
+            isOpen: true,
+            contentId: "marchers",
+        });
+        // Back to the front ensemble's list
+        fireEvent.click(screen.getByRole("button", { name: "Back" }));
+        expect(await screen.findByText("Marimba 1")).toBeTruthy();
+    });
+
     it("opens from its row in the Marchers panel, and goes back there", async ({
         db,
         marchersAndPages,
@@ -653,7 +675,7 @@ describeDbTests("Front ensemble panel", (it) => {
         expect(await screen.findByText(/No props yet/)).toBeInTheDocument();
     });
 
-    it("tells the inspector's reader selected equipment is edited in the Front ensemble panel", async ({
+    it("tells the inspector's reader selected equipment is edited with a right-click", async ({
         db,
         marchersAndPages,
     }) => {
@@ -670,7 +692,7 @@ describeDbTests("Front ensemble panel", (it) => {
         expect(
             await screen.findByTestId("inspector-equipment-selected"),
         ).toHaveTextContent(
-            "1 piece of equipment selected. Edit it in the Front ensemble panel.",
+            "1 piece of equipment selected. Right-click it to edit it.",
         );
         expect(
             screen.getByTestId("inspector-items-selected"),

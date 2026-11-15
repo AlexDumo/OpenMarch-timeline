@@ -542,8 +542,7 @@ cues: items are never cue targets (ADR 0004, amendment of 2026-10-11).
 and can move anywhere; battery and wind players can visit an instrument.
 Nothing stores who plays what: whoever's dot is on an instrument's playing
 spot (within about 1 ft) plays it, snapping to face it in a playing pose.
-Players stand on the field side of the instrument, facing the audience. 2D
-draws the playing spot as a faint marker. Pit-section players carry nothing;
+Players stand on the field side of the instrument, facing the audience. Pit-section players carry nothing;
 a visiting player keeps their own carried instrument in v1 (instrument swaps
 are their own future design).
 
@@ -590,7 +589,10 @@ the 5.0; vibes are always the 3.0 (owner, 2026-11-15).
   in its section, plus a Drum Major standing on the podium, skipping
   performers that already exist.
 - Re-applying a preset replaces only the items the previous preset created.
-  Applying is one undo step.
+  The previous preset's players (standing on its instruments' playing spots or
+  its podium) move onto the new spots for their section, and those whose
+  instruments the new preset doesn't have are removed with them (owner,
+  2026-11-15). Anyone else stays put. Applying is one undo step.
 
 **Podium.** The drum major stands on the podium at a standing height from
 the model's metadata, not through `surface_type`: the items check
@@ -609,7 +611,9 @@ every zoom, and once zoomed in past about 24 px per meter the edges seen from
 above (bars, drum heads, steps) and a small facing mark. The drawings are
 generated from the GLBs into `assets/pit/plan.json`
 (`scripts/view3d-assets/pit-plan.mjs`); a model without one draws its
-footprint rectangle. Played instruments also get a faint playing-spot marker.
+footprint rectangle. The playing spot isn't drawn (owner, 2026-11-15): where
+the player stands is plain from the drawing. Right-clicking a piece offers
+Edit, which opens its edit view.
 
 Under the equipment, the field draws a pit area (owner pick 2026-11-15,
 "flat tone"): a flat tone, the field's background with a little of its line

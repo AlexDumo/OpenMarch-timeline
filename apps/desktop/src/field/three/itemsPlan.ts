@@ -1,7 +1,6 @@
 import type { FieldTheme } from "@openmarch/core";
 import { rgbaOf, type Rgba, type StrokePlan } from "@/field/timelineOverlays";
 import type { Pt } from "@/items/itemOutlines";
-import type { PlayingSpot } from "@/view3d/core/pit/playingSpot";
 import type { DrawnItemOutline } from "./fieldItems";
 import { SELECTION_RGBA01 } from "./selectionRing";
 import { PIXELS_PER_METER } from "@/items/itemOutlines";
@@ -31,9 +30,6 @@ export type FillPlan = { readonly points: readonly Pt[]; readonly color: Rgba };
  */
 export const LOCK_BADGE_RADIUS = 9;
 export const MIN_LOCK_BADGE_RADIUS = 4;
-/** A playing spot's ring: as faint as this share of the Outline's line, 1 CSS px wide */
-export const PLAYING_SPOT_ALPHA = 0.55;
-const PLAYING_SPOT_WIDTH = 1;
 /**
  * Equipment drawn from its model (`DrawnItemOutline.plan`): the silhouette filled fainter than an
  * Outline, since the edges inside it carry the detail, and outlined as an Outline is.
@@ -59,14 +55,13 @@ const CIRCLE_POINTS = 24;
 
 /**
  * What the items layer draws: each Outline's fill, then its line; a padlock badge on each locked
- * item (`locks`, the badges' centers) and a faint ring on each pit instrument's playing spot
- * (`spots`). Line widths are CSS px.
+ * item (`locks`, the badges' centers). Line widths are CSS px. A pit instrument's playing spot
+ * isn't drawn (owner, 2026-11-15: where its player stands is plain from the drawing).
  */
 export type ItemsPlan = {
     readonly fills: readonly FillPlan[];
     readonly strokes: readonly StrokePlan[];
     readonly locks: readonly Pt[];
-    readonly spots: readonly PlayingSpot[];
 };
 
 const faded = (color: Rgba, alpha: number): Rgba => [
@@ -81,8 +76,7 @@ const faded = (color: Rgba, alpha: number): Rgba => [
  * faintly in the theme's line color) and outlined in the theme's line color,
  * a selected one outlined in the selection color. A locked item gets a
  * padlock badge at its top left corner, the same size on screen at every
- * `zoom` (CSS px per field unit, 1 by default); a pit instrument a faint ring
- * on its playing spot, as wide as the spot's reach.
+ * `zoom` (CSS px per field unit, 1 by default).
  */
 export function planItems(
     outlines: readonly DrawnItemOutline[],
@@ -103,8 +97,7 @@ export function planItems(
     const fills: FillPlan[] = [];
     const strokes: StrokePlan[] = [];
     const locks: Pt[] = [];
-    const spots: PlayingSpot[] = [];
-    // The badges and spots go over every Outline
+    // The badges and marks go over every Outline
     const badgeFills: FillPlan[] = [];
     const markStrokes: StrokePlan[] = [];
     // A model's edges go under its silhouette's line
@@ -133,17 +126,6 @@ export function planItems(
         strokes.push(...drawn.strokes);
         detailStrokes.push(...drawn.details);
         badgeFills.push(...drawn.marks);
-        const spot = outline.playingSpot;
-        if (spot) {
-            spots.push(spot);
-            markStrokes.push({
-                points: circle(spot, spot.reach, true),
-                color: faded(line, PLAYING_SPOT_ALPHA * alpha),
-                width: PLAYING_SPOT_WIDTH,
-                dash: [spot.reach / 3, spot.reach / 3],
-                round: false,
-            });
-        }
         // Equipment drawn from its model is locked as a rule (a pit stays put), so a badge on every
         // piece would only be noise; a drawn prop that's locked still gets one
         if (outline.locked && !outline.plan) {
@@ -161,7 +143,6 @@ export function planItems(
         fills: [...fills, ...badgeFills],
         strokes: [...detailStrokes, ...strokes, ...markStrokes],
         locks,
-        spots,
     };
 }
 

@@ -6,6 +6,8 @@ import { pitVariant } from "@/view3d/core/pit/catalog";
 import { performUndo } from "../history";
 import { createItems, getItems } from "../items";
 import { createMarchers } from "../marcher";
+import { PIXELS_PER_METER } from "@/items/itemOutlines";
+import { playingSpotOf } from "@/view3d/core/pit/playingSpot";
 import {
     applyPitPreset,
     performersToAdd,
@@ -210,6 +212,152 @@ describeDbTests("applyPitPreset", (it) => {
             people.find((p) => p.section === "Marimba" && p.id !== existing.id)
                 ?.drill_order,
         ).toBe(8);
+    });
+
+    it("moves the previous preset's players onto the new preset's spots", async ({
+        db,
+        beats,
+    }) => {
+        expect(beats).toBeDefined();
+        const beatId = await firstBeatId(db);
+        const reach = 0.3048 * PIXELS_PER_METER;
+        // Each marimba's player stands on its playing spot, as a real preset puts them
+        const spotOf = (home: [number, number]): [number, number] => {
+            const spot = playingSpotOf(
+                marimba.modelId,
+                {
+                    center: { x: home[0], y: home[1] },
+                    depth: marimba.footprint.depth,
+                    rotation: 0,
+                },
+                PIXELS_PER_METER,
+            )!;
+            return [spot.x, spot.y];
+        };
+        const layout = (xs: number[]) => ({
+            equipment: xs.map(
+                (x): PitPresetEquipmentArgs => ({
+                    variant: marimba,
+                    baseName: "Marimba",
+                    home: [x, 300],
+                    rotation: 0,
+                }),
+            ),
+            performers: xs.map(
+                (x): PitPresetPerformerArgs => ({
+                    section: "Marimba",
+                    home: spotOf([x, 300]),
+                }),
+            ),
+        });
+        await applyPitPreset({
+            db,
+            beatId,
+            ...layout([100, 160]),
+            performerReach: reach,
+        });
+        const first = (await performerRows(db)).map((p) => p.id);
+        // A different layout: the same two players move onto its spots, and nobody is added
+        const next = layout([400, 470]);
+        await applyPitPreset({ db, beatId, ...next, performerReach: reach });
+        const people = await performerRows(db);
+        expect(people.map((p) => p.id).sort()).toEqual([...first].sort());
+        const homes = people
+            .map((p) => [p.home_x, p.home_y])
+            .sort((a, b) => a[0] - b[0]);
+        expect(homes).toEqual(next.performers.map((p) => p.home));
+    });
+
+    it("removes the previous preset's players whose instruments the new one doesn't have", async ({
+        db,
+        beats,
+    }) => {
+        expect(beats).toBeDefined();
+        const beatId = await firstBeatId(db);
+        const reach = 0.3048 * PIXELS_PER_METER;
+        const spotOf = (x: number): [number, number] => {
+            const spot = playingSpotOf(
+                marimba.modelId,
+                {
+                    center: { x, y: 300 },
+                    depth: marimba.footprint.depth,
+                    rotation: 0,
+                },
+                PIXELS_PER_METER,
+            )!;
+            return [spot.x, spot.y];
+        };
+        const layout = (xs: number[]) => ({
+            equipment: xs.map(
+                (x): PitPresetEquipmentArgs => ({
+                    variant: marimba,
+                    baseName: "Marimba",
+                    home: [x, 300],
+                    rotation: 0,
+                }),
+            ),
+            performers: xs.map(
+                (x): PitPresetPerformerArgs => ({
+                    section: "Marimba",
+                    home: spotOf(x),
+                }),
+            ),
+        });
+        await applyPitPreset({
+            db,
+            beatId,
+            ...layout([100, 160, 220]),
+            performerReach: reach,
+        });
+        const result = await applyPitPreset({
+            db,
+            beatId,
+            ...layout([400]),
+            performerReach: reach,
+        });
+        const people = await performerRows(db);
+        expect(people).toHaveLength(1);
+        expect([people[0].home_x, people[0].home_y]).toEqual(spotOf(400));
+        expect(result.removedPerformerIds).toHaveLength(2);
+        // One undo brings them back where they were
+        await performUndo(db);
+        expect(await performerRows(db)).toHaveLength(3);
+    });
+
+    it("leaves a player who isn't at the previous preset's instruments where they are", async ({
+        db,
+        beats,
+    }) => {
+        expect(beats).toBeDefined();
+        const beatId = await firstBeatId(db);
+        await createMarchers({
+            db,
+            newMarchers: [
+                { section: "Marimba", drill_prefix: "MR", drill_order: 1 },
+            ],
+        });
+        const roamer = (await performerRows(db))[0];
+        await applyPitPreset({
+            db,
+            beatId,
+            equipment,
+            performers,
+            performerReach: 5,
+        });
+        await applyPitPreset({
+            db,
+            beatId,
+            equipment,
+            performers,
+            performerReach: 5,
+        });
+        const after = (await performerRows(db)).find(
+            (p) => p.id === roamer.id,
+        )!;
+        expect([after.home_x, after.home_y]).toEqual([
+            roamer.home_x,
+            roamer.home_y,
+        ]);
     });
 
     it("replaces only the items the previous preset created", async ({

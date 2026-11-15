@@ -30,6 +30,7 @@ questions:
   picture, with a search box; pick one and click the field to place it.
   **Reset to preset** swaps the pit for a Small, Medium or Large layout (one
   undo takes it back). Both are in the command palette too.
+- Right-click a piece of equipment on the field: **Edit** opens its settings.
 - The **Props** panel lists only props now, not the pit.
 - Drag a piece of equipment on one page, then look at another page: it moved
   there too (equipment stays in one spot all show). Lasso some marchers across

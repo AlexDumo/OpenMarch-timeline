@@ -466,7 +466,7 @@ function MarcherEditor() {
     const { selectedMarchers: selection, setSelectedMarchers } =
         useSelectedMarchers()!;
     // Performers: items are edited in their panels, not as marchers: props in the Props panel,
-    // equipment in the Front ensemble panel
+    // equipment, edited from its right-click menu
     const selectedMarchers = useMemo(
         () => performersOnly(selection),
         [selection],

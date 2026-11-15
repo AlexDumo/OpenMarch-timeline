@@ -8,7 +8,7 @@ import type { FieldTestItem } from "../../../src/field/fieldTestApi";
 // The front ensemble on the 2D field (instruments.md section 6): equipment
 // stands in the pit strip in front of the front sideline, a locked item has
 // one position for the whole show, area selections skip it, and a pit
-// instrument draws its playing spot on its field side.
+// instrument has its playing spot on its field side.
 
 /** Field units per meter and per foot, as `PIXELS_PER_METER` (`src/items/itemOutlines.ts`) */
 const PIXELS_PER_METER = 0.5 / 0.0254;

@@ -234,6 +234,10 @@
             "openFrontEnsembleKeywords": "pit front ensemble podium drum major marimba vibraphone percussion speaker equipment preset",
             "addFrontEnsembleEquipment": "Add front ensemble equipment or podium",
             "addFrontEnsembleEquipmentKeywords": "pit podium drum major marimba vibraphone percussion speaker mixer tower stepladder instrument"
+        },
+        "items": {
+            "edit": "Edit selected prop or equipment",
+            "editNamed": "Edit {name}"
         }
     },
     "analyticsOptIn": {
@@ -758,7 +762,7 @@
             "drillNumber": "Drill Number",
             "errorLoadingCoords": "Error loading coordinates",
             "itemsSelected": "{count, plural, one {# prop selected. Edit it in the Props panel.} other {# props selected. Edit them in the Props panel.}}",
-            "equipmentSelected": "{count, plural, one {# piece of equipment selected. Edit it in the Front ensemble panel.} other {# pieces of equipment selected. Edit them in the Front ensemble panel.}}",
+            "equipmentSelected": "{count, plural, one {# piece of equipment selected. Right-click it to edit it.} other {# pieces of equipment selected. Right-click one to edit it.}}",
             "playing": "Playing. Pause to see and edit the selected marchers.",
             "maxStepSize": "Largest step size",
             "minStepSize": "Smallest step size",
@@ -1490,7 +1494,7 @@
             "always": "Each also adds a podium on the 50 and a mixer behind the pit.",
             "addPerformers": "Also add performers",
             "apply": "Apply",
-            "replaces": "Replaces the equipment the last preset added. Equipment you added yourself stays.",
+            "replaces": "Replaces the equipment the last preset added, with its players moved onto the new spots. Equipment you added yourself stays.",
             "none": "None",
             "start": "Start from a preset",
             "reset": "Reset to preset"

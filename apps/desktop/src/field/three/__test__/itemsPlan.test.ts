@@ -169,7 +169,7 @@ describe("planItems for the front ensemble", () => {
         ).toHaveLength(1);
     });
 
-    it("draws a pit instrument's playing spot as a faint ring of its reach", () => {
+    it("draws nothing for a pit instrument's playing spot", () => {
         const spot = playingSpotOf("pit/marimba-5.0", {
             center: { x: 5, y: 5 },
             depth: 1,
@@ -177,16 +177,8 @@ describe("planItems for the front ensemble", () => {
         });
         const plain = planItems([square(1)], withZoom);
         const plan = planItems([{ ...square(1), playingSpot: spot }], withZoom);
-        expect(plan.spots).toEqual([spot]);
-        const ring = plan.strokes.slice(plain.strokes.length);
-        expect(ring).toHaveLength(1);
-        expect(ring[0].dash).not.toBeNull();
-        for (const p of ring[0].points)
-            expect(Math.hypot(p.x - spot!.x, p.y - spot!.y)).toBeCloseTo(
-                spot!.reach,
-            );
-        // Fainter than the Outline's line
-        expect(ring[0].color[3]).toBeLessThan(plain.strokes[0].color[3]);
+        expect(plan.strokes).toEqual(plain.strokes);
+        expect(plan.fills).toEqual(plain.fills);
     });
 
     describe("equipment drawn from its model", () => {
