@@ -1571,18 +1571,19 @@ function saxHands(
 /**
  * The bari up (owner, 2026-11-14, with marching photos): too long to hang
  * straight in front, it is worn on a harness sideways down the body, the
- * top of the horn out by the left shoulder and the bow at the right hip,
- * the bell opening forward. The sax hold turned `BARI_YAW_DEG` toward the
+ * top of the horn out by the left shoulder and the bow resting just in
+ * front of the right thigh, nearly touching the leg, the bell opening
+ * forward. The sax hold turned `BARI_YAW_DEG` toward the
  * performer's left about the vertical, which carries the body out to the
  * left with the neck coming in to the mouth from there, then rolled
  * `BARI_ROLL_DEG` about the forward axis so the bottom swings across to the
- * right hip, and its bottom tipped back `BARI_PITCH_DEG` so the bow rests
- * against the hip rather than hanging out in front. The mouthpiece stays at
+ * right thigh, and its bottom tipped back `BARI_PITCH_DEG` so the bow sits
+ * against the leg rather than hanging out in front. The mouthpiece stays at
  * the lips; the hands follow the stacks.
  */
-const BARI_YAW_DEG = 35;
-const BARI_ROLL_DEG = 22;
-const BARI_PITCH_DEG = 10;
+const BARI_YAW_DEG = 50;
+const BARI_ROLL_DEG = 21;
+const BARI_PITCH_DEG = 5;
 /** The bari's right elbow: down at the side, a little in and back, not winged. */
 const BARI_RIGHT_ELBOW_OUT: Vec3 = [-0.15, -1, -0.25];
 function bariUp(): Hold {

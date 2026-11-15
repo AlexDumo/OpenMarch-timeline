@@ -235,8 +235,13 @@ describe("the sax held in front", () => {
         const top = point([0, yb, sh.pigtail!.bowTop]);
         const bow = point([0, yb, bowZ]);
         expect(top[0]).toBeGreaterThan(0.05);
+        // the bow rests just in front of the right thigh (owner, 2026-11-14:
+        // nearly touching the leg), its axis about a bow's radius off it
         expect(bow[0]).toBeLessThan(-0.15);
+        expect(bow[0]).toBeGreaterThan(-0.25);
         expect(bow[1]).toBeLessThan(0.85);
+        expect(bow[2]).toBeGreaterThan(0.12);
+        expect(bow[2]).toBeLessThan(0.26);
     });
 });
 

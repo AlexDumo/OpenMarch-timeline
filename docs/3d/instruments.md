@@ -400,11 +400,16 @@ points and where the elbows go.
   straight up and down, the mouthpiece would come straight back to the
   player and the bell face straight away, with the top loop, crook and neck
   receiver on the near side of the body in the same plane. Up: too long to
-  hang straight in front, it is worn sideways down the body, the sax hold
-  turned 30 degrees toward the performer's left (`BARI_YAW_DEG`), which
+  hang straight in front, it is worn sideways down the body, as marching
+  photos show: the neck by the left side of the face and the bow resting
+  just in front of the right thigh, nearly touching the leg. The sax hold
+  turned 50 degrees toward the performer's left (`BARI_YAW_DEG`), which
   carries the body out to the left with the neck coming in to the mouth
-  from there, then rolled 22 degrees (`BARI_ROLL_DEG`) so the bow swings
-  across to the right hip; the bell still opens forward. Carry: as the
+  from there, rolled 21 degrees (`BARI_ROLL_DEG`) so the bow swings across
+  to the right thigh, and its bottom tipped back 5 degrees
+  (`BARI_PITCH_DEG`); the bell opens forward and a little left. The right
+  elbow hangs tucked in at the side, the forearm reaching down the horn to
+  the lower stack (owner, 2026-11-14). Carry: as the
   alto's, the hands on the bari's upper stacks so they reach at eye level.
   Trail: as the alto's, the tube a little further out for the wide bell.
 - **snare, tenors.** Elbows at the sides, a little forward, not winged
