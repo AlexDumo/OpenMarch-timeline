@@ -293,6 +293,18 @@ describe("instrument color and material", () => {
         expect(shader.fragmentShader).toContain(
             "material.clearcoat *= vSurface.z;",
         );
+        // the insides of open tubes (looking into a bell) partly diffuse
+        expect(shader.fragmentShader).toContain(
+            "if (!gl_FrontFacing) metalnessFactor *=",
+        );
+        expect(shader.fragmentShader).toContain(
+            "if (!gl_FrontFacing) roughnessFactor = max(roughnessFactor,",
+        );
+        // reflections lose most of the environment's (turf) color
+        expect(shader.fragmentShader).toContain("vec3 neutralEnv(");
+        expect(shader.fragmentShader).toContain(
+            "neutralEnv(envMapColor.rgb) *",
+        );
         // the environment's boost replaced the chunk's own intensity
         expect(shader.fragmentShader).toContain("(envMapIntensity * ");
         expect(shader.fragmentShader).not.toContain(

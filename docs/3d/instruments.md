@@ -227,7 +227,12 @@ horn shows is what it reflects. So the environment map (`envMap.ts`) holds
 more than a sky gradient: a dark band of stands round the horizon, a sun
 many times brighter than white, clouds, the light towers at night and a
 hall's ceiling panels, and instruments take it `ENVIRONMENT_BOOST` times as
-brightly as the turf and uniforms do. One extra draw call per brass group.
+brightly as the turf and uniforms do, but mostly without its color
+(`ENVIRONMENT_NEUTRAL`, 0.75): a stadium's environment is largely turf, and
+lacquer reflecting it read dark olive, inside and outside the bells
+(#957). The insides of open tubes (looking into a bell) are also partly
+diffuse (`INSIDE_METALNESS`, `INSIDE_ROUGHNESS`), so they show their own
+lacquer or plate. One extra draw call per brass group.
 
 **Silks** are not instrument pieces (C4.4, props-spec.md section 7). A flag
 model lists its silks as `SilkSpec`s (size, frame in the instrument frame,

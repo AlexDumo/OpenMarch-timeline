@@ -249,9 +249,30 @@ export function surfaceOf(part: number, finish: Finish): Surface {
 export const ENVIRONMENT_BOOST = 1.7;
 
 /**
+ * How much of the environment's color instruments drop from what they
+ * reflect, keeping its brightness (0 none, 1 grey). A stadium's environment
+ * is mostly turf, so lacquer and plate reflecting it read dark olive
+ * instead of gold or silver (#957); a mostly grey reflection lets the
+ * metal's own color carry.
+ */
+export const ENVIRONMENT_NEUTRAL = 0.75;
+
+/**
+ * The inside of an open tube (a bell's throat, seen from in front) as a
+ * share of the outside's metalness, and its least roughness. Fully metallic,
+ * the inside showed only what it reflects, mostly the turf, so every bell
+ * looked dark olive inside (#957); partly diffuse, it shows its own lacquer
+ * or plate lit by the sky, as a bell's inside reads at a distance.
+ */
+export const INSIDE_METALNESS = 0.45;
+export const INSIDE_ROUGHNESS = 0.45;
+
+/**
  * Patches a physical material's shaders so each vertex draws with its own
- * `_surface` (metalness, roughness, clear coat: {@link surfaceOf}), and
- * reflects the environment {@link ENVIRONMENT_BOOST} times as brightly.
+ * `_surface` (metalness, roughness, clear coat: {@link surfaceOf}), the
+ * insides of open tubes partly diffuse ({@link INSIDE_METALNESS}), and
+ * reflects the environment {@link ENVIRONMENT_BOOST} times as brightly and
+ * mostly without its color ({@link ENVIRONMENT_NEUTRAL}).
  */
 export function surfaceShader(shader: {
     vertexShader: string;
@@ -273,11 +294,11 @@ export function surfaceShader(shader: {
         )
         .replace(
             "#include <metalnessmap_fragment>",
-            "#include <metalnessmap_fragment>\n  metalnessFactor = vSurface.x;",
+            `#include <metalnessmap_fragment>\n  metalnessFactor = vSurface.x;\n  if (!gl_FrontFacing) metalnessFactor *= ${INSIDE_METALNESS.toFixed(2)};`,
         )
         .replace(
             "#include <roughnessmap_fragment>",
-            "#include <roughnessmap_fragment>\n  roughnessFactor = vSurface.y;",
+            `#include <roughnessmap_fragment>\n  roughnessFactor = vSurface.y;\n  if (!gl_FrontFacing) roughnessFactor = max(roughnessFactor, ${INSIDE_ROUGHNESS.toFixed(2)});`,
         )
         .replace(
             "#include <lights_physical_fragment>",
@@ -285,10 +306,16 @@ export function surfaceShader(shader: {
         )
         .replace(
             "#include <envmap_physical_pars_fragment>",
-            THREE.ShaderChunk.envmap_physical_pars_fragment.replaceAll(
-                "envMapIntensity",
-                `(envMapIntensity * ${ENVIRONMENT_BOOST.toFixed(2)})`,
-            ),
+            `vec3 neutralEnv(const in vec3 c) {\n  return mix(c, vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), ${ENVIRONMENT_NEUTRAL.toFixed(2)});\n}\n` +
+                THREE.ShaderChunk.envmap_physical_pars_fragment
+                    .replaceAll(
+                        "envMapColor.rgb *",
+                        "neutralEnv(envMapColor.rgb) *",
+                    )
+                    .replaceAll(
+                        "envMapIntensity",
+                        `(envMapIntensity * ${ENVIRONMENT_BOOST.toFixed(2)})`,
+                    ),
         );
 }
 
