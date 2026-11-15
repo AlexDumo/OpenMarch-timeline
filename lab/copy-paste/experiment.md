@@ -32,6 +32,8 @@ marchers you have selected into the copied formation.
   same number, then onto fewer, then onto more. With fewer, the nearest
   spots are used. With more, the nearest marchers take the spots and the
   rest stay where they are.
+- The Clipboard card is at the top of the inspector. Select its heading to
+  fold it away, and **Clear** to empty the clipboard.
 - Copy a box, then pick **Positions** under **Paste as** on the Clipboard
   card and paste onto fewer marchers: they take some of the box's exact
   spots instead of a smaller box, and stay plain marchers.

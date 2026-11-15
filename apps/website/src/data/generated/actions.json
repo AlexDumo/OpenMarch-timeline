@@ -1420,6 +1420,11 @@
         "category": "edit",
         "bindings": []
     },
+    "clearClipboard": {
+        "label": "Clear the clipboard",
+        "category": "edit",
+        "bindings": []
+    },
     "pasteFormationInPlace": {
         "label": "Paste in place",
         "category": "edit",

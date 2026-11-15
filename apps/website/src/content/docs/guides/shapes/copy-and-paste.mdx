@@ -46,11 +46,13 @@ Placing is one step you can undo. Each marcher takes a spot by least travel, as 
 
 ## See what's copied
 
-Once you copy, the inspector shows a <Ui k="shapes.clipboard.title" /> card: a small picture of the formation, what it is (a shape's name, or <Ui k="shapes.clipboard.positions" plain /> for marchers copied where they stand), and how many marchers it has. It also says whether you can paste onto any number of marchers or need to select a certain number, and checks that against the marchers you have selected now. Its <Ui k="actions.edit.paste" /> and <Ui k="actions.edit.pasteInPlace" /> buttons do the same as the menu.
+Once you copy, the top of the inspector shows a <Ui k="shapes.clipboard.title" /> card: a small picture of the formation, what it is (a shape's name, or <Ui k="shapes.clipboard.positions" plain /> for marchers copied where they stand), and how many marchers it has. It also says whether you can paste onto any number of marchers or need to select a certain number, and checks that against the marchers you have selected now. Its <Ui k="actions.edit.paste" /> and <Ui k="actions.edit.pasteInPlace" /> buttons do the same as the menu.
+
+Select the card's heading to fold it away; folded, the heading still says what's copied, such as "Clipboard: Box, 16 marchers", and it stays folded until you open it again. Select <Ui k="shapes.clipboard.clear" /> to empty the clipboard, or choose <Ui k="actions.edit.clearClipboard" plain /> in the command palette; there is then nothing to paste until you copy again.
 
 <Media
   id="shapes-clipboard-card"
-  alt="The inspector's Clipboard card: a picture of a gently curved row of dots, Positions, 12 marchers, the line Fills 12 spots: select 12 marchers to fill them all, a warning that with 2 selected 10 spots stay empty, and Paste and Paste in place buttons."
+  alt="The inspector's Clipboard card, with the caret that folds it: a picture of a gently curved row of dots, Positions, 12 marchers, the line Fills 12 spots: select 12 marchers to fill them all, a warning that with 2 selected 10 spots stay empty, and Paste, Paste in place and Clear buttons."
 />
 
 ## Paste a shape as its positions
@@ -78,7 +80,7 @@ You can't yet choose in the pasted formation which spots stay empty. To leave ce
 ## What is kept
 
 - A shape copied whole is a shape again once you place it: you can select it and change it like any placed shape. Marchers copied where they stand are pasted as plain marchers, with no shape.
-- The copied formation stays until you copy another one. OpenMarch keeps it on this computer, so you can open another show and paste it there, and it is still there after you restart.
+- The copied formation stays until you copy another one or clear it. OpenMarch keeps it on this computer, so you can open another show and paste it there, and it is still there after you restart.
 - It is not on your system's clipboard. Copying text doesn't replace it, and it can't be pasted into another app. In a text box, the same keys copy and paste text as usual.
 - On a field with a different step size, the formation keeps its size in steps, and a shape is pasted as plain marchers.
 
