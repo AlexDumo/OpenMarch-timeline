@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * Migration 0019 gives items an optional built-in 3D model and a lock. A file saved before it
+ * Migration 0020 gives items an optional built-in 3D model and a lock. A file saved before it
  * opens with every item kept, drawn as a block (no model) and unlocked, and ends with a new file's
  * schema.
  */
@@ -27,10 +27,10 @@ const itemColumns = (file: string) =>
         ).map((c) => c.name),
     );
 
-describe("0019_item_model_and_lock", () => {
+describe("0020_item_model_and_lock", () => {
     let dir: string;
     beforeEach(() => {
-        dir = fs.mkdtempSync(path.join(os.tmpdir(), "om-0019-"));
+        dir = fs.mkdtempSync(path.join(os.tmpdir(), "om-0020-"));
         vi.spyOn(console, "log").mockImplementation(() => {});
         vi.spyOn(console, "debug").mockImplementation(() => {});
     });
@@ -44,7 +44,7 @@ describe("0019_item_model_and_lock", () => {
         await createNewTimelineShow(file);
         const fresh = withDb(file, normalizedSchema);
 
-        rollBackMigrationsFrom(file, 19);
+        rollBackMigrationsFrom(file, 20);
         expect(itemColumns(file)).not.toContain("model");
         expect(itemColumns(file)).not.toContain("locked");
         expect(itemColumns(file)).not.toContain("from_preset");

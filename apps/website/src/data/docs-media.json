@@ -80,6 +80,18 @@
         "width": 752,
         "height": 1784
     },
+    "3d-silk-artwork": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 1600,
+        "height": 586
+    },
+    "3d-silk-settings": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 684,
+        "height": 1032
+    },
     "3d-window": {
         "chapter": "3d-view",
         "kind": "still",
@@ -206,7 +218,7 @@
         "chapter": "marchers",
         "kind": "still",
         "width": 644,
-        "height": 1116
+        "height": 756
     },
     "marchers-move-drag": {
         "chapter": "marchers",
@@ -221,10 +233,24 @@
         "width": 1012,
         "height": 1040
     },
-    "marchers-rotate": {
+    "marchers-pivot": {
         "chapter": "marchers",
         "kind": "clip",
         "width": 1240,
+        "height": 960,
+        "seconds": 7
+    },
+    "marchers-pivot-pick": {
+        "chapter": "marchers",
+        "kind": "clip",
+        "width": 1240,
+        "height": 720,
+        "seconds": 8
+    },
+    "marchers-rotate": {
+        "chapter": "marchers",
+        "kind": "clip",
+        "width": 1120,
         "height": 840,
         "seconds": 4.5
     },

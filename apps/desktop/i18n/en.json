@@ -579,6 +579,11 @@
             "wholeDegrees": "whole degrees",
             "withKey": "<keys></keys> {word}"
         },
+        "pivotHint": {
+            "own": "Drag to move the pivot · double-click to put it back in the middle",
+            "picking": "Click a marcher or a spot to turn around · <keys></keys> cancel",
+            "pull": "<keys></keys> move the pivot"
+        },
         "general": {
             "exportField": "Export Field",
             "exportField.tooltip": "Export this field to a file to use in other projects",
@@ -759,6 +764,13 @@
         "valueMissing": "Please enter a value."
     },
     "inspector": {
+        "arrange": {
+            "title": "Arrange",
+            "pickPivot": "Pick the pivot on the field",
+            "pickPivotHint": "Or hold {key} and drag the dot in the middle of the selection",
+            "pivotTip": "Turn around the {pivot}",
+            "pickPivotButton": "Pick on field"
+        },
         "marcher": {
             "drillNumber": "Drill Number",
             "errorLoadingCoords": "Error loading coordinates",
@@ -813,6 +825,7 @@
             "removeFromTagCaption": "Remove",
             "alignHeading": "Align",
             "distributeHeading": "Distribute",
+            "rotateHeading": "Rotate",
             "distributeStepsPlaceholder": "Steps",
             "coords": {
                 "x": "X",
@@ -2206,9 +2219,6 @@
                 "ringCaption": "Ring"
             }
         },
-        "transform": {
-            "title": "Transform"
-        },
         "validate": {
             "noPosition": "The shape has a spot with no position",
             "offField": "{count, plural, one {# marcher would stand} other {# marchers would stand}} off the field",
@@ -3090,7 +3100,9 @@
             "uniforms": "Band uniform",
             "guardUniforms": "Guard uniform",
             "brassFinish": "Brass finish",
-            "tuba": "Tubas"
+            "tuba": "Tubas",
+            "silkShape": "Flag silk shape",
+            "silkArtwork": "Flag silk artwork"
         },
         "keys": {
             "playPause": "Play or pause",
@@ -3162,6 +3174,34 @@
         "pausedPose": {
             "label": "Show the actual step when paused",
             "tooltip": "Show marchers mid-step when paused, as they are at that moment. Off: they stand closed on their dots"
+        },
+        "silkShape": {
+            "standard": "Standard",
+            "curvedTail": "Curved tail",
+            "cSwing": "C-swing",
+            "rainbow": "Rainbow",
+            "arc": "Arc",
+            "teardrop": "Teardrop",
+            "distressed": "Distressed",
+            "rounded": "Rounded",
+            "rectangle": "Rectangle",
+            "curvedAngle": "Oversized curved angle",
+            "wings": "Wings",
+            "snake": "Snake",
+            "swing": "Swing"
+        },
+        "silkArtwork": {
+            "none": "No artwork: the silks show the guard uniform's pattern or the section's color.",
+            "import": "Import PNG…",
+            "replace": "Replace…",
+            "remove": "Remove",
+            "template": "Template for {shape}:",
+            "preparing": "Preparing…",
+            "notPng": "That file isn't a PNG. Export your artwork as PNG and import it again.",
+            "tooLarge": "That PNG is too large. Export it at a lower resolution and import it again.",
+            "unreadable": "That PNG couldn't be read.",
+            "templateFailed": "The template couldn't be made.",
+            "saveFailed": "The flag silk artwork couldn't be saved."
         }
     },
     "web": {
