@@ -16,8 +16,8 @@ Open a demo show. Basic or Expert both work.
 
 **What to try**
 
-- Select a few marchers and place a box on Page 2 (press the box shape key or
-  use the Shapes tab).
+- Select a few marchers and place a box on Page 2 (from the Shapes tab in the
+  inspector).
 - Go to Page 3. Select the box: its bars on the timeline are dashed, Not
   defined. That's what it always did when you edited it there: Page 3 got a
   copy of its own.
