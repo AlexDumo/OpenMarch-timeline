@@ -183,26 +183,21 @@ async function open(context, variant, query = "rec") {
 // What the pointer does in each variant's clip, on a 1280 × 720 page
 const DESKTOP = { width: 1280, height: 720 };
 const SCRIPTS = {
-    // Form: stand (it changes form in place), drift, a fast sweep it keeps up with, a click,
-    // a whip across, stand
+    // Form: lead the file around, stop (it winds into a circle and runs the show), lead it off
+    // mid-show, stop again
     form: {
-        start: { x: 640, y: 270 },
+        start: { x: 200, y: 300 },
         legs: [
-            [3.0, 640, 270],
-            [1.6, 340, 320],
-            [1.4, 340, 320],
-            [0.7, 620, 210],
-            [0.7, 900, 320],
-            [0.7, 1020, 220],
-            [0.7, 760, 180],
-            [0.7, 520, 300],
-            [2.0, 520, 300],
-            [0.2, 520, 300, "click"],
-            [1.6, 520, 300],
-            [0.4, 980, 230],
-            [2.4, 980, 230],
-            [0.5, 280, 250],
-            [3.0, 280, 250],
+            [0.9, 460, 190],
+            [0.8, 700, 330],
+            [0.8, 1000, 200],
+            [0.7, 820, 160],
+            [0.8, 990, 250],
+            [23.5, 990, 250],
+            [0.7, 700, 180],
+            [0.7, 420, 330],
+            [0.8, 290, 250],
+            [7.0, 290, 250],
         ],
     },
     // Show: the band runs its sets while the pointer drifts and steers it
