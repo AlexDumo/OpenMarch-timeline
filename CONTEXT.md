@@ -62,8 +62,6 @@ From ADR 0015.
 - **Lasting / momentary**: a lasting cue holds until that performer's next lasting cue of the
   type; a momentary one applies for a length in counts, then the lasting value shows again.
 - **Transition length**: how many counts a cue's change takes; each value has a default.
-- **Hold style**: what a holding performer's feet do: stand (the default), mark time or high mark
-  time. A property of the hold, not a cue.
 
 ## Modifier keys
 
