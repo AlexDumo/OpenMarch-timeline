@@ -46,10 +46,10 @@ import SidebarModal from "@/components/sidebar/SidebarModal";
 import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 
 /**
- * The Front ensemble panel (instruments.md §6): equipment is picked as a family, then a variant,
- * placed with a click as a locked item with its model's footprint, and edited as props are, with
- * its variant and lock. Equipment and podiums are listed there, apart, and never in the Props
- * panel.
+ * The front ensemble (instruments.md §6), in the Marchers panel: its list of equipment and
+ * podiums, the Add view (every model as a picture, by group, with search) that places one with a
+ * click as a locked item with its model's footprint, edited as props are, with its variant and
+ * lock, and opened from the field's right-click menu too. Equipment is never in the Props panel.
  */
 
 const app = vi.hoisted(() => ({ client: (): unknown => null }));

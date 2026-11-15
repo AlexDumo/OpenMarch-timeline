@@ -11,6 +11,7 @@ import { playingSpotOf } from "@/view3d/core/pit/playingSpot";
 import {
     applyPitPreset,
     performersToAdd,
+    reseatPlayers,
     type PitPresetEquipmentArgs,
     type PitPresetPerformerArgs,
 } from "../pitPreset";
@@ -97,6 +98,68 @@ describe("performersToAdd", () => {
             ),
         ).toEqual([]);
     });
+});
+
+describe("reseatPlayers", () => {
+    const reach = 5;
+    const oldSpots = [
+        { home: [100, 180] as [number, number], section: "Marimba" },
+        { home: [130, 180] as [number, number], section: "Marimba" },
+    ];
+    const planned = [
+        { section: "Marimba", home: [400, 180] as [number, number] },
+    ];
+    const performer = (
+        id: number,
+        section: string,
+        home: [number, number],
+        hasMoves = false,
+    ) => ({ id, section, home, hasMoves });
+
+    plainIt(
+        "moves players onto the new spots and removes the ones left over",
+        () => {
+            expect(
+                reseatPlayers(
+                    [
+                        performer(1, "Marimba", [100, 180]),
+                        performer(2, "Marimba", [130, 180]),
+                    ],
+                    oldSpots,
+                    planned,
+                    reach,
+                ),
+            ).toEqual({ moves: [{ id: 1, home: [400, 180] }], leftovers: [2] });
+        },
+    );
+
+    plainIt("keeps a leftover player who has drill moves", () => {
+        expect(
+            reseatPlayers(
+                [
+                    performer(1, "Marimba", [100, 180]),
+                    performer(2, "Marimba", [130, 180], true),
+                ],
+                oldSpots,
+                planned,
+                reach,
+            ).leftovers,
+        ).toEqual([]);
+    });
+
+    plainIt(
+        "never touches a performer of another section standing on a spot",
+        () => {
+            expect(
+                reseatPlayers(
+                    [performer(3, "Trumpet", [100, 180])],
+                    oldSpots,
+                    [],
+                    reach,
+                ),
+            ).toEqual({ moves: [], leftovers: [] });
+        },
+    );
 });
 
 describeDbTests("applyPitPreset", (it) => {

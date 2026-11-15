@@ -81,6 +81,9 @@ export function loadPitPlans(): Promise<void> {
         (module) => {
             plans = module.default as Record<string, PitPlan>;
             listeners.forEach((listener) => listener());
+            // They load once: nobody needs to hear again, and holding on would keep each
+            // listener's owner (a field's items) alive after it's gone
+            listeners.clear();
         },
         (error: unknown) => {
             // eslint-disable-next-line no-console -- a broken built-in asset is worth one line
@@ -93,8 +96,9 @@ export function loadPitPlans(): Promise<void> {
 /** Whether the plans have loaded (`loadPitPlans`). */
 export const arePitPlansLoaded = (): boolean => plans !== null;
 
-/** Hears when the plans have loaded. */
+/** Hears when the plans have loaded (once; nothing once they have). */
 export function subscribePitPlans(listener: () => void): () => void {
+    if (plans) return () => {};
     listeners.add(listener);
     return () => listeners.delete(listener);
 }

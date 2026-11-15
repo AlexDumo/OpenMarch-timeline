@@ -2,6 +2,7 @@ import * as RadioGroup from "@radix-ui/react-radio-group";
 import { CheckCircleIcon, CircleIcon } from "@phosphor-icons/react";
 import { useTranslate } from "@tolgee/react";
 import clsx from "clsx";
+import { useId } from "react";
 import {
     PIT_PRESET_SIZES,
     type PitPresetSize,
@@ -28,6 +29,7 @@ export default function PitPresetCards({
     "aria-labelledby"?: string;
 }) {
     const { t } = useTranslate();
+    const idPrefix = useId();
     const selected: Choice = value ?? "none";
     return (
         <RadioGroup.Root
@@ -43,8 +45,8 @@ export default function PitPresetCards({
         >
             {CHOICES.map((choice) => {
                 const checked = selected === choice;
-                const titleId = `pit-preset-card-${choice}-title`;
-                const descriptionId = `pit-preset-card-${choice}-description`;
+                const titleId = `${idPrefix}-${choice}-title`;
+                const descriptionId = `${idPrefix}-${choice}-description`;
                 return (
                     <RadioGroup.Item
                         key={choice}

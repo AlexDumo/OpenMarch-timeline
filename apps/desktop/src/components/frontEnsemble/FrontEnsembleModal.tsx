@@ -16,6 +16,7 @@ import { isPodiumFamily, pitVariant } from "@/view3d/core/pit/catalog";
 import FrontEnsemblePicker from "./FrontEnsemblePicker";
 import PitPresets from "./PitPresets";
 import { runAction } from "@/shortcuts/registry";
+import { formatList } from "@/utilities/formatList";
 import { usePitVariantLabel } from "./usePitVariantLabel";
 
 /**
@@ -67,10 +68,22 @@ export function FrontEnsembleSummary() {
                 </span>
                 <span className="text-sub text-text-subtitle">
                     {hasPit
-                        ? t("frontEnsemble.summary.counts", {
-                              equipment: equipment.length,
-                              podiums: podiums.length,
-                          })
+                        ? formatList([
+                              ...(equipment.length > 0
+                                  ? [
+                                        t("frontEnsemble.summary.equipment", {
+                                            count: equipment.length,
+                                        }),
+                                    ]
+                                  : []),
+                              ...(podiums.length > 0
+                                  ? [
+                                        t("frontEnsemble.summary.podiums", {
+                                            count: podiums.length,
+                                        }),
+                                    ]
+                                  : []),
+                          ])
                         : t("frontEnsemble.summary.none")}
                 </span>
             </div>

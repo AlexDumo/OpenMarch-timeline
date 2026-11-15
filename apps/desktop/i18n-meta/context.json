@@ -3004,7 +3004,7 @@
     "frontEnsemble.presets.apply": "Button that places the chosen front ensemble preset on the field. Can be undone in one step.",
     "frontEnsemble.presets.large": "Option in a three-way switch picking the largest front ensemble (pit) preset. Keep it to one short word.",
     "frontEnsemble.presets.medium": "Option in a three-way switch picking the middle-sized front ensemble (pit) preset. Keep it to one short word.",
-    "frontEnsemble.presets.replaces": "Note in the presets popover once a preset was applied: applying another removes the equipment the previous preset placed and moves its players onto the new instruments (players whose instrument the new preset doesn't have are removed). Equipment placed by hand isn't touched.",
+    "frontEnsemble.presets.replaces": "Note in the presets popover once a preset was applied: applying another removes the equipment the previous preset placed and moves its players onto the new instruments; players whose instrument the new preset doesn't have are removed (unless they have drill moves). One undo restores it all. Equipment placed by hand isn't touched.",
     "frontEnsemble.presets.size": "Screen-reader label of the Small / Medium / Large switch that picks which front ensemble preset to apply.",
     "frontEnsemble.presets.small": "Option in a three-way switch picking the smallest front ensemble (pit) preset. Keep it to one short word.",
     "frontEnsemble.presets.summary.large": "One line under the preset switch listing what the Large front ensemble preset places in front of the field. 'Vibes' are vibraphones, a 'rack' is a rack of auxiliary percussion, a 'synth' is a keyboard synthesizer.",
@@ -3278,7 +3278,6 @@
     "launchpage.newShow.steps.frontEnsemble.description": "Subtitle of the Front ensemble step of the New show setup. 'Pit' is the usual marching-band word for the front ensemble.",
     "launchpage.newShow.steps.frontEnsemble.hint": "Line under the None, Small, Medium and Large cards in the Front ensemble step of the New show setup: picking a size places the pit's instruments and speakers, a performer at each instrument, and a drum major's podium on the 50-yard line. 'The 50' is the 50-yard line, the middle of the field.",
     "frontEnsemble.summary.none": "Second line of the Front ensemble row at the top of the Marchers panel, when the show has no front ensemble (pit) yet.",
-    "frontEnsemble.summary.counts": "Second line of the Front ensemble row at the top of the Marchers panel: how many pieces of front ensemble (pit) equipment and podiums the show has, e.g. '18 pieces of equipment, 1 podium'. ICU plurals; the podium part is empty when there are none.",
     "frontEnsemble.summary.setUp": "Button on the Front ensemble row of the Marchers panel when the show has no pit: opens the front ensemble setup (presets and equipment). Verb, short.",
     "frontEnsemble.summary.edit": "Button on the Front ensemble row of the Marchers panel when the show has a pit: opens the front ensemble view to change it. Verb, short.",
     "frontEnsemble.presets.start": "Small button in the front ensemble view's header when the show has no pit yet: opens a popover to lay out a whole front ensemble from a ready-made Small, Medium or Large layout. Short.",
@@ -3292,5 +3291,9 @@
     "actions.ui.addFrontEnsembleEquipment": "Command palette action that opens the pictures of front ensemble (pit) equipment and podiums, to pick one and place it on the field. Same as the Add button in the front ensemble view.",
     "actions.ui.addFrontEnsembleEquipmentKeywords": "Search words for the Add front ensemble equipment or podium action in the command palette, separated by spaces. Never shown; translate as words people might type to find it (pit, podium, drum major, marimba, vibraphone, percussion, speaker, mixer, tower, stepladder, instrument).",
     "actions.items.edit": "Name of the action that opens the edit view of the one selected prop or piece of front ensemble (pit) equipment or podium, in the command palette and shortcut settings.",
-    "actions.items.editNamed": "The same action in the field's right-click menu and the command palette, naming the selected item, e.g. 'Edit Marimba 1'. {name} is the item's name."
+    "actions.items.editNamed": "The same action in the field's right-click menu and the command palette, naming the selected item, e.g. 'Edit Marimba 1'. {name} is the item's name.",
+    "frontEnsemble.summary.equipment": "Part of the second line of the Front ensemble row at the top of the Marchers panel: how many pieces of front ensemble (pit) equipment the show has, e.g. '18 pieces of equipment'. Joined with the podium count as a list when there are podiums.",
+    "frontEnsemble.summary.podiums": "Part of the second line of the Front ensemble row at the top of the Marchers panel: how many podiums the show has, e.g. '1 podium'. Joined after the equipment count as a list.",
+    "frontEnsemble.results": "Read out by screen readers (not shown) as the equipment pictures are filtered by the search box: how many models are shown, or that none match.",
+    "actions.items.editKeywords": "Search words for the Edit selected prop or equipment action in the command palette, separated by spaces. Never shown; translate as words people might type to find it (edit, settings, properties, prop, equipment, podium, instrument, name, size, lock)."
 }

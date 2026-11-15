@@ -14,7 +14,6 @@ export default function Sidebar() {
         >
             <div className="flex flex-col gap-16">
                 <MarchersModal />
-                {/* Stored as items like props, but not staging: its own panel (owner, 2026-11-15) */}
                 {/* The music is edited on the timeline: Edit music (owner, 2026-11-04) */}
                 <FieldModal />
                 <MetronomeModal />

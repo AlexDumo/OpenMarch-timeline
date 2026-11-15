@@ -4,12 +4,14 @@
  *
  * - Re-applying replaces only the items the previous preset created, the ones with
  *   `items.from_preset` set. Renaming or moving one keeps the mark, deleting it drops it, and
- *   undo restores it with the row. Hand-added items and performers are never removed.
- * - The previous preset's players move with it: a performer standing where they play one of the
- *   replaced items (its playing spot, or a podium's standing point) moves onto the new preset's
- *   spot for their section, left to right, and those whose instruments the new preset doesn't
- *   have are removed with them (owner, 2026-11-15: they were left standing inside the new
- *   instruments). Anyone else stays where they are. One undo brings it all back.
+ *   undo restores it with the row. Hand-added items are never removed.
+ * - The previous preset's players move with it (owner, 2026-11-15: they were left standing inside
+ *   the new instruments). A player is a performer of an instrument's section standing on its
+ *   playing spot (or a Drum Major on a podium's standing point) at the start of the show. Players
+ *   move onto the new preset's spots for their section, left to right; those left over, whose
+ *   instruments the new preset doesn't have, are removed, unless they have drill moves, in which
+ *   case they stay where they are. Anyone else is never moved or removed. One undo brings it all
+ *   back.
  * - Performers are skipped when the show already has them: a section that has N of the preset's
  *   M players gets M - N more, on the spots none of that section stands on.
  */
@@ -22,6 +24,11 @@ import type { PitVariant } from "@/view3d/core/pit/catalog";
 import { PIXELS_PER_METER } from "@/items/itemOutlines";
 import { playingSpotOf } from "@/view3d/core/pit/playingSpot";
 import { podiumStandAt } from "@/view3d/core/pit/pitModels";
+import { isPodiumFamily, pitVariant } from "@/view3d/core/pit/catalog";
+import {
+    DRUM_MAJOR_SECTION,
+    PIT_PLAYER_SECTIONS,
+} from "@/view3d/core/pit/presets";
 import type { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 import { createItemsInTransaction, type DatabaseItem } from "./items";
@@ -79,13 +86,28 @@ export function performersToAdd<T extends PitPresetPerformerArgs>(
     return planned.filter((p) => chosen.has(p));
 }
 
+/** Where a player of `section` stands at one of the previous preset's items, in canvas units */
+export interface PlayerSpot {
+    home: XY;
+    section: string;
+}
+
+/** The section whose performers play or stand on an item of model `model`, or null */
+function playerSectionOf(model: string | null): string | null {
+    const variant = pitVariant(model);
+    if (!variant) return null;
+    if (isPodiumFamily(variant.family)) return DRUM_MAJOR_SECTION;
+    return PIT_PLAYER_SECTIONS[variant.family] ?? null;
+}
+
 /**
  * Where a performer stands to play or stand on each item the previous preset created, at the
- * start of the show, in canvas units: an instrument's playing spot, a podium's standing point.
+ * start of the show, in canvas units, with the section that does: an instrument's playing spot,
+ * a podium's standing point.
  */
 async function previousPresetSpotsInTransaction(
     tx: DbTransaction,
-): Promise<XY[]> {
+): Promise<PlayerSpot[]> {
     const rows = await tx
         .select({
             model: schema.items.model,
@@ -100,8 +122,10 @@ async function previousPresetSpotsInTransaction(
         )
         .where(eq(schema.items.from_preset, true))
         .all();
-    const spots: XY[] = [];
+    const spots: PlayerSpot[] = [];
     for (const row of rows) {
+        const section = playerSectionOf(row.model);
+        if (!section) continue;
         // Its first Outline: a locked item has only that one
         const geometry = await tx
             .select({
@@ -123,7 +147,7 @@ async function previousPresetSpotsInTransaction(
             PIXELS_PER_METER,
         );
         if (spot) {
-            spots.push([spot.x, spot.y]);
+            spots.push({ home: [spot.x, spot.y], section });
             continue;
         }
         const standAt = podiumStandAt(row.model);
@@ -131,45 +155,59 @@ async function previousPresetSpotsInTransaction(
             const r = (rotation * Math.PI) / 180;
             const dx = standAt.x * PIXELS_PER_METER;
             const dz = standAt.z * PIXELS_PER_METER;
-            spots.push([
-                row.x + dx * Math.cos(r) - dz * Math.sin(r),
-                row.y + dx * Math.sin(r) + dz * Math.cos(r),
-            ]);
+            spots.push({
+                home: [
+                    row.x + dx * Math.cos(r) - dz * Math.sin(r),
+                    row.y + dx * Math.sin(r) + dz * Math.cos(r),
+                ],
+                section,
+            });
         }
     }
     return spots;
 }
 
+/** A performer in the show, where they start, and whether they have drill moves */
+export type ShowPerformer = PitPresetPerformerArgs & {
+    id: number;
+    hasMoves: boolean;
+};
+
 /**
- * The previous preset's players (performers standing on `oldSpots`) moved onto the `planned`
- * spots of their section, left to right, as many as there are spots (`moves`); the rest of them,
- * whose instruments the new preset doesn't have, go with those instruments (`leftovers`).
- * Everyone else stays where they are.
+ * The previous preset's players (performers of an old spot's section standing on it) moved onto
+ * the `planned` spots of their section, left to right, as many as there are spots (`moves`); the
+ * rest of them, whose instruments the new preset doesn't have, are removed with those instruments
+ * (`leftovers`), unless they have drill moves. Everyone else stays where they are.
  */
 export function reseatPlayers<T extends PitPresetPerformerArgs>(
-    existing: readonly (PitPresetPerformerArgs & { id: number })[],
-    oldSpots: readonly XY[],
+    existing: readonly ShowPerformer[],
+    oldSpots: readonly PlayerSpot[],
     planned: readonly T[],
     reach: number,
 ): { moves: { id: number; home: XY }[]; leftovers: number[] } {
-    const onOldSpot = (home: XY) =>
+    const isPlayer = (p: ShowPerformer) =>
         oldSpots.some(
-            (spot) => Math.hypot(home[0] - spot[0], home[1] - spot[1]) <= reach,
+            (spot) =>
+                spot.section === p.section &&
+                Math.hypot(
+                    p.home[0] - spot.home[0],
+                    p.home[1] - spot.home[1],
+                ) <= reach,
         );
-    const seated = existing.filter((p) => onOldSpot(p.home));
+    const players = existing.filter(isPlayer);
     const moves: { id: number; home: XY }[] = [];
     const leftovers: number[] = [];
-    for (const section of new Set(seated.map((p) => p.section))) {
-        const players = seated
+    for (const section of new Set(players.map((p) => p.section))) {
+        const ofSection = players
             .filter((p) => p.section === section)
             .sort((a, b) => a.home[0] - b.home[0]);
         const spots = planned
             .filter((p) => p.section === section)
             .sort((a, b) => a.home[0] - b.home[0]);
-        players.forEach((player, i) => {
+        ofSection.forEach((player, i) => {
             if (i < spots.length)
                 moves.push({ id: player.id, home: spots[i].home });
-            else leftovers.push(player.id);
+            else if (!player.hasMoves) leftovers.push(player.id);
         });
     }
     return { moves, leftovers };
@@ -182,12 +220,12 @@ export function reseatPlayers<T extends PitPresetPerformerArgs>(
  */
 async function reseatPlayersInTransaction(
     tx: DbTransaction,
-    existing: (PitPresetPerformerArgs & { id: number })[],
-    oldSpots: readonly XY[],
+    existing: ShowPerformer[],
+    oldSpots: readonly PlayerSpot[],
     performers: readonly PitPresetPerformerArgs[],
     reach: number,
 ): Promise<{
-    staying: (PitPresetPerformerArgs & { id: number })[];
+    staying: ShowPerformer[];
     leftovers: number[];
 }> {
     const { moves, leftovers } =
@@ -208,6 +246,33 @@ async function reseatPlayersInTransaction(
         .filter((p) => !leftovers.includes(p.id))
         .map((p) => ({ ...p, home: moved.get(p.id) ?? p.home }));
     return { staying, leftovers };
+}
+
+/** The show's performers, where they start, and whether they have drill moves */
+async function showPerformersInTransaction(
+    tx: DbTransaction,
+): Promise<ShowPerformer[]> {
+    // Who has drill moves: a leftover player with moves stays rather than being removed
+    const moving = new Set(
+        (
+            await tx
+                .selectDistinct({ id: schema.timeline_assignments.marcher_id })
+                .from(schema.timeline_assignments)
+                .all()
+        ).map((row) => row.id),
+    );
+    return (
+        await tx
+            .select()
+            .from(schema.marchers)
+            .where(eq(schema.marchers.type, "marcher"))
+            .all()
+    ).map((m) => ({
+        id: m.id,
+        section: m.section,
+        home: [m.home_x, m.home_y] as XY,
+        hasMoves: moving.has(m.id),
+    }));
 }
 
 /** Deletes marchers rows as `deleteMarchers` does: their moves first, then the rows */
@@ -313,17 +378,7 @@ export async function applyPitPresetInTransaction({
     });
     const items = await createItemsInTransaction({ tx, newItems });
 
-    const existing = (
-        await tx
-            .select()
-            .from(schema.marchers)
-            .where(eq(schema.marchers.type, "marcher"))
-            .all()
-    ).map((m) => ({
-        id: m.id,
-        section: m.section,
-        home: [m.home_x, m.home_y] as XY,
-    }));
+    const existing = await showPerformersInTransaction(tx);
     const { staying, leftovers } = await reseatPlayersInTransaction(
         tx,
         existing,

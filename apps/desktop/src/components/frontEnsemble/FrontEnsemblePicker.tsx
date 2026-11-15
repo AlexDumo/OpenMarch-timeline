@@ -98,6 +98,16 @@ export default function FrontEnsemblePicker() {
                     className="w-full pl-36"
                 />
             </div>
+            {/* Read out as the search narrows the pictures (WCAG 4.1.3) */}
+            <span role="status" className="sr-only">
+                {words.length > 0 &&
+                    t("frontEnsemble.results", {
+                        count: groups.reduce(
+                            (n, { shown }) => n + shown.length,
+                            0,
+                        ),
+                    })}
+            </span>
             {groups.length === 0 ? (
                 <p className="text-sub text-text-subtitle py-8 text-center">
                     <T keyName="frontEnsemble.noMatch" />
@@ -131,7 +141,8 @@ export default function FrontEnsemblePicker() {
 
 /**
  * One model in the catalog: its picture on a light card (so dark finishes read in both themes),
- * its family's name and its size and finish. The footprint is in its tooltip and its description.
+ * its family's name, its size and finish, and its footprint (also its description, so a screen
+ * reader hears it, and shown rather than hovered, so a finger sees it too).
  */
 function EquipmentTile({
     variant,
@@ -158,7 +169,7 @@ function EquipmentTile({
         <button
             type="button"
             onClick={onPick}
-            title={`${name}\n${footprint}`}
+            title={name}
             aria-label={
                 isDefault ? `${name} ${t("frontEnsemble.default")}` : name
             }
@@ -187,7 +198,10 @@ function EquipmentTile({
                     {variantName}
                 </span>
             )}
-            <span id={footprintId} className="sr-only">
+            <span
+                id={footprintId}
+                className="text-sub text-text-subtitle min-w-0 truncate px-2 leading-tight tabular-nums"
+            >
                 {footprint}
             </span>
         </button>

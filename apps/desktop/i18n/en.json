@@ -237,7 +237,8 @@
         },
         "items": {
             "edit": "Edit selected prop or equipment",
-            "editNamed": "Edit {name}"
+            "editNamed": "Edit {name}",
+            "editKeywords": "edit settings properties prop equipment podium instrument name size lock"
         }
     },
     "analyticsOptIn": {
@@ -762,7 +763,7 @@
             "drillNumber": "Drill Number",
             "errorLoadingCoords": "Error loading coordinates",
             "itemsSelected": "{count, plural, one {# prop selected. Edit it in the Props panel.} other {# props selected. Edit them in the Props panel.}}",
-            "equipmentSelected": "{count, plural, one {# piece of equipment selected. Right-click it to edit it.} other {# pieces of equipment selected. Right-click one to edit it.}}",
+            "equipmentSelected": "{count, plural, =1 {# piece of equipment selected. Right-click it to edit it.} other {# pieces of equipment selected. Right-click one to edit it.}}",
             "playing": "Playing. Pause to see and edit the selected marchers.",
             "maxStepSize": "Largest step size",
             "minStepSize": "Smallest step size",
@@ -1494,7 +1495,7 @@
             "always": "Each also adds a podium on the 50 and a mixer behind the pit.",
             "addPerformers": "Also add performers",
             "apply": "Apply",
-            "replaces": "Replaces the equipment the last preset added, with its players moved onto the new spots. Equipment you added yourself stays.",
+            "replaces": "Replaces the equipment the last preset added. Its players move to the new spots; those left without an instrument are removed. Undo brings everything back. Equipment you added yourself stays.",
             "none": "None",
             "start": "Start from a preset",
             "reset": "Reset to preset"
@@ -1502,12 +1503,14 @@
         "summary": {
             "title": "Front ensemble and podiums",
             "none": "No pit yet",
-            "counts": "{equipment, plural, one {# piece of equipment} other {# pieces of equipment}}{podiums, plural, =0 {} one {, # podium} other {, # podiums}}",
             "setUp": "Set up",
-            "edit": "Edit"
+            "edit": "Edit",
+            "equipment": "{count, plural, one {# piece of equipment} other {# pieces of equipment}}",
+            "podiums": "{count, plural, one {# podium} other {# podiums}}"
         },
         "search": "Search equipment",
-        "noMatch": "No equipment matches."
+        "noMatch": "No equipment matches.",
+        "results": "{count, plural, =0 {No equipment matches.} one {# model} other {# models}}"
     },
     "section": {
         "drumMajor": "Drum Major",

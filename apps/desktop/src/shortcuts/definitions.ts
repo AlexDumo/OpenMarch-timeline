@@ -648,6 +648,7 @@ const STATIC_ACTIONS = {
     // row's edit button does; the field's right-click menu offers it on an item
     editSelectedItem: {
         labelKey: "actions.items.edit",
+        keywordsKey: "actions.items.editKeywords",
         category: "edit",
         scope: "global",
         defaultBindings: [],
