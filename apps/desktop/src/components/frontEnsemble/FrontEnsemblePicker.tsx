@@ -8,11 +8,14 @@ import {
     CylinderIcon,
     DiscIcon,
     FadersIcon,
+    LadderIcon,
+    LadderSimpleIcon,
     PianoKeysIcon,
     RowsIcon,
     SpeakerHifiIcon,
     SquaresFourIcon,
     StairsIcon,
+    StepsIcon,
 } from "@phosphor-icons/react";
 import { T, useTranslate } from "@tolgee/react";
 import { MENU_BUTTON_CLASS } from "@/components/ui/popupClasses";
@@ -28,8 +31,14 @@ import {
     type PitGroup,
     type PitVariant,
 } from "@/view3d/core/pit/catalog";
+import { usePitVariantLabel } from "./usePitVariantLabel";
 
-const GROUPS: readonly PitGroup[] = ["keyboards", "percussion", "audio"];
+const GROUPS: readonly PitGroup[] = [
+    "keyboards",
+    "percussion",
+    "audio",
+    "podiums",
+];
 
 const FAMILY_ICONS: Record<PitFamilyId, React.ReactNode> = {
     marimba: <PianoKeysIcon size={16} />,
@@ -49,29 +58,26 @@ const FAMILY_ICONS: Record<PitFamilyId, React.ReactNode> = {
     speaker: <SpeakerHifiIcon size={16} />,
     mixer: <FadersIcon size={16} />,
     podium: <StairsIcon size={16} />,
+    podiumStand: <StepsIcon size={16} />,
+    podiumTower: <StairsIcon size={16} />,
+    rollingPodium: <StairsIcon size={16} />,
+    stepladder: <LadderSimpleIcon size={16} />,
+    scaffold: <LadderIcon size={16} />,
 };
 
 const GROUP_HEADING_CLASS =
     "text-sub text-text-subtitle px-8 pt-8 pb-4 font-medium tracking-wide uppercase";
 
-/** A variant's label: its parts joined, or the family's name for a family with one model */
-export function usePitVariantLabel(): (variant: PitVariant) => string {
-    const { t } = useTranslate();
-    return (variant) =>
-        variant.label.length > 0
-            ? variant.label.map((part) => t(part.key, part.params)).join(" · ")
-            : t(`pit.family.${variant.family}`);
-}
-
 /** Meters, to two decimals at most */
 const meters = (value: number) => String(Number(value.toFixed(2)));
 
 /**
- * The Props panel's Front ensemble (instruments.md §6): pick a family, then a variant, and place
- * it on the field with a click, as a locked equipment item named for its family ("Marimba 2").
- * A family with one model is placed straight from the list. The Small, Medium and Large presets
- * (`PitPresets`) sit above the families. It starts open until the show has equipment, then
- * folded, so the list of items below stays in view.
+ * The Front ensemble panel's Add equipment (instruments.md §6): pick a family, then a variant,
+ * and place it on the field with a click, as a locked equipment item named for its family
+ * ("Marimba 2"). A family with one model is placed straight from the list. The families are
+ * grouped, the podiums on their own. The Small, Medium and Large presets (`PitPresets`) sit above
+ * the families. It starts open until the show has equipment, then folded, so the list of
+ * equipment below stays in view.
  */
 export default function FrontEnsemblePicker({
     hasEquipment,
@@ -99,11 +105,11 @@ export default function FrontEnsemblePicker({
         <RadixCollapsible.Root asChild open={open} onOpenChange={setOpenChoice}>
             <section
                 className="flex flex-col gap-12"
-                aria-label={t("props.frontEnsemble.title")}
+                aria-label={t("frontEnsemble.add.title")}
             >
                 <RadixCollapsible.Trigger className="text-text/70 hover:text-text focus-visible:text-accent flex items-center justify-between text-sm font-medium outline-hidden duration-150 ease-out">
                     <span role="heading" aria-level={5}>
-                        <T keyName="props.frontEnsemble.title" />
+                        <T keyName="frontEnsemble.add.title" />
                     </span>
                     <CaretDownIcon
                         size={16}
@@ -142,10 +148,10 @@ function FamilyList({ onPick }: { onPick: (family: PitFamily) => void }) {
                 <div
                     key={group}
                     role="group"
-                    aria-label={t(`props.frontEnsemble.groups.${group}`)}
+                    aria-label={t(`frontEnsemble.groups.${group}`)}
                 >
                     <div className={GROUP_HEADING_CLASS} aria-hidden>
-                        {t(`props.frontEnsemble.groups.${group}`)}
+                        {t(`frontEnsemble.groups.${group}`)}
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                         {PIT_FAMILIES.filter((f) => f.group === group).map(
@@ -201,7 +207,7 @@ function VariantList({
                 type="button"
                 onClick={onBack}
                 className={`${MENU_BUTTON_CLASS} text-text-subtitle hover:text-text`}
-                aria-label={t("props.frontEnsemble.allFamilies")}
+                aria-label={t("frontEnsemble.allFamilies")}
             >
                 <CaretLeftIcon size={12} aria-hidden />
                 <span className="text-sub font-medium tracking-wide uppercase">
@@ -220,12 +226,12 @@ function VariantList({
                     </span>
                     {variant === fallback && (
                         <span className="text-sub text-accent shrink-0">
-                            <T keyName="props.frontEnsemble.default" />
+                            <T keyName="frontEnsemble.default" />
                         </span>
                     )}
                     <span className="text-sub text-text-subtitle shrink-0 tabular-nums">
                         <T
-                            keyName="props.frontEnsemble.footprint"
+                            keyName="frontEnsemble.footprint"
                             params={{
                                 width: meters(variant.footprint.width),
                                 depth: meters(variant.footprint.depth),

@@ -4,6 +4,7 @@ import manifest from "@/view3d/assets/pit/manifest.json";
 import {
     PIT_FAMILIES,
     defaultPitVariant,
+    isPodiumFamily,
     pitFamily,
     pitFileId,
     pitModelId,
@@ -27,7 +28,7 @@ describe("pit model ids", () => {
 });
 
 describe("the front ensemble catalog", () => {
-    it("has the seventeen families of the design, in order", () => {
+    it("has the families of the design, podiums last, in order", () => {
         expect(PIT_FAMILIES.map((f) => f.id)).toEqual([
             "marimba",
             "vibraphone",
@@ -46,11 +47,16 @@ describe("the front ensemble catalog", () => {
             "speaker",
             "mixer",
             "podium",
+            "podiumStand",
+            "podiumTower",
+            "rollingPodium",
+            "stepladder",
+            "scaffold",
         ]);
     });
 
-    it("offers every built model except the amps and drum major stands, each in one family", () => {
-        const notOffered = /^(amp-|podium-|scaffold-|stepladder-)/;
+    it("offers every built model except the amps, each in one family", () => {
+        const notOffered = /^amp-/;
         const offered = PIT_FAMILIES.flatMap((f) =>
             pitVariantsOf(f.id).map((v) => v.fileId),
         );
@@ -72,6 +78,11 @@ describe("the front ensemble catalog", () => {
             speaker: "speaker-tall",
             mixer: "mixer-cart",
             podium: "conductor-podium",
+            podiumStand: "podium-stand-2ft",
+            podiumTower: "podium-tower-5ft",
+            rollingPodium: "podium-rolling-6ft",
+            stepladder: "stepladder-6ft",
+            scaffold: "scaffold-tower",
         });
         for (const family of PIT_FAMILIES)
             expect(pitVariantsOf(family.id)).toContain(
@@ -116,6 +127,18 @@ describe("the front ensemble catalog", () => {
             { key: "pit.variant.tall" },
         ]);
         expect(parts("chimes")).toEqual([]);
+        expect(parts("podium-tower-4ft")).toEqual([
+            { key: "pit.variant.feet", params: { size: "4" } },
+            { key: "pit.variant.aluminum" },
+        ]);
+        expect(parts("podium-stand-2ft-black")).toEqual([
+            { key: "pit.variant.feet", params: { size: "2" } },
+            { key: "pit.variant.black" },
+        ]);
+        expect(parts("stepladder-6ft")).toEqual([
+            { key: "pit.variant.feet", params: { size: "6" } },
+        ]);
+        expect(parts("scaffold-tower")).toEqual([]);
     });
 
     it("lists a family's variants by size, then finish", () => {
@@ -133,6 +156,32 @@ describe("the front ensemble catalog", () => {
             "timpani-29",
             "timpani-32",
         ]);
+        expect(pitVariantsOf("podiumTower").map((v) => v.fileId)).toEqual([
+            "podium-tower-4ft",
+            "podium-tower-4ft-black",
+            "podium-tower-5ft",
+            "podium-tower-5ft-black",
+            "podium-tower-6ft",
+            "podium-tower-6ft-black",
+        ]);
+    });
+
+    it("groups the podiums on their own, stood on rather than played", () => {
+        const podiums = PIT_FAMILIES.filter((f) => f.group === "podiums");
+        expect(podiums.map((f) => f.id)).toEqual([
+            "podium",
+            "podiumStand",
+            "podiumTower",
+            "rollingPodium",
+            "stepladder",
+            "scaffold",
+        ]);
+        for (const family of podiums) {
+            expect(family.played).toBe(false);
+            expect(isPodiumFamily(family.id)).toBe(true);
+        }
+        expect(isPodiumFamily("speaker")).toBe(false);
+        expect(isPodiumFamily("marimba")).toBe(false);
     });
 
     it("finds a model's family, and nothing for an unknown or amp model", () => {

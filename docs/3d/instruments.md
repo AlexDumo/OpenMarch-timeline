@@ -522,12 +522,15 @@ unlocked. The flag is a boolean `items.locked` column, added in the same
 migration as `items.model`. Props that are on the field for only some pages
 are the placement work in `props-spec.md` §4, not part of this.
 
-Equipment stays a prop in the data, but not in the UI (owner, 2026-11-15):
-designers don't think of the pit or podiums as props, since they don't move and
-aren't part of staging. They have their own Front ensemble panel beside the
-performers, with the Small, Medium and Large presets, the equipment and podiums
-to place one at a time, and the list of placed equipment to edit; the Props
-panel and props lists leave equipment out. A new show can start with a pit:
+Equipment is edited with the normal prop editing, but it has its own sidebar
+panel, Front ensemble, next to Marchers (owner, 2026-11-15): designers don't
+think of the pit or the podiums as props, since they don't move and aren't
+staging. The panel holds the Small, Medium and Large presets, the catalog to
+place one piece from (the podiums grouped on their own: the conductor
+podium and the drum major's stand, towers, rolling podium, stepladder and
+scaffold), and the equipment and podiums in the show, listed apart. The
+Props panel lists only props. Storage is unchanged: equipment stays
+`items` rows with `kind = 'equipment'`. A new show can start with a pit:
 the new-show dialog asks "Front ensemble?" (None, Small, Medium, Large). Equipment never takes part in
 cues: items are never cue targets (ADR 0004, amendment of 2026-10-11).
 

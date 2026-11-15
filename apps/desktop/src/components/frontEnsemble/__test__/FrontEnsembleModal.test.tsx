@@ -25,12 +25,21 @@ import { useItemDrawingStore } from "@/stores/ItemDrawingStore";
 import { usePropDrawn } from "@/field/fieldPropTool";
 import { pitVariant } from "@/view3d/core/pit/catalog";
 import type { DrawnOutline } from "@/items/itemOutlines";
-import { PropEditContents, PropListContents } from "../PropsModal";
+import {
+    PropEditContents,
+    PropListContents,
+} from "@/components/items/PropsModal";
+import MarcherEditor from "@/components/inspector/MarcherEditor";
+import {
+    FrontEnsembleContents,
+    FrontEnsembleEditContents,
+} from "../FrontEnsembleModal";
 
 /**
- * The Props panel's Front ensemble (instruments.md §6): equipment is picked as a family, then a
- * variant, placed with a click as a locked item with its model's footprint, and edited as props
- * are, with its variant and lock.
+ * The Front ensemble panel (instruments.md §6): equipment is picked as a family, then a variant,
+ * placed with a click as a locked item with its model's footprint, and edited as props are, with
+ * its variant and lock. Equipment and podiums are listed there, apart, and never in the Props
+ * panel.
  */
 
 const app = vi.hoisted(() => ({ client: (): unknown => null }));
@@ -88,7 +97,21 @@ const firstBeatId = async (db: DbConnection) =>
         .orderBy(schema.beats.position)
         .get())!.id;
 
-describeDbTests("Props panel front ensemble", (it) => {
+const riser = (beatId: number) => ({
+    kind: "prop" as const,
+    name: "Riser",
+    surfaceType: "platform" as const,
+    home: [40, 40] as [number, number],
+    beatId,
+    geometry: {
+        outlineType: "rectangle" as const,
+        width: 2,
+        depth: 1,
+        height: 0.4,
+    },
+});
+
+describeDbTests("Front ensemble panel", (it) => {
     it("picks a family, then a variant, and places it as a locked, numbered item with the model's footprint", async ({
         db,
         marchersAndPages,
@@ -96,14 +119,14 @@ describeDbTests("Props panel front ensemble", (it) => {
         expect(marchersAndPages).toBeDefined();
         await setUpFeature(
             <>
-                <PropListContents />
+                <FrontEnsembleContents />
                 <FieldPort />
             </>,
             PAGE,
             [],
         );
         const ensemble = screen.getByRole("region", {
-            name: "Front ensemble",
+            name: "Add equipment",
         });
         fireEvent.click(
             within(ensemble).getByRole("button", { name: /Marimba/ }),
@@ -175,7 +198,7 @@ describeDbTests("Props panel front ensemble", (it) => {
         });
         await setUpFeature(
             <>
-                <PropListContents />
+                <FrontEnsembleContents />
                 <FieldPort />
             </>,
             PAGE,
@@ -183,14 +206,14 @@ describeDbTests("Props panel front ensemble", (it) => {
         );
         await screen.findByText("Chimes 4");
         const ensemble = screen.getByRole("region", {
-            name: "Front ensemble",
+            name: "Add equipment",
         });
         // Folded once the show has equipment, so the list stays in view
         expect(
             within(ensemble).queryByRole("button", { name: "Chimes" }),
         ).toBeNull();
         fireEvent.click(
-            within(ensemble).getByRole("button", { name: /Front ensemble/ }),
+            within(ensemble).getByRole("button", { name: /Add equipment/ }),
         );
         fireEvent.click(
             within(ensemble).getByRole("button", { name: "Chimes" }),
@@ -223,7 +246,11 @@ describeDbTests("Props panel front ensemble", (it) => {
             db,
             newItems: [marimba(await firstBeatId(db))],
         });
-        await setUpFeature(<PropEditContents itemId={item.id} />, PAGE, []);
+        await setUpFeature(
+            <FrontEnsembleEditContents itemId={item.id} />,
+            PAGE,
+            [],
+        );
         // The compact select is named by its value
         expect(await screen.findByText("Marimba model")).toBeInTheDocument();
         const trigger = screen.getByRole("combobox", {
@@ -352,17 +379,21 @@ describeDbTests("Props panel front ensemble", (it) => {
         expect(marchersAndPages).toBeDefined();
         await setUpFeature(
             <>
-                <PropListContents />
+                <FrontEnsembleContents />
                 <FieldPort />
             </>,
             PAGE,
             [],
         );
         const ensemble = screen.getByRole("region", {
-            name: "Front ensemble",
+            name: "Add equipment",
+        });
+        // The conductor's podium, among the podiums' own group
+        const podiums = within(ensemble).getByRole("group", {
+            name: "Podiums",
         });
         fireEvent.click(
-            within(ensemble).getByRole("button", { name: /Podium/ }),
+            within(podiums).getByRole("button", { name: "Podium" }),
         );
         fireEvent.click(within(ensemble).getByRole("button", { name: /^Low/ }));
         // Behind the back sideline, turned to face the field
@@ -386,33 +417,89 @@ describeDbTests("Props panel front ensemble", (it) => {
         });
     });
 
-    it("calls equipment equipment, not a prop, when editing and deleting it", async ({
+    it("places a drum major's tower from the podiums, turned to face the field from behind it", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        await setUpFeature(
+            <>
+                <FrontEnsembleContents />
+                <FieldPort />
+            </>,
+            PAGE,
+            [],
+        );
+        const podiums = screen.getByRole("group", { name: "Podiums" });
+        expect(
+            within(podiums)
+                .getAllByRole("button")
+                .map((b) => b.textContent),
+        ).toEqual([
+            "Podium",
+            "Podium stand",
+            "Tower",
+            "Rolling podium",
+            "Stepladder",
+            "Scaffold tower",
+        ]);
+        fireEvent.click(within(podiums).getByRole("button", { name: "Tower" }));
+        fireEvent.click(screen.getByRole("button", { name: /^6 ft · Black/ }));
+        act(() =>
+            port.drawn!({
+                outlineType: "rectangle",
+                centerX: 300,
+                centerY: -40,
+                widthPixels: 1,
+                depthPixels: 1,
+                rotation: 180,
+            }),
+        );
+        await waitFor(async () =>
+            expect(await getItems({ db })).toHaveLength(1),
+        );
+        expect((await getItems({ db }))[0]).toMatchObject({
+            kind: "equipment",
+            model: "pit/podium-tower-6ft-black",
+            locked: true,
+            marcher: { name: "Tower 1" },
+        });
+        expect((await getItemGeometry({ db }))[0]).toMatchObject({
+            rotation: 180,
+            ...pitVariant("pit/podium-tower-6ft-black")!.footprint,
+        });
+    });
+
+    it("lists the equipment and the podiums apart, as equipment, and no props", async ({
         db,
         marchersAndPages,
     }) => {
         expect(marchersAndPages).toBeDefined();
         const beatId = await firstBeatId(db);
-        const [item] = await createItems({
+        const [, podium] = await createItems({
             db,
             newItems: [
                 marimba(beatId),
                 {
-                    kind: "prop",
-                    name: "Riser",
-                    surfaceType: "platform",
-                    home: [40, 40],
-                    beatId,
-                    geometry: {
-                        outlineType: "rectangle",
-                        width: 2,
-                        depth: 1,
-                        height: 0.4,
-                    },
+                    ...marimba(beatId),
+                    name: "Podium 1",
+                    model: "pit/conductor-podium",
                 },
+                riser(beatId),
             ],
         });
-        const { result } = await setUpFeature(<PropListContents />, PAGE, []);
+        const { result } = await setUpFeature(
+            <FrontEnsembleContents />,
+            PAGE,
+            [],
+        );
         await screen.findByText("Marimba 1");
+        expect(screen.queryByText("Riser")).toBeNull();
+        const equipment = screen.getByRole("region", { name: "Equipment" });
+        const podiums = screen.getByRole("region", { name: "Podiums" });
+        expect(within(equipment).getByText("Marimba 1")).toBeInTheDocument();
+        expect(within(equipment).queryByText("Podium 1")).toBeNull();
+        expect(within(podiums).getByText("Podium 1")).toBeInTheDocument();
         expect(
             screen
                 .getAllByRole("button", { name: /^(Edit|Delete) / })
@@ -420,13 +507,85 @@ describeDbTests("Props panel front ensemble", (it) => {
         ).toEqual([
             "Edit equipment",
             "Delete equipment",
-            "Edit prop",
-            "Delete prop",
+            "Edit podium",
+            "Delete podium",
         ]);
         result.unmount();
-        await setUpFeature(<PropEditContents itemId={item.id} />, PAGE, []);
+        await setUpFeature(
+            <FrontEnsembleEditContents itemId={podium.id} />,
+            PAGE,
+            [],
+        );
         expect(
-            await screen.findByRole("heading", { name: "Edit Equipment" }),
+            await screen.findByRole("heading", { name: "Edit Podium" }),
         ).toBeInTheDocument();
+    });
+
+    it("keeps equipment out of the Props panel: no Front ensemble section and only props listed", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        const beatId = await firstBeatId(db);
+        await createItems({
+            db,
+            newItems: [
+                marimba(beatId),
+                {
+                    ...marimba(beatId),
+                    name: "Podium 1",
+                    model: "pit/conductor-podium",
+                },
+                riser(beatId),
+            ],
+        });
+        await setUpFeature(<PropListContents />, PAGE, []);
+        await screen.findByText("Riser");
+        expect(screen.queryByText("Marimba 1")).toBeNull();
+        expect(screen.queryByText("Podium 1")).toBeNull();
+        expect(screen.queryByText(/Front ensemble/)).toBeNull();
+        expect(screen.queryByTestId("pit-preset-medium")).toBeNull();
+        expect(
+            screen
+                .getAllByRole("button", { name: /^(Edit|Delete) / })
+                .map((b) => b.getAttribute("aria-label")),
+        ).toEqual(["Edit prop", "Delete prop"]);
+    });
+
+    it("says the Props panel has no props when the show only has equipment", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        await createItems({
+            db,
+            newItems: [marimba(await firstBeatId(db))],
+        });
+        await setUpFeature(<PropListContents />, PAGE, []);
+        expect(await screen.findByText(/No props yet/)).toBeInTheDocument();
+    });
+
+    it("tells the inspector's reader selected equipment is edited in the Front ensemble panel", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        const beatId = await firstBeatId(db);
+        const [equipment, prop] = await createItems({
+            db,
+            newItems: [marimba(beatId), riser(beatId)],
+        });
+        await setUpFeature(<MarcherEditor />, PAGE, [
+            equipment.marcher_id,
+            prop.marcher_id,
+        ]);
+        expect(
+            await screen.findByTestId("inspector-equipment-selected"),
+        ).toHaveTextContent(
+            "1 piece of equipment selected. Edit it in the Front ensemble panel.",
+        );
+        expect(
+            screen.getByTestId("inspector-items-selected"),
+        ).toHaveTextContent("1 prop selected. Edit it in the Props panel.");
     });
 });

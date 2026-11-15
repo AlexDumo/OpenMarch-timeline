@@ -63,25 +63,25 @@ export default function PitPresets() {
         <div
             className="border-stroke bg-fg-2 rounded-6 flex flex-col gap-8 border p-8"
             role="group"
-            aria-label={t("props.frontEnsemble.presets.title")}
+            aria-label={t("frontEnsemble.presets.title")}
         >
             <div className={HEADING_CLASS} aria-hidden>
-                <T keyName="props.frontEnsemble.presets.title" />
+                <T keyName="frontEnsemble.presets.title" />
             </div>
             <SegmentedTextSwitch
-                ariaLabel={t("props.frontEnsemble.presets.size")}
+                ariaLabel={t("frontEnsemble.presets.size")}
                 className="self-start"
                 options={PIT_PRESET_SIZES.map((value) => ({
                     value,
-                    label: t(`props.frontEnsemble.presets.${value}`),
+                    label: t(`frontEnsemble.presets.${value}`),
                     testId: `pit-preset-${value}`,
                 }))}
                 selected={size}
                 setSelected={(value) => setSize(value as PitPresetSize)}
             />
             <p className="text-sub text-text-subtitle">
-                {t(`props.frontEnsemble.presets.summary.${size}`)}{" "}
-                <T keyName="props.frontEnsemble.presets.always" />
+                {t(`frontEnsemble.presets.summary.${size}`)}{" "}
+                <T keyName="frontEnsemble.presets.always" />
             </p>
             <label className="text-body flex items-center gap-8">
                 <Checkbox
@@ -90,11 +90,11 @@ export default function PitPresets() {
                         setAddPerformers(checked === true)
                     }
                 />
-                <T keyName="props.frontEnsemble.presets.addPerformers" />
+                <T keyName="frontEnsemble.presets.addPerformers" />
             </label>
             {hasPreset && (
                 <p className="text-sub text-text-subtitle">
-                    <T keyName="props.frontEnsemble.presets.replaces" />
+                    <T keyName="frontEnsemble.presets.replaces" />
                 </p>
             )}
             <Button
@@ -103,7 +103,7 @@ export default function PitPresets() {
                 disabled={!field || !firstBeat || apply.isPending}
                 onClick={onApply}
             >
-                <T keyName="props.frontEnsemble.presets.apply" />
+                <T keyName="frontEnsemble.presets.apply" />
             </Button>
         </div>
     );

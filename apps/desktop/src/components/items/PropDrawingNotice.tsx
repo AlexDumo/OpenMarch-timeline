@@ -55,7 +55,7 @@ export default function PropDrawingNotice() {
                 <InfoIcon size={24} />
                 <span className="text-body text-text flex-1">
                     {placing
-                        ? t("props.equipment.placeInstructions", {
+                        ? t("frontEnsemble.placeInstructions", {
                               name: placing.baseName,
                           })
                         : t(instructions)}

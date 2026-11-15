@@ -240,13 +240,13 @@ test("Escape turns the prop tool off, and nothing is drawn", async ({
     expect(await show.query("SELECT id FROM items")).toEqual([{ id: 1 }]);
 });
 
-test("places a marimba from the Front ensemble with one click, locked, at its model's footprint", async ({
+test("places a marimba from the Front ensemble panel with one click, locked, at its model's footprint", async ({
     show,
 }) => {
     const { page } = show;
     await expect.poll(() => drawnItems(page)).toHaveLength(1);
-    await page.locator("#sidebar-launcher-props").click();
-    const ensemble = page.getByRole("region", { name: "Front ensemble" });
+    await page.locator("#sidebar-launcher-front-ensemble").click();
+    const ensemble = page.getByRole("region", { name: "Add equipment" });
     await ensemble.getByRole("button", { name: "Marimba" }).click();
     await ensemble
         .getByRole("button", { name: /^5\.0 octaves · Rosewood/ })
@@ -294,9 +294,9 @@ test("places a podium behind the back sideline, turned to face the field", async
 }) => {
     const { page } = show;
     await expect.poll(() => drawnItems(page)).toHaveLength(1);
-    await page.locator("#sidebar-launcher-props").click();
-    const ensemble = page.getByRole("region", { name: "Front ensemble" });
-    await ensemble.getByRole("button", { name: "Podium" }).click();
+    await page.locator("#sidebar-launcher-front-ensemble").click();
+    const ensemble = page.getByRole("region", { name: "Add equipment" });
+    await ensemble.getByRole("button", { name: "Podium", exact: true }).click();
     await ensemble.getByRole("button", { name: /^Low/ }).click();
     await expect
         .poll(() => page.evaluate(() => window.fieldTest!.activeGesture()))
@@ -341,7 +341,7 @@ test("applies a front ensemble preset with its performers in one undo step, and 
 }) => {
     const { page } = show;
     await expect.poll(() => drawnItems(page)).toHaveLength(1);
-    await page.locator("#sidebar-launcher-props").click();
+    await page.locator("#sidebar-launcher-front-ensemble").click();
     const presets = page.getByRole("group", { name: "Presets" });
     await presets.getByRole("radio", { name: "Medium" }).click();
     await expect(presets.getByRole("checkbox")).toBeChecked();
@@ -374,11 +374,11 @@ test("applies a front ensemble preset with its performers in one undo step, and 
     ]);
     await expectCanvasMatchesShow(show);
 
-    // The Front ensemble folds once the show has equipment; open it again to apply another.
+    // Add equipment folds once the show has equipment; open it again to apply another.
     // Small replaces Medium's equipment, keeps the riser and adds no performers it already has
     await page
-        .getByRole("region", { name: "Front ensemble" })
-        .getByRole("button", { name: "Front ensemble" })
+        .getByRole("region", { name: "Add equipment" })
+        .getByRole("button", { name: "Add equipment" })
         .click();
     await expect(
         presets.getByText("Replaces the equipment the last preset added", {

@@ -754,6 +754,7 @@
             "drillNumber": "Drill Number",
             "errorLoadingCoords": "Error loading coordinates",
             "itemsSelected": "{count, plural, one {# prop selected. Edit it in the Props panel.} other {# props selected. Edit them in the Props panel.}}",
+            "equipmentSelected": "{count, plural, one {# piece of equipment selected. Edit it in the Front ensemble panel.} other {# pieces of equipment selected. Edit them in the Front ensemble panel.}}",
             "playing": "Playing. Pause to see and edit the selected marchers.",
             "maxStepSize": "Largest step size",
             "minStepSize": "Smallest step size",
@@ -1431,41 +1432,55 @@
         },
         "locked": "Locked",
         "lockLabel": "Locked",
-        "lockHint": "One position for the whole show",
+        "lockHint": "One position for the whole show"
+    },
+    "frontEnsemble": {
+        "title": "Front ensemble",
+        "add": {
+            "title": "Add equipment"
+        },
+        "empty": "No front ensemble yet. Apply a preset or pick equipment above, then click the field to place it.",
+        "list": {
+            "equipment": "Equipment",
+            "podiums": "Podiums"
+        },
+        "placeInstructions": "Click the field to place the {name}. It is on the field from the playhead's count.",
         "equipment": {
             "block": "Equipment",
             "delete": "Delete equipment",
             "edit": "Edit equipment",
             "editTitle": "Edit Equipment",
-            "model": "{family} model",
-            "placeInstructions": "Click the field to place the {name}. It is on the field from the playhead's count."
+            "model": "{family} model"
         },
-        "frontEnsemble": {
-            "allFamilies": "Back to all front ensemble equipment",
-            "default": "Default",
-            "footprint": "{width} × {depth} m",
-            "groups": {
-                "audio": "Audio and staging",
-                "keyboards": "Keyboards",
-                "percussion": "Percussion"
+        "podium": {
+            "delete": "Delete podium",
+            "edit": "Edit podium",
+            "editTitle": "Edit Podium"
+        },
+        "allFamilies": "Back to all front ensemble equipment",
+        "default": "Default",
+        "footprint": "{width} × {depth} m",
+        "groups": {
+            "audio": "Audio",
+            "keyboards": "Keyboards",
+            "percussion": "Percussion",
+            "podiums": "Podiums"
+        },
+        "presets": {
+            "title": "Presets",
+            "size": "Preset size",
+            "small": "Small",
+            "medium": "Medium",
+            "large": "Large",
+            "summary": {
+                "small": "2 marimbas, 2 vibes, a rack, a synth and 2 speakers",
+                "medium": "4 marimbas, 3 vibes, xylophone, glockenspiel, rack, drum set, synth and 4 speakers",
+                "large": "6 marimbas, 4 vibes, xylophone, glockenspiel, 2 racks, drum set, 2 synths and 6 speakers"
             },
-            "title": "Front ensemble",
-            "presets": {
-                "title": "Presets",
-                "size": "Preset size",
-                "small": "Small",
-                "medium": "Medium",
-                "large": "Large",
-                "summary": {
-                    "small": "2 marimbas, 2 vibes, a rack, a synth and 2 speakers",
-                    "medium": "4 marimbas, 3 vibes, xylophone, glockenspiel, rack, drum set, synth and 4 speakers",
-                    "large": "6 marimbas, 4 vibes, xylophone, glockenspiel, 2 racks, drum set, 2 synths and 6 speakers"
-                },
-                "always": "Each also adds a podium on the 50 and a mixer behind the pit.",
-                "addPerformers": "Also add performers",
-                "apply": "Apply",
-                "replaces": "Replaces the equipment the last preset added. Equipment you added yourself stays."
-            }
+            "always": "Each also adds a podium on the 50 and a mixer behind the pit.",
+            "addPerformers": "Also add performers",
+            "apply": "Apply",
+            "replaces": "Replaces the equipment the last preset added. Equipment you added yourself stays."
         }
     },
     "section": {
@@ -3396,7 +3411,8 @@
         "props": "Props",
         "music": "Music",
         "renderFail": "Sidebar modal content failed to render",
-        "settings": "Show settings"
+        "settings": "Show settings",
+        "frontEnsemble": "Front ensemble"
     },
     "infoTip": {
         "moreInfo": "More info"
@@ -3990,7 +4006,12 @@
             "timpani": "Timpani",
             "trapTable": "Trap table",
             "vibraphone": "Vibraphone",
-            "xylophone": "Xylophone"
+            "xylophone": "Xylophone",
+            "podiumStand": "Podium stand",
+            "podiumTower": "Tower",
+            "rollingPodium": "Rolling podium",
+            "stepladder": "Stepladder",
+            "scaffold": "Scaffold tower"
         },
         "variant": {
             "accessories": "Accessories",
@@ -4012,7 +4033,10 @@
             "syntheticBlack": "Black synthetic",
             "tall": "Tall",
             "toms": "Toms",
-            "wide": "Wide"
+            "wide": "Wide",
+            "aluminum": "Aluminum",
+            "black": "Black",
+            "feet": "{size} ft"
         }
     },
     "feedback": {

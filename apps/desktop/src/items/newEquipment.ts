@@ -1,6 +1,6 @@
 import type { FieldProperties, XY } from "@openmarch/core";
 import type { NewItemArgs } from "@/db-functions/items";
-import type { PitVariant } from "@/view3d/core/pit/catalog";
+import { isPodiumFamily, type PitVariant } from "@/view3d/core/pit/catalog";
 
 /**
  * A new equipment item from the front ensemble catalog (instruments.md §6): it names its built-in
@@ -45,7 +45,7 @@ export function equipmentRotationAt(
     center: { x: number; y: number },
     field: Pick<FieldProperties, "centerFrontPoint" | "height">,
 ): number {
-    if (variant.family !== "podium") return 0;
+    if (!isPodiumFamily(variant.family)) return 0;
     const centerLine = field.centerFrontPoint.yPixels - field.height / 2;
     return center.y < centerLine ? 180 : 0;
 }

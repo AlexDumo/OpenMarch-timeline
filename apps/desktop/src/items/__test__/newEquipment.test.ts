@@ -82,6 +82,23 @@ describe("equipmentRotationAt", () => {
         );
     });
 
+    it("turns the drum major's podiums like the conductor's", () => {
+        for (const modelId of [
+            "pit/podium-stand-2ft",
+            "pit/podium-tower-6ft-black",
+            "pit/podium-rolling-6ft",
+            "pit/stepladder-6ft",
+            "pit/scaffold-tower",
+        ])
+            expect(
+                equipmentRotationAt(
+                    pitVariant(modelId)!,
+                    { x: 600, y: 10 },
+                    field,
+                ),
+            ).toBe(180);
+    });
+
     it("turns a podium behind the back sideline too", () => {
         expect(equipmentRotationAt(podium, { x: 600, y: -60 }, field)).toBe(
             180,

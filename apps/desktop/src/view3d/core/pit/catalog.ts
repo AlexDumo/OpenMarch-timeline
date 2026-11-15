@@ -8,8 +8,9 @@
  * - A variant's footprint is the detailed model's size, in meters like an item's geometry:
  *   width along the field's x, depth toward the audience, as the models are built (+Z toward the
  *   audience).
- * - Amps are built but not offered yet, nor are the drum major's stands, towers, rolling podium,
- *   stepladder and scaffold (#838); the podium family is the conductor podium.
+ * - Amps are built but not offered yet.
+ * - The podiums (the conductor podium and the drum major's stand, towers, rolling podium,
+ *   stepladder and scaffold, #838) are their own group: stood on, not played.
  *
  * Labels are i18n keys with parameters, so this stays free of the UI.
  */
@@ -35,10 +36,15 @@ export type PitFamilyId =
     | "trapTable"
     | "speaker"
     | "mixer"
-    | "podium";
+    | "podium"
+    | "podiumStand"
+    | "podiumTower"
+    | "rollingPodium"
+    | "stepladder"
+    | "scaffold";
 
-/** How the Props panel groups families */
-export type PitGroup = "keyboards" | "percussion" | "audio";
+/** How the Front ensemble panel groups families */
+export type PitGroup = "keyboards" | "percussion" | "audio" | "podiums";
 
 export interface PitFamily {
     id: PitFamilyId;
@@ -47,7 +53,7 @@ export interface PitFamily {
     labelKey: string;
     /**
      * Whether someone plays it, standing on its playing spot (`pit/playingSpot.ts`): the
-     * keyboards and percussion, not the audio group's speakers, mixer and podium
+     * keyboards and percussion, not the audio group's speakers and mixer or the podiums
      */
     played: boolean;
 }
@@ -83,7 +89,7 @@ interface FamilySpec {
     stem: string;
     defaultFileId: string;
     /** The unit of the size in the file id */
-    size?: "octaves" | "inches" | "keys";
+    size?: "octaves" | "inches" | "keys" | "feet";
     /** The label part of a variant whose file id names no finish or style */
     plain?: string;
 }
@@ -201,12 +207,54 @@ const FAMILY_SPECS: readonly FamilySpec[] = [
     },
     {
         id: "podium",
-        group: "audio",
+        group: "podiums",
         stem: "conductor-podium",
         defaultFileId: "conductor-podium",
         plain: "low",
     },
+    {
+        id: "podiumStand",
+        group: "podiums",
+        stem: "podium-stand",
+        defaultFileId: "podium-stand-2ft",
+        size: "feet",
+        plain: "aluminum",
+    },
+    {
+        id: "podiumTower",
+        group: "podiums",
+        stem: "podium-tower",
+        defaultFileId: "podium-tower-5ft",
+        size: "feet",
+        plain: "aluminum",
+    },
+    {
+        id: "rollingPodium",
+        group: "podiums",
+        stem: "podium-rolling",
+        defaultFileId: "podium-rolling-6ft",
+        size: "feet",
+        plain: "aluminum",
+    },
+    {
+        id: "stepladder",
+        group: "podiums",
+        stem: "stepladder",
+        defaultFileId: "stepladder-6ft",
+        size: "feet",
+    },
+    {
+        id: "scaffold",
+        group: "podiums",
+        stem: "scaffold-tower",
+        defaultFileId: "scaffold-tower",
+    },
 ];
+
+/** Size words in file ids that carry their unit ("6ft"), and the unit to drop from them */
+const SIZE_SUFFIX: Partial<Record<NonNullable<FamilySpec["size"]>, string>> = {
+    feet: "ft",
+};
 
 /** File-id words, as the label parts they read as */
 const WORDS: Readonly<Record<string, string>> = {
@@ -234,11 +282,19 @@ function variantOf(spec: FamilySpec, fileId: string): PitVariant {
     const rest = fileId === spec.stem ? "" : fileId.slice(spec.stem.length + 1);
     const tokens = rest ? rest.split("-") : [];
     const label: PitLabelPart[] = [];
-    if (spec.size && tokens.length > 0)
+    if (spec.size && tokens.length > 0) {
+        const suffix = SIZE_SUFFIX[spec.size];
+        const word = tokens.shift()!;
         label.push({
             key: variantKey(spec.size),
-            params: { size: tokens.shift()! },
+            params: {
+                size:
+                    suffix && word.endsWith(suffix)
+                        ? word.slice(0, -suffix.length)
+                        : word,
+            },
         });
+    }
     const words = tokens.join("-");
     if (words) label.push({ key: variantKey(WORDS[words] ?? words) });
     else if (spec.plain) label.push({ key: variantKey(spec.plain) });
@@ -276,15 +332,19 @@ const BY_FILE_ID: ReadonlyMap<string, PitVariant> = new Map(
     [...VARIANTS.values()].flat().map((v) => [v.fileId, v]),
 );
 
-/** The families offered, in the order the Props panel lists them */
+/** The families offered, in the order the Front ensemble panel lists them */
 export const PIT_FAMILIES: readonly PitFamily[] = FAMILY_SPECS.map(
     ({ id, group }) => ({
         id,
         group,
         labelKey: `pit.family.${id}`,
-        played: group !== "audio",
+        played: group === "keyboards" || group === "percussion",
     }),
 );
+
+/** Whether a family is a podium: stood on by a conductor or drum major, not played */
+export const isPodiumFamily = (family: PitFamilyId): boolean =>
+    FAMILY_SPECS.find((s) => s.id === family)?.group === "podiums";
 
 /** A family's variants, smaller first */
 export const pitVariantsOf = (family: PitFamilyId): readonly PitVariant[] =>
