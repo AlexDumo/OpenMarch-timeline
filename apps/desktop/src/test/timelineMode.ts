@@ -1,3 +1,4 @@
+// cspell:ignore Millis (drizzle's `folderMillis`)
 import { DatabaseSync } from "node:sqlite";
 import fs from "fs";
 import os from "os";
@@ -5,7 +6,12 @@ import path from "path";
 import type { Table } from "drizzle-orm";
 import { inject } from "vitest";
 import { schema, getOrm } from "@/../electron/database/db";
-import { DrizzleMigrationService } from "@/../electron/database/services/DrizzleMigrationService";
+import {
+    DrizzleMigrationService,
+    FIRST_TIMELINE_MIGRATION_TAG,
+    readTaggedMigrations,
+} from "@/../electron/database/services/DrizzleMigrationService";
+import { skipsExistingColumn } from "@/../electron/database/migrations/addColumnGuard";
 import { PAGE_MODEL_USER_VERSION } from "@/../electron/database/fileVersion";
 import { convertFileOnOpen } from "@/../electron/database/convertOnOpen";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
@@ -64,9 +70,37 @@ export const timelineHistoryTables = (): Table[] => [
 let pageEraBlank: string | undefined;
 
 /**
- * A blank page-era file (version 7, the migrations before the timeline-only ones, and the rows
- * a new file got), built once per process. Data fixtures copy it to load a page show. It goes in
- * the run's fixture cache folder (./globalSetup.ts), which is deleted afterwards.
+ * Runs, without recording them, the timeline-only migrations after the page-era drop
+ * (`FIRST_TIMELINE_MIGRATION_TAG`) on a page-era test file. They change tables such a file
+ * already has (0019 adds a Held mark's hold style). The app runs them when the file converts, but
+ * a test that keeps its page-era fixtures (`keepFixturesInPageMode`) writes timeline rows without
+ * converting, and the app's code reads the current columns. Finishing the conversion runs them
+ * again, recorded this time, skipping a column the table already has (`addColumnGuard.ts`): so a
+ * migration added here must be safe to run twice, as an `ADD COLUMN` is.
+ */
+function applyLaterTimelineMigrationsUnrecorded(db: DatabaseSync): void {
+    const migrations = readTaggedMigrations(migrationsFolder);
+    const drop = migrations.find((m) => m.tag === FIRST_TIMELINE_MIGRATION_TAG);
+    if (!drop) return;
+    const columnsOf = (table: string) =>
+        (
+            db.prepare("SELECT name FROM pragma_table_info(?)").all(table) as {
+                name: string;
+            }[]
+        ).map((c) => c.name);
+    for (const m of migrations) {
+        if (m.folderMillis <= drop.folderMillis) continue;
+        for (const statement of m.sql)
+            if (statement.trim() && !skipsExistingColumn(statement, columnsOf))
+                db.exec(statement);
+    }
+}
+
+/**
+ * A blank page-era file (version 7, the migrations before the timeline-only ones, the columns
+ * later ones add to its tables, and the rows a new file got), built once per process. Data
+ * fixtures copy it to load a page show. It goes in the run's fixture cache folder
+ * (./globalSetup.ts), which is deleted afterwards.
  */
 export async function pageEraBlankPath(): Promise<string> {
     if (pageEraBlank && fs.existsSync(pageEraBlank)) return pageEraBlank;
@@ -82,6 +116,7 @@ export async function pageEraBlankPath(): Promise<string> {
         await new DrizzleMigrationService(orm, db).applyPendingMigrations(
             migrationsFolder,
         );
+        applyLaterTimelineMigrationsUnrecorded(db);
         await orm.insert(schema.field_properties).values({
             id: 1,
             json_data: JSON.stringify(

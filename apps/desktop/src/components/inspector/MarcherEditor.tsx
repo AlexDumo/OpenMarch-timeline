@@ -46,6 +46,7 @@ import {
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import { TagButtons } from "./marcher/TagEditor";
 import TimelineHoldLine, { TimelineHeldCount } from "./TimelineHoldLine";
+import TimelineHoldStyle from "./TimelineHoldStyle";
 import MovePad from "./marcher/MovePad";
 import { sectionDisplayName } from "@/components/marcher/sectionDisplayName";
 import { formatList } from "@/utilities/formatList";
@@ -724,6 +725,10 @@ function MarcherEditor() {
                                     <TimelineHoldLine
                                         marcherIds={selectedMarcherIdList}
                                     />
+                                    {/* What their feet do over a Held hold (#775) */}
+                                    <TimelineHoldStyle
+                                        marcherIds={selectedMarcherIdList}
+                                    />
                                     {selectedMarchers.length === 2 && (
                                         <ActionButton
                                             action="swapMarchers"
@@ -986,6 +991,12 @@ function MarcherEditor() {
                                                 )}
                                                 {/* Under Step Size: hold or move on this page (UI-18) */}
                                                 <TimelineHoldLine
+                                                    marcherIds={
+                                                        selectedMarcherIdList
+                                                    }
+                                                />
+                                                {/* What its feet do over a Held hold (#775) */}
+                                                <TimelineHoldStyle
                                                     marcherIds={
                                                         selectedMarcherIdList
                                                     }

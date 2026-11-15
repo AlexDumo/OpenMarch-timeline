@@ -145,6 +145,11 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
             if (object.type === "index" && PAGE_ERA_TABLES.includes(object.tbl))
                 db.exec(object.sql);
     },
+    // A Held mark's hold style (ADR 0015 D-5): the column goes. The history triggers name it
+    19: (db) => {
+        dropTriggers(db);
+        db.exec("ALTER TABLE timeline_held_marks DROP COLUMN style");
+    },
 };
 
 /**
