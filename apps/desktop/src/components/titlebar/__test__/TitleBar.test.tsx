@@ -1,9 +1,14 @@
 import { render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useInputModeStore } from "@/stores/InputModeStore";
+import { useToolbarTabsSlot } from "../toolbarSlot";
 import { TolgeeProvider } from "@tolgee/react";
 import tolgee from "@/global/singletons/Tolgee";
 import TitleBar from "../TitleBar";
 import type { UpdateState } from "@/global/updates";
+
+// The file buttons need the database; these tests are about the bar's layout
+vi.mock("../FileControls", () => ({ default: () => null }));
 
 const availableState: UpdateState = {
     currentVersion: "0.2.0",
@@ -35,6 +40,10 @@ beforeEach(() => {
             databaseGetPath: vi.fn().mockResolvedValue("/shows/Halftime.dots"),
         },
     });
+});
+
+afterEach(() => {
+    useInputModeStore.setState({ mode: "pointer" });
 });
 
 const renderBar = (props: Parameters<typeof TitleBar>[0] = {}) =>
@@ -91,8 +100,30 @@ describe("TitleBar", () => {
         renderBar();
         const pill = await screen.findByTestId("update-pill");
         expect(pill).toHaveAttribute("data-quiet", "true");
-        expect(pill).toHaveAccessibleName("Downloading an update: 37%");
+        expect(pill).toHaveAccessibleName("Downloading update: 37%");
         expect(screen.getByTestId("update-progress-ring")).toBeInTheDocument();
+    });
+
+    it("main variant shows a requested download as the ring and words, no bar", async () => {
+        updaterWith({
+            ...availableState,
+            phase: {
+                kind: "downloading",
+                version: "0.2.1",
+                requested: true,
+                percent: 37.4,
+                bytesPerSecond: 1,
+                transferred: 1,
+                total: 2,
+            },
+        });
+        renderBar();
+        const pill = await screen.findByTestId("update-pill");
+        expect(pill).not.toHaveAttribute("data-quiet");
+        expect(pill).toHaveAccessibleName("Downloading update: 37%");
+        expect(pill).toHaveTextContent("Downloading update");
+        expect(screen.getByTestId("update-progress-ring")).toBeInTheDocument();
+        expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     });
 
     it("main variant shows nothing while up to date", async () => {
@@ -103,5 +134,26 @@ describe("TitleBar", () => {
         renderBar();
         await vi.waitFor(() => expect(updates.getState).toHaveBeenCalled());
         expect(screen.queryByTestId("update-pill")).not.toBeInTheDocument();
+    });
+
+    it("touch mode gives the middle to the toolbar's slot instead of the show's name", async () => {
+        useInputModeStore.setState({ mode: "touch" });
+        let slot: HTMLElement | null = null;
+        function ReadSlot() {
+            slot = useToolbarTabsSlot();
+            return null;
+        }
+        render(
+            <TolgeeProvider tolgee={tolgee} fallback="">
+                <TitleBar showControls />
+                <ReadSlot />
+            </TolgeeProvider>,
+        );
+        await vi.waitFor(() =>
+            expect(slot).toBe(screen.getByTestId("titlebar-toolbar-tabs")),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(window.electron.databaseGetPath).not.toHaveBeenCalled();
+        expect(screen.queryByText("Halftime.dots")).not.toBeInTheDocument();
     });
 });

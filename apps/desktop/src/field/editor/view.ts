@@ -126,6 +126,35 @@ export function centerAtBase(
 }
 
 /**
+ * The Edit field mode's view (#824), which holds still while the mode is on: the whole field
+ * fitted and centered in the part of the element the rulers leave, `inset` px along the top and
+ * down the left, with a small margin on each side and room for what's drawn outside the field
+ * (its labels).
+ */
+export function fieldEditFit(
+    width: number,
+    height: number,
+    field: FieldSize,
+    inset: number,
+    /** Room kept past the field's edges on each side, in field units (its outside labels) */
+    outside: { readonly x: number; readonly y: number } = { x: 0, y: 0 },
+): FieldView {
+    const roomWidth = Math.max(1, width - inset);
+    const roomHeight = Math.max(1, height - inset);
+    const zoom = baseZoom(roomWidth, roomHeight, {
+        width: field.width + 2 * outside.x,
+        height: field.height + 2 * outside.y,
+    });
+    return {
+        width,
+        height,
+        zoom,
+        panX: inset + (roomWidth - field.width * zoom) / 2,
+        panY: inset + (roomHeight - field.height * zoom) / 2,
+    };
+}
+
+/**
  * The view `t` of the way from `from` to `to` (0 to 1), as if the element's
  * visible part of the field slid and resized in a straight line from one to
  * the other. Clicking the zoom percentage glides along this.
@@ -230,17 +259,40 @@ export const viewCenter = (view: FieldView): ElementPoint => ({
 });
 
 /**
- * One step of a two-finger touch pinch: the zoom grows by 0.01 for each pixel
- * the fingers move apart, at the point between them.
+ * Where the fingers are during a touch navigation, in element pixels: the
+ * point between them (one finger: the finger itself) and, with two or more
+ * fingers, how far apart the first two are.
  */
-export function pinchStep(
-    view: FieldView,
-    center: ElementPoint,
-    distanceChange: number,
+export type TouchGeometry = { mid: ElementPoint; distance: number | null };
+
+/**
+ * The view during a touch navigation: the field point that was under the
+ * fingers when it began (`from`, with the view `start`) stays under them now
+ * (`to`), and the zoom grows by as much as the fingers spread. One finger, or
+ * two moving together, pans one to one; two fingers moving apart zoom about
+ * the point between them, so the field stays under each finger.
+ */
+export function touchNavigation(
+    start: FieldView,
+    from: TouchGeometry,
+    to: TouchGeometry,
     field: FieldSize,
 ): FieldView {
+    const spread =
+        from.distance !== null && to.distance !== null && from.distance > 0
+            ? to.distance / from.distance
+            : 1;
+    const zoom = clampZoom(start.zoom * spread);
+    // The field point under the fingers when the navigation began
+    const fieldX = (from.mid.x - start.panX) / start.zoom;
+    const fieldY = (from.mid.y - start.panY) / start.zoom;
     return clampPan(
-        zoomAt(view, center, view.zoom + distanceChange * 0.01),
+        {
+            ...start,
+            zoom,
+            panX: to.mid.x - fieldX * zoom,
+            panY: to.mid.y - fieldY * zoom,
+        },
         field,
     );
 }

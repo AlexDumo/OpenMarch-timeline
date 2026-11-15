@@ -85,7 +85,7 @@ rotors).
 | Soprano Sax   | straight soprano          | length 0.65            | clarinet |
 | Alto Sax      | alto sax on a strap       | height 0.65, bell 0.12 | sax      |
 | Tenor Sax     | tenor sax on a strap      | height 0.80, bell 0.14 | sax      |
-| Bari Sax      | baritone sax on a harness | height 1.0, bell 0.19  | sax      |
+| Bari Sax      | baritone sax on a harness | height 1.0, bell 0.17  | bariSax  |
 
 ### Battery (`FAMILIES.Battery`)
 
@@ -93,15 +93,18 @@ rotors).
 | --------- | ----------------------------------------- | ---------------------------------------------- | ------- |
 | Snare     | marching snare on a carrier               | 14 in × 12 in shell                            | snare   |
 | Tenors    | sixes on a carrier                        | 10, 12, 13, 14 in drums, 6 and 8 in shots      | tenors  |
-| Bass Drum | marching bass on a carrier, sized per dot | 18 to 32 in diameter in 2 in steps, 14 in deep | bass    |
+| Bass Drum | marching bass on a carrier, sized per dot | 14 to 32 in diameter in 2 in steps, 14 in deep | bass    |
 | Cymbals   | pair of 18 in crash cymbals               | 18 in                                          | cymbals |
 | Flub Drum | the bass model, sized with the bass line  |                                                | bass    |
 
-Bass drum size: the show stores no size, so each marcher gets one. The
-marchers whose section carries the bass model (Bass Drum and Flub Drum), in
-id order, spread evenly over 18, 20, … 32 in, smallest first; a lone drum
-gets 26 in (`bassSizesFor`, `bassOptions` in `looks.ts`). A stored
-per-marcher size is a later schema change. The drums ride high, as in the
+Bass drum size: automatic, never picked (owner, 2026-11-15: the drill
+writer won't touch it), so the show stores no size. The sizes are what
+Yamaha (MB-8300) and Pearl (Championship Maple) sell: 14 to 32 in, in 2 in
+steps. The marchers whose section carries the bass model (Bass Drum and Flub
+Drum), in id order, spread evenly from the line's smallest size up to 32 in,
+smallest first. Lines of up to five start at 18 in, a line of six at 16 in
+and longer lines at 14 in, so every drum gets its own size up to ten; a
+lone drum gets 26 in (`bassSizesFor`, `bassOptions` in `looks.ts`). The drums ride high, as in the
 owner's reference photo: every size keeps its back at the carrier, just in
 front of the belly plate, so bigger drums reach further forward, and each
 hangs where its head's center is one mallet length up and forward from the
@@ -111,11 +114,31 @@ the mallet runs back through the hand with its butt behind the fist. The
 arms are one pose for every size; a hold per size would refine the small
 drums.
 
-**Carriers.** Snare, tenors and bass hang from one shoulder-hoop carrier:
-chrome hoops from a black belly plate up over the shoulders (padded where
-they sit) and down the back, with chrome J-bars from the plate to the drum.
-Its clearances come from the seven body meshes: shoulder tops at 1.46 m,
-chests reaching z 0.17, upper backs z −0.19.
+**Drum hardware (owner, 2026-11-15: match Yamaha's marching drums).** The
+drums follow current high-tension marching drums, after Yamaha's MS-9400
+snares, MQ-8300 multi-toms and MB-8300 basses, with no maker's badge or
+logo. Shells are paint under a glossy clear coat in the section's color, not
+metal; heads are smooth white. The snare's shell floats inside satin
+aluminum hardware: a tall top hoop over a tension frame, ten long tube lugs
+down to the bottom hoop, four feet, the strainer at the player's right and a
+mount bar at the back for the J-bars. Tenor shells are open below and cut
+away toward the player (about half depth on the near side), under tall
+chrome hoops with short lug casings. Bass drums have wood hoops in the
+shell's color, claw hooks and long tension rods to a center lug at each
+position (8 lugs up to 20 in, 10 to 26 in, 12 above), with a thin mount at
+the back. Cymbals are brilliant bronze in either brass finish, with the
+lathing's tone grooves and a leather pad on each bell. Each pad rests on its
+palm, and no hand passes through its cymbal on any body
+(`cymbalGrip.test.ts`); the strap runs inside the fist, so it isn't drawn.
+Bolt heads and lug casings are drawn at high detail only.
+
+**Carriers.** Snare, tenors and bass hang from one plate carrier, after
+current aluminum vest carriers: flat satin bars from a yoke on the chest up
+over the shoulders (padded where they sit) and down the back, a plate down
+the sternum onto a belly plate, a bar across the upper back, and J-bars
+from the belly plate to the drum. Its clearances come from the seven body
+meshes: shoulder tops at 1.46 m, chests reaching z 0.17, upper backs
+z −0.19.
 
 **Tenor layout.** Sixes, after the owner's reference photo of a Dynasty
 six-drum set. The two shots (6 and 8 in) sit in the middle nearest the
@@ -204,7 +227,8 @@ against the reference pages' angled views and front-on photos of marching
 players: `woodwindKit.ts` holds the shared parts (cups on chimneys, hinge
 rods with posts, key guards, mouthpieces with reed and ligature, flared
 tubes), `woodwinds.ts` the flute, piccolo and clarinets, `saxophones.ts`
-the saxophones. The curved saxes have a true U bow, a bell that leans as it
+the saxophones. The curved saxes have a true U bow, a bell in front of the
+body tube that leans forward as it
 flares to a rolled rim with its low cups under guards, a bell-to-body brace
 and a neck with its octave key; the bari has its top loop. The flute's lip
 plate lines up with its keys; the bass clarinet has a swan-neck crook and a
@@ -248,8 +272,10 @@ the catalog's flat-bottomed swing Cut and the 6 ft flag stays a rectangle.
 
 **Parts and finish.** The uniform shader paints parts by id; it knows ids 0
 to 15 today. Instruments take new ids from 16 upward: 16 brass finish (gold
-lacquer by default, silver plate as the alternative), 17 reserved, 18 chrome, 19 drum shell (section color), 20 drum head, 21 bar
-(rosewood), 22 black hardware, 23 wood (clarinet), 24 speaker grille. The
+lacquer by default, silver plate as the alternative), 17 reserved, 18 chrome, 19 drum shell (section color, paint under clear coat), 20 drum
+head, 21 bar (rosewood), 22 black hardware, 23 wood (clarinet), 24 speaker
+grille or flag silk, 25 satin aluminum (drum hoops, lugs, carriers), 26
+cymbal bronze. The
 finish (lacquer or silver) is the show's choice for its whole brass line
 (venue settings `brassFinish`, ADR 0010 amendment 2026-11-09); woodwinds
 keep the finish they are made in (`finishFor`). Painting new ids needs a change in the vendored
@@ -376,23 +402,35 @@ points and where the elbows go.
   carry the crook and bell sit low at the right side, at trail the keys
   face the ground so the crook and bell hang below the tube behind the
   leg.
-- **sax.** Up (photos, 2026-11-10): the bottom kicked forward 12 degrees
-  and the left hand up on the upper stack at the chest, 0.11 m higher than
-  before, the elbows relaxed near the body. On the strap in front of the body, as front-on photos of marching
-  saxes show: the neck runs straight back to the mouth, reed underneath,
-  and the body hangs straight down, parallel to the player, to the bow at
-  the stomach (lower for the tenor and bari). The body is turned 65 degrees
-  about its own axis under the neck (`SAX_BODY_TURN` in `saxophones.ts`),
-  so the bell stands in front of the body tube, a little to the player's
-  left, opening forward and up, and the pearls face the player's
-  front-right where the fingers go (owner, 2026-11-09). The hands wrap the
-  body from the sides, fingers across the front: left hand on the upper
-  stack, right hand on the lower, elbows out. Carry: the playing
-  orientation raised so the mouthpiece is at eye level, on the center line
-  0.13 m out. The hands stay where they play. Trail: level along front to
-  back through the right fist, the mouthpiece forward, turned about the body
-  tube so the bow and bell still hang below it, clear of the leg; the arms
-  are the brass trail's.
+- **sax (alto and tenor).** Up (owner, 2026-11-14, replacing the
+  2026-11-09 turn and the 2026-11-10 kick): the sax stands straight up and
+  down on the strap in front of the body, the mouthpiece straight back into
+  the mouth and the bell straight away from the player, directly in front
+  of the body tube, so neck, body and bell lie in one front-to-back plane.
+  The model turns its body 90 degrees about its own axis under the neck
+  (`SAX_BODY_TURN` in `saxophones.ts`) to line them up, which leaves the
+  pearls facing the performer's right. The hands come from the model's own
+  stacks (`saxHands` in `holds.ts`; the alto and tenor share a hold, so
+  their hands go between the two saxes' stacks), in the real grip: the
+  thumbs on the player's side of the tube, the palms on its flanks and the
+  fingers curled round onto the pearls, so each stiff mitt points along the
+  curled fingers' chord, bent toward the palm at the wrist by up to 30
+  degrees (`SAX_WRIST_BEND`). The elbows hang under the shoulders. Carry: the
+  playing orientation raised so the mouthpiece is at eye level, on the
+  center line 0.13 m out; the hands stay on the stacks. Trail: level along
+  front to back through the right fist, the mouthpiece forward, the bow and
+  bell hanging straight down below the body tube, clear of the leg; the
+  arms are the brass trail's.
+- **bari sax.** A hold of its own, so its hands land on its own, longer
+  stacks. The model follows the same rule as the alto and tenor: the
+  mouthpiece comes straight back to the player and the bell faces straight
+  away, with the top loop, crook and neck receiver on the near side of the
+  body in the same plane. Up (owner, 2026-11-14, after trying a carry slung
+  sideways down the body): straight up and down like the alto and tenor,
+  the long body hanging in front of the performer, the hands in the same
+  real grip on its stacks. Carry: as the
+  alto's, the hands on the bari's upper stacks so they reach at eye level.
+  Trail: as the alto's, the tube a little further out for the wide bell.
 - **snare, tenors.** Elbows at the sides, a little forward, not winged
   (photos, 2026-11-10). Drum at waist height on the carrier, its shell clear
   of the belly plate. Matched grip: the hands just behind the back rim

@@ -1,5 +1,10 @@
 import { isWebBuild } from "@/utilities/webBuild";
-export type ActionScope = "global" | "canvas";
+/**
+ * Where an action's key works. `canvas` keys beat `global` ones on the same key; `fieldEdit` keys
+ * work only in the Edit field mode (#824), whose handlers exist only while it's on, and beat both
+ * there. A `fieldEdit` key may reuse a `canvas` key (Delete, H, R, the arrows) but not a global one.
+ */
+export type ActionScope = "global" | "canvas" | "fieldEdit";
 export type ActionCategory =
     | "file"
     | "edit"
@@ -12,7 +17,8 @@ export type ActionCategory =
     | "cursor"
     | "select"
     | "shape"
-    | "timeline";
+    | "timeline"
+    | "field";
 export type ActionArgs = Readonly<Record<string, string | number | boolean>>;
 
 /**
@@ -159,6 +165,35 @@ function buildNudgeActions(): Record<NudgeActionId, ActionDefinition> {
             };
         }
     }
+    return result;
+}
+
+type FieldLineNudgeActionId =
+    `fieldEditNudge${keyof typeof NUDGE_KEYS}${"" | "Fine"}`;
+
+/**
+ * The Edit field mode's arrows (#824): move the selected lines a step (X lines left and right, Y
+ * lines up and down), or half a step with Shift (the Fine role, as for marchers)
+ */
+function buildFieldLineNudgeActions(): Record<
+    FieldLineNudgeActionId,
+    ActionDefinition
+> {
+    const result = {} as Record<FieldLineNudgeActionId, ActionDefinition>;
+    for (const [dirName, dir] of Object.entries(NUDGE_KEYS))
+        for (const fine of [false, true]) {
+            const id =
+                `fieldEditNudge${dirName}${fine ? "Fine" : ""}` as FieldLineNudgeActionId;
+            result[id] = {
+                labelKey: `actions.field.nudge${dirName}`,
+                // Half a step, not the marchers' Fine (¼ step, no snap)
+                labelSuffixKey: fine ? "actions.field.halfStep" : undefined,
+                category: "field",
+                scope: "fieldEdit",
+                defaultBindings: [fine ? `Shift+${dir.arrow}` : dir.arrow],
+                args: { direction: dir.direction, steps: fine ? 0.5 : 1 },
+            };
+        }
     return result;
 }
 
@@ -716,6 +751,32 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
         hiddenFromPalette: true,
     },
+    // The open shape thrown away, placing nothing (tablet 1.4): the touch layout's Discard, as
+    // Escape is with a keyboard. While clicking a line's points, those points; mid-drag, the drag.
+    // No key of its own: Escape already does it (shapes/tool/ShapeToolKeys)
+    shapeDiscard: {
+        labelKey: "actions.shape.discard",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    // Drawing a polygon prop (C2.1): finished now, as its double-click does, and its last corner
+    // taken back (tablet 1.4, the drawing card's Finish and Undo point). No keys: the mouse
+    // double-clicks (field/fieldPropTool)
+    propFinishDrawing: {
+        labelKey: "actions.prop.finishDrawing",
+        category: "edit",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    propRemoveLastPoint: {
+        labelKey: "actions.prop.removeLastPoint",
+        category: "edit",
+        scope: "canvas",
+        defaultBindings: [],
+    },
     // The floating editor's turn and Recalculate (#429), for the open or selected shape only. While
     // one is shown, Alt+F and Alt+Shift+F (flipHorizontal/flipVertical) flip the shape instead of
     // the marchers (shapes/editor/ShapeEditorBar)
@@ -797,6 +858,28 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
     },
 
+    // Select one marcher of the placed box selected whole, going inside the box: what a
+    // double-click on a member does, as a field menu entry for a tablet (tablet 1.5). The field's
+    // menu passes the marcher pressed (`args.marcherId`); it needs one, so it isn't in the palette
+    shapeEnterBox: {
+        labelKey: "actions.shape.enterBox",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: [],
+        hiddenFromPalette: true,
+    },
+
+    // The open shape's pivot back to the center: what a double-click on the pivot does, as an
+    // entry in the floating editor's pivot menu for a tablet (tablet 1.5)
+    shapeCenterPivot: {
+        labelKey: "actions.shape.centerPivot",
+        keywordsKey: "actions.shape.centerPivotKeywords",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+
     // Cursor mode
     cancelAlignmentUpdates: {
         labelKey: "actions.alignment.cancelUpdates",
@@ -833,6 +916,16 @@ const STATIC_ACTIONS = {
         keywordsKey: "actions.timeline.unsetHereKeywords",
         category: "timeline",
         scope: "canvas",
+        defaultBindings: [],
+    },
+
+    // Tablet 0.6 (#846): Basic or Expert from the palette, as Settings › Timeline switches it. No
+    // key: none is free that reads as this, and switching is rare
+    toggleEditorMode: {
+        labelKey: "actions.timeline.toggleEditorMode",
+        keywordsKey: "actions.timeline.toggleEditorModeKeywords",
+        category: "timeline",
+        scope: "global",
         defaultBindings: [],
     },
 
@@ -883,11 +976,260 @@ const STATIC_ACTIONS = {
         scope: "global",
         defaultBindings: [],
     },
+
+    // Tablet 3.2 (#885): one step of the timeline's zoom, about the playhead when it's in view.
+    // The touch layout's ± buttons and tempo mode's transport buttons; no key (Mod+scroll zooms)
+    timelineZoomIn: {
+        labelKey: "actions.timeline.zoomIn",
+        keywordsKey: "actions.timeline.zoomKeywords",
+        category: "timeline",
+        scope: "global",
+        defaultBindings: [],
+    },
+    timelineZoomOut: {
+        labelKey: "actions.timeline.zoomOut",
+        keywordsKey: "actions.timeline.zoomKeywords",
+        category: "timeline",
+        scope: "global",
+        defaultBindings: [],
+    },
+    // Tablet 3.5 (#888): Fit the show in view, or back to the zoom from before, for the touch
+    // transport's "…" and the palette. Shift+Z stays the timeline's own key (`useTimelineZoom`)
+    timelineFit: {
+        labelKey: "actions.timeline.fit",
+        keywordsKey: "actions.timeline.zoomKeywords",
+        category: "timeline",
+        scope: "global",
+        defaultBindings: [],
+    },
+    // Tablet 3.5 (#888): tempo mode ("Edit music") on or off, for the touch transport's "…" and
+    // the palette. Shift+T stays tempo mode's own key (`TempoModeButton`)
+    toggleTempoMode: {
+        labelKey: "actions.timeline.toggleTempoMode",
+        keywordsKey: "actions.timeline.toggleTempoModeKeywords",
+        category: "timeline",
+        scope: "global",
+        defaultBindings: [],
+    },
+    // Field edits (#823, src/field/edits): the field's checkpoints, each one undo step. The ones
+    // that need no checkpoint picked are here; remove, move, update, settings and templates are
+    // called by name (runFieldEdit / applyFieldEdits) until the Edit field mode (#824) has a
+    // checkpoint selection to give them. Unbound
+    fieldAddXCheckpoint: {
+        labelKey: "actions.field.addXCheckpoint",
+        keywordsKey: "actions.field.checkpointKeywords",
+        category: "field",
+        scope: "global",
+        defaultBindings: [],
+    },
+    fieldAddYCheckpoint: {
+        labelKey: "actions.field.addYCheckpoint",
+        keywordsKey: "actions.field.checkpointKeywords",
+        category: "field",
+        scope: "global",
+        defaultBindings: [],
+    },
+    fieldAddXCheckpointSeries: {
+        labelKey: "actions.field.addXCheckpointSeries",
+        keywordsKey: "actions.field.checkpointKeywords",
+        category: "field",
+        scope: "global",
+        defaultBindings: [],
+        params: [
+            {
+                key: "every",
+                labelKey: "actions.field.params.every",
+                unit: "steps",
+                default: 4,
+                range: { min: 0.5 },
+            },
+            {
+                key: "to",
+                labelKey: "actions.field.params.toSide",
+                unit: "steps",
+                default: 80,
+                range: { min: 0 },
+            },
+        ],
+    },
+    fieldAddYCheckpointSeries: {
+        labelKey: "actions.field.addYCheckpointSeries",
+        keywordsKey: "actions.field.checkpointKeywords",
+        category: "field",
+        scope: "global",
+        defaultBindings: [],
+        params: [
+            {
+                key: "every",
+                labelKey: "actions.field.params.every",
+                unit: "steps",
+                default: 4,
+                range: { min: 0.5 },
+            },
+            {
+                key: "to",
+                labelKey: "actions.field.params.toBack",
+                unit: "steps",
+                default: 84,
+                range: { min: 0 },
+            },
+        ],
+    },
+    // The Field panel (#824). Opening it is global; the rest are the panel's keys, handled only
+    // while it's open, and the line keys only while Edit lines is on (useFieldEditModeActions)
+    fieldEditMode: {
+        labelKey: "actions.field.editField",
+        keywordsKey: "actions.field.editFieldKeywords",
+        category: "field",
+        scope: "global",
+        defaultBindings: ["$mod+Shift+E", "Control+Shift+E"],
+    },
+    // Opens the Field panel on its Lines tab (#824). No key: E is the next page everywhere
+    fieldEditLines: {
+        labelKey: "actions.field.editLines",
+        keywordsKey: "actions.field.checkpointKeywords",
+        category: "field",
+        scope: "global",
+        defaultBindings: [],
+    },
+    fieldEditDone: {
+        labelKey: "actions.field.done",
+        category: "field",
+        scope: "fieldEdit",
+        defaultBindings: ["Escape"],
+    },
+    // The Field panel's X (#824): puts the field back as it was when the panel opened, one undo step
+    fieldEditDiscard: {
+        labelKey: "actions.field.discard",
+        category: "field",
+        scope: "fieldEdit",
+        defaultBindings: [],
+    },
+    fieldEditMirror: {
+        labelKey: "actions.field.mirror",
+        toggleOnKey: "actions.field.mirrorOn",
+        toggleOffKey: "actions.field.mirrorOff",
+        category: "field",
+        scope: "fieldEdit",
+        defaultBindings: ["M"],
+        ignoreRepeat: true,
+    },
+    fieldEditAddXLine: {
+        labelKey: "actions.field.addXLine",
+        keywordsKey: "actions.field.checkpointKeywords",
+        category: "field",
+        scope: "fieldEdit",
+        defaultBindings: ["X"],
+    },
+    fieldEditAddYLine: {
+        labelKey: "actions.field.addYLine",
+        keywordsKey: "actions.field.checkpointKeywords",
+        category: "field",
+        scope: "fieldEdit",
+        defaultBindings: ["Y"],
+    },
+    fieldEditEditLine: {
+        labelKey: "actions.field.editLine",
+        category: "field",
+        scope: "fieldEdit",
+        defaultBindings: ["Enter", "F2"],
+    },
+    fieldEditDeleteLines: {
+        labelKey: "actions.field.deleteLines",
+        category: "field",
+        scope: "fieldEdit",
+        defaultBindings: ["Delete", "Backspace"],
+    },
+    fieldEditToggleVisible: {
+        labelKey: "actions.field.toggleVisible",
+        category: "field",
+        scope: "fieldEdit",
+        defaultBindings: ["H"],
+    },
+    fieldEditToggleReference: {
+        labelKey: "actions.field.toggleReference",
+        category: "field",
+        scope: "fieldEdit",
+        defaultBindings: ["R"],
+    },
+    fieldEditNextLine: {
+        labelKey: "actions.field.nextLine",
+        category: "field",
+        scope: "fieldEdit",
+        defaultBindings: ["Tab"],
+    },
+    fieldEditPreviousLine: {
+        labelKey: "actions.field.previousLine",
+        category: "field",
+        scope: "fieldEdit",
+        defaultBindings: ["Shift+Tab"],
+    },
+    // The keyboard's way out of the field (where Tab walks lines) to the bar and the inspector
+    fieldEditNextPane: {
+        labelKey: "actions.field.nextPane",
+        category: "field",
+        scope: "fieldEdit",
+        defaultBindings: ["F6"],
+        allowInInputs: true,
+    },
+    fieldEditPreviousPane: {
+        labelKey: "actions.field.previousPane",
+        category: "field",
+        scope: "fieldEdit",
+        defaultBindings: ["Shift+F6"],
+        allowInInputs: true,
+    },
+    fieldEditImportImage: {
+        labelKey: "actions.field.importImage",
+        keywordsKey: "actions.field.imageKeywords",
+        category: "field",
+        scope: "fieldEdit",
+        defaultBindings: [],
+    },
+    fieldEditRemoveImage: {
+        labelKey: "actions.field.removeImage",
+        keywordsKey: "actions.field.imageKeywords",
+        category: "field",
+        scope: "fieldEdit",
+        defaultBindings: [],
+    },
+    fieldEditSelectAllLines: {
+        labelKey: "actions.field.selectAllLines",
+        category: "field",
+        scope: "fieldEdit",
+        // ⌘A / Ctrl+A is Select all marchers' (global); the mode takes it over while it's on
+        defaultBindings: [],
+    },
+    fieldEditSelectAllXLines: {
+        labelKey: "actions.field.selectAllXLines",
+        category: "field",
+        scope: "fieldEdit",
+        defaultBindings: [],
+    },
+    fieldEditSelectAllYLines: {
+        labelKey: "actions.field.selectAllYLines",
+        category: "field",
+        scope: "fieldEdit",
+        defaultBindings: [],
+    },
+    fieldEditEveryOther: {
+        labelKey: "actions.field.everyOther",
+        category: "field",
+        scope: "fieldEdit",
+        defaultBindings: [],
+    },
+    fieldEditResetNames: {
+        labelKey: "actions.field.resetNames",
+        category: "field",
+        scope: "fieldEdit",
+        defaultBindings: [],
+    },
 } satisfies Record<string, ActionDefinition>;
 
 export const ACTIONS = {
     ...STATIC_ACTIONS,
     ...buildNudgeActions(),
+    ...buildFieldLineNudgeActions(),
 } as const satisfies Record<string, ActionDefinition>;
 
 export type ActionId = keyof typeof ACTIONS;
@@ -896,6 +1238,11 @@ export const ACTION_IDS = Object.keys(ACTIONS) as ActionId[];
 
 export const NUDGE_ACTION_IDS = ACTION_IDS.filter((id) =>
     id.startsWith("moveSelectedMarchers"),
+);
+
+/** The Edit field mode's arrows (#824) */
+export const FIELD_LINE_NUDGE_ACTION_IDS = ACTION_IDS.filter((id) =>
+    id.startsWith("fieldEditNudge"),
 );
 
 export const EXPORT_ACTION_IDS = [

@@ -52,6 +52,7 @@ import { GROUND_LAYER, setGroundLayer } from "@/view3d/core/environment";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
 import { workspaceSettingsQueryOptions } from "@/hooks/queries/useWorkspaceSettings";
 import { performerDefaults } from "@/view3d/core/performerDefaults";
+import { isPercussionSection } from "@/view3d/core/marchers/crab";
 import { marcherHeading } from "@/view3d/core/marchers/facing";
 import {
     buildCountClock,
@@ -66,6 +67,8 @@ import {
     sectionUniform,
 } from "@/view3d/core/marchers/looks";
 import { useShowPositions } from "@/view3d/positions";
+import { useShowProps } from "@/hooks/useShowProps";
+import { writePerformerLifts } from "../props/performerLift";
 import { useView3dSyncStore } from "@/view3d/sync/view3dSyncStore";
 import type { View3dSelection } from "@/view3d/sync/protocol";
 import { useView3dSceneStore } from "../sceneStore";
@@ -209,9 +212,29 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         () => [...new Set((marcherLooks ?? []).map((l) => l.body.heightClass))],
         [marcherLooks],
     );
-    const marcherAssets = useMarcherAssets(heightClasses);
+    // Percussion travels in a crab step unless Show settings say it slides;
+    // only then do its clips load.
+    const percussionTravel = performerDefaults(
+        useQuery(workspaceSettingsQueryOptions()).data?.performerDefaults,
+    ).percussionTravel;
+    const crabs = useMemo(
+        () =>
+            looksKey && percussionTravel === "crab"
+                ? (JSON.parse(looksKey) as [number, string, unknown][]).map(
+                      ([, section]) => isPercussionSection(section),
+                  )
+                : null,
+        [looksKey, percussionTravel],
+    );
+    const marcherAssets = useMarcherAssets(
+        heightClasses,
+        crabs?.includes(true) ?? false,
+    );
     // The count clock and every marcher's clip plan for the whole show.
     const { beats } = useTimingObjects();
+    // Performers stand on the platform under their dot (C4.5), as drawn
+    const hiddenItemIds = useView3dSyncStore((s) => s.hiddenItemIds);
+    const { props: showProps } = useShowProps(hiddenItemIds);
     const clock = useMemo(() => buildCountClock(beats), [beats]);
     // How marchers move where no cue says otherwise: the show's performer
     // defaults (Show settings), field by field so an unrelated settings
@@ -301,6 +324,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             cues,
             previousPlans.current,
             dotMode,
+            crabs,
             directionChange,
         );
         previousPlans.current = planned;
@@ -320,6 +344,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         cues,
         dotMode,
         directionChange,
+        crabs,
     ]);
     const clipNames = useMemo(() => {
         const names = plannedClips(
@@ -486,6 +511,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             visible: new Uint8Array(count),
             xz: new Float32Array(count * 2),
             placed: new Uint8Array(count),
+            lift: new Float32Array(count),
         };
     }, [assets, count]);
     useEffect(
@@ -525,6 +551,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         marcherBodies,
         motion,
         silkMotion,
+        showProps,
     ]);
 
     // Colors and visibility, only when the looks change.
@@ -598,6 +625,8 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                     meshes.placed,
                     countRef.current,
                     cam,
+                    null,
+                    meshes.lift,
                 );
                 marcherBodies.compose(state.gl);
                 lod[0] = cam[0];
@@ -607,26 +636,37 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             return;
         }
 
-        const { bodies, rings, visible, xz, placed } = meshes;
+        const { bodies, rings, visible, xz, placed, lift } = meshes;
         if (moved) {
             // the marchers run a count ahead of the clock (`STEP_AHEAD`), so
             // they're placed from the drill a count later; closed, they stand
             // on the dot at the show time itself
             const c = countAt(clock, ms, countRef.current);
-            writePerformerPositions(
-                slots,
+            const placedMs =
                 marcherBodies && motion && !closed
                     ? msAtCount(clock, c + STEP_AHEAD)
-                    : ms,
+                    : ms;
+            writePerformerPositions(
+                slots,
+                placedMs,
                 fieldProperties,
                 visible,
                 xz,
                 placed,
             );
+            // performers stand on the platforms as drawn, at the clock
+            const propsNow = {
+                props: showProps,
+                positions: slots.positions,
+                ms,
+                fieldProperties,
+            };
             if (marcherBodies) {
                 countRef.current = c;
                 if (closed) motion?.updateClosed(c, headings);
                 else motion?.update(c, xz, placed, headings);
+                // where the bodies are now
+                writePerformerLifts(propsNow, xz, placed, lift);
                 marcherBodies.writeFrame(
                     xz,
                     headings,
@@ -634,17 +674,20 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                     c,
                     cam,
                     silkMotion?.update(c, closed) ?? null,
+                    lift,
                 );
                 marcherBodies.compose(state.gl);
                 lod[0] = cam[0];
                 lod[1] = cam[1];
                 lod[2] = cam[2];
             } else {
+                writePerformerLifts(propsNow, xz, placed, lift);
                 writePerformerMatrices(
                     count,
                     xz,
                     placed,
                     bodies.instanceMatrix.array as Float32Array,
+                    lift,
                 );
                 bodies.instanceMatrix.needsUpdate = true;
             }
@@ -655,6 +698,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             xz,
             placed,
             rings.instanceMatrix.array as Float32Array,
+            lift,
         );
         // With no selection there is nothing to upload (P5.1).
         if (ringCount > 0 || rings.count > 0)

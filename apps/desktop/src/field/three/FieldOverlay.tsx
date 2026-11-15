@@ -2,9 +2,17 @@ import {
     memo,
     useCallback,
     useMemo,
+    useRef,
     useSyncExternalStore,
     type CSSProperties,
 } from "react";
+import {
+    belowLayers,
+    useFieldLayerRects,
+    type FieldLayerKind,
+    type Rect,
+} from "@/components/canvas/fieldLayers";
+import { useIsTouchMode } from "@/stores/InputModeStore";
 import { GlyphText } from "@/shapes/editor/GlyphText";
 import { rgbaToString, type FieldTheme } from "@openmarch/core";
 import type {
@@ -41,6 +49,7 @@ import {
 } from "@/shapes/field/groupDrawing";
 import { PivotHint } from "./PivotHint";
 import HeldRolesChip, { HeldRolesChipBelowTip } from "./HeldRolesChip";
+import ClearOfFinger from "./ClearOfFinger";
 
 /** The selection border width, in CSS px. */
 const BOX_WIDTH = 2;
@@ -202,10 +211,18 @@ export default function FieldOverlay({
     const propTool = useSyncExternalStore(subscribeEditor, () =>
         editor.propToolShape(),
     );
+    // A finger's drag puts its readouts above the finger, where they aren't covered
+    const touch = useSyncExternalStore(
+        subscribeEditor,
+        () => editor.pressKind() === "touch",
+    );
 
     return (
         <>
-            <HeldRolesChip belowTip={modeDrawing?.tip !== undefined} />
+            <HeldRolesChip
+                belowTip={modeDrawing?.tip !== undefined}
+                touch={touch}
+            />
             <PivotHint pivot={JSON.parse(pivot)} />
             <svg
                 className="pointer-events-none absolute inset-0 h-full w-full"
@@ -228,6 +245,7 @@ export default function FieldOverlay({
                         drawing={modeDrawing}
                         theme={theme}
                         marchers={marchers}
+                        touch={touch}
                     />
                 )}
                 {propTool && <PropToolPreview tool={propTool} theme={theme} />}
@@ -591,9 +609,54 @@ const StartMarks = memo(function StartMarks({
     );
 });
 
+/** The guides' names (#427), below the task's card at the field's top in the touch layout (#933) */
+function GuideLabels({
+    guides,
+    at,
+    view,
+}: {
+    guides: FieldModeDrawing["guides"];
+    at: (p: { x: number; y: number }) => { x: number; y: number };
+    view: { width: number; height: number };
+}) {
+    const ref = useRef<SVGGElement>(null);
+    const touchLayout = useIsTouchMode();
+    const field = useCallback(
+        () => ref.current?.ownerSVGElement?.parentElement ?? null,
+        [],
+    );
+    // Listened to only while a guide has a name to show
+    const named = guides?.some((g) => g.label) ?? false;
+    const overTop = useFieldLayerRects(field, TOP_LAYERS, touchLayout && named);
+    return (
+        <g ref={ref}>
+            {guides?.map(({ from, to, label }, i) => {
+                if (!label) return null;
+                const upright = Math.abs(at(from).x - at(to).x) < 1e-6;
+                const p = at(from);
+                return (
+                    <GuideLabel
+                        key={i}
+                        text={label}
+                        at={upright ? { x: p.x, y: 0 } : { x: 0, y: p.y }}
+                        upright={upright}
+                        width={view.width}
+                        height={view.height}
+                        overTop={overTop}
+                    />
+                );
+            })}
+        </g>
+    );
+}
+
+/** What a guide's name at the top keeps below: the task's cards, the toolbar panel and the pill */
+const TOP_LAYERS: readonly FieldLayerKind[] = ["task", "cover", "pill"];
+
 /**
  * A guide's name at the canvas edge (#427): at the top for a line side to side, at the left for
- * one front to back, kept inside the canvas
+ * one front to back, kept inside the canvas. At the top it goes below any of `overTop` it would be
+ * under (#933: the line tool's card)
  */
 function GuideLabel({
     text,
@@ -601,12 +664,14 @@ function GuideLabel({
     upright,
     width,
     height,
+    overTop = [],
 }: {
     text: string;
     at: { x: number; y: number };
     upright: boolean;
     width: number;
     height: number;
+    overTop?: readonly Rect[];
 }) {
     // About the width of the text in DM Sans at this size, with room either side
     const w = text.length * GUIDE_LABEL_PX * 0.55 + 16;
@@ -614,7 +679,13 @@ function GuideLabel({
     const clamp = (v: number, max: number) =>
         Math.max(GUIDE_LABEL_INSET, Math.min(max - GUIDE_LABEL_INSET, v));
     const x = upright ? clamp(at.x - w / 2, width - w) : GUIDE_LABEL_INSET;
-    const y = upright ? GUIDE_LABEL_INSET : clamp(at.y - h / 2, height - h);
+    const y = upright
+        ? belowLayers(
+              { left: x, top: GUIDE_LABEL_INSET, width: w, height: h },
+              overTop,
+              GUIDE_LABEL_INSET,
+          )
+        : clamp(at.y - h / 2, height - h);
     return (
         <g data-testid="fieldShapeGuideLabel">
             <rect
@@ -1014,10 +1085,13 @@ function ModeDrawing({
     drawing,
     theme,
     marchers,
+    touch,
 }: {
     drawing: FieldModeDrawing;
     theme: FieldTheme;
     marchers: FieldMarchers;
+    /** The press is a finger's: the tip sits above it, clear of the finger */
+    touch: boolean;
 }) {
     const view = useFieldViewStore();
     const shape = rgbaToString(theme.shape);
@@ -1316,6 +1390,43 @@ function ModeDrawing({
                 (() => {
                     const p = at(drawing.tip.at);
                     // A solid pill, so the readout reads over any part of the field (owner)
+                    const stack = (
+                        <div className="flex flex-col items-start gap-4">
+                            <div
+                                className="rounded-6 border-stroke bg-bg-1 bg-modal text-text shadow-modal inline-flex items-center gap-2 border px-6 py-2 whitespace-nowrap tabular-nums"
+                                style={{ fontSize: TIP_PX }}
+                                data-testid="fieldShapeTip"
+                            >
+                                <GlyphText text={drawing.tip.text} size={12} />
+                            </div>
+                            {/* The held-roles chip stacks under the readout, never over it */}
+                            <HeldRolesChipBelowTip />
+                        </div>
+                    );
+                    if (touch) {
+                        // Over the whole field, so the stack can center above the finger and
+                        // stay inside the field's edges
+                        return (
+                            <foreignObject
+                                x={0}
+                                y={0}
+                                width={view.width}
+                                height={view.height}
+                            >
+                                <div className="relative h-full w-full">
+                                    <ClearOfFinger
+                                        finger={p}
+                                        bounds={{
+                                            width: view.width,
+                                            height: view.height,
+                                        }}
+                                    >
+                                        {stack}
+                                    </ClearOfFinger>
+                                </div>
+                            </foreignObject>
+                        );
+                    }
                     return (
                         <foreignObject
                             x={p.x + TIP_OFFSET_PX}
@@ -1324,40 +1435,13 @@ function ModeDrawing({
                             height={TIP_BOX.height}
                             overflow="visible"
                         >
-                            <div className="flex flex-col items-start gap-4">
-                                <div
-                                    className="rounded-6 border-stroke bg-bg-1 bg-modal text-text shadow-modal inline-flex items-center gap-2 border px-6 py-2 whitespace-nowrap tabular-nums"
-                                    style={{ fontSize: TIP_PX }}
-                                    data-testid="fieldShapeTip"
-                                >
-                                    <GlyphText
-                                        text={drawing.tip.text}
-                                        size={12}
-                                    />
-                                </div>
-                                {/* The held-roles chip stacks under the readout, never over it */}
-                                <HeldRolesChipBelowTip />
-                            </div>
+                            {stack}
                         </foreignObject>
                     );
                 })()}
             {/* The guides' names last, over every line, edge and spot, so nothing crosses
                 their text (owner on #427) */}
-            {drawing.guides?.map(({ from, to, label }, i) => {
-                if (!label) return null;
-                const upright = Math.abs(at(from).x - at(to).x) < 1e-6;
-                const p = at(from);
-                return (
-                    <GuideLabel
-                        key={i}
-                        text={label}
-                        at={upright ? { x: p.x, y: 0 } : { x: 0, y: p.y }}
-                        upright={upright}
-                        width={view.width}
-                        height={view.height}
-                    />
-                );
-            })}
+            <GuideLabels guides={drawing.guides} at={at} view={view} />
         </g>
     );
 }
