@@ -478,7 +478,7 @@ describe("woodwind and battery holds", () => {
         expect(x).toBeLessThan(-0.25);
         // the neck comes in to the mouth from the front-left
         expect(h.instrument.capsAxis[0]).toBeGreaterThan(0.3);
-        expect(h.instrument.capsAxis[2]).toBeGreaterThan(0.8);
+        expect(h.instrument.capsAxis[2]).toBeGreaterThan(0.75);
     });
 
     it("drums ride the chest with the hands over the heads", () => {

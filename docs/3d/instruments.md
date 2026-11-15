@@ -399,14 +399,15 @@ points and where the elbows go.
 - **bari sax.** A hold of its own (owner, 2026-11-14, with marching
   photos and an independent review). The model's neck is swivelled 40
   degrees in its receiver (`BARI_NECK_SWIVEL` in `saxophones.ts`), as
-  players turn it, with the body 0.11 m toward the player's left of the
-  mouthpiece (`BARI_NECK_REACH`): the neck reaches across to the mouth from
-  by the left side of the face while the body and bell face forward. Up:
-  too long to hang straight in front, it is worn sideways down the body,
-  the bow just in front of the right thigh: the sax hold turned 28 degrees
-  toward the performer's left (`BARI_YAW_DEG`), rolled 23 degrees
-  (`BARI_ROLL_DEG`) so the bow swings across to the right thigh, and its
-  bottom tipped 3 degrees forward (`BARI_PITCH_DEG`) to clear the belly; the
+  players turn it: the body and bell turn about the receiver's axis while
+  the neck stays a plain hook from the mouthpiece down into the receiver,
+  so the neck reaches the mouth from by the left side of the face while the
+  bell faces forward. Up: too long to hang straight in front, it is worn
+  sideways down the body, the bow in front of the right thigh: the sax hold
+  turned 38 degrees toward the performer's left (`BARI_YAW_DEG`), rolled 18
+  degrees (`BARI_ROLL_DEG`) so the bow swings across to the right thigh, and
+  its bottom tipped 2 degrees forward (`BARI_PITCH_DEG`), which keeps the
+  crook off the left of the chest and the lower tube off the belly; the
   bell opens up and forward, a little left. The left hand reaches across the
   chest to the upper stack, its elbow down at the side; the right comes onto
   the lower stack from the right hip, its elbow drawn back. Carry: as the

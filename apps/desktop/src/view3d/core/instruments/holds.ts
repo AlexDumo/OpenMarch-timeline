@@ -1639,9 +1639,9 @@ function saxHands(
  * forward by -`BARI_PITCH_DEG` (a positive pitch tips it back) to clear the
  * belly. The mouthpiece stays at the lips; the hands follow the stacks.
  */
-const BARI_YAW_DEG = 28;
-const BARI_ROLL_DEG = 23;
-const BARI_PITCH_DEG = -3;
+const BARI_YAW_DEG = 38;
+const BARI_ROLL_DEG = 18;
+const BARI_PITCH_DEG = -2;
 function bariUp(): Hold {
     const base = withMouth(SAX.up);
     const y = (BARI_YAW_DEG * Math.PI) / 180;
@@ -1791,7 +1791,11 @@ const TABLE: Record<HoldFamily, () => Record<HoldState, Hold>> = {
             family: "bariSax",
             // raised to eye level, the long bari's hands reach its upper stacks
             ...saxHands(SAX.carry, ["bariSax"], {
-                left: { ...ALTO_HANDS.left, k: 0.2 },
+                left: {
+                    ...ALTO_HANDS.left,
+                    k: 0.2,
+                    knuckles: [0.02, 0.031, 0.055],
+                },
                 right: {
                     ...ALTO_HANDS.right,
                     k: 0.42,

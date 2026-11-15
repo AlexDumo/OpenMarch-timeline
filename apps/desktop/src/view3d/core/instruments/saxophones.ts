@@ -564,12 +564,6 @@ export function saxTurned(p: Vec3, yb: number): Vec3 {
  * where they are, so the mouthpiece is still the frame's origin.
  */
 export const BARI_NECK_SWIVEL = (40 * Math.PI) / 180;
-/**
- * How far the bari's body sits toward +X (the player's left) of its
- * mouthpiece: the swivelled neck reaches across from the receiver, by the
- * left side of the face, to the mouth.
- */
-export const BARI_NECK_REACH = 0.11;
 
 /** The bari's neck receiver in the instrument frame, before any swivel: the axis the body swivels about. */
 function bariReceiver(): Vec3 {
@@ -588,7 +582,7 @@ export function saxSwivelled(
     const s = Math.sin(BARI_NECK_SWIVEL);
     const x = p[0] - rx;
     const y = p[1] - ry;
-    return [rx + x * c - y * s + BARI_NECK_REACH, ry + x * s + y * c, p[2]];
+    return [rx + x * c - y * s, ry + x * s + y * c, p[2]];
 }
 
 /** The inverse of {@link saxSwivelled}: a body point back as the body is turned, before the bari's swivel. */
@@ -600,7 +594,7 @@ export function saxSwivelBack(
     const [rx, ry] = bariReceiver();
     const c = Math.cos(BARI_NECK_SWIVEL);
     const s = Math.sin(BARI_NECK_SWIVEL);
-    const x = p[0] - BARI_NECK_REACH - rx;
+    const x = p[0] - rx;
     const y = p[1] - ry;
     return [rx + x * c + y * s, ry - x * s + y * c, p[2]];
 }

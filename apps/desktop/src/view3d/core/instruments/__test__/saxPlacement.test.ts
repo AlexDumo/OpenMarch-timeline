@@ -121,6 +121,39 @@ describe("sax placement under its hold", () => {
                 });
 
                 it.runIf(state === "up")(
+                    "keeps the neck and crook clear of the face, the neck and the shoulders",
+                    () => {
+                        const hits: Vec3[] = [];
+                        for (const p of woodwindModel(id, "high").pieces)
+                            for (let i = 0; i < p.positions.length; i += 3) {
+                                const w = point([
+                                    p.positions[i],
+                                    p.positions[i + 1],
+                                    p.positions[i + 2],
+                                ]);
+                                // the mouthpiece itself is in the lips
+                                if (dist(w, MOUTH) < 0.045) continue;
+                                const head =
+                                    (w[0] / 0.085) ** 2 +
+                                        ((w[1] - 1.62) / 0.12) ** 2 +
+                                        (w[2] / 0.095) ** 2 <
+                                    1;
+                                const neck =
+                                    w[1] > 1.42 &&
+                                    w[1] < 1.56 &&
+                                    Math.hypot(w[0], w[2] + 0.005) < 0.065;
+                                const shoulders =
+                                    Math.abs(w[0]) < 0.21 &&
+                                    w[1] > 1.3 &&
+                                    w[1] < 1.45 &&
+                                    w[2] < 0.11;
+                                if (head || neck || shoulders) hits.push(w);
+                            }
+                        expect(hits.length).toBe(0);
+                    },
+                );
+
+                it.runIf(state === "up")(
                     "puts the bell in front of the body tube, opening forward and up",
                     () => {
                         const [, yb] = woodwindModel(id).leftGrip;
@@ -173,7 +206,8 @@ describe("the sax held in front", () => {
             const rim = bellRim(id);
             const [, yb] = woodwindModel(id).leftGrip;
             expect(rim[1]).toBeGreaterThan(yb + 0.08);
-            expect(Math.abs(rim[0])).toBeLessThan(0.01);
+            // the bari's body is swivelled under its neck (below)
+            if (id !== "bariSax") expect(Math.abs(rim[0])).toBeLessThan(0.01);
             expect(SAX_BODY_TURN).toBeCloseTo(Math.PI / 2);
             const keys = saxTurned([0, yb + 1, 0], yb);
             expect(keys[0]).toBeLessThan(-0.99);
@@ -230,10 +264,10 @@ describe("the sax held in front", () => {
         expect(BARI_NECK_SWIVEL).toBeGreaterThan((30 * Math.PI) / 180);
         const top = saxAxis("bariSax", 0);
         const bow = saxAxis("bariSax", 1);
-        expect(top[0]).toBeGreaterThan(0.05);
         expect(Math.abs(bow[0] - top[0])).toBeLessThan(0.001);
+        // the bell turned off the neck's plane toward −X
         const rim = bellRim("bariSax");
-        expect(rim[0]).toBeLessThan(top[0]);
+        expect(rim[0]).toBeLessThan(top[0] - 0.05);
     });
 
     it("altoSax and tenorSax hang straight down, centered, the neck straight back", () => {
@@ -257,7 +291,8 @@ describe("the sax held in front", () => {
         // the body's axis at its top (by the top loop) and at the bow
         const top = point(saxAxis("bariSax", 0));
         const bow = point(saxAxis("bariSax", 1));
-        expect(top[0]).toBeGreaterThan(0.05);
+        // leaning across the body: the top well to the left of the bow
+        expect(top[0] - bow[0]).toBeGreaterThan(0.18);
         // the bow rests just in front of the right thigh (owner, 2026-11-14:
         // nearly touching the leg), its axis about a bow's radius off it
         expect(bow[0]).toBeLessThan(-0.15);
@@ -288,8 +323,11 @@ describe("the saxes at carry", () => {
             const rim = point(rimLocal);
             const body = point([0, yb, rimLocal[2]]);
             expect(rim[2]).toBeGreaterThan(body[2] + 0.08);
-            // the flare leans toward the keys, the performer's right
-            expect(Math.abs(rim[0] - body[0])).toBeLessThan(0.1);
+            // the flare leans toward the keys, the performer's right (the
+            // bari's swivelled body a little more)
+            expect(Math.abs(rim[0] - body[0])).toBeLessThan(
+                id === "bariSax" ? 0.15 : 0.1,
+            );
             // the body tube centered in front of the performer
             expect(Math.abs(body[0])).toBeLessThan(0.08);
         });
