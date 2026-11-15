@@ -2859,8 +2859,8 @@
     "updates": {
         "pill": {
             "available": "Update available",
-            "downloading": "Updating {percent}%",
-            "downloadingQuiet": "Downloading an update: {percent}%",
+            "downloadingUpdate": "Downloading update",
+            "downloadingProgress": "Downloading update: {percent}%",
             "ready": "Update ready",
             "failed": "Update failed"
         },
