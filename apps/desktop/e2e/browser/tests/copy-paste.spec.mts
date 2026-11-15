@@ -374,3 +374,54 @@ test("the field menu offers Copy, Paste and Paste in place: the pastes only once
     await expect(preview(page)).toBeVisible();
     expect((await shapeOverlay(page))!.spots).toHaveLength(2);
 });
+
+test("the inspector's Clipboard card shows what is copied and how it fits the selection", async ({
+    show,
+}) => {
+    const { page } = show;
+    const card = page.getByTestId("clipboard-section");
+    await expect(card).toBeHidden();
+
+    // Positions: so many spots, checked against the selection
+    await select(page, [1, 2, 3, 4]);
+    await page.keyboard.press("ControlOrMeta+c");
+    await expect(card).toBeVisible();
+    await expect(card.getByTestId("clipboard-kind")).toHaveText("Positions");
+    await expect(card.getByTestId("clipboard-count")).toHaveText("4 marchers");
+    await expect(card.getByTestId("clipboard-picture")).toHaveAttribute(
+        "data-dots",
+        "4",
+    );
+    await expect(card.getByTestId("clipboard-rule")).toHaveText(
+        "Fills 4 spots: select 4 marchers to fill them all",
+    );
+    await expect(card.getByTestId("clipboard-fit")).toHaveText(
+        "Fits the 4 marchers selected",
+    );
+    await select(page, [5, 6]);
+    await expect(card.getByTestId("clipboard-fit")).toHaveText(
+        "With 2 selected, 2 spots stay empty",
+    );
+    await select(page, [3, 4, 5, 6, 7, 8]);
+    await expect(card.getByTestId("clipboard-fit")).toHaveText(
+        "2 selected marchers have no spot and stay put",
+    );
+
+    // Its Paste opens the preview, as Ctrl/Cmd+V does
+    await card.getByTestId("clipboard-paste").click();
+    await expect(preview(page)).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(preview(page)).toBeHidden();
+
+    // A shape: any number
+    await placeBox(show);
+    await page.keyboard.press("ControlOrMeta+c");
+    await expect(card.getByTestId("clipboard-kind")).toHaveText("Box");
+    await expect(card.getByTestId("clipboard-rule")).toHaveText(
+        "Pastes onto any number of marchers, keeping its spacing",
+    );
+    await select(page, [5, 6, 7]);
+    await expect(card.getByTestId("clipboard-fit")).toHaveText(
+        "Laid out for the 3 marchers selected",
+    );
+});

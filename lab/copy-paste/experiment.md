@@ -10,6 +10,7 @@ questions:
   - The preview starts centered on the marchers you selected. Is that where you expected it?
   - When you pasted a shape onto more or fewer marchers, was the shape it rebuilt the one you wanted?
   - When you pasted loose marchers onto fewer marchers, did it use the spots you wanted? Did you want to pick them?
+  - Did the Clipboard card in the inspector tell you what you'd copied, and how many marchers to select before pasting?
   - Did you reach for Cut or Duplicate?
 ---
 
@@ -32,6 +33,9 @@ marchers you have selected into the copied formation.
   rest stay where they are.
 - Go to another page and use **Paste in place** (Ctrl/Cmd+Shift+V): the
   preview starts exactly where the formation was copied.
+- Watch the **Clipboard** card in the inspector as you copy and change the
+  selection. It shows a picture of what's copied, whether it's a shape or
+  positions, how many marchers, and whether your selection fits.
 - Open another show and paste there. The copied formation is kept by
   OpenMarch on this computer.
 

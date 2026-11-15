@@ -117,6 +117,81 @@ export function readPicture(stored: unknown): CopiedPicture | null {
     };
 }
 
+/**
+ * The copied shape as this field can lay it out: its kind and params, or null when the picture
+ * pastes as its dots (none copied, a kind or version this app doesn't know, or a field with
+ * another step size)
+ */
+function readShape(
+    picture: CopiedPicture,
+    stepPx: number,
+    kinds: readonly AnyToolKind[],
+): { kind: AnyToolKind; params: unknown } | null {
+    if (!picture.shape) return null;
+    if (Math.abs(stepPx / picture.stepPx - 1) > SAME_STEP) return null;
+    return placedOf({ id: 0, ...picture.shape, members: [] }, kinds);
+}
+
+/**
+ * What the copied picture is, as the inspector's Clipboard card says it (#961): a shape that is
+ * laid out for any number of marchers, or spots that only so many fill (a group, or positions)
+ */
+export interface PictureSummary {
+    readonly type: "shape" | "group" | "positions";
+    /** The kind it pastes as, for a shape or a group */
+    readonly kind: AnyToolKind | null;
+    /** How many marchers were copied: the spots a group or positions has */
+    readonly count: number;
+    /** Whether it pastes onto any number of marchers (a shape), or fills `count` spots */
+    readonly anyNumber: boolean;
+}
+
+/** What `picture` pastes as on a field `stepPx` field units to the step */
+export function pictureSummary(
+    picture: CopiedPicture,
+    stepPx: number,
+    kinds: readonly AnyToolKind[] = PLACED_KINDS,
+): PictureSummary {
+    const read = readShape(picture, stepPx, kinds);
+    const count = picture.dots.length;
+    if (!read)
+        return { type: "positions", kind: null, count, anyNumber: false };
+    if (read.kind === groupTool)
+        return { type: "group", kind: groupTool, count, anyNumber: false };
+    return { type: "shape", kind: read.kind, count, anyNumber: true };
+}
+
+/**
+ * How the picture fits `selected` marchers: laid out for them (a shape), every spot filled, some
+ * spots left empty, or some marchers left where they are. Nothing selected: `none`.
+ */
+export type PictureFit =
+    | { readonly fit: "none" }
+    | { readonly fit: "laidOut"; readonly selected: number }
+    | { readonly fit: "exact"; readonly selected: number }
+    | {
+          readonly fit: "emptySpots";
+          readonly selected: number;
+          readonly empty: number;
+      }
+    | {
+          readonly fit: "leftOut";
+          readonly selected: number;
+          readonly left: number;
+      };
+
+export function pictureFit(
+    summary: PictureSummary,
+    selected: number,
+): PictureFit {
+    if (selected <= 0) return { fit: "none" };
+    if (summary.anyNumber) return { fit: "laidOut", selected };
+    if (selected === summary.count) return { fit: "exact", selected };
+    return selected < summary.count
+        ? { fit: "emptySpots", selected, empty: summary.count - selected }
+        : { fit: "leftOut", selected, left: selected - summary.count };
+}
+
 /** What a paste opens: the shape to preview and the marchers who take its spots */
 export interface PastePlan {
     readonly kind: AnyToolKind;
@@ -195,10 +270,7 @@ export function planPaste({
     if (n === 0) return null;
     const scale = stepPx / picture.stepPx;
     const sameStep = Math.abs(scale - 1) <= SAME_STEP;
-    const read =
-        picture.shape && sameStep
-            ? placedOf({ id: 0, ...picture.shape, members: [] }, kinds)
-            : null;
+    const read = readShape(picture, stepPx, kinds);
 
     if (read && read.kind !== groupTool) {
         const { kind, params } = read;

@@ -6,7 +6,9 @@ import { lineTool } from "../line/lineTool";
 import {
     dotsTool,
     pastedGroupTool,
+    pictureFit,
     pictureOf,
+    pictureSummary,
     planPaste,
     readPicture,
     PICTURE_VERSION,
@@ -498,5 +500,93 @@ describe("pasting a shape", () => {
         expect(sorted(spotsOf(scaled))).toEqual(
             sorted(picture.dots.map((d) => ({ x: d.x / 2, y: d.y / 2 }))),
         );
+    });
+});
+
+describe("what the Clipboard card says", () => {
+    it("a shape pastes onto any number, laid out for the selection", () => {
+        const summary = pictureSummary(
+            copiedShape(drawn(boxTool, 16, { x: 0, y: 0 }, { x: 60, y: 60 })),
+            STEP,
+        );
+        expect(summary).toEqual({
+            type: "shape",
+            kind: boxTool,
+            count: 16,
+            anyNumber: true,
+        });
+        expect(pictureFit(summary, 0)).toEqual({ fit: "none" });
+        expect(pictureFit(summary, 12)).toEqual({
+            fit: "laidOut",
+            selected: 12,
+        });
+        expect(pictureFit(summary, 30)).toEqual({
+            fit: "laidOut",
+            selected: 30,
+        });
+    });
+
+    it("positions fill so many spots: exact, some spots empty, or some marchers left out", () => {
+        const summary = pictureSummary(loose(), STEP);
+        expect(summary).toEqual({
+            type: "positions",
+            kind: null,
+            count: 4,
+            anyNumber: false,
+        });
+        expect(pictureFit(summary, 4)).toEqual({ fit: "exact", selected: 4 });
+        expect(pictureFit(summary, 3)).toEqual({
+            fit: "emptySpots",
+            selected: 3,
+            empty: 1,
+        });
+        expect(pictureFit(summary, 6)).toEqual({
+            fit: "leftOut",
+            selected: 6,
+            left: 2,
+        });
+    });
+
+    it("a group fills its own spots, as positions do", () => {
+        const { params } = groupRecipe(
+            DOTS.map((d, i) => ({ id: i + 1, ...d })),
+        );
+        const { spots: _spots, ...stored } = params;
+        const summary = pictureSummary(
+            pictureOf({
+                positions: DOTS,
+                shape: {
+                    recipe: {
+                        id: 1,
+                        timelineId: 1,
+                        kind: groupShape.id,
+                        kindVersion: groupShape.version,
+                        params,
+                        orderMode: "nearest",
+                        reverse: false,
+                        members: [],
+                    },
+                    params: stored,
+                },
+                stepPx: STEP,
+            })!,
+            STEP,
+        );
+        expect(summary.type).toBe("group");
+        expect(summary.anyNumber).toBe(false);
+        expect(summary.count).toBe(4);
+    });
+
+    it("says positions for a shape it would paste as positions", () => {
+        const picture = copiedShape(
+            drawn(boxTool, 6, { x: 0, y: 0 }, { x: 40, y: 20 }),
+        );
+        expect(pictureSummary(picture, STEP * 2).type).toBe("positions");
+        expect(
+            pictureSummary(
+                { ...picture, shape: { ...picture.shape!, kind: "spiral" } },
+                STEP,
+            ).type,
+        ).toBe("positions");
     });
 });

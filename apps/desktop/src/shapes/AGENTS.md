@@ -52,7 +52,7 @@ ordinary positions it writes.
 - `clipboard/`: copy and paste of a formation (#961). `picture.ts` is what a selection copies and
   what pasting it onto other marchers opens (pure); `pictureStore.ts` keeps it in localStorage,
   never the system clipboard; `copyPaste.ts` opens the paste as the host's open shape, so it's
-  moved and placed like one drawn. Loose dots open as `dotsTool`, the group kind placed with no
+  moved and placed like one drawn; `ClipboardSection.tsx` is the inspector's card that shows what's copied (`pictureSummary`, `pictureFit`). Loose dots open as `dotsTool`, the group kind placed with no
   recipe (`ToolKind.loose`).
 - `command/`: the command bar's shape steps.
   `preview/`: a shape's small picture, drawn from its own geometry. `transform/`: turning and

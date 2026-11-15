@@ -734,6 +734,32 @@ const shots = [
             await film.hold(1.8);
         },
     },
+    {
+        id: "shapes-clipboard-card",
+        kind: "still",
+        covers: ["apps/desktop/src/shapes/clipboard"],
+        // A section's positions copied, two of its marchers selected: the inspector's Clipboard
+        // card says how many spots the copy has and that two stay empty (#961)
+        async setup({ page, around }) {
+            const { prefix } = await start(page);
+            await page.keyboard.press("Control+KeyC");
+            await page.waitForTimeout(400);
+            const ms = (await marchers(page)).filter(
+                (m) => m.label.replace(/\d+$/, "") === prefix,
+            );
+            await page.mouse.click(ms[0].x, ms[0].y);
+            await page.keyboard.down("Shift");
+            await page.mouse.click(ms[1].x, ms[1].y);
+            await page.keyboard.up("Shift");
+            await page.waitForTimeout(500);
+            await tidy(page);
+            const card = page.getByTestId("clipboard-section");
+            await card.scrollIntoViewIfNeeded();
+            await page.mouse.move(5, 500);
+            await page.waitForTimeout(300);
+            return { box: await around(card, 10) };
+        },
+    },
 ];
 
 export default shots;

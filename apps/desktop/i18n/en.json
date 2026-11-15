@@ -2160,9 +2160,19 @@
             "countAt": "{count} at {interval}"
         },
         "clipboard": {
+            "anyNumber": "Pastes onto any number of marchers, keeping its spacing",
             "copied": "{count, plural, one {# marcher copied} other {# marchers copied}}",
             "copiedShape": "{shape} copied ({count, plural, one {# marcher} other {# marchers}})",
-            "left": "{count, plural, one {# marcher has no spot and stays put} other {# marchers have no spot and stay put}}"
+            "fitEmptySpots": "{count, plural, one {With {selected} selected, # spot stays empty} other {With {selected} selected, # spots stay empty}}",
+            "fitExact": "{count, plural, one {Fits the # marcher selected} other {Fits the # marchers selected}}",
+            "fitLaidOut": "{count, plural, one {Laid out for the # marcher selected} other {Laid out for the # marchers selected}}",
+            "fitLeftOut": "{count, plural, one {# selected marcher has no spot and stays put} other {# selected marchers have no spot and stay put}}",
+            "fixed": "{count, plural, one {Fills # spot: select # marcher to fill it} other {Fills # spots: select # marchers to fill them all}}",
+            "left": "{count, plural, one {# marcher has no spot and stays put} other {# marchers have no spot and stay put}}",
+            "marchers": "{count, plural, one {# marcher} other {# marchers}}",
+            "pictureLabel": "Picture of the copied formation",
+            "positions": "Positions",
+            "title": "Clipboard"
         }
     },
     "tags": {
