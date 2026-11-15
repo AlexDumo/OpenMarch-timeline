@@ -39,7 +39,6 @@ import type { DatabaseTimelineAssignment } from "./timelineAssignments";
 import { setPositionsAtBeatInTransaction } from "./timelinePointMoves";
 import {
     clearHeldMarksOverInTransaction,
-    dropShapeHomeHoldsInTransaction,
     nameHeldConflict,
     splitHeldEditsInTransaction,
     trimHeldMarksUnderRowsInTransaction,
@@ -1509,20 +1508,9 @@ export const moveMarchersInTarget = async ({
                         ...w.ids,
                     ]);
                 let wroteAppData = false;
-                let wroteHomeData = false;
-                for (const [timelineId, ids] of merged) {
-                    const wrote =
-                        (await afterWrite!(tx, timelineId, ids)) !== false;
-                    wroteAppData ||= wrote;
-                    if (timelineId === null) wroteHomeData ||= wrote;
-                }
-                // A shape placed at the starting spots is those marchers' hold: their Held
-                // holds from the starting spots go, in the same edit (owner, 2026-11-01)
-                if (wroteHomeData)
-                    await dropShapeHomeHoldsInTransaction(
-                        tx,
-                        homes.map((h) => h.move.marcherId),
-                    );
+                for (const [timelineId, ids] of merged)
+                    if ((await afterWrite!(tx, timelineId, ids)) !== false)
+                        wroteAppData = true;
                 // An edit that writes nothing (and no app data beside it) can't be an undo step
                 if (!wroteAppData && !wroteSomething(result))
                     throw new NothingWritten(result);
@@ -1538,18 +1526,10 @@ export const moveMarchersInTarget = async ({
                     home: [m.x, m.y],
                 })),
             });
-            const placed =
-                afterWrite !== undefined &&
-                (await afterWrite(
+            if (afterWrite)
+                await afterWrite(
                     tx,
                     null,
-                    moves.map((m) => m.marcherId),
-                )) !== false;
-            // A shape placed at the starting spots is those marchers' hold, as when it's placed
-            // through a hold (above): their Held holds from the starting spots go, in this edit
-            if (placed)
-                await dropShapeHomeHoldsInTransaction(
-                    tx,
                     moves.map((m) => m.marcherId),
                 );
             return {

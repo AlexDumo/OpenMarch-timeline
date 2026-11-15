@@ -4,9 +4,8 @@ import { sameMembers, type FieldDimming } from "./fieldDimming";
  * How the field draws whether each marcher's position is decided (holds decisions 8 and 9, review
  * M8; fork #478), outside React. Two things, both read at the count the field shows:
  *
- * - **Not defined** marchers (`timelineDecided.ts`: no move, Held hold or carried shape decides
- *   them there) draw with a dashed edge (`NOT_DEFINED_LOOK`). Walking, Held, arriving and carried
- *   shape members draw solid.
+ * - **Not defined** marchers (`timelineDecided.ts`: no move or Held hold decides them there) draw
+ *   with a dashed edge (`NOT_DEFINED_LOOK`). Walking, Held and arriving marchers draw solid.
  * - The label is **bold only on a keyframe**, the count where the marcher's own coordinate is set
  *   (`timelineSetFollowing.ts`); off it, the label is drawn lighter in weight.
  *

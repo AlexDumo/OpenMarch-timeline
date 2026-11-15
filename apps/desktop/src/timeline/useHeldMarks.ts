@@ -5,19 +5,12 @@ import { useTimelineDisplayStore } from "@/db-functions/timelineDisplay";
 import { readHeldMarks, type HeldMark } from "@/db-functions/timelineHeldMarks";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
-import { usePlacedBoxStore } from "@/shapes/placed/placedBoxStore";
 import {
-    marcherHolds,
     NO_HOLDS,
     selectionHolds,
     type SelectionHolds,
 } from "./timelineHoldBars";
 import { useDraggedHoldMarks } from "./holdEdgeDragStore";
-import { carriedStretches } from "./timelineCarried";
-import {
-    editingPositionAt,
-    useIsolationPlanStore,
-} from "./timelineIsolationPlan";
 import { useHoldLightStore } from "./holdLight";
 import { useFieldEditing } from "./useFieldEditing";
 import { resolverSpans, useTimelineResolverStore } from "./timelineStore";
@@ -85,7 +78,7 @@ export function useHeldMarksHost(
 
 /**
  * The selection's hold bars and departure ticks (`selectionHolds`; fork #472, #477), worked out
- * once per selection, resolver version, set of marks and shapes, and when a field drag starts or
+ * once per selection, resolver version and set of marks, and when a field drag starts or
  * ends or a follow-back entry is hovered: never per scrubbed beat.
  *
  * During a field drag that moves, scales or rotates the selection, the bars the edit changes
@@ -103,8 +96,6 @@ export function useSelectionHolds(
     const showEnd = useTimelineSelectionStore((s) =>
         s.pageBoxes.reduce((end, box) => Math.max(end, box.end), 0),
     );
-    const recipes = usePlacedBoxStore((s) => s.recipes);
-    const ends = usePlacedBoxStore((s) => s.ends);
     const editing = useFieldEditing();
     const dragBeat = useTimelineSelectionStore((s) =>
         !editing
@@ -125,37 +116,6 @@ export function useSelectionHolds(
     const hoverLight = useHoldLightStore((s) => s.light);
     // #475: a hold edge being dragged draws its holds where it would land, lit
     const { shownMarks, light } = useDraggedHoldMarks(marks, hoverLight);
-    const isolation = useIsolationPlanStore((s) => s.current);
-    // Where a shape carries the selected marchers: the field's rule (`carriedStretches`), worked
-    // out apart from the lit ranges, so starting a drag or hovering an entry doesn't redo it
-    const carried = useMemo(() => {
-        void version; // a new version means new spans
-        if (!resolver || marcherIds.length === 0 || recipes.length === 0)
-            return null;
-        const spansOf = (id: number) => resolverSpans(resolver, id);
-        return carriedStretches({
-            marcherIds,
-            within: marcherIds.flatMap((id) =>
-                marcherHolds(spansOf(id), showEnd),
-            ),
-            recipes,
-            endBeatOf: (id) => (id === null ? 0 : ends.get(id)),
-            spansOf,
-            positionAt: (id, beat) => {
-                try {
-                    const [x, y] = editingPositionAt(
-                        resolver,
-                        id,
-                        beat,
-                        isolation,
-                    );
-                    return { x, y };
-                } catch {
-                    return undefined;
-                }
-            },
-        });
-    }, [resolver, version, marcherIds, recipes, ends, showEnd, isolation]);
     return useMemo(() => {
         void version; // a new version means new spans
         if (!resolver || marcherIds.length === 0) return NO_HOLDS;
@@ -164,7 +124,6 @@ export function useSelectionHolds(
             spansOf: (id) => resolverSpans(resolver, id),
             marks: shownMarks,
             showEnd,
-            carriedOf: carried ? (id) => carried.get(id) : undefined,
             dragBeat,
             dragWindowStart,
             light,
@@ -175,7 +134,6 @@ export function useSelectionHolds(
         marcherIds,
         shownMarks,
         showEnd,
-        carried,
         dragBeat,
         dragWindowStart,
         light,

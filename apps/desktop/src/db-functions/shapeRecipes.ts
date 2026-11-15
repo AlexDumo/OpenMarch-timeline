@@ -325,13 +325,16 @@ export const shapeRecipesOnly = () => ne(recipes.kind, UNGROUPED_RECIPE_KIND);
 
 /**
  * After `marcherIds` are cleared off moves `timelineIds`, takes those no longer in a move out of
- * its ungrouped marks, and deletes a mark left with nobody. Only cleared marchers: a marcher whose
- * rows are only re-cut into other moves over the same page (Basic's mid-page points) stays in. A mark lists only marchers in its move, as every recipe does:
- * one still naming a marcher cleared off its page would keep hiding the earlier shape that marcher
- * now stands in (Clear this page reverts the page, its Ungroup included). Real shapes' recipes are
- * left to their writers.
+ * its recipes, shapes and ungrouped marks alike, and deletes a recipe left with nobody. Only
+ * cleared marchers: a marcher whose rows are only re-cut into other moves over the same page
+ * (Basic's mid-page points) stays in. A recipe lists only marchers in its move: an ungrouped mark
+ * still naming a marcher cleared off its page would keep hiding the earlier shape that marcher now
+ * stands in (Clear this page reverts the page, its Ungroup included), and a shape still naming one
+ * would claim a spot it no longer stands on. A shape that keeps members keeps its spots, so the
+ * cleared ones leave holes (07-placed-boxes.md), as when members walk away: its spot count is
+ * pinned first when it had none.
  */
-export async function dropUngroupedLeavers(
+export async function dropRecipeLeavers(
     tx: DbTransaction,
     timelineIds: readonly number[],
     marcherIds: readonly number[],
@@ -344,35 +347,40 @@ export async function dropUngroupedLeavers(
         return;
     const a = schema.timeline_assignments;
     const t = schema.timeline_transitions;
-    const marks = tx
+    const moves = [...new Set(timelineIds)];
+    const cleared = [...new Set(marcherIds)];
+    const onMoves = tx
         .select({ id: recipes.id })
         .from(recipes)
-        .where(
-            and(
-                inArray(recipes.timeline_id, [...new Set(timelineIds)]),
-                eq(recipes.kind, UNGROUPED_RECIPE_KIND),
-            ),
-        );
+        .where(inArray(recipes.timeline_id, moves));
     const stillInMove = sql`EXISTS (SELECT 1 FROM ${a} INNER JOIN ${t} ON ${t.id} = ${a.transition_id} INNER JOIN ${recipes} r2 ON r2.id = ${members.recipe_id} WHERE ${a.marcher_id} = ${members.marcher_id} AND ${t.timeline_id} = r2.timeline_id)`;
+    const leaving = and(
+        inArray(members.recipe_id, onMoves),
+        inArray(members.marcher_id, cleared),
+        sql`NOT ${stillInMove}`,
+    );
+    // A shape losing members keeps its spot count, so the rest stay where they are
+    const losing = tx
+        .selectDistinct({ id: members.recipe_id })
+        .from(members)
+        .where(leaving);
     await tx
-        .delete(members)
+        .update(recipes)
+        .set({
+            params: sql`json_set(${recipes.params}, '$.spots', (SELECT COUNT(*) FROM ${members} WHERE ${members.recipe_id} = ${recipes.id}))`,
+        })
         .where(
             and(
-                inArray(members.recipe_id, marks),
-                inArray(members.marcher_id, [...new Set(marcherIds)]),
-                sql`NOT ${stillInMove}`,
+                inArray(recipes.id, losing),
+                shapeRecipesOnly(),
+                sql`json_type(${recipes.params}, '$.spots') IS NULL`,
             ),
         )
         .run();
+    await tx.delete(members).where(leaving).run();
     await tx
         .delete(recipes)
-        .where(
-            and(
-                inArray(recipes.timeline_id, [...new Set(timelineIds)]),
-                eq(recipes.kind, UNGROUPED_RECIPE_KIND),
-                noMembers(),
-            ),
-        )
+        .where(and(inArray(recipes.timeline_id, moves), noMembers()))
         .run();
 }
 

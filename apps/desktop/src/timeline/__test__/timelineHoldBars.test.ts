@@ -78,49 +78,15 @@ describe("marcherHoldPieces", () => {
         expect(
             marcherHoldPieces({ holds, marks: [{ start: 16, end: 24 }] }),
         ).toEqual([
-            { start: 8, end: 16, kind: "notDefined", shape: false, lit: false },
-            { start: 16, end: 24, kind: "held", shape: false, lit: false },
+            { start: 8, end: 16, kind: "notDefined", lit: false },
+            { start: 16, end: 24, kind: "held", lit: false },
             {
                 start: 24,
                 end: 32,
                 kind: "notDefined",
-                shape: false,
+
                 lit: false,
             },
-        ]);
-    });
-
-    it("draws Held where a shape carries the marcher (`carriedStretches`), Not defined around it", () => {
-        expect(
-            marcherHoldPieces({
-                holds,
-                marks: [],
-                carried: [{ start: 12, end: 24 }],
-            }),
-        ).toEqual([
-            { start: 8, end: 12, kind: "notDefined", shape: false, lit: false },
-            { start: 12, end: 24, kind: "held", shape: true, lit: false },
-            {
-                start: 24,
-                end: 32,
-                kind: "notDefined",
-                shape: false,
-                lit: false,
-            },
-        ]);
-    });
-
-    it("a Held mark wins over a shape carried over the same counts", () => {
-        expect(
-            marcherHoldPieces({
-                holds,
-                marks: [{ start: 16, end: 24 }],
-                carried: [{ start: 8, end: 32 }],
-            }).map((p) => [p.start, p.end, p.kind, p.shape]),
-        ).toEqual([
-            [8, 16, "held", true],
-            [16, 24, "held", false],
-            [24, 32, "held", true],
         ]);
     });
 
@@ -130,9 +96,7 @@ describe("marcherHoldPieces", () => {
                 holds: [{ start: 8, end: 16, departs: true }],
                 marks: [{ start: 8, end: 24 }],
             }),
-        ).toEqual([
-            { start: 8, end: 16, kind: "held", shape: false, lit: false },
-        ]);
+        ).toEqual([{ start: 8, end: 16, kind: "held", lit: false }]);
         expect(
             marcherHoldPieces({ holds: [], marks: [{ start: 8, end: 24 }] }),
         ).toEqual([]);
@@ -146,10 +110,10 @@ describe("marcherHoldPieces", () => {
                 lit: [{ start: 12, end: 28 }],
             }),
         ).toEqual([
-            { start: 8, end: 12, kind: "notDefined", shape: false, lit: false },
-            { start: 12, end: 24, kind: "notDefined", shape: false, lit: true },
-            { start: 24, end: 28, kind: "held", shape: false, lit: true },
-            { start: 28, end: 32, kind: "held", shape: false, lit: false },
+            { start: 8, end: 12, kind: "notDefined", lit: false },
+            { start: 12, end: 24, kind: "notDefined", lit: true },
+            { start: 24, end: 28, kind: "held", lit: true },
+            { start: 28, end: 32, kind: "held", lit: false },
         ]);
     });
 });
@@ -310,7 +274,7 @@ describe("selectionHolds", () => {
                     start: 8,
                     end: 16,
                     kind: "held",
-                    shape: false,
+
                     lit: false,
                     marcherIds: [1],
                     total: 3,
@@ -319,7 +283,7 @@ describe("selectionHolds", () => {
                     start: 8,
                     end: 24,
                     kind: "notDefined",
-                    shape: false,
+
                     lit: false,
                     marcherIds: [2],
                     total: 3,
@@ -328,7 +292,7 @@ describe("selectionHolds", () => {
                     start: 16,
                     end: 24,
                     kind: "notDefined",
-                    shape: false,
+
                     lit: false,
                     marcherIds: [1],
                     total: 3,
@@ -337,7 +301,7 @@ describe("selectionHolds", () => {
                     start: 28,
                     end: 32,
                     kind: "notDefined",
-                    shape: false,
+
                     lit: false,
                     marcherIds: [2, 1],
                     total: 3,
@@ -429,7 +393,7 @@ describe("notDefinedOver", () => {
         start,
         end,
         kind,
-        shape: false,
+
         lit: false,
         marcherIds: [1],
         total: 2,

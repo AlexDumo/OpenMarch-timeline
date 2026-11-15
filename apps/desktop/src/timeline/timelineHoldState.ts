@@ -30,10 +30,11 @@ export type HoldState =
 
 /**
  * What a hold at the current flag is (holds decisions 2 and 8, fork #478): **Held** on purpose (a
- * Held mark over the flag), a shape **carried** there (the shape's hold, owner 2026-11-01 on #477),
- * or **Not defined** (nothing decided yet; it shows the last position for now).
+ * Held mark over the flag), or **Not defined** (nothing decided yet; it shows the last position
+ * for now). A placed shape shown there decides nothing by itself (owner, 2026-11-15): holding it
+ * makes it Held.
  */
-export type HoldKind = "held" | "carried" | "notDefined";
+export type HoldKind = "held" | "notDefined";
 
 /** Where a hold is held from: the page it names and jumps to (`heldSince`). */
 export type HeldFrom = { page: NamedFlag; fromStart: boolean };
@@ -42,33 +43,22 @@ export type HeldFrom = { page: NamedFlag; fromStart: boolean };
  * `state` with what decides its hold (`HoldKind`), for a marcher holding at the flag `current`.
  * A Held hold names the page its Held mark starts on, not the marcher's last arrival: Hold from
  * previous page holds that page only (holds review R3, demo M7), so Not defined pages may lie
- * between the arrival and the mark. A carried shape's hold reads as Held too (owner, holds wave
- * 2), and names the page the shape was placed or last laid out on, where the carry comes from.
+ * between the arrival and the mark.
  *
  * @param held where the Held mark of the marcher covering `current` (`start < current <= end`)
  *   starts (`heldSince`), or `null` for none
- * @param carried where the shape carried onto `current` with the marcher in it was placed
- *   (`heldSince` of `carriedSince`'s beat), or `null` when no shape carries the marcher there
  */
 export function withHoldKind(
     state: HoldState | null,
-    {
-        held,
-        carried,
-    }: {
-        held: HeldFrom | null;
-        carried: HeldFrom | null;
-    },
+    { held }: { held: HeldFrom | null },
 ): HoldState | null {
     if (state?.kind !== "holding") return state;
     if (held) return { ...state, ...held, how: "held" };
-    if (carried) return { ...state, ...carried, how: "carried" };
     return { ...state, how: "notDefined" };
 }
 
-/** Whether a hold reads as Held: a Held mark, or a shape carried there (owner, holds wave 2) */
-export const readsHeld = (how: HoldKind | undefined) =>
-    how === "held" || how === "carried";
+/** Whether a hold reads as Held: a Held mark over it */
+export const readsHeld = (how: HoldKind | undefined) => how === "held";
 
 /**
  * The page a Held mark starting at `start` holds from: the first flag at or after it (the first
@@ -127,15 +117,10 @@ export function sharedHoldState(
         (s.kind === "movesHere" ||
             (first.kind === "holding" && s.page.beat === first.page.beat));
     if (!states.every(same)) return null;
-    // Held and Not defined marchers on the same page share the line, without naming either.
-    // Held and carried ones both read Held, so they share it as Held
-    const reads = (how: HoldKind | undefined) =>
-        readsHeld(how) ? "held" : how;
+    // Held and Not defined marchers on the same page share the line, without naming either
     if (
         first.kind === "holding" &&
-        states.some(
-            (s) => s?.kind === "holding" && reads(s.how) !== reads(first.how),
-        )
+        states.some((s) => s?.kind === "holding" && s.how !== first.how)
     )
         return {
             kind: "holding",

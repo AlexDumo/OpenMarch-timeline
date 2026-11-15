@@ -55,11 +55,6 @@ const SKIP_WORDS: Record<SkipReason, { key: string; defaultValue: string }> = {
         defaultValue:
             "{names}: the hold would start where a follow-the-leader move ends",
     },
-    homeShape: {
-        key: "timeline.expertHolds.homeShape",
-        defaultValue:
-            "{names}: a shape sets the starting spot. Ungroup it at the start of the show to hold them one by one",
-    },
     endsWithoutArriving: {
         key: "timeline.expertHolds.endsWithoutArriving",
         defaultValue:

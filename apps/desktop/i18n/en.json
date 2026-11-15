@@ -2264,7 +2264,6 @@
         },
         "heldBar": {
             "detail": "{held} of {total} selected",
-            "shape": "Its shape carries on here",
             "title": "{held} · Page {page}",
             "titleRange": "{held} · Pages {first}–{last}",
             "titleWithDetail": "{title}. {detail}"
@@ -2275,11 +2274,11 @@
             "count": "{count, plural, one {# marcher} other {# marchers}}",
             "crossesFlag": "{names}: a move runs across one of the page's flags",
             "done": "{names} {held} on {page}",
+            "doneWithShape": "{names} and the rest of their shape {held} on {page}",
             "endsWithoutArriving": "{names}: a move ends at {page} without arriving there",
             "expertMoves": "{names}: Expert moves on this page",
             "followLeader": "{names}: follows the leader on this page",
             "held": "{names}: already {held} here",
-            "homeShape": "{names}: a shape sets the starting spot. Ungroup it at the start of the show to hold them one by one",
             "none": "Nobody {held} on {page}",
             "notHeldReasons": "Not {heldLower}: {reasons}",
             "shape": "{names}: in a shape on this page"
@@ -2757,7 +2756,6 @@
             "followLeaderOrder": "{names}: shares a curved move with a follow-the-leader order",
             "arrivalShape": "{names}: the hold would start where a shape ends",
             "arrivalFollowLeader": "{names}: the hold would start where a follow-the-leader move ends",
-            "homeShape": "{names}: a shape sets the starting spot. Ungroup it at the start of the show to hold them one by one",
             "endsWithoutArriving": "{names}: the last move before the start flag ends without arriving there",
             "count": "{count, plural, one {# marcher} other {# marchers}}",
             "notHeld": "{count, plural, one {# marcher} other {# marchers}} not {heldLower}"

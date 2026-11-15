@@ -16,13 +16,13 @@ import { isPageBox } from "./timelineMoves";
 import { clearOwnPageMoves } from "./timelineMoveHelpers";
 import {
     arrivalSkipReason,
-    marcherRecipeTimelines,
     readArrival,
     readHeldMarks,
     type HeldArrival,
     type HeldMark,
 } from "./timelineHeldMarks";
-import { HOME_ARRIVAL, marchersWithShapeHome } from "./timelineHeldArrival";
+import { HOME_ARRIVAL } from "./timelineHeldArrival";
+import { carriedShapeMates, type HoldSource } from "./timelineShapeHoldMates";
 import { holdReachBack } from "@/timeline/holdExtent";
 import { showStartBeat, type PageGrid } from "./timelinePageGrid";
 
@@ -51,25 +51,26 @@ import { showStartBeat, type PageGrid } from "./timelinePageGrid";
  * - **Reaching back** over Not defined pages: the hold starts at the latest of the marcher's last
  *   row end before the page, the end of its own earlier hold (touching holds are one hold), or the
  *   start of the show for a marcher who never moved. The move it then grows out of is checked as
- *   an arrival is: a shape's or follow-the-leader move is skipped (`arrivalShape`,
- *   `arrivalFollowLeader`), since a carried shape is the shape's hold (owner, 2026-11-01).
+ *   an arrival is: a stored shape's or follow-the-leader move is skipped (`arrivalShape`,
+ *   `arrivalFollowLeader`).
+ * - **A shape is Held whole** (owner, 2026-11-15, reversing 2026-11-01): a placed shape's move is
+ *   an arrival like any other, and holding some of its members holds the rest of it too where it
+ *   is carried there with them (`carriedShapeMates`), listed in `alsoHeld`. The page's own copy of
+ *   the shape goes with the page's moves; members it keeps leave holes (`dropRecipeLeavers`).
  *
  * Left alone and reported, with why:
  * - `noArrival`: the row the hold would grow out of ends without arriving there (a lower layer's
  *   row, or its part of a move that runs on), so it has nothing to grow out of;
- * - `homeShape`: it is held from its starting spot, and a placed shape sets that spot
- *   (`marchersWithShapeHome`): a shape gets no Held hold, the shape carried on is its hold (owner,
- *   2026-11-01). Ungroup it at the start of the show (Ungroup on a later page only marks that page) to hold its marchers one by one;
  * - `held`: it is Held over some of the box already;
  * - `crossesFlag`: a move of its runs over one of the box's flags (taking it out of part of a move
  *   is #469's cut in time);
  * - `expertMoves`: its moves in the box overlap, or use a path Basic doesn't edit;
- * - `shape`: a shape or a placed shape's recipe holds it on this page (fork #436 decisions 6–14:
+ * - `shape`: a transition into a stored shape holds it on this page (fork #436 decisions 6–14:
  *   skipped and named until #504);
  * - `followLeader`: it follows the leader on this page;
- * - `arrivalShape`, `arrivalFollowLeader`: the arrival is a shape's move (a shape destination, or a
- *   placed shape's recipe holds the marcher there) or a follow-the-leader move, which a drag inside
- *   the hold would rewrite (owner's rule: skipped and named, #434 / #436).
+ * - `arrivalShape`, `arrivalFollowLeader`: the arrival is a transition into a stored shape or a
+ *   follow-the-leader move, which a drag inside the hold would rewrite (skipped and named,
+ *   #434 / #436).
  *
  * One undo step; a run that holds nobody opens no edit.
  */
@@ -83,8 +84,7 @@ export type HoldFromPreviousSkipReason =
     | "shape"
     | "followLeader"
     | "arrivalShape"
-    | "arrivalFollowLeader"
-    | "homeShape";
+    | "arrivalFollowLeader";
 
 /** A marcher Hold from last keyframe left alone, with why. */
 export interface HoldFromPreviousSkip {
@@ -105,6 +105,11 @@ export interface HoldFromPreviousResult {
     skipped: HoldFromPreviousSkip[];
     /** The pages the holds newly cover, first to last, when they reach back beyond the page */
     pagesCovered?: string[];
+    /**
+     * Those of `held` that weren't asked for: the rest of a shape held with the ones that were
+     * (`carriedShapeMates`)
+     */
+    alsoHeld?: number[];
 }
 
 /**
@@ -159,10 +164,27 @@ export async function holdFromPreviousPageInTransaction({
                 counts: countsText(pageBox, grid.pages.slice(1)),
             }),
         );
-    const ids = [...new Set(marcherIds)].sort((x, y) => x - y);
+    const asked = [...new Set(marcherIds)].sort((x, y) => x - y);
+    const showStart = showStartBeat(grid);
+    // The rest of a shape carried here with them is Held too
+    const mates = await carriedShapeMates(tx, {
+        selected: asked,
+        range: pageBox,
+        sourceOf: async (marcherId) =>
+            holdSourceOf(
+                await readHoldGrowth(tx, {
+                    marcherId,
+                    box: pageBox,
+                    rows: await readBasicRows(tx, { marcherIds: [marcherId] }),
+                    marks: await readHeldMarks(tx, [marcherId]),
+                    showStart,
+                }),
+            ),
+    });
+    const mateSet = new Set(mates);
+    const ids = [...asked, ...mates].sort((x, y) => x - y);
     const rows = await readBasicRows(tx, { marcherIds: ids });
     const marks = await readHeldMarks(tx, ids);
-    const showStart = showStartBeat(grid);
     const growths = new Map<number, HoldGrowth>();
     for (const id of ids)
         growths.set(
@@ -175,19 +197,6 @@ export async function holdFromPreviousPageInTransaction({
                 showStart,
             }),
         );
-    const fromHome = ids.filter(
-        (id) => growths.get(id)!.source === HOME_ARRIVAL,
-    );
-    const arrivals = [...growths.values()]
-        .map((g) => g.source)
-        .filter(isHeldArrival);
-    const shapeHome = await marchersWithShapeHome(tx, fromHome);
-    const inRecipe = await marchersInRecipesOf(tx, [
-        ...rows.filter((r) => overlapsBox(r, pageBox)).map((r) => r.timelineId),
-    ]);
-    const inArrivalRecipe = await marcherRecipeTimelines(tx, [
-        ...new Set(arrivals.map((a) => a.timelineId)),
-    ]);
 
     const result: HoldFromPreviousResult = { held: [], skipped: [] };
     const toRemove: number[] = [];
@@ -210,22 +219,15 @@ export async function holdFromPreviousPageInTransaction({
             box: pageBox,
             inBox,
             marks: ownMarks,
-            inShapeRecipe: inRecipe.has(marcherId),
             arrival:
                 source === "joined"
                     ? "joined"
                     : source === HOME_ARRIVAL
-                      ? { home: true, shape: shapeHome.has(marcherId) }
-                      : source
-                        ? {
-                              ...source,
-                              inRecipe:
-                                  inArrivalRecipe
-                                      .get(source.timelineId)
-                                      ?.has(marcherId) ?? false,
-                          }
-                        : null,
+                      ? "home"
+                      : source,
         });
+        // A shape's member nobody asked for is only brought along where it can be
+        if (reason && mateSet.has(marcherId)) continue;
         if (reason) {
             const atPage =
                 reason === "noArrival" && growth.from !== pageBox.start
@@ -252,6 +254,8 @@ export async function holdFromPreviousPageInTransaction({
         firstFilled = Math.min(firstFilled, growth.from);
     }
     if (result.held.length === 0) return result;
+    const alsoHeld = result.held.filter((id) => mateSet.has(id));
+    if (alsoHeld.length > 0) result.alsoHeld = alsoHeld;
     if (firstFilled < pageBox.start) {
         const covered = pagesOver(grid, firstFilled, pageBox.end);
         if (covered.length > 1) result.pagesCovered = covered;
@@ -266,7 +270,7 @@ export async function holdFromPreviousPageInTransaction({
             .all();
         await clearOwnPageMoves(tx, removed, {
             tidyShared: true,
-            dropUngrouped: result.held,
+            dropLeavers: result.held,
         });
     }
     const h = schema.timeline_held_marks;
@@ -290,6 +294,14 @@ export interface HoldGrowth {
 
 const isHeldArrival = (source: HoldGrowth["source"]): source is HeldArrival =>
     typeof source === "object" && source !== null;
+
+/** What a hold's growth grows out of, as `carriedShapeMates` compares them: a move or the starting spots */
+export const holdSourceOf = (growth: HoldGrowth): HoldSource | null =>
+    isHeldArrival(growth.source)
+        ? { timelineId: growth.source.timelineId, from: growth.from }
+        : growth.source === HOME_ARRIVAL
+          ? { timelineId: null, from: growth.from }
+          : null;
 
 /** What a hold of one marcher over `box` grows out of (see the module comment). */
 export async function readHoldGrowth(
@@ -348,22 +360,16 @@ function skipReason({
     box,
     inBox,
     marks,
-    inShapeRecipe,
     arrival,
 }: {
     box: { start: number; end: number };
     inBox: readonly BasicRow[];
     marks: readonly HeldMark[];
-    inShapeRecipe: boolean;
     /**
-     * The move the hold grows out of, the starting spot (`home`, with whether a shape sets it), or
-     * "joined" when it joins an earlier hold of the marcher that has neither (the upkeep's to mend)
+     * The move the hold grows out of, the starting spot (`home`), or "joined" when it joins an
+     * earlier hold of the marcher that has neither (the upkeep's to mend)
      */
-    arrival:
-        | (HeldArrival & { inRecipe: boolean })
-        | { home: true; shape: boolean }
-        | "joined"
-        | null;
+    arrival: HeldArrival | "home" | "joined" | null;
 }): HoldFromPreviousSkipReason | null {
     if (marks.some((m) => overlapsBox(m, box))) return "held";
     const verdict = marcherSimpleOnBox(inBox, box);
@@ -374,21 +380,10 @@ function skipReason({
         if (verdict.reason === "shape") return "shape";
         return "expertMoves";
     }
-    if (inShapeRecipe) return "shape";
     if (arrival === null) return "noArrival";
-    if (arrival === "joined") return null;
-    if ("home" in arrival) return arrival.shape ? "homeShape" : null;
-    const arrivalReason = arrivalSkipReason(arrival, arrival.inRecipe);
+    if (arrival === "joined" || arrival === "home") return null;
+    const arrivalReason = arrivalSkipReason(arrival);
     if (arrivalReason === "followTheLeader") return "arrivalFollowLeader";
     if (arrivalReason === "shape") return "arrivalShape";
     return null;
-}
-
-/** The marchers a placed shape's recipe holds in any of `timelineIds`. */
-async function marchersInRecipesOf(
-    tx: DbTransaction,
-    timelineIds: readonly number[],
-): Promise<Set<number>> {
-    const byTimeline = await marcherRecipeTimelines(tx, timelineIds);
-    return new Set([...byTimeline.values()].flatMap((ids) => [...ids]));
 }

@@ -8,12 +8,12 @@ import { readBasicRows } from "./basicRows";
 import { takeMarchersOutOfRangeInTransaction } from "./timelineMoveCuts";
 import {
     arrivalSkipReason,
-    marcherRecipeTimelines,
     readArrival,
     readHeldMarks,
     type HeldMark,
 } from "./timelineHeldMarks";
-import { HOME_ARRIVAL, marchersWithShapeHome } from "./timelineHeldArrival";
+import { HOME_ARRIVAL } from "./timelineHeldArrival";
+import { carriedShapeMates, type HoldSource } from "./timelineShapeHoldMates";
 import { readHoldGrowth, type HoldGrowth } from "./timelineHoldFromPrevious";
 import { readPageGrid } from "./timelineRipple";
 import { showEndBeat, showStartBeat } from "./timelinePageGrid";
@@ -43,13 +43,16 @@ import { holdOverWindowStart, holdWindowInShow } from "@/timeline/holdExtent";
  * - `shape`, `followLeader`, `followLeaderOrder`: a move it would be taken out of is a shape's, or
  *   follows the leader, or it shares a curved move with an inheriting follow-the-leader order
  *   (the holds commands' rule, owner 2026-10-30, until #434 / #504);
- * - `arrivalShape`, `arrivalFollowLeader`, `homeShape`: the hold would grow out of a shape's move,
- *   a follow-the-leader move or a shape's starting spot, which a drag inside it would rewrite (as
- *   Hold from last keyframe skips it). That includes a move on a higher layer ending at `S` above
+ * - `arrivalShape`, `arrivalFollowLeader`: the hold would grow out of a transition into a stored
+ *   shape or a follow-the-leader move, which a drag inside it would rewrite (as Hold from last
+ *   keyframe skips it). That includes a move on a higher layer ending at `S` above
  *   a move crossing `S`: after the cut it is the arrival (`arrivalRowSql`), so it is checked
  *   before anything is cut;
  * - `endsWithoutArriving`: the row the hold would grow out of ends without arriving there (a lower
  *   layer's row, or its part of a move that runs on), so it has nothing to grow out of.
+ *
+ * A placed shape is Held whole, as by Hold from last keyframe (owner, 2026-11-15): the rest of a
+ * shape carried into the window with the selected marchers is Held too (`carriedShapeMates`).
  *
  * One undo step; a run that holds nobody opens no edit.
  */
@@ -62,7 +65,6 @@ export type HoldOverWindowSkipReason =
     | "followLeaderOrder"
     | "arrivalShape"
     | "arrivalFollowLeader"
-    | "homeShape"
     | "endsWithoutArriving";
 
 /** A marcher a hold command left alone, with why. */
@@ -77,6 +79,8 @@ export interface HoldOverWindowResult {
     held: number[];
     /** The others, with why */
     skipped: HoldSkip<HoldOverWindowSkipReason>[];
+    /** Those of `held` that weren't asked for: the rest of a shape held with them */
+    alsoHeld?: number[];
 }
 
 /** **Hold over the window** `window` (`[S, P)`) for `marcherIds` (see the module comment). */
@@ -117,6 +121,12 @@ export async function holdOverWindow({
  */
 type PlannedSource = HoldGrowth["source"] | "cut";
 
+/** A `PlannedSource` and where it starts, as `carriedShapeMates` compares them. */
+interface Planned {
+    readonly source: PlannedSource;
+    readonly hold: HoldSource | null;
+}
+
 /** What `rows`' marcher's hold over `window` would grow out of; `own` are its marks. */
 async function plannedSource(
     tx: DbTransaction,
@@ -125,14 +135,32 @@ async function plannedSource(
     own: readonly HeldMark[],
     window: { start: number; end: number },
     showStart: number,
-): Promise<PlannedSource> {
+): Promise<Planned> {
     const windowStart = window.start;
+    const at = (
+        source: PlannedSource,
+        from: number,
+        timelineId?: number,
+    ): Planned => ({
+        source,
+        hold:
+            timelineId !== undefined
+                ? { timelineId, from }
+                : source === HOME_ARRIVAL
+                  ? { timelineId: null, from }
+                  : typeof source === "object" && source !== null
+                    ? { timelineId: source.timelineId, from }
+                    : null,
+    });
     // Joining a hold: judged by what that hold grows out of, as if new
     const joins = own.find(
         (m) => m.start < windowStart && windowStart <= m.end,
     );
     if (joins)
-        return (await readArrival(tx, marcherId, joins.start)) ?? "joined";
+        return at(
+            (await readArrival(tx, marcherId, joins.start)) ?? "joined",
+            joins.start,
+        );
     const crossing = rows.filter(
         (r) => r.start < windowStart && windowStart < r.end,
     );
@@ -142,8 +170,12 @@ async function plannedSource(
         // the flag wins, and the hold would grow out of it
         const cutLayer = Math.max(...crossing.map((r) => r.layer));
         if (!rows.some((r) => r.end === windowStart && r.layer >= cutLayer))
-            return "cut";
-        return readArrival(tx, marcherId, windowStart);
+            return at(
+                "cut",
+                windowStart,
+                crossing.find((r) => r.layer === cutLayer)!.timelineId,
+            );
+        return at(await readArrival(tx, marcherId, windowStart), windowStart);
     }
     const growth = await readHoldGrowth(tx, {
         marcherId,
@@ -152,7 +184,7 @@ async function plannedSource(
         marks: own,
         showStart,
     });
-    return growth.source;
+    return at(growth.source, growth.from);
 }
 
 /** `holdOverWindow` inside the caller's edit. Refused (E-ARGS) for an empty window. */
@@ -178,16 +210,34 @@ export async function holdOverWindowInTransaction({
     const showStart = showStartBeat(grid);
     const window = holdWindowInShow(asked, showStart, showEndBeat(grid));
     if (!window) return { held: [], skipped: [] };
-    const ids = [...new Set(marcherIds)].sort((x, y) => x - y);
+    const chosen = [...new Set(marcherIds)].sort((x, y) => x - y);
+    // The rest of a shape carried into the window with them is Held too
+    const mates = await carriedShapeMates(tx, {
+        selected: chosen,
+        range: window,
+        sourceOf: async (marcherId) =>
+            (
+                await plannedSource(
+                    tx,
+                    marcherId,
+                    await readBasicRows(tx, { marcherIds: [marcherId] }),
+                    await readHeldMarks(tx, [marcherId]),
+                    window,
+                    showStart,
+                )
+            ).hold,
+    });
+    const mateSet = new Set(mates);
+    const ids = [...chosen, ...mates].sort((x, y) => x - y);
     const rows = await readBasicRows(tx, { marcherIds: ids });
     const marks = await readHeldMarks(tx, ids);
     const result: HoldOverWindowResult = { held: [], skipped: [] };
-    const fromHome: number[] = [];
     const planned = new Map<number, PlannedSource>();
     for (const marcherId of ids) {
         const own = marks.filter((m) => m.marcherId === marcherId);
         if (own.some((m) => m.start <= window.start && window.end <= m.end)) {
-            result.skipped.push({ marcherId, reason: "held" });
+            if (!mateSet.has(marcherId))
+                result.skipped.push({ marcherId, reason: "held" });
             continue;
         }
         const plan = await plannedSource(
@@ -198,28 +248,15 @@ export async function holdOverWindowInTransaction({
             window,
             showStart,
         );
-        planned.set(marcherId, plan);
-        if (plan === HOME_ARRIVAL) fromHome.push(marcherId);
+        planned.set(marcherId, plan.source);
     }
-    const shapeHome = await marchersWithShapeHome(tx, fromHome);
-    const inRecipe = await marcherRecipeTimelines(tx, [
-        ...new Set(
-            [...planned.values()].flatMap((p) =>
-                isArrivalRow(p) ? [p.timelineId] : [],
-            ),
-        ),
-    ]);
     const eligible: number[] = [];
     for (const [marcherId, plan] of planned) {
-        const reason = startSkipReason(
-            plan,
-            shapeHome.has(marcherId),
-            isArrivalRow(plan)
-                ? (inRecipe.get(plan.timelineId)?.has(marcherId) ?? false)
-                : false,
-        );
-        if (reason) result.skipped.push({ marcherId, reason });
-        else eligible.push(marcherId);
+        const reason = startSkipReason(plan);
+        // A shape's member nobody asked for is only brought along where it can be
+        if (reason && !mateSet.has(marcherId))
+            result.skipped.push({ marcherId, reason });
+        else if (!reason) eligible.push(marcherId);
     }
     if (eligible.length === 0) return sorted(result);
 
@@ -243,7 +280,7 @@ export async function holdOverWindowInTransaction({
         range: window,
     });
     const stayed = new Set(out.skipped.map((s) => s.marcherId));
-    for (const skip of out.skipped)
+    for (const skip of out.skipped.filter((s) => !mateSet.has(s.marcherId)))
         result.skipped.push({
             marcherId: skip.marcherId,
             reason:
@@ -268,26 +305,19 @@ export async function holdOverWindowInTransaction({
         );
         result.held.push(marcherId);
     }
+    const alsoHeld = result.held.filter((id) => mateSet.has(id));
+    if (alsoHeld.length > 0) result.alsoHeld = alsoHeld.sort((x, y) => x - y);
     return sorted(result);
 }
-
-const isArrivalRow = (
-    source: PlannedSource,
-): source is Exclude<
-    HoldGrowth["source"],
-    typeof HOME_ARRIVAL | "joined" | null
-> => typeof source === "object" && source !== null;
 
 /** Why a hold growing out of `source` can't be made, or null when it can. */
 function startSkipReason(
     source: PlannedSource,
-    shapeHome: boolean,
-    inRecipe: boolean,
 ): HoldOverWindowSkipReason | null {
     if (source === "cut" || source === "joined") return null;
-    if (source === HOME_ARRIVAL) return shapeHome ? "homeShape" : null;
+    if (source === HOME_ARRIVAL) return null;
     if (source === null) return "endsWithoutArriving";
-    const reason = arrivalSkipReason(source, inRecipe);
+    const reason = arrivalSkipReason(source);
     if (reason === "followTheLeader") return "arrivalFollowLeader";
     if (reason === "shape") return "arrivalShape";
     return null;

@@ -606,7 +606,7 @@ async function removeFromMove(
     await clearOwnPageMoves(
         tx,
         removed.map((r) => r.row),
-        { tidyShared: true, dropUngrouped: plan.removed },
+        { tidyShared: true, dropLeavers: plan.removed },
     );
     const deleted = !(await readTimeline(tx, pieceId));
     return {

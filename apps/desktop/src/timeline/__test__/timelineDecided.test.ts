@@ -116,20 +116,9 @@ describe("notDefinedAt", () => {
         [2, marcherDecided([hold(-Infinity, Infinity)], [])],
     ]);
 
-    it("draws a carried shape's members decided: the shape is their hold", () => {
-        expect([...notDefinedAt(decided, 12, () => new Set([2]))]).toEqual([1]);
-    });
-
-    it("only asks for the carried shapes when someone would be Not defined", () => {
-        let asked = 0;
-        const carried = () => {
-            asked++;
-            return new Set<number>();
-        };
-        notDefinedAt(new Map([[1, [{ start: 0, end: 24 }]]]), 12, carried);
-        expect(asked).toBe(0);
-        notDefinedAt(decided, 12, carried);
-        expect(asked).toBe(1);
+    it("draws everyone nothing decides Not defined, a placed shape's members too (owner, 2026-11-15)", () => {
+        expect([...notDefinedAt(decided, 12)]).toEqual([1, 2]);
+        expect([...notDefinedAt(decided, 0)]).toEqual([]);
     });
 });
 

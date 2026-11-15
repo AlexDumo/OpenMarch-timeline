@@ -458,7 +458,7 @@ describeDbTests("Hold from last keyframe reaches back", (it) => {
 });
 
 describeDbTests("Hold from last keyframe skips what it can't hold", (it) => {
-    it("a marcher whose last move is a placed shape's move", async ({
+    it("not a marcher whose last move is a placed shape's move: it reaches back to it (owner, 2026-11-15)", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -469,11 +469,9 @@ describeDbTests("Hold from last keyframe skips what it can't hold", (it) => {
             pageBox: PAGE4,
             marcherIds: [a, b],
         });
-        expect(result.held).toEqual([b]);
-        expect(result.skipped).toEqual([
-            { marcherId: a, reason: "arrivalShape" },
-        ]);
-        expect(await marksOf(db, a)).toEqual([]);
+        expect(result.held).toEqual([a, b].sort((x, y) => x - y));
+        expect(result.skipped).toEqual([]);
+        expect(await marksOf(db, a)).toEqual([OVER(PAGE2.end, PAGE4.end)]);
     });
 
     it("a marcher whose last move follows the leader", async ({
@@ -545,7 +543,7 @@ describeDbTests("Hold from last keyframe skips what it can't hold", (it) => {
         });
     });
 
-    it("joining an earlier hold whose arrival has since become a shape's move", async ({
+    it("not joining an earlier hold whose arrival has since become a shape's move: it joins it", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -558,12 +556,9 @@ describeDbTests("Hold from last keyframe skips what it can't hold", (it) => {
                 pageBox,
                 marcherIds: [a],
             });
-            expect(result).toEqual({
-                held: [],
-                skipped: [{ marcherId: a, reason: "arrivalShape" }],
-            });
+            expect(result).toEqual({ held: [a], skipped: [] });
         }
-        expect(await marksOf(db, a)).toEqual([PAGE3]);
+        expect(await marksOf(db, a)).toEqual([OVER(PAGE3.start, PAGE5.end)]);
     });
 
     it("joining an earlier hold whose arrival follows the leader", async ({
@@ -686,19 +681,19 @@ describeDbTests("A drag inside a reached-back hold", (it) => {
         expect(await spansOf(db, c)).toEqual([]);
     });
 
-    it("whose arrival has since become a shape's move is skipped and named", async ({
+    it("whose arrival has since become a shape's move moves that arrival", async ({
         db,
         marchersAndPages: _,
     }) => {
         const { a } = await show(db);
         await holdFromPreviousPage({ db, pageBox: PAGE4, marcherIds: [a] });
         await shapeRecipeIn(db, await moveEndingAt(db, a, PAGE2.end), a, TWO);
-        const before = await snapshot(db);
         const result = await edit(db, { kind: "range", ...PAGE3 }, [
             { marcherId: a, xy: FAR },
         ]);
-        expect(result.skipped?.message).toContain("shape");
-        expect(await snapshot(db)).toEqual(before);
+        expect(result.skipped).toBeUndefined();
+        expect((await atFlags(db, a)).slice(2, 5)).toEqual([FAR, FAR, FAR]);
+        expect(await marksOf(db, a)).toEqual([OVER(PAGE2.end, PAGE4.end)]);
     });
 
     it("then removing the keyframe it grows out of takes the hold away (decision 17)", async ({

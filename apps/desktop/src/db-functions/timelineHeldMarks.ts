@@ -10,7 +10,6 @@ import {
     readHeldMarkArrivals,
     readHeldMarks,
     HOME_ARRIVAL,
-    marchersWithShapeHome,
     type HeldArrival,
     type HeldMark,
 } from "./timelineHeldArrival";
@@ -77,46 +76,20 @@ export interface HeldHomeEdit<M extends { marcherId: number }> {
 export type HeldEditSkip = Pick<MoveMemberSkip, "marcherId" | "reason">;
 
 /**
- * Deletes the holds from the starting spots (#619) of those of `marcherIds` whose starting spot a
- * placed shape now sets (`marchersWithShapeHome`): a shape's starting spots get no Held hold, the
- * shape carried on is its hold (owner, 2026-11-01). Run in the edit that placed the shape, after
- * its recipe is written, so both are one undo step.
- *
- * @returns the marchers whose holds went
- */
-export async function dropShapeHomeHoldsInTransaction(
-    tx: DbTransaction,
-    marcherIds: readonly number[],
-): Promise<number[]> {
-    const shaped = await marchersWithShapeHome(tx, marcherIds);
-    if (shaped.size === 0) return [];
-    const gone = (await readHeldMarkArrivals(tx)).filter(
-        (m) => m.fromHome && shaped.has(m.marcherId),
-    );
-    if (gone.length === 0) return [];
-    await tx.delete(schema.timeline_held_marks).where(
-        inArray(
-            schema.timeline_held_marks.id,
-            gone.map((m) => m.id),
-        ),
-    );
-    return [...new Set(gone.map((m) => m.marcherId))].sort((x, y) => x - y);
-}
-
-/**
  * Splits an edit at the count `beat` into the moved marchers that are Held there, those skipped,
  * and the rest.
  *
  * A Held marcher's edit is the edit of the move that arrives at its hold's start (`readArrival`),
  * so setting that move's ending moves the arrival and the whole hold with it. Every hold grows out
  * of a move or the starting spot (owner, 2026-11-09), and the upkeep keeps it so; a marcher Held
- * at `beat` with neither stays with the rest. One whose arrival is a shape's move or a follow-the-leader move, which the edit would rewrite, is left
- * alone and named in `skipped`, as Hold from last keyframe skips it (owner's rule, #434 / #436):
- * a later edit, such as a shape placed on the arrival's page, can make it one.
+ * at `beat` with neither stays with the rest. A placed shape's move is an arrival like any other
+ * (owner, 2026-11-15: a hold links the counts, a shape only arranges marchers), so its recipe is
+ * saved with that move by the edit's after-write step. One whose arrival is a stored shape's
+ * transition or a follow-the-leader move, which the edit would rewrite, is left alone and named in
+ * `skipped`, as Hold from last keyframe skips it (#434 / #436).
  *
  * A marcher Held from its starting spot (`readArrival`, `HOME_ARRIVAL`) goes in `homes`: its edit
- * sets its starting spot. One whose starting spot a placed shape sets (`marchersWithShapeHome`) is
- * skipped and named the same way.
+ * sets its starting spot, a shape's starting spots included.
  *
  * An Expert window's edit passes its start flag as `windowStart`: a window that starts inside a
  * hold (after its start) **wins** (holds decision 6, review R2, fork #476), so that marcher stays
@@ -159,10 +132,6 @@ export async function splitHeldEditsInTransaction<
         if (arrival === HOME_ARRIVAL) fromHome.add(mark.marcherId);
         else if (arrival) arrivals.set(mark.marcherId, arrival);
     }
-    const shapeHome = await marchersWithShapeHome(tx, [...fromHome]);
-    const inRecipe = await marcherRecipeTimelines(tx, [
-        ...new Set([...arrivals.values()].map((a) => a.timelineId)),
-    ]);
     const held: HeldArrivalEdit<M>[] = [];
     const homes: HeldHomeEdit<M>[] = [];
     const skipped: HeldEditSkip[] = [];
@@ -170,9 +139,7 @@ export async function splitHeldEditsInTransaction<
     for (const move of moves) {
         const mark = markOf.get(move.marcherId);
         if (mark && fromHome.has(move.marcherId)) {
-            if (shapeHome.has(move.marcherId))
-                skipped.push({ marcherId: move.marcherId, reason: "shape" });
-            else homes.push({ move, mark });
+            homes.push({ move, mark });
             continue;
         }
         const arrival = arrivals.get(move.marcherId);
@@ -180,10 +147,7 @@ export async function splitHeldEditsInTransaction<
             rest.push(move);
             continue;
         }
-        const reason = arrivalSkipReason(
-            arrival,
-            inRecipe.get(arrival.timelineId)?.has(move.marcherId) ?? false,
-        );
+        const reason = arrivalSkipReason(arrival);
         if (reason) skipped.push({ marcherId: move.marcherId, reason });
         else held.push({ move, mark, timelineId: arrival.timelineId });
     }
@@ -192,15 +156,15 @@ export async function splitHeldEditsInTransaction<
 
 /**
  * Why a drag inside a hold can't edit `arrival`, or null when it can: it is a follow-the-leader
- * move, or a shape's move (a shape destination, or a placed shape's recipe holds the marcher in
- * it, `inRecipe`), which the edit would rewrite.
+ * move, or a transition into a stored shape (a shape destination), which the edit would rewrite.
+ * A placed shape's move can: its positions are ordinary points, and its recipe is saved with the
+ * move by the edit (owner, 2026-11-15).
  */
 export function arrivalSkipReason(
     arrival: HeldArrival,
-    inRecipe: boolean,
 ): MoveMemberSkipReason | null {
     if (arrival.pathStyle === "follow_the_leader") return "followTheLeader";
-    if (arrival.shapeId !== null || inRecipe) return "shape";
+    if (arrival.shapeId !== null) return "shape";
     return null;
 }
 

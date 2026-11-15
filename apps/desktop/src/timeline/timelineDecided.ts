@@ -10,9 +10,9 @@ import type { CarrySpan } from "./timelineCarryForward";
  * - walking in a move of its own, or arriving where one ends (`start < count <= end` of any span
  *   that isn't a hold, moved or not: a stored move is designer intent, decision 13);
  * - **Held** there (`start < count <= end` of a Held mark, `timeline_held_marks`);
- * - a member of a shape carried onto this count (owner, 2026-11-01 on #477: a shape carried onto
- *   later pages is the shape's hold). The shapes shown move per count, so the caller passes them
- *   per count (`notDefinedAt`'s `carried`).
+ *
+ * A placed shape shown on a later page decides nothing by itself (owner, 2026-11-15, reversing
+ * 2026-11-01): its members are Not defined there until it is held, or edited there.
  *
  * Everywhere else it is Not defined: an unedited stretch, including the counts before its first
  * move. The count a move starts on is decided only when something else decides it (an arrival
@@ -105,23 +105,14 @@ export function marksByMarcher(
 
 /**
  * The marchers Not defined at `beat`, from each one's decided stretches by id.
- *
- * @param carried the members of the shapes carried onto `beat` (`placedBoxesAt`), decided there;
- *   a function, so it's only worked out when someone would otherwise be Not defined
  */
 export function notDefinedAt(
     decided: ReadonlyMap<number, readonly DecidedStretch[]>,
     beat: number,
-    carried: () => ReadonlySet<number> = () => NOBODY,
 ): Set<number> {
     const notDefined = new Set<number>();
     if (beat === 0) return notDefined;
     for (const [id, stretches] of decided)
         if (!isDecidedAt(stretches, beat)) notDefined.add(id);
-    if (notDefined.size === 0) return notDefined;
-    const inShapes = carried();
-    for (const id of inShapes) notDefined.delete(id);
     return notDefined;
 }
-
-const NOBODY: ReadonlySet<number> = new Set();
