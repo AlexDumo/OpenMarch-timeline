@@ -168,6 +168,8 @@ describe("FieldContextMenu", () => {
                 );
         }
         expect(groups).toEqual([
+            // Copy and paste come first (#961)
+            ["copyFormation", "pasteFormation", "pasteFormationInPlace"],
             [
                 "timelineHoldFromPrevious",
                 "timelineHoldOverWindow",
@@ -184,6 +186,11 @@ describe("FieldContextMenu", () => {
             ["selectAllMarchers"],
             ["fieldEditMode"],
         ]);
+        expect(item("copyFormation")).toHaveTextContent("Copy");
+        expect(item("pasteFormation")).toHaveTextContent("Paste");
+        expect(item("pasteFormationInPlace")).toHaveTextContent(
+            "Paste in place",
+        );
         expect(item("timelineHoldFromPrevious")).toHaveTextContent(
             "Hold from last keyframe",
         );

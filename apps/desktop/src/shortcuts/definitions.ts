@@ -880,6 +880,36 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
     },
 
+    // Copy and paste a formation (#961, owner 2026-11-15): Copy keeps where the selected marchers
+    // stand (one whole placed shape as a shape); Paste shows it on the marchers selected then, as
+    // an open shape centered on them that Enter places, and Paste in place starts it where it was
+    // copied. Nothing is created, so there's no Cut or Duplicate. The app's own clipboard, not the
+    // system's; in a text field these keys stay the text's (shapes/clipboard)
+    copyFormation: {
+        labelKey: "actions.edit.copy",
+        keywordsKey: "actions.edit.copyKeywords",
+        category: "edit",
+        scope: "canvas",
+        defaultBindings: ["$mod+C", "Control+C"],
+        ignoreRepeat: true,
+    },
+    pasteFormation: {
+        labelKey: "actions.edit.paste",
+        keywordsKey: "actions.edit.pasteKeywords",
+        category: "edit",
+        scope: "canvas",
+        defaultBindings: ["$mod+V", "Control+V"],
+        ignoreRepeat: true,
+    },
+    pasteFormationInPlace: {
+        labelKey: "actions.edit.pasteInPlace",
+        keywordsKey: "actions.edit.pasteInPlaceKeywords",
+        category: "edit",
+        scope: "canvas",
+        defaultBindings: ["$mod+Shift+V", "Control+Shift+V"],
+        ignoreRepeat: true,
+    },
+
     // Cursor mode
     cancelAlignmentUpdates: {
         labelKey: "actions.alignment.cancelUpdates",

@@ -44,8 +44,14 @@
             "holdOverWindow": "{holdOverWindow}"
         },
         "edit": {
+            "copy": "Copy",
+            "copyKeywords": "copy formation picture shape positions dots form set clipboard",
             "noRedoAvailable": "No action to redo",
             "noUndoAvailable": "No action to undo",
+            "paste": "Paste",
+            "pasteInPlace": "Paste in place",
+            "pasteInPlaceKeywords": "paste in place same spot exact where copied formation picture restore",
+            "pasteKeywords": "paste formation picture shape positions dots form set clipboard onto selected",
             "redo": "Redo",
             "redoFailed": "The redo couldn't be applied, so nothing changed.",
             "undo": "Undo",
@@ -2152,6 +2158,11 @@
             "addGroup": "Add group",
             "list": "All groups as a list: count * steps, + between groups",
             "countAt": "{count} at {interval}"
+        },
+        "clipboard": {
+            "copied": "{count, plural, one {# marcher copied} other {# marchers copied}}",
+            "copiedShape": "{shape} copied ({count, plural, one {# marcher} other {# marchers}})",
+            "left": "{count, plural, one {# marcher has no spot and stays put} other {# marchers have no spot and stay put}}"
         }
     },
     "tags": {

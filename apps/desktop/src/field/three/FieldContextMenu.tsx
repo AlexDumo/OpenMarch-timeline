@@ -40,7 +40,10 @@ import {
  * palette do, and is unavailable when they are. It acts on the selection: the
  * editor selects an unselected marcher right-clicked before it opens.
  *
- * - **Group** or **Ungroup**, first, each shown only while it's available: Group with two or
+ * - **Copy**, **Paste** and **Paste in place**, first (#961): the selection's formation copied,
+ *   and pasted onto the marchers selected as an open shape that Enter places. Unavailable with
+ *   nobody selected, and the pastes with nothing copied.
+ * - **Group** or **Ungroup**, each shown only while it's available: Group with two or
  *   more marchers selected that aren't one placed shape (#603), Ungroup with one selected whole.
  *   With one selected whole and the menu opened on one of its marchers, **Select only this
  *   marcher** goes inside it there, as a double-click on that marcher does (tablet 1.5).
@@ -64,6 +67,8 @@ const STATE_GROUP: readonly ActionId[] = [
 ];
 
 const GROUPS: readonly (readonly ActionId[])[] = [
+    // #961: a formation copied, and pasted onto the marchers selected
+    ["copyFormation", "pasteFormation", "pasteFormationInPlace"],
     ["shapeGroup", "shapeUngroup", "shapeEnterBox"],
     STATE_GROUP,
     [

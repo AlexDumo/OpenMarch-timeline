@@ -39,6 +39,11 @@ export interface ShapePlacement {
      * moves no one (its pivot), and the earlier page keeps its own
      */
     readonly setAll?: boolean;
+    /**
+     * Save no recipe (a kind that's `loose`, #961): the members go to their spots as a plain move
+     * of marchers does, and any shape they stood in loses them
+     */
+    readonly plain?: boolean;
 }
 
 /** What placing the open shape would write; null while there is nothing to place */
@@ -65,6 +70,7 @@ export function placementOf(
             x: t.to.x,
             y: t.to.y,
         })),
+        ...(tool.kind.loose && { plain: true }),
     };
 }
 
@@ -91,17 +97,30 @@ export async function writePlacement(
     const to = new Map(members.map((m) => [m.marcherId, m]));
     const marcherIds = members.map((m) => m.marcherId);
     let saved = false;
+    const spotsOf = (current: readonly { readonly marcher_id: number }[]) =>
+        current.flatMap((c) => {
+            const spot = to.get(c.marcher_id);
+            return spot
+                ? [{ marcher_id: c.marcher_id, x: spot.x, y: spot.y }]
+                : [];
+        });
     try {
+        if (placement.plain) {
+            // Plain marchers moved to their spots: no recipe, and nobody set who doesn't move
+            await transformMarchersInSelection({
+                db,
+                marcherIds,
+                transform: spotsOf,
+                ...(plan ? { plan } : {}),
+                keepPlayhead,
+            });
+            void queryClient.invalidateQueries({ queryKey: historyKeys.all() });
+            return true;
+        }
         await transformMarchersInSelection({
             db,
-            marcherIds: members.map((m) => m.marcherId),
-            transform: (current) =>
-                current.flatMap((c) => {
-                    const spot = to.get(c.marcher_id);
-                    return spot
-                        ? [{ marcher_id: c.marcher_id, x: spot.x, y: spot.y }]
-                        : [];
-                }),
+            marcherIds,
+            transform: spotsOf,
             ...(plan ? { plan } : {}),
             keepPlayhead,
             writesShapes: true,

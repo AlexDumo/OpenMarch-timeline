@@ -694,6 +694,11 @@ export interface ToolKind<P> {
      * offers no Recalculate, and it isn't saved to the library, which keeps no spots
      */
     readonly asIs?: boolean;
+    /**
+     * Placing it saves no recipe: its marchers go to its spots and stay plain marchers (loose dots
+     * pasted from the clipboard, #961). It isn't read back from recipes or offered by a picker.
+     */
+    readonly loose?: boolean;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
