@@ -3216,7 +3216,7 @@
     "view3d.silkArtwork.template": "Label before three small buttons named PNG, SVG and PDF that each download a printable template of the flag silk's shape and size, to paint on. {shape} is the shape's name, such as Teardrop or Swing.",
     "view3d.silkArtwork.preparing": "Replaces a template download button's label while the file is being made, which can take a few seconds.",
     "view3d.silkArtwork.notPng": "Error under the flag silk artwork row when the chosen file isn't a PNG image.",
-    "view3d.silkArtwork.tooLarge": "Error under the flag silk artwork row when the chosen PNG file is bigger than 32 megabytes.",
+    "view3d.silkArtwork.tooLarge": "Error under the flag silk artwork row when the chosen PNG file is too big to import (over 300 megabytes or 400 million pixels, or still over 32 megabytes after it is scaled down).",
     "view3d.silkArtwork.unreadable": "Error under the flag silk artwork row when the chosen PNG file is damaged or can't be opened.",
     "view3d.silkArtwork.templateFailed": "Error under the flag silk artwork row when the template file couldn't be made for download.",
     "view3d.silkArtwork.saveFailed": "Error message (toast) when the imported flag silk artwork couldn't be saved into the show."

@@ -3111,7 +3111,7 @@
             "template": "Template for {shape}:",
             "preparing": "Preparing…",
             "notPng": "That file isn't a PNG. Export your artwork as PNG and import it again.",
-            "tooLarge": "That PNG is larger than 32 MB. Export it smaller and import it again.",
+            "tooLarge": "That PNG is too large. Export it at a lower resolution and import it again.",
             "unreadable": "That PNG couldn't be read.",
             "templateFailed": "The template couldn't be made.",
             "saveFailed": "The flag silk artwork couldn't be saved."

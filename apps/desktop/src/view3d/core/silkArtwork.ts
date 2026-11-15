@@ -1,3 +1,4 @@
+// cspell:words IHDR
 /**
  * Imported silk Artwork (fork #973): what an import must be, and where the
  * painted silk lies in the image. A painter starts from the shape's
@@ -13,11 +14,28 @@ import * as z from "zod";
 import type { TemplateSurface } from "./artworkTemplates/surfaces";
 import { FIXED_BLEED } from "./artworkTemplates/surfaces";
 
-/** The largest PNG a show takes: a 66 in fly at 300 DPI is well under it. */
+/**
+ * The largest PNG a show stores. An import is first brought down to
+ * `SILK_ARTWORK_MAX_PX`, so this only turns away a 4096 px image that
+ * compresses badly (photographic noise); kept small, too, because replacing
+ * or removing the Artwork copies it into the undo history.
+ */
 export const SILK_ARTWORK_MAX_BYTES = 32 * 1024 * 1024;
 
-/** The longest edge a silk texture gets; larger images are drawn smaller. */
+/**
+ * The longest edge a silk texture gets, and so the longest the show stores:
+ * a larger import is scaled down to it first.
+ */
 export const SILK_ARTWORK_MAX_PX = 4096;
+
+/** The largest PNG file an import reads (props-spec section 2's artwork limit). */
+export const SILK_ARTWORK_MAX_FILE_BYTES = 300 * 1024 * 1024;
+
+/**
+ * The most pixels an import decodes. A full-size painted template is far
+ * under it (the largest silk's PNG template, at 150 DPI, is about 170 million).
+ */
+export const SILK_ARTWORK_MAX_PIXELS = 400_000_000;
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
@@ -26,16 +44,41 @@ export function isPng(data: Uint8Array): boolean {
     return PNG_SIGNATURE.every((b, i) => data[i] === b);
 }
 
-/** An Artwork import, as the 3D window sends it to the editor. */
-export const silkArtworkImportSchema = z.object({
-    name: z.string().min(1).max(200),
-    data: z
-        .instanceof(Uint8Array)
-        .refine((d) => d.length <= SILK_ARTWORK_MAX_BYTES, "PNG too large")
-        .refine(isPng, "Not a PNG file"),
-    width: z.number().int().positive().max(65535),
-    height: z.number().int().positive().max(65535),
-});
+/**
+ * A PNG's size in pixels, from its header (the IHDR chunk right after the
+ * signature), or null when the bytes don't start like a PNG with one.
+ */
+export function pngSize(
+    data: Uint8Array,
+): { width: number; height: number } | null {
+    if (data.length < 24 || !isPng(data)) return null;
+    const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    const chunk = String.fromCharCode(...data.subarray(12, 16));
+    if (chunk !== "IHDR") return null;
+    const width = view.getUint32(16);
+    const height = view.getUint32(20);
+    return width > 0 && height > 0 ? { width, height } : null;
+}
+
+/**
+ * An Artwork import, as the 3D window sends it to the editor: a PNG of at
+ * most `SILK_ARTWORK_MAX_PX` on its longest edge, whose stated size is its
+ * header's.
+ */
+export const silkArtworkImportSchema = z
+    .object({
+        name: z.string().min(1).max(200),
+        data: z
+            .instanceof(Uint8Array)
+            .refine((d) => d.length <= SILK_ARTWORK_MAX_BYTES, "PNG too large")
+            .refine(isPng, "Not a PNG file"),
+        width: z.number().int().positive().max(SILK_ARTWORK_MAX_PX),
+        height: z.number().int().positive().max(SILK_ARTWORK_MAX_PX),
+    })
+    .refine((a) => {
+        const size = pngSize(a.data);
+        return size?.width === a.width && size.height === a.height;
+    }, "Size doesn't match the PNG");
 
 export type SilkArtworkImport = z.infer<typeof silkArtworkImportSchema>;
 

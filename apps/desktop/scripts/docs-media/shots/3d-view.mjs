@@ -407,20 +407,31 @@ const shots = [
             await seekInPage(ctx.page, 3, 0.5);
             const { view } = await open3d(ctx);
             await paintSilks(view);
-            const shapes = view.getByTestId("view3d-silk-shape-picker");
-            // the shapes at the top of the panel, the Artwork row under them
-            await shapes.evaluate((el) =>
-                el.parentElement?.scrollIntoView({ block: "start" }),
-            );
+            // the rows, labels and all: the shapes, and the Artwork under them
+            const shapeRow = view
+                .getByTestId("view3d-silk-shape-picker")
+                .locator("xpath=..");
+            const artworkRow = view
+                .getByTestId("view3d-silk-artwork")
+                .locator("xpath=..");
+            // the shapes' row near the top of the panel, clear of its edge
+            await shapeRow.evaluate((el) => {
+                el.scrollIntoView({ block: "start" });
+                let scroller = el.parentElement;
+                while (
+                    scroller &&
+                    !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)
+                )
+                    scroller = scroller.parentElement;
+                if (scroller) scroller.scrollTop -= 24;
+            });
             await view.mouse.move(4, ctx.window.height / 2);
             await ctx.wait(1500);
             return {
+                // tight below the Artwork, so the next row's control stays out
                 box: ctx.union(
-                    await ctx.around(shapes, 12),
-                    await ctx.around(
-                        view.getByTestId("view3d-silk-artwork"),
-                        12,
-                    ),
+                    await ctx.around(shapeRow, 10),
+                    await ctx.around(artworkRow, 4),
                 ),
                 target: view,
             };

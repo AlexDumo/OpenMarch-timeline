@@ -18,18 +18,20 @@ import { silkShape, type SilkShapeId } from "@/view3d/core/sizes/silkShapes";
 import { requestDraw } from "../../drawWake";
 import { setSilkArtwork } from "./silkSet";
 
-export function useSilkArtworkTexture(
-    id: number | undefined,
-    shape: SilkShapeId,
-): boolean {
-    const { data: row } = useQuery(silkArtworkQueryOptions(id));
-    const [shown, setShown] = useState(false);
+type ArtworkRow = { data: Uint8Array; width: number; height: number };
+
+/**
+ * The stored PNG as a texture, decoded once per row; null until it is. The
+ * texture is kept with the row it came from, so a new row never shows (or
+ * reuses) the last row's texture, which its cleanup has disposed.
+ */
+function useArtworkTexture(row: ArtworkRow | undefined): THREE.Texture | null {
+    const [decoded, setDecoded] = useState<{
+        row: ArtworkRow;
+        texture: THREE.Texture;
+    } | null>(null);
     useEffect(() => {
-        if (!row) {
-            setSilkArtwork(null);
-            setShown(false);
-            return;
-        }
+        if (!row) return;
         let cancelled = false;
         let texture: THREE.Texture | null = null;
         const scale = Math.min(
@@ -45,6 +47,8 @@ export function useSilkArtworkTexture(
                 // row is at v = 1 as the silk shader expects
                 imageOrientation: "flipY",
                 premultiplyAlpha: "none",
+                // the editor stores at most SILK_ARTWORK_MAX_PX; a row from
+                // before that rule is drawn smaller here
                 ...(scale < 1
                     ? {
                           resizeWidth: Math.max(
@@ -69,30 +73,45 @@ export function useSilkArtworkTexture(
                 texture.colorSpace = THREE.SRGBColorSpace;
                 texture.anisotropy = 4;
                 texture.needsUpdate = true;
-                setSilkArtwork(
-                    texture,
-                    silkArtworkTrimRect(
-                        row.width,
-                        row.height,
-                        silkShapeSurface(silkShape(shape)),
-                    ),
-                );
-                setShown(true);
-                requestDraw(600);
+                setDecoded({ row, texture });
             })
             .catch((error: unknown) => {
                 console.warn("3D View: couldn't read the silk Artwork", error);
-                setSilkArtwork(null);
-                setShown(false);
             });
         return () => {
             cancelled = true;
             if (texture) {
-                setSilkArtwork(null);
                 (texture.image as ImageBitmap | undefined)?.close?.();
                 texture.dispose();
             }
         };
-    }, [row, shape]);
+    }, [row]);
+    return row && decoded?.row === row ? decoded.texture : null;
+}
+
+export function useSilkArtworkTexture(
+    id: number | undefined,
+    shape: SilkShapeId,
+): boolean {
+    const { data: row } = useQuery(silkArtworkQueryOptions(id));
+    const texture = useArtworkTexture(row ?? undefined);
+    const shown = Boolean(row && texture);
+    // a new shape only moves the trim in the same texture
+    useEffect(() => {
+        if (!row || !texture) {
+            setSilkArtwork(null);
+            return;
+        }
+        setSilkArtwork(
+            texture,
+            silkArtworkTrimRect(
+                row.width,
+                row.height,
+                silkShapeSurface(silkShape(shape)),
+            ),
+        );
+        requestDraw(600);
+        return () => setSilkArtwork(null);
+    }, [row, texture, shape]);
     return shown;
 }

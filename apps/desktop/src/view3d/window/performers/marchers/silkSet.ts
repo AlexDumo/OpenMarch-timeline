@@ -15,8 +15,9 @@
  *   {@link silkPatternTexture} at the grid's (u, v), or with the show's
  *   imported Artwork ({@link setSilkArtwork}), laid flat as its template is.
  *   Silk cues (C5.4) come later.
- * - Shaped: a silk with a shape (`core/sizes/silkShapes.ts`) discards what
- *   lies outside its outline, read from {@link silkMaskTexture}.
+ * - Shaped: a silk with a shape (`core/sizes/silkShapes.ts`) clips what
+ *   lies outside its outline, read from {@link silkMaskTexture}, with an
+ *   antialiased edge (alpha to coverage).
  * - No shadows at any quality (props-spec.md section 7, "Rendering").
  * - The wave reads only per-instance inputs written from the count, so a
  *   scrub back to a count draws the same silks as playing there.
@@ -264,13 +265,18 @@ varying vec2 vSilkUv;
 varying vec2 vSilkPlanar;
 varying float vSilkPattern;
 varying float vSilkCut;
-/** Whether the flat silk point p lies inside its shape's outline. */
-bool silkInsideCut(vec2 p, float cut) {
-  if (cut < 0.5) return true;
+/**
+ * How far the flat silk point p lies inside its shape's outline, as an
+ * alpha: 0.5 on the outline, rising to 1 inside and falling to 0 outside
+ * across the mask's distance band. The material's alpha to coverage turns
+ * that into a smooth, pixel-wide edge.
+ */
+float silkCutAlpha(vec2 p, float cut) {
+  if (cut < 0.5) return 1.0;
   float inset = 0.5 / ${SILK_MASK_SIZE.toFixed(1)};
   vec2 q = clamp(p, inset, 1.0 - inset);
   float m = texture2D(uSilkMasks, vec2(q.x, (floor(cut + 0.5) + q.y) / uSilkMaskCount)).r;
-  return m >= ${(SILK_MASK_EDGE / 255).toFixed(6)};
+  return clamp(0.5 + (m - ${(SILK_MASK_EDGE / 255).toFixed(6)}) * ${(255 / (2 * (SILK_MASK_EDGE - 1))).toFixed(6)}, 0.0, 1.0);
 }
 /** The show's Artwork at the flat silk point p, over the plain color. */
 vec3 silkArtworkColor(vec2 p, vec3 plain) {
@@ -299,6 +305,10 @@ export function silkMaterial(composer: Composer): THREE.MeshStandardMaterial {
         side: THREE.DoubleSide,
         envMapIntensity: 1,
     });
+    // a shaped silk's outline comes from its mask as an alpha (silkCutAlpha):
+    // clipped at 0.5 and smoothed over the pixel, as the plume's cards are
+    material.alphaTest = 0.5;
+    material.alphaToCoverage = true;
     material.onBeforeCompile = (shader) => {
         shader.uniforms.uComposed = composer.uniform;
         shader.uniforms.uSilkPatterns = { value: silkPatternTexture() };
@@ -344,7 +354,7 @@ export function silkMaterial(composer: Composer): THREE.MeshStandardMaterial {
             .replace(
                 "#include <color_fragment>",
                 `#include <color_fragment>
-  if (!silkInsideCut(vSilkPlanar, vSilkCut)) discard;
+  diffuseColor.a *= silkCutAlpha(vSilkPlanar, vSilkCut);
   diffuseColor.rgb *= vSilkPattern < -1.5
     ? silkArtworkColor(vSilkPlanar, vSilkColor)
     : vSilkPattern < -0.5

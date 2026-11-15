@@ -5,7 +5,7 @@
  * stores it in the show with undo; the relayed invalidation brings it back
  * here and onto the silks.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslate } from "@tolgee/react";
 import { Button } from "@openmarch/ui";
@@ -17,7 +17,10 @@ import {
 } from "@/view3d/core/artworkTemplates";
 import {
     SILK_ARTWORK_MAX_BYTES,
-    isPng,
+    SILK_ARTWORK_MAX_FILE_BYTES,
+    SILK_ARTWORK_MAX_PIXELS,
+    SILK_ARTWORK_MAX_PX,
+    pngSize,
     type SilkArtworkImport,
 } from "@/view3d/core/silkArtwork";
 import { silkShape, silkShapeOf } from "@/view3d/core/sizes/silkShapes";
@@ -48,17 +51,62 @@ function saveFile(name: string, mimeType: string, data: string | Uint8Array) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-/** A picked file as an Artwork import, or the reason it can't be one. */
+/**
+ * A picked file as an Artwork import, or the reason it can't be one. The
+ * size comes from the PNG's header; an image longer than the silk texture
+ * (`SILK_ARTWORK_MAX_PX`) is scaled down to it before the show stores it,
+ * so a template painted at full size imports without a size limit getting
+ * in the way.
+ */
 async function readArtwork(
     file: File,
 ): Promise<SilkArtworkImport | "notPng" | "tooLarge"> {
-    if (file.size > SILK_ARTWORK_MAX_BYTES) return "tooLarge";
-    const data = new Uint8Array(await file.arrayBuffer());
-    if (!isPng(data)) return "notPng";
-    const bitmap = await createImageBitmap(file);
-    const { width, height } = bitmap;
+    if (file.size > SILK_ARTWORK_MAX_FILE_BYTES) return "tooLarge";
+    const original = new Uint8Array(await file.arrayBuffer());
+    const size = pngSize(original);
+    if (!size) return "notPng";
+    if (size.width * size.height > SILK_ARTWORK_MAX_PIXELS) return "tooLarge";
+    const scale = Math.min(
+        1,
+        SILK_ARTWORK_MAX_PX / Math.max(size.width, size.height),
+    );
+    if (scale === 1) {
+        return original.length > SILK_ARTWORK_MAX_BYTES
+            ? "tooLarge"
+            : { name: file.name, data: original, ...size };
+    }
+    const width = Math.max(1, Math.round(size.width * scale));
+    const height = Math.max(1, Math.round(size.height * scale));
+    const bitmap = await createImageBitmap(file, {
+        resizeWidth: width,
+        resizeHeight: height,
+        resizeQuality: "high",
+        premultiplyAlpha: "none",
+    });
+    const canvas = new OffscreenCanvas(width, height);
+    canvas.getContext("2d")!.drawImage(bitmap, 0, 0);
     bitmap.close();
+    const blob = await canvas.convertToBlob({ type: "image/png" });
+    const data = new Uint8Array(await blob.arrayBuffer());
+    if (data.length > SILK_ARTWORK_MAX_BYTES) return "tooLarge";
     return { name: file.name, data, width, height };
+}
+
+/** An object URL for the stored PNG, revoked when it changes or unmounts. */
+function usePngUrl(data: Uint8Array | undefined): string | null {
+    const [url, setUrl] = useState<string | null>(null);
+    useEffect(() => {
+        if (!data) {
+            setUrl(null);
+            return;
+        }
+        const next = URL.createObjectURL(
+            new Blob([data as Uint8Array<ArrayBuffer>], { type: "image/png" }),
+        );
+        setUrl(next);
+        return () => URL.revokeObjectURL(next);
+    }, [data]);
+    return url;
 }
 
 export function SilkArtworkControls() {
@@ -73,23 +121,7 @@ export function SilkArtworkControls() {
     const [busy, setBusy] = useState<TemplateFormat | null>(null);
 
     // the stored PNG as a picture beside its name
-    const preview = useMemo(
-        () =>
-            artwork
-                ? URL.createObjectURL(
-                      new Blob([artwork.data as Uint8Array<ArrayBuffer>], {
-                          type: "image/png",
-                      }),
-                  )
-                : null,
-        [artwork],
-    );
-    useEffect(
-        () => () => {
-            if (preview) URL.revokeObjectURL(preview);
-        },
-        [preview],
-    );
+    const preview = usePngUrl(artwork?.data);
 
     const onPick = async (file: File | undefined) => {
         if (!file) return;
