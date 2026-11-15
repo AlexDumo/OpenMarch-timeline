@@ -136,6 +136,7 @@ export function ClipboardSection() {
                 <ActionButton
                     action="pasteFormationInPlace"
                     data-testid="clipboard-paste-in-place"
+                    hint={t("shapes.clipboard.pasteExactlyHint")}
                     className={getButtonClassName({
                         variant: "secondary",
                         size: "compact",
