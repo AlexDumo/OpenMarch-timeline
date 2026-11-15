@@ -2,13 +2,13 @@
 
 <!-- cspell:words shako -->
 
-- Status: proposed. Draft for the owner's design pass of 2026-11-15. The open
-  decisions at the end are worked through before it is accepted.
+- Status: accepted by the owner on 2026-11-15, decision by decision, in a
+  design pass (the record is under "Decisions with the owner").
 - Date: 2026-11-15
 - Supersedes in part: [ADR 0004](0004-performer-cues.md) D-1 to D-3 and its
-  channels, including those of its 2026-10-11 amendment. ADR 0004's compile
-  module (D-6), 3D View amendments (D-7), beat deletion rule (2026-10-15) and
-  performer defaults (2026-11-11) stand.
+  channels, including those of its 2026-10-11 amendment, and the Feet default
+  of its 2026-11-11 amendment. ADR 0004's compile module (D-6), 3D View
+  amendments (D-7) and beat deletion rule (2026-10-15) stand.
 
 ## Context
 
@@ -30,13 +30,14 @@ The owner (Alex) gave the model on 2026-11-14:
 > To me, a cue modifies an entity of a component (the performer) and each cue
 > type controls a specific param.
 
-The owner also wants the timeline to have separate views or lanes for
-equipment, visuals, facings and so on.
+The owner also wants the timeline to have separate lanes for equipment,
+looks, facings and so on.
 
 ADR 0004 is the earlier design, from the 3D work. Its compiler shipped
 (`packages/core/src/cues`) and drives the 3D View with show defaults only. Its
 storage, Visuals mode and item placement are parked on
-`archive/pre-convergence` (002b6da97), and ADR 0011 dropped their tables.
+`archive/pre-convergence` (002b6da97), and ADR 0011 dropped their tables. No
+file on fork main holds cues.
 
 ### The parked design against the owner's model
 
@@ -46,149 +47,177 @@ storage, Visuals mode and item placement are parked on
   wins.
 - A cue sits on a beat id, and its instant is the count's click.
 - Defaults are never stored. Each has a show setting, and a cue changes it
-  from a count (2026-11-11 amendment).
+  from a count.
 - Carry, Silk and Uniform each hold one value and cut on their count.
 - Compile is pure, and it can say why a performer does something on a count.
 
 **Where it is more complex than the model needs**
 
-| Parked design                                                                                                                                                                                                                                 | Why it is more than the model needs                                                                                              |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| **Channels are body regions.** `feet` holds pace, moving technique, hold technique and step-off foot. `horn_equipment` holds horn position and angle, stick position, guard position and equipment work. `body` holds posture and choreography. | A cue sets one of them and resets the others to their defaults, because the latest cue wins the whole channel.                   |
-| **Phrases** are a second kind of cue with their own library values, a minimum of 2 counts, stretchable sections, overlap flags, a `phrase_assets` table and "copy into show".                                                                  | The model needs only "for just that moment". The rest is animation authoring.                                                    |
-| **Take-overs:** a cue on one channel owns another (kneel over Feet, choreography over Horn/Equipment).                                                                                                                                         | A cue type controls one parameter. Which body parts an animation moves is the renderer's business.                               |
-| **Ripples** and **per-cue transition lengths**.                                                                                                                                                                                                | Neither is in the model. Both can be added later without changing it.                                                            |
-| **Library values** (`library:<uuid>@<version hash>`) for Carry, Silk and Uniform.                                                                                                                                                             | The embedded Library is no longer on fork main. Looks get their own model in #972.                                               |
-| **Item placement beside cues:** each item has holders, hands, crew, ripple groups and a beat rank.                                                                                                                                             | That is logistics, which #966 puts later. Seeing equipment needs only "this performer holds a rifle from count 40".               |
+- **Channels are body regions.** `feet` holds pace, moving technique, hold
+  technique and step-off foot; `horn_equipment` holds horn position, stick
+  position, guard position and equipment work; `body` holds posture and
+  choreography. Because the latest cue wins the whole channel, a cue that
+  sets one of them resets the others to their defaults.
+- **Phrases** are a second kind of cue with their own library values, a
+  minimum of 2 counts, stretchable sections, overlap flags, a `phrase_assets`
+  table and "copy into show". The model needs only "for just that moment".
+- **Take-overs:** a cue on one channel owns another (kneel over Feet,
+  choreography over Horn/Equipment).
+- **Targets with precedence:** band, section, tag or hand-picked, resolved
+  live, with the narrower group winning on a tie.
+- **Item placement beside cues:** holders, hands, crew, ripple groups and a
+  beat rank. That is logistics, which #966 puts later.
 
 **What is missing**
 
-- **"For just that moment" on every type.** Phrases exist only on Horn/Equipment
-  and Body, and they are never one count long. "Lights on for this count" can't
-  be said.
-- **Lights.** There is no channel for them. Hats and capes exist only as a
-  whole-uniform swap.
-- **Selecting by current state.** Targets are fixed groups (band, section, tag,
-  hand-picked). Nothing answers "who holds a rifle on count 40", for selecting
-  or for aiming a cue.
+- **"For just that moment" on every type.** Phrases exist only on
+  Horn/Equipment and Body, and they are never one count long.
+- **Selecting by what a performer holds at a moment** ("Rifles").
 - **Equipment on the 2D field.** Only the 3D View would show it.
-- **"Stand here".** In the parked storage it takes a Feet cue that restates
-  pace, technique and step-off foot.
+- **"Stand here".** It takes a Feet cue that restates pace, technique and
+  step-off foot.
 
-## Decision (proposed)
+## Decision
 
-### D-1 The model
+### D-1 What is a cue, and what isn't
 
 - **Entity:** a performer (a `marchers` row of type `marcher`). Props may get
-  cues later; `item_geometry` already follows the same rule.
-- **Parameter:** one thing about a performer that can change during the show.
-- **Cue type:** controls exactly one parameter.
-- **Cue:** a type, a value, a moment and who. The moment is a beat id, at the
-  count's click (ADR 0004 D-1).
-- A cue is **lasting** or **momentary**, chosen per cue:
-  - **Lasting:** sets the parameter from its moment until the performer's next
-    lasting cue of that type.
-  - **Momentary:** applies for a length in counts (1 unless the value says
-    otherwise), then the lasting value shows again. It never changes the
-    lasting value.
-- Before a performer's first cue of a type, the parameter has its **default**:
-  a show setting or the section's, never stored as a cue.
-- No take-overs, ripples, per-cue transition lengths or phrase assets. How a
-  change animates is the value's business.
+  cues later.
+- **Cue type:** controls exactly one parameter of a performer.
+- **Cue:** a type, a value, a moment (a beat id, at the count's click) and the
+  performers it applies to.
+- **Only things that change independently of the drill are cues.** Something
+  that belongs to a hold or a move is stored on that hold or move:
+  - hold style (stand or mark time) is a property of the hold (D-5);
+  - pace and step style are properties of the move, when they are built;
+  - step-off foot and dot mode stay show settings.
 
-### D-2 Cue types
+### D-2 Lasting and momentary
 
-Each row is one cue type. The view is its lane group on the timeline (D-6).
+- Each cue is **lasting** or **momentary**, chosen per cue, for any type.
+  - **Lasting:** sets the parameter from its moment until that performer's
+    next lasting cue of the type.
+  - **Momentary:** applies for a length in counts (1 by default), then the
+    lasting value shows again. It never changes the lasting value.
+- Each value has a natural default: Equipment, Look and Facing are lasting; a
+  toss is momentary. The choice stays open wherever it makes sense ("sabre for
+  8 counts, then back"). A value that works only one way is locked: a toss is
+  momentary only.
+- **Transition length:** a cue may say how many counts its change takes
+  ("horns down over 2", "turn to the back over 4"). Each value has a default,
+  such as a snap for horns and 2 counts for a facing change.
+- Before a performer's first cue of a type, the parameter has its
+  **default**: a show setting or the section's, never stored as a cue.
 
-| View      | Cue type   | Parameter                      | Values                                                                     | Default                    |
-| --------- | ---------- | ------------------------------ | -------------------------------------------------------------------------- | -------------------------- |
-| Equipment | Equipment  | What the performer holds       | The section's instrument, flag, rifle, sabre, nothing                      | The section's usual        |
-| Equipment | Position   | How it is held                 | Horn up, down, trail; sticks playing, in, down; set, port, present         | Up, playing or set         |
-| Equipment | Silk       | A held flag's design           | Plain color; artwork later                                                 | The section's color        |
-| Looks     | Look       | Which uniform look             | A look from #972                                                           | The band or guard look     |
-| Looks     | Lights     | Lights on the uniform          | Off, on                                                                    | Off                        |
-| Facing    | Facing     | Where the performer faces      | Front, back, side 1, side 2, direction of travel, an angle, toward a point | Front                      |
-| Movement  | Hold style | The feet while the dot holds   | Stand, mark time, high mark time                                           | The show setting           |
-| Movement  | Pace       | Steps per count                | Single, half, double                                                       | Single                     |
-| Movement  | Step style | The moving technique           | Straight leg, bent leg, high step                                          | Straight leg               |
-| Body      | Posture    | The body's posture             | Neutral, kneel                                                             | Neutral                    |
+### D-3 Cue types
 
-- Tosses, spins and body visuals are momentary values on Position and Posture.
-- One rule crosses types: a Position value applies only to performers holding
-  equipment it fits (horns up skips a rifle). When Equipment changes, Position
-  returns to the new equipment's default until its next cue.
-- Step-off foot and dot mode stay show settings, with no cue type.
-- Hats and capes become their own on/off types once garments exist (#971).
+Each type is a lane on the timeline (D-6).
 
-### D-3 Who a cue reaches
+| Group     | Cue type  | Parameter                | Values                                                                     | Default                |
+| --------- | --------- | ------------------------ | -------------------------------------------------------------------------- | ---------------------- |
+| Equipment | Equipment | What the performer holds | The section's instrument, flag, rifle, sabre, nothing                      | The section's usual    |
+| Equipment | Position  | How it is held           | Horn up, down, trail; sticks playing, in, down; set, port, present; tosses | Up, playing or set     |
+| Equipment | Silk      | A held flag's design     | Plain color; artwork later                                                 | The section's color    |
+| Looks     | Look      | Which uniform look       | A look from #972                                                           | The band or guard look |
+| Facing    | Facing    | Where the performer faces | Front, back, side 1, side 2, direction of travel, an angle, toward a point | Front                  |
+| Body      | Posture   | The body's posture       | Neutral, kneel; body visuals later                                         | Neutral                |
 
-A cue names one **group**, resolved to performers at the cue's moment:
+- **Lights** is its own on/off type under Looks, added later. Lights are not
+  folded into looks, so a show with 3 looks and lights doesn't need 6.
+- Hats and capes can become their own types once garments exist (#971).
+- A value can say where it applies. A Position value fits only the equipment
+  it names (horns up skips a rifle). A kneel shows only while the dot holds.
+  When Equipment changes, Position returns to the new equipment's default
+  until its next cue.
+- No take-overs. Which body parts a value moves is the renderer's business.
 
-- everyone;
-- a section;
-- a tag;
-- drill numbers (hand-picked);
-- **by current value:** the performers whose Equipment is a given value at the
-  cue's moment, such as "holding a rifle". An Equipment cue reads the value
-  just before its count, so "rifles to flags" and "flags to rifles" on one
-  count is a clean swap.
+### D-4 Who a cue applies to
 
-For each performer and type, the latest cue at or before a count wins. On the
-same count the narrower group wins (everyone, then section, then tag or
-current value, then drill numbers), then the newest cue.
+- **A cue stores the performers that were selected when it was made.** The
+  list is fixed; it doesn't follow later changes to sections or tags.
+- Groups (a section, a tag, "holding a rifle at the playhead", a hand-picked
+  set) are **selection tools only**. "Select Rifles" picks whoever holds a
+  rifle at the playhead, whatever their section (#377's `#rifles`). Core
+  answers "who holds what on count N" from the compiled cues.
+- For each performer and type, the latest cue at or before a count wins. There
+  are no precedence rules between groups.
+- A cue keeps a display-only **label** of how its performers were picked, such
+  as "Trumpets".
+- Accepted costs: a marcher added to a section later doesn't inherit that
+  section's earlier cues, and fixing them is by hand. A group that follows the
+  show can be added later without changing stored cues.
 
-**Selecting** uses the same groups. "Rifles" is whoever holds a rifle at the
-playhead, whatever their section or drill number (#377's `#rifles`). Core
-answers "who holds what on count N" from the compiled cues.
+### D-5 Mark time
 
-### D-4 Equipment
+- **Holds stand still by default.** Mark time is opt-in.
+- **Each Held hold can carry a style:** stand, mark time or high mark time,
+  set on the hold for the performers in it. No style means the show setting.
+- **The show setting's default becomes Stand.** Set to Mark time, it keeps
+  today's rule: a holding performer marks time while anyone in the band
+  travels, and stands when the whole band holds.
+- This answers both halves of #775 ("too often" and "stand here") without
+  cues, and gives #655's stops their mark time or halt.
 
-- Equipment belongs to the performer: "G3 holds a rifle from count 40".
-- The default comes from the section: a Rifle section holds rifles, Flag and
-  Color Guard hold flags, winds and battery hold their instrument.
+### D-6 Equipment and logistics
+
+- Equipment belongs to the performer: "G3 holds a rifle from count 40". The
+  default comes from the section: a Rifle section holds rifles, Flag and Color
+  Guard hold flags, winds and battery hold their instrument.
 - The 2D field and the 3D View both show what each performer holds at the
   playhead.
-- Logistics (put-downs, pick-ups, who carries what) come later, as items with
-  their own placement. They add to an Equipment cue and don't replace it.
+- **Logistics comes later**, through one optional item link on the Equipment
+  cue to an `items` row of kind `equipment`. The item's whereabouts are
+  derived from the cue: in the performer's hands while the cue lasts, and at
+  its placed spot otherwise. There is one source of truth, and cues without a
+  link keep meaning "a rifle from somewhere". Nothing is reserved in storage
+  now; the nullable column comes with logistics.
 - Appearances' dormant `equipment_name` and `equipment_state` columns stay
   unread.
 
-### D-5 Looks and mark time
+### D-7 Timeline lanes
 
-- **Look** switches the whole look, which covers a reveal, an unzip that
-  changes the colors, and half the band in another uniform. **Lights** is its
-  own type, so lights don't multiply the looks. Both wait for the looks model
-  (#972).
-- **Hold style** is how a designer says "stand here": a lasting cue for a group
-  from a count. The show setting stays the default.
+- One lane per cue type in the main timeline, under the drill rows, grouped as
+  in D-3. Each lane can be shown or hidden, and all are hidden by default.
+- A lane draws a lasting cue as a bar to the next one and a momentary cue as a
+  block of its length.
+- There is no separate Visuals workspace: cues are timed against the drill, so
+  the drill stays in view.
+- A prototype settles the rows inside a lane, when performers have different
+  values at once, before the lanes are built.
 
-### D-6 Timeline lanes
+### D-8 Ripples
 
-- One lane per cue type, shown on demand in the timeline under the drill rows,
-  grouped by view: Equipment, Looks, Facing, Movement, Body. Hidden by default.
-- A lane draws each lasting cue as a bar to the next one, and each momentary
-  cue as a block of its length.
-- A prototype settles the rows inside a lane before it is built.
+Ripples are later, as one design for both moves and cues: an order through
+the performers and a delay per step. A cue already stores its performers, so a
+ripple adds an order and a delay to that list without changing existing cues.
+Until then, a ripple is several cues on successive counts.
 
-### D-7 Storage
+### D-9 Storage
 
-- `cues`: `id`, `type`, `beat_id`, `value`, `settings_json`, `length` (null for
-  a lasting cue), `target_kind`, `target_section`, `target_tag_id`,
-  `target_value`, `notes` and the shared timestamps.
-- `cue_marchers` for drill-number groups, as in ADR 0004 D-2.
+- `cues`: `id`, `type`, `beat_id`, `value`, `settings_json`, `length` (null
+  for a lasting cue), `transition` (null for the value's default), `label`,
+  `notes` and the shared timestamps.
+- `cue_marchers`: `cue_id`, `marcher_id`. Every cue has its performers here.
+- `timeline_held_marks` gains a nullable `style` (`stand`, `markTime`,
+  `highMarkTime`).
 - `type` and `value` are checked in code, not by a CHECK constraint. A build
-  that doesn't know a type keeps its cues and ignores them, so a new type needs
-  no migration.
+  that doesn't know a type keeps its cues and ignores them, so a new type
+  needs no migration.
 - ADR 0004's write rules stay: history, repair, and carrying cues forward when
-  beats are deleted, per type and group.
+  beats are deleted, per type and performer.
 
-### D-8 Compile
+### D-10 Compile
 
 `@openmarch/core`'s cue module keeps its shape (compile, trace, flags). Its
-public types change: `CueChannel` becomes the cue types of D-2, a cue is
-lasting or momentary, groups gain "by current value", and a new query answers
-who has a value on a count. Take-overs, ripples and transitions leave the
-input and output.
+public types change:
+
+- `CueChannel` becomes the cue types of D-3, and a cue is lasting or
+  momentary, with a length and a transition.
+- A cue names its performers; targets and precedence leave the input.
+- The Feet channel leaves. Hold style comes from the holds and the show
+  setting.
+- Phrases, phrase assets and take-overs leave the input and output.
+- A new query answers who has a value on a count.
 
 ### What comes back from the archive, and what doesn't
 
@@ -205,62 +234,85 @@ input and output.
 **Stays parked**
 
 - item placement, holders, crew and artwork slots, until logistics;
-- the embedded Library and `library:` values.
+- the embedded Library and `library:` values;
+- per-set dot mode (`page_performer_settings`).
 
 **Dropped**
 
-- `phrase_assets` and the phrase asset format;
-- take-overs, ripples and per-cue transition lengths;
-- the `horn_equipment`, `feet` and `body` channels as cue targets;
+- `phrase_assets` and the phrase asset format, which can return with tosses
+  and choreography as an authoring format;
+- take-overs;
+- the `feet`, `horn_equipment` and `body` channels;
+- live targets and group precedence;
 - Visuals mode as a separate workspace.
 
 ### Build order
 
-1. Core types, storage and undo.
-2. Equipment and Hold style end to end: set them for a selection, see them in
-   2D and 3D, select by equipment, and one lane each.
-3. Facing and Position.
-4. Look and Lights, after #972.
-5. Momentary values: tosses and visuals.
-6. Logistics.
+1. **Mark time:** holds stand by default, with a style on each Held hold. It
+   needs no cues and closes #775.
+2. **Cue foundations:** core types, storage and undo.
+3. **Equipment, end to end:** set it for a selection, see it on the 2D field
+   and in 3D, select by equipment at the playhead, and its lane. That is the
+   "show it now" part of #966.
+4. **Facing and Position,** with transition lengths.
+5. **Look,** after the looks model (#972).
+6. **Later, in no fixed order:** tosses and other momentary values, Lights,
+   ripples, logistics.
 
-## Open decisions
+## Decisions with the owner
 
-Worked through with the owner one at a time. Each is settled when its line
-gains an answer.
+Worked through one at a time on 2026-11-15.
 
-1. One parameter per cue type, which splits `feet`, `horn_equipment` and
-   `body`.
-2. Lasting or momentary is chosen per cue, and a momentary cue has a length.
-3. A "holding a rifle" group follows the show: it is resolved at the cue's
-   moment, not frozen when the cue is written.
-4. Equipment belongs to the performer, and item placement waits for logistics.
-5. Look and Lights are separate types.
-6. Mark time: the show default, and Hold style for exceptions.
-7. Lanes on demand in the main timeline, not a separate workspace.
-8. Drop take-overs, ripples, transition lengths and phrase assets.
-9. The build order.
+1. **What a cue is:** only something that changes independently of the
+   drill, one parameter per type. Hold style, pace and step style are not
+   cues. Agreed after the owner asked whether hold style should be a cue at
+   all.
+2. **Lasting or momentary:** chosen per cue for any type, with a natural
+   default per value and locks where only one makes sense. Agreed; the owner
+   noted that equipment is almost always lasting but the option doesn't hurt.
+3. **Who:** a cue stores the selected performers; groups only select. The
+   owner rejected the proposed live groups: adding a cue by section means the
+   section was selected at that moment.
+4. **Equipment:** performer-first, logistics later through an optional item
+   link. Agreed.
+5. **Look and Lights:** separate types. Agreed; Lights can come later.
+6. **Mark time:** a style on the hold, with Stand as the show default and mark
+   time opt-in. The owner chose Stand over today's mark time while the band
+   moves.
+7. **Lanes:** show/hide lanes in the main timeline, no separate workspace.
+   Agreed.
+8. **Dropped:** take-overs and phrase assets. The owner kept transition
+   lengths ("a horns down that takes 2 counts, a facing change that takes 4")
+   and wants ripples for both moves and cues, so they come later as one
+   design.
+9. **Build order:** as above. Agreed.
 
 ## Consequences
 
 - A cue can never reset a parameter it doesn't name.
-- More cue types than channels: ten against seven. Lanes are shown on demand,
-  so the timeline stays calm.
+- Six cue types now, against seven channels. Lanes are hidden until shown, so
+  the timeline stays calm.
 - `@openmarch/core`'s cue types change, which is a public package API change.
   The 3D View's compile call changes with it.
-- Two new tables return to the file format. Older builds ignore them and play
-  the defaults.
-- Shows need no conversion: no file on fork main holds cues.
-- Tosses and choreography lose their authoring format until momentary values
-  are built.
+- Two tables return to the file format and one column is added. Older builds
+  ignore them and play the defaults.
+- Shows need no conversion: no file on fork main holds cues. Shows that never
+  changed the hold setting switch from mark time to stand.
+- A marcher added to a section later doesn't pick up that section's earlier
+  cues.
+- Tosses and choreography have no authoring format until momentary values are
+  built.
 
 ## Verification
 
-- Compile unit tests: one parameter per type (a Hold style cue leaves Pace
-  alone); lasting and momentary cues, including one count; current-value
-  groups, including the same-count swap; the Position fit rule; defaults.
-- Schema and history tests for the two tables, and the beat deletion rule.
+- Compile unit tests: one parameter per type (a Position cue leaves Facing
+  alone); lasting and momentary cues, including one count; transition
+  lengths; the latest cue per performer wins; the Position fit rule; defaults.
+- Mark time tests: holds stand by default; a Held hold's style wins over the
+  show setting; the show setting at Mark time keeps today's band rule.
+- Schema and history tests for the two tables and the new column, and the
+  beat deletion rule.
 - An unknown cue type survives a save in a build that doesn't know it.
 - End to end: set a rifle for the selection at a count; the 2D field and the
-  3D View show it from that count; "select rifles" picks those performers
+  3D View show it from that count; "Select Rifles" picks those performers
   there and not before.
