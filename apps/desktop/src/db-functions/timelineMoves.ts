@@ -1501,14 +1501,20 @@ export const moveMarchersInTarget = async ({
                             ids: marcherIds,
                         });
                 }
+                // One call per move, should two writes have gone to the same one
+                const merged = new Map<number | null, number[]>();
+                for (const w of writes)
+                    merged.set(w.timelineId, [
+                        ...(merged.get(w.timelineId) ?? []),
+                        ...w.ids,
+                    ]);
                 let wroteAppData = false;
                 let wroteHomeData = false;
-                for (const write of writes) {
+                for (const [timelineId, ids] of merged) {
                     const wrote =
-                        (await afterWrite!(tx, write.timelineId, write.ids)) !==
-                        false;
+                        (await afterWrite!(tx, timelineId, ids)) !== false;
                     wroteAppData ||= wrote;
-                    if (write.timelineId === null) wroteHomeData ||= wrote;
+                    if (timelineId === null) wroteHomeData ||= wrote;
                 }
                 // A shape placed at the starting spots is those marchers' hold: their Held
                 // holds from the starting spots go, in the same edit (owner, 2026-11-01)

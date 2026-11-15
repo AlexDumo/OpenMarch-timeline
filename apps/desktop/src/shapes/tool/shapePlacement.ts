@@ -13,6 +13,7 @@ import {
     type CanvasEditPlan,
 } from "@/timeline/timelineCoordinateWrites";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
+import { TimelineEditRefusedError } from "@/timeline/timelineEditRefusals";
 import { invalidatePlacedBoxes } from "../placed/placedBoxStore";
 import type { ShapeContext } from "../types";
 import { orderOf, targetsOf, type ToolState } from "./toolMachine";
@@ -39,6 +40,30 @@ export interface ShapePlacement {
      * moves no one (its pivot), and the earlier page keeps its own
      */
     readonly setAll?: boolean;
+}
+
+/**
+ * A shape's positions go to one move: its recipe is saved with that move (ADR 0006), so a shape
+ * can't be split across two. An edit writes Held marchers to the moves arriving at their holds and
+ * the rest to the window's move, calling its after-write step once per move
+ * (`TimelineAfterWrite`). Returns, for each call, the members whose positions went there (none:
+ * nothing to save there), and throws `shapePartlyHeld` once a second move gets some, so the edit
+ * rolls back and says why: a shape is Held whole or not at all.
+ */
+export function oneMoveForShape(
+    memberIds: readonly number[],
+): (written: readonly number[]) => number[] {
+    let moves = 0;
+    return (written) => {
+        const here = new Set(written);
+        const mine = memberIds.filter((id) => here.has(id));
+        if (mine.length === 0) return mine;
+        if (++moves > 1)
+            throw new TimelineEditRefusedError("shapePartlyHeld", {
+                marcherIds: [...memberIds].sort((a, b) => a - b),
+            });
+        return mine;
+    };
 }
 
 /** What placing the open shape would write; null while there is nothing to place */
@@ -91,6 +116,7 @@ export async function writePlacement(
     const to = new Map(members.map((m) => [m.marcherId, m]));
     const marcherIds = members.map((m) => m.marcherId);
     let saved = false;
+    const inThisMove = oneMoveForShape(marcherIds);
     try {
         await transformMarchersInSelection({
             db,
@@ -110,7 +136,8 @@ export async function writePlacement(
             // `setAll`
             setUnmoved: true,
             setAll: placement.setAll,
-            afterWrite: async (tx, timelineId) => {
+            afterWrite: async (tx, timelineId, written) => {
+                if (inThisMove(written).length === 0) return false;
                 // A move none of the members are in would keep no one: the edit moved nobody there,
                 // and is saved below instead (#485)
                 if (!(await moveHoldsAnyOf(tx, timelineId, marcherIds)))
