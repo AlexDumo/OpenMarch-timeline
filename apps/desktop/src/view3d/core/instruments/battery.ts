@@ -46,22 +46,39 @@ import type {
 
 const IN = 0.0254;
 
-/** The marching bass sizes, inches across the head, smallest first. */
-export const BASS_SIZES_IN = [18, 20, 22, 24, 26, 28, 30, 32] as const;
+/**
+ * The marching bass sizes, inches across the head, smallest first: what
+ * Yamaha (MB-8300) and Pearl (Championship Maple) sell, 14 to 32 in 2 in
+ * steps, every one 14 in deep.
+ */
+export const BASS_SIZES_IN = [14, 16, 18, 20, 22, 24, 26, 28, 30, 32] as const;
 
 /**
- * Sizes for a bass line of `count` drums, spread evenly over
- * `BASS_SIZES_IN`, smallest first. One drum gets the middle size; past
- * eight, sizes repeat.
+ * The smallest size a line of `count` drums reaches down to. Real lines
+ * run 18 to 32 in (high schools mostly 18 to 28); only a line too long to
+ * give every drum its own size there reaches down to 16 in, then 14 in.
+ */
+function smallestFor(count: number): number {
+    if (count <= 5) return 18;
+    if (count === 6) return 16;
+    return 14;
+}
+
+/**
+ * Sizes for a bass line of `count` drums, smallest first: spread evenly
+ * from the smallest size the line reaches (`smallestFor`) to 32 in. One
+ * drum gets the middle of 18 to 32 in; past ten, sizes repeat. The show
+ * stores no size: the drill writer never picks one.
  */
 export function bassSizesFor(count: number): number[] {
     const n = Math.max(0, Math.floor(count));
     if (n === 0) return [];
-    const last = BASS_SIZES_IN.length - 1;
-    if (n === 1) return [BASS_SIZES_IN[Math.floor(BASS_SIZES_IN.length / 2)]];
+    const sizes = BASS_SIZES_IN.filter((s) => s >= smallestFor(n));
+    const last = sizes.length - 1;
+    if (n === 1) return [sizes[Math.floor(sizes.length / 2)]];
     return Array.from(
         { length: n },
-        (_, i) => BASS_SIZES_IN[Math.round((i * last) / (n - 1))],
+        (_, i) => sizes[Math.round((i * last) / (n - 1))],
     );
 }
 

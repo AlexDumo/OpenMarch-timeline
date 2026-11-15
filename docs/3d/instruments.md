@@ -93,15 +93,18 @@ rotors).
 | --------- | ----------------------------------------- | ---------------------------------------------- | ------- |
 | Snare     | marching snare on a carrier               | 14 in × 12 in shell                            | snare   |
 | Tenors    | sixes on a carrier                        | 10, 12, 13, 14 in drums, 6 and 8 in shots      | tenors  |
-| Bass Drum | marching bass on a carrier, sized per dot | 18 to 32 in diameter in 2 in steps, 14 in deep | bass    |
+| Bass Drum | marching bass on a carrier, sized per dot | 14 to 32 in diameter in 2 in steps, 14 in deep | bass    |
 | Cymbals   | pair of 18 in crash cymbals               | 18 in                                          | cymbals |
 | Flub Drum | the bass model, sized with the bass line  |                                                | bass    |
 
-Bass drum size: the show stores no size, so each marcher gets one. The
-marchers whose section carries the bass model (Bass Drum and Flub Drum), in
-id order, spread evenly over 18, 20, … 32 in, smallest first; a lone drum
-gets 26 in (`bassSizesFor`, `bassOptions` in `looks.ts`). A stored
-per-marcher size is a later schema change. The drums ride high, as in the
+Bass drum size: automatic, never picked (owner, 2026-11-15: the drill
+writer won't touch it), so the show stores no size. The sizes are what
+Yamaha (MB-8300) and Pearl (Championship Maple) sell: 14 to 32 in, in 2 in
+steps. The marchers whose section carries the bass model (Bass Drum and Flub
+Drum), in id order, spread evenly from the line's smallest size up to 32 in,
+smallest first. Lines of up to five start at 18 in, a line of six at 16 in
+and longer lines at 14 in, so every drum gets its own size up to ten; a
+lone drum gets 26 in (`bassSizesFor`, `bassOptions` in `looks.ts`). The drums ride high, as in the
 owner's reference photo: every size keeps its back at the carrier, just in
 front of the belly plate, so bigger drums reach further forward, and each
 hangs where its head's center is one mallet length up and forward from the

@@ -62,12 +62,20 @@ describe("battery models", () => {
     });
 
     it("spreads bass sizes evenly, smallest first", () => {
-        expect(BASS_SIZES_IN).toEqual([18, 20, 22, 24, 26, 28, 30, 32]);
+        expect(BASS_SIZES_IN).toEqual([14, 16, 18, 20, 22, 24, 26, 28, 30, 32]);
+        expect(bassSizesFor(0)).toEqual([]);
         expect(bassSizesFor(1)).toEqual([26]);
         expect(bassSizesFor(2)).toEqual([18, 32]);
         expect(bassSizesFor(5)).toEqual([18, 22, 26, 28, 32]);
-        expect(bassSizesFor(8)).toEqual([18, 20, 22, 24, 26, 28, 30, 32]);
-        expect(bassSizesFor(0)).toEqual([]);
+    });
+
+    it("reaches below 18 in only for lines longer than five", () => {
+        expect(bassSizesFor(6)).toEqual([16, 20, 22, 26, 28, 32]);
+        expect(bassSizesFor(7)).toEqual([14, 18, 20, 24, 26, 30, 32]);
+        expect(bassSizesFor(10)).toEqual([...BASS_SIZES_IN]);
+        for (let n = 1; n <= 10; n++)
+            expect(new Set(bassSizesFor(n)).size).toBe(n);
+        expect(bassSizesFor(12)).toHaveLength(12);
     });
 
     it("hangs a cymbal from each hand, facing each other", () => {
