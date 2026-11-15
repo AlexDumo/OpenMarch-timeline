@@ -1221,7 +1221,7 @@
                     ]
                 },
                 {
-                    "label": "Edit line…",
+                    "label": "Type the picked line's position",
                     "other": [
                         {
                             "keys": [
@@ -1325,7 +1325,7 @@
                     ]
                 },
                 {
-                    "label": "Go to the next part of Edit field",
+                    "label": "Go between the field and the Field panel",
                     "other": [
                         {
                             "keys": [
@@ -1342,7 +1342,7 @@
                     ]
                 },
                 {
-                    "label": "Go to the previous part of Edit field",
+                    "label": "Go between the Field panel and the field",
                     "other": [
                         {
                             "keys": [
@@ -2862,7 +2862,7 @@
                     ]
                 },
                 {
-                    "label": "Edit line…",
+                    "label": "Type the picked line's position",
                     "other": [
                         {
                             "keys": [
@@ -2966,7 +2966,7 @@
                     ]
                 },
                 {
-                    "label": "Go to the next part of Edit field",
+                    "label": "Go between the field and the Field panel",
                     "other": [
                         {
                             "keys": [
@@ -2983,7 +2983,7 @@
                     ]
                 },
                 {
-                    "label": "Go to the previous part of Edit field",
+                    "label": "Go between the Field panel and the field",
                     "other": [
                         {
                             "keys": [

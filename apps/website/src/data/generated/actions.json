@@ -1563,6 +1563,11 @@
             }
         ]
     },
+    "fieldEditLines": {
+        "label": "Edit field lines",
+        "category": "field",
+        "bindings": []
+    },
     "fieldEditDone": {
         "label": "Done editing the field",
         "category": "field",
@@ -1580,6 +1585,11 @@
                 }
             }
         ]
+    },
+    "fieldEditDiscard": {
+        "label": "Discard field changes",
+        "category": "field",
+        "bindings": []
     },
     "fieldEditMirror": {
         "label": "Mirror sides",
@@ -1636,7 +1646,7 @@
         ]
     },
     "fieldEditEditLine": {
-        "label": "Edit line…",
+        "label": "Type the picked line's position",
         "category": "field",
         "bindings": [
             {
@@ -1770,7 +1780,7 @@
         ]
     },
     "fieldEditNextPane": {
-        "label": "Go to the next part of Edit field",
+        "label": "Go between the field and the Field panel",
         "category": "field",
         "bindings": [
             {
@@ -1788,7 +1798,7 @@
         ]
     },
     "fieldEditPreviousPane": {
-        "label": "Go to the previous part of Edit field",
+        "label": "Go between the Field panel and the field",
         "category": "field",
         "bindings": [
             {
