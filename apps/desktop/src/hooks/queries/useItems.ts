@@ -35,7 +35,7 @@ export const itemGeometryKeys = {
 };
 
 /** After items are added or removed: their marchers rows, canvas visuals, items and Outlines */
-const invalidateItemsAndMarchers = async (qc: QueryClient) => {
+export const invalidateItemsAndMarchers = async (qc: QueryClient) => {
     // The marchers first: the canvas makes an item's Outline from its visual group
     await qc.invalidateQueries({ queryKey: marcherKeys.all() });
     void qc.invalidateQueries({ queryKey: itemKeys.all() });

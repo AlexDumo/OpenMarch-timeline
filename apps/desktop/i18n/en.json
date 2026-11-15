@@ -930,7 +930,9 @@
                 "ensemble": {
                     "description": "Choose your activity.",
                     "title": "Activity",
-                    "typeLabel": "Activity"
+                    "typeLabel": "Activity",
+                    "frontEnsembleLabel": "Front ensemble?",
+                    "frontEnsembleHint": "Places the equipment and its players in front of the field, with a podium on the 50."
                 },
                 "field": {
                     "description": "Pick a field template for your show.",
@@ -1475,12 +1477,14 @@
             "summary": {
                 "small": "2 marimbas, 2 vibes, a rack, a synth and 2 speakers",
                 "medium": "4 marimbas, 3 vibes, xylophone, glockenspiel, rack, drum set, synth and 4 speakers",
-                "large": "6 marimbas, 4 vibes, xylophone, glockenspiel, 2 racks, drum set, 2 synths and 6 speakers"
+                "large": "6 marimbas, 4 vibes, xylophone, glockenspiel, 2 racks, drum set, 2 synths and 6 speakers",
+                "none": "No pit. You can add one later in the Front ensemble panel."
             },
             "always": "Each also adds a podium on the 50 and a mixer behind the pit.",
             "addPerformers": "Also add performers",
             "apply": "Apply",
-            "replaces": "Replaces the equipment the last preset added. Equipment you added yourself stays."
+            "replaces": "Replaces the equipment the last preset added. Equipment you added yourself stays.",
+            "none": "None"
         }
     },
     "section": {

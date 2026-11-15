@@ -90,6 +90,9 @@ export function loadPitPlans(): Promise<void> {
     return loading;
 }
 
+/** Whether the plans have loaded (`loadPitPlans`). */
+export const arePitPlansLoaded = (): boolean => plans !== null;
+
 /** Hears when the plans have loaded. */
 export function subscribePitPlans(listener: () => void): () => void {
     listeners.add(listener);

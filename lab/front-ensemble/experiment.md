@@ -2,31 +2,34 @@
 # The lab reads this file when this branch's test build is published.
 # Keep `id` stable: feedback is filed under it.
 id: front-ensemble
-title: Add a front ensemble (pit) from the Props panel
-summary: Place pit equipment (keyboards, drum set, racks, timpani, speakers, a podium) on the field one at a time or as a Small, Medium or Large preset, and see it, with players at their instruments, in the 3D View.
+title: Start a show with a front ensemble (pit)
+summary: Pick a pit when you make a new show, or add one later from the Front ensemble panel. Equipment is drawn as the real thing seen from above, on a plain area in front of the field, and shows up in the 3D View with players at their instruments.
 status: open
 questions:
-  - Could you find the Front ensemble section and place a single instrument where you wanted it?
+  - When you made a new show, was the "Front ensemble?" question clear, and did the pictures help you pick a size?
+  - Does the equipment on the field look like the real thing from above? Can you tell the instruments apart, zoomed out and zoomed in?
+  - Does the area in front of the field read as the pit, not as more field?
+  - Was the Front ensemble panel where you expected to find the pit and the podiums?
   - Did a preset lay the pit out the way a real front ensemble sets up? What would you move?
-  - Was it clear that equipment is locked (one spot for the whole show), and was that what you wanted?
   - In the 3D View, did the players stand at their instruments and the drum major on the podium?
-  - Anything that was missing from the list of equipment, or named in a way you didn't expect?
 ---
-
-Open a show with a few pages, then open the **Props** panel.
 
 **What to try**
 
-- Under **Front ensemble**, pick an instrument (marimba, vibraphone, drum
-  set, timpani, racks, synth, speakers, the drum major podium...), pick a
-  size, and click on the field to place it. A podium behind the field turns
-  to face the band.
-- Try a preset: pick **Small**, **Medium** or **Large** and **Apply**. Tick
-  **Also add performers** to get the players too. Apply a different size:
-  only what the last preset placed is replaced. One undo takes it back.
-- Drag a piece of equipment on one page, then look at another page: it
-  moved there too (equipment is locked). Lasso some marchers across the pit:
-  the equipment isn't selected. The lock switch is in the item's edit view.
+- Make a new show. On the **Activity** step, answer **Front ensemble?** with
+  Small, Medium or Large (the pictures show each pit from above), then finish
+  the show. The pit, its players and a podium on the 50 are already there.
+- Look at the equipment on the field, then zoom in: the keyboards' bars, the
+  drums and the podium's steps appear as you get closer. The area under the
+  pit is a plain tone, only as wide as the pit.
+- Open the **Front ensemble** panel (the keyboard icon under Marchers). Try a
+  different preset size, or open **Add equipment** to place one instrument or
+  a podium (towers, rolling podium, stepladder and more) by clicking the field.
+  Equipment and podiums are listed there, and edited there.
+- The **Props** panel lists only props now, not the pit.
+- Drag a piece of equipment on one page, then look at another page: it moved
+  there too (equipment stays in one spot all show). Lasso some marchers across
+  the pit: the equipment isn't selected.
 - Open the **3D View**. A performer whose dot sits on an instrument's playing
   spot plays it; the drum major stands on the podium.
 

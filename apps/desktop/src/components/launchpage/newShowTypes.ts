@@ -1,5 +1,6 @@
 import type { FieldProperties } from "@openmarch/core";
 import type { NewMarcherArgs, NewSectionAppearanceArgs } from "@/db-functions";
+import type { PitPresetSize } from "@/view3d/core/pit/presets";
 
 export type NewShowStepId =
     | "start"
@@ -35,6 +36,11 @@ export interface NewShowStartData {
 
 export interface NewShowEnsembleData {
     activity: string;
+    /**
+     * The front ensemble preset the show starts with (instruments.md section 6), placed with its
+     * players when the show is made; null or missing for none
+     */
+    frontEnsemble?: PitPresetSize | null;
 }
 
 export interface NewShowFieldData {

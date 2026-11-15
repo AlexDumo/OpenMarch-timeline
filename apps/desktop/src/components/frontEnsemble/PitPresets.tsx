@@ -8,13 +8,11 @@ import {
     allItemsQueryOptions,
     applyPitPresetMutationOptions,
 } from "@/hooks/queries/useItems";
-import { pitVariant } from "@/view3d/core/pit/catalog";
 import {
     PIT_PRESET_SIZES,
-    pitPreset,
-    pitPresetOnCanvas,
     type PitPresetSize,
 } from "@/view3d/core/pit/presets";
+import { pitPresetApplyArgs } from "./pitPresetArgs";
 
 const HEADING_CLASS =
     "text-sub text-text-subtitle font-medium tracking-wide uppercase";
@@ -39,24 +37,15 @@ export default function PitPresets() {
 
     const onApply = () => {
         if (!field || !firstBeat) return;
-        const placed = pitPresetOnCanvas(pitPreset(size), field);
-        apply.mutate({
-            // On field from the show's first count, so the pit is there all show
-            beatId: firstBeat.id,
-            equipment: placed.equipment.map((e) => ({
-                variant: pitVariant(e.variantId)!,
-                baseName: t(`pit.family.${e.familyId}`),
-                home: e.home,
-                rotation: e.rotation,
-            })),
-            performers: addPerformers
-                ? placed.performers.map(({ section, home }) => ({
-                      section,
-                      home,
-                  }))
-                : [],
-            performerReach: placed.reach,
-        });
+        apply.mutate(
+            pitPresetApplyArgs({
+                size,
+                field,
+                beatId: firstBeat.id,
+                addPerformers,
+                familyName: (family) => t(`pit.family.${family}`),
+            }),
+        );
     };
 
     return (
