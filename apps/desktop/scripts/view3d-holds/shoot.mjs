@@ -20,7 +20,8 @@ const opt = (name, def) => {
 };
 const out = path.resolve(opt("out", "/mnt/data/om-capture/holds/latest"));
 const states = opt("states", "up").split(",");
-// --look: draw instruments with the window's surfaces; --shell <hex> the section color
+// --look: draw instruments with the window's surfaces; --shell <hex> the section color;
+// --hand R|L: the close-up frames that hand's grip
 const look = args.includes("--look");
 const shell = opt("shell");
 const only = opt("only")
@@ -62,6 +63,7 @@ try {
     const query = new URLSearchParams();
     if (look) query.set("look", "1");
     if (shell) query.set("shell", shell.replace(/^#/, ""));
+    if (opt("hand")) query.set("hand", opt("hand"));
     await page.goto(`${server.resolvedUrls.local[0]}?${query}`, {
         timeout: 180000,
     });

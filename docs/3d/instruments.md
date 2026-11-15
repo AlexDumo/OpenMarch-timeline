@@ -127,8 +127,10 @@ chrome hoops with short lug casings. Bass drums have wood hoops in the
 shell's color, claw hooks and long tension rods to a center lug at each
 position (8 lugs up to 20 in, 10 to 26 in, 12 above), with a thin mount at
 the back. Cymbals are brilliant bronze in either brass finish, with the
-lathing's tone grooves, a leather pad on each bell and the strap loop. Bolt
-heads, lug casings and the cymbal strap are drawn at high detail only.
+lathing's tone grooves and a leather pad on each bell. Each pad rests on its
+palm, and no hand passes through its cymbal on any body
+(`cymbalGrip.test.ts`); the strap runs inside the fist, so it isn't drawn.
+Bolt heads and lug casings are drawn at high detail only.
 
 **Carriers.** Snare, tenors and bass hang from one plate carrier, after
 current aluminum vest carriers: flat satin bars from a yoke on the chest up

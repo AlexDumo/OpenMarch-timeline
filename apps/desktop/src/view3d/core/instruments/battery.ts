@@ -115,7 +115,7 @@ interface SegmentCounts {
     stick: number;
     /** Rings in a head's profile, center to rim. */
     headRings: number;
-    /** Small hardware (bolt heads, lug casings, the cymbal strap) is drawn up close only. */
+    /** Small hardware (bolt heads, lug casings) is drawn up close only. */
     fine: boolean;
 }
 
@@ -1030,14 +1030,28 @@ function cymbalProfile(detail: Detail): [number, number][] {
     return [...under, ...top.reverse()];
 }
 
+/** The pad's crown over the cymbal's rim plane: the bell rises 0.052, the pad 0.0065 more. */
+const PAD_TOP = 0.0585;
+/**
+ * How far each palm's inner face sits inside its hold's grip point, toward
+ * the other cymbal, measured on the seven posed bodies (2026-11-15). The
+ * hands aren't posed as mirror images (the left is rolled half a turn
+ * about its fingers), so the left palm sits 3.4 cm further in.
+ * `cymbalGrip.test.ts` checks every hand clears its cymbal and rests on
+ * its pad.
+ */
+const PALM_INSET = { handR: 0.014, handL: 0.048 } as const;
+/** The pad presses this far into the palm, so no light shows between them. */
+const PAD_PRESS = 0.003;
+
 /** How much darker a cymbal's lathe groove is than the bronze. */
 const LATHE_GROOVE = 0.82;
 
 /**
  * Two 18 inch crash cymbals, one in each hand, inside faces toward each
  * other: brilliant bronze with the lathing's tone grooves (alternate rings
- * a little darker), a leather pad on the outside of each bell and, up
- * close, the strap loop the fist closes on.
+ * a little darker) and a leather pad on the outside of each bell, resting
+ * on the palm. The strap runs inside the fist, so it isn't drawn.
  */
 function cymbals(detail: Detail, options: ModelOptions): InstrumentModel {
     const s = SEGMENTS[detail];
@@ -1062,28 +1076,25 @@ function cymbals(detail: Detail, options: ModelOptions): InstrumentModel {
             [0.045, 0.04],
             [0.04, 0.046],
             [0.025, 0.054],
-            [0, 0.0585],
+            [0, PAD_TOP],
         ],
         Math.max(8, round / 2),
         PART_BLACK,
     );
-    const strap = smoothTube(
-        [
-            [0.022, 0.056, 0],
-            [0.026, 0.08, 0],
-            [0, 0.096, 0],
-            [-0.026, 0.08, 0],
-            [-0.022, 0.056, 0],
-        ],
-        0.006,
-        s.small,
-        PART_BLACK,
-    );
-    const parts = s.fine ? [disc, pad, strap] : [disc, pad];
+    const parts = [disc, pad];
     const plate = (grip: Vec3, bell: Vec3, bone: "handR" | "handL"): Piece[] =>
         parts.map((p) => ({
-            // the strap holds the bell against the palm: the plate sits just inside the grip
-            ...transformPiece(p, alongAxis(bell, sub(grip, scale(bell, 0.03)))),
+            // the pad rests on the palm: the plate sits that far inside the grip
+            ...transformPiece(
+                p,
+                alongAxis(
+                    bell,
+                    sub(
+                        grip,
+                        scale(bell, PALM_INSET[bone] + PAD_TOP - PAD_PRESS),
+                    ),
+                ),
+            ),
             colors: p.colors,
             bone,
         }));

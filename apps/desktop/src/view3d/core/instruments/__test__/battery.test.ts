@@ -85,7 +85,7 @@ describe("battery models", () => {
         const right = m.pieces.filter((p) => p.bone === "handR");
         expect(left.length).toBeGreaterThan(0);
         expect(right.length).toBeGreaterThan(0);
-        // bronze plates, whatever the brass finish, each with a black pad and strap
+        // bronze plates, whatever the brass finish, each with a black pad
         for (const side of [left, right]) {
             expect(side.filter((p) => p.part === PART_BRONZE)).toHaveLength(1);
             expect(

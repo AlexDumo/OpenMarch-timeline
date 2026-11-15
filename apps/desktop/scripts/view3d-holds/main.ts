@@ -348,14 +348,31 @@ function show(entry: Entry, state: HoldState) {
     const ownCenter = own.getCenter(new THREE.Vector3());
     const ownHalf =
         (Math.max(...own.getSize(new THREE.Vector3()).toArray()) / 2) * 0.8;
+    // ?hand=R or L: the close-up frames that hand's grip instead
+    const handClose = params.get("hand");
+    if (handClose) {
+        const grip = handClose === "L" ? h.left : h.right;
+        ownCenter
+            .set(...grip.wrist)
+            .addScaledVector(new THREE.Vector3(...grip.fingers), 0.07);
+    }
+    const handHalf = 0.13;
     if (LOOK)
         dirs[dirs.length - 1] = [
-            new THREE.Vector3(-1, 0.6, 1.3).normalize(),
+            handClose
+                ? new THREE.Vector3(-0.3, 0.5, 1).normalize()
+                : new THREE.Vector3(-1, 0.6, 1.3).normalize(),
             new THREE.Vector3(0, 1, 0),
         ];
     dirs.forEach(([dir, up], i) => {
         const close = i === dirs.length - 1;
-        const h = close ? (LOOK ? ownHalf : 0.22) : half;
+        const h = close
+            ? LOOK
+                ? handClose
+                    ? handHalf
+                    : ownHalf
+                : 0.22
+            : half;
         const at = close ? (LOOK ? ownCenter : head) : center;
         const cam = new THREE.OrthographicCamera(-h, h, h, -h, 0.01, 20);
         cam.position.copy(at).addScaledVector(dir, 6);
