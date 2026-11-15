@@ -32,7 +32,11 @@ import type { MarcherPlan } from "@/view3d/core/marchers/planner";
 import { bodyAt, eventIndexAt } from "@/view3d/core/marchers/planner";
 import type { HeightClass } from "@/view3d/core/marchers/looks";
 import { marcherCueInputs } from "@/view3d/core/marchers/cueInputs";
-import type { DotMode, Foot } from "@/view3d/core/marchers/planner";
+import type {
+    DirectionChange,
+    DotMode,
+    Foot,
+} from "@/view3d/core/marchers/planner";
 import type { MarcherBodies } from "./marcherBodies";
 import type { HoldFamily } from "@/view3d/core/instruments/holds";
 import {
@@ -61,7 +65,9 @@ export interface ShowPlans {
         bpm: Float64Array;
         ids: readonly number[];
         cues: CompiledCues | null;
-        dotModes: readonly DotMode[] | null;
+        dotMode: DotMode | readonly DotMode[] | null;
+        crabs: readonly boolean[] | null;
+        directionChange: DirectionChange | readonly DirectionChange[] | null;
     };
 }
 
@@ -74,23 +80,30 @@ export interface WindowCueInputs {
      * for the Feet default: marchers mark time while the band moves.
      */
     bandMoving?: ArrayLike<number> | null;
+    /** The Feet default on those counts (Show settings); mark time when omitted. */
+    holdWhileBandMoves?: NonNullable<
+        CompileInput["showDefaults"]
+    >["holdWhileBandMoves"];
+    /**
+     * What each marcher carries, which decides the Horn/Equipment default.
+     * Marchers carry nothing when it is left out.
+     */
+    carries?: (marcherId: number) => PerformerCarry;
 }
 
 /**
  * Compiles the 3D View's performer behavior from the marchers and the timed
  * beats (in the count clock's order) with no stored cues: the show defaults
  * only (ADR 0004; cue storage is parked). `stepOffFoot` is the show's saved
- * default. `carries` says what each marcher carries, which decides the
- * Horn/Equipment default.
+ * default.
  */
 export function compileWindowCues(
     marchers: readonly { id: number; section: string }[],
     beats: readonly { id: number; timestamp: number; duration: number }[],
     stepOffFoot: Foot,
     inputs: WindowCueInputs = {},
-    carries: (marcherId: number) => PerformerCarry = () => "none",
 ): CompiledCues {
-    const { bandMoving } = inputs;
+    const { bandMoving, carries = () => "none" } = inputs;
     return compileCues({
         beats: beats
             .filter((b) => b.duration > 0)
@@ -106,7 +119,10 @@ export function compileWindowCues(
         cues: [],
         sections: inputs.sections,
         bandTravels: bandMoving ? (c) => bandMoving[c] === 1 : undefined,
-        showDefaults: { stepOffFoot },
+        showDefaults: {
+            stepOffFoot,
+            holdWhileBandMoves: inputs.holdWhileBandMoves,
+        },
     });
 }
 
@@ -201,8 +217,12 @@ export function planShow(
     /** The compiled cues; null plays the defaults (front facing, stand). */
     cues: CompiledCues | null,
     previous: ShowPlans | null = null,
-    /** What each count's dot marks (`dotModesPerCount`); null is foot on the dot. */
-    dotModes: readonly DotMode[] | null = null,
+    /** What the dot marks, for the show or per count; null is foot on the dot. */
+    dotMode: DotMode | readonly DotMode[] | null = null,
+    /** Per marcher: travels in a crab step (`core/marchers/crab.ts`). */
+    crabs: readonly boolean[] | null = null,
+    /** How direction changes go, for the show or per count; null is the default. */
+    directionChange: DirectionChange | readonly DirectionChange[] | null = null,
 ): ShowPlans {
     const t0 = performance.now();
     const sampled = sampleDrill(ids, positions, clock, fieldProperties);
@@ -212,7 +232,8 @@ export function planShow(
     const reuseAll =
         !!prev &&
         prev.cues === cues &&
-        prev.dotModes === dotModes &&
+        prev.dotMode === dotMode &&
+        prev.directionChange === directionChange &&
         sameArray(prev.bpm, clock.bpm) &&
         clock.counts + 1 === (prev.positions.find((p) => p)?.length ?? 0) / 2;
     const prevIndex = new Map((prev?.ids ?? []).map((id, i) => [id, i]));
@@ -226,6 +247,7 @@ export function planShow(
             reuseAll &&
             j !== undefined &&
             prev!.heightClasses[j] === h &&
+            (prev!.crabs?.[j] ?? false) === (crabs?.[i] ?? false) &&
             sameArray(prev!.positions[j], positions) &&
             previous!.plans[j]
         )
@@ -247,7 +269,9 @@ export function planShow(
             heading: fromCues?.heading ?? 0,
             turnSpan: fromCues?.turnSpan,
             feet: fromCues?.feet,
-            dotMode: dotModes ?? undefined,
+            dotMode: dotMode ?? undefined,
+            directionChange: directionChange ?? undefined,
+            crab: crabs?.[i] ?? false,
             positions,
             bpm: clock.bpm,
         });
@@ -262,7 +286,9 @@ export function planShow(
             bpm: clock.bpm,
             ids,
             cues,
-            dotModes,
+            dotMode,
+            crabs,
+            directionChange,
         },
     };
 }
@@ -319,7 +345,7 @@ export class MarcherMotion {
         const row2 = clip2 ? (rows[clip2] ?? null) : null;
         let weight = e.weight;
         let legYaw = e.legYaw;
-        if (e.kind === "crossfade") {
+        if (e.kind === "crossfade" || e.handoff) {
             // the fade's progress, 0 before its window and 1 after
             const u = Math.min(
                 Math.max(
@@ -367,7 +393,8 @@ export class MarcherMotion {
             const index = eventIndexAt(plan, planCount, this.cursor[i]);
             if (
                 index !== this.cursor[i] ||
-                plan.events[index].kind === "crossfade"
+                plan.events[index].kind === "crossfade" ||
+                plan.events[index].handoff
             ) {
                 this.apply(i, plan, index, planCount);
                 this.cursor[i] = index;

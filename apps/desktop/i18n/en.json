@@ -117,6 +117,10 @@
             "toggleMetronome": "Toggle metronome",
             "toggleLoop": "Loop on / off"
         },
+        "prop": {
+            "finishDrawing": "Prop: Finish drawing",
+            "removeLastPoint": "Prop: Remove the last corner while drawing"
+        },
         "select": {
             "selectAll": "Select all"
         },
@@ -141,7 +145,11 @@
             "groupKeywords": "group shape freeze as is keep together combine",
             "ungroup": "Shape: Ungroup",
             "ungroupKeywords": "ungroup shape break apart release separate",
-            "arc": "Shape: Arc"
+            "enterBox": "Select only this marcher",
+            "centerPivot": "Shape: Move the pivot back to the center",
+            "centerPivotKeywords": "pivot center centre reset turn flip around",
+            "arc": "Shape: Arc",
+            "discard": "Shape: Discard"
         },
         "swap": {
             "mustSelectTwo": "Can only swap when 2 marchers are selected.",
@@ -156,8 +164,18 @@
             "unsetHereAndFollowing": "{removeKeyframe}, later pages move back too",
             "unsetHereAndPagesMoveBack": "{count, plural, =1 {{removeKeyframe}, Page {first} moves back too} other {{removeKeyframe}, Pages {first}–{last} move back too}}",
             "unsetHereKeywords": "keyframe diamond unset set defined not defined following remove clear take back coordinate position delete",
+            "toggleEditorMode": "Switch between Basic and Expert",
+            "toggleEditorModeKeywords": "basic expert editor mode simple full timeline pages",
+            "toggleEditorModeToBasic": "Switch to Basic (Expert is on)",
+            "toggleEditorModeToExpert": "Switch to Expert (Basic is on)",
             "splitSelectedIntoNewMove": "Split selected marchers into a new move",
-            "mergeMoveIntoPage": "Merge this move into its page"
+            "mergeMoveIntoPage": "Merge this move into its page",
+            "zoomIn": "Zoom the timeline in",
+            "zoomOut": "Zoom the timeline out",
+            "zoomKeywords": "zoom magnify timeline wider narrower closer farther scale plus minus",
+            "fit": "Fit the show in the timeline",
+            "toggleTempoMode": "Edit music on / off",
+            "toggleTempoModeKeywords": "edit music tempo time signature rehearsal marks audio align counts"
         },
         "ui": {
             "openFieldMenu": "Open the field menu",
@@ -165,6 +183,8 @@
             "openCommandPalette": "Command palette",
             "openCommandBar": "Command bar",
             "openSettings": "Settings…",
+            "checkForUpdates": "Check for updates",
+            "checkForUpdatesKeywords": "update upgrade version download install new release",
             "openView3d": "Open 3D View",
             "openView3dKeywords": "3d three dimensional stadium venue window",
             "showShortcuts": "Keyboard shortcuts",
@@ -175,7 +195,10 @@
             "showNextPaths": "Show next page paths",
             "toggleNextPaths": "Toggle next page paths",
             "togglePreview": "Preview the show",
-            "togglePreviewKeywords": "preview cinematic watch present presentation fullscreen play"
+            "togglePreviewKeywords": "preview cinematic watch present presentation fullscreen play",
+            "reportFeedback": "Report a bug or send feedback",
+            "reportFeedbackKeywords": "bug issue problem feedback feature request support",
+            "viewMyReports": "View my reports"
         }
     },
     "analyticsOptIn": {
@@ -318,7 +341,9 @@
         "roundToHalf": "Round {axis} to nearest half step",
         "roundToSteps": "{steps, plural, one {Round {axis} to nearest # step} other {Round {axis} to nearest # steps}}",
         "xStepValue": "X: {value}",
-        "yStepValue": "Y: {value}"
+        "yStepValue": "Y: {value}",
+        "aboutSteps": "About the rounding steps",
+        "touchStepDescription": "Tap X or Y to step through the rounding options. To pick one directly, open Coordinate Rounding."
     },
     "coordinateSheet": {
         "countAbbreviation": "Ct",
@@ -1391,9 +1416,13 @@
                 "arc": "Click both ends of the arc, then click to set its curve.",
                 "circle": "Drag from the center to set the radius.",
                 "drag": "Drag on the field to draw the prop. It is on the field from the playhead's count.",
-                "polygon": "Click each corner, then double-click to finish."
+                "polygon": "Click each corner, then double-click to finish.",
+                "polygonTouch": "Tap each corner, then tap Finish.",
+                "arcTouch": "Tap both ends of the arc, then tap to set its curve."
             },
-            "title": "Draw a prop"
+            "title": "Draw a prop",
+            "finish": "Finish",
+            "undoPoint": "Undo point"
         },
         "edit": "Edit prop",
         "editTitle": "Edit Prop",
@@ -1525,7 +1554,17 @@
         "general.appearance": "Appearance",
         "general.appearance.dark": "Dark",
         "general.appearance.light": "Light",
-        "general.automaticUpdates": "Automatically download and install updates",
+        "general.updates": "Updates",
+        "general.updates.version": "You have OpenMarch {version}.",
+        "general.updates.checking": "You have OpenMarch {version}. Checking for updates…",
+        "general.updates.upToDate": "OpenMarch {version} is the latest version.",
+        "general.updates.available": "OpenMarch {version} is available.",
+        "general.updates.downloading": "Downloading OpenMarch {version}: {percent}%",
+        "general.updates.ready": "OpenMarch {version} is ready. It installs the next time you quit, or now from the update button in the title bar.",
+        "general.updates.failed": "The update didn't work. You have OpenMarch {version}.",
+        "general.checkForUpdates": "Check for updates",
+        "general.automaticDownload": "Download updates automatically",
+        "general.automaticDownload.description": "Updates install when you quit OpenMarch, or right away with Update now.",
         "general.description": "Editor mode, language and other app-wide preferences.",
         "general.editorMode": "Editor mode",
         "general.editorMode.basic": "Basic",
@@ -1738,6 +1777,7 @@
             },
             "pivot": {
                 "aria": "Pivot: {pivot}",
+                "backToCenter": "Back to the center",
                 "custom": "Pivot: where it was dragged on the field",
                 "label": "Pivot",
                 "names": {
@@ -1805,7 +1845,13 @@
                 "label": "Who goes where"
             },
             "drawHintFor": "Drag on the field to draw {shape, select, block {a box} circle {a circle} line {a line} curve {a curve} arc {an arc} other {a shape}} · <keys></keys> to cancel",
-            "drawPointsHintFor": "Drag on the field to draw {shape, select, line {a line} curve {a curve} arc {an arc} other {a shape}}, or click point after point · <keys></keys> to cancel"
+            "drawPointsHintFor": "Drag on the field to draw {shape, select, line {a line} curve {a curve} arc {an arc} other {a shape}}, or click point after point · <keys></keys> to cancel",
+            "finish": "Finish",
+            "undoPoint": "Undo point",
+            "discard": "Discard",
+            "drawHintTouchFor": "Drag on the field to draw {shape, select, block {a box} circle {a circle} line {a line} curve {a curve} arc {an arc} other {a shape}}",
+            "drawPointsHintTouchFor": "Drag on the field to draw {shape, select, line {a line} curve {a curve} arc {an arc} other {a shape}}, or tap point after point",
+            "pointsHintTouch": "Tap to add points · Double-tap or Finish to end"
         },
         "placed": {
             "label": "{name} · {count, plural, one {{interval} step} other {{interval} steps}}",
@@ -2111,7 +2157,8 @@
             "tab": {
                 "greyed": "{name}: {reason}",
                 "kinds": "Shape kinds",
-                "ringHintKeys": "Hold <keys></keys> on the field for the shape ring"
+                "ringHintKeys": "Hold <keys></keys> on the field for the shape ring",
+                "ringCaption": "Ring"
             }
         },
         "transform": {
@@ -2188,14 +2235,14 @@
             "inShapeOrFollowTheLeader": "{shapeCount, plural, =0 {} one {{shapeNames} is in a shape} other {{shapeNames} are in a shape}}{leaderCount, plural, =0 {} other {{shapeCount, plural, =0 {} other {, and }}}}{leaderCount, plural, =0 {} one {{leaderNames} follows the leader} other {{leaderNames} follow the leader}}{orderCount, plural, =0 {} other {{shapeCount, plural, =0 {{leaderCount, plural, =0 {} other {, and }}} other {, and }}}}{orderCount, plural, =0 {} one {{orderNames} shares a curved move with a follow-the-leader order} other {{orderNames} share a curved move with a follow-the-leader order}}, so {count, plural, one {it keeps its} other {they keep their}} move here.",
             "passThrough": {
                 "catchUp": "Now catches up to the set at the end of {caughtUp}",
-                "keepStops": {
-                    "pages": "{count, plural, =1 {Keep Page {first} as a keyframe} other {Keep Pages {first}–{last} as keyframes}}",
-                    "unnamed": "Keep them as keyframes"
+                "stopAtEnd": {
+                    "pages": "{count, plural, =1 {Stop at the end of Page {first}} other {Stop at the ends of Pages {first}–{last}}}",
+                    "unnamed": "Stop at the ends of those pages"
                 },
-                "keepStopsError": "Couldn't keep those pages as keyframes",
-                "noLongerStop": {
-                    "pages": "{count, plural, =1 {Page {first} is no longer a keyframe} other {Pages {first}–{last} are no longer keyframes}}",
-                    "unnamed": "The pages inside this move are no longer keyframes"
+                "stopAtEndError": "Couldn't stop the marchers at the ends of those pages",
+                "walksThrough": {
+                    "pages": "{count, plural, =1 {Now walks straight through the end of Page {first}} other {Now walks straight through the ends of Pages {first}–{last}}}",
+                    "unnamed": "Now walks straight through the ends of the pages inside this move"
                 },
                 "through": "Now moves straight through {through}",
                 "throughAndCatchUp": "Now moves straight through {through}, then catches up to the set at the end of {caughtUp}"
@@ -2314,6 +2361,7 @@
                 "subsetToggle": "Subset"
             },
             "label": "Page {pageName}",
+            "optionsLabel": "Page {pageName} options",
             "homeTooltip": "Home: the start of the show (page {page}'s set)"
         },
         "rangeMenu": {
@@ -2497,6 +2545,8 @@
             "passedSets": "{count, plural, =1 {set {names}} other {sets {names}}}",
             "through": "· through {sets}",
             "editingThrough": "{editing}, through {sets}",
+            "held": "· {count} of {total} {held}",
+            "withHeld": "{rest}, {count} of {total} {held}",
             "afterPaused": "{paused}. {rest}",
             "withLoop": "{rest}. {key} loops {loop}",
             "loops": "<keys></keys> loops {loop}"
@@ -2749,6 +2799,23 @@
         },
         "departure": {
             "title": "Moves again · Page {page}, count {count}"
+        },
+        "touchTransport": {
+            "playMenu": "Ways to play",
+            "goTo": "Go to",
+            "start": "Start",
+            "countBack": "Count back",
+            "countOn": "Count on",
+            "end": "End",
+            "playback": "Playback",
+            "speed": "Speed",
+            "sound": "Sound",
+            "view": "View",
+            "fit": "Fit",
+            "atPlayhead": "At the playhead",
+            "newPage": "New page",
+            "newSubset": "New subset",
+            "compact": "Compact"
         }
     },
     "titlebar": {
@@ -2767,6 +2834,8 @@
         }
     },
     "toolbar": {
+        "showControls": "Show the toolbar",
+        "hideControls": "Hide the toolbar",
         "alignment": {
             "lockXCaption": "Lock X",
             "lockYCaption": "Lock Y",
@@ -2826,21 +2895,50 @@
             "shapesAlways": "Always",
             "shapesOff": "Off",
             "shapesSelected": "When selected"
-        }
-    },
-    "versionCheck": {
-        "error": {
-            "fetchFailed": "An error occurred while fetching the version.",
-            "message": "Error: {message}",
-            "noVersion": "Unable to fetch latest version."
         },
-        "installLinux": "Install for Linux",
-        "installMacArm": "Install for Apple Silicon",
-        "installMacIntel": "Install for Intel Mac",
-        "installWindows": "Install for Windows",
-        "skipVersion": "Skip this version",
-        "title": "New Version Available",
-        "trigger": "New Version Available!"
+        "alignmentTabShort": "Align"
+    },
+    "updates": {
+        "pill": {
+            "available": "Update available",
+            "downloading": "Updating {percent}%",
+            "downloadingQuiet": "Downloading an update: {percent}%",
+            "ready": "Update ready",
+            "failed": "Update failed"
+        },
+        "popover": {
+            "current": "You have {version}.",
+            "availableBody": "Download it now. It installs when you choose Update now, or the next time you quit.",
+            "downloadingBody": "{transferred} of {total} MB, {speed} MB/s",
+            "downloadingStarting": "Starting the download…",
+            "readyBody": "Update now closes your show, installs the update and opens OpenMarch and your show again. Your work is already saved.",
+            "moveBody": "macOS can only update OpenMarch in your Applications folder. Move it there, and OpenMarch opens again from Applications.",
+            "errorBody": "The update couldn't download. Try again, or download the installer and run it yourself.",
+            "installFailedBody": "OpenMarch {version} didn't install. Download the installer and run it yourself."
+        },
+        "action": {
+            "download": "Download",
+            "updateNow": "Update now",
+            "later": "Later",
+            "retry": "Try again",
+            "downloadInstaller": "Download installer",
+            "moveToApplications": "Move to Applications",
+            "whatsNew": "What's new"
+        },
+        "toast": {
+            "checking": "Checking for updates…",
+            "upToDate": "OpenMarch {version} is the latest version.",
+            "available": "OpenMarch {version} is available.",
+            "downloading": "It's downloading now. The update button at the top left shows its progress.",
+            "ready": "OpenMarch {version} is ready to install.",
+            "checkFailed": "Couldn't check for updates."
+        },
+        "unsupported": {
+            "development": "Updates are off in development builds.",
+            "snap": "The Snap Store keeps this copy of OpenMarch up to date.",
+            "linuxPackage": "This copy of OpenMarch can't update itself. Download new versions from openmarch.com.",
+            "noFeed": "This build of OpenMarch doesn't update itself. Download each new build by hand."
+        }
     },
     "view3d": {
         "autoOpenPrompt": {
@@ -2898,7 +2996,8 @@
             "pickSeat": "Pick a seat",
             "pickSeatTooltip": "Pick a seat: click a seat in the stands to sit there",
             "venue": "Venue",
-            "freeCamera": "Free view"
+            "freeCamera": "Free view",
+            "director": "Director"
         },
         "readout": {
             "count": "Count {count} of {total}",
@@ -3232,6 +3331,36 @@
             "designer": "Designer",
             "client": "Client",
             "optional": "Optional"
+        },
+        "performer": {
+            "title": "Performer defaults",
+            "description": "How marchers move in the 3D View wherever nothing more specific is set.",
+            "stepOffFoot": {
+                "label": "Step off on",
+                "left": "Left foot",
+                "right": "Right foot"
+            },
+            "dotMode": {
+                "label": "Dot marks",
+                "foot": "Foot on the dot",
+                "body": "Body center"
+            },
+            "directionChange": {
+                "label": "Direction changes",
+                "corner": "Round the corner",
+                "direct": "Straight across"
+            },
+            "holdWhileBandMoves": {
+                "label": "Holding while others move",
+                "markTime": "Mark time",
+                "highMarkTime": "High mark time",
+                "stand": "Stand"
+            },
+            "percussionTravel": {
+                "label": "Drums travel sideways",
+                "crab": "Crab step",
+                "slide": "Slide"
+            }
         }
     },
     "canvas": {
@@ -3263,6 +3392,7 @@
         "marchers": "Marchers",
         "metronome": "Metronome",
         "mobile": "Mobile app",
+        "props": "Props",
         "music": "Music",
         "renderFail": "Sidebar modal content failed to render",
         "settings": "Show settings"
@@ -3287,6 +3417,19 @@
         }
     },
     "touch": {
+        "dragMode": {
+            "auto": "Auto",
+            "autoDescribe": "{device, select, pencil {One finger moves the view. Apple Pencil, or press and hold then drag, draws a box.} other {One finger moves the view. A pen, or press and hold then drag, draws a box.}}",
+            "box": "Box",
+            "boxDescribe": "{device, select, pencil {One finger or Apple Pencil draws a box to select. Two fingers move the view.} other {One finger or a pen draws a box to select. Two fingers move the view.}}",
+            "button": "Drag on empty field: {label}. {describe} Tap to change",
+            "lasso": "Lasso",
+            "lassoDescribe": "{device, select, pencil {One finger or Apple Pencil draws around marchers to select them. Two fingers move the view.} other {One finger or a pen draws around marchers to select them. Two fingers move the view.}}",
+            "menu": "Drag on empty field",
+            "pan": "Pan",
+            "panDescribe": "{device, select, pencil {One finger or Apple Pencil moves the view.} other {One finger or a pen moves the view.}}",
+            "prefix": "Drag:"
+        },
         "modifiers": {
             "add": "Add",
             "addHint": "Add: hold, or tap to keep on. Tapping marchers adds them to the selection",
@@ -3295,11 +3438,13 @@
             "explain": {
                 "add": "Tap marchers to add or remove them.",
                 "constrain": "Equal spacings, one axis when moving, flips proportional scaling.",
+                "dragMode": "What one finger or the pen does on empty field: move the view, or draw a box or lasso.",
                 "fine": "Marchers move slowly, off the grid. Shapes leave the half steps but still catch lines. Turns go by whole degrees.",
                 "fromCenter": "Boxes draw and resize from their center.",
                 "grip": "Drag to move.",
                 "help": "Gestures.",
-                "snap": "Turns Snap to steps and lines on or off."
+                "snap": "Turns Snap to steps and lines on or off.",
+                "subtract": "A box or lasso takes marchers out of the selection."
             },
             "fine": "Fine",
             "fineHint": "Fine: hold, or tap to keep on. Marchers move slowly, off the grid; shapes leave the half steps; turns go by whole degrees",
@@ -3310,12 +3455,17 @@
             "help": "What these buttons do",
             "helpList": {
                 "add": "<b>Add</b> taps add to the selection · <b>Snap off</b> moves freely",
+                "dragMode": "<b>Drag</b> chooses what one finger does on empty field: move the view, or draw a box or lasso",
                 "fine": "<b>Fine</b> exact drags and turns · <b>Equal</b> equal spacings",
                 "fromCenter": "<b>From center</b> boxes grow from the middle",
                 "toggles": "<b>Tap</b> a button to keep it on, or <b>hold</b> it while you drag"
             },
-            "noSnap": "Snap off"
-        }
+            "noSnap": "Snap off",
+            "subtract": "Subtract",
+            "subtractHint": "Subtract: hold, or tap to keep on. A box or lasso takes the marchers it covers out of the selection"
+        },
+        "redone": "Redone",
+        "undone": "Undone"
     },
     "shortcutsDialog": {
         "movement": {
@@ -3423,8 +3573,11 @@
             "title": "Help",
             "showShortcuts": "Keyboard Shortcuts",
             "website": "Website",
-            "guides": "Docs/Guides"
+            "guides": "Docs/Guides",
+            "reportFeedback": "Report a Bug or Send Feedback…",
+            "viewMyReports": "View My Reports"
         },
+        "checkForUpdates": "Check for Updates…",
         "withShortcut": "{label}  ({shortcut})"
     },
     "fileDialog": {
@@ -3811,6 +3964,91 @@
         "label": "Workspace",
         "editor": "Editor",
         "preview": "Preview"
+    },
+    "feedback": {
+        "window.title": "Report a bug or send feedback",
+        "signIn.heading": "Sign in to send a report",
+        "signIn.why": "So you can follow your report and we can tell you what happens to it.",
+        "signIn.button": "Sign in",
+        "signIn.alternatives": "Rather not sign in? <github>Report it on GitHub</github> or <discord>ask on Discord</discord>.",
+        "sent.heading": "Thanks for your report",
+        "sent.body": "We've emailed you a copy. If it becomes a GitHub issue, we'll email you the link so you can follow it.",
+        "sent.another": "Send another",
+        "viewMyReports": "View my reports",
+        "type.label": "What's this about?",
+        "type.broken": "Something is broken",
+        "type.broken.hint": "A bug, crash or something that doesn't work right",
+        "type.feature": "Feature request",
+        "type.feature.hint": "Something you'd like OpenMarch to do",
+        "type.feedback": "General feedback",
+        "type.feedback.hint": "Anything else you'd like to tell us",
+        "title.label": "Summary",
+        "title.placeholder": "In one line, what's this about?",
+        "question.whatWentWrong": "What went wrong?",
+        "question.whatWentWrong.placeholder": "Describe what happened",
+        "question.expected": "What did you expect to happen?",
+        "question.expected.placeholder": "Describe what should have happened",
+        "question.steps": "How can we make it happen again?",
+        "question.steps.placeholder": "1. Open a show\n2. …",
+        "question.feature": "What would you like OpenMarch to do?",
+        "question.feature.placeholder": "Describe the feature and what you'd use it for",
+        "question.ideas": "Ideas for how it could work",
+        "question.ideas.placeholder": "Sketches, examples from other apps, anything that helps",
+        "question.feedback": "What would you like to tell us?",
+        "question.feedback.placeholder": "Your feedback",
+        "optional": "(optional)",
+        "attach.label": "Attachments",
+        "attach.showFile": "Send a copy of my show",
+        "attach.showFile.scrubbed": "Performer names and notes are removed first.",
+        "attach.music": "Include music",
+        "attach.noShow": "Open a show to send a copy of it with your report.",
+        "attach.diagnostics": "Your app's recent actions and errors are sent too, to help us find the problem.",
+        "record.start": "Record the screen",
+        "record.microphone": "With microphone",
+        "record.hint": "Records only the OpenMarch window, for up to 5 minutes. The report steps aside while you record: show us the problem while you talk us through it.",
+        "record.recording": "Recording {time}",
+        "record.stop": "Stop",
+        "record.done": "Recording ready ({time})",
+        "record.discard": "Discard",
+        "record.failed.denied": "Recording didn't start. Check that OpenMarch may use the screen and microphone in your system settings.",
+        "record.failed.unsupported": "Recording isn't available on this computer.",
+        "public.label": "What we may share",
+        "public.notice": "Reports may be summarized in a public GitHub issue. We never post your name, email or files unless you allow it below.",
+        "public.video": "My recording may be posted publicly",
+        "public.showFile": "My show file may be posted publicly",
+        "public.credit": "Credit me by name if this becomes a public issue",
+        "send": "Send report",
+        "sending": "Sending…",
+        "retention": "Files you send with a report are deleted from our servers after 2 months.",
+        "error.failed": "Your report couldn't be sent. Check your connection and try again.",
+        "attach.music.off": "The music isn't sent.",
+        "attach.music.on": "The music is sent too.",
+        "sending.recording": "Uploading the recording…",
+        "sending.show_file": "Uploading your show…",
+        "sending.diagnostics": "Uploading diagnostics…",
+        "sending.creating": "Sending…",
+        "sent.view": "View this report",
+        "error.signedOut": "You've been signed out. Sign in again and send the report.",
+        "error.tooMany": "You've sent a lot of reports today. Please try again tomorrow.",
+        "error.showChanged": "A different show is open now. Check the attachment and send again.",
+        "sent.showTooLarge": "Your show was too large to attach (over 1 GB), so the report was sent without it.",
+        "close": "Close",
+        "record.stopAndReturn": "Stop and go back to the report",
+        "record.webHint": "Your browser asks what to share: choose this tab. The report steps aside while you record, for up to 5 minutes. Show us the problem while you talk us through it.",
+        "record.failed.webDenied": "Recording didn't start. Choose this tab when your browser asks, and allow the microphone if you turned it on.",
+        "record.failed.webUnsupported": "Recording isn't available in this browser.",
+        "drawer.show": "Show the report",
+        "drawer.hide": "Hide the report",
+        "drawer.resize": "Resize the report",
+        "discard.question": "Discard this report?",
+        "discard.body": "What you've written and recorded will be lost.",
+        "discard.confirm": "Discard",
+        "discard.keep": "Keep editing",
+        "record.preview": "Your recording",
+        "error.details": "Details: {message}",
+        "error.refused": "Your report couldn't be sent. Try again, and if it keeps happening, tell us on Discord.",
+        "record.failed.microphone": "OpenMarch may not use the microphone. Turn off With microphone to record without sound, or allow the microphone in your system settings.",
+        "record.failed.webMicrophone": "Your browser didn't allow the microphone. Turn off With microphone to record without sound, or allow the microphone for this site."
     },
     "fieldEdits": {
         "issues": {
