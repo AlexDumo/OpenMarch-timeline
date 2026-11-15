@@ -3,7 +3,13 @@ import { describe, expect, it } from "vitest";
 import { hold, playingLips, type HoldFamily, type HoldState } from "../holds";
 import { bounds, PART_METAL, type Vec3 } from "../mesh";
 import type { WoodwindModelId } from "../model";
-import { SAX_BODY_TURN, saxStack, saxTurned } from "../saxophones";
+import {
+    BARI_NECK_SWIVEL,
+    SAX_BODY_TURN,
+    saxAxis,
+    saxStack,
+    saxTurned,
+} from "../saxophones";
 import {
     SAX_BELL_TILT,
     SAX_SHAPES,
@@ -173,15 +179,18 @@ describe("the sax held in front", () => {
             expect(keys[0]).toBeLessThan(-0.99);
         });
 
-        it(`${id}: the mouthpiece, body and bell in one plane, front to back`, () => {
-            // nothing further either side of the plane x = 0 than the bell's
-            // rim (the bari's crook reaches a little past it on +X)
-            const m = woodwindModel(id, "low");
-            const b = bounds(m.pieces);
-            const rim = WOODWIND_DIMENSIONS[id].bell / 2 + 0.005;
-            expect(b.max[0]).toBeLessThan(rim);
-            expect(b.min[0]).toBeGreaterThan(-rim);
-        });
+        it.runIf(id !== "bariSax")(
+            `${id}: the mouthpiece, body and bell in one plane, front to back`,
+            () => {
+                // nothing further either side of the plane x = 0 than the bell's
+                // rim (the bari's crook reaches a little past it on +X)
+                const m = woodwindModel(id, "low");
+                const b = bounds(m.pieces);
+                const rim = WOODWIND_DIMENSIONS[id].bell / 2 + 0.005;
+                expect(b.max[0]).toBeLessThan(rim);
+                expect(b.min[0]).toBeGreaterThan(-rim);
+            },
+        );
 
         it(`${id}: the hands on the stacks, left hand upper, right hand lower`, () => {
             const family = familyOf(id);
@@ -191,8 +200,9 @@ describe("the sax held in front", () => {
             const lower = point(saxStack(id, 0.66));
             const knuckles = (a: typeof h.left) =>
                 [0, 1, 2].map((k) => a.wrist[k] + a.fingers[k] * 0.1) as Vec3;
-            // the alto and tenor share a hold, so their hands sit between their stacks
-            const reach = id === "bariSax" ? 0.06 : 0.1;
+            // the curled fingers wrap round in front of the pearls; the alto
+            // and tenor share a hold, so their hands sit between their stacks
+            const reach = id === "bariSax" ? 0.06 : 0.15;
             expect(dist(knuckles(h.left), upper)).toBeLessThan(reach);
             expect(dist(knuckles(h.right), lower)).toBeLessThan(reach);
             expect(h.left.wrist[1]).toBeGreaterThan(h.right.wrist[1]);
@@ -200,15 +210,31 @@ describe("the sax held in front", () => {
             expect(h.left.wrist[0]).toBeGreaterThan(h.right.wrist[0]);
             expect(h.left.fingers[0]).toBeLessThan(0);
             if (id === "bariSax") {
-                // the right elbow tucked in at the side, the forearm reaching
-                // down the horn to the stack at the right hip (owner, 2026-11-14)
-                expect(h.right.elbow[0]).toBeGreaterThan(-0.23);
-                expect(h.right.fingers[1]).toBeLessThan(-0.5);
+                // the right elbow tucked in at the side and drawn back, the hand
+                // coming onto the stack from the right hip, leveling out and
+                // wrapping inward (owner and review, 2026-11-14)
+                expect(h.right.elbow[0]).toBeGreaterThan(-0.26);
+                expect(h.right.elbow[2]).toBeLessThan(0);
+                expect(h.right.fingers[0]).toBeGreaterThan(0.2);
+                expect(h.right.fingers[2]).toBeGreaterThan(0.5);
             } else {
                 expect(h.right.fingers[0]).toBeGreaterThan(0);
             }
         });
     }
+
+    it("bariSax: the neck swivelled in its receiver, the body and bell turned toward −X", () => {
+        // players turn the bari's neck so it comes in to the mouth from by
+        // the left collarbone while the bell still faces forward (owner and
+        // review, 2026-11-14)
+        expect(BARI_NECK_SWIVEL).toBeGreaterThan((30 * Math.PI) / 180);
+        const top = saxAxis("bariSax", 0);
+        const bow = saxAxis("bariSax", 1);
+        expect(top[0]).toBeGreaterThan(0.05);
+        expect(Math.abs(bow[0] - top[0])).toBeLessThan(0.001);
+        const rim = bellRim("bariSax");
+        expect(rim[0]).toBeLessThan(top[0]);
+    });
 
     it("altoSax and tenorSax hang straight down, centered, the neck straight back", () => {
         const { point, y } = placement("up");
@@ -228,12 +254,9 @@ describe("the sax held in front", () => {
 
     it("bariSax runs from by the left shoulder down across to the right hip", () => {
         const { point } = placement("up", "bariSax");
-        const sh = SAX_SHAPES.bariSax;
-        const [, yb] = woodwindModel("bariSax").leftGrip;
-        const bowZ =
-            WOODWIND_DIMENSIONS.bariSax.length - sh.bowWidth / 2 - sh.rBow;
-        const top = point([0, yb, sh.pigtail!.bowTop]);
-        const bow = point([0, yb, bowZ]);
+        // the body's axis at its top (by the top loop) and at the bow
+        const top = point(saxAxis("bariSax", 0));
+        const bow = point(saxAxis("bariSax", 1));
         expect(top[0]).toBeGreaterThan(0.05);
         // the bow rests just in front of the right thigh (owner, 2026-11-14:
         // nearly touching the leg), its axis about a bow's radius off it
@@ -241,7 +264,7 @@ describe("the sax held in front", () => {
         expect(bow[0]).toBeGreaterThan(-0.25);
         expect(bow[1]).toBeLessThan(0.85);
         expect(bow[2]).toBeGreaterThan(0.12);
-        expect(bow[2]).toBeLessThan(0.26);
+        expect(bow[2]).toBeLessThan(0.3);
     });
 });
 
@@ -288,12 +311,15 @@ describe("the saxes and bass clarinet at trail", () => {
                 expect(Math.abs(z[1])).toBeLessThan(0.01);
                 // the nearest point of the body tube to the fist
                 const f = fist(family, "trail");
-                const top = point([0, yb, 0]);
+                // the body's axis (the bari's swivelled about its receiver)
+                const [ax, ay] =
+                    id === "bassClarinet" ? [0, yb] : saxAxis(id as SaxId, 0);
+                const top = point([ax, ay, 0]);
                 const k = [0, 1, 2].reduce(
                     (s, i) => s + (f[i] - top[i]) * z[i],
                     0,
                 );
-                const near = point([0, yb, k]);
+                const near = point([ax, ay, k]);
                 // the alto and tenor share a hold, its tube between theirs
                 expect(dist(near, f)).toBeLessThan(0.05);
             });

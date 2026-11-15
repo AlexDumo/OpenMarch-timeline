@@ -386,30 +386,30 @@ points and where the elbows go.
   (`SAX_BODY_TURN` in `saxophones.ts`) to line them up, which leaves the
   pearls facing the performer's right. The hands come from the model's own
   stacks (`saxHands` in `holds.ts`; the alto and tenor share a hold, so
-  their hands go between the two saxes' stacks): the left hand's knuckles in
-  front of the upper stack, its fingers wrapping round to the pearls, the
-  right hand's at the front edge of the lower stack from the right side,
-  clear of the bell, each hand straight on from its forearm. Carry: the
+  their hands go between the two saxes' stacks), in the real grip: the
+  thumbs on the player's side of the tube, the palms on its flanks and the
+  fingers curled round onto the pearls, so each stiff mitt points along the
+  curled fingers' chord, bent toward the palm at the wrist by up to 30
+  degrees (`SAX_WRIST_BEND`). The elbows hang under the shoulders. Carry: the
   playing orientation raised so the mouthpiece is at eye level, on the
   center line 0.13 m out; the hands stay on the stacks. Trail: level along
   front to back through the right fist, the mouthpiece forward, the bow and
   bell hanging straight down below the body tube, clear of the leg; the
   arms are the brass trail's.
 - **bari sax.** A hold of its own (owner, 2026-11-14, with marching
-  photos). The model follows the same rule as the alto and tenor: held
-  straight up and down, the mouthpiece would come straight back to the
-  player and the bell face straight away, with the top loop, crook and neck
-  receiver on the near side of the body in the same plane. Up: too long to
-  hang straight in front, it is worn sideways down the body, as marching
-  photos show: the neck by the left side of the face and the bow resting
-  just in front of the right thigh, nearly touching the leg. The sax hold
-  turned 50 degrees toward the performer's left (`BARI_YAW_DEG`), which
-  carries the body out to the left with the neck coming in to the mouth
-  from there, rolled 21 degrees (`BARI_ROLL_DEG`) so the bow swings across
-  to the right thigh, and its bottom tipped back 5 degrees
-  (`BARI_PITCH_DEG`); the bell opens forward and a little left. The right
-  elbow hangs tucked in at the side, the forearm reaching down the horn to
-  the lower stack (owner, 2026-11-14). Carry: as the
+  photos and an independent review). The model's neck is swivelled 40
+  degrees in its receiver (`BARI_NECK_SWIVEL` in `saxophones.ts`), as
+  players turn it, with the body 0.11 m toward the player's left of the
+  mouthpiece (`BARI_NECK_REACH`): the neck reaches across to the mouth from
+  by the left side of the face while the body and bell face forward. Up:
+  too long to hang straight in front, it is worn sideways down the body,
+  the bow just in front of the right thigh: the sax hold turned 28 degrees
+  toward the performer's left (`BARI_YAW_DEG`), rolled 23 degrees
+  (`BARI_ROLL_DEG`) so the bow swings across to the right thigh, and its
+  bottom tipped 3 degrees forward (`BARI_PITCH_DEG`) to clear the belly; the
+  bell opens up and forward, a little left. The left hand reaches across the
+  chest to the upper stack, its elbow down at the side; the right comes onto
+  the lower stack from the right hip, its elbow drawn back. Carry: as the
   alto's, the hands on the bari's upper stacks so they reach at eye level.
   Trail: as the alto's, the tube a little further out for the wide bell.
 - **snare, tenors.** Elbows at the sides, a little forward, not winged
