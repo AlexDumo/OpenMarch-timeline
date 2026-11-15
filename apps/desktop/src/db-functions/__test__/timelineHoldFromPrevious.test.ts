@@ -941,6 +941,51 @@ describeDbTests(
                 [a, b].sort(),
             );
         });
+
+        it("with Held and other marchers dragged together, the after-write step runs once per move written, with whose positions went there", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b, c } = await show(db);
+            await holdFromPreviousPage({
+                db,
+                pageBox: PAGE3,
+                marcherIds: [a, b],
+            });
+            const timelineOf = async (row: { transition_id: number }) =>
+                (await db
+                    .select()
+                    .from(schema.timeline_transitions)
+                    .where(
+                        eqId(schema.timeline_transitions.id, row.transition_id),
+                    )
+                    .get())!.timeline_id;
+            const arrival = await timelineOf(
+                (await rowsOf(db, a)).find((r) => r.end_beat === PAGE3.start)!,
+            );
+            const seen: { timelineId: number | null; ids: number[] }[] = [];
+            await moveMarchersInTarget({
+                db,
+                target: { kind: "range", ...PAGE3 },
+                moves: [
+                    { marcherId: a, x: FAR[0], y: FAR[1] },
+                    { marcherId: b, x: LEFT[0], y: LEFT[1] },
+                    { marcherId: c, x: ELSEWHERE[0], y: ELSEWHERE[1] },
+                ],
+                afterWrite: async (_tx, timelineId, ids) => {
+                    seen.push({ timelineId, ids: [...ids].sort() });
+                },
+            });
+            // The Held ones with the move arriving at their hold, c with page 3's new move
+            const page3 = await timelineOf(
+                (await rowsOf(db, c)).find((r) => r.end_beat === PAGE3.end)!,
+            );
+            expect(page3).not.toBe(arrival);
+            expect(seen).toEqual([
+                { timelineId: arrival, ids: [a, b].sort() },
+                { timelineId: page3, ids: [c] },
+            ]);
+        });
     },
 );
 

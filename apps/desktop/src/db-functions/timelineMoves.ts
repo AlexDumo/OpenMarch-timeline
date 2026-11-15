@@ -1061,6 +1061,19 @@ export const moveMarchersFromFlagInstead = async ({
         },
     );
 
+/**
+ * App data written inside a coordinate edit, after its positions (a shape recipe, ADR 0006): called
+ * once per move the positions went to, with that move (`null` for starting spots) and the marchers
+ * whose positions went there. A drag inside holds writes to each move arriving at them, beside the
+ * window's move for everyone else, so one edit can call it several times. Resolving to `false`
+ * says that call wrote nothing.
+ */
+export type TimelineAfterWrite = (
+    tx: DbTransaction,
+    timelineId: number | null,
+    marcherIds: readonly number[],
+) => Promise<void | boolean>;
+
 /** Thrown inside an edit that turned out to write nothing, so it rolls back instead of failing. */
 class NothingWritten extends Error {
     constructor(readonly result: TimelineMoveResult) {
@@ -1163,21 +1176,6 @@ async function refuseLockedArrivals(
                 : `Marchers ${labels.join(", ")} are Held from Expert moves. Switch to Expert to edit them.`,
     });
 }
-
-/** The value occurring most often in `ids` (the smallest of a tie), or null when empty. */
-const mostCommon = (ids: readonly number[]): number | null => {
-    const counts = new Map<number, number>();
-    for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
-    let best: number | null = null;
-    for (const [id, n] of counts)
-        if (
-            best === null ||
-            n > counts.get(best)! ||
-            (n === counts.get(best)! && id < best)
-        )
-            best = id;
-    return best;
-};
 
 const wroteSomething = (r: TimelineMoveResult): boolean =>
     r.homes.length > 0 ||
@@ -1303,15 +1301,12 @@ export const moveMarchersInTarget = async ({
      */
     onStart?: () => void;
     /**
-     * Called inside the edit after the positions are written, with the move they belong to
-     * (`null` for homes, and for a drag inside holds from the starting spots only), so app data about them (a shape recipe, ADR 0006) is part of the same
-     * undo step. Not called for a range with no move to hold the positions. Resolving to `false`
-     * says it wrote nothing, so an edit that changed no positions either is still no undo step.
+     * Called inside the edit after the positions are written, once per move they went to
+     * (`TimelineAfterWrite`), so app data about them (a shape recipe, ADR 0006) is part of the
+     * same undo step. Resolving to `false` every time says it wrote nothing, so an edit that
+     * changed no positions either is still no undo step.
      */
-    afterWrite?: (
-        tx: DbTransaction,
-        timelineId: number | null,
-    ) => Promise<void | boolean>;
+    afterWrite?: TimelineAfterWrite;
 }): Promise<TimelineMoveResult> => {
     if (moves.length === 0) return emptyMoveResult();
     try {
@@ -1329,7 +1324,11 @@ export const moveMarchersInTarget = async ({
                     moves,
                     ghosts: target.ghosts ?? false,
                 });
-                await afterWrite?.(tx, target.timelineId);
+                await afterWrite?.(
+                    tx,
+                    target.timelineId,
+                    moves.map((m) => m.marcherId),
+                );
                 return result;
             }
             if (target.kind === "range" || target.kind === "point") {
@@ -1446,53 +1445,74 @@ export const moveMarchersInTarget = async ({
                     keepUnchanged,
                 });
                 await moveHeldHomesInTransaction(tx, homes, result);
-                // The selected move, else the one the marchers are in, since a move split off
-                // the page's shares its counts (UI-25). With only Held marchers, the move their
-                // edit went to (the most of them arrive in), so app data about their positions (a
-                // shape recipe) is saved with it; with only marchers Held from their starting
-                // spots, the homes (`null`), where their edit went
-                const marcherIds = rest.map((m) => m.marcherId);
-                const onlyHomes =
-                    marcherIds.length === 0 &&
-                    held.length === 0 &&
-                    homes.length > 0;
-                const timelineId = !afterWrite
-                    ? null
-                    : marcherIds.length === 0
-                      ? mostCommon(held.map((h) => h.timelineId))
-                      : target.kind === "range"
-                        ? (target.timelineId ??
-                          (await timelineHoldingMost(
-                              tx,
-                              marcherIds,
-                              target.end,
-                              target.start,
-                          )) ??
-                          (await timelineWithRange(tx, target)))
-                        : // Basic edits only moves over the page box (an Expert move is
-                          // refused), so those first, should a file hold others
-                          ((await timelineHoldingMost(
-                              tx,
-                              marcherIds,
-                              target.beat,
-                              target.box.start,
-                          )) ??
-                          (await timelineHoldingMost(
-                              tx,
-                              marcherIds,
-                              target.beat,
-                          )) ??
-                          (await timelineEndingAt(tx, target.beat)));
-                const wroteAppData =
-                    afterWrite && (timelineId !== null || onlyHomes)
-                        ? (await afterWrite(
-                              tx,
-                              onlyHomes ? null : timelineId,
-                          )) !== false
-                        : false;
+                // App data goes with each move the positions went to: Held marchers' edits to
+                // the moves arriving at their holds, those Held from their starting spots to the
+                // homes (`null`), and the rest to the window's move: the selected move, else the
+                // one they are in, since a move split off the page's shares its counts (UI-25).
+                // One call per move, so a shape whose members' edits went to one move (a Held
+                // shape) is saved with that move, whatever else the edit wrote
+                const writes: { timelineId: number | null; ids: number[] }[] =
+                    [];
+                if (afterWrite) {
+                    const byArrival = new Map<number, number[]>();
+                    for (const h of held)
+                        byArrival.set(h.timelineId, [
+                            ...(byArrival.get(h.timelineId) ?? []),
+                            h.move.marcherId,
+                        ]);
+                    for (const [timelineId, ids] of byArrival)
+                        writes.push({ timelineId, ids });
+                    if (homes.length > 0)
+                        writes.push({
+                            timelineId: null,
+                            ids: homes.map((h) => h.move.marcherId),
+                        });
+                    const marcherIds = rest.map((m) => m.marcherId);
+                    const restTimeline =
+                        marcherIds.length === 0
+                            ? null
+                            : target.kind === "range"
+                              ? (target.timelineId ??
+                                (await timelineHoldingMost(
+                                    tx,
+                                    marcherIds,
+                                    target.end,
+                                    target.start,
+                                )) ??
+                                (await timelineWithRange(tx, target)))
+                              : // Basic edits only moves over the page box (an Expert move is
+                                // refused), so those first, should a file hold others
+                                ((await timelineHoldingMost(
+                                    tx,
+                                    marcherIds,
+                                    target.beat,
+                                    target.box.start,
+                                )) ??
+                                (await timelineHoldingMost(
+                                    tx,
+                                    marcherIds,
+                                    target.beat,
+                                )) ??
+                                (await timelineEndingAt(tx, target.beat)));
+                    // A range with no move to hold their positions has nothing to save beside
+                    if (restTimeline !== null)
+                        writes.push({
+                            timelineId: restTimeline,
+                            ids: marcherIds,
+                        });
+                }
+                let wroteAppData = false;
+                let wroteHomeData = false;
+                for (const write of writes) {
+                    const wrote =
+                        (await afterWrite!(tx, write.timelineId, write.ids)) !==
+                        false;
+                    wroteAppData ||= wrote;
+                    if (write.timelineId === null) wroteHomeData ||= wrote;
+                }
                 // A shape placed at the starting spots is those marchers' hold: their Held
                 // holds from the starting spots go, in the same edit (owner, 2026-11-01)
-                if (onlyHomes && wroteAppData)
+                if (wroteHomeData)
                     await dropShapeHomeHoldsInTransaction(
                         tx,
                         homes.map((h) => h.move.marcherId),
@@ -1514,7 +1534,11 @@ export const moveMarchersInTarget = async ({
             });
             const placed =
                 afterWrite !== undefined &&
-                (await afterWrite(tx, null)) !== false;
+                (await afterWrite(
+                    tx,
+                    null,
+                    moves.map((m) => m.marcherId),
+                )) !== false;
             // A shape placed at the starting spots is those marchers' hold, as when it's placed
             // through a hold (above): their Held holds from the starting spots go, in this edit
             if (placed)

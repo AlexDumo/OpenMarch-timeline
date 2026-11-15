@@ -1,4 +1,5 @@
 import {
+    type TimelineAfterWrite,
     type TimelineEditTarget,
     type TimelineMarcherMove,
     type TimelineMovePage,
@@ -282,11 +283,8 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
      * for an edit written to an earlier plan after the playhead moved on (a shape placed on a scrub)
      */
     keepPlayhead?: boolean;
-    /** App data written in the same edit, such as a shape recipe (ADR 0006) */
-    afterWrite?: (
-        tx: DbTransaction,
-        timelineId: number | null,
-    ) => Promise<void | boolean>;
+    /** App data written in the same edit, such as a shape recipe (ADR 0006), once per move written */
+    afterWrite?: TimelineAfterWrite;
     /** `afterWrite` saves shape recipes itself, so placed boxes aren't kept up to date around it */
     writesShapes?: boolean;
     /**
