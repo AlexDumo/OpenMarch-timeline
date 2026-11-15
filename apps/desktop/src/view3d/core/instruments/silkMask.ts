@@ -55,7 +55,9 @@ export function silkMaskField(
         for (let k = 1; k < poly.length; k++) {
             const [ax, ay] = poly[k - 1];
             const [bx, by] = poly[k];
-            if (ay > y === by > y) continue;
+            const aAbove = ay > y;
+            const bAbove = by > y;
+            if (aAbove === bAbove) continue;
             xs.push(ax + ((y - ay) / (by - ay)) * (bx - ax));
         }
         xs.sort((p, q) => p - q);

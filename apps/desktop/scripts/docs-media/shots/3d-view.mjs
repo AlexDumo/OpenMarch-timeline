@@ -406,7 +406,7 @@ const shots = [
         async setup(ctx) {
             await seekInPage(ctx.page, 3, 0.5);
             const { view } = await open3d(ctx);
-            const panel = await paintSilks(view);
+            await paintSilks(view);
             const shapes = view.getByTestId("view3d-silk-shape-picker");
             // the shapes at the top of the panel, the Artwork row under them
             await shapes.evaluate((el) =>
