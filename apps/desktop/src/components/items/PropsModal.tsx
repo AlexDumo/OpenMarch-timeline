@@ -87,8 +87,10 @@ const itemLabel = (item: ItemWithMarcher) =>
  * surface, model, lock and Outline at the playhead.
  */
 export default function PropsModal() {
+    const { t } = useTranslate();
     return (
         <SidebarModalLauncher
+            name={t("sidebar.props")}
             contents={<PropListContents />}
             newContentId="props"
             buttonLabel={<CubeIcon size={24} />}

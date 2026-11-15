@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
+import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { FieldProperties } from "@openmarch/core";
 import {
@@ -47,13 +48,34 @@ const stampOf = (
 /**
  * Turns the field's prop tool on and off with the Props panel's Draw and
  * Front ensemble (`ItemDrawingStore`, C2.1). Escape turns it off through the
- * canvas's cancel action.
+ * canvas's cancel action. While a polygon or arc is drawn corner by corner, its
+ * last corner can be taken back, and a polygon finished, as its double-click
+ * does: the drawing card's Undo point and Finish in the touch layout
+ * (tablet 1.4).
  */
 export function useFieldPropTool(
     editor: FieldEditor,
     field: () => FieldProperties | null | undefined,
 ) {
     const latestField = useRef(field);
+    const shape = useSyncExternalStore(
+        useCallback((listener) => editor.subscribe(listener), [editor]),
+        () => editor.propToolShape(),
+    );
+    useActionHandler(
+        "propFinishDrawing",
+        () => {
+            editor.finishPropTool();
+        },
+        { enabled: shape?.canFinish ?? false },
+    );
+    useActionHandler(
+        "propRemoveLastPoint",
+        () => {
+            editor.removeLastPropPoint();
+        },
+        { enabled: (shape?.points ?? 0) > 0 },
+    );
     useEffect(() => {
         latestField.current = field;
     });

@@ -29,6 +29,7 @@ import {
 import { hornRowSpec } from "../marchers/hornRows";
 import { STAND_Y } from "../performerData";
 import { platformRig } from "../marchers/platformClip";
+import { restoreStillPose } from "@/view3d/window/performers/marchers/stillPose";
 
 async function body(): Promise<BufferGeometry> {
     const b = fs.readFileSync(
@@ -79,7 +80,7 @@ async function allClips() {
         b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength),
         "",
     );
-    return new Map(gltf.animations.map((c) => [c.name, c]));
+    return new Map(restoreStillPose(gltf.animations).map((c) => [c.name, c]));
 }
 
 async function clip8to5() {
@@ -90,7 +91,7 @@ async function clip8to5() {
         b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength),
         "",
     );
-    return gltf.animations.find((c) => c.name === "8to5")!;
+    return restoreStillPose(gltf.animations).find((c) => c.name === "8to5")!;
 }
 
 describe("rows per channel", () => {
@@ -632,7 +633,7 @@ describe("the clips the bake plays", () => {
             "",
         );
         const clips = Object.fromEntries(
-            gltf.animations
+            restoreStillPose(gltf.animations)
                 .filter((a) =>
                     ["8to5", "back8to5", "halt_8to5"].includes(a.name),
                 )

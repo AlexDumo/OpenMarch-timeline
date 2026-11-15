@@ -9,6 +9,7 @@ import {
     type RefObject,
 } from "react";
 import clsx from "clsx";
+import { useFieldTopInset } from "@/components/canvas/fieldLayers";
 import { useShallow } from "zustand/react/shallow";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import type { OrthographicCamera, WebGLRenderer } from "three";
@@ -18,7 +19,7 @@ import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { LABEL_SIZE_SCALE, useUiSettingsStore } from "@/stores/UiSettingsStore";
-import { useIsPreviewMode } from "@/stores/PreviewModeStore";
+import { isPreviewMode, useIsPreviewMode } from "@/stores/PreviewModeStore";
 import { onScreenToggles } from "@/stores/TouchModifierStore";
 import {
     allItemsQueryOptions,
@@ -100,6 +101,9 @@ import FieldOverlay from "./FieldOverlay";
 import TouchModifierButtons from "@/components/canvas/touch/TouchModifierButtons";
 import FieldContextMenu, { useFieldMenu } from "./FieldContextMenu";
 import { attachFieldPointerInput } from "./fieldPointerInput";
+import { attachFieldGestures } from "./fieldGestures";
+import { fingerRole, holdDragArea, penDrag } from "./fieldDragModes";
+import { runFieldHistory } from "./fieldHistory";
 import { cameraBounds, useFieldViewStore } from "./fieldView";
 import {
     attachFieldNavigation,
@@ -111,6 +115,7 @@ import {
 import { GlyphAtlas } from "./sdfText";
 import { selectionBoxPadding } from "./selectionRing";
 import { drawnSelectionBox, selectionHandles } from "./selectionFrame";
+import { fieldObstacleSource } from "./fieldObstacles";
 import { createThreeFieldTestApi } from "./threeFieldTestApi";
 import FieldLayer from "./layers/FieldLayer";
 import BackgroundImageLayer from "./layers/BackgroundImageLayer";
@@ -338,6 +343,8 @@ function ThreeFieldView() {
     const { dimming, look } = timeline;
     useShapeFocus(dimming);
     const root = useRef<HTMLDivElement>(null);
+    // #927: the bars at the field's top sit below the touch toolbar's panel
+    useFieldTopInset(root);
 
     // The field test API and the editor read the latest of these, not the render they came from
     const element = useRef<HTMLElement | null>(null);
@@ -377,9 +384,11 @@ function ThreeFieldView() {
         fieldProperties,
     };
     // #315: where a right-click opens the field's menu (`useFieldMenu`, below
-    // the editor), and whether it's open: a press that closes it does nothing more
-    const openMenuAt = useRef((_at: { x: number; y: number }) => {});
-    const menuShown = useRef(false);
+    // the editor), and the press that closes it, which does nothing more
+    const openMenuAt = useRef(
+        (_at: { x: number; y: number }, _marcher: number | null) => {},
+    );
+    const takeMenuPress = useRef((): boolean => false);
 
     const editor = useMemo(
         () =>
@@ -411,7 +420,8 @@ function ThreeFieldView() {
                         ),
                     // #558: the shape's hidden marchers aren't there to press while it's seen alone
                     marcherHidden: (id) => dimming.isHidden(id),
-                    takePress: () => menuShown.current || takeFieldPress(),
+                    takePress: () =>
+                        takeMenuPress.current() || takeFieldPress(),
                     selectionBoxPadding: () =>
                         selectionBoxPadding(useFieldViewStore.getState().zoom),
                     showPositions: (positions) =>
@@ -454,7 +464,7 @@ function ThreeFieldView() {
                         snapToRounding(point, latest.current.fieldProperties),
                     propDrawn: (outline) => latest.current.propDrawn(outline),
                     // #315: a right-click opens the field's menu there
-                    openMenu: (at) => openMenuAt.current(at.screen),
+                    openMenu: (at, hit) => openMenuAt.current(at.screen, hit),
                 },
                 {
                     isMac: isMacPlatform(),
@@ -495,6 +505,11 @@ function ThreeFieldView() {
         });
         return () => setShapeField(null);
     }, [marchers]);
+    // #933: the pill keeps off the selection box, the open shape and their handles
+    const obstacles = useMemo(
+        () => fieldObstacleSource(marchers, editor, items),
+        [marchers, editor, items],
+    );
     useShapeFieldModes(editor, isPlaying);
     useFieldPropTool(editor, () => latest.current.fieldProperties);
     const menu = useFieldMenu({
@@ -503,7 +518,7 @@ function ThreeFieldView() {
         hasSelection: selectedIds.length > 0,
     });
     openMenuAt.current = menu.openAt;
-    menuShown.current = menu.at !== null;
+    takeMenuPress.current = menu.takePress;
     const timelineMode = useTimelineResolverStore((s) => s.resolver !== null);
 
     useEffect(() => {
@@ -550,6 +565,23 @@ function ThreeFieldView() {
             () => useUiSettingsStore.getState().uiSettings.mouseSettings,
         );
     }, []);
+    // Fingers and the pen's palm rule (tablet plan 1.1): one finger on a
+    // marcher or the selection selects and moves it (1.2), elsewhere it does
+    // what the pill's drag mode says (1.3: pans in Auto, or draws a box or
+    // lasso); two pan and pinch, a long press asks the editor for a menu. Preview
+    // edits nothing, so there fingers only navigate
+    useEffect(() => {
+        if (!root.current) return;
+        return attachFieldGestures(root.current, () => element.current, {
+            editor: () => (isPreviewMode() ? null : editor),
+            singleFinger: (press) => fingerRole(editor, press),
+            holdDrag: (press) => holdDragArea(editor, press),
+            tap: (pointer) => {
+                if (!isPreviewMode()) editor.fingerTap(pointer);
+            },
+            history: runFieldHistory,
+        });
+    }, [editor]);
     // The view opens once the field and a page are loaded. Latched: a page
     // briefly unselected mustn't reset the view
     const [ready, setReady] = useState(false);
@@ -722,7 +754,12 @@ function ThreeFieldView() {
                     <ShapeEditor stepPx={fieldProperties.pixelsPerStep} />
                 )}
                 {/* Fine, Equal, From center, Add and Snap for a tablet: touch layout only */}
-                {!preview && <TouchModifierButtons marchers={marchers} />}
+                {!preview && (
+                    <TouchModifierButtons
+                        marchers={marchers}
+                        obstacles={obstacles}
+                    />
+                )}
                 <FavoritesRing />
                 {/* A command asking its parameters docks here, over the field's top (#354) */}
                 <DockedCommandBar />
@@ -730,6 +767,7 @@ function ThreeFieldView() {
                 <HandleMenu />
                 <FieldContextMenu
                     at={menu.at}
+                    marcher={menu.marcher}
                     onClose={menu.close}
                     selectedCount={selectedIds.length}
                     timelineMode={timelineMode}
@@ -964,7 +1002,12 @@ function EditorInput({
     const preview = useIsPreviewMode();
 
     useEffect(
-        () => (preview ? undefined : attachFieldPointerInput(canvas, editor)),
+        () =>
+            preview
+                ? undefined
+                : attachFieldPointerInput(canvas, editor, {
+                      penDrag: (press) => penDrag(editor, press),
+                  }),
         [canvas, editor, preview],
     );
     // A drag moves marchers outside the playhead's fills: draw them
