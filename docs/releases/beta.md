@@ -76,7 +76,7 @@ The push to `prerelease/0.2` also rebuilds preview.openmarch.com; its badge show
 
 ### 6. Publish it as a pre-release
 
-First check that there's only one draft for the tag and that it has every platform: macOS (Apple Silicon and Intel), Windows and Linux (x64 and arm64), each with its `latest-*.yml` file, plus the four beta feed files `beta.yml`, `beta-mac.yml`, `beta-linux.yml` and `beta-linux-arm64.yml` (the last job of the workflow writes them; beta installs read only these). See [When something goes wrong](#when-something-goes-wrong) if not.
+First check that there's only one draft for the tag and that it has every platform: macOS (Apple Silicon and Intel), Windows and Linux (x64 and arm64), each with its `latest-*.yml` file, plus the four beta feed files `beta.yml`, `beta-mac.yml`, `beta-linux.yml` and `beta-linux-arm64.yml` (the last job of the workflow writes them; beta installs need these to find a beta). See [When something goes wrong](#when-something-goes-wrong) if not.
 
 On the [releases page](https://github.com/OpenMarch/OpenMarch/releases), edit the draft:
 

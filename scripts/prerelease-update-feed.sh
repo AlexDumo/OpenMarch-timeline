@@ -14,8 +14,8 @@
 #
 # This copies each per-arch feed to the name a <channel> updater asks for, and
 # joins the two Mac feeds into one (electron-updater's MacUpdater picks the files
-# with "arm64" in the name on Apple Silicon and the others on Intel). A feed whose
-# build is missing is skipped.
+# with "arm64" in the name on Apple Silicon and the others on Intel). A Windows or
+# Linux feed whose build is missing is skipped; a missing Mac arch is an error.
 set -euo pipefail
 
 [[ $# -eq 3 ]] || { echo "usage: $0 <dir with latest-*.yml> <out dir> <channel>" >&2; exit 2; }
@@ -42,7 +42,13 @@ MAC_FEEDS=()
 for arch in x64 arm64; do
     [[ -f "$IN/latest-$arch-mac.yml" ]] && MAC_FEEDS+=("$IN/latest-$arch-mac.yml")
 done
-if [[ ${#MAC_FEEDS[@]} -gt 0 ]]; then
+# One Mac feed alone would send Apple Silicon Macs the Intel build (MacUpdater falls back to
+# the non-arm64 files), so write no Mac feed rather than half of one.
+if [[ ${#MAC_FEEDS[@]} -eq 1 ]]; then
+    echo "error: only ${MAC_FEEDS[0]##*/} exists; rebuild the other macOS arch first" >&2
+    exit 1
+fi
+if [[ ${#MAC_FEEDS[@]} -eq 2 ]]; then
     FIRST="${MAC_FEEDS[0]}"
     VERSION=$(version_of "$FIRST")
     for feed in "${MAC_FEEDS[@]}"; do
