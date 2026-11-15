@@ -590,3 +590,44 @@ describe("what the Clipboard card says", () => {
         ).toBe("positions");
     });
 });
+
+describe("pasting a shape as its positions", () => {
+    it("fills the shape's exact copied spots, as plain marchers, for any count", () => {
+        const tool = drawn(boxTool, 16, { x: 100, y: 100 }, { x: 160, y: 160 });
+        const picture = copiedShape(tool);
+        const copiedSpots = sorted(
+            slotsOf(tool, ctx).map((s) => ({ x: s.x, y: s.y })),
+        );
+        const same = planPaste({
+            picture,
+            marchers: row(16, { x: 400, y: 300 }),
+            stepPx: STEP,
+            inPlace: true,
+            asPositions: true,
+        })!;
+        expect(same.kind).toBe(dotsTool);
+        expect(sorted(spotsOf(same))).toEqual(copiedSpots);
+        expect(placementOf(opened(same), ctx)!.plain).toBe(true);
+        // Fewer: some of the very same spots, not a smaller box
+        const fewer = planPaste({
+            picture,
+            marchers: row(12, { x: 400, y: 300 }),
+            stepPx: STEP,
+            inPlace: true,
+            asPositions: true,
+        })!;
+        const used = spotsOf(fewer);
+        expect(used).toHaveLength(12);
+        for (const spot of sorted(used))
+            expect(copiedSpots).toContainEqual(spot);
+    });
+
+    it("says positions on the card, and a group stays a group", () => {
+        const picture = copiedShape(
+            drawn(boxTool, 6, { x: 0, y: 0 }, { x: 40, y: 20 }),
+        );
+        expect(
+            pictureSummary(picture, STEP, { asPositions: true }),
+        ).toMatchObject({ type: "positions", anyNumber: false, count: 6 });
+    });
+});

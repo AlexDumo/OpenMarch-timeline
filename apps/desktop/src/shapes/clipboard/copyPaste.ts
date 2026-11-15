@@ -15,7 +15,11 @@ import {
 } from "../tool/shapeToolStore";
 import { openDrawn } from "../tool/toolMachine";
 import { pictureOf, planPaste } from "./picture";
-import { copiedPicture, keepPicture } from "./pictureStore";
+import {
+    copiedPicture,
+    keepPicture,
+    useCopiedPictureStore,
+} from "./pictureStore";
 
 /**
  * Copy and paste of a formation (#961, owner 2026-11-15). Copy keeps where the marchers `ids`
@@ -95,6 +99,7 @@ export function pasteFormation(
         marchers: marchersOnField(field, ids),
         stepPx: field.fieldProperties.pixelsPerStep,
         inPlace,
+        asPositions: useCopiedPictureStore.getState().pasteAs === "positions",
     });
     if (!plan) return false;
     // One waiting away from its moment is dismissed, as a new shape started there does (#416)

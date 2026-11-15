@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import {
     useActionHandler,
     useActionHandlerGroup,
@@ -5,7 +6,10 @@ import {
 import { useEditorReadiness } from "@/shortcuts/handlers/useEditorReadiness";
 import { useShapeShown } from "../tool/shapeToolStore";
 import { copyFormation, pasteFormation } from "./copyPaste";
-import { useCopiedPictureStore } from "./pictureStore";
+import { setPasteAs, useCopiedPictureStore } from "./pictureStore";
+import { useQuery } from "@tanstack/react-query";
+import { fieldPropertiesQueryOptions } from "@/hooks/queries/useFieldProperties";
+import { pictureSummary } from "./picture";
 
 /**
  * Copy, Paste and Paste in place (#961), for their keys, the field's menu and the command palette
@@ -30,5 +34,26 @@ export function useClipboardActions(): void {
                 inPlace: id === "pasteFormationInPlace",
             }),
         { enabled: selected && copied, ignoreRepeat: true },
+    );
+    // A copied shape pastes as the shape or as its exact positions (the Clipboard card's switch)
+    const picture = useCopiedPictureStore((s) => s.picture);
+    const asPositions = useCopiedPictureStore((s) => s.pasteAs === "positions");
+    const { data: fieldProperties } = useQuery(fieldPropertiesQueryOptions());
+    const stepPx = fieldProperties?.pixelsPerStep;
+    const shapeCopied =
+        !!picture &&
+        !!stepPx &&
+        pictureSummary(picture, stepPx).type === "shape";
+    useActionHandler(
+        "pasteAsPositions",
+        () => setPasteAs(asPositions ? "shape" : "positions"),
+        {
+            enabled: ready && shapeCopied,
+            ignoreRepeat: true,
+            // Names what it does now: the way back once positions are picked
+            label: asPositions
+                ? tolgee.t("actions.edit.pasteAsShape")
+                : undefined,
+        },
     );
 }

@@ -11,6 +11,7 @@ questions:
   - When you pasted a shape onto more or fewer marchers, was the shape it rebuilt the one you wanted?
   - When you pasted loose marchers onto fewer marchers, did it use the spots you wanted? Did you want to pick them?
   - Did the Clipboard card in the inspector tell you what you'd copied, and how many marchers to select before pasting?
+  - Was the Shape | Positions switch the right way to choose between a rebuilt shape and the exact copied spots?
   - Did you reach for Cut or Duplicate?
 ---
 
@@ -31,6 +32,9 @@ marchers you have selected into the copied formation.
   same number, then onto fewer, then onto more. With fewer, the nearest
   spots are used. With more, the nearest marchers take the spots and the
   rest stay where they are.
+- Copy a box, then pick **Positions** under **Paste as** on the Clipboard
+  card and paste onto fewer marchers: they take some of the box's exact
+  spots instead of a smaller box, and stay plain marchers.
 - Go to another page and use **Paste in place** (Ctrl/Cmd+Shift+V): the
   preview starts exactly where the formation was copied.
 - Watch the **Clipboard** card in the inspector as you copy and change the

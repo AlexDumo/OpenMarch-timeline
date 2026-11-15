@@ -25,18 +25,30 @@ function load(): CopiedPicture | null {
     }
 }
 
+/**
+ * How a copied shape pastes (owner, 2026-11-15): as the shape, laid out for any number of
+ * marchers and kept live, or as its exact positions, spots that so many marchers fill. Every new
+ * copy starts as the shape; a picture with no shape always pastes as positions.
+ */
+export type PasteAs = "shape" | "positions";
+
 export const useCopiedPictureStore = create<{
     picture: CopiedPicture | null;
-}>(() => ({ picture: load() }));
+    pasteAs: PasteAs;
+}>(() => ({ picture: load(), pasteAs: "shape" }));
 
 /** Another window copied: this one pastes the same picture */
 syncFromStorage(PICTURE_STORAGE_KEY, parse, (picture) =>
-    useCopiedPictureStore.setState({ picture }),
+    useCopiedPictureStore.setState({ picture, pasteAs: "shape" }),
 );
+
+/** Paste a copied shape as the shape or as its positions */
+export const setPasteAs = (pasteAs: PasteAs): void =>
+    useCopiedPictureStore.setState({ pasteAs });
 
 /** Keeps `picture` as the one Paste uses, here and in every other window */
 export function keepPicture(picture: CopiedPicture): void {
-    useCopiedPictureStore.setState({ picture });
+    useCopiedPictureStore.setState({ picture, pasteAs: "shape" });
     try {
         localStorage.setItem(PICTURE_STORAGE_KEY, JSON.stringify(picture));
     } catch (error) {

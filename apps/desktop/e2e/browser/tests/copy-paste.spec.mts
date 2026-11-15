@@ -425,3 +425,46 @@ test("the inspector's Clipboard card shows what is copied and how it fits the se
         "Laid out for the 3 marchers selected",
     );
 });
+
+test("a copied box switched to Positions on the Clipboard card pastes onto its exact spots as plain marchers", async ({
+    show,
+}) => {
+    const { page } = show;
+    const boxSpots = sorted(await placeBox(show));
+    await page.keyboard.press("ControlOrMeta+c");
+    const card = page.getByTestId("clipboard-section");
+    await expect(card.getByTestId("clipboard-kind")).toHaveText("Box");
+    await card.getByTestId("clipboard-paste-as-positions").click();
+    await expect(card.getByTestId("clipboard-rule")).toHaveText(
+        "Fills 4 spots: select 4 marchers to fill them all",
+    );
+    await select(page, [5, 6, 7]);
+    await expect(card.getByTestId("clipboard-fit")).toHaveText(
+        "With 3 selected, 1 spot stays empty",
+    );
+    await page.keyboard.press("ControlOrMeta+Shift+v");
+    await expect(preview(page)).toBeVisible();
+    const spots = sorted((await shapeOverlay(page))!.spots);
+    expect(spots).toHaveLength(3);
+    for (const spot of spots)
+        expect(boxSpots.some((b) => near(b, spot))).toBe(true);
+    await page.keyboard.press("Enter");
+    await expect(preview(page)).toBeHidden();
+    await expect
+        .poll(async () => sorted(await savedAt(show, [5, 6, 7])))
+        .toEqual(spots);
+    await waitForIdle(page);
+    // Plain marchers: still only the first box is saved
+    expect(await savedShapes(show)).toBe(1);
+
+    // A click on T1 selects its whole box again
+    await page.waitForTimeout(550);
+    await clickMarcher(page, "T1");
+    await expect
+        .poll(async () => (await readField(page)).selection.length)
+        .toBe(4);
+    await page.keyboard.press("ControlOrMeta+c");
+    await expect(
+        card.getByTestId("clipboard-paste-as-shape"),
+    ).toHaveAttribute("data-state", "on");
+});

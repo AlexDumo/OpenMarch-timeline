@@ -1415,6 +1415,11 @@
             }
         ]
     },
+    "pasteAsPositions": {
+        "label": "Paste a copied shape as its positions",
+        "category": "edit",
+        "bindings": []
+    },
     "pasteFormationInPlace": {
         "label": "Paste in place",
         "category": "edit",

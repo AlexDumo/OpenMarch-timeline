@@ -901,6 +901,16 @@ const STATIC_ACTIONS = {
         defaultBindings: ["$mod+V", "Control+V"],
         ignoreRepeat: true,
     },
+    // A copied shape pasted as its exact positions rather than rebuilt for any count: the
+    // Clipboard card's Shape | Positions switch (owner 2026-11-15). No key
+    pasteAsPositions: {
+        labelKey: "actions.edit.pasteAsPositions",
+        keywordsKey: "actions.edit.pasteAsPositionsKeywords",
+        category: "edit",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
     pasteFormationInPlace: {
         labelKey: "actions.edit.pasteInPlace",
         keywordsKey: "actions.edit.pasteInPlaceKeywords",

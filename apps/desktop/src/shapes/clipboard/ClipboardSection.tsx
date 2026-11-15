@@ -1,8 +1,9 @@
 import { useMemo } from "react";
 import { useTranslate } from "@tolgee/react";
-import { getButtonClassName } from "@openmarch/ui";
+import { getButtonClassName, SegmentedTextSwitch } from "@openmarch/ui";
 import { WarningIcon } from "@phosphor-icons/react";
 import ActionButton from "@/shortcuts/ActionButton";
+import { runAction } from "@/shortcuts/registry";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { performersOnly } from "@/global/classes/Marcher";
 import { useQuery } from "@tanstack/react-query";
@@ -27,17 +28,28 @@ import { useCopiedPictureStore } from "./pictureStore";
 export function ClipboardSection() {
     const { t } = useTranslate();
     const picture = useCopiedPictureStore((s) => s.picture);
+    const pasteAs = useCopiedPictureStore((s) => s.pasteAs);
     const { data: fieldProperties } = useQuery(fieldPropertiesQueryOptions());
     const selectedMarchers = useSelectedMarchers()?.selectedMarchers ?? [];
     const selected = performersOnly(selectedMarchers).length;
     const stepPx = fieldProperties?.pixelsPerStep;
-    const summary = useMemo(
+    // What was copied, and what pasting it does now (a shape can paste as its positions)
+    const copied = useMemo(
         () => (picture && stepPx ? pictureSummary(picture, stepPx) : null),
         [picture, stepPx],
     );
-    if (!picture || !summary) return null;
+    const summary = useMemo(
+        () =>
+            picture && stepPx
+                ? pictureSummary(picture, stepPx, {
+                      asPositions: pasteAs === "positions",
+                  })
+                : null,
+        [picture, stepPx, pasteAs],
+    );
+    if (!picture || !copied || !summary) return null;
     const fit = pictureFit(summary, selected);
-    const name = summary.kind?.shape.label ?? t("shapes.clipboard.positions");
+    const name = copied.kind?.shape.label ?? t("shapes.clipboard.positions");
     return (
         <div className="flex flex-col gap-8" data-testid="clipboard-section">
             <h5 className="text-h5">{t("shapes.clipboard.title")}</h5>
@@ -60,6 +72,35 @@ export function ClipboardSection() {
                     </span>
                 </div>
             </div>
+            {copied.type === "shape" && (
+                <div className="flex items-center gap-8">
+                    <span className="text-sub text-text-subtitle">
+                        {t("shapes.clipboard.pasteAs")}
+                    </span>
+                    <SegmentedTextSwitch
+                        ariaLabel={t("shapes.clipboard.pasteAs")}
+                        testId="clipboard-paste-as"
+                        selected={pasteAs}
+                        // Through the action, as the palette's Paste as positions does
+                        setSelected={(value) => {
+                            if (value !== pasteAs)
+                                runAction("pasteAsPositions");
+                        }}
+                        options={[
+                            {
+                                value: "shape",
+                                label: t("shapes.clipboard.asShape"),
+                                testId: "clipboard-paste-as-shape",
+                            },
+                            {
+                                value: "positions",
+                                label: t("shapes.clipboard.positions"),
+                                testId: "clipboard-paste-as-positions",
+                            },
+                        ]}
+                    />
+                </div>
+            )}
             <p className="text-sub" data-testid="clipboard-rule">
                 {summary.anyNumber
                     ? t("shapes.clipboard.anyNumber")

@@ -126,8 +126,11 @@ function readShape(
     picture: CopiedPicture,
     stepPx: number,
     kinds: readonly AnyToolKind[],
+    asPositions = false,
 ): { kind: AnyToolKind; params: unknown } | null {
     if (!picture.shape) return null;
+    // A group always pastes as a group: its spots are where its marchers stood
+    if (asPositions && picture.shape.kind !== groupTool.shape.id) return null;
     if (Math.abs(stepPx / picture.stepPx - 1) > SAME_STEP) return null;
     return placedOf({ id: 0, ...picture.shape, members: [] }, kinds);
 }
@@ -150,9 +153,16 @@ export interface PictureSummary {
 export function pictureSummary(
     picture: CopiedPicture,
     stepPx: number,
-    kinds: readonly AnyToolKind[] = PLACED_KINDS,
+    {
+        kinds = PLACED_KINDS,
+        asPositions = false,
+    }: {
+        kinds?: readonly AnyToolKind[];
+        /** A copied shape pasted as its exact positions (the Clipboard card's switch) */
+        asPositions?: boolean;
+    } = {},
 ): PictureSummary {
-    const read = readShape(picture, stepPx, kinds);
+    const read = readShape(picture, stepPx, kinds, asPositions);
     const count = picture.dots.length;
     if (!read)
         return { type: "positions", kind: null, count, anyNumber: false };
@@ -256,6 +266,7 @@ export function planPaste({
     marchers,
     stepPx,
     inPlace = false,
+    asPositions = false,
     kinds = PLACED_KINDS,
 }: {
     picture: CopiedPicture;
@@ -264,13 +275,15 @@ export function planPaste({
     /** Field units per step on the field pasted onto */
     stepPx: number;
     inPlace?: boolean;
+    /** A copied shape pasted as its exact positions, plain marchers with no shape */
+    asPositions?: boolean;
     kinds?: readonly AnyToolKind[];
 }): PastePlan | null {
     const n = marchers.length;
     if (n === 0) return null;
     const scale = stepPx / picture.stepPx;
     const sameStep = Math.abs(scale - 1) <= SAME_STEP;
-    const read = readShape(picture, stepPx, kinds);
+    const read = readShape(picture, stepPx, kinds, asPositions);
 
     if (read && read.kind !== groupTool) {
         const { kind, params } = read;
