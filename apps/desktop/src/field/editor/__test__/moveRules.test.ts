@@ -2,14 +2,7 @@
 import { describe, expect, it } from "vitest";
 import type { Roles } from "@/input/modifierRoles";
 import type { MarcherPosition } from "../moveGesture";
-import {
-    PRECISION_START,
-    anchorAt,
-    precisionDelta,
-    ruledMove,
-    type MoveRules,
-    type PrecisionTrack,
-} from "../moveRules";
+import { ruledMove, type MoveRules } from "../moveRules";
 
 // A grid of 10 field units a step, with center front at (500, 400): rounding
 // to 1 step puts marchers on x = 500 ± 10n, y = 400 ± 10n.
@@ -267,79 +260,5 @@ describe("ruledMove locks (user story 40)", () => {
     it("returns one position per start, in order", () => {
         const moved = move({ lockX: true }, { x: 5, y: 5 }, GROUP);
         expect(moved.map((p) => p.id)).toEqual([1, 2, 3]);
-    });
-});
-
-describe("precisionDelta (fine at a quarter speed)", () => {
-    /** Runs pointer deltas through the tracker, returning each delta out. */
-    const run = (steps: [number, number, boolean][]) => {
-        let track: PrecisionTrack = PRECISION_START;
-        return steps.map(([x, y, fine]) => {
-            const moved = precisionDelta(track, { x, y }, fine);
-            track = moved.track;
-            return moved.delta;
-        });
-    };
-
-    it("follows the pointer exactly without fine", () => {
-        expect(
-            run([
-                [0.1, 0.2, false],
-                [0.3, 0.7, false],
-            ]),
-        ).toEqual([
-            { x: 0.1, y: 0.2 },
-            { x: 0.3, y: 0.7 },
-        ]);
-    });
-
-    it("moves a quarter as far as the pointer with fine", () => {
-        expect(
-            run([
-                [40, -20, true],
-                [80, -40, true],
-            ]),
-        ).toEqual([
-            { x: 10, y: -5 },
-            { x: 20, y: -10 },
-        ]);
-    });
-
-    it("doesn't jump when fine turns on or off, and keeps the lag after", () => {
-        expect(
-            run([
-                [40, 0, false],
-                [40, 0, true], // fine on: same place
-                [80, 0, true], // +40 counts as +10
-                [80, 0, false], // fine off: same place
-                [100, 0, false], // full speed, 30 behind the pointer
-            ]),
-        ).toEqual([
-            { x: 40, y: 0 },
-            { x: 40, y: 0 },
-            { x: 50, y: 0 },
-            { x: 50, y: 0 },
-            { x: 70, y: 0 },
-        ]);
-    });
-});
-
-describe("anchorAt", () => {
-    it("re-anchors the drag on where the marchers are drawn", () => {
-        // The pointer is 37 across; the marcher is drawn snapped at 40
-        let track = precisionDelta(
-            PRECISION_START,
-            { x: 37, y: 0 },
-            false,
-        ).track;
-        track = anchorAt(track, { x: 40, y: 0 });
-        expect(precisionDelta(track, { x: 37, y: 0 }, true).delta).toEqual({
-            x: 40,
-            y: 0,
-        });
-        expect(precisionDelta(track, { x: 77, y: 0 }, true).delta).toEqual({
-            x: 50,
-            y: 0,
-        });
     });
 });

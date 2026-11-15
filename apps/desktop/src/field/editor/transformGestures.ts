@@ -13,7 +13,6 @@ import {
     type HandleId,
 } from "./groupTransform";
 import type { MarcherPosition, MoveGestureHost } from "./moveGesture";
-import { PRECISION_START, precisionDelta } from "./moveRules";
 import type { FieldRect } from "./selectionArea";
 
 /**
@@ -23,9 +22,8 @@ import type { FieldRect } from "./selectionArea";
  * positions, the drop and its pending save, snap-back, one undo step.
  *
  * Lock X and Lock Y don't apply to handles (rules table: Lock X / Lock Y).
- * While fine is on a scale handle counts the pointer at a quarter of its
- * speed (`precisionDelta`, #197); a rotation turns at full speed in whole
- * degrees. Alt (from center) scales about the box's center. As in a move, a
+ * A scale handle doesn't snap, so fine doesn't change it; a rotation turns in
+ * whole degrees with fine. Alt (from center) scales about the box's center. As in a move, a
  * role key pressed or released mid-drag redraws the marchers at the last
  * pointer. Each handle declares the roles it reads, for the chip.
  */
@@ -76,11 +74,10 @@ abstract class HandleGesture implements FieldGesture {
  * A corner scales each axis with the pointer and a middle handle scales one axis, and constrain
  * keeps the ratio; with the box shape's ratio lock on they keep it, and constrain frees it (a box's
  * corner gives equal spacings instead). Either scales from the center with from center. Nothing
- * snaps.
+ * snaps, so fine does nothing here.
  */
 const scaleHonors = (ratioLocked: boolean): HonoredRoles => ({
     context: "field",
-    fine: "fine",
     constrain: ratioLocked ? "freeRatio" : "keepRatio",
     fromCenter: "fromCenter",
     snaps: false,
@@ -96,7 +93,6 @@ export const ROTATE_HONORS: HonoredRoles = {
 /** A corner or middle handle: scales the selection from the opposite side, or from its center. */
 export class ScaleGesture extends HandleGesture {
     readonly kind: FieldTestGesture = "scale";
-    private track = PRECISION_START;
 
     constructor(
         origin: FieldPointer,
@@ -113,21 +109,17 @@ export class ScaleGesture extends HandleGesture {
     }
 
     protected positionsAt(at: FieldPoint, roles: Roles) {
-        // Nothing snaps, so fine needs no re-anchoring: the slow drag goes on
-        // from wherever the pointer had taken the marchers
-        const moved = precisionDelta(
-            this.track,
-            { x: at.x - this.origin.field.x, y: at.y - this.origin.field.y },
-            roles.fine,
-        );
-        this.track = moved.track;
+        const delta = {
+            x: at.x - this.origin.field.x,
+            y: at.y - this.origin.field.y,
+        };
         // Constrain flips the ratio lock for the drag, as on a box shape: one idea, not two
         return scalePositions(
             this.starts,
             scaleFor(
                 this.handle,
                 this.box,
-                moved.delta,
+                delta,
                 this.ratioLocked !== roles.constrain,
                 roles.fromCenter,
             ),

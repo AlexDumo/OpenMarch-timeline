@@ -8,7 +8,6 @@ import {
     type HandleId,
     type SelectionFrame,
 } from "./groupTransform";
-import { PRECISION_START, precisionDelta } from "./moveRules";
 import { ROTATE_HONORS, RotationDrag } from "./transformGestures";
 
 /**
@@ -68,8 +67,7 @@ const PULLS: Record<Exclude<HandleId, "rot">, FieldPoint> = {
 };
 
 /**
- * As the selection's handles do: while fine is on a resize counts the
- * pointer at a quarter of its speed (a turn doesn't slow), a role key pressed
+ * As the selection's handles do: a turn reads fine (whole degrees), a role key pressed
  * or released mid-drag redraws the Outline at the last pointer, and a release
  * where the last move left the pointer saves what's drawn. Neither handle reads
  * constrain or from center.
@@ -111,44 +109,24 @@ abstract class ItemHandleGesture implements FieldGesture {
 /**
  * A side or corner: the Outline's sides it pulls follow the pointer, the
  * opposite ones following too, so the center stays where it is. Nothing
- * snaps, so fine needs no re-anchoring: the slow drag goes on from wherever
- * the pointer had taken the sides.
+ * snaps, so fine does nothing here.
  */
 export class ItemResizeGesture extends ItemHandleGesture {
     readonly kind: FieldTestGesture = "scale";
-    private track = PRECISION_START;
 
     constructor(
-        private readonly origin: FieldPointer,
         frame: ItemFrame,
         host: ItemTransformHost,
         private readonly handle: Exclude<HandleId, "rot">,
         keys: FieldKeys,
     ) {
-        super(frame, host, keys, {
-            context: "field",
-            fine: "fine",
-            snaps: false,
-        });
+        super(frame, host, keys, { context: "field", snaps: false });
     }
 
-    protected sizeAt(at: FieldPoint, roles: Roles): ItemSize {
+    protected sizeAt(at: FieldPoint): ItemSize {
         const { center, width, depth, rotation } = this.frame;
-        const moved = precisionDelta(
-            this.track,
-            { x: at.x - this.origin.field.x, y: at.y - this.origin.field.y },
-            roles.fine,
-        );
-        this.track = moved.track;
-        // Where the pointer counts as being, unturned about the center into the Outline's own frame
-        const local = rotatePoint(
-            {
-                x: this.origin.field.x + moved.delta.x,
-                y: this.origin.field.y + moved.delta.y,
-            },
-            center,
-            -rotation,
-        );
+        // Where the pointer is, unturned about the center into the Outline's own frame
+        const local = rotatePoint(at, center, -rotation);
         const pulls = PULLS[this.handle];
         const half = (offset: number, pull: number, size: number) =>
             pull === 0

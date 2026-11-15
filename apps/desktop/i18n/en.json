@@ -3407,7 +3407,7 @@
                 "add": "Tap marchers to add or remove them.",
                 "constrain": "Equal spacings, one axis when moving, flips proportional scaling.",
                 "dragMode": "What one finger or the pen does on empty field: move the view, or draw a box or lasso.",
-                "fine": "Marchers move slowly, off the grid. Shapes leave the half steps but still catch lines. Turns go by whole degrees.",
+                "fineOffGrid": "Marchers move freely, off the grid. Shapes leave the half steps but still catch lines. Turns go by whole degrees.",
                 "fromCenter": "Boxes draw and resize from their center.",
                 "grip": "Drag to move.",
                 "help": "Gestures.",
@@ -3415,7 +3415,7 @@
                 "subtract": "A box or lasso takes marchers out of the selection."
             },
             "fine": "Fine",
-            "fineHint": "Fine: hold, or tap to keep on. Marchers move slowly, off the grid; shapes leave the half steps; turns go by whole degrees",
+            "fineOffGridHint": "Fine: hold, or tap to keep on. Marchers move freely, off the grid; shapes leave the half steps; turns go by whole degrees",
             "fromCenter": "From center",
             "fromCenterHint": "From center: hold, or tap to keep on. Boxes draw and resize from their center",
             "grip": "Move these buttons",
@@ -3438,7 +3438,7 @@
     "shortcutsDialog": {
         "movement": {
             "constrain": "Move on one axis while dragging",
-            "fineControl": "Fine control while dragging marchers",
+            "offGridDrag": "Drag marchers off the grid",
             "nudge": "Nudge the selected marchers"
         },
         "shape": {

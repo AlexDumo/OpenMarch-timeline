@@ -270,7 +270,7 @@ test("a second finger cancels a finger's move: put back, nothing saved", async (
     await expectCanvasMatchesShow(show);
 });
 
-test("Fine on the pill slows a finger's drag to a quarter, off the grid", async ({
+test("Fine on the pill takes a finger's drag off the grid, at the finger's speed", async ({
     show,
 }) => {
     const { page } = show;
@@ -297,7 +297,7 @@ test("Fine on the pill slows a finger's drag to a quarter, off the grid", async 
     await touchDrag(
         page,
         t2,
-        { x: t2.x + moved.x * 4 * scale, y: t2.y + moved.y * 4 * scale },
+        { x: t2.x + moved.x * scale, y: t2.y + moved.y * scale },
         { steps: 16 },
     );
     await expectSaved(show, 2, { x: 603 + moved.x, y: 354 + moved.y });

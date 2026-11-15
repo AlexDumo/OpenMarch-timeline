@@ -11,7 +11,7 @@ import { seedShowSql, type SeedPosition } from "../seed.mjs";
 // The touch pill over the field (modifier roles, version A, "Touch and Apple
 // Pencil"): in the touch layout, Fine, Equal and From center stand in for the
 // keys a tablet doesn't have. Tapping Fine latches it, and the next drag goes
-// as one with Shift held: at a quarter of the pointer's speed, off the grid.
+// as one with Shift held: with the pointer, off the grid.
 // The browser has no Pencil, so the drag is the mouse's; a Pencil press
 // reaches the field editor the same way.
 
@@ -95,7 +95,7 @@ test("the touch layout shows the pill, named by role", async ({ show }) => {
     await pill.screenshot({ path: test.info().outputPath("pill.png") });
 });
 
-test("tapping Fine, then dragging a marcher: a quarter of the pointer's speed, off the grid", async ({
+test("tapping Fine, then dragging a marcher: it follows the pointer, off the grid", async ({
     show,
 }) => {
     const { page } = show;
@@ -117,7 +117,7 @@ test("tapping Fine, then dragging a marcher: a quarter of the pointer's speed, o
     await expect(fine).toHaveAttribute("aria-pressed", "true");
     await page.screenshot({ path: test.info().outputPath("field-fine.png") });
 
-    await dragT2(page, { x: moved.x * 4, y: moved.y * 4 });
+    await dragT2(page, moved);
 
     await expectT2Saved(show, { x: T2.x + moved.x, y: T2.y + moved.y });
     await expectCanvasMatchesShow(show);

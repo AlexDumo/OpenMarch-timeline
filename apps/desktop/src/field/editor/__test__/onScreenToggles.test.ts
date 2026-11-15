@@ -145,7 +145,7 @@ afterEach(() => {
 });
 
 describe("Fine on the pill", () => {
-    it("latched, drags a marcher at a quarter of the pointer's speed and off the grid, as Shift held does", () => {
+    it("latched, drags a marcher off the grid at the pointer's speed, as Shift held does", () => {
         // On a selected marcher, so the Shift-press adds nothing and Shift is fine
         const shift = setup({ selected: [1] });
         drag(
@@ -163,7 +163,7 @@ describe("Fine on the pill", () => {
         store().toggleLatched("fine");
         const fine = setup({ selected: [1] });
         drag(fine.editor, { x: 100, y: 100 }, { x: 157, y: 121 });
-        expect(fine.state.drops[0]).toEqual([{ id: 1, x: 114.25, y: 105.25 }]);
+        expect(fine.state.drops[0]).toEqual([{ id: 1, x: 157, y: 121 }]);
         expect(fine.state.drops[0]).toEqual(shift.state.drops[0]);
     });
 
@@ -173,12 +173,12 @@ describe("Fine on the pill", () => {
         editor.pointerMove(at(137, 100));
         expect(shown(state)).toEqual({ 1: { x: 140, y: 100 } });
         store().toggleLatched("fine");
-        // Off the grid now, but still drawn where it was: no jump back to 137
-        expect(shown(state)).toEqual({ 1: { x: 140, y: 100 } });
+        // Off the grid now, where the pointer is
+        expect(shown(state)).toEqual({ 1: { x: 137, y: 100 } });
         editor.pointerMove(at(157, 100));
-        expect(shown(state)).toEqual({ 1: { x: 145, y: 100 } });
+        expect(shown(state)).toEqual({ 1: { x: 157, y: 100 } });
         store().toggleLatched("fine");
-        expect(shown(state)).toEqual({ 1: { x: 150, y: 100 } });
+        expect(shown(state)).toEqual({ 1: { x: 160, y: 100 } });
     });
 
     it("isn't followed once the drag ends", () => {
@@ -264,11 +264,12 @@ describe("Add on the pill, as Shift at the press", () => {
         store().toggleLatched("add");
         store().toggleLatched("fine");
         const { editor, state } = setup({ selected: [2] });
-        drag(editor, { x: 100, y: 100 }, { x: 100, y: 140 });
+        drag(editor, { x: 100, y: 100 }, { x: 100, y: 137 });
         expect(state.selected).toEqual([2, 1]);
+        // Off the grid: fine
         expect(state.drops[0]).toEqual([
-            { id: 1, x: 100, y: 110 },
-            { id: 2, x: 200, y: 110 },
+            { id: 1, x: 100, y: 137 },
+            { id: 2, x: 200, y: 137 },
         ]);
     });
 
@@ -370,14 +371,14 @@ describe("the pill and a finger (tablet 1.2)", () => {
         kind: "touch",
     });
 
-    it("Fine slows a finger's drag as it slows a mouse's", () => {
+    it("Fine takes a finger's drag off the grid as it does a mouse's", () => {
         store().toggleLatched("fine");
         const { editor, state } = setup({ selected: [1] });
         editor.pointerDown(finger(100, 100));
         editor.pointerMove(finger(130, 110));
         editor.pointerMove(finger(157, 121));
         editor.pointerUp(finger(157, 121));
-        expect(state.drops[0]).toEqual([{ id: 1, x: 114.25, y: 105.25 }]);
+        expect(state.drops[0]).toEqual([{ id: 1, x: 157, y: 121 }]);
     });
 
     it("Add keeps the selection on a tap on empty field, and adds the marcher a finger taps", () => {

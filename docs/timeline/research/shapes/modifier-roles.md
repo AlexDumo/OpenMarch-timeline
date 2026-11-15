@@ -144,6 +144,8 @@ One role per key, so every key has exactly one meaning while dragging.
 
 - **`fine`**: slower or finer. Off the half-step ladder (guides still pull), hundredths when
   scrubbing a number, quarter speed on the field, whole degrees when rotating.
+  _Changed 2026-11-15 (owner): on the field, fine no longer slows a drag. It turns snapping off
+  at the pointer's full speed, so scale and resize handles, which don't snap, ignore it._
 - **`constrain`**: the shape's natural constraint. It is one idea with a meaning per gesture:
   - **moving** (marchers, a placed box, a whole shape): stay on one axis, horizontal or vertical,
     picked by which way the drag has gone further. This is new; today it's only reachable through

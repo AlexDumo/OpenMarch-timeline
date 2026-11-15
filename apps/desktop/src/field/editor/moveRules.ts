@@ -1,7 +1,6 @@
 import type { FieldProperties } from "@openmarch/core";
 import type { UiSettings } from "@/stores/UiSettingsStore";
 import { getRoundCoordinates2 } from "@/utilities/CoordinateActions";
-import type { FieldPoint } from "./fieldEditor";
 import { followPointer, type MoveTransform } from "./moveGesture";
 
 /**
@@ -26,9 +25,6 @@ export type MoveRules = {
     snap?: boolean;
 };
 
-/** Fine moves the selection at this fraction of the pointer's speed. */
-export const PRECISION_SPEED = 0.25;
-
 /**
  * The drag rules as a {@link MoveTransform}, reading `rules` on every call:
  *
@@ -38,9 +34,9 @@ export const PRECISION_SPEED = 0.25;
  * - With coordinate rounding on, one marcher snaps onto the rounding grid; a
  *   group moves in whole rounding steps, so each marcher keeps its offset
  *   from the grid.
- * - Fine (precision), or the Snap toggle off, turns snapping off.
- *
- * Fine's quarter speed is in the delta already ({@link precisionDelta}).
+ * - Fine, or the Snap toggle off, turns snapping off. The marchers still
+ *   follow the pointer at full speed (owner, 2026-11-15: fine is "no snap",
+ *   not "slower").
  */
 export function ruledMove(rules: () => MoveRules): MoveTransform {
     return (delta, roles, starts) => {
@@ -97,59 +93,4 @@ function wholeSteps(
     if (!steps) return distance;
     const size = Math.abs(steps) * grid.pixelsPerStep;
     return Math.round(distance / size) * size;
-}
-
-/**
- * How far a drag has moved the marchers, with fine at {@link PRECISION_SPEED}.
- * `lag` is how far they've fallen behind the pointer, in field units.
- */
-export type PrecisionTrack = {
-    /** The pointer's delta from the press at the last event. */
-    pointer: FieldPoint;
-    /** How far the marchers trail the pointer's delta. */
-    lag: FieldPoint;
-};
-
-export const PRECISION_START: PrecisionTrack = {
-    pointer: { x: 0, y: 0 },
-    lag: { x: 0, y: 0 },
-};
-
-/**
- * The marchers' delta for a pointer at `pointer` (its delta from the press),
- * after `track`. The distance the pointer moved since the last event counts
- * at a quarter while fine is on, in full otherwise. So fine turning on or off
- * mid-drag doesn't jump: the marchers carry on from where they are, at the
- * new speed (the drag re-anchors on every event). Without fine the marchers
- * keep their lag; with none they follow the pointer exactly.
- */
-export function precisionDelta(
-    track: PrecisionTrack,
-    pointer: FieldPoint,
-    fine: boolean,
-): { delta: FieldPoint; track: PrecisionTrack } {
-    const slowed = fine ? 1 - PRECISION_SPEED : 0;
-    const lag = {
-        x: track.lag.x + (pointer.x - track.pointer.x) * slowed,
-        y: track.lag.y + (pointer.y - track.pointer.y) * slowed,
-    };
-    return {
-        delta: { x: pointer.x - lag.x, y: pointer.y - lag.y },
-        track: { pointer, lag },
-    };
-}
-
-/**
- * `track` re-anchored so the marchers' delta is `drawn`, where they're drawn
- * now. The move gesture calls it when fine turns on: a drag snapped to the
- * grid goes on slowly from the grid point, not from the unsnapped pointer.
- */
-export function anchorAt(
-    track: PrecisionTrack,
-    drawn: FieldPoint,
-): PrecisionTrack {
-    return {
-        pointer: track.pointer,
-        lag: { x: track.pointer.x - drawn.x, y: track.pointer.y - drawn.y },
-    };
 }

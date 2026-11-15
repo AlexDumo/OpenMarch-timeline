@@ -1,6 +1,6 @@
 import tolgee from "@/global/singletons/Tolgee";
 import { formatSteps } from "../editor/format";
-import { SPACING_FINE_RATE, SPACING_RATE } from "../editor/scrub";
+import { SPACING_RATE } from "../editor/scrub";
 import { paramGlyph, type AnyToolKind, type ToolEnv } from "../tool/toolKind";
 import { pivotPoint, samePivot, type Pivot } from "./frame";
 import { settled } from "./gestures";
@@ -161,9 +161,10 @@ const EXPAND_PX = SPACING_RATE.px;
 
 /**
  * Expand or Shrink dragged `distance` px (positive for bigger) from `base`, the shape at the
- * press: one step of the rule per 8 px, stopping at the smallest it can go. With `fine` the driver
- * moves a hundredth of a step per px, with the Snap toggle off (`env.pull` false) freely, the other
- * in proportion either way. Around `pivot`; `base` where it can't change.
+ * press: one step of the rule per 8 px, stopping at the smallest it can go. With `fine` or the
+ * Snap toggle off (`env.pull` false) the driver moves freely at the same speed (half a step per
+ * 8 px; fine is no snap, not slower), the other in proportion. Around `pivot`; `base` where it
+ * can't change.
  */
 export function scrubKeepingRatio(
     kind: AnyToolKind,
@@ -177,9 +178,7 @@ export function scrubKeepingRatio(
         const px = Math.trunc(distance);
         const continuous = (steps: readonly number[]) => {
             const driver = steps[ratioDriver(steps)]!;
-            const to = env.fine
-                ? driver + px * SPACING_FINE_RATE.step
-                : driver + (px * SPACING_RATE.step) / EXPAND_PX;
+            const to = driver + (px * SPACING_RATE.step) / EXPAND_PX;
             // As small as it goes: the smallest spacing at half a step
             const floor = (SCALE_STEP * driver) / Math.min(...steps);
             const scale = Math.max(to, floor) / driver;
