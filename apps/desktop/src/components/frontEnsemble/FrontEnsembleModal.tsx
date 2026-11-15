@@ -15,6 +15,7 @@ import { allItemsQueryOptions } from "@/hooks/queries/useItems";
 import { isPodiumFamily, pitVariant } from "@/view3d/core/pit/catalog";
 import FrontEnsemblePicker from "./FrontEnsemblePicker";
 import PitPresets from "./PitPresets";
+import { runAction } from "@/shortcuts/registry";
 import { usePitVariantLabel } from "./usePitVariantLabel";
 
 /**
@@ -43,11 +44,10 @@ export function splitFrontEnsemble(
 
 /**
  * The front ensemble's place in the Marchers panel: what the show has (or that it has no pit) and
- * a button that opens the front ensemble view in the panel, where `onBack` returns.
+ * a button that opens the front ensemble view in the panel (the `openFrontEnsemble` action).
  */
-export function FrontEnsembleSummary({ onBack }: { onBack: () => void }) {
+export function FrontEnsembleSummary() {
     const { t } = useTranslate();
-    const { setContent } = useSidebarModalStore();
     const { data: items } = useQuery(allItemsQueryOptions());
     const { equipment, podiums } = useMemo(
         () => splitFrontEnsemble(items),
@@ -57,13 +57,13 @@ export function FrontEnsembleSummary({ onBack }: { onBack: () => void }) {
     return (
         <section
             className="border-stroke bg-fg-2 rounded-6 flex items-center gap-12 border p-8"
-            aria-label={t("frontEnsemble.title")}
+            aria-label={t("frontEnsemble.summary.title")}
             data-testid="front-ensemble-summary"
         >
             <PianoKeysIcon size={20} className="text-text/70 shrink-0" />
             <div className="flex min-w-0 grow flex-col">
                 <span className="text-body font-medium">
-                    <T keyName="frontEnsemble.title" />
+                    <T keyName="frontEnsemble.summary.title" />
                 </span>
                 <span className="text-sub text-text-subtitle">
                     {hasPit
@@ -77,12 +77,7 @@ export function FrontEnsembleSummary({ onBack }: { onBack: () => void }) {
             <Button
                 size="compact"
                 variant={hasPit ? "secondary" : "primary"}
-                onClick={() =>
-                    setContent(
-                        <FrontEnsembleContents onBack={onBack} />,
-                        FRONT_ENSEMBLE_PANEL_ID,
-                    )
-                }
+                onClick={() => runAction("openFrontEnsemble")}
             >
                 {hasPit
                     ? t("frontEnsemble.summary.edit")

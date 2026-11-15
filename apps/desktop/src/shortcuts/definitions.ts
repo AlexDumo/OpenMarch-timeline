@@ -635,6 +635,15 @@ const STATIC_ACTIONS = {
         scope: "global",
         defaultBindings: [],
     },
+    // Opens the front ensemble and podiums view of the Marchers panel (instruments.md §6), as its
+    // row at the top of the panel does. Unbound by default: a pit is set up about once per show
+    openFrontEnsemble: {
+        labelKey: "actions.ui.openFrontEnsemble",
+        keywordsKey: "actions.ui.openFrontEnsembleKeywords",
+        category: "ui",
+        scope: "global",
+        defaultBindings: [],
+    },
     // Preview: watch the show without editing it (the workspace switch's other mode)
     togglePreview: {
         labelKey: "actions.ui.togglePreview",

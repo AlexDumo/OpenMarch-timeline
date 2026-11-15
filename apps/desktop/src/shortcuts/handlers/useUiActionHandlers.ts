@@ -5,6 +5,7 @@ import { isBasicMode, useEditorModeStore } from "@/stores/EditorModeStore";
 import tolgee from "@/global/singletons/Tolgee";
 import { useActionHandler } from "../useActionHandler";
 import { useTempoModeStore } from "@/tempo/tempoModeStore";
+import { openFrontEnsemble } from "@/components/marcher/MarchersModal";
 
 export function useUiActionHandlers() {
     // Read when an action runs, so a settings change (such as a timeline zoom save) doesn't
@@ -37,6 +38,7 @@ export function useUiActionHandlers() {
     useActionHandler("openView3d", () => {
         void window.electron.openView3d();
     });
+    useActionHandler("openFrontEnsemble", openFrontEnsemble);
     // UI-17 follow-up: ? lists every shortcut
     useActionHandler("showShortcuts", () =>
         useShortcutsDialogStore.getState().setOpen(true),

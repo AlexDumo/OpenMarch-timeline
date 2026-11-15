@@ -3283,5 +3283,8 @@
     "frontEnsemble.summary.setUp": "Button on the Front ensemble row of the Marchers panel when the show has no pit: opens the front ensemble setup (presets and equipment). Verb, short.",
     "frontEnsemble.summary.edit": "Button on the Front ensemble row of the Marchers panel when the show has a pit: opens the front ensemble view to change it. Verb, short.",
     "frontEnsemble.presets.start": "Small button in the front ensemble view's header when the show has no pit yet: opens a popover to lay out a whole front ensemble from a ready-made Small, Medium or Large layout. Short.",
-    "frontEnsemble.presets.reset": "Small button in the front ensemble view's header once the show has pit equipment: opens a popover that replaces the pit with a ready-made Small, Medium or Large layout. Short."
+    "frontEnsemble.presets.reset": "Small button in the front ensemble view's header once the show has pit equipment: opens a popover that replaces the pit with a ready-made Small, Medium or Large layout. Short.",
+    "frontEnsemble.summary.title": "Name of the row at the top of the Marchers panel that opens the setup of the front ensemble (the pit: stationary keyboards and percussion in front of the field) and the podiums the drum majors stand on. Noun phrase, sentence case.",
+    "actions.ui.openFrontEnsemble": "Command palette action that opens the front ensemble and podiums view in the sidebar's Marchers panel: where the pit (stationary keyboards and percussion in front of the field) and the drum majors' podiums are set up. Same words as the row in the Marchers panel.",
+    "actions.ui.openFrontEnsembleKeywords": "Search words for the Open front ensemble and podiums action in the command palette, separated by spaces. Never shown; translate as words people might type to find it (pit, front ensemble, podium, drum major, marimba, vibraphone, percussion, speaker, equipment, preset)."
 }

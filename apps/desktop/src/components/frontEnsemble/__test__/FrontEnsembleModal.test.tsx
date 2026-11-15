@@ -34,7 +34,11 @@ import {
     FrontEnsembleContents,
     FrontEnsembleEditContents,
 } from "../FrontEnsembleModal";
-import { MarcherListContents } from "@/components/marcher/MarchersModal";
+import {
+    MarcherListContents,
+    openFrontEnsemble,
+} from "@/components/marcher/MarchersModal";
+import { registerActionHandler } from "@/shortcuts/registry";
 import SidebarModal from "@/components/sidebar/SidebarModal";
 import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 
@@ -120,6 +124,11 @@ describeDbTests("Front ensemble panel", (it) => {
         marchersAndPages,
     }) => {
         expect(marchersAndPages).toBeDefined();
+        // The row runs the openFrontEnsemble action, as the command palette does
+        const unregister = registerActionHandler("openFrontEnsemble", {
+            run: openFrontEnsemble,
+            isEnabled: () => true,
+        });
         useSidebarModalStore.setState({ isOpen: true });
         useSidebarModalStore
             .getState()
@@ -141,6 +150,7 @@ describeDbTests("Front ensemble panel", (it) => {
             expect(within(back).getByText("1 piece of equipment")).toBeTruthy(),
         );
         expect(within(back).getByRole("button", { name: "Edit" })).toBeTruthy();
+        unregister();
     });
 
     it("picks a family, then a variant, and places it as a locked, numbered item with the model's footprint", async ({

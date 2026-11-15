@@ -229,7 +229,9 @@
             "togglePreviewKeywords": "preview cinematic watch present presentation fullscreen play",
             "reportFeedback": "Report a bug or send feedback",
             "reportFeedbackKeywords": "bug issue problem feedback feature request support",
-            "viewMyReports": "View my reports"
+            "viewMyReports": "View my reports",
+            "openFrontEnsemble": "Open front ensemble and podiums",
+            "openFrontEnsembleKeywords": "pit front ensemble podium drum major marimba vibraphone percussion speaker equipment preset"
         }
     },
     "analyticsOptIn": {
@@ -1492,6 +1494,7 @@
             "reset": "Reset to preset"
         },
         "summary": {
+            "title": "Front ensemble and podiums",
             "none": "No pit yet",
             "counts": "{equipment, plural, one {# piece of equipment} other {# pieces of equipment}}{podiums, plural, =0 {} one {, # podium} other {, # podiums}}",
             "setUp": "Set up",
