@@ -32,15 +32,59 @@ function load(): CopiedPicture | null {
  */
 export type PasteAs = "shape" | "positions";
 
+/** Whether the inspector's Clipboard card is folded, kept per user like other view choices */
+const FOLDED_KEY = "openmarch:clipboardCardFolded";
+
+function loadFolded(): boolean {
+    if (typeof localStorage === "undefined") return false;
+    try {
+        return localStorage.getItem(FOLDED_KEY) === "true";
+    } catch {
+        return false;
+    }
+}
+
 export const useCopiedPictureStore = create<{
     picture: CopiedPicture | null;
     pasteAs: PasteAs;
-}>(() => ({ picture: load(), pasteAs: "shape" }));
+    /** The Clipboard card shows only its heading */
+    folded: boolean;
+}>(() => ({ picture: load(), pasteAs: "shape", folded: loadFolded() }));
+
+/** Folds or unfolds the inspector's Clipboard card, remembered across restarts */
+export function setClipboardFolded(folded: boolean): void {
+    useCopiedPictureStore.setState({ folded });
+    try {
+        localStorage.setItem(FOLDED_KEY, String(folded));
+    } catch {
+        // Still folded until the app closes
+    }
+}
+
+/**
+ * Empties the clipboard (owner, 2026-11-15): nothing to paste until something is copied again,
+ * here and in every other window
+ */
+export function clearPicture(): void {
+    useCopiedPictureStore.setState({ picture: null, pasteAs: "shape" });
+    try {
+        localStorage.removeItem(PICTURE_STORAGE_KEY);
+    } catch (error) {
+        console.error("Failed to clear the copied picture:", error);
+    }
+}
 
 /** Another window copied: this one pastes the same picture */
 syncFromStorage(PICTURE_STORAGE_KEY, parse, (picture) =>
     useCopiedPictureStore.setState({ picture, pasteAs: "shape" }),
 );
+
+// Another window cleared it (`syncFromStorage` skips a removed key)
+if (typeof window !== "undefined")
+    window.addEventListener("storage", (event) => {
+        if (event.key === PICTURE_STORAGE_KEY && event.newValue === null)
+            useCopiedPictureStore.setState({ picture: null, pasteAs: "shape" });
+    });
 
 /** Paste a copied shape as the shape or as its positions */
 export const setPasteAs = (pasteAs: PasteAs): void =>

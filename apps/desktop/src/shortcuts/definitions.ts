@@ -911,6 +911,15 @@ const STATIC_ACTIONS = {
         defaultBindings: [],
         ignoreRepeat: true,
     },
+    // Empty the formation clipboard: the Clipboard card's Clear. No key
+    clearClipboard: {
+        labelKey: "actions.edit.clearClipboard",
+        keywordsKey: "actions.edit.clearClipboardKeywords",
+        category: "edit",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
     pasteFormationInPlace: {
         labelKey: "actions.edit.pasteInPlace",
         keywordsKey: "actions.edit.pasteInPlaceKeywords",

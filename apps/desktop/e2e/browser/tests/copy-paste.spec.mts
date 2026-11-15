@@ -468,3 +468,42 @@ test("a copied box switched to Positions on the Clipboard card pastes onto its e
         card.getByTestId("clipboard-paste-as-shape"),
     ).toHaveAttribute("data-state", "on");
 });
+
+test("the Clipboard card sits at the top of the inspector, folds (remembered after a reload) and Clear empties it", async ({
+    show,
+}) => {
+    const { page } = show;
+    await select(page, [1, 2, 3, 4]);
+    await page.keyboard.press("ControlOrMeta+c");
+    const card = page.getByTestId("clipboard-section");
+    await expect(card).toBeVisible();
+    // First in the inspector
+    const top = await page.evaluate(() => {
+        const el = document.querySelector('[data-testid="clipboard-section"]');
+        const list = el?.parentElement;
+        return list ? list.firstElementChild === el : false;
+    });
+    expect(top).toBe(true);
+
+    // Folded: only the heading, which still says what's copied
+    await card.getByRole("button", { name: "Clipboard" }).click();
+    await expect(card.getByTestId("clipboard-picture")).toBeHidden();
+    await expect(card).toContainText("Clipboard: Positions, 4 marchers");
+    await page.reload();
+    await waitForField(page);
+    await expect(card).toContainText("Clipboard: Positions, 4 marchers");
+    await expect(card.getByTestId("clipboard-picture")).toBeHidden();
+    await card.getByRole("button", { name: /Clipboard/ }).click();
+    await expect(card.getByTestId("clipboard-picture")).toBeVisible();
+
+    // Clear: nothing to paste
+    await card.getByTestId("clipboard-clear").click();
+    await expect(card).toBeHidden();
+    await expectCanvasMatchesShow(show);
+    await select(page, [5, 6]);
+    await page.keyboard.press("ControlOrMeta+v");
+    await expect(preview(page)).toBeHidden();
+    await page.reload();
+    await waitForField(page);
+    await expect(card).toBeHidden();
+});

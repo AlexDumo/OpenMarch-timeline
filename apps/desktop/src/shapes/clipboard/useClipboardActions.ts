@@ -6,7 +6,11 @@ import {
 import { useEditorReadiness } from "@/shortcuts/handlers/useEditorReadiness";
 import { useShapeShown } from "../tool/shapeToolStore";
 import { copyFormation, pasteFormation } from "./copyPaste";
-import { setPasteAs, useCopiedPictureStore } from "./pictureStore";
+import {
+    clearPicture,
+    setPasteAs,
+    useCopiedPictureStore,
+} from "./pictureStore";
 import { useQuery } from "@tanstack/react-query";
 import { fieldPropertiesQueryOptions } from "@/hooks/queries/useFieldProperties";
 import { pictureSummary } from "./picture";
@@ -35,6 +39,11 @@ export function useClipboardActions(): void {
             }),
         { enabled: selected && copied, ignoreRepeat: true },
     );
+    // Empty the clipboard (the Clipboard card's Clear)
+    useActionHandler("clearClipboard", clearPicture, {
+        enabled: ready && copied,
+        ignoreRepeat: true,
+    });
     // A copied shape pastes as the shape or as its exact positions (the Clipboard card's switch)
     const picture = useCopiedPictureStore((s) => s.picture);
     const asPositions = useCopiedPictureStore((s) => s.pasteAs === "positions");

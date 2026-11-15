@@ -3,6 +3,7 @@ import { useTranslate } from "@tolgee/react";
 import { getButtonClassName, SegmentedTextSwitch } from "@openmarch/ui";
 import { WarningIcon } from "@phosphor-icons/react";
 import ActionButton from "@/shortcuts/ActionButton";
+import { InspectorCollapsible } from "@/components/inspector/InspectorCollapsible";
 import { runAction } from "@/shortcuts/registry";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { performersOnly } from "@/global/classes/Marcher";
@@ -17,7 +18,7 @@ import {
     type PictureFit,
     type PictureSummary,
 } from "./picture";
-import { useCopiedPictureStore } from "./pictureStore";
+import { setClipboardFolded, useCopiedPictureStore } from "./pictureStore";
 
 /**
  * The inspector's Clipboard card (#961, owner 2026-11-15): what Copy kept, so it's plain before
@@ -29,6 +30,7 @@ export function ClipboardSection() {
     const { t } = useTranslate();
     const picture = useCopiedPictureStore((s) => s.picture);
     const pasteAs = useCopiedPictureStore((s) => s.pasteAs);
+    const folded = useCopiedPictureStore((s) => s.folded);
     const { data: fieldProperties } = useQuery(fieldPropertiesQueryOptions());
     const selectedMarchers = useSelectedMarchers()?.selectedMarchers ?? [];
     const selected = performersOnly(selectedMarchers).length;
@@ -51,8 +53,21 @@ export function ClipboardSection() {
     const fit = pictureFit(summary, selected);
     const name = copied.kind?.shape.label ?? t("shapes.clipboard.positions");
     return (
-        <div className="flex flex-col gap-8" data-testid="clipboard-section">
-            <h5 className="text-h5">{t("shapes.clipboard.title")}</h5>
+        <InspectorCollapsible
+            data-testid="clipboard-section"
+            open={!folded}
+            onOpenChange={(open) => setClipboardFolded(!open)}
+            // Folded, the heading still says what's copied
+            translatableTitle={
+                folded
+                    ? {
+                          keyName: "shapes.clipboard.titleFolded",
+                          parameters: { name, count: summary.count },
+                      }
+                    : { keyName: "shapes.clipboard.title" }
+            }
+            className="mt-12 flex flex-col gap-8"
+        >
             <div className="flex items-center gap-12">
                 <PicturePreview picture={picture} summary={summary} />
                 <div className="flex min-w-0 flex-col">
@@ -130,8 +145,20 @@ export function ClipboardSection() {
                         {t("actions.edit.pasteInPlace")}
                     </span>
                 </ActionButton>
+                <ActionButton
+                    action="clearClipboard"
+                    data-testid="clipboard-clear"
+                    className={`${getButtonClassName({
+                        variant: "secondary",
+                        size: "compact",
+                    })} ml-auto`}
+                >
+                    <span className="text-body">
+                        {t("shapes.clipboard.clear")}
+                    </span>
+                </ActionButton>
             </div>
-        </div>
+        </InspectorCollapsible>
     );
 }
 
