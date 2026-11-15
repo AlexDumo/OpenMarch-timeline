@@ -366,7 +366,7 @@ describe("ScaleGesture", () => {
         expect(last(h.drop)).toEqual(last(h.show));
     });
 
-    it("moves at a quarter of the pointer's speed with fine (Shift; user story 51)", () => {
+    it("keeps the pointer's speed with fine (Shift): fine is no snap, and a scale doesn't snap", () => {
         const h = host();
         const gesture = new ScaleGesture(
             pointer(200, 250),
@@ -378,8 +378,8 @@ describe("ScaleGesture", () => {
         );
         gesture.move(pointer(240, 250));
         gesture.move(pointer(280, 250, { shift: true }));
-        // 40 at full speed, then 40 at a quarter: 50 across, half again
-        expect(last(h.show).map((p) => p.x)).toEqual([100, 250, 175]);
+        // 80 across at full speed: the box's 100 width goes to 180
+        expect(last(h.show).map((p) => p.x)).toEqual([100, 280, 190]);
     });
 
     it("drops what's drawn when the release didn't move, whatever keys changed", () => {
@@ -418,7 +418,7 @@ describe("ScaleGesture", () => {
         expect(scaled({ meta: true }, true)).toEqual({ x: 1.4, y: 1.4 });
         // Mac Ctrl is a right-click, never $mod; Shift is fine, not proportional
         expect(scaled({ ctrl: true }, true)).toEqual({ x: 1.5, y: 1 });
-        expect(scaled({ shift: true })).toEqual({ x: 1.13, y: 1 });
+        expect(scaled({ shift: true })).toEqual({ x: 1.5, y: 1 });
     });
 
     it("keeps the ratio by default with the ratio lock on, and constrain frees it (#545)", () => {
@@ -494,9 +494,9 @@ describe("ScaleGesture", () => {
             [225, 217.5],
             [150, 262.5],
         ]);
-        // With fine as well, at a quarter of the speed
+        // Fine changes nothing: a scale doesn't snap
         expect(
-            scaled("e", pointer(300, 225, { alt: true, shift: true }), east),
+            scaled("e", pointer(225, 225, { alt: true, shift: true }), east),
         ).toEqual([
             [75, 200],
             [225, 220],

@@ -19,8 +19,8 @@ import { seedShowSql, type SeedPosition } from "../seed.mjs";
 // The rules that modify a marcher drag (#197; #189 user stories 36 to 40,
 // rules table rows Snapping, Lock X / Lock Y; keys from the modifier roles
 // design, version A): with coordinate rounding on, one marcher snaps onto the
-// rounding grid and a group moves in whole rounding steps; fine (Shift) moves
-// at a quarter of the pointer's speed with snapping off; constrain (Cmd/Ctrl)
+// rounding grid and a group moves in whole rounding steps; fine (Shift) turns
+// snapping off, at the pointer's speed; constrain (Cmd/Ctrl)
 // keeps a drag on one axis; the Snap toggle off (Shift+M) turns snapping off
 // until the show opens again; Lock X and Lock Y hold an axis.
 //
@@ -324,24 +324,23 @@ test("change: constrain (Cmd/Ctrl) during a drag keeps the marcher on the axis i
     await expectCanvasMatchesShow(show);
 });
 
-test("change: rounding on: fine (Shift) during a drag moves the marcher at a quarter of the pointer's speed, with snapping off", async ({
+test("change: rounding on: fine (Shift) during a drag moves the marcher with the pointer, with snapping off", async ({
     show,
 }) => {
     const { page } = show;
     await roundToSteps(show);
     const grid = await fieldGrid(show);
     const start = startOf(2);
-    // The marcher should end a quarter of a step off the grid
+    // The marcher should end a quarter of a step off the grid, where the pointer is
     const moved = offGridDrag(start, { x: 1, y: 1 }, grid);
-    const pointer = { x: moved.x * 4, y: moved.y * 4 };
 
-    await dragLegs(page, "T2", [{ by: pointer, hold: ["Shift"] }]);
+    await dragLegs(page, "T2", [{ by: moved, hold: ["Shift"] }]);
 
     await expectSaved(show, withMarcherAt(2, plus(start, moved)));
     await expectCanvasMatchesShow(show);
 });
 
-test("change: rounding on: pressing Shift mid-drag goes on slowly from where the marcher is drawn, without a jump", async ({
+test("change: rounding on: pressing Shift mid-drag takes the marcher off the grid to the pointer", async ({
     show,
 }) => {
     const { page } = show;
@@ -349,29 +348,27 @@ test("change: rounding on: pressing Shift mid-drag goes on slowly from where the
     const grid = await fieldGrid(show);
     const start = startOf(2);
     const first = offGridDrag(start, { x: 2, y: 1 }, grid);
-    const onTheGrid = snapped(plus(start, first), grid);
-    const slow = { x: 8, y: -6 };
+    const atPointer = plus(start, first);
+    const more = { x: 8, y: -6 };
 
     let drawnAtFine: { x: number; y: number } | null = null;
     await dragLegs(page, "T2", [{ by: first }], async () => {
-        // Shift down with no pointer move: redrawn where it is, no jump
+        // Shift down with no pointer move: redrawn off the grid, at the pointer
         await page.keyboard.down("Shift");
         drawnAtFine = await drawnPosition(page, "T2");
         const at = await screenOf(page, "T2");
         const scale = await canvasScale(page);
-        await page.mouse.move(
-            at.x + slow.x * 4 * scale,
-            at.y + slow.y * 4 * scale,
-            { steps: 8 },
-        );
+        await page.mouse.move(at.x + more.x * scale, at.y + more.y * scale, {
+            steps: 8,
+        });
     });
     await page.keyboard.up("Shift");
 
     expect(
-        near(drawnAtFine!, onTheGrid),
-        JSON.stringify({ drawnAtFine, onTheGrid }),
+        near(drawnAtFine!, atPointer),
+        JSON.stringify({ drawnAtFine, atPointer }),
     ).toBe(true);
-    await expectSaved(show, withMarcherAt(2, plus(onTheGrid, slow)));
+    await expectSaved(show, withMarcherAt(2, plus(atPointer, more)));
     await expectCanvasMatchesShow(show);
 });
 

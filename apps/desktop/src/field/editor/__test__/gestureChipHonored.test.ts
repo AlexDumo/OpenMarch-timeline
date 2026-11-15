@@ -50,11 +50,10 @@ describe("what each field drag honors", () => {
             { fine: "fine", constrain: "oneAxis", snaps: true },
         ],
         [
-            "a scale corner: fine, a kept ratio, from center, no snapping",
+            "a scale corner: a kept ratio, from center, no snapping",
             () =>
                 new ScaleGesture(at(10, 10), marchers, host, "se", box, keys()),
             {
-                fine: "fine",
                 constrain: "keepRatio",
                 fromCenter: "fromCenter",
                 snaps: false,
@@ -73,17 +72,15 @@ describe("what each field drag honors", () => {
                     true,
                 ),
             {
-                fine: "fine",
                 constrain: "freeRatio",
                 fromCenter: "fromCenter",
                 snaps: false,
             },
         ],
         [
-            "a scale side: fine, a kept ratio, from center, no snapping",
+            "a scale side: a kept ratio, from center, no snapping",
             () => new ScaleGesture(at(10, 5), marchers, host, "e", box, keys()),
             {
-                fine: "fine",
                 constrain: "keepRatio",
                 fromCenter: "fromCenter",
                 snaps: false,
@@ -102,7 +99,6 @@ describe("what each field drag honors", () => {
                     true,
                 ),
             {
-                fine: "fine",
                 constrain: "freeRatio",
                 fromCenter: "fromCenter",
                 snaps: false,
@@ -114,9 +110,9 @@ describe("what each field drag honors", () => {
             { fine: "wholeDegrees", snaps: true },
         ],
         [
-            "a prop's side or corner: fine only",
-            () => new ItemResizeGesture(at(10, 10), frame, host, "se", keys()),
-            { fine: "fine", snaps: false },
+            "a prop's side or corner: no roles, no snapping",
+            () => new ItemResizeGesture(frame, host, "se", keys()),
+            { snaps: false },
         ],
         [
             "a prop's rotate: whole degrees, snapping",

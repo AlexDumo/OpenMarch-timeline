@@ -292,9 +292,8 @@ describe("FieldEditor with items", () => {
             ]);
         });
 
-        it("resizes at a quarter speed with fine (Shift)", () => {
+        it("resizes at the pointer's speed with fine (Shift): a resize doesn't snap, so fine changes nothing", () => {
             const { editor, state } = setup({ selected: [2] });
-            // 40 across at a quarter: the east side goes out 10
             drag(editor, HANDLE.e, { x: 390, y: 100 }, { release: false });
             editor.pointerUp(at(390, 100));
             const plain = state.saves[0];
@@ -305,30 +304,12 @@ describe("FieldEditor with items", () => {
             fine.editor.pointerMove(at(390, 100, { shift: true }));
             fine.editor.pointerUp(at(390, 100, { shift: true }));
             expect(plain).toEqual({ width: 180, depth: 40, rotation: 0 });
-            expect(fine.state.saves).toEqual([
-                { width: 120, depth: 40, rotation: 0 },
-            ]);
+            expect(fine.state.saves).toEqual([plain]);
         });
 
         describe("keys pressed or released mid-drag, with no pointer move", () => {
             let running: FieldEditor | undefined;
             afterEach(() => running?.pointerCancel());
-
-            it("re-runs a resize: fine on and off keeps the size drawn, and the pointer counts a quarter between", () => {
-                const { editor, state } = setup({ selected: [2] });
-                running = editor;
-                editor.pointerDown(at(HANDLE.e.x, HANDLE.e.y));
-                editor.pointerMove(at(370, 100));
-                expect(state.preview?.width).toBe(140);
-                key("keydown", { key: "Shift", shiftKey: true });
-                expect(state.preview?.width).toBe(140);
-                editor.pointerMove(at(410, 100, { shift: true }));
-                expect(state.preview?.width).toBe(160);
-                key("keyup", { key: "Shift" });
-                expect(state.preview?.width).toBe(160);
-                editor.pointerMove(at(420, 100));
-                expect(state.preview?.width).toBe(180);
-            });
 
             it("re-runs a rotation: Shift down draws whole degrees where the pointer is, Shift up snaps it to 15° again", () => {
                 const { editor, state } = setup({ selected: [2] });

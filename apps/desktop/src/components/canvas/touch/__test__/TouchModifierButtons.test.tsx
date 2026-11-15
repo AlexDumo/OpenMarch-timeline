@@ -238,7 +238,7 @@ describe.each([
     [
         "fine",
         "Fine",
-        "Marchers move slowly, off the grid; shapes leave the half steps; turns go by whole degrees",
+        "Marchers move freely, off the grid; shapes leave the half steps; turns go by whole degrees",
     ],
     ["constrain", "Equal", "Equal spacings"],
     ["fromCenter", "From center", "from their center"],

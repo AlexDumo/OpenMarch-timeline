@@ -2935,14 +2935,14 @@
             "explain": {
                 "add": "Toque em integrantes para adicioná-los ou removê-los.",
                 "constrain": "Espaçamentos iguais, um só eixo ao mover, alterna a escala proporcional.",
-                "fine": "Os integrantes se movem devagar, fora da grade. As formas saem dos meios passos, mas ainda se ajustam às linhas. Os giros vão de grau em grau.",
+                "fine": "Os integrantes se movem livremente, fora da grade. As formas saem dos meios passos, mas ainda se ajustam às linhas. Os giros vão de grau em grau.",
                 "fromCenter": "Os blocos são desenhados e redimensionados a partir do centro.",
                 "grip": "Arraste para mover.",
                 "help": "Gestos.",
                 "snap": "Ativa ou desativa o ajuste a passos e linhas."
             },
             "fine": "Fino",
-            "fineHint": "Fino: segure ou toque para manter ativo. Os integrantes se movem devagar, fora da grade; as formas saem dos meios passos; os giros vão de grau em grau",
+            "fineHint": "Fino: segure ou toque para manter ativo. Os integrantes se movem livremente, fora da grade; as formas saem dos meios passos; os giros vão de grau em grau",
             "fromCenter": "Do centro",
             "fromCenterHint": "Do centro: segure ou toque para manter ativo. Os blocos são desenhados e redimensionados a partir do centro",
             "grip": "Mover estes botões",
@@ -2960,7 +2960,7 @@
     "shortcutsDialog": {
         "movement": {
             "constrain": "Mover em um só eixo ao arrastar",
-            "fineControl": "Controle fino ao arrastar integrantes",
+            "fineControl": "Arrastar integrantes fora da grade",
             "nudge": "Mover um pouco os integrantes selecionados"
         },
         "shape": {

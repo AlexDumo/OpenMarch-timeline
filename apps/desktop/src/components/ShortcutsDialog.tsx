@@ -94,7 +94,7 @@ const EXTRA_ROWS: Readonly<Record<string, readonly ExtraRow[]>> = {
             keys: "W / A / S / D",
         },
         {
-            label: "Fine control while dragging marchers",
+            label: "Drag marchers off the grid",
             labelKey: "shortcutsDialog.movement.fineControl",
             keys: "Shift + Drag",
         },

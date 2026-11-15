@@ -22,7 +22,8 @@ import type { FieldTestHandle } from "../../../src/field/fieldTestApi";
 // center still (#545); rotation snaps to 15°, fine (Shift) turns it in whole
 // degrees at the pointer's full speed, and the Snap toggle off (Shift+M)
 // turns it freely;
-// fine scales at a quarter of the pointer's speed; no flipping; the box fits
+// fine doesn't change a scale (it only turns snapping off, and a scale doesn't
+// snap); no flipping; the box fits
 // the marchers again after each transform. A transform is dropped through the
 // same timeline rules as a move.
 //
@@ -427,7 +428,7 @@ test("the box fits the marchers again after a rotation", async ({ show }) => {
     expect(handles!.ne.x - right).toBeLessThan(25);
 });
 
-test("change: fine (Shift) scales at a quarter of the pointer's speed", async ({
+test("change: fine (Shift) scales at the pointer's full speed", async ({
     show,
 }) => {
     const { page } = show;
@@ -438,8 +439,8 @@ test("change: fine (Shift) scales at a quarter of the pointer's speed", async ({
     await dragHandle(page, "e", { x: 200, y: 0 }, { hold: ["Shift"] });
 
     const after = spread(await savedChange(show));
-    // A quarter of the pointer's 200 px
-    expect(after.width - before.width).toBeCloseTo(50 / scale, -0.3);
+    // All of the pointer's 200 px
+    expect(after.width - before.width).toBeCloseTo(200 / scale, -0.3);
     await expectCanvasMatchesShow(show);
 });
 

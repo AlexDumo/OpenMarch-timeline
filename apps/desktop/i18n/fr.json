@@ -2935,14 +2935,14 @@
             "explain": {
                 "add": "Touchez des marcheurs pour les ajouter ou les retirer.",
                 "constrain": "Espacements égaux, un seul axe en déplaçant, inverse la mise à l'échelle proportionnelle.",
-                "fine": "Les marcheurs se déplacent lentement, hors de la grille. Les formes quittent les demi-pas mais restent aimantées aux lignes. Les rotations se font degré par degré.",
+                "fine": "Les marcheurs se déplacent librement, hors de la grille. Les formes quittent les demi-pas mais restent aimantées aux lignes. Les rotations se font degré par degré.",
                 "fromCenter": "Les blocs se dessinent et se redimensionnent depuis leur centre.",
                 "grip": "Glissez pour déplacer.",
                 "help": "Gestes.",
                 "snap": "Active ou désactive le magnétisme aux pas et aux lignes."
             },
             "fine": "Précis",
-            "fineHint": "Précis : maintenez, ou touchez pour le garder actif. Les marcheurs se déplacent lentement, hors de la grille ; les formes quittent les demi-pas ; les rotations se font degré par degré",
+            "fineHint": "Précis : maintenez, ou touchez pour le garder actif. Les marcheurs se déplacent librement, hors de la grille ; les formes quittent les demi-pas ; les rotations se font degré par degré",
             "fromCenter": "Depuis le centre",
             "fromCenterHint": "Depuis le centre : maintenez, ou touchez pour le garder actif. Les blocs se dessinent et se redimensionnent depuis leur centre",
             "grip": "Déplacer ces boutons",
@@ -2960,7 +2960,7 @@
     "shortcutsDialog": {
         "movement": {
             "constrain": "Déplacer sur un seul axe en faisant glisser",
-            "fineControl": "Contrôle fin en faisant glisser des marcheurs",
+            "fineControl": "Faire glisser des marcheurs hors de la grille",
             "nudge": "Décaler légèrement les marcheurs sélectionnés"
         },
         "shape": {

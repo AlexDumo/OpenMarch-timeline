@@ -1760,7 +1760,7 @@ export class FieldEditor {
                   keys,
                   this.options.snap,
               )
-            : new ItemResizeGesture(press.start, frame, host, handle, keys);
+            : new ItemResizeGesture(frame, host, handle, keys);
     }
 
     /** A marquee, or a lasso after a double-click, from empty field. */
