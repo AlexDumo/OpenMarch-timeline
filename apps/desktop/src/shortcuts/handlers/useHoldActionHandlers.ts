@@ -36,11 +36,8 @@ export function useHoldActionHandlers() {
     const { pages } = useTimingObjects()!;
     const pageId = useSelectedPage()?.selectedPage?.id;
     const isPlaying = useIsPlaying()?.isPlaying ?? false;
-    const { defineAsShown, holdFromPrevious, entriesOn } = useHoldCommands(
-        pages,
-        marcherIds,
-        nameOf,
-    );
+    const { defineAsShown, holdFromPrevious, entriesOn, selectAlsoHeld } =
+        useHoldCommands(pages, marcherIds, nameOf);
     const entries = entriesOn(pageId);
     const expert = useExpertHolds(marcherIds);
 
@@ -72,7 +69,13 @@ export function useHoldActionHandlers() {
         "timelineHoldOverWindow",
         () => {
             if (expert.window)
-                void holdOverWindowOn(expert.window, marcherIds, nameOf);
+                void holdOverWindowOn(
+                    expert.window,
+                    marcherIds,
+                    nameOf,
+                    undefined,
+                    selectAlsoHeld,
+                );
         },
         {
             enabled: !isPlaying && expert.window !== null,

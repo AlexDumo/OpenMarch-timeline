@@ -1257,7 +1257,7 @@ describeDbTests(
             expect(menu.labelsFor(pages[3]!.id)?.followBack).toBeNull();
         });
 
-        it("shape and follow-the-leader members, whom the clear skips, offer no follow-back item (#573 review)", async ({
+        it("follow-the-leader members, whom the clear skips, offer no follow-back item; a placed shape's members do, as the clear takes them (#573 review; owner, 2026-11-15)", async ({
             db,
             marchersAndPages: _,
         }) => {
@@ -1314,7 +1314,7 @@ describeDbTests(
             useTimelineSelectionStore.setState({
                 storedTimelines: await readStoredTimelineMemberships(db),
             });
-            expect(following([1])).toBeNull();
+            expect(following([1])).not.toBeNull();
             expect(following([1, 2])).not.toBeNull();
 
             // Marcher 2 follows the leader on Page 3 (only the transition's style is read)
@@ -1345,7 +1345,7 @@ describeDbTests(
                 performerIds: [1, 2, 3, 4],
                 run: vi.fn(() => Promise.resolve(1)),
             });
-            expect(menu.labelsFor(pages[3]!.id)?.followBack).toBeNull();
+            expect(menu.labelsFor(pages[3]!.id)?.followBack).not.toBeNull();
         });
 
         it("set to previous clears an own move that already goes nowhere (a stay)", async ({

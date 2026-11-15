@@ -37,6 +37,7 @@ import {
 } from "../shapeRecipes";
 import { readHeldMarks } from "../timelineHeldMarks";
 import { holdFromPreviousPage } from "../timelineHoldFromPrevious";
+import { holdOverWindow } from "../timelineHoldOverWindow";
 import { setAsShownOnPage } from "../timelineSetAsShown";
 import { unsetMarchersAt } from "../timelineUnset";
 import { setMarchersToNeighborPage } from "@/utilities/setMarchersToNeighborPage";
@@ -2476,6 +2477,80 @@ describeDbTests(
             expect(await recipesOn(db, page3)).toEqual([
                 { kind: "box", params: { spots: 3 }, members: [c] },
             ]);
+        });
+
+        it("Expert: Hold from start flag to playhead over a page with its own copy holds the whole box from page 2", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b } = await show(db);
+            const page2 = await moveEndingAt(db, a, PAGE3.start);
+            await boxOn(db, page2, [
+                { marcherId: a, xy: UP },
+                { marcherId: b, xy: UP2 },
+            ]);
+            const there: XY = [UP[0] + 20, UP[1]];
+            const there2: XY = [UP2[0] + 20, UP2[1]];
+            await move(db, PAGE3, [
+                { marcherId: a, xy: there },
+                { marcherId: b, xy: there2 },
+            ]);
+            const page3 = await moveEndingAt(db, a, PAGE3.end);
+            await boxOn(db, page3, [
+                { marcherId: a, xy: there },
+                { marcherId: b, xy: there2 },
+            ]);
+            const result = await holdOverWindow({
+                db,
+                window: PAGE3,
+                marcherIds: [a],
+            });
+            expect(result).toEqual({
+                held: [a, b].sort((x, y) => x - y),
+                skipped: [],
+                alsoHeld: [b],
+            });
+            expect((await atFlags(db, a)).slice(2, 4)).toEqual([UP, UP]);
+            expect(await recipesOn(db, page3)).toEqual([]);
+        });
+
+        it("Clear this page for part of a box's own copy leaves holes in it, and the rest on their spots", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b, c } = await show(db);
+            await move(db, PAGE3, [
+                { marcherId: a, xy: FAR },
+                { marcherId: b, xy: LEFT },
+                { marcherId: c, xy: ELSEWHERE },
+            ]);
+            const page3 = await moveEndingAt(db, a, PAGE3.end);
+            await boxOn(db, page3, [
+                { marcherId: a, xy: FAR },
+                { marcherId: b, xy: LEFT },
+                { marcherId: c, xy: ELSEWHERE },
+            ]);
+            const before = await snapshot(db);
+            const recipesBefore = await recipeTables(db);
+            const result = await moveMarchersInTarget({
+                db,
+                target: { kind: "range", ...PAGE3 },
+                moves: [{ marcherId: a, x: UP[0], y: UP[1] }],
+                clearPage: true,
+            });
+            expect(result.skipped).toBeUndefined();
+            expect((await atFlags(db, a))[3]).toEqual(UP);
+            expect((await atFlags(db, b))[3]).toEqual(LEFT);
+            expect(await recipesOn(db, page3)).toEqual([
+                {
+                    kind: "box",
+                    params: { spots: 3 },
+                    members: [b, c].sort((x, y) => x - y),
+                },
+            ]);
+            await roundTrip(db, before, await snapshot(db));
+            expect((await performUndo(db)).success).toBe(true);
+            expect(await recipeTables(db)).toEqual(recipesBefore);
         });
 
         it("holding the next page for one member carries the whole box on, each joining its hold", async ({

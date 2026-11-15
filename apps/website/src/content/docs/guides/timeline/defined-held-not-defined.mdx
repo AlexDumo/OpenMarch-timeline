@@ -72,7 +72,7 @@ Select marchers, and the timeline shows their states along the bottom edge of th
 
 While you drag marchers on the field, the lines that the drag will change grow thicker and turn the accent color, so you can see which later pages move too before you let go. The same happens while you point at an item such as "Remove keyframe, Pages 4–5 move back too" in a diamond's menu.
 
-On the field, a marcher is drawn with a dashed outline only where it's Not defined at the playhead. Defined and Held marchers, marchers walking in a move, and marchers in a shape carried on are drawn solid. A marcher's label is bold at its keyframes and lighter between them.
+On the field, a marcher is drawn with a dashed outline only where it's Not defined at the playhead. Defined and Held marchers, and marchers walking in a move, are drawn solid. A marcher's label is bold at its keyframes and lighter between them.
 
 In the inspector, the selected marchers' section says what decides where they are on the playhead's page:
 
@@ -150,7 +150,7 @@ This needs Expert mode: see [Basic and Expert](/guides/start/basic-and-expert/).
 2. Select the marchers.
 3. Right-click a selected marcher on the field and select <Ui k="timeline.terms.holdOverWindow" />, or find it in the command palette. It has no shortcut.
 
-As with Hold from last keyframe, pointing at the command shows the hold before you select it, and where the marchers are Not defined before the start flag, the hold reaches back over those pages to their last keyframe. Their moves between the two flags are taken out. A move that crosses the start flag is cut there. A move that crosses the playhead keeps its destination, so the marchers walk the rest of it faster, and a step size warning shows if it's too fast. Marchers in a shape or following the leader are left alone, and a message names them.
+As with Hold from last keyframe, pointing at the command shows the hold before you select it, and where the marchers are Not defined before the start flag, the hold reaches back over those pages to their last keyframe. Their moves between the two flags are taken out. A move that crosses the start flag is cut there. A move that crosses the playhead keeps its destination, so the marchers walk the rest of it faster, and a step size warning shows if it's too fast. Marchers following the leader are left alone, and a message names them. A shape is held whole here too.
 
 ## Clear this page
 

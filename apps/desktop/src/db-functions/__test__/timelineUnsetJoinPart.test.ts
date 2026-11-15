@@ -133,13 +133,14 @@ describeDbTests(
             expect(await dataOf(db)).toEqual(joinedData);
         });
 
-        it("a shape member keeps the plain Remove and is named; the other selected marcher joins", async ({
+        it("part of a shape keeps the plain Remove and is named; the other selected marcher joins", async ({
             db,
             marchersAndPages: _,
         }) => {
             const { after, members, even } = await splitPage2(db);
-            const [shaped, free] = members as [number, number];
-            // The half after the split keeps the shape recipe (#363) of one marcher
+            const [shaped, free, mate] = members as [number, number, number];
+            // The half after the split keeps a shape recipe (#363) of one selected marcher and one
+            // that isn't: taken apart, the selected one would leave the shape unseen
             await transactionWithHistory(db, "recipe", async (tx) => {
                 // The recipe tables aren't in the undo history on their own; a named move is
                 await tx
@@ -156,7 +157,10 @@ describeDbTests(
                         orderMode: "keep",
                         reverse: false,
                     },
-                    members: [{ marcherId: shaped, slot: 0, x: 100, y: 50 }],
+                    members: [
+                        { marcherId: shaped, slot: 0, x: 100, y: 50 },
+                        { marcherId: mate, slot: 1, x: 120, y: 50 },
+                    ],
                 });
             });
             const r0 = await resolverOf(db);

@@ -112,7 +112,7 @@ export function useHoldCommands(
             },
         [keepStates, marcherIds, marks],
     );
-    return { defineAsShown, holdFromPrevious, entriesOn };
+    return { defineAsShown, holdFromPrevious, entriesOn, selectAlsoHeld };
 }
 
 /**

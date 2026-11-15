@@ -623,9 +623,15 @@ passages of the 2026-10-30 amendment:
   field's look and the inspector. Nothing stored changes: "carried" was never stored, so existing
   files simply show those pages as Not defined, which is how edits there always behaved.
 
-No schema or file format change. Still open: Clear this page and the Expert window's cut and
-remove keep skipping a placed shape's members in a move they would cut (the 2026-10-30
-amendment's interim rule, until fork #504).
+- **Cut and remove take a placed shape's members like anyone**, so Clear this page, its drag back
+  and the Expert window hold no longer skip them. A cut keeps the move's recipe with the piece
+  after it, and members removed from the piece holding it leave the recipe with holes. Only part of
+  a shape taken into a move of its own (a cut that would change someone else's curved path, Remove
+  keyframe on part of a group, the join, Clear keeping the next page) stays and is named as in a
+  shape: it would leave the shape while still standing on its spots. Follow-the-leader members
+  keep the 2026-10-30 interim rule until fork #504.
+
+No schema or file format change.
 
 ### 3. Undo and redo compatibility (C-1, C-2, C-6)
 

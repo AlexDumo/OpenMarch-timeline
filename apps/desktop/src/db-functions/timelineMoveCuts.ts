@@ -60,12 +60,17 @@ import {
  *    are named (`followTheLeaderOrder`). A direct path is cut for everyone, as no one's motion
  *    changes.
  *
- * **Shape and follow-the-leader members stay** (owner, 2026-10-30, holds README decisions 6–14,
- * interim until fork #504): a marcher in a shape recipe of the move (#363), or whose row is in a
- * follow-the-leader transition, is left in it and reported in `skipped` with the reason. The
- * others are still removed. `skippedRefusal` words them for the toast. A transition into a stored
- * shape (Q-14, no recipe) is switched to individual points first, as a canvas move switches it,
- * so the marchers who stay keep their spots.
+ * **Follow-the-leader members stay** (owner, 2026-10-30, holds README decisions 6–14, interim
+ * until fork #504): a marcher whose row is in a follow-the-leader transition is left in it and
+ * reported in `skipped` with the reason. The others are still removed. `skippedRefusal` words them
+ * for the toast. A transition into a stored shape (Q-14, no recipe) is switched to individual
+ * points first, as a canvas move switches it, so the marchers who stay keep their spots.
+ *
+ * **A placed shape's members go like anyone** (owner, 2026-11-15, reversing the 2026-10-30
+ * interim rule for them): a cut keeps the move's recipe with the piece after it
+ * (`splitTimelineAtBeatInTransaction`), and members removed from the piece holding it leave the
+ * recipe with holes (`dropRecipeLeavers`). Only part of a shape taken into a move of its own stays,
+ * named as in a shape (`partOfShapes`): it would leave the shape while still on its spots.
  *
  * **Into a move of their own** (`takeMarchersIntoOwnMoveInTransaction`, R4, #471): a removal over
  * the move's whole counts whose marchers aren't left with nothing there but go, rows and motion as
@@ -391,37 +396,44 @@ async function membersThatStay(
     };
     for (const r of rows)
         if (r.pathStyle === "follow_the_leader") note(r, "followTheLeader");
-    if (rows.length === 0 || !(await hasShapeRecipes(tx))) return out;
+    return out;
+}
+
+/**
+ * Those of `marcherIds` in a placed shape's recipe on move `timelineId` that wouldn't take the
+ * whole shape with them (`shapeRecipesOnly`; an ungrouped mark is no shape). Taken into a move of
+ * their own, a part of a shape would silently leave it while still standing on its spots
+ * (`splitShapeRecipesInTransaction` drops them from it), so they stay, named as in a shape. A whole
+ * shape goes, its recipe with it (owner, 2026-11-15: a shape is held, and cleared, whole).
+ */
+async function partOfShapes(
+    tx: DbTransaction,
+    timelineId: number,
+    marcherIds: readonly number[],
+): Promise<number[]> {
+    if (marcherIds.length === 0 || !(await hasShapeRecipes(tx))) return [];
     const recipes = schema.timeline_shape_recipes;
     const members = schema.timeline_shape_recipe_marchers;
-    const inRecipes = await tx
-        .selectDistinct({
-            marcherId: members.marcher_id,
-            timelineId: recipes.timeline_id,
-        })
+    const rows = await tx
+        .select({ recipeId: recipes.id, marcherId: members.marcher_id })
         .from(members)
         .innerJoin(recipes, eq(recipes.id, members.recipe_id))
-        .where(
-            and(
-                inArray(
-                    members.marcher_id,
-                    ascending(rows.map((r) => r.row.marcher_id)),
-                ),
-                inArray(
-                    recipes.timeline_id,
-                    ascending(rows.map((r) => r.timelineId)),
-                ),
-                shapeRecipesOnly(),
-            ),
-        )
+        .where(and(eq(recipes.timeline_id, timelineId), shapeRecipesOnly()))
         .all();
-    const recipeKeys = new Set(
-        inRecipes.map((m) => `${m.marcherId}:${m.timelineId}`),
-    );
+    const going = new Set(marcherIds);
+    const byRecipe = new Map<number, number[]>();
     for (const r of rows)
-        if (recipeKeys.has(`${r.row.marcher_id}:${r.timelineId}`))
-            note(r, "shape");
-    return out;
+        byRecipe.set(r.recipeId, [
+            ...(byRecipe.get(r.recipeId) ?? []),
+            r.marcherId,
+        ]);
+    const out = new Set<number>();
+    for (const ids of byRecipe.values()) {
+        const leaving = ids.filter((id) => going.has(id));
+        if (leaving.length > 0 && leaving.length < ids.length)
+            for (const id of leaving) out.add(id);
+    }
+    return ascending([...out]);
 }
 
 /** The counts of `range`'s ends that `leaving`'s rows cross, so the move is cut there. */
@@ -458,20 +470,34 @@ async function planCuts(
  * that has to stay in any of those moves (a shape or follow-the-leader member, or one split by
  * marcher won't take out of a move that needs a cut) stays in all of them. Marchers with no row
  * there are ignored.
+ *
+ * With `intoOwnMove` (a plan for `takeMarchersIntoOwnMoveInTransaction`, over the whole of move
+ * `timelineId`), part of a placed shape stays too (`partOfShapes`).
  */
 export async function planRemovalFromRange({
     tx,
     marcherIds,
     range,
     timelineId = null,
+    intoOwnMove = false,
 }: {
     tx: DbTransaction;
     marcherIds: readonly number[];
     range: BeatRange;
     timelineId?: number | null;
+    intoOwnMove?: boolean;
 }): Promise<RemovalPlan> {
     const rows = await rowsIn(tx, timelineId, { marcherIds, range });
     const stay = await membersThatStay(tx, rows);
+    if (intoOwnMove && timelineId !== null)
+        for (const marcherId of await partOfShapes(
+            tx,
+            timelineId,
+            ascending(
+                rows.map((r) => r.row.marcher_id).filter((m) => !stay.has(m)),
+            ),
+        ))
+            stay.set(marcherId, { marcherId, timelineId, reason: "shape" });
     // A refusal to take some into a move of their own keeps them in every move, so plan again
     for (;;) {
         const moves: MoveRemovalPlan[] = [];
@@ -542,6 +568,18 @@ async function planMove(
             storedShapesSwitched: true,
         });
         if (why) return why;
+        // Part of a shape taken into a move of its own would leave it unseen: they stay
+        const part = await partOfShapes(tx, id, removed);
+        if (part.length > 0)
+            return {
+                reason: "shape",
+                leaving: part,
+                staying: ascending(
+                    rows
+                        .map((r) => r.row.marcher_id)
+                        .filter((m) => !part.includes(m)),
+                ),
+            };
     }
     const counts = { start: move.start_beat, end: move.end_beat };
     const { cuts, piece } = await planCuts(
@@ -730,13 +768,24 @@ export async function takeMarchersIntoOwnMoveInTransaction({
         marcherIds,
         range: { start: move.start_beat, end: move.end_beat },
         timelineId,
+        intoOwnMove: true,
     });
-    const taken = plan.removed;
-    if (taken.length === 0) return none(plan.skipped);
+    // Part of a shape stays, named, so it doesn't leave the shape unseen (`partOfShapes`)
+    const part = await partOfShapes(tx, timelineId, plan.removed);
+    const stayed: MoveMemberSkip[] = [
+        ...plan.skipped,
+        ...part.map((marcherId) => ({
+            marcherId,
+            timelineId,
+            reason: "shape" as const,
+        })),
+    ].sort((x, y) => x.marcherId - y.marcherId);
+    const taken = plan.removed.filter((id) => !part.includes(id));
+    if (taken.length === 0) return none(stayed);
     const rows = await rowsIn(tx, timelineId);
     const going = new Set(taken);
     if (rows.every((r) => going.has(r.row.marcher_id)))
-        return { taken, stayed: plan.skipped, timelineId };
+        return { taken, stayed, timelineId };
     // Only transitions shared with someone who stays are switched; a whole one keeps its shape
     const staying = new Set(
         rows
@@ -755,7 +804,7 @@ export async function takeMarchersIntoOwnMoveInTransaction({
         timelineId,
         marcherIds: taken,
     });
-    return { taken, stayed: plan.skipped, timelineId: split.timeline.id };
+    return { taken, stayed, timelineId: split.timeline.id };
 }
 
 const REASON_WORDS: Record<MoveMemberSkipReason, [string, string]> = {

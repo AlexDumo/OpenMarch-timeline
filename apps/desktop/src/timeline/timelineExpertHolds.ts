@@ -100,12 +100,16 @@ export function expertHoldSkipMessage(
     };
 }
 
-/** **Hold over the window** `[start, end)` for `marcherIds` (`holdOverWindow`). */
+/**
+ * **Hold over the window** `[start, end)` for `marcherIds` (`holdOverWindow`). `onAlsoHeld` gets
+ * the marchers held that weren't selected (the rest of a shape), to add them to the selection.
+ */
 export async function holdOverWindowOn(
     window: { start: number; end: number },
     marcherIds: readonly number[],
     nameOf: MarcherNameOf | undefined,
     database: DbConnection = db,
+    onAlsoHeld?: (marcherIds: readonly number[]) => void,
 ): Promise<HoldOverWindowResult> {
     try {
         const result = await holdOverWindow({
@@ -113,6 +117,7 @@ export async function holdOverWindowOn(
             window,
             marcherIds,
         });
+        if (result.alsoHeld && onAlsoHeld) onAlsoHeld(result.alsoHeld);
         const message = expertHoldSkipMessage(result, nameOf);
         if (message)
             toast.info(message.title, { description: message.description });
