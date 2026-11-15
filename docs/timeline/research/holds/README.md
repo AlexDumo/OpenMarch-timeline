@@ -92,6 +92,10 @@ Holds never look inside a shape or a path style. Where a rule below mentions sha
 follow-the-leader (decisions 4, 16, R4, R5), it is provisional until the ownership model lands.
 Tickets built from this doc should say the same.
 
+**2026-11-15 (owner):** a placed shape is held like any marchers, and held whole: a hold links
+counts, a shape only arranges marchers (ADR 0012, amendment of 2026-11-15). The rules below that
+skip shape members now apply only to transitions into stored shapes and to follow-the-leader.
+
 ## Vocabulary (owner, 2026-10-28)
 
 Working words since 2026-11-02 (owner): **Defined · Held · Not defined**, and **Define as shown**

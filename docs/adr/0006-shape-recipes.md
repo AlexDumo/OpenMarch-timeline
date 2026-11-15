@@ -626,3 +626,22 @@ marchers a shape where they stand. Nobody moves. It changes no schema.
 Verification: `group/__test__/groupTool.test.ts` (the frame, turn, flip, move, interval and scale,
 and reading groups back across pages) and the browser scenario "Group makes the selected marchers
 a shape…" in `box-tool.spec.mts`.
+
+## Amendment, 2026-11-15: a Held shape edits where it's held from
+
+Rule 4 of the 2026-10-29 revision (a later page gets its own copy on any edit there) holds only
+where the shape isn't Held. A shape can now be Held over later pages, and is Held whole (ADR 0012,
+amendment of 2026-11-15). There, an edit of the shape goes to the move its hold grows out of, as a
+drag of any Held marcher does: the members' positions are written to that move, and its recipe is
+replaced in place, since the after-write step is called with the move the positions went to.
+
+1. **One move per shape.** A shape's recipe belongs to one move, so a placement or refill whose
+   members' positions would go to two moves (some Held, some not) is refused as one edit
+   (`shapePartlyHeld`, `oneMoveForShape`).
+2. **Leavers leave holes.** Marchers cleared off a move leave its recipes, a shape's as well as an
+   ungrouped mark (`dropRecipeLeavers`); a shape that keeps members keeps its spot count.
+3. Nothing else changes: a shape still shows on later pages while its members stand on its spots
+   (`boxesAt`), and selecting it there still works. Showing is not holding.
+
+Verification: "A shape is Held whole" in `db-functions/__test__/timelineHoldFromPrevious.test.ts`
+and `shapes/__test__/oneMoveForShape.test.ts`.

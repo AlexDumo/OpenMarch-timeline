@@ -592,6 +592,41 @@ view, which has no time-to-beat function today.
 decision 12). **Define as shown** stays in the page box menu, on right-click of a Not defined
 bar, in the inspector and in the palette. No stored data or format changes.
 
+**Amendment (2026-11-15, project owner): a shape can be Held, and is Held whole.** This reverses
+the owner's decision of 2026-11-01 that a placed shape carried onto later pages is the shape's
+hold. A hold says "these marchers stay the same for this stretch": it links counts, like a link
+across beats, while a shape only arranges marchers. The 2026-11-01 rule drew a carried shape as
+Held but edited it as Not defined (an edit there made that page's own copy), which is what the
+owner found confusing. So, amending the Held-holds, starting-spots and drag-inside-a-hold
+passages of the 2026-10-30 amendment:
+
+- **A placed shape's move is an arrival like any other.** Hold from last keyframe, Hold from start
+  flag to playhead and a drag inside a hold no longer skip a marcher whose arrival is a placed
+  shape's move (a recipe in `timeline_shape_recipes` on that move), or whose starting spot a
+  placed shape sets. Only a transition into a stored shape (`dest_shape_id`) and a
+  follow-the-leader move are still skipped and named, since the write would rewrite them. Placing
+  a shape at the starting spots no longer drops holds from the starting spots.
+- **A shape is Held whole.** Holding some of a placed shape's members holds the rest of it where
+  it is carried there with them: their own hold would grow out of the same move (or the starting
+  spots) from the same count, and their only rows in the stretch are in that shape's own move.
+  Members that walked off since, or move on their own in the stretch, stay as they are. The
+  results list them as `alsoHeld`.
+- **Holding a page with its own copy of the shape** removes the page's moves as before, and the
+  copy goes with them. A recipe that keeps members after marchers are cleared off its move keeps
+  its spot count (`params.spots`), so the cleared ones leave holes, as when members walk away.
+- **A drag inside the hold edits the move it grows out of**, shape and all: an edit's after-write
+  step (a shape recipe) now runs once per move the edit writes, with the marchers written there,
+  so a shape's recipe is saved with the move its members' positions went to. A placement or refill
+  whose members would go to two moves (some Held, some not) is refused as a whole
+  (`shapePartlyHeld`).
+- **A shape shown on a later page with no hold is Not defined there**, in the hold bars, the
+  field's look and the inspector. Nothing stored changes: "carried" was never stored, so existing
+  files simply show those pages as Not defined, which is how edits there always behaved.
+
+No schema or file format change. Still open: Clear this page and the Expert window's cut and
+remove keep skipping a placed shape's members in a move they would cut (the 2026-10-30
+amendment's interim rule, until fork #504).
+
 ### 3. Undo and redo compatibility (C-1, C-2, C-6)
 
 The app's history mechanism (`history_undo`, `history_redo`, `history_stats`, the
