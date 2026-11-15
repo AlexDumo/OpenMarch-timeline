@@ -4,7 +4,6 @@ import { T, useTranslate } from "@tolgee/react";
 import FormField from "@/components/ui/FormField";
 import { CheckpointEditor } from "./CheckpointEditor";
 import { inputClassname } from "./utils";
-import { sortedCheckpoints } from "./fieldEditorValues";
 
 export interface CheckpointsTabProps {
     currentFieldProperties: FieldProperties;
@@ -16,6 +15,7 @@ export interface CheckpointsTabProps {
     }) => void;
     deleteCheckpoint: (checkpoint: Checkpoint) => void;
     addCheckpoint: (axis: "x" | "y") => void;
+    sorter: (a: Checkpoint, b: Checkpoint) => number;
 }
 
 export function CheckpointsTab({
@@ -24,6 +24,7 @@ export function CheckpointsTab({
     updateCheckpoint,
     deleteCheckpoint,
     addCheckpoint,
+    sorter,
 }: CheckpointsTabProps) {
     const { t } = useTranslate();
 
@@ -56,8 +57,9 @@ export function CheckpointsTab({
                     <T keyName="fieldProperties.warnings.xCheckpointsNotEquidistant" />
                 </div>
                 <div className="flex flex-col gap-12">
-                    {sortedCheckpoints(currentFieldProperties.xCheckpoints).map(
-                        (xCheckpoint) => (
+                    {currentFieldProperties.xCheckpoints
+                        .sort(sorter)
+                        .map((xCheckpoint) => (
                             <CheckpointEditor
                                 checkpoint={xCheckpoint}
                                 updateCheckpoint={updateCheckpoint}
@@ -65,8 +67,7 @@ export function CheckpointsTab({
                                 axis="x"
                                 deleteCheckpoint={deleteCheckpoint}
                             />
-                        ),
-                    )}
+                        ))}
                 </div>
                 <div className="mt-16 flex justify-end">
                     <Button
@@ -115,8 +116,9 @@ export function CheckpointsTab({
                             }}
                         />
                     </FormField>
-                    {sortedCheckpoints(currentFieldProperties.yCheckpoints).map(
-                        (yCheckpoint) => (
+                    {currentFieldProperties.yCheckpoints
+                        .sort(sorter)
+                        .map((yCheckpoint) => (
                             <CheckpointEditor
                                 checkpoint={yCheckpoint}
                                 updateCheckpoint={updateCheckpoint}
@@ -124,8 +126,7 @@ export function CheckpointsTab({
                                 axis="y"
                                 deleteCheckpoint={deleteCheckpoint}
                             />
-                        ),
-                    )}
+                        ))}
                 </div>
                 <div className="mt-16 mb-16 flex justify-end">
                     <Button

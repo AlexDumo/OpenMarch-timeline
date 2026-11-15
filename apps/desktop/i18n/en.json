@@ -537,7 +537,6 @@
             "importImage": "Import Image",
             "newXCheckpoint": "New X-Checkpoint",
             "newYCheckpoint": "New Y-Checkpoint",
-            "removeImage": "Remove Image",
             "resetTheme": "Reset Theme to Default"
         },
         "checkpoint": {
@@ -549,11 +548,11 @@
             "fieldLabelTooltip": "The label to appear on the field (i.e., the yard markers)",
             "minimumRequired": "At least 2 {axis}-checkpoints are required",
             "name": "Name",
-            "nameUsageTooltip": "The full name of the line, such as \"45 yard line\". It's used in written-out coordinates (\"2 steps inside 45 yard line\"), and the 3D View uses it to choose the venue.",
+            "nameTooltip": "Name your checkpoint whatever you want. This is just for you to know what checkpoint you're selecting.",
             "newXCheckpointName": "New X Checkpoint",
             "newYCheckpointName": "New Y Checkpoint",
             "shortName": "Short Name",
-            "shortNameUsageTooltip": "The short name of the line, such as \"45\" or \"FH\". It's what the field shows along its edges, and what the coordinate readouts and coordinate sheets use.",
+            "shortNameTooltip": "The primary name of the checkpoint. (E.g. \"45 Yard Line - Side 1\")",
             "stepsFromCenter": "Steps from center",
             "stepsFromFront": "Steps from front",
             "stepsFromFrontTooltip": "The number of steps away from the front of the field that this checkpoint is. Negative is towards the back.",
@@ -575,9 +574,7 @@
             "invalidJson": "Invalid JSON file.\n\nPlease ensure the file contains valid JSON syntax.",
             "invalidFile": "Invalid field properties file.\n\n{details}\n\nPlease ensure the file contains all required fields with correct values.",
             "fieldsHaveErrors": "The following fields have errors:\n{issues}",
-            "unknownValidation": "Unknown validation error",
-            "saveFailed": "Couldn't save that change. The field is unchanged.",
-            "removeImageFailed": "Couldn't remove the background image."
+            "unknownValidation": "Unknown validation error"
         },
         "fieldTemplate": {
             "custom": "Custom",
@@ -637,7 +634,8 @@
         },
         "messages": {
             "fieldRatio": "{ratio} or {decimal}",
-            "measurementModificationNote": "These values can be modified by adjusting the X and Y coordinates, the step size and the background image"
+            "measurementModificationNote": "These values can be modified by adjusting the X and Y coordinates, the step size and the background image",
+            "refreshAfterImporting": "Refresh after importing [Ctrl + R]"
         },
         "options": {
             "fill": "Fill",
@@ -670,7 +668,6 @@
         },
         "tooltips": {
             "importImage": "Import an image to display on the field",
-            "removeImage": "Remove the background image from the field. You can undo this.",
             "conformMethod": "Whether to fit the background image inside the field or fill it. The aspect ratio is always maintained",
             "directorsLeft": "E.g. \"Side 1\", \"Audience Left\" or \"Stage Right\"",
             "directorsRight": "E.g. \"Side 2\", \"Audience Right\" or \"Stage Left\"",

@@ -1,9 +1,4 @@
-import {
-    FieldProperties,
-    MeasurementSystem,
-    SideDescriptions,
-    YardNumberCoordinates,
-} from "@openmarch/core";
+import { FieldProperties, MeasurementSystem } from "@openmarch/core";
 import { Input, UnitInput, TabContent, Switch } from "@openmarch/ui";
 import {
     Select,
@@ -14,164 +9,27 @@ import {
 } from "@openmarch/ui";
 import { T, useTranslate } from "@tolgee/react";
 import clsx from "clsx";
-import { toast } from "sonner";
 import FormField from "@/components/ui/FormField";
 import { inputClassname } from "./utils";
-import { useCommitInput, type CommitInputProps } from "./useCommitInput";
-import {
-    filterSignedNumber,
-    filterUnsignedNumber,
-    formatNumber,
-    parseNumber,
-    parseStepSize,
-} from "./fieldEditorValues";
 
 interface GeneralTabProps {
     currentFieldProperties: FieldProperties;
-    /** Saves the field. A rejected promise puts the edited input back and shows an error. */
-    updateFieldProperties: (props: FieldProperties) => void | Promise<unknown>;
+    updateFieldProperties: (props: FieldProperties) => void;
+    fieldProperties: FieldProperties | undefined;
+    measurementSystem: MeasurementSystem;
+    stepSizeInputRef: React.RefObject<HTMLInputElement | null>;
+    blurOnEnter: (e: React.KeyboardEvent<HTMLInputElement>) => void;
 }
-
-const errorInputClassname = clsx(inputClassname, "border-red");
-
-/** A number, or null when the text isn't one. */
-const parseRequiredNumber = (text: string) => {
-    const value = parseNumber(text);
-    return value === undefined ? null : { value };
-};
-
-/** A number, or nothing for an empty input. */
-const parseOptionalNumber = (text: string) =>
-    text.trim() === "" ? { value: undefined } : parseRequiredNumber(text);
-
-/** An optional number as an input shows it: empty for nothing. */
-const formatOptionalNumber = (value: number | undefined) =>
-    value === undefined ? "" : formatNumber(value);
-
-/** Any text. */
-const parseText = (text: string) => ({ value: text });
-const formatText = (text: string) => text;
-
-/**
- * The props a text input takes from `useCommitInput`, with the red border for an invalid value.
- * `className` goes on a plain input; a `UnitInput` takes it as `containerClassName`.
- */
-const inputProps = ({ valid, ...props }: CommitInputProps) => ({
-    ...props,
-    className: valid ? inputClassname : errorInputClassname,
-});
-const unitInputProps = (commitInput: CommitInputProps) => {
-    const { className, ...props } = inputProps(commitInput);
-    return { ...props, containerClassName: className };
-};
 
 export function GeneralTab({
     currentFieldProperties,
     updateFieldProperties,
+    fieldProperties,
+    measurementSystem,
+    stepSizeInputRef,
+    blurOnEnter,
 }: GeneralTabProps) {
     const { t } = useTranslate();
-    const field = currentFieldProperties;
-    const imperial = field.measurementSystem === "imperial";
-    const toInches = (units: number) =>
-        imperial ? units : FieldProperties.centimetersToInches(units);
-    const save = (changes: Partial<FieldProperties>) =>
-        updateFieldProperties(new FieldProperties({ ...field, ...changes }));
-    /** Saves a switch or select. It follows the stored field, so a failed save only shows an error. */
-    const toggle = (changes: Partial<FieldProperties>) => {
-        Promise.resolve(save(changes)).catch((error: unknown) => {
-            console.error("Couldn't save the field", error);
-            toast.error(t("fieldProperties.errors.saveFailed"));
-        });
-    };
-
-    // Every input follows the stored field (undo, import, another window) and saves only a
-    // changed, valid value; see useCommitInput
-    const name = useCommitInput({
-        current: field.name,
-        format: formatText,
-        parse: parseText,
-        commit: (value) => save({ name: value }),
-    });
-    const stepSize = useCommitInput({
-        current: field.stepSizeInUnits,
-        format: formatNumber,
-        // A step has a length: 0 would make a field with no size
-        parse: (text) => {
-            const value = parseStepSize(text);
-            return value === undefined ? null : { value };
-        },
-        commit: (value) => save({ stepSizeInches: toInches(value) }),
-        filter: filterUnsignedNumber,
-    });
-    const threshold = useCommitInput({
-        current: field.stepSizeWarningThresholdInUnits,
-        format: formatNumber,
-        // 0 turns the warning off
-        parse: parseRequiredNumber,
-        commit: (value) =>
-            save({ stepSizeWarningThresholdInches: toInches(value) }),
-        filter: filterUnsignedNumber,
-    });
-    const halfLineX = useCommitInput({
-        current: field.halfLineXInterval ?? 0,
-        format: formatNumber,
-        // The field stores no interval as 0 (no half lines), so an empty input means 0
-        parse: (text) =>
-            text.trim() === "" ? { value: 0 } : parseRequiredNumber(text),
-        commit: (value) => save({ halfLineXInterval: value }),
-        filter: filterUnsignedNumber,
-    });
-    const halfLineY = useCommitInput({
-        current: field.halfLineYInterval ?? 0,
-        format: formatNumber,
-        // The field stores no interval as 0 (no half lines), so an empty input means 0
-        parse: (text) =>
-            text.trim() === "" ? { value: 0 } : parseRequiredNumber(text),
-        commit: (value) => save({ halfLineYInterval: value }),
-        filter: filterUnsignedNumber,
-    });
-    const sideInput = (key: keyof SideDescriptions) => ({
-        current: field.sideDescriptions[key],
-        format: formatText,
-        parse: parseText,
-        commit: (value: string) =>
-            save({
-                sideDescriptions: { ...field.sideDescriptions, [key]: value },
-            }),
-    });
-    const verboseLeft = useCommitInput(sideInput("verboseLeft"));
-    const terseLeft = useCommitInput(sideInput("terseLeft"));
-    const verboseRight = useCommitInput(sideInput("verboseRight"));
-    const terseRight = useCommitInput(sideInput("terseRight"));
-    const yardNumberInput = (key: keyof YardNumberCoordinates) => ({
-        current: field.yardNumberCoordinates[key],
-        format: formatOptionalNumber,
-        parse: parseOptionalNumber,
-        commit: (value: number | undefined) =>
-            save({
-                yardNumberCoordinates: {
-                    ...field.yardNumberCoordinates,
-                    [key]: value,
-                },
-            }),
-        filter: filterSignedNumber,
-    });
-    const homeOutside = useCommitInput(
-        yardNumberInput("homeStepsFromFrontToOutside"),
-    );
-    const homeInside = useCommitInput(
-        yardNumberInput("homeStepsFromFrontToInside"),
-    );
-    const awayInside = useCommitInput(
-        yardNumberInput("awayStepsFromFrontToInside"),
-    );
-    const awayOutside = useCommitInput(
-        yardNumberInput("awayStepsFromFrontToOutside"),
-    );
-
-    const unit = imperial
-        ? t("fieldProperties.units.inches")
-        : t("fieldProperties.units.centimeters");
 
     return (
         <TabContent value="general" className="flex flex-col gap-32">
@@ -184,7 +42,26 @@ export function GeneralTab({
                     label={t("fieldProperties.labels.fieldName")}
                     tooltip={t("fieldProperties.tooltips.fieldName")}
                 >
-                    <Input type="text" {...inputProps(name)} required />
+                    <Input
+                        type="text"
+                        onBlur={(e) => {
+                            e.preventDefault();
+                            if (
+                                e.target.value !== currentFieldProperties.name
+                            ) {
+                                updateFieldProperties(
+                                    new FieldProperties({
+                                        ...currentFieldProperties,
+                                        name: e.target.value,
+                                    }),
+                                );
+                            }
+                        }}
+                        className={inputClassname}
+                        onKeyDown={blurOnEnter}
+                        defaultValue={currentFieldProperties.name}
+                        required
+                    />
                 </FormField>
                 <FormField
                     label={t("fieldProperties.labels.stepSize")}
@@ -192,17 +69,56 @@ export function GeneralTab({
                 >
                     <UnitInput
                         type="text"
+                        ref={stepSizeInputRef}
                         inputMode="numeric"
                         pattern="[0-9]*\.?[0-9]*"
-                        unit={unit}
-                        {...unitInputProps(stepSize)}
+                        containerClassName={inputClassname}
+                        unit={
+                            measurementSystem === "imperial"
+                                ? t("fieldProperties.units.inches")
+                                : t("fieldProperties.units.centimeters")
+                        }
+                        onBlur={(e) => {
+                            e.preventDefault();
+
+                            if (e.target.value !== "") {
+                                const parsedFloat = parseFloat(e.target.value);
+
+                                if (!isNaN(parsedFloat)) {
+                                    updateFieldProperties(
+                                        new FieldProperties({
+                                            ...currentFieldProperties,
+                                            stepSizeInches:
+                                                measurementSystem === "imperial"
+                                                    ? parsedFloat
+                                                    : FieldProperties.centimetersToInches(
+                                                          parsedFloat,
+                                                      ),
+                                        }),
+                                    );
+                                }
+                            }
+                        }}
+                        onChange={(e) => {
+                            // Allow numbers and decimal point
+                            const filtered = e.target.value.replace(
+                                /[^\d.]/g,
+                                "",
+                            );
+                            // Ensure only one decimal point
+                            const normalized = filtered.replace(/\.+/g, ".");
+                            e.target.value = normalized;
+                        }}
+                        onKeyDown={blurOnEnter}
+                        defaultValue={currentFieldProperties.stepSizeInUnits}
                         required
                     />
                 </FormField>
                 <FormField
                     // Also as drill writers say it, "4 to 5", as the shape tool's warning does
                     label={
-                        field.stepSizeWarningThresholdInches > 0
+                        currentFieldProperties.stepSizeWarningThresholdInches >
+                        0
                             ? t(
                                   "fieldProperties.labels.stepSizeWarningRatio",
                                   "Step Size Warning Threshold ({steps} to 5)",
@@ -210,7 +126,7 @@ export function GeneralTab({
                                       steps:
                                           Math.round(
                                               (180 /
-                                                  field.stepSizeWarningThresholdInches) *
+                                                  currentFieldProperties.stepSizeWarningThresholdInches) *
                                                   10,
                                           ) / 10,
                                   },
@@ -227,8 +143,42 @@ export function GeneralTab({
                         type="text"
                         inputMode="numeric"
                         pattern="[0-9]*\.?[0-9]*"
-                        unit={unit}
-                        {...unitInputProps(threshold)}
+                        containerClassName={inputClassname}
+                        unit={
+                            measurementSystem === "imperial"
+                                ? t("fieldProperties.units.inches")
+                                : t("fieldProperties.units.centimeters")
+                        }
+                        onBlur={(e) => {
+                            e.preventDefault();
+                            if (e.target.value !== "") {
+                                const parsedFloat = parseFloat(e.target.value);
+                                if (!isNaN(parsedFloat)) {
+                                    updateFieldProperties(
+                                        new FieldProperties({
+                                            ...currentFieldProperties,
+                                            stepSizeWarningThresholdInches:
+                                                measurementSystem === "imperial"
+                                                    ? parsedFloat
+                                                    : FieldProperties.centimetersToInches(
+                                                          parsedFloat,
+                                                      ),
+                                        }),
+                                    );
+                                }
+                            }
+                        }}
+                        onChange={(e) => {
+                            const filtered = e.target.value.replace(
+                                /[^\d.]/g,
+                                "",
+                            );
+                            e.target.value = filtered.replace(/\.+/g, ".");
+                        }}
+                        onKeyDown={blurOnEnter}
+                        defaultValue={
+                            currentFieldProperties.stepSizeWarningThresholdInUnits
+                        }
                         required
                     />
                 </FormField>
@@ -237,18 +187,22 @@ export function GeneralTab({
                     tooltip={t("fieldProperties.tooltips.measurementSystem")}
                 >
                     <Select
-                        onValueChange={(e) =>
-                            toggle({
-                                measurementSystem: e as MeasurementSystem,
-                            })
-                        }
-                        value={field.measurementSystem}
+                        onValueChange={(e) => {
+                            updateFieldProperties(
+                                new FieldProperties({
+                                    ...currentFieldProperties,
+                                    measurementSystem: e as MeasurementSystem,
+                                }),
+                            );
+                        }}
+                        defaultValue={currentFieldProperties.measurementSystem}
                     >
                         <SelectTriggerButton
                             className={inputClassname}
-                            label={t(
-                                "fieldProperties.labels.measurementSystem",
-                            )}
+                            label={
+                                fieldProperties?.name ||
+                                t("fieldProperties.fieldType.label")
+                            }
                         />
                         <SelectContent>
                             <SelectGroup>
@@ -271,7 +225,42 @@ export function GeneralTab({
                         type="text"
                         inputMode="numeric"
                         pattern="[0-9]*\.?[0-9]*"
-                        {...inputProps(halfLineX)}
+                        className={inputClassname}
+                        onBlur={(e) => {
+                            e.preventDefault();
+
+                            if (e.target.value === "") {
+                                updateFieldProperties(
+                                    new FieldProperties({
+                                        ...currentFieldProperties,
+                                        halfLineXInterval: undefined,
+                                    }),
+                                );
+                            } else {
+                                const parsedFloat = parseFloat(e.target.value);
+
+                                if (!isNaN(parsedFloat)) {
+                                    updateFieldProperties(
+                                        new FieldProperties({
+                                            ...currentFieldProperties,
+                                            halfLineXInterval: parsedFloat,
+                                        }),
+                                    );
+                                }
+                            }
+                        }}
+                        onChange={(e) => {
+                            // Allow numbers and decimal point
+                            const filtered = e.target.value.replace(
+                                /[^\d.]/g,
+                                "",
+                            );
+                            // Ensure only one decimal point
+                            const normalized = filtered.replace(/\.+/g, ".");
+                            e.target.value = normalized;
+                        }}
+                        onKeyDown={blurOnEnter}
+                        defaultValue={fieldProperties?.halfLineXInterval ?? ""}
                     />
                 </FormField>
                 <FormField
@@ -282,7 +271,42 @@ export function GeneralTab({
                         type="text"
                         inputMode="numeric"
                         pattern="[0-9]*\.?[0-9]*"
-                        {...inputProps(halfLineY)}
+                        className={inputClassname}
+                        onBlur={(e) => {
+                            e.preventDefault();
+
+                            if (e.target.value === "") {
+                                updateFieldProperties(
+                                    new FieldProperties({
+                                        ...currentFieldProperties,
+                                        halfLineYInterval: undefined,
+                                    }),
+                                );
+                            } else {
+                                const parsedFloat = parseFloat(e.target.value);
+
+                                if (!isNaN(parsedFloat)) {
+                                    updateFieldProperties(
+                                        new FieldProperties({
+                                            ...currentFieldProperties,
+                                            halfLineYInterval: parsedFloat,
+                                        }),
+                                    );
+                                }
+                            }
+                        }}
+                        onChange={(e) => {
+                            // Allow numbers and decimal point
+                            const filtered = e.target.value.replace(
+                                /[^\d.]/g,
+                                "",
+                            );
+                            // Ensure only one decimal point
+                            const normalized = filtered.replace(/\.+/g, ".");
+                            e.target.value = normalized;
+                        }}
+                        onKeyDown={blurOnEnter}
+                        defaultValue={fieldProperties?.halfLineYInterval ?? ""}
                     />
                 </FormField>
             </div>
@@ -295,29 +319,132 @@ export function GeneralTab({
                     label={t("fieldProperties.labels.directorsLeft")}
                     tooltip={t("fieldProperties.tooltips.directorsLeft")}
                 >
-                    <Input type="text" {...inputProps(verboseLeft)} required />
+                    <Input
+                        type="text"
+                        onBlur={(e) => {
+                            e.preventDefault();
+                            if (
+                                e.target.value !==
+                                currentFieldProperties.sideDescriptions
+                                    .verboseLeft
+                            ) {
+                                updateFieldProperties(
+                                    new FieldProperties({
+                                        ...currentFieldProperties,
+                                        sideDescriptions: {
+                                            ...currentFieldProperties.sideDescriptions,
+                                            verboseLeft: e.target.value,
+                                        },
+                                    }),
+                                );
+                            }
+                        }}
+                        className={inputClassname}
+                        onKeyDown={blurOnEnter}
+                        defaultValue={
+                            currentFieldProperties.sideDescriptions.verboseLeft
+                        }
+                        required
+                    />
                 </FormField>
                 <FormField
                     label={t("fieldProperties.labels.leftAbbreviation")}
                     tooltip={t("fieldProperties.tooltips.leftAbbreviation")}
                 >
-                    <Input type="text" {...inputProps(terseLeft)} required />
+                    <Input
+                        type="text"
+                        onBlur={(e) => {
+                            e.preventDefault();
+                            if (
+                                e.target.value !==
+                                currentFieldProperties.sideDescriptions
+                                    .terseLeft
+                            ) {
+                                updateFieldProperties(
+                                    new FieldProperties({
+                                        ...currentFieldProperties,
+                                        sideDescriptions: {
+                                            ...currentFieldProperties.sideDescriptions,
+                                            terseLeft: e.target.value,
+                                        },
+                                    }),
+                                );
+                            }
+                        }}
+                        className={inputClassname}
+                        onKeyDown={blurOnEnter}
+                        defaultValue={
+                            currentFieldProperties.sideDescriptions.terseLeft
+                        }
+                        required
+                    />
                 </FormField>
 
                 <FormField
                     label={t("fieldProperties.labels.directorsRight")}
                     tooltip={t("fieldProperties.tooltips.directorsRight")}
                 >
-                    <Input type="text" {...inputProps(verboseRight)} required />
+                    <Input
+                        type="text"
+                        onBlur={(e) => {
+                            e.preventDefault();
+                            if (
+                                e.target.value !==
+                                currentFieldProperties.sideDescriptions
+                                    .verboseRight
+                            ) {
+                                updateFieldProperties(
+                                    new FieldProperties({
+                                        ...currentFieldProperties,
+                                        sideDescriptions: {
+                                            ...currentFieldProperties.sideDescriptions,
+                                            verboseRight: e.target.value,
+                                        },
+                                    }),
+                                );
+                            }
+                        }}
+                        className={inputClassname}
+                        onKeyDown={blurOnEnter}
+                        defaultValue={
+                            currentFieldProperties.sideDescriptions.verboseRight
+                        }
+                        required
+                    />
                 </FormField>
                 <FormField
                     label={t("fieldProperties.labels.rightAbbreviation")}
                     tooltip={t("fieldProperties.tooltips.rightAbbreviation")}
                 >
-                    <Input type="text" {...inputProps(terseRight)} required />
+                    <Input
+                        type="text"
+                        onBlur={(e) => {
+                            e.preventDefault();
+                            if (
+                                e.target.value !==
+                                currentFieldProperties.sideDescriptions
+                                    .terseRight
+                            ) {
+                                updateFieldProperties(
+                                    new FieldProperties({
+                                        ...currentFieldProperties,
+                                        sideDescriptions: {
+                                            ...currentFieldProperties.sideDescriptions,
+                                            terseRight: e.target.value,
+                                        },
+                                    }),
+                                );
+                            }
+                        }}
+                        className={inputClassname}
+                        onKeyDown={blurOnEnter}
+                        defaultValue={
+                            currentFieldProperties.sideDescriptions.terseRight
+                        }
+                        required
+                    />
                 </FormField>
             </div>
-            {/* The yard number placement isn't editable yet; the inputs show the stored values */}
             <div className="flex flex-col gap-12">
                 <h4 className="text-h4 mb-8">
                     <T keyName="fieldProperties.sections.fieldLabels" />
@@ -334,7 +461,57 @@ export function GeneralTab({
                         type="text"
                         inputMode="numeric"
                         pattern="-?[0-9]*\.?[0-9]*"
-                        {...inputProps(homeOutside)}
+                        className={inputClassname}
+                        onBlur={(e) => {
+                            e.preventDefault();
+                            if (e.target.value === "") {
+                                updateFieldProperties(
+                                    new FieldProperties({
+                                        ...currentFieldProperties,
+                                        yardNumberCoordinates: {
+                                            ...currentFieldProperties.yardNumberCoordinates,
+                                            homeStepsFromFrontToOutside:
+                                                undefined,
+                                        },
+                                    }),
+                                );
+                            } else {
+                                const parsedFloat = parseFloat(e.target.value);
+
+                                if (!isNaN(parsedFloat)) {
+                                    updateFieldProperties(
+                                        new FieldProperties({
+                                            ...currentFieldProperties,
+                                            yardNumberCoordinates: {
+                                                ...currentFieldProperties.yardNumberCoordinates,
+                                                homeStepsFromFrontToOutside:
+                                                    parsedFloat,
+                                            },
+                                        }),
+                                    );
+                                }
+                            }
+                        }}
+                        onChange={(e) => {
+                            // Allow numbers, decimal point, and negative sign
+                            const filtered = e.target.value.replace(
+                                /[^\d.-]/g,
+                                "",
+                            );
+
+                            // Ensure only one decimal point and one negative sign at start
+                            const normalized = filtered
+                                .replace(/\.+/g, ".")
+                                .replace(/--+/g, "-")
+                                .replace(/(.+)-/g, "$1");
+
+                            e.target.value = normalized;
+                        }}
+                        onKeyDown={blurOnEnter}
+                        defaultValue={
+                            fieldProperties?.yardNumberCoordinates
+                                .homeStepsFromFrontToOutside ?? ""
+                        }
                         disabled
                     />
                 </FormField>
@@ -350,7 +527,57 @@ export function GeneralTab({
                         type="text"
                         inputMode="numeric"
                         pattern="-?[0-9]*\.?[0-9]*"
-                        {...inputProps(homeInside)}
+                        className={inputClassname}
+                        onBlur={(e) => {
+                            e.preventDefault();
+                            if (e.target.value === "") {
+                                updateFieldProperties(
+                                    new FieldProperties({
+                                        ...currentFieldProperties,
+                                        yardNumberCoordinates: {
+                                            ...currentFieldProperties.yardNumberCoordinates,
+                                            homeStepsFromFrontToInside:
+                                                undefined,
+                                        },
+                                    }),
+                                );
+                            } else {
+                                const parsedFloat = parseFloat(e.target.value);
+
+                                if (!isNaN(parsedFloat)) {
+                                    updateFieldProperties(
+                                        new FieldProperties({
+                                            ...currentFieldProperties,
+                                            yardNumberCoordinates: {
+                                                ...currentFieldProperties.yardNumberCoordinates,
+                                                homeStepsFromFrontToInside:
+                                                    parsedFloat,
+                                            },
+                                        }),
+                                    );
+                                }
+                            }
+                        }}
+                        onChange={(e) => {
+                            // Allow numbers, decimal point, and negative sign
+                            const filtered = e.target.value.replace(
+                                /[^\d.-]/g,
+                                "",
+                            );
+
+                            // Ensure only one decimal point and one negative sign at start
+                            const normalized = filtered
+                                .replace(/\.+/g, ".")
+                                .replace(/--+/g, "-")
+                                .replace(/(.+)-/g, "$1");
+
+                            e.target.value = normalized;
+                        }}
+                        onKeyDown={blurOnEnter}
+                        defaultValue={
+                            fieldProperties?.yardNumberCoordinates
+                                .homeStepsFromFrontToInside ?? ""
+                        }
                         disabled
                     />
                 </FormField>
@@ -366,7 +593,57 @@ export function GeneralTab({
                         type="text"
                         inputMode="numeric"
                         pattern="-?[0-9]*\.?[0-9]*"
-                        {...inputProps(awayInside)}
+                        className={inputClassname}
+                        onBlur={(e) => {
+                            e.preventDefault();
+                            if (e.target.value === "") {
+                                updateFieldProperties(
+                                    new FieldProperties({
+                                        ...currentFieldProperties,
+                                        yardNumberCoordinates: {
+                                            ...currentFieldProperties.yardNumberCoordinates,
+                                            awayStepsFromFrontToInside:
+                                                undefined,
+                                        },
+                                    }),
+                                );
+                            } else {
+                                const parsedFloat = parseFloat(e.target.value);
+
+                                if (!isNaN(parsedFloat)) {
+                                    updateFieldProperties(
+                                        new FieldProperties({
+                                            ...currentFieldProperties,
+                                            yardNumberCoordinates: {
+                                                ...currentFieldProperties.yardNumberCoordinates,
+                                                awayStepsFromFrontToInside:
+                                                    parsedFloat,
+                                            },
+                                        }),
+                                    );
+                                }
+                            }
+                        }}
+                        onChange={(e) => {
+                            // Allow numbers, decimal point, and negative sign
+                            const filtered = e.target.value.replace(
+                                /[^\d.-]/g,
+                                "",
+                            );
+
+                            // Ensure only one decimal point and one negative sign at start
+                            const normalized = filtered
+                                .replace(/\.+/g, ".")
+                                .replace(/--+/g, "-")
+                                .replace(/(.+)-/g, "$1");
+
+                            e.target.value = normalized;
+                        }}
+                        onKeyDown={blurOnEnter}
+                        defaultValue={
+                            fieldProperties?.yardNumberCoordinates
+                                .awayStepsFromFrontToInside ?? ""
+                        }
                         disabled
                     />
                 </FormField>
@@ -382,7 +659,57 @@ export function GeneralTab({
                         type="text"
                         inputMode="numeric"
                         pattern="-?[0-9]*\.?[0-9]*"
-                        {...inputProps(awayOutside)}
+                        className={inputClassname}
+                        onBlur={(e) => {
+                            e.preventDefault();
+                            if (e.target.value === "") {
+                                updateFieldProperties(
+                                    new FieldProperties({
+                                        ...currentFieldProperties,
+                                        yardNumberCoordinates: {
+                                            ...currentFieldProperties.yardNumberCoordinates,
+                                            awayStepsFromFrontToOutside:
+                                                undefined,
+                                        },
+                                    }),
+                                );
+                            } else {
+                                const parsedFloat = parseFloat(e.target.value);
+
+                                if (!isNaN(parsedFloat)) {
+                                    updateFieldProperties(
+                                        new FieldProperties({
+                                            ...currentFieldProperties,
+                                            yardNumberCoordinates: {
+                                                ...currentFieldProperties.yardNumberCoordinates,
+                                                awayStepsFromFrontToOutside:
+                                                    parsedFloat,
+                                            },
+                                        }),
+                                    );
+                                }
+                            }
+                        }}
+                        onChange={(e) => {
+                            // Allow numbers, decimal point, and negative sign
+                            const filtered = e.target.value.replace(
+                                /[^\d.-]/g,
+                                "",
+                            );
+
+                            // Ensure only one decimal point and one negative sign at start
+                            const normalized = filtered
+                                .replace(/\.+/g, ".")
+                                .replace(/--+/g, "-")
+                                .replace(/(.+)-/g, "$1");
+
+                            e.target.value = normalized;
+                        }}
+                        onKeyDown={blurOnEnter}
+                        defaultValue={
+                            fieldProperties?.yardNumberCoordinates
+                                .awayStepsFromFrontToOutside ?? ""
+                        }
                         disabled
                     />
                 </FormField>
@@ -398,9 +725,13 @@ export function GeneralTab({
                             checked={currentFieldProperties.leftLabelsVisible}
                             onClick={(e) => {
                                 e.preventDefault();
-                                toggle({
-                                    leftLabelsVisible: !field.leftLabelsVisible,
-                                });
+                                updateFieldProperties(
+                                    new FieldProperties({
+                                        ...currentFieldProperties,
+                                        leftLabelsVisible:
+                                            !currentFieldProperties.leftLabelsVisible,
+                                    }),
+                                );
                             }}
                         />
                     </FormField>
@@ -410,10 +741,13 @@ export function GeneralTab({
                             checked={currentFieldProperties.rightLabelsVisible}
                             onClick={(e) => {
                                 e.preventDefault();
-                                toggle({
-                                    rightLabelsVisible:
-                                        !field.rightLabelsVisible,
-                                });
+                                updateFieldProperties(
+                                    new FieldProperties({
+                                        ...currentFieldProperties,
+                                        rightLabelsVisible:
+                                            !currentFieldProperties.rightLabelsVisible,
+                                    }),
+                                );
                             }}
                         />
                     </FormField>
@@ -423,10 +757,13 @@ export function GeneralTab({
                             checked={currentFieldProperties.bottomLabelsVisible}
                             onClick={(e) => {
                                 e.preventDefault();
-                                toggle({
-                                    bottomLabelsVisible:
-                                        !field.bottomLabelsVisible,
-                                });
+                                updateFieldProperties(
+                                    new FieldProperties({
+                                        ...currentFieldProperties,
+                                        bottomLabelsVisible:
+                                            !currentFieldProperties.bottomLabelsVisible,
+                                    }),
+                                );
                             }}
                         />
                     </FormField>
@@ -436,9 +773,13 @@ export function GeneralTab({
                             checked={currentFieldProperties.topLabelsVisible}
                             onClick={(e) => {
                                 e.preventDefault();
-                                toggle({
-                                    topLabelsVisible: !field.topLabelsVisible,
-                                });
+                                updateFieldProperties(
+                                    new FieldProperties({
+                                        ...currentFieldProperties,
+                                        topLabelsVisible:
+                                            !currentFieldProperties.topLabelsVisible,
+                                    }),
+                                );
                             }}
                         />
                     </FormField>
