@@ -2188,7 +2188,7 @@
             "left": "{count, plural, one {# marcher has no spot and stays put} other {# marchers have no spot and stay put}}",
             "marchers": "{count, plural, one {# marcher} other {# marchers}}",
             "pasteAs": "Paste as",
-            "pasteExactlyHint": "Puts the copy back on the exact spot of the field it was copied from, instead of centered on the marchers you selected. Use it to bring a form back on a later page, or to put other marchers exactly where the first ones stood. Nobody moves until you place it.",
+            "pasteExactlyHint": "Puts the copy on the exact spot it was copied from, not centered on the selected marchers.",
             "pictureLabel": "Picture of the copied formation",
             "positions": "Positions",
             "title": "Clipboard",

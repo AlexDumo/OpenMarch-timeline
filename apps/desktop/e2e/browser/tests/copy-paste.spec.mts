@@ -410,7 +410,7 @@ test("the inspector's Clipboard card shows what is copied and how it fits the se
     // Paste exactly's tooltip explains it, under its name
     await card.getByTestId("clipboard-paste-in-place").hover();
     await expect(page.getByRole("tooltip")).toContainText(
-        "Puts the copy back on the exact spot of the field it was copied from",
+        "Puts the copy on the exact spot it was copied from",
     );
     await page.mouse.move(5, 500);
     // Its Paste opens the preview, as Ctrl/Cmd+V does
