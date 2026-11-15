@@ -5,6 +5,8 @@ import type { DrawnItemOutline } from "../fieldItems";
 import {
     DIMMED_ITEM_ALPHA,
     COLORED_ITEM_FILL_ALPHA,
+    EQUIPMENT_DETAIL_PX_PER_M,
+    EQUIPMENT_FILL_ALPHA,
     ITEM_FILL_ALPHA,
     ITEM_STROKE_WIDTH,
     LOCK_BADGE_RADIUS,
@@ -13,6 +15,8 @@ import {
 } from "../itemsPlan";
 import { playingSpotOf } from "@/view3d/core/pit/playingSpot";
 import { SELECTION_RGBA01 } from "../selectionRing";
+import { PIXELS_PER_METER } from "@/items/itemOutlines";
+import { placePitPlan } from "@/view3d/core/pit/pitPlan";
 
 const square = (
     id: number,
@@ -30,6 +34,7 @@ const square = (
     closed,
     locked: false,
     playingSpot: null,
+    plan: null,
     center: { x: 5, y: 5 },
     geometry: {
         outlineType: "rectangle",
@@ -182,5 +187,70 @@ describe("planItems for the front ensemble", () => {
             );
         // Fainter than the Outline's line
         expect(ring[0].color[3]).toBeLessThan(plain.strokes[0].color[3]);
+    });
+
+    describe("equipment drawn from its model", () => {
+        // Two outlines (a drum set's pieces) and two edges inside them
+        const plan = placePitPlan(
+            {
+                outline: [
+                    [-500, -300, 500, -300, 500, 300, -500, 300],
+                    [600, 0, 800, 0, 700, 200],
+                ],
+                details: [
+                    [-500, 0, 500, 0],
+                    [0, -300, 0, 300],
+                ],
+            },
+            { x: 5, y: 5 },
+            0,
+            PIXELS_PER_METER,
+        );
+        const equipment = { ...square(1), plan };
+        const detailZoom = EQUIPMENT_DETAIL_PX_PER_M / PIXELS_PER_METER;
+
+        it("fills and outlines its silhouette instead of its Outline", () => {
+            const drawn = planItems([equipment], { ...options, zoom: 0.5 });
+            expect(drawn.fills.map((f) => f.points)).toEqual(plan.outlines);
+            expect(drawn.fills[0].color[3]).toBeCloseTo(EQUIPMENT_FILL_ALPHA);
+            expect(drawn.strokes).toHaveLength(2);
+            expect(drawn.strokes[0].points.at(-1)).toEqual(
+                drawn.strokes[0].points[0],
+            );
+        });
+
+        it("shows its edges and facing mark only once zoomed in enough", () => {
+            const far = planItems([equipment], {
+                ...options,
+                zoom: detailZoom * 0.9,
+            });
+            const near = planItems([equipment], {
+                ...options,
+                zoom: detailZoom * 1.1,
+            });
+            expect(far.strokes).toHaveLength(2);
+            expect(near.strokes).toHaveLength(4);
+            // The edges go under the silhouette's line
+            expect(near.strokes[0].points).toEqual(plan.details[0]);
+            // The facing mark: a triangle past the front edge (y = 5 + 0.3 m), toward the audience
+            expect(near.fills).toHaveLength(far.fills.length + 1);
+            const mark = near.fills.at(-1)!.points;
+            expect(mark).toHaveLength(3);
+            const front = 5 + 0.3 * PIXELS_PER_METER;
+            for (const p of mark) expect(p.y).toBeGreaterThan(front);
+        });
+
+        it("outlines a selected one in the selection color", () => {
+            const drawn = planItems([equipment], {
+                ...options,
+                selected: new Set([1]),
+            });
+            expect(drawn.strokes[0].width).toBe(SELECTED_ITEM_STROKE_WIDTH);
+        });
+
+        it("draws no lock badge on locked equipment", () => {
+            const drawn = planItems([{ ...equipment, locked: true }], options);
+            expect(drawn.fills).toHaveLength(plan.outlines.length);
+        });
     });
 });

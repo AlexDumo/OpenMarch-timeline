@@ -3,76 +3,65 @@ import { describe, expect, it } from "vitest";
 import { FieldProperties } from "@openmarch/core";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import {
-    PIT_STRIP_DEPTH_FT,
-    backStripOf,
+    PIT_AREA_LABEL_ROOM,
+    PIT_AREA_MARGIN_FT,
     fieldViewSize,
-    hasEquipmentBehind,
-    pitStripOf,
+    isBehindField,
+    pitAreasOf,
 } from "../pitStrip";
 
 const fp: FieldProperties =
     FieldPropertiesTemplates.HIGH_SCHOOL_FOOTBALL_FIELD_NO_END_ZONES;
-/** 30 ft in field units: 360 in at half a unit per inch, 16 8-to-5 steps */
-const THIRTY_FEET = 360 * FieldProperties.PIXELS_PER_INCH;
+const front = fp.centerFrontPoint.yPixels;
+const margin = PIT_AREA_MARGIN_FT * 12 * FieldProperties.PIXELS_PER_INCH;
 
-describe("pitStripOf", () => {
-    it("is 30 ft deep in front of the front sideline, across the whole field", () => {
-        expect(PIT_STRIP_DEPTH_FT).toBe(30);
-        expect(THIRTY_FEET).toBeCloseTo(16 * fp.pixelsPerStep);
-        expect(pitStripOf(fp, true)).toEqual({
-            left: 0,
-            right: fp.width,
-            top: fp.centerFrontPoint.yPixels,
-            bottom: fp.centerFrontPoint.yPixels + THIRTY_FEET,
-        });
+describe("pitAreasOf", () => {
+    it("is nothing in a show with no equipment", () => {
+        expect(pitAreasOf(fp, [])).toEqual([]);
     });
 
-    it("is toward the audience: past the front sideline, where y grows", () => {
-        const strip = pitStripOf(fp, true)!;
-        expect(strip.top).toBe(fp.height);
-        expect(strip.bottom).toBeGreaterThan(fp.height);
+    it("hugs the equipment in front of the field, from the sideline out", () => {
+        const areas = pitAreasOf(fp, [
+            { x: 800, y: front + 40, radius: 10 },
+            { x: 1000, y: front + 90, radius: 20 },
+        ]);
+        expect(areas).toEqual([
+            {
+                left: 790 - margin,
+                right: 1020 + margin,
+                top: front,
+                bottom: front + 110 + margin,
+            },
+        ]);
+        // Narrower than the field: it's the pit, not more field
+        expect(areas[0].right - areas[0].left).toBeLessThan(fp.width);
+        expect(isBehindField(areas[0])).toBe(false);
     });
 
-    it("is not drawn in a show with no front ensemble", () => {
-        expect(pitStripOf(fp, false)).toBeNull();
-    });
-});
-
-describe("backStripOf", () => {
-    it("is 30 ft deep behind the back sideline, across the whole field", () => {
-        expect(backStripOf(fp, true)).toEqual({
-            left: 0,
-            right: fp.width,
-            top: -THIRTY_FEET,
+    it("adds one behind the back sideline for equipment there (a back podium)", () => {
+        const areas = pitAreasOf(fp, [
+            { x: 900, y: front + 50, radius: 10 },
+            { x: 900, y: -60, radius: 10 },
+        ]);
+        expect(areas).toHaveLength(2);
+        const behind = areas.find(isBehindField)!;
+        expect(behind).toEqual({
+            left: 890 - margin,
+            right: 910 + margin,
+            top: -70 - margin,
             bottom: 0,
         });
     });
 
-    it("is not drawn with no equipment behind the field", () => {
-        expect(backStripOf(fp, false)).toBeNull();
-    });
-});
-
-describe("hasEquipmentBehind", () => {
-    const at = new Map([
-        [1, [900, 980] as const],
-        [2, [900, -40] as const],
-        [3, [900, 400] as const],
-    ]);
-    const positionAt = (id: number) => at.get(id)!;
-
-    it("is true when an equipment item stands behind the back sideline", () => {
-        expect(hasEquipmentBehind([1, 2], positionAt)).toBe(true);
-    });
-
-    it("is false for equipment on the field or in front of it", () => {
-        expect(hasEquipmentBehind([1, 3], positionAt)).toBe(false);
-        expect(hasEquipmentBehind([], positionAt)).toBe(false);
+    it("gives equipment standing on the field no area", () => {
+        expect(pitAreasOf(fp, [{ x: 900, y: front / 2, radius: 10 }])).toEqual(
+            [],
+        );
     });
 });
 
 describe("fieldViewSize", () => {
-    it("is the field alone with no strip", () => {
+    it("is the field alone without pit areas", () => {
         expect(fieldViewSize(fp, [])).toEqual({
             width: fp.width,
             height: fp.height,
@@ -80,21 +69,14 @@ describe("fieldViewSize", () => {
         });
     });
 
-    it("reaches the strip's far edge, so fitting the field shows the pit", () => {
-        expect(fieldViewSize(fp, [pitStripOf(fp, true)])).toEqual({
-            width: fp.width,
-            height: fp.height + THIRTY_FEET,
-            top: 0,
-        });
-    });
-
-    it("reaches up over the back strip too", () => {
-        expect(
-            fieldViewSize(fp, [pitStripOf(fp, true), backStripOf(fp, true)]),
-        ).toEqual({
-            width: fp.width,
-            height: fp.height + 2 * THIRTY_FEET,
-            top: -THIRTY_FEET,
-        });
+    it("reaches past the pit areas, with room for the labels moved past them", () => {
+        const [ahead, behind] = pitAreasOf(fp, [
+            { x: 900, y: front + 50, radius: 10 },
+            { x: 900, y: -60, radius: 10 },
+        ]);
+        const size = fieldViewSize(fp, [ahead, behind]);
+        expect(size.top).toBe(behind.top - PIT_AREA_LABEL_ROOM);
+        expect(size.top + size.height).toBe(ahead.bottom + PIT_AREA_LABEL_ROOM);
+        expect(size.width).toBe(fp.width);
     });
 });

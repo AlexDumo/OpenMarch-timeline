@@ -492,7 +492,7 @@ is a number change.
 
 The owner's design (2026-11-11). It replaces the earlier `view3d_props`
 proposal, which is retired. The front ensemble is mainly for the 3D View;
-2D shows footprints so writers see how much space the pit takes. Timeline-mode
+2D draws each piece as its model seen from above, so writers see how much space the pit takes. Timeline-mode
 shows only, like every item (ADR 0010 D-9).
 
 **Models.** Built and CC0: 44 models, each with a `-low` version, in
@@ -514,15 +514,21 @@ plain, speaker tall, mixer cart, podium low.
 **Locked items.** Any item can be locked. A locked item has one position for
 the whole show and no moves: dragging it on any page moves it on every page.
 Lasso and select-all skip it, so selecting marchers never picks up the pit;
-clicking it still selects it, and 2D shows a lock icon. Unlocking gives it
+clicking it still selects it, and 2D shows a lock icon on a locked prop (not on
+equipment, which is locked as a rule). Unlocking gives it
 moves again. Equipment (pit instruments, podiums, speakers, the mixer,
 including everything a preset creates) is created locked; props are created
 unlocked. The flag is a boolean `items.locked` column, added in the same
 migration as `items.model`. Props that are on the field for only some pages
 are the placement work in `props-spec.md` §4, not part of this.
 
-Equipment is edited with the normal prop editing. It is added from a "Front ensemble" group in the Props panel, which
-also holds the Small, Medium and Large presets. Equipment never takes part in
+Equipment stays a prop in the data, but not in the UI (owner, 2026-11-15):
+designers don't think of the pit or podiums as props, since they don't move and
+aren't part of staging. They have their own Front ensemble panel beside the
+performers, with the Small, Medium and Large presets, the equipment and podiums
+to place one at a time, and the list of placed equipment to edit; the Props
+panel and props lists leave equipment out. A new show can start with a pit:
+the new-show dialog asks "Front ensemble?" (None, Small, Medium, Large). Equipment never takes part in
 cues: items are never cue targets (ADR 0004, amendment of 2026-10-11).
 
 **Players are marchers.** Pit players are ordinary marchers in pit sections
@@ -589,11 +595,21 @@ podium behind the back sideline they face the audience. The drill's facing
 doesn't change this while they stand on it. Podiums can stand at the back of
 the field too; a podium placed on the back half is turned to face the field.
 
-**2D.** The field draws a pit strip up to 30 ft deep in front of the front
-sideline, with the footprints, playing-spot markers and pit dots, and a
-matching strip behind the back sideline when the show has equipment there
-(a back podium). They are drawing aids only; `FieldProperties` doesn't
-change.
+**2D.** Each piece is drawn as its model seen from straight above (owner
+pick 2026-11-15, "outline + details"): its silhouette, faintly filled, at
+every zoom, and once zoomed in past about 24 px per meter the edges seen from
+above (bars, drum heads, steps) and a small facing mark. The drawings are
+generated from the GLBs into `assets/pit/plan.json`
+(`scripts/view3d-assets/pit-plan.mjs`); a model without one draws its
+footprint rectangle. Played instruments also get a faint playing-spot marker.
+
+Under the equipment, the field draws a pit area (owner pick 2026-11-15,
+"flat tone"): a flat tone, the field's background with a little of its line
+color, against the front sideline, only as wide and deep as the equipment
+plus 4 ft, with no lines. A matching one sits behind the back sideline when
+equipment stands there (a back podium). The yard-line labels under a pit area
+move past it, and the zoom fit includes it. They are drawing aids only;
+`FieldProperties` doesn't change.
 
 **Later.** Instrument swaps (their own design), more podium models
 (scaffold, traditional and others), artwork slots, amps, and a
@@ -611,7 +627,7 @@ real browser:
 3. **Battery.** Carriers, five drums, cymbals, the bass size spread.
 4. **Front ensemble.** The `items.model` migration first, then the models
    in the 3D View, the Front ensemble group and presets, playing spots and
-   the 2D pit strip (§6).
+   the 2D pit area (§6).
 
 ## 8. Risks and what to measure first
 

@@ -90,14 +90,14 @@ import {
     usePropDrawn,
 } from "@/field/fieldPropTool";
 import { PIXELS_PER_METER } from "@/items/itemOutlines";
+import { PIT_MANIFEST, pitModelName } from "@/view3d/core/pit/pitModels";
 import { isMacPlatform } from "@/shortcuts/platform";
 import { planFieldImage } from "@/field/fieldPlan";
 import { dropMarchersOnTimeline } from "@/field/fieldDrop";
 import {
-    backStripOf,
     fieldViewSize,
-    hasEquipmentBehind,
-    pitStripOf,
+    pitAreasOf,
+    type PitAreaEquipment,
 } from "@/field/pitStrip";
 import type { FieldRect } from "@/field/editor/selectionArea";
 import { FieldMarchers } from "./fieldMarchers";
@@ -859,9 +859,9 @@ function useFieldItems(
 }
 
 /**
- * The strips beside the field (instruments.md section 6): the pit strip in front of the front
- * sideline while the show has equipment, and the back strip behind the back sideline while
- * equipment stands there (a back podium), by the resolver at the start of the show. The same
+ * The pit areas beside the field (instruments.md section 6, `pitAreasOf`): around the equipment in
+ * front of the front sideline and behind the back sideline, where the resolver has it at the start
+ * of the show (a locked item is there all show), each as big as its model's footprint. The same
  * array until they change. `loaded` once the items are, and the resolver with any equipment, so
  * the view can open fitted to them.
  */
@@ -874,32 +874,44 @@ function useFieldStrips(fieldProperties: FieldProperties | undefined): {
         () =>
             (itemRows ?? [])
                 .filter((item) => item.kind === "equipment")
-                .map((item) => item.marcher_id),
+                .map((item) => ({
+                    id: item.marcher_id,
+                    radius: footprintRadius(item.model),
+                })),
         [itemRows],
     );
     const resolver = useTimelineResolverStore((s) => s.resolver);
     const version = useTimelineResolverStore((s) => s.version);
-    const behind = useMemo(() => {
+    const pieces = useMemo((): PitAreaEquipment[] => {
         void version; // a new version means new positions
-        if (!resolver) return false;
+        if (!resolver) return [];
         const known = new Set(resolver.marcherIds());
-        return hasEquipmentBehind(
-            equipment.filter((id) => known.has(id)),
-            (id) => resolver.positionAt(id, 0),
-        );
+        return equipment
+            .filter(({ id }) => known.has(id))
+            .map(({ id, radius }) => {
+                const [x, y] = resolver.positionAt(id, 0);
+                return { x, y, radius };
+            });
     }, [resolver, version, equipment]);
-    const hasEquipment = equipment.length > 0;
-    const strips = useMemo(() => {
-        if (!fieldProperties) return [];
-        return [
-            pitStripOf(fieldProperties, hasEquipment),
-            backStripOf(fieldProperties, behind),
-        ].filter((strip): strip is FieldRect => strip !== null);
-    }, [fieldProperties, hasEquipment, behind]);
+    const key = JSON.stringify(pieces);
+    const strips = useMemo(
+        () => (fieldProperties ? pitAreasOf(fieldProperties, pieces) : []),
+        // Only a change to where equipment stands makes new areas
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [fieldProperties, key],
+    );
     return {
         strips,
-        loaded: isFetched && (!hasEquipment || resolver !== null),
+        loaded: isFetched && (equipment.length === 0 || resolver !== null),
     };
+}
+
+/** Half the diagonal of a built-in model's footprint in field units, or a meter's worth without one */
+function footprintRadius(model: string | null): number {
+    const name = pitModelName(model);
+    const size = name ? PIT_MANIFEST[name]?.high.sizeM : null;
+    const diagonal = size ? Math.hypot(size.width, size.depth) : 1;
+    return (diagonal / 2) * PIXELS_PER_METER;
 }
 
 /**

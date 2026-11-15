@@ -201,56 +201,58 @@ describe("fieldGeometry variants", () => {
     });
 });
 
-describe("fieldGeometry with the pit strip", () => {
-    const strip = {
-        left: 0,
-        right: fp.width,
-        top: fp.height,
-        bottom: fp.height + 180,
+describe("fieldGeometry with a pit area", () => {
+    // Around the 50, narrower than the field, 180 deep
+    const pit = {
+        left: xPixels - 300,
+        right: xPixels + 300,
+        top: yPixels,
+        bottom: yPixels + 180,
     };
     const plain = fieldGeometry(fp);
-    const withStrip = fieldGeometry(fp, {
+    const withPit = fieldGeometry(fp, {
         gridLines: true,
         halfLines: true,
-        strips: [strip],
+        strips: [pit],
     });
 
-    it("fills the strip under everything, fainter than the field", () => {
-        expect(withStrip.background.count).toBe(2);
-        expect(Array.from(withStrip.background.bounds.subarray(4, 8))).toEqual(
-            [0, fp.height, fp.width, fp.height + 180].map(Math.fround),
+    it("fills it with an opaque flat tone just off the field's", () => {
+        // The field, then the pit's paper, then a little ink over it
+        expect(withPit.background.count).toBe(3);
+        expect(Array.from(withPit.background.bounds.subarray(4, 8))).toEqual(
+            [pit.left, pit.top, pit.right, pit.bottom].map(Math.fround),
         );
-        const fieldAlpha = withStrip.background.colors[3];
-        const stripAlpha = withStrip.background.colors[7];
-        expect(stripAlpha).toBeGreaterThan(0);
-        expect(stripAlpha).toBeLessThan(fieldAlpha);
+        expect(withPit.background.colors[7]).toBe(1);
+        const ink = withPit.background.colors[11];
+        expect(ink).toBeGreaterThan(0);
+        expect(ink).toBeLessThan(0.15);
     });
 
-    it("draws the strip's edges and the yard lines across it, and nothing else changes", () => {
-        const added = rects(withStrip).slice(rects(plain).length);
-        expect(added.length).toBeGreaterThan(3);
-        for (const r of added) {
-            expect(r.minY).toBeGreaterThanOrEqual(fp.height - 1);
-            expect(r.maxY).toBeLessThanOrEqual(fp.height + 180 + 1);
-        }
-        expect(rects(withStrip).slice(0, rects(plain).length)).toEqual(
-            rects(plain),
-        );
-        // The 50 yard line runs on through the strip
-        expect(
-            added.some(
-                (r) =>
-                    r.minX < xPixels &&
-                    r.maxX > xPixels &&
-                    r.maxY - r.minY > 170,
-            ),
-        ).toBe(true);
+    it("draws no lines on it: the field's own lines are unchanged", () => {
+        expect(rects(withPit)).toEqual(rects(plain));
+    });
+
+    it("moves the yard-line labels under it below it, and leaves the rest at the sideline", () => {
+        const labels = (g: ReturnType<typeof fieldGeometry>) =>
+            g.texts.filter((t) => t.font === "label" && t.y > yPixels);
+        const before = labels(plain);
+        const after = labels(withPit);
+        expect(after).toHaveLength(before.length);
+        after.forEach((t, i) => {
+            const under = t.x >= pit.left && t.x <= pit.right;
+            expect(t.y - before[i].y).toBeCloseTo(under ? 180 : 0);
+        });
+        expect(after.some((t) => t.y > pit.bottom)).toBe(true);
     });
 });
 
-describe("fieldGeometry with a back strip", () => {
-    const back = { left: 0, right: fp.width, top: -180, bottom: 0 };
-    const plain = fieldGeometry(fp);
+describe("fieldGeometry with a pit area behind the field", () => {
+    const back = {
+        left: xPixels - 60,
+        right: xPixels + 60,
+        top: -180,
+        bottom: 0,
+    };
     const geometry = fieldGeometry(fp, {
         gridLines: true,
         halfLines: true,
@@ -259,23 +261,14 @@ describe("fieldGeometry with a back strip", () => {
 
     it("fills it behind the back sideline", () => {
         expect(Array.from(geometry.background.bounds.subarray(4, 8))).toEqual(
-            [0, -180, fp.width, 0].map(Math.fround),
+            [back.left, -180, back.right, 0].map(Math.fround),
         );
     });
 
-    it("draws its far edge behind the field, and nothing of it on the field", () => {
-        const added = rects(geometry).slice(rects(plain).length);
-        for (const r of added) {
-            expect(r.minY).toBeGreaterThanOrEqual(-180 - 1);
-            expect(r.maxY).toBeLessThanOrEqual(1);
-        }
-        // The far edge: a full-width line at y = -180
-        expect(
-            added.some(
-                (r) =>
-                    r.maxX - r.minX >= fp.width &&
-                    Math.abs((r.minY + r.maxY) / 2 + 180) < 1e-3,
-            ),
-        ).toBe(true);
+    it("moves the labels under it above it", () => {
+        const top = geometry.texts.filter(
+            (t) => t.font === "label" && Math.abs(t.x - xPixels) < 1,
+        );
+        expect(top.some((t) => t.y < -180)).toBe(true);
     });
 });

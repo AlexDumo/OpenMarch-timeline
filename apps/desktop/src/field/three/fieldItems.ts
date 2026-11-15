@@ -16,6 +16,12 @@ import type {
 } from "@/items/itemOutlineTimeline";
 import type { ItemFrame } from "@/field/editor/itemTransform";
 import { playingSpotOf, type PlayingSpot } from "@/view3d/core/pit/playingSpot";
+import {
+    pitPlanOf,
+    placePitPlan,
+    subscribePitPlans,
+    type PlacedPitPlan,
+} from "@/view3d/core/pit/pitPlan";
 import type { FieldItemSource, FieldMarchers } from "./fieldMarchers";
 
 /** An item's Outline where the field draws it. */
@@ -35,6 +41,11 @@ export type DrawnItemOutline = {
     readonly locked: boolean;
     /** Where a player stands to play it, for a pit instrument (`playingSpotOf`), else null */
     readonly playingSpot: PlayingSpot | null;
+    /**
+     * For an item with a built-in model, the model from above (its silhouette and the edges seen
+     * from above), placed where the item is; null draws the Outline
+     */
+    readonly plan: PlacedPitPlan | null;
 };
 
 /**
@@ -69,9 +80,20 @@ export class FieldItems implements FieldItemSource {
         beat: number;
         byId: Map<number, ItemGeometry | null>;
     } | null = null;
+    /** Each item's placed plan, kept while it stands still (a locked pit doesn't move) */
+    private placedPlans = new Map<
+        number,
+        { key: string; plan: PlacedPitPlan | null }
+    >();
     private readonly listeners = new Set<() => void>();
 
-    constructor(private readonly marchers: FieldMarchers) {}
+    constructor(private readonly marchers: FieldMarchers) {
+        // The models' plans load on their own: draw them once they're here
+        subscribePitPlans(() => {
+            this.placedPlans.clear();
+            this.changed();
+        });
+    }
 
     /**
      * The items by marcher id, their Outline changes, those the user hid, the
@@ -100,6 +122,7 @@ export class FieldItems implements FieldItemSource {
         this.locked = locked;
         this.models = models;
         this.geometries = null;
+        this.placedPlans.clear();
         // The marchers' marks first, so a listener reads the items as they now are
         this.version++;
         this.marchers.setItems(this);
@@ -166,6 +189,7 @@ export class FieldItems implements FieldItemSource {
                     center,
                     color: this.colors.get(id) ?? null,
                     locked: this.locked.has(id),
+                    plan: this.planOf(id, center, geometry.rotation),
                     playingSpot: playingSpotOf(
                         this.models.get(id),
                         {
@@ -229,6 +253,25 @@ export class FieldItems implements FieldItemSource {
             byId.set(id, geometry);
         }
         return geometry;
+    }
+
+    /** Item `id`'s model from above, placed at `center` turned `rotation`, or null. */
+    private planOf(
+        id: number,
+        center: Pt,
+        rotation: number,
+    ): PlacedPitPlan | null {
+        const model = this.models.get(id);
+        if (!model) return null;
+        const key = `${model}|${center.x}|${center.y}|${rotation}`;
+        const cached = this.placedPlans.get(id);
+        if (cached?.key === key) return cached.plan;
+        const plan = pitPlanOf(model);
+        const placed = plan
+            ? placePitPlan(plan, center, rotation, PIXELS_PER_METER)
+            : null;
+        this.placedPlans.set(id, { key, plan: placed });
+        return placed;
     }
 
     private changed() {

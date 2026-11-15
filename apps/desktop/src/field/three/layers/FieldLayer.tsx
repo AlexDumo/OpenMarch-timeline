@@ -198,7 +198,7 @@ export default function FieldLayer({
     labelAtlas,
 }: {
     fieldProperties: FieldProperties;
-    /** The strips in front of and behind the field (`pitStripOf`, `backStripOf`) */
+    /** The pit areas in front of and behind the field (`pitAreasOf`) */
     strips?: readonly FieldRect[];
     /** The yard number font. */
     numberAtlas: GlyphAtlas;

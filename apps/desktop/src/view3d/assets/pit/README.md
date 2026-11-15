@@ -11,7 +11,27 @@ blender -b --factory-startup --python scripts/view3d-assets/pit/build.py -- --ou
 ```
 
 Copy the `.glb` files and `manifest.json` from `<dir>` here. Skip `bars-*.png`, which is
-already inside the GLBs.
+already inside the GLBs. Then regenerate the 2D drawings from the new GLBs and commit them too:
+
+```bash
+cd apps/desktop && node scripts/view3d-assets/pit-plan.mjs
+```
+
+`plan.json` holds each model seen from straight above, which is how the 2D field draws it: its
+silhouette at every zoom, and the edges seen from above (bars, drum heads, steps) once zoomed in
+(`src/view3d/core/pit/pitPlan.ts`). A test fails when a model has no drawing.
+
+## Ids are permanent
+
+A show stores only a model's id (`items.model = 'pit/<name>'`), never its bytes. So once an id has
+shipped:
+
+- Never rename or remove it. An older show would lose the model and draw a block.
+- Never change its size or footprint. The item's Outline, playing spot and pit area were made from
+  the old size and would no longer match.
+- Give a new look or size a new id (`marimba-5.0-synthetic-black`, `podium-tower-7ft`) and leave
+  the old one in place. Small fixes that keep the size (a wheel turned the right way, a better
+  color) are fine under the same id.
 
 Axes: meters, +Y up, origin on the ground at the middle of the footprint, +Z toward the
 audience, +X the player's left. Each model has at most six parts (draw calls).

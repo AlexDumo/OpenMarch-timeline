@@ -8,6 +8,7 @@ import {
     type FieldPlanText,
 } from "@/field/fieldPlan";
 import { fieldShapeMesh, type FieldShapeMesh } from "./fieldShapes";
+import { isBehindField } from "@/field/pitStrip";
 
 /**
  * The field's rectangles and text in field units.
@@ -63,24 +64,25 @@ const ALIGN: Record<FieldPlanText["anchor"], FieldText["align"]> = {
     end: "right",
 };
 
-/** The pit strip's fill: the field's background, this much as strong, so it reads as off the field */
-export const PIT_STRIP_FILL_ALPHA = 0.45;
-/** The yard lines run on across the pit strip this faint, to place speakers and the podium by */
-export const PIT_STRIP_LINE_ALPHA = 0.35;
+/**
+ * A pit area's tone: the field's background with this much of its line color over it, a flat
+ * surface just off the field's own (owner pick 2026-11-15, "flat tone")
+ */
+export const PIT_AREA_INK_ALPHA = 0.07;
 
 export type FieldGeometryOptions = FieldPlanOptions & {
     /**
-     * The strips beside the field: the pit strip in front of the front sideline (`pitStripOf`)
-     * and the back strip behind the back sideline (`backStripOf`), when there are any
+     * The pit areas beside the field (`pitAreasOf`): in front of the front sideline and behind the
+     * back sideline, when there are any
      */
     strips?: readonly FieldRect[];
 };
 
 /**
  * Plans the field of `fieldProperties` with the user's line settings. The
- * field image is its own layer (`planFieldImage`). The strips beside the
- * field, when there are any, are drawn after it: a fainter fill, their edges
- * and the yard lines run on across them.
+ * field image is its own layer (`planFieldImage`). The pit areas beside the
+ * field, when there are any, are flat tones with no lines (`pitAreaFills`), and
+ * the yard-line labels that would sit under one move past it.
  */
 export function fieldGeometry(
     fieldProperties: FieldProperties,
@@ -124,8 +126,7 @@ export function fieldGeometry(
     ];
     for (const rect of sides) rects.push({ rect, color: border.color });
     const strips = options.strips ?? [];
-    for (const strip of strips)
-        rects.push(...stripRects(plan, strip, fieldProperties));
+    moveLabelsPastPitAreas(plan.texts, strips, fieldProperties);
 
     const texts = plan.texts.map(
         (t): FieldText => ({
@@ -146,13 +147,7 @@ export function fieldGeometry(
         { rect: [0, 0, plan.width, plan.height], color: plan.background },
     ];
     for (const strip of strips)
-        background.push({
-            rect: [strip.left, strip.top, strip.right, strip.bottom],
-            color: {
-                ...plan.background,
-                a: plan.background.a * PIT_STRIP_FILL_ALPHA,
-            },
-        });
+        background.push(...pitAreaFills(strip, fieldProperties));
     return {
         background: packRects(background),
         rects: packRects(rects),
@@ -162,41 +157,46 @@ export function fieldGeometry(
 }
 
 /**
- * A strip's left, right and far edges (away from the field: the bottom of the pit strip, the top
- * of the back strip), and each yard line run on across it, faintly
+ * A pit area's fill: the field's background, opaque so the equipment's lines (in the field's line
+ * color) read on it whatever the app's theme, with a little of the line color over it.
  */
-function stripRects(
-    plan: ReturnType<typeof planField2d>,
-    strip: FieldRect,
+function pitAreaFills(
+    area: FieldRect,
     fieldProperties: FieldProperties,
 ): { rect: Rect; color: RgbaColor }[] {
-    const theme = fieldProperties.theme;
-    const edge = { ...theme.tertiaryStroke };
-    const yardColor = {
-        ...theme.primaryStroke,
-        a: theme.primaryStroke.a * PIT_STRIP_LINE_ALPHA,
-    };
-    const half = FieldProperties.GRID_STROKE_WIDTH / 2;
-    const { left, right, top, bottom } = strip;
-    // A strip that ends at the field's top edge is behind it
-    const far = bottom <= 0 ? top : bottom;
-    const out: { rect: Rect; color: RgbaColor }[] = [
-        { rect: [left - half, top, left + half, bottom], color: edge },
-        { rect: [right - half, top, right + half, bottom], color: edge },
+    const { background, primaryStroke } = fieldProperties.theme;
+    const rect: Rect = [area.left, area.top, area.right, area.bottom];
+    return [
+        { rect, color: { ...background, a: 1 } },
         {
-            rect: [left - half, far - half, right + half, far + half],
-            color: edge,
+            rect,
+            color: {
+                ...primaryStroke,
+                a: primaryStroke.a * PIT_AREA_INK_ALPHA,
+            },
         },
     ];
-    for (const line of plan.lines) {
-        if (line.role !== "yardLine" || line.x1 !== line.x2) continue;
-        const w = line.width / 2;
-        out.push({
-            rect: [line.x1 - w, top, line.x1 + w, bottom],
-            color: yardColor,
-        });
+}
+
+/**
+ * Moves the yard-line labels that would sit under a pit area past it: below a front one, above
+ * one behind the field. Labels beside the area stay at the sideline.
+ */
+function moveLabelsPastPitAreas(
+    texts: FieldPlanText[],
+    areas: readonly FieldRect[],
+    fieldProperties: FieldProperties,
+) {
+    const front = fieldProperties.centerFrontPoint.yPixels;
+    for (const area of areas) {
+        const behind = isBehindField(area);
+        for (const t of texts) {
+            if (t.role !== "checkpointLabel" || t.anchor !== "middle") continue;
+            if (t.x < area.left || t.x > area.right) continue;
+            if (behind ? t.y >= 0 : t.y <= front) continue;
+            t.y += behind ? area.top : area.bottom - front;
+        }
     }
-    return out;
 }
 
 function packRects(rects: { rect: Rect; color: RgbaColor }[]): FieldRects {
