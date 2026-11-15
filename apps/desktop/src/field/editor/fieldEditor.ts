@@ -1327,6 +1327,8 @@ export class FieldEditor {
      * center puts it back there.
      */
     setSelectionPivot(key: BoxPointKey): void {
+        // None while a shape owns the selection, or a lone marcher: nothing to set
+        if (this.selectionPivot() === null) return;
         const ids = this.ports.selection.get();
         this.ownPivot =
             key === "c"
@@ -1983,7 +1985,6 @@ export class FieldEditor {
             this.endLive();
             return;
         }
-        this.carryPivot(starts, positions);
         this.live = null;
         const pending = withPositions(this.pending, positions);
         this.pending = pending;
@@ -2002,6 +2003,9 @@ export class FieldEditor {
             clearTimeout(unsettled);
             // A rotation typed over this drop started from where it snaps back from
             if (result !== "saved") this.cancelRotation();
+            // A pivot on a free spot moves with the drop only once it's saved: refused, the
+            // marchers snap back and it stays put
+            else this.carryPivot(starts, positions);
             // A later drop is still saving: its answer clears both
             if (drop !== this.drops) return;
             this.pending = null;

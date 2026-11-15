@@ -106,6 +106,8 @@ function EditorPivotPick({ editor }: { editor: FieldEditor }) {
         window.addEventListener("keydown", onKey, true);
         return () => window.removeEventListener("keydown", onKey, true);
     }, [editor, picking]);
+    // Folded away (or gone), nothing here hears Escape any more: stop picking with it
+    useEffect(() => () => editor.cancelPickingPivot(), [editor]);
     return (
         <Tip
             label={t("inspector.arrange.pickPivot")}
@@ -149,6 +151,11 @@ function EditorPivotGrid({ editor }: { editor: FieldEditor }) {
         const pivot = editor.selectionPivot();
         return pivot ? pivot.key : "c";
     });
+    // No pivot while a shape owns the selection: the Rotation box and Pick are off too
+    const available = useSyncExternalStore(
+        subscribe,
+        () => editor.selectionPivot() !== null,
+    );
     return (
         <PivotGrid
             // A pivot on a marcher or a free spot: no cell is lit
@@ -156,6 +163,7 @@ function EditorPivotGrid({ editor }: { editor: FieldEditor }) {
             onPick={(k) => editor.setSelectionPivot(k)}
             onPreview={(k) => editor.previewSelectionPivot(k)}
             tip={(name) => t("inspector.arrange.pivotTip", { pivot: name })}
+            disabled={!available}
             testId="arrange-pivot"
         />
     );

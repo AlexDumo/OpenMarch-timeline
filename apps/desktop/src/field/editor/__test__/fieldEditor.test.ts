@@ -2258,9 +2258,9 @@ describe("FieldEditor a plain selection's pivot", () => {
         expect(editor.selectionPivot()?.own).toBe(false);
     });
 
-    it("keeps a free spot on the field, carried along by a drag of the whole selection, and drops it on a page change", () => {
+    it("keeps a free spot on the field, carried along by a saved drag of the whole selection, and drops it on a page change", async () => {
         const positions = [100, 100, 200, 100, 300, 100, 400, 100];
-        const { editor } = setup({ selected: ALL, positions });
+        const { editor, state } = setup({ selected: ALL, positions });
         // Grid snapping is off in this setup, and nothing is within reach of (250, 150)
         pullPivot(editor, { x: 250, y: 150 });
         expect(editor.selectionPivot()?.at).toEqual({ x: 250, y: 150 });
@@ -2268,8 +2268,18 @@ describe("FieldEditor a plain selection's pivot", () => {
         positions[0] += 50;
         expect(editor.selectionPivot()?.at).toEqual({ x: 250, y: 150 });
         positions[0] -= 50;
-        // A drag of the selection does
+        // A drag of the selection does, once it's saved; refused, it stays put as the marchers
+        // snap back
         drag(editor, { x: 200, y: 100 }, { x: 230, y: 120 });
+        expect(editor.selectionPivot()?.at).toEqual({ x: 250, y: 150 });
+        state.drops[0].answer("refused");
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(editor.selectionPivot()?.at).toEqual({ x: 250, y: 150 });
+        drag(editor, { x: 200, y: 100 }, { x: 230, y: 120 });
+        state.drops[1].answer("saved");
+        await Promise.resolve();
+        await Promise.resolve();
         expect(editor.selectionPivot()?.at).toEqual({ x: 280, y: 170 });
         editor.pageChanged();
         expect(editor.selectionPivot()?.own).toBe(false);
@@ -2364,6 +2374,23 @@ describe("FieldEditor a plain selection's pivot", () => {
         const one = setup({ selected: [1] });
         one.editor.startPickingPivot();
         expect(one.editor.pickingPivot()).toBe(false);
+    });
+
+    it("picks with a finger's tap on empty field too, as a click", () => {
+        const { editor, state } = setup({ selected: ALL });
+        editor.startPickingPivot();
+        editor.fingerTap(at(250, 300));
+        expect(editor.pickingPivot()).toBe(false);
+        expect(editor.selectionPivot()?.at).toEqual({ x: 250, y: 300 });
+        expect(state.selected).toEqual(ALL);
+    });
+
+    it("can't be set from the pivot grid while a shape owns the selection", () => {
+        const { editor } = setup({ selected: ALL });
+        editor.setMode(fakeMode({ claims: () => false }).mode);
+        editor.setSelectionPivot("nw");
+        editor.setMode(null);
+        expect(editor.selectionPivot()?.own).toBe(false);
     });
 });
 

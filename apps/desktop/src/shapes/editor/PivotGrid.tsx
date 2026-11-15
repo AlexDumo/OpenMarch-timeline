@@ -43,6 +43,7 @@ export function PivotGrid({
     onPick,
     onPreview,
     tip,
+    disabled = false,
     testId = "transform-pivot",
 }: {
     pivot: Pivot;
@@ -51,6 +52,8 @@ export function PivotGrid({
     onPreview?: (key: PivotKey | null) => void;
     /** A cell's tooltip from the pivot's name; a shape's turns and flips around it by default */
     tip?: (name: string) => string;
+    /** Greyed out and inert, as the controls beside it are (a shape owns the selection) */
+    disabled?: boolean;
     testId?: string;
 }) {
     // One stop for Tab, on the pivot picked (the center for one dragged on the field); the arrows
@@ -60,6 +63,7 @@ export function PivotGrid({
         <div
             role="radiogroup"
             aria-label={tolgee.t("shapes.edit.pivot.label", "Pivot")}
+            aria-disabled={disabled || undefined}
             onKeyDown={(e) =>
                 arrowFocus(
                     e,
@@ -71,7 +75,10 @@ export function PivotGrid({
                     3,
                 )
             }
-            className="rounded-4 border-stroke grid shrink-0 grid-cols-3 gap-2 border p-4"
+            className={clsx(
+                "rounded-4 border-stroke grid shrink-0 grid-cols-3 gap-2 border p-4",
+                disabled && "opacity-50",
+            )}
             data-testid={testId}
         >
             {PIVOT_KEYS.map((key) => (
@@ -91,6 +98,7 @@ export function PivotGrid({
                         type="button"
                         role="radio"
                         aria-checked={key === pivot}
+                        disabled={disabled}
                         tabIndex={key === stop ? 0 : -1}
                         aria-label={tolgee.t(
                             "shapes.edit.pivot.aria",
@@ -111,7 +119,10 @@ export function PivotGrid({
                                 "block rounded-full",
                                 key === pivot
                                     ? "bg-accent size-8"
-                                    : "bg-text/30 hover:bg-accent/60 size-6",
+                                    : clsx(
+                                          "bg-text/30 size-6",
+                                          !disabled && "hover:bg-accent/60",
+                                      ),
                             )}
                         />
                     </button>
