@@ -29,6 +29,7 @@ import {
     BrassFinishPicker,
     LightingControl,
     GuardUniformPicker,
+    SilkShapePicker,
     TubaPicker,
     UniformPicker,
     VenuePicker,
@@ -89,6 +90,9 @@ export function SettingsPanel({
                     </Row>
                     <Row label={t("view3d.settings.guardUniforms")} stacked>
                         <GuardUniformPicker />
+                    </Row>
+                    <Row label={t("view3d.settings.silkShape")} stacked>
+                        <SilkShapePicker />
                     </Row>
                     <Row label={t("view3d.settings.brassFinish")}>
                         <BrassFinishPicker />

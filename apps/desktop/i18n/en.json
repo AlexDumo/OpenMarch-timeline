@@ -3003,7 +3003,8 @@
             "uniforms": "Band uniform",
             "guardUniforms": "Guard uniform",
             "brassFinish": "Brass finish",
-            "tuba": "Tubas"
+            "tuba": "Tubas",
+            "silkShape": "Flag silk shape"
         },
         "keys": {
             "playPause": "Play or pause",
@@ -3075,6 +3076,21 @@
         "pausedPose": {
             "label": "Show the actual step when paused",
             "tooltip": "Show marchers mid-step when paused, as they are at that moment. Off: they stand closed on their dots"
+        },
+        "silkShape": {
+            "standard": "Standard",
+            "curvedTail": "Curved tail",
+            "cSwing": "C-swing",
+            "rainbow": "Rainbow",
+            "arc": "Arc",
+            "teardrop": "Teardrop",
+            "distressed": "Distressed",
+            "rounded": "Rounded",
+            "rectangle": "Rectangle",
+            "curvedAngle": "Oversized curved angle",
+            "wings": "Wings",
+            "snake": "Snake",
+            "swing": "Swing"
         }
     },
     "web": {

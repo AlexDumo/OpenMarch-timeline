@@ -88,6 +88,14 @@ export const venueSettingsSchema = z.object({
      * 2026-11-09 without a version bump.
      */
     tuba: z.enum(TUBA_MODELS).optional(),
+    /**
+     * The shape of the guard's 6 ft flag silks (`sizes/silkShapes.ts`);
+     * absent means the plain rectangle. Added 2026-11-15 (fork #973)
+     * without a version bump, like `brassFinish`. A plain string, read
+     * through `silkShapeOf`, so a shape a later build adds falls back to the
+     * rectangle here instead of failing the whole venue.
+     */
+    silkShape: z.string().max(64).optional(),
 });
 
 export type VenueSettings = z.infer<typeof venueSettingsSchema>;
