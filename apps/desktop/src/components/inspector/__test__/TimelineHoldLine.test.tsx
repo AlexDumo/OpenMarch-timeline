@@ -16,7 +16,7 @@ import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { useHeldMarksStore } from "@/timeline/useHeldMarks";
 import { useEditorModeStore } from "@/stores/EditorModeStore";
 import { isTimelineOwnKey } from "@/components/timeline/timelineHotkeys";
-import TimelineHoldLine from "../TimelineHoldLine";
+import TimelineHoldLine, { TimelineHeldCount } from "../TimelineHoldLine";
 
 /**
  * UI-18: the marcher inspector's line for the selected marchers on the current page, "Moves on
@@ -136,6 +136,7 @@ beforeEach(() => {
 const show = (marcherIds: number[]) =>
     render(
         <TolgeeProvider tolgee={tolgee} fallback="Loading...">
+            <TimelineHeldCount marcherIds={marcherIds} />
             <TimelineHoldLine marcherIds={marcherIds} />
         </TolgeeProvider>,
     );
@@ -158,6 +159,15 @@ describe("TimelineHoldLine", () => {
         ).toBeGreaterThan(0);
         fireEvent.click(line()!);
         expect(useTimelineSelectionStore.getState().playheadBeat).toBe(9);
+    });
+
+    it("carries where the link goes for a long press, which a tablet shows instead of the tooltip", () => {
+        mocks.selectedPage = PAGES[3];
+        show([1]);
+        expect(line()).toHaveAttribute(
+            "data-tip-label",
+            "Go to Page 2, where these marchers last moved",
+        );
     });
 
     it("says a marcher that never moved holds from the start, not from the first page by name, and jumps there", async () => {
@@ -337,7 +347,7 @@ describe("TimelineHoldLine", () => {
     });
 });
 
-describe("TimelineHoldLine, how many are Held (#476)", () => {
+describe("TimelineHeldCount, how many are Held (#476, #805)", () => {
     /** Marcher 1 Held from its page 2 arrival (9) through page 4; marcher 5 moves as 1 does */
     const held = () =>
         useHeldMarksStore.setState({

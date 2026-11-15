@@ -23,8 +23,7 @@ describe("the window's horn channel", () => {
             [{ id: 1, section: "Trumpet" }],
             beats,
             "left",
-            {},
-            () => "winds",
+            { carries: () => "winds" },
         );
         const events = windowHornEvents(
             compiled.segments(1, "horn_equipment"),
