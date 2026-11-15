@@ -84,10 +84,7 @@ Next to <Ui k="fieldEditMode.panel.sections.template" />, the panel says how man
 - <Ui k="fieldProperties.labels.stepSizeWarningThreshold" />: the longest step
   before a move is marked as too big. See [Step size
   warnings](/guides/field/step-size-warnings/).
-- <Ui k="fieldProperties.labels.measurementSystem" />: inches (
-  <Ui k="fieldProperties.options.imperial" />) or centimeters (
-  <Ui k="fieldProperties.options.metric" />
-  ).
+- In <Ui k="fieldProperties.labels.measurementSystem" />, choose <Ui k="fieldProperties.options.imperial" /> for inches or <Ui k="fieldProperties.options.metric" /> for centimeters.
 
 <Aside type="caution">
   Marchers don't move when the field's size or step size changes. They keep
@@ -198,11 +195,7 @@ Pick a line and change it in the <Ui k="fieldEditMode.line.title" /> section. Ea
   used in written-out coordinates and to pick the 3D View's venue.
 - <Ui k="fieldEditMode.popover.yardNumber" />: the number painted on the field
   at an X line.
-- <Ui k="fieldEditMode.popover.visible" />: whether the line is drawn. A hidden
-  line can still be used for coordinates; while the
-  <Ui k="fieldEditMode.panel.tabs.lines" /> tab is open it shows as a faint
-  dashed line so you can find it. <Kbd action="fieldEditToggleVisible" /> flips
-  it for the picked lines.
+- Turn off <Ui k="fieldEditMode.popover.visible" /> to stop drawing the line. A hidden line can still be used for coordinates, and on the <Ui k="fieldEditMode.panel.tabs.lines" /> tab it shows as a faint dashed line so you can find it. <Kbd action="fieldEditToggleVisible" /> flips it for the picked lines.
 - <Ui k="fieldEditMode.line.reference" />: whether coordinates are measured from
   the line. Turn it off for lines you want to see but not count from, such as
   the real hash next to the grid hash. <Kbd action="fieldEditToggleReference" />
@@ -241,9 +234,7 @@ In the touch layout the rulers and the strip along each line are a finger wide (
 
 ### Markings and labels
 
-- <Ui k="fieldProperties.labels.halfLineXInterval" /> and
-  <Ui k="fieldProperties.labels.halfLineYInterval" />: every how many steps a
-  half line is drawn, from the center and from the front. Leave one empty for no
+- Half lines: <Ui k="fieldProperties.labels.halfLineXInterval" /> sets every how many steps one is drawn from the center, and <Ui k="fieldProperties.labels.halfLineYInterval" /> from the front. Leave one empty for no
   half lines that way. Half lines don't change coordinates.
 - <Ui k="fieldEditMode.markings.edgeLabels" />: whether the line names outside
   the field show on each edge.
