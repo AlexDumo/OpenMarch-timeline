@@ -557,9 +557,8 @@ export class MarcherBodies {
                     xz[i * 2 + 1],
                     heading[i],
                     placed[i] ? this.scaleOf[i] : 0,
-                    STAND_Y,
+                    STAND_Y + (lift?.[i] ?? 0),
                 );
-                if (lift) array[k * 16 + 13] = STAND_Y + lift[i];
             }
             mesh.instanceMatrix.needsUpdate = true;
         }

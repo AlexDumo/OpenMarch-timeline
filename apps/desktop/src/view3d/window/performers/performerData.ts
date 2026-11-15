@@ -172,7 +172,7 @@ function writeTranslation(
  * Writes the block matrices: a translation to the performer's spot for a
  * placed performer, and a zero matrix (nothing drawn) otherwise. The
  * cylinder geometry has its base at its origin, so blocks stand at `STAND_Y`,
- * raised by `lift` (m) where a platform raises them.
+ * or `lift` (m) above it where a platform raises them.
  */
 export function writePerformerMatrices(
     count: number,

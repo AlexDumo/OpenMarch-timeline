@@ -172,9 +172,8 @@ export class HornSet {
                         xz[slot * 2 + 1],
                         heading[slot],
                         scale[slot],
-                        STAND_Y,
+                        STAND_Y + (lift?.[slot] ?? 0),
                     );
-                    if (lift) matrices[i * 16 + 13] = STAND_Y + lift[slot];
                     if (changed) writeInstance(t.mesh, i, slot);
                 });
                 t.mesh.count = list.length;

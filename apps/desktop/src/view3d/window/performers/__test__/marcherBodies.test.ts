@@ -14,6 +14,7 @@ import {
 } from "@/view3d/core/marchers/looks";
 import type { LoadedBody } from "../marchers/marcherAssets";
 import { defaultPerformerBody } from "@/view3d/core/marchers/looks";
+import { STAND_Y } from "../performerData";
 import { mirrorRow } from "@/view3d/core/marchers/planner";
 import {
     MarcherBodies,
@@ -27,7 +28,6 @@ import {
     visibleIndex,
 } from "../marchers/marcherBodies";
 import { hornRowSpec } from "../marchers/hornRows";
-import { STAND_Y } from "../performerData";
 import { platformRig } from "../marchers/platformClip";
 import { restoreStillPose } from "@/view3d/window/performers/marchers/stillPose";
 

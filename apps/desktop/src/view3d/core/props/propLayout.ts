@@ -7,7 +7,7 @@
  * - A platform or an obstacle sits on the top of the tallest platform under its footprint center.
  *   Of two platforms over each other's centers, the smaller stands on the larger, and of two the
  *   same size the later made (the higher id) on the earlier, so stacking makes steps. A loop of
- *   three or more (each center over the next) is broken where it is entered.
+ *   three or more (each center over the next) is broken once, where its largest platform enters it.
  * - A Floor prop stays flat on the Base floor and lifts nothing; obstacles are never stood on.
  *
  * Plain TypeScript only: this module lives under `view3d/core/`. Outlines are in world meters on
@@ -178,31 +178,34 @@ export function propsAt(
         (f.surface !== "platform" ||
             !holds(f, under.center) ||
             lower(under, f));
+    // Each platform's top is worked out once, largest (then earliest) first, so a loop is
+    // broken in one place for the whole layout and every prop in it agrees where it stands.
     const top = new Map<number, number>();
     const visiting = new Set<number>();
-    /** Set when a loop was broken: values worked out meanwhile depend on the way in */
-    let brokeLoop = false;
-    const baseOf = (f: Footprint): number => {
-        if (f.surface === "floor") return 0;
-        visiting.add(f.id);
-        let base = 0;
-        for (const under of platforms) {
-            if (!standsOn(f, under)) continue;
-            if (visiting.has(under.id)) brokeLoop = true;
-            else base = Math.max(base, topOf(under));
-        }
-        visiting.delete(f.id);
-        return base;
-    };
     const topOf = (f: Footprint): number => {
         const known = top.get(f.id);
         if (known !== undefined) return known;
-        const outer = brokeLoop;
-        brokeLoop = false;
-        const t = baseOf(f) + f.height;
-        if (!brokeLoop) top.set(f.id, t);
-        brokeLoop ||= outer;
+        visiting.add(f.id);
+        let base = 0;
+        for (const under of platforms)
+            if (!visiting.has(under.id) && standsOn(f, under))
+                base = Math.max(base, topOf(under));
+        visiting.delete(f.id);
+        const t = base + f.height;
+        top.set(f.id, t);
         return t;
+    };
+    const byOrder = [...platforms].sort((a, b) =>
+        lower(a, b) ? -1 : lower(b, a) ? 1 : 0,
+    );
+    for (const f of byOrder) topOf(f);
+    const baseOf = (f: Footprint): number => {
+        if (f.surface === "floor") return 0;
+        if (top.has(f.id)) return top.get(f.id)! - f.height;
+        let base = 0;
+        for (const under of platforms)
+            if (standsOn(f, under)) base = Math.max(base, top.get(under.id)!);
+        return base;
     };
 
     return drawn.map((f) => ({ ...f, base: baseOf(f) }));

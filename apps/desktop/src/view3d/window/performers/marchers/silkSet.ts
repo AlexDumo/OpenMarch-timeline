@@ -501,9 +501,8 @@ export class SilkSet {
                     xz[slot * 2 + 1],
                     heading[slot],
                     scale[slot],
-                    STAND_Y,
+                    STAND_Y + (lift?.[slot] ?? 0),
                 );
-                if (lift) matrices[i * 16 + 13] = STAND_Y + lift[slot];
                 for (let c = 0; c < 4; c++)
                     motion.array[i * 4 + c] = this.motion[silk * 4 + c];
                 if (!changed) return;
