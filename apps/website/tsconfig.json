@@ -6,6 +6,9 @@
         "jsx": "react-jsx",
         "jsxImportSource": "react",
         "paths": {
+            "@/global/singletons/Tolgee": [
+                "./src/components/home/hero/tolgeeStub.ts"
+            ],
             "@/*": ["./src/*"]
         }
     }

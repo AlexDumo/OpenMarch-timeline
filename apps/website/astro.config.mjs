@@ -9,6 +9,27 @@ import starlightLlmsTxt from "starlight-llms-txt";
 
 import tailwindcss from "@tailwindcss/vite";
 import { readFileSync, readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+/**
+ * Prototype (#968): the home page hero runs the desktop app's shape engine
+ * (apps/desktop/src/shapes). Its one impure import is the translation singleton, swapped here
+ * for a stub, and its solver comes from @openmarch/core, read here from source.
+ */
+function heroShapeEngine() {
+    const at = (path) => fileURLToPath(new URL(path, import.meta.url));
+    const swaps = {
+        "@/global/singletons/Tolgee": at(
+            "./src/components/home/hero/tolgeeStub.ts",
+        ),
+        "@openmarch/core": at("../../packages/core/src/index.ts"),
+    };
+    return {
+        name: "hero-shape-engine",
+        enforce: "pre",
+        resolveId: (source) => swaps[source],
+    };
+}
 
 /**
  * Which site this build is. "stable" is openmarch.com. "preview" is
@@ -295,7 +316,7 @@ export default defineConfig({
     },
 
     vite: {
-        plugins: [tailwindcss()],
+        plugins: [tailwindcss(), heroShapeEngine()],
         define: {
             "import.meta.env.PUBLIC_SITE_CHANNEL": JSON.stringify(siteChannel),
             "import.meta.env.PUBLIC_DOWNLOAD_URL": JSON.stringify(downloadUrl),

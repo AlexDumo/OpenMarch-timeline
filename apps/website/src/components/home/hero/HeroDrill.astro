@@ -1,0 +1,55 @@
+---
+/**
+ * Prototype (#968): marchers forming shapes around the cursor, behind the hero's content.
+ * `?hero=form|show|file` picks the variant (form when absent) and shows a switcher;
+ * `?rec` hands the clock to the recording script.
+ */
+---
+
+<canvas
+    id="hero-drill"
+    aria-hidden="true"
+    class="pointer-events-none absolute inset-0 -z-10 size-full rounded-[14px]"
+></canvas>
+<nav
+    id="hero-drill-switch"
+    hidden
+    class="border-stroke bg-bg-1 text-sub fixed bottom-12 left-12 z-50 flex gap-4 rounded-full border p-4"
+>
+    <a class="rounded-full px-10 py-2" data-hero="form" href="?hero=form">A</a>
+    <a class="rounded-full px-10 py-2" data-hero="show" href="?hero=show">B</a>
+    <a class="rounded-full px-10 py-2" data-hero="file" href="?hero=file">C</a>
+</nav>
+
+<script>
+    const canvas = document.getElementById("hero-drill") as HTMLCanvasElement;
+    const query = new URLSearchParams(location.search);
+    const pick = query.get("hero") ?? "form";
+    const manual = query.has("rec");
+
+    if (query.has("hero") && !manual) {
+        const nav = document.getElementById("hero-drill-switch")!;
+        nav.hidden = false;
+        nav.querySelector(`[data-hero="${pick}"]`)?.classList.add(
+            "bg-accent",
+            "text-text-invert",
+        );
+    }
+
+    async function start() {
+        const [{ startHero }, variant] = await Promise.all([
+            import("./runtime"),
+            pick === "show"
+                ? import("./show").then((m) => m.showVariant())
+                : pick === "file"
+                  ? import("./file").then((m) => m.fileVariant())
+                  : import("./form").then((m) => m.formVariant()),
+        ]);
+        const hero = startHero(canvas, variant, { manual });
+        (window as unknown as { __hero: typeof hero }).__hero = hero;
+    }
+
+    // Off the critical path: the page paints and hydrates first
+    if (manual) void start();
+    else (window.requestIdleCallback ?? ((f) => setTimeout(f, 200)))(start);
+</script>
