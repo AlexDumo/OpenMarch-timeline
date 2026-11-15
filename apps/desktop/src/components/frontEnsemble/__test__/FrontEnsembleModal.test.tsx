@@ -169,17 +169,33 @@ describeDbTests("Front ensemble panel", (it) => {
         const ensemble = screen.getByRole("region", {
             name: "Add equipment",
         });
-        fireEvent.click(
-            within(ensemble).getByRole("button", { name: /Marimba/ }),
-        );
-        // The default is marked; the variants show their footprints
+        // Every model is a picture, named by family and variant; the default is marked, and
+        // each tells its footprint
         const rosewood43 = within(ensemble).getByRole("button", {
-            name: /4\.3 octaves · Rosewood.*Default/,
+            name: "Marimba · 4.3 octaves · Rosewood Default",
         });
-        expect(rosewood43).toHaveTextContent("2.13 × 0.9 m");
+        expect(rosewood43).toHaveAccessibleDescription("2.13 × 0.9 m");
+        expect(rosewood43.querySelector("img")).not.toBeNull();
+        // The search box narrows the pictures
+        fireEvent.change(
+            within(ensemble).getByRole("searchbox", {
+                name: "Search equipment",
+            }),
+            { target: { value: "marimba black" } },
+        );
+        expect(
+            within(ensemble)
+                .getAllByRole("button")
+                .filter((b) => b.querySelector("img"))
+                .map((b) => b.getAttribute("aria-label")),
+        ).toEqual([
+            "Marimba · 4.3 octaves · Black synthetic",
+            "Marimba · 4.6 octaves · Black synthetic",
+            "Marimba · 5.0 octaves · Black synthetic",
+        ]);
         fireEvent.click(
             within(ensemble).getByRole("button", {
-                name: /4\.3 octaves · Black synthetic/,
+                name: "Marimba · 4.3 octaves · Black synthetic",
             }),
         );
         const { placing, drawingMode } = useItemDrawingStore.getState();
@@ -428,9 +444,10 @@ describeDbTests("Front ensemble panel", (it) => {
             name: "Podiums",
         });
         fireEvent.click(
-            within(podiums).getByRole("button", { name: "Podium" }),
+            within(podiums).getByRole("button", {
+                name: "Podium · Low Default",
+            }),
         );
-        fireEvent.click(within(ensemble).getByRole("button", { name: /^Low/ }));
         // Behind the back sideline, turned to face the field
         act(() =>
             port.drawn!({
@@ -466,20 +483,28 @@ describeDbTests("Front ensemble panel", (it) => {
             [],
         );
         const podiums = screen.getByRole("group", { name: "Podiums" });
+        // Every podium model, by family
         expect(
-            within(podiums)
-                .getAllByRole("button")
-                .map((b) => b.textContent),
-        ).toEqual([
-            "Podium",
-            "Podium stand",
-            "Tower",
-            "Rolling podium",
-            "Stepladder",
-            "Scaffold tower",
-        ]);
-        fireEvent.click(within(podiums).getByRole("button", { name: "Tower" }));
-        fireEvent.click(screen.getByRole("button", { name: /^6 ft · Black/ }));
+            new Set(
+                within(podiums)
+                    .getAllByRole("button")
+                    .map((b) => b.getAttribute("aria-label")!.split(" · ")[0]),
+            ),
+        ).toEqual(
+            new Set([
+                "Podium",
+                "Podium stand",
+                "Tower",
+                "Rolling podium",
+                "Stepladder",
+                "Scaffold tower",
+            ]),
+        );
+        fireEvent.click(
+            within(podiums).getByRole("button", {
+                name: "Tower · 6 ft · Black",
+            }),
+        );
         act(() =>
             port.drawn!({
                 outlineType: "rectangle",

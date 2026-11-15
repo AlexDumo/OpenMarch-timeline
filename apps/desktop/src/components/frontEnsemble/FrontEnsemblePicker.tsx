@@ -1,32 +1,15 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import * as RadixCollapsible from "@radix-ui/react-collapsible";
-import {
-    BellSimpleIcon,
-    CaretDownIcon,
-    CaretLeftIcon,
-    CaretRightIcon,
-    CylinderIcon,
-    DiscIcon,
-    FadersIcon,
-    LadderIcon,
-    LadderSimpleIcon,
-    PianoKeysIcon,
-    RowsIcon,
-    SpeakerHifiIcon,
-    SquaresFourIcon,
-    StairsIcon,
-    StepsIcon,
-} from "@phosphor-icons/react";
+import { CaretDownIcon, MagnifyingGlassIcon } from "@phosphor-icons/react";
 import { T, useTranslate } from "@tolgee/react";
-import { MENU_BUTTON_CLASS } from "@/components/ui/popupClasses";
+import { Input } from "@openmarch/ui";
+import { pitThumbnailUrl } from "./pitThumbnails";
 import { useItemDrawingStore } from "@/stores/ItemDrawingStore";
 import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 import {
     PIT_FAMILIES,
     defaultPitVariant,
     pitVariantsOf,
-    type PitFamily,
-    type PitFamilyId,
     type PitGroup,
     type PitVariant,
 } from "@/view3d/core/pit/catalog";
@@ -39,31 +22,6 @@ const GROUPS: readonly PitGroup[] = [
     "podiums",
 ];
 
-const FAMILY_ICONS: Record<PitFamilyId, React.ReactNode> = {
-    marimba: <PianoKeysIcon size={16} />,
-    vibraphone: <PianoKeysIcon size={16} />,
-    xylophone: <PianoKeysIcon size={16} />,
-    glockenspiel: <PianoKeysIcon size={16} />,
-    synth: <PianoKeysIcon size={16} />,
-    drumSet: <CylinderIcon size={16} />,
-    auxRack: <RowsIcon size={16} />,
-    timpani: <CylinderIcon size={16} />,
-    chimes: <BellSimpleIcon size={16} />,
-    gong: <DiscIcon size={16} />,
-    congas: <CylinderIcon size={16} />,
-    bongos: <CylinderIcon size={16} />,
-    concertBassDrum: <CylinderIcon size={16} />,
-    trapTable: <SquaresFourIcon size={16} />,
-    speaker: <SpeakerHifiIcon size={16} />,
-    mixer: <FadersIcon size={16} />,
-    podium: <StairsIcon size={16} />,
-    podiumStand: <StepsIcon size={16} />,
-    podiumTower: <StairsIcon size={16} />,
-    rollingPodium: <StairsIcon size={16} />,
-    stepladder: <LadderSimpleIcon size={16} />,
-    scaffold: <LadderIcon size={16} />,
-};
-
 const GROUP_HEADING_CLASS =
     "text-sub text-text-subtitle px-8 pt-8 pb-4 font-medium tracking-wide uppercase";
 
@@ -71,28 +29,55 @@ const GROUP_HEADING_CLASS =
 const meters = (value: number) => String(Number(value.toFixed(2)));
 
 /**
- * The Front ensemble panel's Add equipment (instruments.md §6): pick a family, then a variant,
- * and place it on the field with a click, as a locked equipment item named for its family
- * ("Marimba 2"). A family with one model is placed straight from the list. The families are
- * grouped, the podiums on their own. It starts open, so adding more is always in reach; the
- * presets are a button in the view's header (`PitPresets`).
+ * The front ensemble view's Add equipment (instruments.md §6): every model as a small picture,
+ * under its group (keyboards, percussion, audio, podiums), with a search box over them (owner,
+ * 2026-11-15: see what each looks like rather than a list of names). Clicking one places it on
+ * the field with a click, as a locked equipment item named for its family ("Marimba 2"). It
+ * starts open, so adding more is always in reach; the presets are a button in the view's header
+ * (`PitPresets`).
  */
 export default function FrontEnsemblePicker() {
     const { t } = useTranslate();
-    const [family, setFamily] = useState<PitFamily | null>(null);
     const [open, setOpen] = useState(true);
+    const [query, setQuery] = useState("");
     const placeEquipment = useItemDrawingStore((s) => s.placeEquipment);
     const { toggleOpen } = useSidebarModalStore();
+    const label = usePitVariantLabel();
 
     const place = (variant: PitVariant) => {
         placeEquipment({
             variant,
             baseName: t(`pit.family.${variant.family}`),
         });
-        setFamily(null);
         // Close the panel to place it on the field, as drawing a prop does
         toggleOpen();
     };
+
+    const words = query.toLocaleLowerCase().split(/\s+/).filter(Boolean);
+    const groups = GROUPS.map((group) => {
+        const groupName = t(`frontEnsemble.groups.${group}`);
+        const tiles = PIT_FAMILIES.filter((f) => f.group === group).flatMap(
+            (family) => {
+                const familyName = t(family.labelKey);
+                const fallback = defaultPitVariant(family.id);
+                return pitVariantsOf(family.id).map((variant) => ({
+                    variant,
+                    familyName,
+                    variantName:
+                        variant.label.length > 0 ? label(variant) : null,
+                    isDefault:
+                        variant === fallback &&
+                        pitVariantsOf(family.id).length > 1,
+                }));
+            },
+        );
+        const shown = tiles.filter((tile) => {
+            const text =
+                `${groupName} ${tile.familyName} ${tile.variantName ?? ""}`.toLocaleLowerCase();
+            return words.every((word) => text.includes(word));
+        });
+        return { group, groupName, shown };
+    }).filter(({ shown }) => shown.length > 0);
 
     return (
         <RadixCollapsible.Root asChild open={open} onOpenChange={setOpen}>
@@ -111,20 +96,51 @@ export default function FrontEnsemblePicker() {
                     />
                 </RadixCollapsible.Trigger>
                 <RadixCollapsible.Content className="flex flex-col gap-12">
-                    {family ? (
-                        <VariantList
-                            family={family}
-                            onBack={() => setFamily(null)}
-                            onPick={place}
+                    <div className="relative">
+                        <MagnifyingGlassIcon
+                            size={16}
+                            aria-hidden
+                            className="text-text-subtitle pointer-events-none absolute top-1/2 left-12 -translate-y-1/2"
                         />
+                        <Input
+                            type="search"
+                            compact
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            placeholder={t("frontEnsemble.search")}
+                            aria-label={t("frontEnsemble.search")}
+                            className="w-full pl-36"
+                        />
+                    </div>
+                    {groups.length === 0 ? (
+                        <p className="text-sub text-text-subtitle py-8 text-center">
+                            <T keyName="frontEnsemble.noMatch" />
+                        </p>
                     ) : (
-                        <FamilyList
-                            onPick={(picked) => {
-                                const variants = pitVariantsOf(picked.id);
-                                if (variants.length === 1) place(variants[0]);
-                                else setFamily(picked);
-                            }}
-                        />
+                        groups.map(({ group, groupName, shown }) => (
+                            <div
+                                key={group}
+                                role="group"
+                                aria-label={groupName}
+                                className="flex flex-col gap-4"
+                            >
+                                <div
+                                    className={GROUP_HEADING_CLASS}
+                                    aria-hidden
+                                >
+                                    {groupName}
+                                </div>
+                                <div className="grid grid-cols-4 gap-6">
+                                    {shown.map((tile) => (
+                                        <EquipmentTile
+                                            key={tile.variant.fileId}
+                                            {...tile}
+                                            onPick={() => place(tile.variant)}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        ))
                     )}
                 </RadixCollapsible.Content>
             </section>
@@ -132,106 +148,67 @@ export default function FrontEnsemblePicker() {
     );
 }
 
-function FamilyList({ onPick }: { onPick: (family: PitFamily) => void }) {
-    const { t } = useTranslate();
-    return (
-        <div className="border-stroke bg-fg-2 rounded-6 flex flex-col border p-4">
-            {GROUPS.map((group) => (
-                <div
-                    key={group}
-                    role="group"
-                    aria-label={t(`frontEnsemble.groups.${group}`)}
-                >
-                    <div className={GROUP_HEADING_CLASS} aria-hidden>
-                        {t(`frontEnsemble.groups.${group}`)}
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                        {PIT_FAMILIES.filter((f) => f.group === group).map(
-                            (family) => {
-                                const many =
-                                    pitVariantsOf(family.id).length > 1;
-                                return (
-                                    <button
-                                        key={family.id}
-                                        type="button"
-                                        className={`${MENU_BUTTON_CLASS} text-text min-w-0`}
-                                        onClick={() => onPick(family)}
-                                    >
-                                        <span className="text-text-subtitle flex shrink-0">
-                                            {FAMILY_ICONS[family.id]}
-                                        </span>
-                                        <span className="min-w-0 flex-1 truncate">
-                                            {t(family.labelKey)}
-                                        </span>
-                                        {many && (
-                                            <CaretRightIcon
-                                                size={12}
-                                                className="text-text-subtitle shrink-0"
-                                                aria-hidden
-                                            />
-                                        )}
-                                    </button>
-                                );
-                            },
-                        )}
-                    </div>
-                </div>
-            ))}
-        </div>
-    );
-}
-
-function VariantList({
-    family,
-    onBack,
+/**
+ * One model in the catalog: its picture on a light card (so dark finishes read in both themes),
+ * its family's name and its size and finish. The footprint is in its tooltip and its description.
+ */
+function EquipmentTile({
+    variant,
+    familyName,
+    variantName,
+    isDefault,
     onPick,
 }: {
-    family: PitFamily;
-    onBack: () => void;
-    onPick: (variant: PitVariant) => void;
+    variant: PitVariant;
+    familyName: string;
+    variantName: string | null;
+    isDefault: boolean;
+    onPick: () => void;
 }) {
     const { t } = useTranslate();
-    const label = usePitVariantLabel();
-    const fallback = defaultPitVariant(family.id);
+    const footprintId = useId();
+    const url = pitThumbnailUrl(variant.fileId);
+    const footprint = t("frontEnsemble.footprint", {
+        width: meters(variant.footprint.width),
+        depth: meters(variant.footprint.depth),
+    });
+    const name = variantName ? `${familyName} · ${variantName}` : familyName;
     return (
-        <div className="border-stroke bg-fg-2 rounded-6 flex flex-col border p-4">
-            <button
-                type="button"
-                onClick={onBack}
-                className={`${MENU_BUTTON_CLASS} text-text-subtitle hover:text-text`}
-                aria-label={t("frontEnsemble.allFamilies")}
-            >
-                <CaretLeftIcon size={12} aria-hidden />
-                <span className="text-sub font-medium tracking-wide uppercase">
-                    {t(family.labelKey)}
+        <button
+            type="button"
+            onClick={onPick}
+            title={`${name}\n${footprint}`}
+            aria-label={
+                isDefault ? `${name} ${t("frontEnsemble.default")}` : name
+            }
+            aria-describedby={footprintId}
+            className="rounded-6 hover:border-accent/60 focus-visible:outline-accent group flex min-w-0 flex-col gap-4 border border-transparent p-2 text-left outline-hidden duration-150 ease-out focus-visible:outline-2"
+        >
+            <span className="rounded-4 relative block aspect-[4/3] overflow-hidden bg-white">
+                {url && (
+                    <img
+                        src={url}
+                        alt=""
+                        draggable={false}
+                        loading="lazy"
+                        className="h-full w-full object-contain"
+                    />
+                )}
+                {isDefault && (
+                    <span className="bg-accent absolute top-4 right-4 size-6 rounded-full" />
+                )}
+            </span>
+            <span className="text-sub text-text min-w-0 truncate px-2 leading-tight font-medium">
+                {familyName}
+            </span>
+            {variantName && (
+                <span className="text-sub text-text-subtitle line-clamp-2 min-w-0 px-2 leading-tight">
+                    {variantName}
                 </span>
-            </button>
-            {pitVariantsOf(family.id).map((variant) => (
-                <button
-                    key={variant.fileId}
-                    type="button"
-                    className={`${MENU_BUTTON_CLASS} text-text`}
-                    onClick={() => onPick(variant)}
-                >
-                    <span className="min-w-0 flex-1 truncate">
-                        {label(variant)}
-                    </span>
-                    {variant === fallback && (
-                        <span className="text-sub text-accent shrink-0">
-                            <T keyName="frontEnsemble.default" />
-                        </span>
-                    )}
-                    <span className="text-sub text-text-subtitle shrink-0 tabular-nums">
-                        <T
-                            keyName="frontEnsemble.footprint"
-                            params={{
-                                width: meters(variant.footprint.width),
-                                depth: meters(variant.footprint.depth),
-                            }}
-                        />
-                    </span>
-                </button>
-            ))}
-        </div>
+            )}
+            <span id={footprintId} className="sr-only">
+                {footprint}
+            </span>
+        </button>
     );
 }

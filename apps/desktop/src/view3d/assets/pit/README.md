@@ -15,11 +15,14 @@ already inside the GLBs. Then regenerate the 2D drawings from the new GLBs and c
 
 ```bash
 cd apps/desktop && node scripts/view3d-assets/pit-plan.mjs
+blender -b --factory-startup --python scripts/view3d-assets/pit-thumbnails.py -- src/view3d/assets/pit
 ```
 
 `plan.json` holds each model seen from straight above, which is how the 2D field draws it: its
 silhouette at every zoom, and the edges seen from above (bars, drum heads, steps) once zoomed in
-(`src/view3d/core/pit/pitPlan.ts`). A test fails when a model has no drawing.
+(`src/view3d/core/pit/pitPlan.ts`). A test fails when a model has no drawing. `thumbs/` holds
+each model's picture in the equipment catalog (the Front ensemble and podiums view), rendered from
+the audience side with Cycles on an NVIDIA GPU.
 
 ## Ids are permanent
 

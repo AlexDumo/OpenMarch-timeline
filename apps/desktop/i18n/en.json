@@ -1464,7 +1464,6 @@
             "edit": "Edit podium",
             "editTitle": "Edit Podium"
         },
-        "allFamilies": "Back to all front ensemble equipment",
         "default": "Default",
         "footprint": "{width} × {depth} m",
         "groups": {
@@ -1499,7 +1498,9 @@
             "counts": "{equipment, plural, one {# piece of equipment} other {# pieces of equipment}}{podiums, plural, =0 {} one {, # podium} other {, # podiums}}",
             "setUp": "Set up",
             "edit": "Edit"
-        }
+        },
+        "search": "Search equipment",
+        "noMatch": "No equipment matches."
     },
     "section": {
         "drumMajor": "Drum Major",

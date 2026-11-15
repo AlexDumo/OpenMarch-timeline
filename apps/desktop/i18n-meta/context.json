@@ -2952,7 +2952,6 @@
     "frontEnsemble.equipment.block": "Second line under a piece of equipment in the Front ensemble panel's list when it has no built-in 3D model and is drawn as a plain block. Means 'a piece of equipment'.",
     "frontEnsemble.equipment.model": "Label above the drop-down in the Front ensemble panel's edit view that switches a front ensemble instrument or piece of equipment to another model of the same kind, e.g. 'Marimba model' with sizes and finishes to pick from. {family} is the kind of equipment (Marimba, Speaker...).",
     "frontEnsemble.placeInstructions": "Instruction shown at the bottom of the field after picking a front ensemble instrument or piece of equipment in the Front ensemble panel. A click on the field places it there. {name} is its kind, e.g. 'Marimba'. The playhead is the current time in the show's timeline; the equipment appears from that count on.",
-    "frontEnsemble.allFamilies": "Screen-reader label of the back button above a list of models (sizes and finishes) in the Front ensemble panel. Returns to the list of all kinds of equipment.",
     "frontEnsemble.default": "Short tag beside the model a kind of front ensemble equipment uses by default, in the Front ensemble panel's list of models. One word.",
     "frontEnsemble.footprint": "How much floor space a front ensemble model takes, beside it in the Front ensemble panel: width by depth in meters, e.g. '2.54 × 1.21 m'. Keep the × sign and the unit short.",
     "frontEnsemble.groups.audio": "Small uppercase heading in the Front ensemble panel's list of equipment to add, over the speakers and the sound mixer.",
@@ -3286,5 +3285,7 @@
     "frontEnsemble.presets.reset": "Small button in the front ensemble view's header once the show has pit equipment: opens a popover that replaces the pit with a ready-made Small, Medium or Large layout. Short.",
     "frontEnsemble.summary.title": "Name of the row at the top of the Marchers panel that opens the setup of the front ensemble (the pit: stationary keyboards and percussion in front of the field) and the podiums the drum majors stand on. Noun phrase, sentence case.",
     "actions.ui.openFrontEnsemble": "Command palette action that opens the front ensemble and podiums view in the sidebar's Marchers panel: where the pit (stationary keyboards and percussion in front of the field) and the drum majors' podiums are set up. Same words as the row in the Marchers panel.",
-    "actions.ui.openFrontEnsembleKeywords": "Search words for the Open front ensemble and podiums action in the command palette, separated by spaces. Never shown; translate as words people might type to find it (pit, front ensemble, podium, drum major, marimba, vibraphone, percussion, speaker, equipment, preset)."
+    "actions.ui.openFrontEnsembleKeywords": "Search words for the Open front ensemble and podiums action in the command palette, separated by spaces. Never shown; translate as words people might type to find it (pit, front ensemble, podium, drum major, marimba, vibraphone, percussion, speaker, equipment, preset).",
+    "frontEnsemble.search": "Placeholder and accessible name of the search box over the pictures of front ensemble equipment and podiums that can be added to the show.",
+    "frontEnsemble.noMatch": "Shown in place of the equipment pictures when nothing matches what was typed in the search box."
 }

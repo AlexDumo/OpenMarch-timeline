@@ -256,9 +256,12 @@ test("places a marimba from the Front ensemble panel with one click, locked, at 
     await expect.poll(() => drawnItems(page)).toHaveLength(1);
     await openFrontEnsemble(page);
     const ensemble = page.getByRole("region", { name: "Add equipment" });
-    await ensemble.getByRole("button", { name: "Marimba" }).click();
+    // Each model is a picture: pick the 5.0 rosewood marimba from the search
     await ensemble
-        .getByRole("button", { name: /^5\.0 octaves · Rosewood/ })
+        .getByRole("searchbox", { name: "Search equipment" })
+        .fill("marimba 5.0");
+    await ensemble
+        .getByRole("button", { name: "Marimba · 5.0 octaves · Rosewood" })
         .click();
     await expect
         .poll(() => page.evaluate(() => window.fieldTest!.activeGesture()))
@@ -305,8 +308,7 @@ test("places a podium behind the back sideline, turned to face the field", async
     await expect.poll(() => drawnItems(page)).toHaveLength(1);
     await openFrontEnsemble(page);
     const ensemble = page.getByRole("region", { name: "Add equipment" });
-    await ensemble.getByRole("button", { name: "Podium", exact: true }).click();
-    await ensemble.getByRole("button", { name: /^Low/ }).click();
+    await ensemble.getByRole("button", { name: /^Podium · Low/ }).click();
     await expect
         .poll(() => page.evaluate(() => window.fieldTest!.activeGesture()))
         .toBe("prop");
