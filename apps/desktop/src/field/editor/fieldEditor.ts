@@ -1230,6 +1230,26 @@ export class FieldEditor {
     }
 
     /**
+     * While the rotate handle is dragged: what the selection turns around, the pointer, and the
+     * angle drawn in degrees clockwise, between -180 and 180. The field draws a dashed line from
+     * the pivot to the pointer and the angle by the pointer, as it does for a shape. Null
+     * otherwise.
+     */
+    selectionTurn(): {
+        pivot: FieldPoint;
+        pointer: FieldPoint;
+        degrees: number;
+    } | null {
+        const g = this.gesture;
+        if (!(g instanceof RotateGesture)) return null;
+        return {
+            pivot: g.center,
+            pointer: g.pointer(),
+            degrees: halfTurn(g.angle()),
+        };
+    }
+
+    /**
      * The plain selection's pivot, which the field draws as a crosshair (see `selectionPivot.ts`).
      * While a rotation is dragged or typed, it's what that turns around. Null while the selection
      * can't be turned (fewer than two marchers drawn, a mode with its own handles, the prop tool,
@@ -1261,7 +1281,8 @@ export class FieldEditor {
         const byId = new Map(starts.map((p) => [p.id, p]));
         const preview = this.picking
             ? this.pickAt
-            : this.pivotPreview && boxPoint(box, this.pivotPreview);
+            : this.pivotPreview &&
+              boxPoint(box, this.pivotPreview, this.boxPad());
         return {
             at: anchorPoint(anchor, box, (id) => this.drawnPoint(id, byId)),
             own: own !== null,
@@ -1333,8 +1354,16 @@ export class FieldEditor {
         this.ownPivot =
             key === "c"
                 ? null
-                : { ids: [...ids], anchor: { kind: "box", key } };
+                : {
+                      ids: [...ids],
+                      anchor: { kind: "box", key, pad: this.boxPad() },
+                  };
         this.emit();
+    }
+
+    /** How far the drawn selection box reaches past the marchers, in field units */
+    private boxPad(): number {
+        return this.ports.selectionBoxPadding?.() ?? 0;
     }
 
     /** Shows where pivot grid cell `key` would put the pivot; null hides it. */
@@ -1420,7 +1449,7 @@ export class FieldEditor {
     }
 
     /**
-     * Dragging the pivot's crosshair: it snaps to the box's 9 points and to any marcher that can
+     * Dragging the pivot's crosshair: it snaps to the drawn box's 9 points and to any marcher that can
      * be pressed within reach, else to the grid; fine or the Snap toggle off leaves it where the
      * pointer is. Set on the center, it's the center again.
      */
@@ -1460,9 +1489,11 @@ export class FieldEditor {
         const box = boundsOf(starts);
         if (starts.length < 2 || !box) return null;
         const zoom = this.ports.zoom() || 1;
+        // The box's points as it's drawn, clear of the rings, so its corners are where they look
+        const pad = this.boxPad();
         const targets: PivotTarget[] = BOX_POINT_KEYS.map((key) => ({
-            at: boxPoint(box, key),
-            anchor: { kind: "box", key },
+            at: boxPoint(box, key, pad),
+            anchor: { kind: "box", key, pad },
         }));
         const { ids: drawn, positions, hidden } = this.ports.marchers();
         for (let i = 0; i < drawn.length; i++) {
@@ -2164,3 +2195,9 @@ const sameIds = (a: readonly number[], b: readonly number[]) => {
     const set = new Set(b);
     return a.every((id) => set.has(id));
 };
+
+/** `degrees` as the same turn between -180 (exclusive) and 180, to a tenth */
+function halfTurn(degrees: number): number {
+    const d = Math.round((((degrees % 360) + 540) % 360) * 10) / 10 - 180;
+    return d === -180 ? 180 : d === 0 ? 0 : d;
+}

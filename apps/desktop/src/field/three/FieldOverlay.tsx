@@ -199,6 +199,14 @@ export default function FieldOverlay({
         ),
         () => JSON.stringify(editor.selectionPivot()),
     );
+    // As a string, so an unchanged turn is an unchanged snapshot
+    const turnJson = useSyncExternalStore(subscribeEditor, () =>
+        JSON.stringify(editor.selectionTurn()),
+    );
+    const turn = useMemo(
+        () => JSON.parse(turnJson) as ReturnType<FieldEditor["selectionTurn"]>,
+        [turnJson],
+    );
     const drawn = useSyncExternalStore(subscribeEditor, () =>
         editor.modeDrawing(),
     );
@@ -220,7 +228,7 @@ export default function FieldOverlay({
     return (
         <>
             <HeldRolesChip
-                belowTip={modeDrawing?.tip !== undefined}
+                belowTip={modeDrawing?.tip !== undefined || turn !== null}
                 touch={touch}
             />
             <PivotHint pivot={JSON.parse(pivot)} />
@@ -232,6 +240,7 @@ export default function FieldOverlay({
                     frame={JSON.parse(box) as DrawnSelectionBox | null}
                 />
                 <SelectionPivot pivot={JSON.parse(pivot)} />
+                {turn && <SelectionTurn turn={turn} touch={touch} />}
                 {area?.kind === "marquee" && (
                     <Marquee
                         rect={area.rect}
@@ -1360,88 +1369,154 @@ function ModeDrawing({
                     testId="fieldShapePivotPreview"
                 />
             )}
-            {drawing.pivot &&
-                (() => {
-                    const a = at(drawing.pivot.at);
-                    const b = at(drawing.pivot.to);
-                    return (
-                        <g data-testid="fieldShapePivot">
-                            <line
-                                x1={a.x}
-                                y1={a.y}
-                                x2={b.x}
-                                y2={b.y}
-                                stroke={PIVOT_COLOR}
-                                strokeWidth={ROTATE_LINE_WIDTH}
-                                strokeDasharray="4 3"
-                            />
-                            <circle
-                                cx={a.x}
-                                cy={a.y}
-                                r={PIVOT_RADIUS}
-                                fill={PIVOT_COLOR}
-                                stroke="black"
-                                strokeWidth={1}
-                            />
-                        </g>
-                    );
-                })()}
-            {drawing.tip &&
-                (() => {
-                    const p = at(drawing.tip.at);
-                    // A solid pill, so the readout reads over any part of the field (owner)
-                    const stack = (
-                        <div className="flex flex-col items-start gap-4">
-                            <div
-                                className="rounded-6 border-stroke bg-bg-1 bg-modal text-text shadow-modal inline-flex items-center gap-2 border px-6 py-2 whitespace-nowrap tabular-nums"
-                                style={{ fontSize: TIP_PX }}
-                                data-testid="fieldShapeTip"
-                            >
-                                <GlyphText text={drawing.tip.text} size={12} />
-                            </div>
-                            {/* The held-roles chip stacks under the readout, never over it */}
-                            <HeldRolesChipBelowTip />
-                        </div>
-                    );
-                    if (touch) {
-                        // Over the whole field, so the stack can center above the finger and
-                        // stay inside the field's edges
-                        return (
-                            <foreignObject
-                                x={0}
-                                y={0}
-                                width={view.width}
-                                height={view.height}
-                            >
-                                <div className="relative h-full w-full">
-                                    <ClearOfFinger
-                                        finger={p}
-                                        bounds={{
-                                            width: view.width,
-                                            height: view.height,
-                                        }}
-                                    >
-                                        {stack}
-                                    </ClearOfFinger>
-                                </div>
-                            </foreignObject>
-                        );
-                    }
-                    return (
-                        <foreignObject
-                            x={p.x + TIP_OFFSET_PX}
-                            y={p.y + TIP_OFFSET_PX}
-                            width={TIP_BOX.width}
-                            height={TIP_BOX.height}
-                            overflow="visible"
-                        >
-                            {stack}
-                        </foreignObject>
-                    );
-                })()}
+            {drawing.pivot && (
+                <PivotLine
+                    from={at(drawing.pivot.at)}
+                    to={at(drawing.pivot.to)}
+                    testId="fieldShapePivot"
+                />
+            )}
+            {drawing.tip && (
+                <PointerTip
+                    at={at(drawing.tip.at)}
+                    text={drawing.tip.text}
+                    touch={touch}
+                    testId="fieldShapeTip"
+                />
+            )}
             {/* The guides' names last, over every line, edge and spot, so nothing crosses
                 their text (owner on #427) */}
             <GuideLabels guides={drawing.guides} at={at} view={view} />
         </g>
+    );
+}
+
+/**
+ * While the selection's rotate handle is dragged: the dashed line from its pivot to the pointer
+ * and the angle by the pointer, as a shape's turn draws them.
+ */
+function SelectionTurn({
+    turn,
+    touch,
+}: {
+    turn: NonNullable<ReturnType<FieldEditor["selectionTurn"]>>;
+    touch: boolean;
+}) {
+    const view = useFieldViewStore();
+    const at = (point: { x: number; y: number }) =>
+        fieldToElement(view, point.x, point.y);
+    const pointer = at(turn.pointer);
+    return (
+        <>
+            <PivotLine
+                from={at(turn.pivot)}
+                to={pointer}
+                testId="fieldSelectionTurn"
+            />
+            <PointerTip
+                at={pointer}
+                text={`${turn.degrees}°`}
+                touch={touch}
+                testId="fieldSelectionTip"
+            />
+        </>
+    );
+}
+
+/**
+ * While turning, a dashed line from the pivot (a dot) to the pointer, at `from` and `to` in
+ * element px: a shape's turn and a plain selection's draw it alike.
+ */
+function PivotLine({
+    from: a,
+    to: b,
+    testId,
+}: {
+    from: { x: number; y: number };
+    to: { x: number; y: number };
+    testId: string;
+}) {
+    return (
+        <g data-testid={testId}>
+            <line
+                x1={a.x}
+                y1={a.y}
+                x2={b.x}
+                y2={b.y}
+                stroke={PIVOT_COLOR}
+                strokeWidth={ROTATE_LINE_WIDTH}
+                strokeDasharray="4 3"
+            />
+            <circle
+                cx={a.x}
+                cy={a.y}
+                r={PIVOT_RADIUS}
+                fill={PIVOT_COLOR}
+                stroke="black"
+                strokeWidth={1}
+            />
+        </g>
+    );
+}
+
+/**
+ * A readout by the pointer at `at` in element px (an angle, a length), with the held-roles chip
+ * under it; above a finger, clear of it, when the press is a finger's.
+ */
+function PointerTip({
+    at: p,
+    text,
+    touch,
+    testId,
+}: {
+    at: { x: number; y: number };
+    text: string;
+    touch: boolean;
+    testId: string;
+}) {
+    const view = useFieldViewStore();
+    // A solid pill, so the readout reads over any part of the field (owner)
+    const stack = (
+        <div className="flex flex-col items-start gap-4">
+            <div
+                className="rounded-6 border-stroke bg-bg-1 bg-modal text-text shadow-modal inline-flex items-center gap-2 border px-6 py-2 whitespace-nowrap tabular-nums"
+                style={{ fontSize: TIP_PX }}
+                data-testid={testId}
+            >
+                <GlyphText text={text} size={12} />
+            </div>
+            {/* The held-roles chip stacks under the readout, never over it */}
+            <HeldRolesChipBelowTip />
+        </div>
+    );
+    if (touch) {
+        // Over the whole field, so the stack can center above the finger and
+        // stay inside the field's edges
+        return (
+            <foreignObject x={0} y={0} width={view.width} height={view.height}>
+                <div className="relative h-full w-full">
+                    <ClearOfFinger
+                        finger={p}
+                        bounds={{
+                            width: view.width,
+                            height: view.height,
+                        }}
+                    >
+                        {stack}
+                    </ClearOfFinger>
+                </div>
+            </foreignObject>
+        );
+    }
+    return (
+        <foreignObject
+            x={p.x + TIP_OFFSET_PX}
+            y={p.y + TIP_OFFSET_PX}
+            width={TIP_BOX.width}
+            height={TIP_BOX.height}
+            overflow="visible"
+        >
+            {stack}
+        </foreignObject>
     );
 }

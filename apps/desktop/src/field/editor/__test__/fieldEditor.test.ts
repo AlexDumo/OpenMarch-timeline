@@ -2026,6 +2026,27 @@ describe("FieldEditor scale and rotate handles (#198)", () => {
         ]);
     });
 
+    it("shows what a rotation turns around, the pointer and the angle, while it's dragged", () => {
+        const { editor } = setup({ selected: ALL });
+        expect(editor.selectionTurn()).toBeNull();
+        editor.pointerDown(at(HANDLE.rot.x, HANDLE.rot.y));
+        editor.pointerMove(at(270, 75));
+        // A quarter turn clockwise about (250, 100)
+        editor.pointerMove(at(280, 100));
+        expect(editor.selectionTurn()).toEqual({
+            pivot: { x: 250, y: 100 },
+            pointer: { x: 280, y: 100 },
+            degrees: 90,
+        });
+        // On round past a half turn, it reads the other way
+        editor.pointerMove(at(250, 130));
+        editor.pointerMove(at(220, 100));
+        editor.pointerMove(at(240, 90));
+        expect(editor.selectionTurn()?.degrees).toBeLessThan(0);
+        editor.pointerUp(at(240, 90));
+        expect(editor.selectionTurn()).toBeNull();
+    });
+
     it("rotates about the box's center with the rotate handle", () => {
         const { editor, state } = setup({ selected: ALL });
         editor.pointerDown(at(HANDLE.rot.x, HANDLE.rot.y));
@@ -2243,17 +2264,14 @@ describe("FieldEditor a plain selection's pivot", () => {
         positions[2] = 210;
         positions[3] = 40;
         expect(editor.selectionPivot()?.at).toEqual({ x: 210, y: 40 });
-        // On a corner marcher, the box's corner wins: it's the same point
-        const corner = setup({ selected: ALL });
-        pullPivot(corner.editor, { x: 100, y: 100 });
-        expect(corner.editor.selectionPivot()?.key).toBe("nw");
+        // The box's points are the drawn box's, 10 out from the marchers
         editor.setSelectionPivot("se");
         expect(editor.selectionPivot()).toMatchObject({
-            at: { x: 400, y: 100 },
+            at: { x: 410, y: 110 },
             key: "se",
         });
         positions[7] = 300;
-        expect(editor.selectionPivot()?.at).toEqual({ x: 400, y: 300 });
+        expect(editor.selectionPivot()?.at).toEqual({ x: 410, y: 310 });
         editor.setSelectionPivot("c");
         expect(editor.selectionPivot()?.own).toBe(false);
     });
@@ -2285,10 +2303,44 @@ describe("FieldEditor a plain selection's pivot", () => {
         expect(editor.selectionPivot()?.own).toBe(false);
     });
 
+    it("snaps to the corners of the box as it's drawn, clear of the rings, and to a corner marcher apart", () => {
+        const corner = setup({ selected: ALL });
+        // 10 out from marcher 1, within reach (5 units at this zoom) of the drawn corner
+        pullPivot(corner.editor, { x: 92, y: 88 });
+        expect(corner.editor.selectionPivot()).toMatchObject({
+            at: { x: 90, y: 90 },
+            key: "nw",
+        });
+        const onMarcher = setup({ selected: ALL });
+        pullPivot(onMarcher.editor, { x: 101, y: 101 });
+        expect(onMarcher.editor.selectionPivot()).toMatchObject({
+            at: { x: 100, y: 100 },
+            key: null,
+        });
+        // An edge's middle too
+        const edge = setup({ selected: ALL });
+        pullPivot(edge.editor, { x: 252, y: 112 });
+        expect(edge.editor.selectionPivot()).toMatchObject({
+            at: { x: 250, y: 110 },
+            key: "s",
+        });
+    });
+
+    it("keeps a box point where it was set when the drawn box's padding changes with the zoom", () => {
+        const { editor, ports } = setup({ selected: ALL });
+        editor.setSelectionPivot("ne");
+        expect(editor.selectionPivot()?.at).toEqual({ x: 410, y: 90 });
+        ports.selectionBoxPadding = () => 4;
+        expect(editor.selectionPivot()?.at).toEqual({ x: 410, y: 90 });
+        // Set again, it's on the box as it's drawn now
+        editor.setSelectionPivot("ne");
+        expect(editor.selectionPivot()?.at).toEqual({ x: 404, y: 96 });
+    });
+
     it("previews a pivot grid cell on the field", () => {
         const { editor } = setup({ selected: ALL });
         editor.previewSelectionPivot("nw");
-        expect(editor.selectionPivot()?.preview).toEqual({ x: 100, y: 100 });
+        expect(editor.selectionPivot()?.preview).toEqual({ x: 90, y: 90 });
         editor.previewSelectionPivot(null);
         expect(editor.selectionPivot()?.preview).toBeUndefined();
     });

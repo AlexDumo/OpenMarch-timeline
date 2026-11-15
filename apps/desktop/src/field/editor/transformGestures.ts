@@ -183,6 +183,8 @@ export class RotateGesture extends HandleGesture {
     readonly kind: FieldTestGesture = "rotate";
     readonly center: FieldPoint;
     private readonly rotation: RotationDrag;
+    /** Where the pointer was at the last event */
+    private at: FieldPoint;
 
     constructor(
         origin: FieldPointer,
@@ -199,6 +201,12 @@ export class RotateGesture extends HandleGesture {
         super(origin, starts, host, keys, ROTATE_HONORS);
         this.center = center;
         this.rotation = new RotationDrag(this.center, origin.field, snap);
+        this.at = origin.field;
+    }
+
+    /** Where the pointer is: the field draws a line to it from the pivot */
+    pointer(): FieldPoint {
+        return this.at;
     }
 
     /** The angle drawn, in degrees clockwise: the overlay turns the box by it until the release. */
@@ -207,6 +215,7 @@ export class RotateGesture extends HandleGesture {
     }
 
     protected positionsAt(at: FieldPoint, roles: Roles) {
+        this.at = at;
         return rotatePositions(
             this.starts,
             this.center,

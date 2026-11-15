@@ -14,7 +14,9 @@ import type { FieldRect } from "./selectionArea";
  * double-clicked, it's the center again.
  *
  * Where it's set is kept as an anchor, so it's worked out again from where the marchers are drawn
- * rather than left behind: one of the box's 9 points, or a marcher. Anywhere else it's a point on
+ * rather than left behind: one of the box's 9 points, or a marcher. The box's points are those of
+ * the box the field draws, which reaches past the outermost marchers to clear their rings; how far
+ * it reached is kept with the point, so zooming afterwards doesn't move the pivot. Anywhere else it's a point on
  * the field, carried along when the editor drags the whole selection, and dropped when the page
  * changes. It lasts while the selection does; it's hidden while the show plays. A shape keeps its
  * own pivot. Everything here but {@link PivotGesture} is pure.
@@ -50,21 +52,30 @@ export const BOX_POINT_KEYS: readonly BoxPointKey[] = [
 
 /** Where the pivot is set: a point of the box, a marcher, or a spot on the field */
 export type PivotAnchor =
-    | { readonly kind: "box"; readonly key: BoxPointKey }
+    | {
+          readonly kind: "box";
+          readonly key: BoxPointKey;
+          /** How far past the marchers the box reached when it was set, in field units */
+          readonly pad?: number;
+      }
     | { readonly kind: "marcher"; readonly id: number }
     | { readonly kind: "point"; readonly at: FieldPoint };
 
-/** Point `key` of `box` */
-export function boxPoint(box: FieldRect, key: BoxPointKey): FieldPoint {
+/** Point `key` of `box`, grown by `pad` on every side */
+export function boxPoint(
+    box: FieldRect,
+    key: BoxPointKey,
+    pad = 0,
+): FieldPoint {
     const x = key.includes("w")
-        ? box.left
+        ? box.left - pad
         : key.includes("e")
-          ? box.right
+          ? box.right + pad
           : (box.left + box.right) / 2;
     const y = key.includes("n")
-        ? box.top
+        ? box.top - pad
         : key.includes("s")
-          ? box.bottom
+          ? box.bottom + pad
           : (box.top + box.bottom) / 2;
     return { x, y };
 }
@@ -80,7 +91,7 @@ export function anchorPoint(
 ): FieldPoint {
     switch (anchor.kind) {
         case "box":
-            return boxPoint(box, anchor.key);
+            return boxPoint(box, anchor.key, anchor.pad);
         case "marcher": {
             const p = positionOf(anchor.id);
             return p ? { x: p.x, y: p.y } : boxPoint(box, "c");
