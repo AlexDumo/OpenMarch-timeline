@@ -25,12 +25,11 @@ questions:
   drums and the podium's steps appear as you get closer. The area under the
   pit is a plain tone, only as wide as the pit; the yard numbers stay at the
   front sideline.
-- Open the **Marchers** panel: the **Front ensemble** row at the top opens the
-  pit's setup. Pick equipment from the list to place
-  one instrument or a podium (towers, rolling podium, stepladder and more) by
-  clicking the field. Equipment and podiums are listed there, and edited there.
-  **Reset to preset** in its header swaps the pit for a Small, Medium or Large
-  layout (one undo takes it back).
+- Open the **Marchers** panel: the **Front ensemble and podiums** row at the
+  top opens the pit's list. **Add** shows every instrument and podium as a
+  picture, with a search box; pick one and click the field to place it.
+  **Reset to preset** swaps the pit for a Small, Medium or Large layout (one
+  undo takes it back). Both are in the command palette too.
 - The **Props** panel lists only props now, not the pit.
 - Drag a piece of equipment on one page, then look at another page: it moved
   there too (equipment stays in one spot all show). Lasso some marchers across

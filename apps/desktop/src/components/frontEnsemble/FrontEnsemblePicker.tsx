@@ -1,6 +1,5 @@
 import { useId, useState } from "react";
-import * as RadixCollapsible from "@radix-ui/react-collapsible";
-import { CaretDownIcon, MagnifyingGlassIcon } from "@phosphor-icons/react";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react";
 import { T, useTranslate } from "@tolgee/react";
 import { Input } from "@openmarch/ui";
 import { pitThumbnailUrl } from "./pitThumbnails";
@@ -32,13 +31,12 @@ const meters = (value: number) => String(Number(value.toFixed(2)));
  * The front ensemble view's Add equipment (instruments.md §6): every model as a small picture,
  * under its group (keyboards, percussion, audio, podiums), with a search box over them (owner,
  * 2026-11-15: see what each looks like rather than a list of names). Clicking one places it on
- * the field with a click, as a locked equipment item named for its family ("Marimba 2"). It
- * starts open, so adding more is always in reach; the presets are a button in the view's header
- * (`PitPresets`).
+ * the field with a click, as a locked equipment item named for its family ("Marimba 2"). It is
+ * the front ensemble's Add view (`FrontEnsembleAddContents`), apart from the list of what the
+ * show has, as the Marchers panel's Add is.
  */
 export default function FrontEnsemblePicker() {
     const { t } = useTranslate();
-    const [open, setOpen] = useState(true);
     const [query, setQuery] = useState("");
     const placeEquipment = useItemDrawingStore((s) => s.placeEquipment);
     const { toggleOpen } = useSidebarModalStore();
@@ -80,71 +78,54 @@ export default function FrontEnsemblePicker() {
     }).filter(({ shown }) => shown.length > 0);
 
     return (
-        <RadixCollapsible.Root asChild open={open} onOpenChange={setOpen}>
-            <section
-                className="flex flex-col gap-12"
-                aria-label={t("frontEnsemble.add.title")}
-            >
-                <RadixCollapsible.Trigger className="text-text/70 hover:text-text focus-visible:text-accent flex items-center justify-between text-sm font-medium outline-hidden duration-150 ease-out">
-                    <span role="heading" aria-level={5}>
-                        <T keyName="frontEnsemble.add.title" />
-                    </span>
-                    <CaretDownIcon
-                        size={16}
-                        aria-hidden
-                        className={`transition-transform duration-150 ${open ? "rotate-180" : ""}`}
-                    />
-                </RadixCollapsible.Trigger>
-                <RadixCollapsible.Content className="flex flex-col gap-12">
-                    <div className="relative">
-                        <MagnifyingGlassIcon
-                            size={16}
-                            aria-hidden
-                            className="text-text-subtitle pointer-events-none absolute top-1/2 left-12 -translate-y-1/2"
-                        />
-                        <Input
-                            type="search"
-                            compact
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
-                            placeholder={t("frontEnsemble.search")}
-                            aria-label={t("frontEnsemble.search")}
-                            className="w-full pl-36"
-                        />
+        <section
+            className="flex flex-col gap-12"
+            aria-label={t("frontEnsemble.add.title")}
+        >
+            <div className="relative">
+                <MagnifyingGlassIcon
+                    size={16}
+                    aria-hidden
+                    className="text-text-subtitle pointer-events-none absolute top-1/2 left-12 -translate-y-1/2"
+                />
+                <Input
+                    type="search"
+                    compact
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder={t("frontEnsemble.search")}
+                    aria-label={t("frontEnsemble.search")}
+                    className="w-full pl-36"
+                />
+            </div>
+            {groups.length === 0 ? (
+                <p className="text-sub text-text-subtitle py-8 text-center">
+                    <T keyName="frontEnsemble.noMatch" />
+                </p>
+            ) : (
+                groups.map(({ group, groupName, shown }) => (
+                    <div
+                        key={group}
+                        role="group"
+                        aria-label={groupName}
+                        className="flex flex-col gap-4"
+                    >
+                        <div className={GROUP_HEADING_CLASS} aria-hidden>
+                            {groupName}
+                        </div>
+                        <div className="grid grid-cols-4 gap-6">
+                            {shown.map((tile) => (
+                                <EquipmentTile
+                                    key={tile.variant.fileId}
+                                    {...tile}
+                                    onPick={() => place(tile.variant)}
+                                />
+                            ))}
+                        </div>
                     </div>
-                    {groups.length === 0 ? (
-                        <p className="text-sub text-text-subtitle py-8 text-center">
-                            <T keyName="frontEnsemble.noMatch" />
-                        </p>
-                    ) : (
-                        groups.map(({ group, groupName, shown }) => (
-                            <div
-                                key={group}
-                                role="group"
-                                aria-label={groupName}
-                                className="flex flex-col gap-4"
-                            >
-                                <div
-                                    className={GROUP_HEADING_CLASS}
-                                    aria-hidden
-                                >
-                                    {groupName}
-                                </div>
-                                <div className="grid grid-cols-4 gap-6">
-                                    {shown.map((tile) => (
-                                        <EquipmentTile
-                                            key={tile.variant.fileId}
-                                            {...tile}
-                                            onPick={() => place(tile.variant)}
-                                        />
-                                    ))}
-                                </div>
-                            </div>
-                        ))
-                    )}
-                </RadixCollapsible.Content>
-            </section>
-        </RadixCollapsible.Root>
+                ))
+            )}
+        </section>
     );
 }
 

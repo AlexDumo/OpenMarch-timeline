@@ -526,12 +526,13 @@ Equipment is edited with the normal prop editing, but not in the Props panel
 (owner, 2026-11-15): designers don't think of the pit or the podiums as props,
 since they don't move and aren't staging. A pit is set up about once per show,
 so it lives in the Marchers panel: a Front ensemble row at the top says what the
-show has and opens the front ensemble view in place. That view leads with the
-catalog to place one piece from (the podiums
-grouped on their own: the conductor podium and the drum major's stand, towers,
-rolling podium, stepladder and scaffold) and lists the equipment and podiums in
-the show apart; the Small, Medium and Large presets sit behind one header
-button, "Start from a preset" or, once there is a pit, "Reset to preset". The Props panel lists only props. Storage is unchanged:
+show has and opens the front ensemble view in place. That view lists the
+equipment and podiums in the show apart, each with its edit view; its header
+has Add, which opens the catalog as its own view (every model as a picture, by
+group: keyboards, percussion, audio and podiums, with a search box), and the
+Small, Medium and Large presets behind one button, "Start from a preset" or,
+once there is a pit, "Reset to preset". Opening the view and opening Add are
+registered actions. The Props panel lists only props. Storage is unchanged:
 equipment stays `items` rows with `kind = 'equipment'`. A new show can start
 with a pit: the new-show dialog has a Front ensemble step after Performers
 (None, Small, Medium, Large). Equipment never takes part in

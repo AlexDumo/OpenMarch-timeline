@@ -231,7 +231,9 @@
             "reportFeedbackKeywords": "bug issue problem feedback feature request support",
             "viewMyReports": "View my reports",
             "openFrontEnsemble": "Open front ensemble and podiums",
-            "openFrontEnsembleKeywords": "pit front ensemble podium drum major marimba vibraphone percussion speaker equipment preset"
+            "openFrontEnsembleKeywords": "pit front ensemble podium drum major marimba vibraphone percussion speaker equipment preset",
+            "addFrontEnsembleEquipment": "Add front ensemble equipment or podium",
+            "addFrontEnsembleEquipmentKeywords": "pit podium drum major marimba vibraphone percussion speaker mixer tower stepladder instrument"
         }
     },
     "analyticsOptIn": {
@@ -1444,9 +1446,10 @@
     "frontEnsemble": {
         "title": "Front ensemble",
         "add": {
-            "title": "Add equipment"
+            "title": "Add equipment",
+            "button": "Add"
         },
-        "empty": "No front ensemble yet. Pick equipment above and click the field to place it, or start from a preset.",
+        "empty": "No front ensemble yet. Add equipment and podiums, or start from a preset.",
         "list": {
             "equipment": "Equipment",
             "podiums": "Podiums"

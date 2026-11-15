@@ -9,6 +9,7 @@ import { T, useTranslate } from "@tolgee/react";
 import { AppearanceModalContents } from "./appearance/AppearanceModal";
 import {
     FRONT_ENSEMBLE_PANEL_ID,
+    FrontEnsembleAddContents,
     FrontEnsembleContents,
     FrontEnsembleSummary,
 } from "@/components/frontEnsemble/FrontEnsembleModal";
@@ -126,6 +127,22 @@ export function openFrontEnsemble() {
     const { setContent, setOpen } = useSidebarModalStore.getState();
     setContent(
         <FrontEnsembleContents
+            onBack={() => setContent(<MarcherListContents />, "marchers")}
+        />,
+        FRONT_ENSEMBLE_PANEL_ID,
+    );
+    setOpen(true);
+}
+
+/**
+ * Opens the sidebar on the front ensemble's Add view (the pictures of every model): the
+ * `addFrontEnsembleEquipment` action, which the front ensemble view's Add button runs. Back goes
+ * to the front ensemble list, then to the Marchers panel.
+ */
+export function openFrontEnsembleAdd() {
+    const { setContent, setOpen } = useSidebarModalStore.getState();
+    setContent(
+        <FrontEnsembleAddContents
             onBack={() => setContent(<MarcherListContents />, "marchers")}
         />,
         FRONT_ENSEMBLE_PANEL_ID,

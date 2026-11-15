@@ -31,12 +31,14 @@ import {
 } from "@/components/items/PropsModal";
 import MarcherEditor from "@/components/inspector/MarcherEditor";
 import {
+    FrontEnsembleAddContents,
     FrontEnsembleContents,
     FrontEnsembleEditContents,
 } from "../FrontEnsembleModal";
 import {
     MarcherListContents,
     openFrontEnsemble,
+    openFrontEnsembleAdd,
 } from "@/components/marcher/MarchersModal";
 import { registerActionHandler } from "@/shortcuts/registry";
 import SidebarModal from "@/components/sidebar/SidebarModal";
@@ -137,7 +139,25 @@ describeDbTests("Front ensemble panel", (it) => {
         const row = await screen.findByTestId("front-ensemble-summary");
         expect(within(row).getByText("No pit yet")).toBeTruthy();
         fireEvent.click(within(row).getByRole("button", { name: "Set up" }));
+        // The list of what the show has, with Add and the presets in its header
+        await screen.findByText(
+            "No front ensemble yet. Add equipment and podiums, or start from a preset.",
+        );
+        expect(
+            screen.getByRole("button", { name: "Start from a preset" }),
+        ).toBeTruthy();
+        // Add is its own view (the pictures), with a way back to the list
+        const unregisterAdd = registerActionHandler(
+            "addFrontEnsembleEquipment",
+            { run: openFrontEnsembleAdd, isEnabled: () => true },
+        );
+        fireEvent.click(screen.getByRole("button", { name: "Add" }));
         await screen.findByRole("region", { name: "Add equipment" });
+        fireEvent.click(screen.getByRole("button", { name: "Back" }));
+        await screen.findByText(
+            "No front ensemble yet. Add equipment and podiums, or start from a preset.",
+        );
+        unregisterAdd();
         // The Marchers button stays lit: the view is part of that panel
         expect(useSidebarModalStore.getState().contentId).toBe("marchers");
 
@@ -160,7 +180,9 @@ describeDbTests("Front ensemble panel", (it) => {
         expect(marchersAndPages).toBeDefined();
         await setUpFeature(
             <>
+                {/* The list and the Add view, side by side */}
                 <FrontEnsembleContents />
+                <FrontEnsembleAddContents />
                 <FieldPort />
             </>,
             PAGE,
@@ -255,7 +277,9 @@ describeDbTests("Front ensemble panel", (it) => {
         });
         await setUpFeature(
             <>
+                {/* The list and the Add view, side by side */}
                 <FrontEnsembleContents />
+                <FrontEnsembleAddContents />
                 <FieldPort />
             </>,
             PAGE,
@@ -430,7 +454,9 @@ describeDbTests("Front ensemble panel", (it) => {
         expect(marchersAndPages).toBeDefined();
         await setUpFeature(
             <>
+                {/* The list and the Add view, side by side */}
                 <FrontEnsembleContents />
+                <FrontEnsembleAddContents />
                 <FieldPort />
             </>,
             PAGE,
@@ -476,7 +502,9 @@ describeDbTests("Front ensemble panel", (it) => {
         expect(marchersAndPages).toBeDefined();
         await setUpFeature(
             <>
+                {/* The list and the Add view, side by side */}
                 <FrontEnsembleContents />
+                <FrontEnsembleAddContents />
                 <FieldPort />
             </>,
             PAGE,

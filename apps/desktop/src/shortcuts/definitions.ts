@@ -644,6 +644,14 @@ const STATIC_ACTIONS = {
         scope: "global",
         defaultBindings: [],
     },
+    // Opens the front ensemble's Add view (the pictures of every model), as its Add button does
+    addFrontEnsembleEquipment: {
+        labelKey: "actions.ui.addFrontEnsembleEquipment",
+        keywordsKey: "actions.ui.addFrontEnsembleEquipmentKeywords",
+        category: "ui",
+        scope: "global",
+        defaultBindings: [],
+    },
     // Preview: watch the show without editing it (the workspace switch's other mode)
     togglePreview: {
         labelKey: "actions.ui.togglePreview",

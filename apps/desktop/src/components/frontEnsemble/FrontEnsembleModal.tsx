@@ -88,10 +88,11 @@ export function FrontEnsembleSummary() {
 }
 
 /**
- * The front ensemble view (instruments.md §6), opened from the Marchers panel: its presets, the
- * catalog to place one piece from, and the equipment and podiums in the show, each with its edit
- * view. They're stored as items like props, but aren't props to designers: they don't move and
- * aren't part of the staging. `onBack` returns to the Marchers panel.
+ * The front ensemble view (instruments.md §6), opened from the Marchers panel: the equipment and
+ * podiums in the show, each with its edit view, and in its header Add (the catalog, its own view,
+ * as the Marchers panel's Add is) and the presets. They're stored as items like props, but aren't
+ * props to designers: they don't move and aren't part of the staging. `onBack` returns to the
+ * Marchers panel.
  */
 export function FrontEnsembleContents({ onBack }: { onBack?: () => void }) {
     const { setContent } = useSidebarModalStore();
@@ -110,11 +111,22 @@ export function FrontEnsembleContents({ onBack }: { onBack?: () => void }) {
             <ItemPanelHeader
                 title={<T keyName="frontEnsemble.title" />}
                 onBack={onBack}
-                actions={<PitPresets />}
+                actions={
+                    <>
+                        <PitPresets />
+                        <Button
+                            size="compact"
+                            onClick={() =>
+                                runAction("addFrontEnsembleEquipment")
+                            }
+                        >
+                            <T keyName="frontEnsemble.add.button" />
+                        </Button>
+                    </>
+                }
             />
             <div className="flex w-[28rem] grow flex-col gap-16 overflow-y-auto">
-                <FrontEnsemblePicker />
-                <div className="border-stroke border-t pt-12">
+                <div>
                     {equipment.length + podiums.length === 0 ? (
                         <p className="text-text/50 py-16 text-center">
                             <T keyName="frontEnsemble.empty" />
@@ -137,6 +149,31 @@ export function FrontEnsembleContents({ onBack }: { onBack?: () => void }) {
                         </div>
                     )}
                 </div>
+            </div>
+        </div>
+    );
+}
+
+/**
+ * The front ensemble's Add view: every model as a picture, by group, with search
+ * (`FrontEnsemblePicker`); picking one closes the panel to place it on the field. Back returns to
+ * the list, whose own back button goes to `onBack`.
+ */
+export function FrontEnsembleAddContents({ onBack }: { onBack?: () => void }) {
+    const { setContent } = useSidebarModalStore();
+    return (
+        <div className="animate-scale-in text-text flex h-full w-fit flex-col gap-16">
+            <ItemPanelHeader
+                title={<T keyName="frontEnsemble.add.title" />}
+                onBack={() =>
+                    setContent(
+                        <FrontEnsembleContents onBack={onBack} />,
+                        FRONT_ENSEMBLE_PANEL_ID,
+                    )
+                }
+            />
+            <div className="flex w-[28rem] grow flex-col gap-16 overflow-y-auto">
+                <FrontEnsemblePicker />
             </div>
         </div>
     );

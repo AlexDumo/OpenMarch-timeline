@@ -2957,7 +2957,7 @@
     "frontEnsemble.groups.audio": "Small uppercase heading in the Front ensemble panel's list of equipment to add, over the speakers and the sound mixer.",
     "frontEnsemble.groups.keyboards": "Small uppercase heading in the Front ensemble panel over the mallet keyboards (marimba, vibraphone, xylophone, glockenspiel) and synthesizers.",
     "frontEnsemble.groups.percussion": "Small uppercase heading in the Front ensemble panel over the drum set, timpani, gong, chimes and other percussion equipment.",
-    "frontEnsemble.add.title": "Heading of the folding section at the top of the Front ensemble panel that adds equipment: ready-made presets and a list of every kind of front ensemble instrument, speaker, mixer and podium to place one on the field. A click on the heading folds or unfolds the section.",
+    "frontEnsemble.add.title": "Title of the view that adds front ensemble equipment and podiums to the show: a picture of every instrument, speaker, mixer and podium, by group, with a search box; picking one places it on the field. Also the accessible name of that list of pictures.",
     "pit.family.auxRack": "Name of a kind of front ensemble equipment in the Front ensemble panel: an aux percussion rack, a stand holding small percussion instruments. Also used to name new equipment with a number after it ('Marimba 2'). Short, capitalized as a name.",
     "pit.family.bongos": "Name of a kind of front ensemble equipment in the Front ensemble panel: a pair of bongo drums on a stand. Also used to name new equipment with a number after it ('Marimba 2'). Short, capitalized as a name.",
     "pit.family.chimes": "Name of a kind of front ensemble equipment in the Front ensemble panel: tubular bells (orchestral chimes) on a frame. Also used to name new equipment with a number after it ('Marimba 2'). Short, capitalized as a name.",
@@ -3257,7 +3257,7 @@
     "fieldEditMode.line.everyOther": "Field panel, Line section. Button with several lines picked: keeps every other one of them picked (to delete every other yard line, for example).",
     "fieldEditMode.list.reference": "Field panel, list of field lines. Screen-reader name of the small crosshair mark on a row whose line is used as a reference for written coordinates.",
     "frontEnsemble.title": "Title of the Front ensemble side panel. The front ensemble (the 'pit') is the stationary percussion section at the front of the field in a marching band show; the panel places its instruments, speakers, mixer and podiums and lists them.",
-    "frontEnsemble.empty": "Shown in the front ensemble view, below the list of equipment to add, while the show has no front ensemble (pit) equipment yet. 'Start from a preset' refers to the button of that name in the view's header.",
+    "frontEnsemble.empty": "Shown in the front ensemble view while the show has no front ensemble (pit) equipment or podiums yet. 'Add' and 'start from a preset' refer to the buttons named Add and Start from a preset in the view's header.",
     "frontEnsemble.list.equipment": "Small uppercase heading in the Front ensemble panel over the instruments, speakers and mixer placed in the show (the podiums are listed under their own heading).",
     "frontEnsemble.list.podiums": "Small uppercase heading in the Front ensemble panel over the podiums placed in the show: the raised platforms, towers and ladders a drum major or conductor stands on.",
     "frontEnsemble.groups.podiums": "Small uppercase heading in the Front ensemble panel's list of equipment to add, over the podiums: the conductor's podium and the drum major's stand, towers, rolling podium, stepladder and scaffold tower.",
@@ -3287,5 +3287,8 @@
     "actions.ui.openFrontEnsemble": "Command palette action that opens the front ensemble and podiums view in the sidebar's Marchers panel: where the pit (stationary keyboards and percussion in front of the field) and the drum majors' podiums are set up. Same words as the row in the Marchers panel.",
     "actions.ui.openFrontEnsembleKeywords": "Search words for the Open front ensemble and podiums action in the command palette, separated by spaces. Never shown; translate as words people might type to find it (pit, front ensemble, podium, drum major, marimba, vibraphone, percussion, speaker, equipment, preset).",
     "frontEnsemble.search": "Placeholder and accessible name of the search box over the pictures of front ensemble equipment and podiums that can be added to the show.",
-    "frontEnsemble.noMatch": "Shown in place of the equipment pictures when nothing matches what was typed in the search box."
+    "frontEnsemble.noMatch": "Shown in place of the equipment pictures when nothing matches what was typed in the search box.",
+    "frontEnsemble.add.button": "Button in the front ensemble view's header that opens the pictures of equipment and podiums to add to the show. Verb, short, as the Marchers panel's Add.",
+    "actions.ui.addFrontEnsembleEquipment": "Command palette action that opens the pictures of front ensemble (pit) equipment and podiums, to pick one and place it on the field. Same as the Add button in the front ensemble view.",
+    "actions.ui.addFrontEnsembleEquipmentKeywords": "Search words for the Add front ensemble equipment or podium action in the command palette, separated by spaces. Never shown; translate as words people might type to find it (pit, podium, drum major, marimba, vibraphone, percussion, speaker, mixer, tower, stepladder, instrument)."
 }

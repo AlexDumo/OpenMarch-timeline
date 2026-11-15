@@ -255,6 +255,8 @@ test("places a marimba from the Front ensemble panel with one click, locked, at 
     const { page } = show;
     await expect.poll(() => drawnItems(page)).toHaveLength(1);
     await openFrontEnsemble(page);
+    // Add is its own view: the pictures of every model
+    await page.getByRole("button", { name: "Add", exact: true }).click();
     const ensemble = page.getByRole("region", { name: "Add equipment" });
     // Each model is a picture: pick the 5.0 rosewood marimba from the search
     await ensemble
@@ -307,6 +309,8 @@ test("places a podium behind the back sideline, turned to face the field", async
     const { page } = show;
     await expect.poll(() => drawnItems(page)).toHaveLength(1);
     await openFrontEnsemble(page);
+    // Add is its own view: the pictures of every model
+    await page.getByRole("button", { name: "Add", exact: true }).click();
     const ensemble = page.getByRole("region", { name: "Add equipment" });
     await ensemble.getByRole("button", { name: /^Podium · Low/ }).click();
     await expect
