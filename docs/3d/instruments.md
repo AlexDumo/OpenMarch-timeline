@@ -114,11 +114,29 @@ the mallet runs back through the hand with its butt behind the fist. The
 arms are one pose for every size; a hold per size would refine the small
 drums.
 
-**Carriers.** Snare, tenors and bass hang from one shoulder-hoop carrier:
-chrome hoops from a black belly plate up over the shoulders (padded where
-they sit) and down the back, with chrome J-bars from the plate to the drum.
-Its clearances come from the seven body meshes: shoulder tops at 1.46 m,
-chests reaching z 0.17, upper backs z −0.19.
+**Drum hardware (owner, 2026-11-15: match Yamaha's marching drums).** The
+drums follow current high-tension marching drums, after Yamaha's MS-9400
+snares, MQ-8300 multi-toms and MB-8300 basses, with no maker's badge or
+logo. Shells are paint under a glossy clear coat in the section's color, not
+metal; heads are smooth white. The snare's shell floats inside satin
+aluminum hardware: a tall top hoop over a tension frame, ten long tube lugs
+down to the bottom hoop, four feet, the strainer at the player's right and a
+mount bar at the back for the J-bars. Tenor shells are open below and cut
+away toward the player (about half depth on the near side), under tall
+chrome hoops with short lug casings. Bass drums have wood hoops in the
+shell's color, claw hooks and long tension rods to a center lug at each
+position (8 lugs up to 20 in, 10 to 26 in, 12 above), with a thin mount at
+the back. Cymbals are brilliant bronze in either brass finish, with the
+lathing's tone grooves, a leather pad on each bell and the strap loop. Bolt
+heads, lug casings and the cymbal strap are drawn at high detail only.
+
+**Carriers.** Snare, tenors and bass hang from one plate carrier, after
+current aluminum vest carriers: flat satin bars from a yoke on the chest up
+over the shoulders (padded where they sit) and down the back, a plate down
+the sternum onto a belly plate, a bar across the upper back, and J-bars
+from the belly plate to the drum. Its clearances come from the seven body
+meshes: shoulder tops at 1.46 m, chests reaching z 0.17, upper backs
+z −0.19.
 
 **Tenor layout.** Sixes, after the owner's reference photo of a Dynasty
 six-drum set. The two shots (6 and 8 in) sit in the middle nearest the
@@ -252,8 +270,10 @@ the catalog's flat-bottomed swing Cut and the 6 ft flag stays a rectangle.
 
 **Parts and finish.** The uniform shader paints parts by id; it knows ids 0
 to 15 today. Instruments take new ids from 16 upward: 16 brass finish (gold
-lacquer by default, silver plate as the alternative), 17 reserved, 18 chrome, 19 drum shell (section color), 20 drum head, 21 bar
-(rosewood), 22 black hardware, 23 wood (clarinet), 24 speaker grille. The
+lacquer by default, silver plate as the alternative), 17 reserved, 18 chrome, 19 drum shell (section color, paint under clear coat), 20 drum
+head, 21 bar (rosewood), 22 black hardware, 23 wood (clarinet), 24 speaker
+grille or flag silk, 25 satin aluminum (drum hoops, lugs, carriers), 26
+cymbal bronze. The
 finish (lacquer or silver) is the show's choice for its whole brass line
 (venue settings `brassFinish`, ADR 0010 amendment 2026-11-09); woodwinds
 keep the finish they are made in (`finishFor`). Painting new ids needs a change in the vendored

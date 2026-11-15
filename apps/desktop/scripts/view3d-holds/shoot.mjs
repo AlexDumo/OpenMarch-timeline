@@ -20,6 +20,9 @@ const opt = (name, def) => {
 };
 const out = path.resolve(opt("out", "/mnt/data/om-capture/holds/latest"));
 const states = opt("states", "up").split(",");
+// --look: draw instruments with the window's surfaces; --shell <hex> the section color
+const look = args.includes("--look");
+const shell = opt("shell");
 const only = opt("only")
     ?.split(",")
     .map((s) => s.trim().toLowerCase());
@@ -56,7 +59,12 @@ try {
     });
     page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
     page.on("pageerror", (e) => errors.push(e.message));
-    await page.goto(server.resolvedUrls.local[0], { timeout: 180000 });
+    const query = new URLSearchParams();
+    if (look) query.set("look", "1");
+    if (shell) query.set("shell", shell.replace(/^#/, ""));
+    await page.goto(`${server.resolvedUrls.local[0]}?${query}`, {
+        timeout: 180000,
+    });
     await page
         .waitForFunction(() => document.title === "holds-ready", null, {
             timeout: 180000,
