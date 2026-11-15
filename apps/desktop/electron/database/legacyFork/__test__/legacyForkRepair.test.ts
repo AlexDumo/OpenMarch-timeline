@@ -173,8 +173,9 @@ describe("the frozen fork migrations", () => {
         }
     });
 
-    it("leave upstream's migrations 0000-0016 alone: the folder keeps them and adds 0017 and 0018", () => {
-        expect(folderMigrations.map((m) => m.tag)).toEqual([
+    it("leave upstream's migrations 0000-0016 alone: the folder keeps them and adds 0017 and 0018 next", () => {
+        // Later migrations (0019 on) follow the two the collapse made
+        expect(folderMigrations.slice(0, 19).map((m) => m.tag)).toEqual([
             ...folderMigrations.slice(0, 17).map((m) => m.tag),
             "0017_timeline_model",
             "0018_drop_page_era",
@@ -244,8 +245,11 @@ describe.each([20, 24, 28, 32])(
         it("drops the parked tables and empties the undo history", async () => {
             await openFile(file);
             withDb(file, (db) => {
+                // 0019 makes the cue tables again, in ADR 0015's shape: the old cues are gone
                 for (const table of PARKED_TABLES)
-                    expect(rowsOf(db, table), table).toBeNull();
+                    if (table === "cues" || table === "cue_marchers")
+                        expect(rowsOf(db, table), table).toEqual([]);
+                    else expect(rowsOf(db, table), table).toBeNull();
                 expect(rowsOf(db, "history_undo")).toEqual([]);
                 expect(rowsOf(db, "history_redo")).toEqual([]);
                 expect(

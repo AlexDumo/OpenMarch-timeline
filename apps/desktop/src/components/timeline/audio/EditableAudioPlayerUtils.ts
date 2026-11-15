@@ -31,6 +31,8 @@ import { measureKeys } from "@/hooks/queries/useMeasures";
 import { beatKeys } from "@/hooks/queries/useBeats";
 import { pageKeys } from "@/hooks/queries/usePages";
 import { itemGeometryKeys } from "@/hooks/queries/useItems";
+import { cueKeys } from "@/hooks/queries/useCues";
+import { remapCuesOntoReplacementBeatsInTransaction } from "@/db-functions/cues";
 import { toast } from "sonner";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import tolgee from "@/global/singletons/Tolgee";
@@ -395,9 +397,13 @@ export const _performDatabaseOperationsInTransaction = async ({
         });
     }
 
-    // Delete old beats; item changes move to the new beat at their time first
+    // Delete old beats; item changes and cues move to the new beat at their time first
     if (beatIdsToDelete.size > 0) {
         await remapItemChangesOntoReplacementBeatsInTransaction({
+            tx,
+            beatIds: beatIdsToDelete,
+        });
+        await remapCuesOntoReplacementBeatsInTransaction({
             tx,
             beatIds: beatIdsToDelete,
         });
@@ -443,10 +449,11 @@ const useAudioPlayerMutation = <TArgs>(
             void queryClient.invalidateQueries({
                 queryKey: pageKeys.all(),
             });
-            // Item Outline changes moved to the new beats
+            // Item Outline changes and cues moved to the new beats
             void queryClient.invalidateQueries({
                 queryKey: itemGeometryKeys.all(),
             });
+            void queryClient.invalidateQueries({ queryKey: cueKeys.all() });
 
             if (successKey) toast.success(tolgee.t(successKey));
         },

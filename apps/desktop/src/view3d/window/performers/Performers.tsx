@@ -104,6 +104,7 @@ import { clipsToLoad } from "./marchers/marcherBodies";
 import { hornRowsOf } from "./marchers/hornRows";
 import { sectionCueCarry } from "@/view3d/core/marchers/hornChannel";
 import { DEFAULT_HOLD, windowHornEvents } from "./windowHorn";
+import { useStoredCues } from "./useStoredCues";
 import { SilkMotion } from "./marchers/silkMotion";
 
 const CYLINDER_SEGMENTS = 20;
@@ -284,12 +285,15 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             ).join(""),
         [slots, clock, fieldProperties],
     );
-    // The show defaults compiled for every marcher (no cues are stored): the
-    // Show settings' hold while the band moves (mark time unless changed),
-    // else stand; face the front; horns up; the Show settings' step-off foot. `carries` decides each marcher's Horn/Equipment
+    // The show's stored cues (ADR 0015), compiled for every marcher over the
+    // show defaults: the Show settings' hold while the band moves (mark time
+    // unless changed), else stand; face the front; horns up; the Show
+    // settings' step-off foot. `carries` decides each marcher's Position
     // default.
+    const storedCues = useStoredCues();
     const cues = useMemo(() => {
-        if (!marchers || !carriesKey || !cueSectionsKey) return null;
+        if (!marchers || !carriesKey || !cueSectionsKey || !storedCues)
+            return null;
         const carries = new Map(
             JSON.parse(carriesKey) as [
                 number,
@@ -297,6 +301,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             ][],
         );
         return compileWindowCues(marchers, beats, stepOffFoot, {
+            cues: storedCues,
             sections: JSON.parse(cueSectionsKey) as CueSection[],
             bandMoving: Array.from(bandMovingKey, Number),
             holdWhileBandMoves,
@@ -307,6 +312,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         beats,
         carriesKey,
         cueSectionsKey,
+        storedCues,
         bandMovingKey,
         stepOffFoot,
         holdWhileBandMoves,
@@ -380,7 +386,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             return {
                 family: carry.family,
                 events: windowHornEvents(
-                    cues.segments(slots.ids[i], "horn_equipment"),
+                    cues.compiled.segments(slots.ids[i], "position"),
                     { secondsPerCount },
                 ),
             };

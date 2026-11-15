@@ -145,6 +145,11 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
             if (object.type === "index" && PAGE_ERA_TABLES.includes(object.tbl))
                 db.exec(object.sql);
     },
+    // Performer cues (ADR 0015 D-9): the two tables go, with their history triggers
+    19: (db) => {
+        dropTriggers(db);
+        dropTables(db, ["cue_marchers", "cues"]);
+    },
 };
 
 /**
