@@ -253,10 +253,9 @@ export async function holdOverWindowInTransaction({
     const eligible: number[] = [];
     for (const [marcherId, plan] of planned) {
         const reason = startSkipReason(plan);
-        // A shape's member nobody asked for is only brought along where it can be
-        if (reason && !mateSet.has(marcherId))
-            result.skipped.push({ marcherId, reason });
-        else if (!reason) eligible.push(marcherId);
+        // A shape's member that can't be held is named, so a shape left partly Held says why
+        if (reason) result.skipped.push({ marcherId, reason });
+        else eligible.push(marcherId);
     }
     if (eligible.length === 0) return sorted(result);
 
@@ -280,7 +279,7 @@ export async function holdOverWindowInTransaction({
         range: window,
     });
     const stayed = new Set(out.skipped.map((s) => s.marcherId));
-    for (const skip of out.skipped.filter((s) => !mateSet.has(s.marcherId)))
+    for (const skip of out.skipped)
         result.skipped.push({
             marcherId: skip.marcherId,
             reason:

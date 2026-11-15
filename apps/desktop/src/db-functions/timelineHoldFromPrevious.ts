@@ -226,8 +226,9 @@ export async function holdFromPreviousPageInTransaction({
                       ? "home"
                       : source,
         });
-        // A shape's member nobody asked for is only brought along where it can be
-        if (reason && mateSet.has(marcherId)) continue;
+        // A shape's member Held there already needs nothing; one that can't be held is named,
+        // so a shape left partly Held says why
+        if (reason === "held" && mateSet.has(marcherId)) continue;
         if (reason) {
             const atPage =
                 reason === "noArrival" && growth.from !== pageBox.start

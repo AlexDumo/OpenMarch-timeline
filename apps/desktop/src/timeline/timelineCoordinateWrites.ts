@@ -3,6 +3,7 @@ import {
     type TimelineEditTarget,
     type TimelineMarcherMove,
     type TimelineMovePage,
+    type TimelineMoveResult,
 } from "@/db-functions/timelineMoves";
 import type { DbConnection, DbTransaction } from "@/db-functions/types";
 import { withTimelineWriteLock } from "@/db-functions/history";
@@ -273,6 +274,7 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
     setUnmoved = false,
     setAll = false,
     keepPlayhead = false,
+    onWritten,
 }: {
     db: DbConnection;
     marcherIds: readonly number[];
@@ -295,6 +297,8 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
     setUnmoved?: boolean;
     /** With `setUnmoved`, write them even when the edit moves nobody (`moveMarchersAndOfferFollowUp`) */
     setAll?: boolean;
+    /** Given what the edit wrote, once it's written (who it left alone, say) */
+    onWritten?: (result: TimelineMoveResult) => void;
 }): Promise<R[]> {
     if (!plan.ok) throw plan.error;
     if (!keepPlayhead) snapIsolatedPlayheadToEnd();
@@ -302,7 +306,7 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
     const next = transform(current);
     const moves = toTimelineMoves(next);
     // Basic's locked marchers are dropped there (UI-19)
-    await moveMarchersAndOfferFollowUp({
+    const result = await moveMarchersAndOfferFollowUp({
         database: db,
         target: plan.target,
         moves,
@@ -313,6 +317,7 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
             setAll,
         }),
     });
+    onWritten?.(result);
     return next;
 }
 

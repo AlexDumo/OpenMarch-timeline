@@ -12,7 +12,10 @@ import {
     displayedBeat,
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
-import { writePlacement } from "../tool/shapePlacement";
+import { partlyHeldAt, writePlacement } from "../tool/shapePlacement";
+import { useHeldMarksStore } from "@/timeline/useHeldMarks";
+import { toastTimelineError } from "@/timeline/timelineErrorMessages";
+import { TimelineEditRefusedError } from "@/timeline/timelineEditRefusals";
 import { liveTargets } from "./liveBox";
 import type { PlacedBox } from "./placedBox";
 import { placedOrderChoice } from "./placedOrder";
@@ -68,7 +71,10 @@ export const recipeOrderFields = (
 /**
  * Saves a selected placed shape drawn with `params` through `writePlacement`: its members move to
  * their spots in it and its recipe is saved, as one edit at the edit window (a canvas edit). A
- * shape held from an earlier move gets its own copy on this one; the earlier one stays.
+ * shape shown from an earlier move gets its own copy on this one, and the earlier one stays; a
+ * shape Held there is edited where its hold grows out of, recipe and all, as dragging any Held
+ * marcher does (owner, 2026-11-15). A shape only partly Held there is refused at once
+ * (`partlyHeldAt`): its members' edits would go to two moves.
  *
  * The shape is shown as saved at once (`useSavingBoxStore`), and saves run one at a time: each
  * starts from the shape as the last one read it back, so quick edits add up. Each goes to the edit
@@ -104,6 +110,15 @@ export function commitBox(
         beat: displayedBeat(useTimelineSelectionStore.getState()),
         waits: unsaved > 0 || historyStepsPending(),
     };
+    const memberIds = box.recipe.members.map((m) => m.marcherId);
+    if (partlyHeldAt(memberIds, at.plan, useHeldMarksStore.getState().marks)) {
+        toastTimelineError(
+            new TimelineEditRefusedError("shapePartlyHeld", {
+                marcherIds: [...memberIds].sort((a, b) => a - b),
+            }),
+        );
+        return Promise.resolve();
+    }
     useSavingBoxStore.setState({
         // As it's stored now: a kept drag's box may be from before this page got its own copy
         box: savedAs(storedBox(box, at.beat), params, shown),
