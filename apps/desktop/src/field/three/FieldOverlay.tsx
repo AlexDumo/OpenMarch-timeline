@@ -39,6 +39,7 @@ import {
     groupLabelWidth,
     placeGroupLabels,
 } from "@/shapes/field/groupDrawing";
+import { PivotHint } from "./PivotHint";
 import HeldRolesChip, { HeldRolesChipBelowTip } from "./HeldRolesChip";
 
 /** The selection border width, in CSS px. */
@@ -205,6 +206,7 @@ export default function FieldOverlay({
     return (
         <>
             <HeldRolesChip belowTip={modeDrawing?.tip !== undefined} />
+            <PivotHint pivot={JSON.parse(pivot)} />
             <svg
                 className="pointer-events-none absolute inset-0 h-full w-full"
                 data-testid="fieldOverlay"
@@ -366,6 +368,8 @@ function PivotCrosshair({
 /** A plain selection's pivot on the center: a small faint dot, in CSS px */
 const CENTER_PIVOT_RADIUS = 2.5;
 const CENTER_PIVOT_OPACITY = 0.7;
+/** The dot with $mod held over it, so a drag pulls it out: larger, full strength, on a halo */
+const ARMED_PIVOT_RADIUS = 4;
 
 /**
  * A plain selection's pivot (`selectionPivot.ts`), what the rotate knob and the inspector's
@@ -377,21 +381,32 @@ function SelectionPivot({ pivot }: { pivot: SelectionPivotDrawing | null }) {
     const view = useFieldViewStore();
     if (!pivot) return null;
     const p = fieldToElement(view, pivot.at.x, pivot.at.y);
+    const armed = pivot.hover === "armed";
     return (
         <>
             {pivot.own ? (
                 <PivotCrosshair at={p} testId="fieldSelectionPivot" />
             ) : (
-                <circle
-                    data-testid="fieldSelectionPivot"
-                    cx={p.x}
-                    cy={p.y}
-                    r={CENTER_PIVOT_RADIUS}
-                    fill={PIVOT_COLOR}
-                    stroke="black"
-                    strokeWidth={1}
-                    opacity={CENTER_PIVOT_OPACITY}
-                />
+                <g data-testid="fieldSelectionPivot" data-armed={armed}>
+                    {armed && (
+                        <circle
+                            cx={p.x}
+                            cy={p.y}
+                            r={ARMED_PIVOT_RADIUS + 4}
+                            fill={PIVOT_COLOR}
+                            fillOpacity={0.25}
+                        />
+                    )}
+                    <circle
+                        cx={p.x}
+                        cy={p.y}
+                        r={armed ? ARMED_PIVOT_RADIUS : CENTER_PIVOT_RADIUS}
+                        fill={PIVOT_COLOR}
+                        stroke="black"
+                        strokeWidth={1}
+                        opacity={armed ? 1 : CENTER_PIVOT_OPACITY}
+                    />
+                </g>
             )}
             {pivot.preview && (
                 <PivotCrosshair

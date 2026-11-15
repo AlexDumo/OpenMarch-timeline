@@ -33,19 +33,22 @@ export const pivotName = (key: PivotKey): string =>
 
 /**
  * What turns, flips and scales go around: a corner, an edge's middle or the center. A shape's
- * pivot dragged elsewhere on the field (#350) lights none of them. In the inspector's Transform
+ * pivot dragged elsewhere on the field (#350) lights none of them. In the inspector's Arrange
  * section for a plain selection, and in the floating editor's pivot menu for a shape (#435).
  */
 export function PivotGrid({
     pivot,
     onPick,
     onPreview,
+    tip,
     testId = "transform-pivot",
 }: {
     pivot: Pivot;
     onPick: (key: PivotKey) => void;
     /** A cell pointed at or keyboard-focused, and null as it's left: shown, not picked (#437) */
     onPreview?: (key: PivotKey | null) => void;
+    /** A cell's tooltip from the pivot's name; a shape's turns and flips around it by default */
+    tip?: (name: string) => string;
     testId?: string;
 }) {
     // One stop for Tab, on the pivot picked (the center for one dragged on the field); the arrows
@@ -72,11 +75,15 @@ export function PivotGrid({
             {PIVOT_KEYS.map((key) => (
                 <Tip
                     key={key}
-                    label={tolgee.t(
-                        "shapes.edit.pivot.tip",
-                        "Turn and flip around the {pivot}",
-                        { pivot: pivotName(key) },
-                    )}
+                    label={
+                        tip
+                            ? tip(pivotName(key))
+                            : tolgee.t(
+                                  "shapes.edit.pivot.tip",
+                                  "Turn and flip around the {pivot}",
+                                  { pivot: pivotName(key) },
+                              )
+                    }
                 >
                     <button
                         type="button"

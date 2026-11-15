@@ -1995,6 +1995,67 @@ describe("FieldEditor a plain selection's pivot", () => {
         editor.setMode(fakeMode({ claims: () => false }).mode);
         expect(editor.selectionPivot()).toBeNull();
     });
+
+    it("tells the field what the pointer rests on: the center dot, armed with $mod, or the moved crosshair", () => {
+        const { editor } = setup({ selected: ALL });
+        editor.pointerMove(at(CENTER.x + 2, CENTER.y));
+        expect(editor.selectionPivot()?.hover).toBe("center");
+        // A plain drag there still moves the group, so the cursor doesn't say "move"
+        expect(editor.cursor()).not.toBe("move");
+        editor.pointerMove(at(CENTER.x + 2, CENTER.y, MOD));
+        expect(editor.selectionPivot()?.hover).toBe("armed");
+        expect(editor.cursor()).toBe("move");
+        editor.pointerMove(at(CENTER.x + 60, CENTER.y + 60));
+        expect(editor.selectionPivot()?.hover).toBeUndefined();
+        pullPivot(editor, { x: 150, y: 150 });
+        editor.pointerMove(at(151, 150));
+        expect(editor.selectionPivot()?.hover).toBe("own");
+        editor.pointerLeave();
+        expect(editor.selectionPivot()?.hover).toBeUndefined();
+    });
+
+    it("is set by the next click on the field while picking, snapped, and the click does nothing else", () => {
+        const { editor, state } = setup({ selected: ALL });
+        editor.startPickingPivot();
+        expect(editor.pickingPivot()).toBe(true);
+        expect(editor.selectionPivot()?.picking).toBe(true);
+        // Near marcher 2: the preview snaps onto it
+        editor.pointerMove(at(203, 102));
+        expect(editor.cursor()).toBe("crosshair");
+        expect(editor.selectionPivot()?.preview).toEqual({ x: 200, y: 100 });
+        click(editor, 203, 102);
+        expect(editor.pickingPivot()).toBe(false);
+        expect(editor.selectionPivot()).toEqual({
+            at: { x: 200, y: 100 },
+            own: true,
+            key: null,
+        });
+        expect(state.selected).toEqual(ALL);
+        expect(state.drops).toEqual([]);
+    });
+
+    it("stops picking on cancel, a new selection or playback, and picks only with a pivot to set", () => {
+        const { editor, state } = setup({ selected: ALL });
+        editor.startPickingPivot();
+        editor.cancelPickingPivot();
+        expect(editor.pickingPivot()).toBe(false);
+        // The click after a cancel is an ordinary one: it selects the marcher
+        click(editor, 100, 100);
+        expect(state.selected).toEqual([1]);
+        state.selected = ALL;
+        editor.selectionChanged();
+        editor.startPickingPivot();
+        state.selected = [1, 2];
+        editor.selectionChanged();
+        expect(editor.pickingPivot()).toBe(false);
+        editor.startPickingPivot();
+        editor.setPlaying(true);
+        editor.setPlaying(false);
+        expect(editor.pickingPivot()).toBe(false);
+        const one = setup({ selected: [1] });
+        one.editor.startPickingPivot();
+        expect(one.editor.pickingPivot()).toBe(false);
+    });
 });
 
 describe("FieldEditor rotation typed into the inspector (user story 54)", () => {

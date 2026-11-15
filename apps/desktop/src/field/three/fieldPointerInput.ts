@@ -45,9 +45,12 @@ export function attachFieldPointerInput(
         captured = event.pointerId;
         element.setPointerCapture(event.pointerId);
     };
+    const resting = hoverAgainOnKeys(element, editor);
     const move = (event: PointerEvent) => {
         if (event.pointerType === "touch") return;
-        editor.pointerMove(pointer(event));
+        const at = pointer(event);
+        resting.set(event.buttons === 0 ? at : null);
+        editor.pointerMove(at);
     };
     const up = (event: PointerEvent) => {
         if (event.pointerType === "touch") return;
@@ -64,7 +67,6 @@ export function attachFieldPointerInput(
     const showCursor = () => {
         element.style.cursor = editor.cursor();
     };
-
     element.addEventListener("pointerdown", down);
     element.addEventListener("pointermove", move);
     element.addEventListener("pointerup", up);
@@ -83,11 +85,63 @@ export function attachFieldPointerInput(
         element.removeEventListener("pointercancel", cancel);
         element.removeEventListener("lostpointercapture", cancel);
         element.removeEventListener("pointerleave", leave);
+        resting.detach();
         detachRight();
         detachLong();
         unsubscribe();
         editor.pointerCancel();
         element.style.cursor = "";
+    };
+}
+
+/**
+ * The pointer resting over the field with no button down, asked about again when a modifier key
+ * goes down or up without a move: Ctrl/Cmd over the selection's pivot changes what a drag there
+ * does (it pulls the pivot out), so the field shows it before the press.
+ */
+function hoverAgainOnKeys(
+    element: HTMLElement,
+    editor: FieldEditor,
+): {
+    set(pointer: FieldPointer | null): void;
+    detach(): void;
+} {
+    let resting: FieldPointer | null = null;
+    const key = (event: KeyboardEvent) => {
+        if (!resting || event.repeat) return;
+        const keys = {
+            shift: event.shiftKey,
+            alt: event.altKey,
+            ctrl: event.ctrlKey,
+            meta: event.metaKey,
+        };
+        if (
+            keys.shift === resting.shift &&
+            keys.alt === resting.alt &&
+            keys.ctrl === resting.ctrl &&
+            keys.meta === resting.meta
+        )
+            return;
+        resting = { ...resting, ...keys };
+        editor.pointerMove(resting);
+    };
+    const away = () => {
+        resting = null;
+    };
+    window.addEventListener("keydown", key);
+    window.addEventListener("keyup", key);
+    element.addEventListener("pointerdown", away);
+    element.addEventListener("pointerleave", away);
+    return {
+        set: (pointer) => {
+            resting = pointer;
+        },
+        detach: () => {
+            window.removeEventListener("keydown", key);
+            window.removeEventListener("keyup", key);
+            element.removeEventListener("pointerdown", away);
+            element.removeEventListener("pointerleave", away);
+        },
     };
 }
 

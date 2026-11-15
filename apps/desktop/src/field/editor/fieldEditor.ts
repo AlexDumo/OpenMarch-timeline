@@ -5,6 +5,7 @@ import {
     REACH_INSIDE,
     type PressChoice,
     type RoleKey,
+    type Roles,
 } from "@/input/modifierRoles";
 import {
     areaChoice,
@@ -520,9 +521,20 @@ export type SelectionPivot = {
     own: boolean;
     /** The pivot grid's cell it's on, or null on a marcher or a free spot */
     key: BoxPointKey | null;
-    /** Where the pivot grid's cell pointed at would put it */
+    /** Where the pivot grid's cell pointed at, or the pointer while picking, would put it */
     preview?: FieldPoint;
+    /**
+     * The pointer rests on it with no button down: on the center dot ("center"), on the center
+     * dot with $mod held so a drag pulls it out ("armed"), or on a crosshair out of the center
+     * ("own"). The field shows a hint for each.
+     */
+    hover?: PivotHover;
+    /** The next click on the field sets it ("Pick on field" in the inspector) */
+    picking?: boolean;
 };
+
+/** Where the pointer rests on the pivot; see {@link SelectionPivot.hover} */
+export type PivotHover = "center" | "armed" | "own";
 
 export class FieldEditor {
     private press: FieldPress | null = null;
@@ -551,6 +563,12 @@ export class FieldEditor {
     private pivotPreview: BoxPointKey | null = null;
     /** The show is playing: the pivot isn't drawn and takes no presses */
     private playing = false;
+    /** Where the pointer rests on the pivot, for the field's hint */
+    private pivotHover: PivotHover | null = null;
+    /** The next click on the field sets the pivot ("Pick on field") */
+    private picking = false;
+    /** Where that click would set it, under the pointer */
+    private pickAt: FieldPoint | null = null;
     /** Counts typed rotations ended, saved or not, so the inspector's input starts over after each. */
     private rotationsEnded = 0;
     /** The mode taking presses first, while one is on. */
@@ -639,6 +657,15 @@ export class FieldEditor {
             this.ignoredButton = pointer.button;
             return true;
         }
+        this.setPivotHover(null);
+        if (this.pickingPivot()) {
+            // "Pick on field": this click sets the pivot, and does nothing else
+            this.pickPivot(pointer);
+            this.press = null;
+            this.lastClick = null;
+            this.ignoredButton = pointer.button;
+            return true;
+        }
         const modePress: FieldModePress = {
             reachesInside: () =>
                 this.reachInside(pointer, this.marcherAt(pointer.field)) !==
@@ -705,7 +732,21 @@ export class FieldEditor {
                 this.setHover(modeCursor);
                 return;
             }
-            if (this.pivotAt(pointer)) {
+            if (this.pickingPivot()) {
+                this.pickAt =
+                    this.pivotPlacer()?.(pointer.field, {
+                        fine: pointer.shift,
+                        constrain: false,
+                        fromCenter: false,
+                    }).at ?? null;
+                this.setPivotHover(null);
+                this.setHover("crosshair");
+                this.emit();
+                return;
+            }
+            const near = this.pivotHoverAt(pointer);
+            this.setPivotHover(near);
+            if (near === "armed" || near === "own") {
                 this.setHover("move");
                 return;
             }
@@ -807,24 +848,7 @@ export class FieldEditor {
             this.lastClick = null;
             return;
         }
-        // A click on a pivot out of the center leaves the selection be, and a second one soon
-        // after sends it back to the center, as on a shape. A $mod-click on the center is an
-        // ordinary click
-        if (press.pivot && this.ownPivot) {
-            const last = this.lastClick;
-            if (last?.pivot && this.isSoonAfter(last, press.start)) {
-                this.lastClick = null;
-                this.resetSelectionPivot();
-                return;
-            }
-            this.lastClick = {
-                time: this.now(),
-                screen: press.start.screen,
-                hit: null,
-                pivot: true,
-            };
-            return;
-        }
+        if (this.pivotClick(press)) return;
         // A double-click's second click starts no third
         this.lastClick = press.double
             ? null
@@ -875,9 +899,36 @@ export class FieldEditor {
         this.cancelGesture();
     }
 
+    /**
+     * A click on a pivot out of the center leaves the selection be, and a second one soon after
+     * sends it back to the center, as on a shape. A $mod-click on the center is an ordinary
+     * click. Returns whether the click was the pivot's.
+     */
+    private pivotClick(press: FieldPress): boolean {
+        if (!press.pivot || !this.ownPivot) return false;
+        const last = this.lastClick;
+        if (last?.pivot && this.isSoonAfter(last, press.start)) {
+            this.lastClick = null;
+            this.resetSelectionPivot();
+            return true;
+        }
+        this.lastClick = {
+            time: this.now(),
+            screen: press.start.screen,
+            hit: null,
+            pivot: true,
+        };
+        return true;
+    }
+
     /** The pointer left the field with no button down. */
     pointerLeave(): void {
         this.mode?.leave?.();
+        this.setPivotHover(null);
+        if (this.pickAt) {
+            this.pickAt = null;
+            this.emit();
+        }
         this.setHover("default");
     }
 
@@ -1035,18 +1086,81 @@ export class FieldEditor {
                 : this.typed?.center;
         if (turning) return { at: turning, own: own !== null, key: null };
         if (this.pivotDrag) return { at: this.pivotDrag, own: true, key: null };
+        if (this.gesture) return this.restingPivot(own, false);
+        return this.restingPivot(own, true);
+    }
+
+    /** The pivot where it's set; `resting` with no gesture running, so hints and previews show */
+    private restingPivot(
+        own: OwnPivot | null,
+        resting: boolean,
+    ): SelectionPivot | null {
         const starts = this.drawnPositions(this.ports.selection.get());
         const box = boundsOf(starts);
         if (!box) return null;
         const anchor = own?.anchor ?? { kind: "box", key: "c" };
         const byId = new Map(starts.map((p) => [p.id, p]));
-        const preview = this.pivotPreview;
+        const preview = this.picking
+            ? this.pickAt
+            : this.pivotPreview && boxPoint(box, this.pivotPreview);
         return {
             at: anchorPoint(anchor, box, (id) => this.drawnPoint(id, byId)),
             own: own !== null,
             key: anchor.kind === "box" ? anchor.key : null,
-            ...(preview ? { preview: boxPoint(box, preview) } : {}),
+            ...(resting && preview ? { preview } : {}),
+            ...(resting && this.pivotHover && !this.picking
+                ? { hover: this.pivotHover }
+                : {}),
+            ...(this.picking ? { picking: true } : {}),
         };
+    }
+
+    /**
+     * "Pick on field": the next click on the field sets the pivot where it lands, snapped as a
+     * drag of the crosshair snaps. Escape, or the button again, cancels it.
+     */
+    startPickingPivot(): void {
+        if (this.picking || !this.selectionPivot()) return;
+        this.picking = true;
+        this.pivotPreview = null;
+        this.emit();
+    }
+
+    /** Stops "Pick on field" without setting anything. */
+    cancelPickingPivot(): void {
+        if (!this.picking) return;
+        this.picking = false;
+        this.pickAt = null;
+        this.emit();
+    }
+
+    /** Whether the next click on the field sets the pivot */
+    pickingPivot(): boolean {
+        return this.picking && this.selectionPivot() !== null;
+    }
+
+    /** The picking click at `pointer`: the pivot goes where it snaps */
+    private pickPivot(pointer: FieldPointer): void {
+        const place = this.pivotPlacer();
+        const ids = this.ports.selection.get();
+        this.picking = false;
+        this.pickAt = null;
+        if (place) {
+            const { anchor } = place(pointer.field, {
+                fine: pointer.shift,
+                constrain: false,
+                fromCenter: false,
+            });
+            this.ownPivot = isCenter(anchor) ? null : { ids: [...ids], anchor };
+        }
+        this.setHover("default");
+        this.emit();
+    }
+
+    private setPivotHover(hover: PivotHover | null): void {
+        if (this.pivotHover === hover) return;
+        this.pivotHover = hover;
+        this.emit();
     }
 
     /**
@@ -1080,7 +1194,11 @@ export class FieldEditor {
     setPlaying(playing: boolean): void {
         if (this.playing === playing) return;
         this.playing = playing;
-        if (playing) this.cancelGesture();
+        if (playing) {
+            this.cancelGesture();
+            this.picking = false;
+            this.pickAt = null;
+        }
         this.emit();
     }
 
@@ -1120,12 +1238,19 @@ export class FieldEditor {
      * the center is the marcher's or the box's, as before.
      */
     private pivotAt(pointer: FieldPointer): boolean {
+        const near = this.pivotHoverAt(pointer);
+        return near === "armed" || near === "own";
+    }
+
+    /** What the pointer at `pointer` rests on of the pivot, if it's near it */
+    private pivotHoverAt(pointer: FieldPointer): PivotHover | null {
         const pivot = this.selectionPivot();
-        if (!pivot) return false;
-        if (!pivot.own && !this.modHeld(pointer)) return false;
+        if (!pivot || pivot.picking) return null;
         const reach = PIVOT_REACH_PX / (this.ports.zoom() || 1);
         const { x, y } = pointer.field;
-        return Math.hypot(x - pivot.at.x, y - pivot.at.y) <= reach;
+        if (Math.hypot(x - pivot.at.x, y - pivot.at.y) > reach) return null;
+        if (pivot.own) return "own";
+        return this.modHeld(pointer) ? "armed" : "center";
     }
 
     /** $mod at `pointer`: Cmd on a Mac, Ctrl elsewhere */
@@ -1141,7 +1266,36 @@ export class FieldEditor {
     private startPivot(press: FieldPress): FieldGesture | null {
         if (!press.pivot) return null;
         const ids = this.ports.selection.get();
-        const starts = this.drawnPositions(ids);
+        const place = this.pivotPlacer();
+        if (!place) return null;
+        return new PivotGesture(this.keysFor(press.start), place, {
+            show: (at) => {
+                this.pivotDrag = at;
+                this.emit();
+            },
+            set: ({ anchor }) => {
+                this.pivotDrag = null;
+                this.ownPivot = isCenter(anchor)
+                    ? null
+                    : { ids: [...ids], anchor };
+                this.emit();
+            },
+            cancel: () => {
+                this.pivotDrag = null;
+                this.emit();
+            },
+        });
+    }
+
+    /**
+     * Where the pivot goes for the pointer at a point, with these roles held: the box's 9 points
+     * and any marcher that can be pressed within reach, else the grid; fine or the Snap toggle
+     * off leaves it where the pointer is. Null when the selection has no box.
+     */
+    private pivotPlacer():
+        | ((at: FieldPoint, roles: Roles) => PivotTarget)
+        | null {
+        const starts = this.drawnPositions(this.ports.selection.get());
         const box = boundsOf(starts);
         if (starts.length < 2 || !box) return null;
         const zoom = this.ports.zoom() || 1;
@@ -1164,30 +1318,10 @@ export class FieldEditor {
             at,
             anchor: { kind: "point", at },
         });
-        return new PivotGesture(
-            this.keysFor(press.start),
-            (at, roles) =>
-                roles.fine || !(this.options.snap?.() ?? true)
-                    ? free(at)
-                    : snapPivot(at, targets, PIVOT_REACH_PX / zoom, grid),
-            {
-                show: (at) => {
-                    this.pivotDrag = at;
-                    this.emit();
-                },
-                set: ({ anchor }) => {
-                    this.pivotDrag = null;
-                    this.ownPivot = isCenter(anchor)
-                        ? null
-                        : { ids: [...ids], anchor };
-                    this.emit();
-                },
-                cancel: () => {
-                    this.pivotDrag = null;
-                    this.emit();
-                },
-            },
-        );
+        return (at, roles) =>
+            roles.fine || !(this.options.snap?.() ?? true)
+                ? free(at)
+                : snapPivot(at, targets, PIVOT_REACH_PX / zoom, grid);
     }
 
     /**
@@ -1272,6 +1406,7 @@ export class FieldEditor {
     /** Drops a typed rotation whose marchers aren't the selection any more. */
     selectionChanged(): void {
         // A pivot is the selection's: a new one starts on its center
+        this.cancelPickingPivot();
         if (
             this.ownPivot &&
             !sameIds(this.ownPivot.ids, this.ports.selection.get())

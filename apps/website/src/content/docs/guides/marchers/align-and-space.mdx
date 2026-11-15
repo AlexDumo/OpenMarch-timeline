@@ -91,9 +91,15 @@ Only positions change: dots and drill numbers stay upright and the same size. Dr
 To turn the group around another point, move the pivot first:
 
 - Select a dot in the pivot grid under <Ui k="inspector.marcher.rotateHeading" /> in the <Ui k="inspector.arrange.title" /> section to put it on a corner, a side's middle or the center of the group. Pointing at a dot shows where that is on the field.
-- Or hold <Kbd keys="Mod" gesture="drag" /> and drag the pivot out of the middle of the group. A plain drag there still moves the group. The pivot snaps onto any marcher and onto the group's corners, side middles and center, and otherwise to the half-step grid. Hold <Kbd keys="Shift" gesture="drag" /> as well, or turn <Ui k="toolbar.alignment.snapToggleCaption" /> off, to place it freely.
+- Select <Ui k="inspector.arrange.pickPivotButton" /> under the <Ui k="inspector.marcher.rotation" plain /> box, then click a marcher or any spot on the field to put the pivot there. Press <Kbd keys="Escape" /> to stop without moving it.
+- Or hold <Kbd keys="Mod" gesture="drag" /> and drag the pivot out of the middle of the group. A plain drag there still moves the group. Rest the pointer on the dot to see a reminder, and hold the key over it to see the dot grow before you drag. Either way, the pivot snaps onto any marcher and onto the group's corners, side middles and center, and otherwise to the half-step grid. Hold <Kbd keys="Shift" /> as well, or turn <Ui k="toolbar.alignment.snapToggleCaption" /> off, to place it freely.
 
 Once it's out of the middle, the pivot is drawn as a crosshair, and you can drag it again without holding a key. A pivot on a marcher or a point of the group stays there as the group moves. One on any other spot moves with the group when you drag it, and goes back to the middle when you go to another page. It also goes back to the middle when you select different marchers, drag it back onto the middle, or double-click it. It's hidden while the show plays.
+
+<Media
+  id="marchers-pivot-pick"
+  alt="The pointer rests on the pivot dot in the middle of a selected block, and a small note beside it reads Ctrl+drag, move the pivot. Holding Ctrl makes the dot grow. Then Pick on field is chosen in the inspector, a crosshair follows the pointer with a note to click a marcher or a spot, and clicking the block's front-right marcher puts the pivot there."
+/>
 
 <Media
   id="marchers-pivot"

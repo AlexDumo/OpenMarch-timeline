@@ -1,5 +1,9 @@
-import { useCallback, useSyncExternalStore } from "react";
-import { T } from "@tolgee/react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { T, useTranslate } from "@tolgee/react";
+import { CrosshairSimpleIcon } from "@phosphor-icons/react";
+import { Button } from "@openmarch/ui";
+import { Tip } from "@/components/ui/Tip";
+import { isMacPlatform } from "@/shortcuts/platform";
 import { InspectorCollapsible } from "@/components/inspector/InspectorCollapsible";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
@@ -10,6 +14,7 @@ import {
 } from "@/field/editor/activeFieldEditor";
 import type { FieldEditor } from "@/field/editor/fieldEditor";
 import { PivotGrid } from "@/shapes/editor/PivotGrid";
+import { keepFocus } from "@/shapes/editor/keepFocus";
 import { ArrangeButtons } from "./MarcherEditor";
 import MarcherRotationInput from "./marcher/MarcherRotationInput";
 
@@ -45,8 +50,11 @@ function RotateRow() {
             </h5>
             <div className="flex items-start gap-12">
                 <SelectionPivotGrid />
-                <div className="min-w-0 flex-1">
-                    <MarcherRotationInput />
+                <div className="flex min-w-0 flex-1 flex-col items-start gap-8">
+                    <div className="w-full">
+                        <MarcherRotationInput />
+                    </div>
+                    <SelectionPivotPick />
                 </div>
             </div>
         </div>
@@ -59,14 +67,79 @@ function RotateRow() {
  * lights none.
  */
 function SelectionPivotGrid() {
-    const editor = useSyncExternalStore(
-        subscribeActiveFieldEditor,
-        activeFieldEditor,
-    );
+    const editor = useActiveEditor();
     return editor ? <EditorPivotGrid editor={editor} /> : null;
 }
 
+/**
+ * "Pick on field": the next click on the field sets the pivot, on a marcher or any spot. The way
+ * there without a modifier key (taste: every action reachable without one); its tooltip names
+ * the fast path, $mod-dragging the dot on the field.
+ */
+function SelectionPivotPick() {
+    const editor = useActiveEditor();
+    return editor ? <EditorPivotPick editor={editor} /> : null;
+}
+
+function EditorPivotPick({ editor }: { editor: FieldEditor }) {
+    const { t } = useTranslate();
+    const subscribe = useCallback(
+        (listener: () => void) => editor.subscribe(listener),
+        [editor],
+    );
+    const picking = useSyncExternalStore(subscribe, () =>
+        editor.pickingPivot(),
+    );
+    const available = useSyncExternalStore(
+        subscribe,
+        () => editor.selectionPivot() !== null,
+    );
+    // Escape stops picking, before it reaches anything else (deselecting)
+    useEffect(() => {
+        if (!picking) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key !== "Escape") return;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            editor.cancelPickingPivot();
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+    }, [editor, picking]);
+    return (
+        <Tip
+            label={t("inspector.arrange.pickPivot")}
+            hint={t("inspector.arrange.pickPivotHint", {
+                key: isMacPlatform() ? "⌘" : "Ctrl",
+            })}
+        >
+            <Button
+                variant={picking ? "primary" : "secondary"}
+                size="compact"
+                aria-pressed={picking}
+                disabled={!available}
+                onPointerDown={keepFocus}
+                onClick={() =>
+                    picking
+                        ? editor.cancelPickingPivot()
+                        : editor.startPickingPivot()
+                }
+                data-testid="arrange-pick-pivot"
+                className="flex items-center gap-6"
+            >
+                <CrosshairSimpleIcon size={14} weight="bold" />
+                <T keyName="inspector.arrange.pickPivotButton" />
+            </Button>
+        </Tip>
+    );
+}
+
+function useActiveEditor(): FieldEditor | null {
+    return useSyncExternalStore(subscribeActiveFieldEditor, activeFieldEditor);
+}
+
 function EditorPivotGrid({ editor }: { editor: FieldEditor }) {
+    const { t } = useTranslate();
     const subscribe = useCallback(
         (listener: () => void) => editor.subscribe(listener),
         [editor],
@@ -82,6 +155,7 @@ function EditorPivotGrid({ editor }: { editor: FieldEditor }) {
             pivot={key ?? { x: 0, y: 0 }}
             onPick={(k) => editor.setSelectionPivot(k)}
             onPreview={(k) => editor.previewSelectionPivot(k)}
+            tip={(name) => t("inspector.arrange.pivotTip", { pivot: name })}
             testId="arrange-pivot"
         />
     );

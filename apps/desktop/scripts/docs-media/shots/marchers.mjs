@@ -413,6 +413,66 @@ const shots = [
         },
     },
     {
+        id: "marchers-pivot-pick",
+        kind: "clip",
+        // Resting on a selected block's pivot dot shows the Ctrl-drag reminder; then Pick on
+        // field, and a click on the block's front-right marcher puts the pivot there
+        async setup({ page, wait }) {
+            await toPage1(page, wait);
+            const all = await marchers(page);
+            const block = named(all, [
+                ...range("U", 1, 4),
+                ...range("B", 1, 8),
+            ]);
+            await shiftSelect(page, block, wait);
+            const b = bounds(block);
+            return {
+                box: boxAround(
+                    {
+                        x: (b.left + b.right) / 2 + 20,
+                        y: (b.top + b.bottom) / 2,
+                    },
+                    620,
+                    360,
+                ),
+            };
+        },
+        async perform({ page, film, overlay }) {
+            await overlay.enable();
+            const pivot = await page.evaluate(() =>
+                window.fieldTest.selectionPivot(),
+            );
+            const b8 = (await marchers(page)).get("B8");
+            const target = { x: b8.x, y: b8.y };
+            const rest = { x: pivot.screen.x + 70, y: pivot.screen.y + 60 };
+            await page.mouse.move(rest.x, rest.y);
+            await film.hold(0.3);
+            await film.moveTo(page, rest, pivot.screen, 0.5);
+            // The reminder waits half a second, as a tooltip does
+            await film.hold(1.6);
+            await page.keyboard.down("Control");
+            await film.hold(0.8);
+            await page.keyboard.up("Control");
+            await film.moveTo(page, pivot.screen, rest, 0.4);
+            await film.hold(0.3);
+            const pick = page.getByTestId("arrange-pick-pivot");
+            await pick.click();
+            const near = { x: target.x - 60, y: target.y - 40 };
+            await page.mouse.move(near.x, near.y);
+            await film.hold(0.4);
+            await film.moveTo(
+                page,
+                near,
+                { x: target.x + 3, y: target.y + 2 },
+                0.7,
+            );
+            await film.hold(0.6);
+            await page.mouse.down();
+            await page.mouse.up();
+            await film.hold(1.2);
+        },
+    },
+    {
         id: "marchers-pivot",
         kind: "clip",
         // Ctrl-dragging a selected block's pivot out of its center onto its corner marcher, then
