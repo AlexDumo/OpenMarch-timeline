@@ -411,10 +411,11 @@ describe("woodwind and battery holds", () => {
         "sax",
         "bariSax",
     ] as const)(
-        "%s up: each hand carries straight on from the forearm, bent 30 degrees at most",
+        "%s up: each hand bends at most 30 degrees from the forearm",
         (family) => {
             // a stiff mitt reads as a hand only with a nearly straight wrist
-            // (woodwind wrist study, 2026-11-10)
+            // (woodwind wrist study, 2026-11-10); the saxes curl it toward the
+            // palm onto the keys, up to that limit (2026-11-14)
             const h = hold(family, "up");
             for (const arm of [h.left, h.right]) {
                 const fore = arm.wrist.map((w, i) => w - arm.elbow[i]);
@@ -466,8 +467,9 @@ describe("woodwind and battery holds", () => {
     it("sax: straight up and down in front, the neck straight back to the lips", () => {
         const h = hold("sax", "up");
         expect(h.instrument.origin[1]).toBeGreaterThan(1.45);
-        expect(h.instrument.bellAxis).toEqual([0, -1, 0]);
-        expect(h.instrument.capsAxis).toEqual([0, 0, 1]);
+        // perpendicular to the ground, the neck pointing straight back
+        expect(h.instrument.bellAxis[1]).toBeLessThan(-0.999);
+        expect(h.instrument.capsAxis[2]).toBeGreaterThan(0.999);
     });
 
     it("bariSax: sideways down the body, top out to the left, bottom to the right hip", () => {

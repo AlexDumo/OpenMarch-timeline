@@ -3,13 +3,7 @@ import { describe, expect, it } from "vitest";
 import { hold, playingLips, type HoldFamily, type HoldState } from "../holds";
 import { bounds, PART_METAL, type Vec3 } from "../mesh";
 import type { WoodwindModelId } from "../model";
-import {
-    BARI_NECK_SWIVEL,
-    SAX_BODY_TURN,
-    saxAxis,
-    saxStack,
-    saxTurned,
-} from "../saxophones";
+import { saxAxis, saxStack, saxTurned } from "../saxophones";
 import {
     SAX_BELL_TILT,
     SAX_SHAPES,
@@ -208,7 +202,6 @@ describe("the sax held in front", () => {
             expect(rim[1]).toBeGreaterThan(yb + 0.08);
             // the bari's body is swivelled under its neck (below)
             if (id !== "bariSax") expect(Math.abs(rim[0])).toBeLessThan(0.01);
-            expect(SAX_BODY_TURN).toBeCloseTo(Math.PI / 2);
             const keys = saxTurned([0, yb + 1, 0], yb);
             expect(keys[0]).toBeLessThan(-0.99);
         });
@@ -261,7 +254,6 @@ describe("the sax held in front", () => {
         // players turn the bari's neck so it comes in to the mouth from by
         // the left collarbone while the bell still faces forward (owner and
         // review, 2026-11-14)
-        expect(BARI_NECK_SWIVEL).toBeGreaterThan((30 * Math.PI) / 180);
         const top = saxAxis("bariSax", 0);
         const bow = saxAxis("bariSax", 1);
         expect(Math.abs(bow[0] - top[0])).toBeLessThan(0.001);
@@ -323,8 +315,9 @@ describe("the saxes at carry", () => {
             const rim = point(rimLocal);
             const body = point([0, yb, rimLocal[2]]);
             expect(rim[2]).toBeGreaterThan(body[2] + 0.08);
-            // the flare leans toward the keys, the performer's right (the
-            // bari's swivelled body a little more)
+            // the flare leans toward the keys, the performer's right; the
+            // bari's body is swivelled 40 degrees under its neck, which
+            // carries its bell further to that side
             expect(Math.abs(rim[0] - body[0])).toBeLessThan(
                 id === "bariSax" ? 0.15 : 0.1,
             );

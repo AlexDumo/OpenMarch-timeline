@@ -410,7 +410,11 @@ points and where the elbows go.
   crook off the left of the chest and the lower tube off the belly; the
   bell opens up and forward, a little left. The left hand reaches across the
   chest to the upper stack, its elbow down at the side; the right comes onto
-  the lower stack from the right hip, its elbow drawn back. Carry: as the
+  the lower stack from the right hip, its elbow drawn back. These angles
+  were hand-tuned against renders and the reference photos: the tests in
+  `saxPlacement.test.ts` hold what they must keep (the bow by the right
+  thigh, nothing in the torso, the neck and crook clear of the face, neck
+  and shoulders), so a retune only has to keep those passing. Carry: as the
   alto's, the hands on the bari's upper stacks so they reach at eye level.
   Trail: as the alto's, the tube a little further out for the wide bell.
 - **snare, tenors.** Elbows at the sides, a little forward, not winged
