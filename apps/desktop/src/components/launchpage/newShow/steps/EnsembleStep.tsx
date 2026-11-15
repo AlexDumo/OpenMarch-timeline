@@ -13,8 +13,6 @@ import {
 } from "@/global/classes/Activities";
 import type { NewShowEnsembleData } from "../../newShowTypes";
 import { useEffect, useRef, useState } from "react";
-import PitPresetCards from "@/components/frontEnsemble/PitPresetCards";
-import type { PitPresetSize } from "@/view3d/core/pit/presets";
 
 interface EnsembleStepProps {
     ensemble: NewShowEnsembleData | null;
@@ -29,9 +27,6 @@ export default function EnsembleStep({
     const [activity, setActivity] = useState(
         ensemble?.activity ?? DEFAULT_ACTIVITY,
     );
-    const [frontEnsemble, setFrontEnsemble] = useState<PitPresetSize | null>(
-        ensemble?.frontEnsemble ?? null,
-    );
 
     // The stored activity is its English label; show it in the app language, or as saved when unknown.
     const activityLabel = (value: string) => {
@@ -43,8 +38,8 @@ export default function EnsembleStep({
     useEffect(() => {
         if (hasSyncedInitial.current) return;
         hasSyncedInitial.current = true;
-        onChange({ activity, frontEnsemble });
-    }, [activity, frontEnsemble, onChange]);
+        onChange({ activity });
+    }, [activity, onChange]);
 
     return (
         <div className="mx-auto flex w-full max-w-lg flex-col gap-16">
@@ -55,7 +50,7 @@ export default function EnsembleStep({
                     value={activity}
                     onValueChange={(next) => {
                         setActivity(next);
-                        onChange({ activity: next, frontEnsemble });
+                        onChange({ activity: next });
                     }}
                 >
                     <SelectTriggerButton label={activityLabel(activity)} />
@@ -68,25 +63,6 @@ export default function EnsembleStep({
                     </SelectContent>
                 </Select>
             </WizardFormField>
-            <div className="flex flex-col gap-8">
-                <span
-                    id="new-show-front-ensemble-label"
-                    className="text-body text-text font-medium"
-                >
-                    {t("launchpage.newShow.steps.ensemble.frontEnsembleLabel")}
-                </span>
-                <PitPresetCards
-                    value={frontEnsemble}
-                    onChange={(next) => {
-                        setFrontEnsemble(next);
-                        onChange({ activity, frontEnsemble: next });
-                    }}
-                    aria-labelledby="new-show-front-ensemble-label"
-                />
-                <p className="text-sub text-text-subtitle">
-                    {t("launchpage.newShow.steps.ensemble.frontEnsembleHint")}
-                </p>
-            </div>
         </div>
     );
 }

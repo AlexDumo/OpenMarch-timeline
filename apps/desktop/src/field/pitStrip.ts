@@ -77,14 +77,8 @@ export function pitAreasOf(
 export const isBehindField = (area: FieldRect): boolean => area.bottom <= 0;
 
 /**
- * Room past a pit area for the yard-line labels it moves there, in field units: the labels that
- * would sit under the pit move below a front one, above one behind the field (`fieldGeometry`).
- */
-export const PIT_AREA_LABEL_ROOM = 24;
-
-/**
  * The area the view fits, centers and keeps in reach: the field, and the pit areas in front of and
- * behind it when there are any, with room for the labels moved past them. The field's own origin
+ * behind it when there are any. The field's own origin
  * stays at (0, 0); an area behind makes the view's area start above it (`top`).
  */
 export function fieldViewSize(
@@ -95,14 +89,8 @@ export function fieldViewSize(
     let bottom = fieldProperties.height;
     for (const area of areas) {
         if (!area) continue;
-        top = Math.min(
-            top,
-            area.top - (isBehindField(area) ? PIT_AREA_LABEL_ROOM : 0),
-        );
-        bottom = Math.max(
-            bottom,
-            area.bottom + (isBehindField(area) ? 0 : PIT_AREA_LABEL_ROOM),
-        );
+        top = Math.min(top, area.top);
+        bottom = Math.max(bottom, area.bottom);
     }
     return { width: fieldProperties.width, height: bottom - top, top };
 }

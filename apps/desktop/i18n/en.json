@@ -930,9 +930,7 @@
                 "ensemble": {
                     "description": "Choose your activity.",
                     "title": "Activity",
-                    "typeLabel": "Activity",
-                    "frontEnsembleLabel": "Front ensemble?",
-                    "frontEnsembleHint": "Places the equipment and its players in front of the field, with a podium on the 50."
+                    "typeLabel": "Activity"
                 },
                 "field": {
                     "description": "Pick a field template for your show.",
@@ -944,6 +942,11 @@
                     "removeMarcher": "Remove {marcher}",
                     "sectionCount": "{section} ({count})",
                     "title": "Performers"
+                },
+                "frontEnsemble": {
+                    "title": "Front ensemble",
+                    "description": "Does the show have a pit? You can change it later.",
+                    "hint": "A size places the equipment and a performer at each instrument in front of the field, with a podium on the 50."
                 },
                 "project": {
                     "description": "Name your show and choose where to save it.",
@@ -1478,13 +1481,19 @@
                 "small": "2 marimbas, 2 vibes, a rack, a synth and 2 speakers",
                 "medium": "4 marimbas, 3 vibes, xylophone, glockenspiel, rack, drum set, synth and 4 speakers",
                 "large": "6 marimbas, 4 vibes, xylophone, glockenspiel, 2 racks, drum set, 2 synths and 6 speakers",
-                "none": "No pit. You can add one later in the Front ensemble panel."
+                "none": "No pit. You can set one up later in the Marchers panel."
             },
             "always": "Each also adds a podium on the 50 and a mixer behind the pit.",
             "addPerformers": "Also add performers",
             "apply": "Apply",
             "replaces": "Replaces the equipment the last preset added. Equipment you added yourself stays.",
             "none": "None"
+        },
+        "summary": {
+            "none": "No pit yet",
+            "counts": "{equipment, plural, one {# piece of equipment} other {# pieces of equipment}}{podiums, plural, =0 {} one {, # podium} other {, # podiums}}",
+            "setUp": "Set up",
+            "edit": "Edit"
         }
     },
     "section": {
@@ -3415,8 +3424,7 @@
         "props": "Props",
         "music": "Music",
         "renderFail": "Sidebar modal content failed to render",
-        "settings": "Show settings",
-        "frontEnsemble": "Front ensemble"
+        "settings": "Show settings"
     },
     "infoTip": {
         "moreInfo": "More info"

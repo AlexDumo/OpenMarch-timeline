@@ -421,7 +421,7 @@ async function applyPreviousDotsMarcherTags(
 }
 
 /**
- * The front ensemble preset picked in the Activity step ("Front ensemble?"): its equipment, on
+ * The front ensemble preset picked in the Front ensemble step: its equipment, on
  * field from the first beat so it is there all show, and a player for each instrument and a drum
  * major on the podium, as the Front ensemble panel's presets place them.
  */
@@ -429,7 +429,7 @@ async function applyFrontEnsemble(
     form: NewShowFormState,
     queryClient: QueryClient,
 ): Promise<void> {
-    const size = form.ensemble?.frontEnsemble;
+    const size = form.frontEnsemble?.size;
     if (!size) return;
     const [firstBeat] = (await getBeats({ db })).sort(
         (a, b) => a.position - b.position,

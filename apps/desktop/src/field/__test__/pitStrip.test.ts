@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { FieldProperties } from "@openmarch/core";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import {
-    PIT_AREA_LABEL_ROOM,
     PIT_AREA_MARGIN_FT,
     fieldViewSize,
     isBehindField,
@@ -69,14 +68,14 @@ describe("fieldViewSize", () => {
         });
     });
 
-    it("reaches past the pit areas, with room for the labels moved past them", () => {
+    it("reaches past the pit areas", () => {
         const [ahead, behind] = pitAreasOf(fp, [
             { x: 900, y: front + 50, radius: 10 },
             { x: 900, y: -60, radius: 10 },
         ]);
         const size = fieldViewSize(fp, [ahead, behind]);
-        expect(size.top).toBe(behind.top - PIT_AREA_LABEL_ROOM);
-        expect(size.top + size.height).toBe(ahead.bottom + PIT_AREA_LABEL_ROOM);
+        expect(size.top).toBe(behind.top);
+        expect(size.top + size.height).toBe(ahead.bottom);
         expect(size.width).toBe(fp.width);
     });
 });

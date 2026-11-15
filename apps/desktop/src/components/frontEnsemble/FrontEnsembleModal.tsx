@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PianoKeysIcon } from "@phosphor-icons/react";
 import { T, useTranslate } from "@tolgee/react";
-import { SidebarModalLauncher } from "@/components/sidebar/SidebarModal";
+import { Button } from "@openmarch/ui";
 import ItemPanelHeader from "@/components/items/ItemPanelHeader";
 import { ItemEditor } from "@/components/items/ItemEditor";
 import {
@@ -16,8 +16,12 @@ import { isPodiumFamily, pitVariant } from "@/view3d/core/pit/catalog";
 import FrontEnsemblePicker from "./FrontEnsemblePicker";
 import { usePitVariantLabel } from "./usePitVariantLabel";
 
-/** The sidebar panel's id, for its launcher and the views it switches between */
-export const FRONT_ENSEMBLE_PANEL_ID = "front-ensemble";
+/**
+ * The front ensemble lives in the Marchers panel (owner, 2026-11-15: a pit is set up about once
+ * per show, so it doesn't earn a sidebar button of its own): its views take the Marchers panel's
+ * id, so the Marchers button stays lit
+ */
+export const FRONT_ENSEMBLE_PANEL_ID = "marchers";
 
 /** Whether an item is a podium from the catalog: listed apart from the pit equipment */
 const isPodiumItem = (item: ItemWithMarcher) => {
@@ -37,23 +41,63 @@ export function splitFrontEnsemble(
 }
 
 /**
- * The front ensemble (instruments.md §6): its presets, the catalog to place one piece from, and
- * the equipment and podiums in the show, each with its edit view. They're stored as items like
- * props, but have their own panel: they don't move and aren't part of the staging.
+ * The front ensemble's place in the Marchers panel: what the show has (or that it has no pit) and
+ * a button that opens the front ensemble view in the panel, where `onBack` returns.
  */
-export default function FrontEnsembleModal() {
+export function FrontEnsembleSummary({ onBack }: { onBack: () => void }) {
     const { t } = useTranslate();
+    const { setContent } = useSidebarModalStore();
+    const { data: items } = useQuery(allItemsQueryOptions());
+    const { equipment, podiums } = useMemo(
+        () => splitFrontEnsemble(items),
+        [items],
+    );
+    const hasPit = equipment.length + podiums.length > 0;
     return (
-        <SidebarModalLauncher
-            name={t("sidebar.frontEnsemble")}
-            contents={<FrontEnsembleContents />}
-            newContentId={FRONT_ENSEMBLE_PANEL_ID}
-            buttonLabel={<PianoKeysIcon size={24} />}
-        />
+        <section
+            className="border-stroke bg-fg-2 rounded-6 flex items-center gap-12 border p-8"
+            aria-label={t("frontEnsemble.title")}
+            data-testid="front-ensemble-summary"
+        >
+            <PianoKeysIcon size={20} className="text-text/70 shrink-0" />
+            <div className="flex min-w-0 grow flex-col">
+                <span className="text-body font-medium">
+                    <T keyName="frontEnsemble.title" />
+                </span>
+                <span className="text-sub text-text-subtitle">
+                    {hasPit
+                        ? t("frontEnsemble.summary.counts", {
+                              equipment: equipment.length,
+                              podiums: podiums.length,
+                          })
+                        : t("frontEnsemble.summary.none")}
+                </span>
+            </div>
+            <Button
+                size="compact"
+                variant={hasPit ? "secondary" : "primary"}
+                onClick={() =>
+                    setContent(
+                        <FrontEnsembleContents onBack={onBack} />,
+                        FRONT_ENSEMBLE_PANEL_ID,
+                    )
+                }
+            >
+                {hasPit
+                    ? t("frontEnsemble.summary.edit")
+                    : t("frontEnsemble.summary.setUp")}
+            </Button>
+        </section>
     );
 }
 
-export function FrontEnsembleContents() {
+/**
+ * The front ensemble view (instruments.md §6), opened from the Marchers panel: its presets, the
+ * catalog to place one piece from, and the equipment and podiums in the show, each with its edit
+ * view. They're stored as items like props, but aren't props to designers: they don't move and
+ * aren't part of the staging. `onBack` returns to the Marchers panel.
+ */
+export function FrontEnsembleContents({ onBack }: { onBack?: () => void }) {
     const { setContent } = useSidebarModalStore();
     const { data: items } = useQuery(allItemsQueryOptions());
     const { equipment, podiums } = useMemo(
@@ -62,12 +106,15 @@ export function FrontEnsembleContents() {
     );
     const onEdit = (item: ItemWithMarcher) =>
         setContent(
-            <FrontEnsembleEditContents itemId={item.id} />,
+            <FrontEnsembleEditContents itemId={item.id} onBack={onBack} />,
             FRONT_ENSEMBLE_PANEL_ID,
         );
     return (
         <div className="animate-scale-in text-text flex h-full w-fit flex-col gap-16">
-            <ItemPanelHeader title={<T keyName="frontEnsemble.title" />} />
+            <ItemPanelHeader
+                title={<T keyName="frontEnsemble.title" />}
+                onBack={onBack}
+            />
             <div className="flex w-[28rem] grow flex-col gap-16 overflow-y-auto">
                 <FrontEnsemblePicker
                     hasEquipment={equipment.length + podiums.length > 0}
@@ -150,7 +197,14 @@ function EquipmentGroup({
 }
 
 /** A piece of equipment's or a podium's edit view: its name, model, lock and Outline */
-export function FrontEnsembleEditContents({ itemId }: { itemId: number }) {
+export function FrontEnsembleEditContents({
+    itemId,
+    onBack,
+}: {
+    itemId: number;
+    /** Where the front ensemble view's own back button goes */
+    onBack?: () => void;
+}) {
     const { setContent } = useSidebarModalStore();
     const { data: items } = useQuery(allItemsQueryOptions());
     const item = items?.find((i) => i.id === itemId);
@@ -166,7 +220,7 @@ export function FrontEnsembleEditContents({ itemId }: { itemId: number }) {
                 }
                 onBack={() =>
                     setContent(
-                        <FrontEnsembleContents />,
+                        <FrontEnsembleContents onBack={onBack} />,
                         FRONT_ENSEMBLE_PANEL_ID,
                     )
                 }

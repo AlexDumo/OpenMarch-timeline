@@ -8,7 +8,6 @@ import {
     type FieldPlanText,
 } from "@/field/fieldPlan";
 import { fieldShapeMesh, type FieldShapeMesh } from "./fieldShapes";
-import { isBehindField } from "@/field/pitStrip";
 
 /**
  * The field's rectangles and text in field units.
@@ -81,8 +80,8 @@ export type FieldGeometryOptions = FieldPlanOptions & {
 /**
  * Plans the field of `fieldProperties` with the user's line settings. The
  * field image is its own layer (`planFieldImage`). The pit areas beside the
- * field, when there are any, are flat tones with no lines (`pitAreaFills`), and
- * the yard-line labels that would sit under one move past it.
+ * field, when there are any, are flat tones with no lines (`pitAreaFills`); the
+ * yard-line labels stay at the sidelines, over them (owner, 2026-11-15).
  */
 export function fieldGeometry(
     fieldProperties: FieldProperties,
@@ -126,7 +125,6 @@ export function fieldGeometry(
     ];
     for (const rect of sides) rects.push({ rect, color: border.color });
     const strips = options.strips ?? [];
-    moveLabelsPastPitAreas(plan.texts, strips, fieldProperties);
 
     const texts = plan.texts.map(
         (t): FieldText => ({
@@ -176,27 +174,6 @@ function pitAreaFills(
             },
         },
     ];
-}
-
-/**
- * Moves the yard-line labels that would sit under a pit area past it: below a front one, above
- * one behind the field. Labels beside the area stay at the sideline.
- */
-function moveLabelsPastPitAreas(
-    texts: FieldPlanText[],
-    areas: readonly FieldRect[],
-    fieldProperties: FieldProperties,
-) {
-    const front = fieldProperties.centerFrontPoint.yPixels;
-    for (const area of areas) {
-        const behind = isBehindField(area);
-        for (const t of texts) {
-            if (t.role !== "checkpointLabel" || t.anchor !== "middle") continue;
-            if (t.x < area.left || t.x > area.right) continue;
-            if (behind ? t.y >= 0 : t.y <= front) continue;
-            t.y += behind ? area.top : area.bottom - front;
-        }
-    }
 }
 
 function packRects(rects: { rect: Rect; color: RgbaColor }[]): FieldRects {

@@ -232,17 +232,10 @@ describe("fieldGeometry with a pit area", () => {
         expect(rects(withPit)).toEqual(rects(plain));
     });
 
-    it("moves the yard-line labels under it below it, and leaves the rest at the sideline", () => {
+    it("leaves the yard-line labels at the front sideline, over it", () => {
         const labels = (g: ReturnType<typeof fieldGeometry>) =>
-            g.texts.filter((t) => t.font === "label" && t.y > yPixels);
-        const before = labels(plain);
-        const after = labels(withPit);
-        expect(after).toHaveLength(before.length);
-        after.forEach((t, i) => {
-            const under = t.x >= pit.left && t.x <= pit.right;
-            expect(t.y - before[i].y).toBeCloseTo(under ? 180 : 0);
-        });
-        expect(after.some((t) => t.y > pit.bottom)).toBe(true);
+            g.texts.filter((t) => t.font === "label").map((t) => t.y);
+        expect(labels(withPit)).toEqual(labels(plain));
     });
 });
 
@@ -263,12 +256,5 @@ describe("fieldGeometry with a pit area behind the field", () => {
         expect(Array.from(geometry.background.bounds.subarray(4, 8))).toEqual(
             [back.left, -180, back.right, 0].map(Math.fround),
         );
-    });
-
-    it("moves the labels under it above it", () => {
-        const top = geometry.texts.filter(
-            (t) => t.font === "label" && Math.abs(t.x - xPixels) < 1,
-        );
-        expect(top.some((t) => t.y < -180)).toBe(true);
     });
 });

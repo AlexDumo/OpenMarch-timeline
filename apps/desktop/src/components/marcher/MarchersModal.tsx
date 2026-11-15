@@ -7,6 +7,7 @@ import { Button } from "@openmarch/ui";
 import { UsersThreeIcon } from "@phosphor-icons/react/dist/ssr";
 import { T, useTranslate } from "@tolgee/react";
 import { AppearanceModalContents } from "./appearance/AppearanceModal";
+import { FrontEnsembleSummary } from "@/components/frontEnsemble/FrontEnsembleModal";
 
 export default function MarchersModal() {
     const { t } = useTranslate();
@@ -62,6 +63,11 @@ export function MarcherListContents() {
             </header>
 
             <div className="flex w-[28rem] grow flex-col gap-16 overflow-y-auto">
+                <FrontEnsembleSummary
+                    onBack={() =>
+                        setContent(<MarcherListContents />, "marchers")
+                    }
+                />
                 <MarcherList />
             </div>
         </div>

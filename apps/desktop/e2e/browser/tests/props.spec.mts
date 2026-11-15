@@ -240,12 +240,21 @@ test("Escape turns the prop tool off, and nothing is drawn", async ({
     expect(await show.query("SELECT id FROM items")).toEqual([{ id: 1 }]);
 });
 
+/** The front ensemble view, opened from its row at the top of the Marchers panel */
+async function openFrontEnsemble(page: Page) {
+    await page.locator("#sidebar-launcher-marchers").click();
+    await page
+        .getByTestId("front-ensemble-summary")
+        .getByRole("button")
+        .click();
+}
+
 test("places a marimba from the Front ensemble panel with one click, locked, at its model's footprint", async ({
     show,
 }) => {
     const { page } = show;
     await expect.poll(() => drawnItems(page)).toHaveLength(1);
-    await page.locator("#sidebar-launcher-front-ensemble").click();
+    await openFrontEnsemble(page);
     const ensemble = page.getByRole("region", { name: "Add equipment" });
     await ensemble.getByRole("button", { name: "Marimba" }).click();
     await ensemble
@@ -294,7 +303,7 @@ test("places a podium behind the back sideline, turned to face the field", async
 }) => {
     const { page } = show;
     await expect.poll(() => drawnItems(page)).toHaveLength(1);
-    await page.locator("#sidebar-launcher-front-ensemble").click();
+    await openFrontEnsemble(page);
     const ensemble = page.getByRole("region", { name: "Add equipment" });
     await ensemble.getByRole("button", { name: "Podium", exact: true }).click();
     await ensemble.getByRole("button", { name: /^Low/ }).click();
@@ -341,7 +350,7 @@ test("applies a front ensemble preset with its performers in one undo step, and 
 }) => {
     const { page } = show;
     await expect.poll(() => drawnItems(page)).toHaveLength(1);
-    await page.locator("#sidebar-launcher-front-ensemble").click();
+    await openFrontEnsemble(page);
     const presets = page.getByRole("group", { name: "Presets" });
     await presets.getByRole("radio", { name: "Medium" }).click();
     await expect(presets.getByRole("checkbox")).toBeChecked();

@@ -34,6 +34,9 @@ import {
     FrontEnsembleContents,
     FrontEnsembleEditContents,
 } from "../FrontEnsembleModal";
+import { MarcherListContents } from "@/components/marcher/MarchersModal";
+import SidebarModal from "@/components/sidebar/SidebarModal";
+import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 
 /**
  * The Front ensemble panel (instruments.md §6): equipment is picked as a family, then a variant,
@@ -112,6 +115,34 @@ const riser = (beatId: number) => ({
 });
 
 describeDbTests("Front ensemble panel", (it) => {
+    it("opens from its row in the Marchers panel, and goes back there", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        useSidebarModalStore.setState({ isOpen: true });
+        useSidebarModalStore
+            .getState()
+            .setContent(<MarcherListContents />, "marchers");
+        await setUpFeature(<SidebarModal />, PAGE, []);
+        const row = await screen.findByTestId("front-ensemble-summary");
+        expect(within(row).getByText("No pit yet")).toBeTruthy();
+        fireEvent.click(within(row).getByRole("button", { name: "Set up" }));
+        await screen.findByRole("region", { name: "Add equipment" });
+        // The Marchers button stays lit: the view is part of that panel
+        expect(useSidebarModalStore.getState().contentId).toBe("marchers");
+
+        const beatId = await firstBeatId(db);
+        await act(() => createItems({ db, newItems: [marimba(beatId)] }));
+        await act(() => harnessQueryClient().invalidateQueries());
+        fireEvent.click(screen.getByRole("button", { name: "Back" }));
+        const back = await screen.findByTestId("front-ensemble-summary");
+        await waitFor(() =>
+            expect(within(back).getByText("1 piece of equipment")).toBeTruthy(),
+        );
+        expect(within(back).getByRole("button", { name: "Edit" })).toBeTruthy();
+    });
+
     it("picks a family, then a variant, and places it as a locked, numbered item with the model's footprint", async ({
         db,
         marchersAndPages,

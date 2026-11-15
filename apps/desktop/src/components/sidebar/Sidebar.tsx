@@ -5,7 +5,6 @@ import WorkspaceSettingsModal from "@/components/sidebar/WorkspaceSettingsModal"
 import AppearanceModal from "@/components/marcher/appearance/AppearanceModal";
 import MobileExportModal from "../mobile/MobileExportModal";
 import PropsModal from "@/components/items/PropsModal";
-import FrontEnsembleModal from "@/components/frontEnsemble/FrontEnsembleModal";
 
 export default function Sidebar() {
     return (
@@ -16,7 +15,6 @@ export default function Sidebar() {
             <div className="flex flex-col gap-16">
                 <MarchersModal />
                 {/* Stored as items like props, but not staging: its own panel (owner, 2026-11-15) */}
-                <FrontEnsembleModal />
                 {/* The music is edited on the timeline: Edit music (owner, 2026-11-04) */}
                 <FieldModal />
                 <MetronomeModal />
