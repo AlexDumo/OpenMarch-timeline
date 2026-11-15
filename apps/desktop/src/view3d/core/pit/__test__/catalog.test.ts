@@ -71,7 +71,7 @@ describe("the front ensemble catalog", () => {
             PIT_FAMILIES.map((f) => [f.id, defaultPitVariant(f.id).fileId]),
         );
         expect(defaults).toMatchObject({
-            marimba: "marimba-5.0",
+            marimba: "marimba-4.3",
             vibraphone: "vibraphone-3.0",
             synth: "synth-88",
             drumSet: "drum-set",

@@ -99,7 +99,8 @@ const FAMILY_SPECS: readonly FamilySpec[] = [
         id: "marimba",
         group: "keyboards",
         stem: "marimba",
-        defaultFileId: "marimba-5.0",
+        // The size most pits own; the 5.0 is the big, rarer one (owner, 2026-11-15)
+        defaultFileId: "marimba-4.3",
         size: "octaves",
         plain: "rosewood",
     },
@@ -107,6 +108,7 @@ const FAMILY_SPECS: readonly FamilySpec[] = [
         id: "vibraphone",
         group: "keyboards",
         stem: "vibraphone",
+        // Always the 3.0 unless asked for the 3.5 (owner, 2026-11-15)
         defaultFileId: "vibraphone-3.0",
         size: "octaves",
         plain: "silver",

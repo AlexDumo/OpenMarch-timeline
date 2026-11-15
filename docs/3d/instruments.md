@@ -508,7 +508,7 @@ Each names its built-in model in a new nullable `items.model` column (a model
 id such as `pit/marimba-5.0`; NULL draws a block, as props do today). This is
 the ADR 0010 amendment of 2026-11-11; it is separate from the future Library
 reference. The model is picked as family, then variant. Default variants:
-marimba 5.0 rosewood, vibraphone 3.0 silver, synth 88-key single, drum set
+marimba 4.3 rosewood, vibraphone 3.0 silver, synth 88-key single, drum set
 plain, speaker tall, mixer cart, podium low.
 
 **Locked items.** Any item can be locked. A locked item has one position for
@@ -564,7 +564,8 @@ concert bass drum and trap table stay equipment that aux players walk to.
 | Podium                   | on the 50 | on the 50 | on the 50 |
 
 Every size adds one mixer, behind the pit (audience side), slightly off
-center.
+center. Marimbas are 4.3 octaves in Small and Medium and 4.6 in Large, never
+the 5.0; vibes are always the 3.0 (owner, 2026-11-15).
 
 - Two rows. The field-side row (the back line) has the xylophone and
   glockenspiel on either side of the drum set at center, and the rack and
@@ -576,7 +577,7 @@ center.
   keyboards sit about 11.6 ft out at Medium and Large.
 - The speakers stand on the audience-side row's line, one per side on
   consecutive 5-yard lines, starting at the first yard line past the end of
-  the pit (for Medium, the 35s and 30s). They never overlap the pit.
+  the pit (for Medium, the 40s and 35s). They never overlap the pit.
 - The podium sits on the 50, 3 ft past the audience-side row: the drum
   major is always the closest performer to the audience, facing the field.
   At Medium and Large this puts the podium on the edge of the track in the

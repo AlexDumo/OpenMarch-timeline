@@ -91,16 +91,23 @@ describe("pitPreset", () => {
         expect(preset.equipment).toHaveLength(total);
     });
 
-    it("uses each family's default variant, unturned", () => {
+    it("uses each family's default variant but the marimbas, unturned", () => {
         for (const size of PIT_PRESET_SIZES)
             for (const e of pitPreset(size).equipment) {
                 const variant = pitVariant(e.variantId);
                 expect(variant?.family).toBe(e.familyId);
                 expect(e.rotation).toBe(0);
             }
-        expect(of(pitPreset("small"), "marimba")[0].variantId).toBe(
-            "pit/marimba-5.0",
-        );
+        // 4.3-octave marimbas in Small and Medium, 4.6 in Large, never the 5.0 (owner, 2026-11-15)
+        const marimbas = (size: PitPresetSize) =>
+            new Set(of(pitPreset(size), "marimba").map((e) => e.variantId));
+        expect(marimbas("small")).toEqual(new Set(["pit/marimba-4.3"]));
+        expect(marimbas("medium")).toEqual(new Set(["pit/marimba-4.3"]));
+        expect(marimbas("large")).toEqual(new Set(["pit/marimba-4.6"]));
+        // Always the 3.0-octave vibes
+        for (const size of PIT_PRESET_SIZES)
+            for (const e of of(pitPreset(size), "vibraphone"))
+                expect(e.variantId).toBe("pit/vibraphone-3.0");
     });
 
     it.each(PIT_PRESET_SIZES)("overlaps nothing at %s", (size) => {
@@ -208,8 +215,8 @@ describe("pitPreset", () => {
 
     it.each<[PitPresetSize, number[]]>([
         ["small", [40]],
-        ["medium", [35, 30]],
-        ["large", [30, 25, 20]],
+        ["medium", [40, 35]],
+        ["large", [35, 30, 25]],
     ])(
         "stands %s's speakers on consecutive 5-yard lines past the pit: %j",
         (size, lines) => {
@@ -345,7 +352,7 @@ describe("pitPresetOnCanvas", () => {
                 e.home[0] > field.centerFrontPoint.xPixels,
         )!;
         expect(speaker.home[0] - field.centerFrontPoint.xPixels).toBeCloseTo(
-            3 * 8 * field.pixelsPerStep,
+            2 * 8 * field.pixelsPerStep,
         );
         // A player is on a spot within about a foot of it
         expect(onCanvas.reach).toBeCloseTo(FEET * pixelsPerMeter);

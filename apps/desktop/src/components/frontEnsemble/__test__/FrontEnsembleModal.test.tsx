@@ -163,10 +163,10 @@ describeDbTests("Front ensemble panel", (it) => {
             within(ensemble).getByRole("button", { name: /Marimba/ }),
         );
         // The default is marked; the variants show their footprints
-        const rosewood5 = within(ensemble).getByRole("button", {
-            name: /5\.0 octaves · Rosewood.*Default/,
+        const rosewood43 = within(ensemble).getByRole("button", {
+            name: /4\.3 octaves · Rosewood.*Default/,
         });
-        expect(rosewood5).toHaveTextContent("2.54 × 1.21 m");
+        expect(rosewood43).toHaveTextContent("2.13 × 0.9 m");
         fireEvent.click(
             within(ensemble).getByRole("button", {
                 name: /4\.3 octaves · Black synthetic/,

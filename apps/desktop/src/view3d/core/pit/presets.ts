@@ -20,6 +20,7 @@
  */
 import {
     defaultPitVariant,
+    pitVariant,
     type PitFamilyId,
     type PitVariant,
 } from "./catalog";
@@ -131,8 +132,27 @@ const PODIUM_STANDOFF = 3 * FEET;
 const MIXER_OFFSET_X = 16 * FEET;
 const MIXER_STANDOFF = 6 * FEET;
 
-const footprint = (familyId: PitFamilyId) =>
-    defaultPitVariant(familyId).footprint;
+/**
+ * The marimba each size uses (owner, 2026-11-15): 4.3 octaves in Small and Medium, 4.6 in Large,
+ * never the 5.0. Every other family, vibes included (always the 3.0), uses its default variant.
+ */
+const PRESET_MARIMBA: Record<PitPresetSize, string> = {
+    small: "pit/marimba-4.3",
+    medium: "pit/marimba-4.3",
+    large: "pit/marimba-4.6",
+};
+
+/** The variant of `familyId` a `size` preset places */
+export function presetVariant(
+    familyId: PitFamilyId,
+    size: PitPresetSize,
+): PitVariant {
+    if (familyId === "marimba") return pitVariant(PRESET_MARIMBA[size])!;
+    return defaultPitVariant(familyId);
+}
+
+/** Picks each family's variant for one preset */
+type VariantOf = (familyId: PitFamilyId) => PitVariant;
 
 /** `familyId` repeated `count` times */
 const times = (familyId: PitFamilyId, count: number): PitFamilyId[] =>
@@ -142,7 +162,13 @@ const times = (familyId: PitFamilyId, count: number): PitFamilyId[] =>
  * A row of families, left to right, 2 ft apart, their field-side edges on `near`: centered on the
  * 50, or with the family at `anchor` (an index) centered on it.
  */
-function row(families: readonly PitFamilyId[], near: number, anchor?: number) {
+function row(
+    variantOf: VariantOf,
+    families: readonly PitFamilyId[],
+    near: number,
+    anchor?: number,
+) {
+    const footprint = (f: PitFamilyId) => variantOf(f).footprint;
     const widths = families.map((f) => footprint(f).width);
     const lefts: number[] = [];
     let left = 0;
@@ -157,7 +183,7 @@ function row(families: readonly PitFamilyId[], near: number, anchor?: number) {
             : -(lefts[anchor] + widths[anchor] / 2);
     const placed = families.map((familyId, i) =>
         at(
-            familyId,
+            variantOf(familyId),
             lefts[i] + shift + widths[i] / 2,
             near + footprint(familyId).depth / 2,
         ),
@@ -165,9 +191,14 @@ function row(families: readonly PitFamilyId[], near: number, anchor?: number) {
     return { placed, halfWidth: Math.max(-shift, total + shift) };
 }
 
-function at(familyId: PitFamilyId, x: number, z: number): PitPresetEquipment {
-    const variant: PitVariant = defaultPitVariant(familyId);
-    return { familyId, variantId: variant.modelId, x, z, rotation: 0 };
+function at(variant: PitVariant, x: number, z: number): PitPresetEquipment {
+    return {
+        familyId: variant.family,
+        variantId: variant.modelId,
+        x,
+        z,
+        rotation: 0,
+    };
 }
 
 /** The back line, left to right: racks and synths at the edges, the rest around the drum set */
@@ -202,11 +233,14 @@ function keyboardRowFamilies(counts: Counts): PitFamilyId[] {
 /** The equipment and performers of a preset, in meters from the 50 on the front sideline */
 export function pitPreset(size: PitPresetSize): PitPreset {
     const counts = COUNTS[size];
+    const variantOf: VariantOf = (familyId) => presetVariant(familyId, size);
+    const footprint = (familyId: PitFamilyId) => variantOf(familyId).footprint;
 
     const backFamilies = backLineFamilies(counts);
     // The drum set at center when there is one, the rest packed out from it
     const drumSet = backFamilies.indexOf("drumSet");
     const back = row(
+        variantOf,
         backFamilies,
         BACK_LINE_START,
         drumSet >= 0 ? drumSet : undefined,
@@ -214,7 +248,7 @@ export function pitPreset(size: PitPresetSize): PitPreset {
     const deepest = Math.max(...backFamilies.map((f) => footprint(f).depth));
     const keyboardNear = BACK_LINE_START + deepest + ROW_SPACING;
     const keyboardFamilies = keyboardRowFamilies(counts);
-    const keyboards = row(keyboardFamilies, keyboardNear);
+    const keyboards = row(variantOf, keyboardFamilies, keyboardNear);
     const keyboardFar =
         keyboardNear +
         Math.max(...keyboardFamilies.map((f) => footprint(f).depth));
@@ -229,16 +263,20 @@ export function pitPreset(size: PitPresetSize): PitPreset {
     for (let i = 0; i < counts.speakerPairs; i++)
         for (const side of [-1, 1])
             speakers.push(
-                at("speaker", side * (firstLine + i * FIVE_YARDS), speakerZ),
+                at(
+                    variantOf("speaker"),
+                    side * (firstLine + i * FIVE_YARDS),
+                    speakerZ,
+                ),
             );
 
     const podium = at(
-        "podium",
+        variantOf("podium"),
         0,
         keyboardFar + PODIUM_STANDOFF + footprint("podium").depth / 2,
     );
     const mixer = at(
-        "mixer",
+        variantOf("mixer"),
         MIXER_OFFSET_X,
         keyboardFar + MIXER_STANDOFF + footprint("mixer").depth / 2,
     );
@@ -271,7 +309,7 @@ function playerSpot(
 ): Pick<PitPresetPerformer, "x" | "z" | "facing"> {
     const spot = playingSpotOf(e.variantId, {
         center: { x: e.x, y: e.z },
-        depth: footprint(e.familyId).depth,
+        depth: pitVariant(e.variantId)!.footprint.depth,
         rotation: e.rotation,
     });
     if (!spot) throw new Error(`Nobody plays ${e.variantId}`);
