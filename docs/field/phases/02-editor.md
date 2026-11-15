@@ -332,6 +332,8 @@ Snap toggle off drops grid snapping; a locked axis stays where the marchers
 started (a single locked marcher snaps on the other axis only, as on Fabric).
 Constrain ($mod) keeps the drag on one axis.
 
+_Superseded 2026-11-15: fine no longer slows a drag; it only turns snapping off, and `precisionDelta` and `anchorAt` are gone. The paragraphs below describe the original build._
+
 **Fine** is in `MoveGesture`, not the transform: `precisionDelta` counts the
 pointer's distance since the last event at ¼ while fine is held, so the
 transform gets the slowed delta (the seam's "raw delta" is that now). Pressing

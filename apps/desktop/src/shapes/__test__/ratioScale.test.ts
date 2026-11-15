@@ -255,7 +255,7 @@ describe("scrubbing Expand", () => {
         expect(Math.min(...tiny)).toBeGreaterThanOrEqual(0.5 - 1e-9);
     });
 
-    it("with fine, moves the driver in hundredths, the ratio kept", () => {
+    it("with fine, scales freely at the same speed as with the Snap toggle off, the ratio kept", () => {
         const base = p();
         const [a, d] = spacings(
             scrubKeepingRatio(
@@ -268,7 +268,8 @@ describe("scrubbing Expand", () => {
             ),
             N,
         );
-        expect(d).toBeCloseTo(3.07, 6);
+        // Half a step per 8 px, unrounded: fine is no snap, not slower
+        expect(d).toBeCloseTo(3 + (7 * 0.5) / 8, 2);
         expect(a / d).toBeCloseTo(2 / 3, 2);
     });
 

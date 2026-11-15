@@ -58,8 +58,8 @@ export const scaleOnce = (
 /**
  * Shrink and Expand (#489): the shape smaller or bigger, its across:deep ratio kept, around the
  * pivot, its counts unchanged (`scaleKeepingRatio`, the owner's half-step rule). A click is one
- * step; held, it repeats; dragged, it scrubs (right or up for bigger), one step per 8 px, finely
- * with fine (Shift) held and freely with the Snap toggle off. Each press is one undo step. Shrink is disabled when the
+ * step; held, it repeats; dragged, it scrubs (right or up for bigger), one step per 8 px, or
+ * freely at the same speed with fine (Shift) held or the Snap toggle off. Each press is one undo step. Shrink is disabled when the
  * next step would take a spacing under half a step.
  */
 export const ScaleButtons = memo(function ScaleButtons({

@@ -129,7 +129,7 @@ const TOGGLES: readonly {
     {
         toggle: "fine",
         label: "touch.modifiers.fine",
-        hint: "touch.modifiers.fineHint",
+        hint: "touch.modifiers.fineOffGridHint",
         Icon: CrosshairSimpleIcon,
     },
     {
@@ -200,7 +200,7 @@ const DRAG_MODES: readonly {
 
 const EXPLAIN = {
     grip: "touch.modifiers.explain.grip",
-    fine: "touch.modifiers.explain.fine",
+    fine: "touch.modifiers.explain.fineOffGrid",
     constrain: "touch.modifiers.explain.constrain",
     fromCenter: "touch.modifiers.explain.fromCenter",
     add: "touch.modifiers.explain.add",

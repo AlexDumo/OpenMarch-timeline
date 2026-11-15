@@ -2935,14 +2935,14 @@
             "explain": {
                 "add": "Toca integrantes para agregarlos o quitarlos.",
                 "constrain": "Espaciados iguales, un solo eje al mover, alterna el escalado proporcional.",
-                "fine": "Los integrantes se mueven libremente, fuera de la cuadrícula. Las formas dejan los medios pasos, pero siguen ajustándose a las líneas. Los giros van de grado en grado.",
+                "fineOffGrid": "Los integrantes se mueven libremente, fuera de la cuadrícula. Las formas dejan los medios pasos, pero siguen ajustándose a las líneas. Los giros van de grado en grado.",
                 "fromCenter": "Los bloques se dibujan y cambian de tamaño desde su centro.",
                 "grip": "Arrastra para mover.",
                 "help": "Gestos.",
                 "snap": "Activa o desactiva el ajuste a pasos y líneas."
             },
             "fine": "Fino",
-            "fineHint": "Fino: mantén presionado o toca para dejarlo activo. Los integrantes se mueven libremente, fuera de la cuadrícula; las formas dejan los medios pasos; los giros van de grado en grado",
+            "fineOffGridHint": "Fino: mantén presionado o toca para dejarlo activo. Los integrantes se mueven libremente, fuera de la cuadrícula; las formas dejan los medios pasos; los giros van de grado en grado",
             "fromCenter": "Desde el centro",
             "fromCenterHint": "Desde el centro: mantén presionado o toca para dejarlo activo. Los bloques se dibujan y cambian de tamaño desde su centro",
             "grip": "Mover estos botones",
@@ -2960,7 +2960,7 @@
     "shortcutsDialog": {
         "movement": {
             "constrain": "Mover en un solo eje al arrastrar",
-            "fineControl": "Arrastrar integrantes fuera de la cuadrícula",
+            "offGridDrag": "Arrastrar integrantes fuera de la cuadrícula",
             "nudge": "Desplazar un poco los integrantes seleccionados"
         },
         "shape": {

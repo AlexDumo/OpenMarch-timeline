@@ -252,7 +252,7 @@ const shots = [
     {
         id: "marchers-move-drag",
         kind: "clip",
-        // Dragging a selected row back, then holding Shift for a fine adjustment
+        // Dragging a selected row back, then holding Shift to move it off the grid
         async setup({ page, wait }) {
             await toPage1(page, wait);
             const all = await marchers(page);
