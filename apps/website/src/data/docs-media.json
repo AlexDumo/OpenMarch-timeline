@@ -357,6 +357,13 @@
         "width": 1404,
         "height": 876
     },
+    "shapes-paste": {
+        "chapter": "shapes",
+        "kind": "clip",
+        "width": 1280,
+        "height": 680,
+        "seconds": 6.5
+    },
     "shapes-snap-guide": {
         "chapter": "shapes",
         "kind": "clip",

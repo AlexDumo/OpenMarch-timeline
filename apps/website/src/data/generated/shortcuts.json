@@ -438,6 +438,65 @@
                             ]
                         }
                     ]
+                },
+                {
+                    "label": "Copy",
+                    "other": [
+                        {
+                            "keys": [
+                                "Ctrl",
+                                "C"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌘",
+                                "C"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Paste",
+                    "other": [
+                        {
+                            "keys": [
+                                "Ctrl",
+                                "V"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌘",
+                                "V"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Paste in place",
+                    "other": [
+                        {
+                            "keys": [
+                                "Ctrl",
+                                "Shift",
+                                "V"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⇧",
+                                "⌘",
+                                "V"
+                            ]
+                        }
+                    ]
                 }
             ]
         },
@@ -2076,6 +2135,65 @@
                                 "⇧",
                                 "⌘",
                                 "Z"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Copy",
+                    "other": [
+                        {
+                            "keys": [
+                                "Ctrl",
+                                "C"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌘",
+                                "C"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Paste",
+                    "other": [
+                        {
+                            "keys": [
+                                "Ctrl",
+                                "V"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌘",
+                                "V"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Paste in place",
+                    "other": [
+                        {
+                            "keys": [
+                                "Ctrl",
+                                "Shift",
+                                "V"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⇧",
+                                "⌘",
+                                "V"
                             ]
                         }
                     ]
