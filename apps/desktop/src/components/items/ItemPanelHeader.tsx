@@ -4,14 +4,16 @@ import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 
 /**
  * The header of the Props and Front ensemble panels: the title, a back button when `onBack` is
- * given, and the close button.
+ * given, any `actions` (buttons beside the close button), and the close button.
  */
 export default function ItemPanelHeader({
     title,
     onBack,
+    actions,
 }: {
     title: React.ReactNode;
     onBack?: () => void;
+    actions?: React.ReactNode;
 }) {
     const { t } = useTranslate();
     const { toggleOpen } = useSidebarModalStore();
@@ -30,14 +32,17 @@ export default function ItemPanelHeader({
                 )}
                 <h4 className="text-h4 leading-none">{title}</h4>
             </div>
-            <button
-                onClick={toggleOpen}
-                aria-label={t("props.close")}
-                title={t("props.close")}
-                className="hover:text-red duration-150 ease-out"
-            >
-                <XIcon size={24} />
-            </button>
+            <div className="flex items-center gap-8">
+                {actions}
+                <button
+                    onClick={toggleOpen}
+                    aria-label={t("props.close")}
+                    title={t("props.close")}
+                    className="hover:text-red duration-150 ease-out"
+                >
+                    <XIcon size={24} />
+                </button>
+            </div>
         </header>
     );
 }

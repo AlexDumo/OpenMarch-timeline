@@ -1444,7 +1444,7 @@
         "add": {
             "title": "Add equipment"
         },
-        "empty": "No front ensemble yet. Apply a preset or pick equipment above, then click the field to place it.",
+        "empty": "No front ensemble yet. Pick equipment above and click the field to place it, or start from a preset.",
         "list": {
             "equipment": "Equipment",
             "podiums": "Podiums"
@@ -1487,7 +1487,9 @@
             "addPerformers": "Also add performers",
             "apply": "Apply",
             "replaces": "Replaces the equipment the last preset added. Equipment you added yourself stays.",
-            "none": "None"
+            "none": "None",
+            "start": "Start from a preset",
+            "reset": "Reset to preset"
         },
         "summary": {
             "none": "No pit yet",

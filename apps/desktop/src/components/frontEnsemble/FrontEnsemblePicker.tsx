@@ -21,7 +21,6 @@ import { T, useTranslate } from "@tolgee/react";
 import { MENU_BUTTON_CLASS } from "@/components/ui/popupClasses";
 import { useItemDrawingStore } from "@/stores/ItemDrawingStore";
 import { useSidebarModalStore } from "@/stores/SidebarModalStore";
-import PitPresets from "./PitPresets";
 import {
     PIT_FAMILIES,
     defaultPitVariant,
@@ -75,19 +74,13 @@ const meters = (value: number) => String(Number(value.toFixed(2)));
  * The Front ensemble panel's Add equipment (instruments.md §6): pick a family, then a variant,
  * and place it on the field with a click, as a locked equipment item named for its family
  * ("Marimba 2"). A family with one model is placed straight from the list. The families are
- * grouped, the podiums on their own. The Small, Medium and Large presets (`PitPresets`) sit above
- * the families. It starts open until the show has equipment, then folded, so the list of
- * equipment below stays in view.
+ * grouped, the podiums on their own. It starts open, so adding more is always in reach; the
+ * presets are a button in the view's header (`PitPresets`).
  */
-export default function FrontEnsemblePicker({
-    hasEquipment,
-}: {
-    hasEquipment: boolean;
-}) {
+export default function FrontEnsemblePicker() {
     const { t } = useTranslate();
     const [family, setFamily] = useState<PitFamily | null>(null);
-    const [openChoice, setOpenChoice] = useState<boolean | null>(null);
-    const open = openChoice ?? !hasEquipment;
+    const [open, setOpen] = useState(true);
     const placeEquipment = useItemDrawingStore((s) => s.placeEquipment);
     const { toggleOpen } = useSidebarModalStore();
 
@@ -102,7 +95,7 @@ export default function FrontEnsemblePicker({
     };
 
     return (
-        <RadixCollapsible.Root asChild open={open} onOpenChange={setOpenChoice}>
+        <RadixCollapsible.Root asChild open={open} onOpenChange={setOpen}>
             <section
                 className="flex flex-col gap-12"
                 aria-label={t("frontEnsemble.add.title")}
@@ -118,7 +111,6 @@ export default function FrontEnsemblePicker({
                     />
                 </RadixCollapsible.Trigger>
                 <RadixCollapsible.Content className="flex flex-col gap-12">
-                    <PitPresets />
                     {family ? (
                         <VariantList
                             family={family}

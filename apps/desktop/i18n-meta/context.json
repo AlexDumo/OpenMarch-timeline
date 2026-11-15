@@ -3011,7 +3011,7 @@
     "frontEnsemble.presets.summary.large": "One line under the preset switch listing what the Large front ensemble preset places in front of the field. 'Vibes' are vibraphones, a 'rack' is a rack of auxiliary percussion, a 'synth' is a keyboard synthesizer.",
     "frontEnsemble.presets.summary.medium": "One line under the preset switch listing what the Medium front ensemble preset places in front of the field. 'Vibes' are vibraphones, a 'rack' is a rack of auxiliary percussion, a 'synth' is a keyboard synthesizer.",
     "frontEnsemble.presets.summary.small": "One line under the preset switch listing what the Small front ensemble preset places in front of the field. 'Vibes' are vibraphones, a 'rack' is a rack of auxiliary percussion, a 'synth' is a keyboard synthesizer.",
-    "frontEnsemble.presets.title": "Small uppercase heading in the Front ensemble panel, over ready-made layouts of a whole front ensemble (pit) in Small, Medium and Large sizes.",
+    "frontEnsemble.presets.title": "Accessible name of the popover in the front ensemble view that lays out a whole front ensemble (pit) from a ready-made Small, Medium or Large layout. Noun, plural.",
     "touch.dragMode.auto": "Name of the default drag mode on the tablet field (a menu entry and the button's label). Automatic: a finger moves the view, the pen selects. Keep it short.",
     "touch.dragMode.autoDescribe": "Second line of the Auto entry in the tablet drag mode menu: what a drag on empty field does in this mode. {device} is pencil on Apple devices (Apple Pencil is a product name) and pen elsewhere. \"Press and hold then drag\": keep the finger still for half a second, then drag. \"Draws a box\": a selection rectangle.",
     "touch.dragMode.box": "Name of a drag mode on the tablet field (menu entry and button label): a drag on empty field draws a selection rectangle. Keep it short.",
@@ -3258,7 +3258,7 @@
     "fieldEditMode.line.everyOther": "Field panel, Line section. Button with several lines picked: keeps every other one of them picked (to delete every other yard line, for example).",
     "fieldEditMode.list.reference": "Field panel, list of field lines. Screen-reader name of the small crosshair mark on a row whose line is used as a reference for written coordinates.",
     "frontEnsemble.title": "Title of the Front ensemble side panel. The front ensemble (the 'pit') is the stationary percussion section at the front of the field in a marching band show; the panel places its instruments, speakers, mixer and podiums and lists them.",
-    "frontEnsemble.empty": "Shown in the Front ensemble panel's list when the show has no front ensemble equipment yet. 'Above' is the presets and the list of equipment to add; a click on the field places the picked piece.",
+    "frontEnsemble.empty": "Shown in the front ensemble view, below the list of equipment to add, while the show has no front ensemble (pit) equipment yet. 'Start from a preset' refers to the button of that name in the view's header.",
     "frontEnsemble.list.equipment": "Small uppercase heading in the Front ensemble panel over the instruments, speakers and mixer placed in the show (the podiums are listed under their own heading).",
     "frontEnsemble.list.podiums": "Small uppercase heading in the Front ensemble panel over the podiums placed in the show: the raised platforms, towers and ladders a drum major or conductor stands on.",
     "frontEnsemble.groups.podiums": "Small uppercase heading in the Front ensemble panel's list of equipment to add, over the podiums: the conductor's podium and the drum major's stand, towers, rolling podium, stepladder and scaffold tower.",
@@ -3281,5 +3281,7 @@
     "frontEnsemble.summary.none": "Second line of the Front ensemble row at the top of the Marchers panel, when the show has no front ensemble (pit) yet.",
     "frontEnsemble.summary.counts": "Second line of the Front ensemble row at the top of the Marchers panel: how many pieces of front ensemble (pit) equipment and podiums the show has, e.g. '18 pieces of equipment, 1 podium'. ICU plurals; the podium part is empty when there are none.",
     "frontEnsemble.summary.setUp": "Button on the Front ensemble row of the Marchers panel when the show has no pit: opens the front ensemble setup (presets and equipment). Verb, short.",
-    "frontEnsemble.summary.edit": "Button on the Front ensemble row of the Marchers panel when the show has a pit: opens the front ensemble view to change it. Verb, short."
+    "frontEnsemble.summary.edit": "Button on the Front ensemble row of the Marchers panel when the show has a pit: opens the front ensemble view to change it. Verb, short.",
+    "frontEnsemble.presets.start": "Small button in the front ensemble view's header when the show has no pit yet: opens a popover to lay out a whole front ensemble from a ready-made Small, Medium or Large layout. Short.",
+    "frontEnsemble.presets.reset": "Small button in the front ensemble view's header once the show has pit equipment: opens a popover that replaces the pit with a ready-made Small, Medium or Large layout. Short."
 }

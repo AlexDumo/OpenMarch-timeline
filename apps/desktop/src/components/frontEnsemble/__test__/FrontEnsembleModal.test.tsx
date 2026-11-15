@@ -239,13 +239,7 @@ describeDbTests("Front ensemble panel", (it) => {
         const ensemble = screen.getByRole("region", {
             name: "Add equipment",
         });
-        // Folded once the show has equipment, so the list stays in view
-        expect(
-            within(ensemble).queryByRole("button", { name: "Chimes" }),
-        ).toBeNull();
-        fireEvent.click(
-            within(ensemble).getByRole("button", { name: /Add equipment/ }),
-        );
+        // Open even with equipment in the show, so adding more stays in reach
         fireEvent.click(
             within(ensemble).getByRole("button", { name: "Chimes" }),
         );

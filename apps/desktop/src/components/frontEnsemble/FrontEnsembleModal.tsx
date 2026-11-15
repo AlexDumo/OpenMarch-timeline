@@ -14,6 +14,7 @@ import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 import { allItemsQueryOptions } from "@/hooks/queries/useItems";
 import { isPodiumFamily, pitVariant } from "@/view3d/core/pit/catalog";
 import FrontEnsemblePicker from "./FrontEnsemblePicker";
+import PitPresets from "./PitPresets";
 import { usePitVariantLabel } from "./usePitVariantLabel";
 
 /**
@@ -114,11 +115,10 @@ export function FrontEnsembleContents({ onBack }: { onBack?: () => void }) {
             <ItemPanelHeader
                 title={<T keyName="frontEnsemble.title" />}
                 onBack={onBack}
+                actions={<PitPresets />}
             />
             <div className="flex w-[28rem] grow flex-col gap-16 overflow-y-auto">
-                <FrontEnsemblePicker
-                    hasEquipment={equipment.length + podiums.length > 0}
-                />
+                <FrontEnsemblePicker />
                 <div className="border-stroke border-t pt-12">
                     {equipment.length + podiums.length === 0 ? (
                         <p className="text-text/50 py-16 text-center">

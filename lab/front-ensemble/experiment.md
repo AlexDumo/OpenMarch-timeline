@@ -10,6 +10,7 @@ questions:
   - Does the equipment on the field look like the real thing from above? Can you tell the instruments apart, zoomed out and zoomed in?
   - Does the area in front of the field read as the pit, not as more field?
   - Was the Front ensemble row in the Marchers panel where you expected to find the pit and the podiums?
+  - Was it obvious how to add one more instrument to a pit you already had?
   - Did a preset lay the pit out the way a real front ensemble sets up? What would you move?
   - In the 3D View, did the players stand at their instruments and the drum major on the podium?
 ---
@@ -25,9 +26,11 @@ questions:
   pit is a plain tone, only as wide as the pit; the yard numbers stay at the
   front sideline.
 - Open the **Marchers** panel: the **Front ensemble** row at the top opens the
-  pit's setup. Try a different preset size, or open **Add equipment** to place
+  pit's setup. Pick equipment from the list to place
   one instrument or a podium (towers, rolling podium, stepladder and more) by
   clicking the field. Equipment and podiums are listed there, and edited there.
+  **Reset to preset** in its header swaps the pit for a Small, Medium or Large
+  layout (one undo takes it back).
 - The **Props** panel lists only props now, not the pit.
 - Drag a piece of equipment on one page, then look at another page: it moved
   there too (equipment stays in one spot all show). Lasso some marchers across
