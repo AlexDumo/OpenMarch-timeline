@@ -217,6 +217,23 @@ describe("propsAt", () => {
         );
         expect(solids.get(3)!.base).toBe(0);
     });
+
+    it("breaks a loop of platforms once, so one of them stands on the ground", () => {
+        // A pinwheel: each center sits over the next platform, never the other way round
+        const solids = byId(
+            propsAt(
+                [
+                    prop(1, "platform", [box(0, 8, 1, 1)]),
+                    prop(2, "platform", [box(0, 1, 8, 1)]),
+                    prop(3, "platform", [box(0, 10, 1, 1, { rotation: 45 })]),
+                ],
+                0,
+                at({ 1: { x: 0, z: 0 }, 2: { x: 3, z: 0 }, 3: { x: 3, z: 3 } }),
+            ),
+        );
+        const bases = [1, 2, 3].map((id) => solids.get(id)!.base).sort();
+        expect(bases).toEqual([0, 1, 2]);
+    });
 });
 
 describe("platformTopAt", () => {

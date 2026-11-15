@@ -3,7 +3,6 @@
  * changes, beats as ordinals (their place among the beats by position), as the timeline resolver
  * counts them.
  */
-import { useMemo } from "react";
 import { useQueries, type UseQueryResult } from "@tanstack/react-query";
 import type { DatabaseBeat } from "@/db-functions";
 import type { DatabaseItem, DatabaseItemGeometry } from "@/db-functions/items";
@@ -61,6 +60,14 @@ type CombinedProps = {
     outlines: ItemOutlineChanges;
 } | null;
 
+/** The last combined results, by the query data they came from. */
+let lastCombined: {
+    items: readonly ShowPropItem[];
+    geometry: readonly DatabaseItemGeometry[];
+    beats: readonly Pick<DatabaseBeat, "id" | "position">[];
+    combined: NonNullable<CombinedProps>;
+} | null = null;
+
 export const _combineShowPropsQueries = (
     results: [
         UseQueryResult<ShowPropItem[]>,
@@ -74,6 +81,16 @@ export const _combineShowPropsQueries = (
     if (isLoading || hasError || !items.data || !geometry.data || !beats.data)
         return { combined: null, isLoading, hasError };
 
+    if (
+        lastCombined?.items === items.data &&
+        lastCombined.geometry === geometry.data &&
+        lastCombined.beats === beats.data
+    )
+        return {
+            combined: lastCombined.combined,
+            isLoading: false,
+            hasError: false,
+        };
     const ordered = [...beats.data].sort(
         (a, b) => a.position - b.position || a.id - b.id,
     );
@@ -82,12 +99,40 @@ export const _combineShowPropsQueries = (
         geometry: geometry.data,
         beatIndexes: new Map(ordered.map((b, i) => [b.id, i])),
     });
-    return {
+    lastCombined = {
+        items: items.data,
+        geometry: geometry.data,
+        beats: beats.data,
         combined: { items: items.data, outlines },
+    };
+    return {
+        combined: lastCombined.combined,
         isLoading: false,
         hasError: false,
     };
 };
+
+/** The last props built, so every caller in the window gets the same array. */
+let shared: {
+    combined: CombinedProps;
+    hidden: ReadonlySet<number>;
+    props: PropInput[];
+} | null = null;
+
+/** The one props array for these query results and hidden props (`performerLift.ts` keys on it). */
+function sharedProps(
+    combined: CombinedProps,
+    hidden: ReadonlySet<number>,
+): PropInput[] {
+    if (!combined) return NO_PROPS;
+    if (shared?.combined !== combined || shared.hidden !== hidden)
+        shared = {
+            combined,
+            hidden,
+            props: propInputs(combined.items, combined.outlines, hidden),
+        };
+    return shared.props;
+}
 
 /**
  * The show's props, for the 3D View window.
@@ -105,12 +150,5 @@ export function useShowProps(
         ],
         combine: _combineShowPropsQueries,
     });
-    const props = useMemo(
-        () =>
-            combined
-                ? propInputs(combined.items, combined.outlines, hidden)
-                : NO_PROPS,
-        [combined, hidden],
-    );
-    return { props, isLoading, hasError };
+    return { props: sharedProps(combined, hidden), isLoading, hasError };
 }
