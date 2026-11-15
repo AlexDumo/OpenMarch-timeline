@@ -198,6 +198,7 @@ function OneLine({
                 parse={orAuto(auto.terseName)}
                 placeholder={auto.terseName}
                 onCommit={(shortName) => rename({ shortName })}
+                hint={t("fieldEditMode.popover.shortNameHint")}
                 testId="field-line-short-name"
                 afterEnter={focusField}
             />
@@ -208,6 +209,7 @@ function OneLine({
                 parse={orAuto(auto.name)}
                 placeholder={auto.name}
                 onCommit={(name) => rename({ name })}
+                hint={t("fieldEditMode.popover.nameHint")}
                 testId="field-line-name"
                 afterEnter={focusField}
             />
@@ -221,6 +223,7 @@ function OneLine({
                         rename({ fieldLabel: label === "" ? null : label })
                     }
                     placeholder={t("fieldEditMode.popover.none")}
+                    hint={t("fieldEditMode.popover.yardNumberHint")}
                     testId="field-line-yard-number"
                     afterEnter={focusField}
                 />

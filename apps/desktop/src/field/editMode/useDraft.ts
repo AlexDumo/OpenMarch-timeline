@@ -5,9 +5,6 @@ import { useState } from "react";
  * value. Whenever the stored value changes (undo or redo, an edit from elsewhere, this input's own
  * save) the draft starts over from it, so an input never shows a value the field no longer has
  * (B1).
- *
- * The same rule as the customizer's `useDraft` in fork PR #828; when both land, one of them
- * should go.
  */
 export function useDraft<T extends string | boolean>(
     stored: T,
