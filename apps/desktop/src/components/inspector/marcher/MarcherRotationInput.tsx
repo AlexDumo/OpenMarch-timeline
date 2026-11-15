@@ -74,8 +74,13 @@ function FieldRotationInput({ editor }: { editor: FieldEditor }) {
     const ended = useSyncExternalStore(subscribe, () =>
         editor.rotationVersion(),
     );
-    // The context holds no hidden marchers, as the editor's handles skip them
-    const canRotate = useSelectedMarchers()!.selectedMarchers.length >= 2;
+    // The context holds no hidden marchers, as the editor's handles skip them. An open shape or
+    // a selected placed box keeps the selection from turning, so the input is off then
+    const locked = useSyncExternalStore(subscribe, () =>
+        editor.selectionLocked(),
+    );
+    const canRotate =
+        useSelectedMarchers()!.selectedMarchers.length >= 2 && !locked;
     const save = () => editor.endRotation();
     // Gone without a blur: nothing typed stays drawn and unsaved
     useEffect(() => () => editor.cancelRotation(), [editor]);

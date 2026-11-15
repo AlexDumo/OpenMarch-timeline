@@ -31,11 +31,11 @@ import Kbd from "@/components/docs/Kbd.astro";
 import Ui from "@/components/docs/Ui.astro";
 import { Steps } from "@astrojs/starlight/components";
 
-When several marchers are selected, the inspector shows tools that arrange them as a group: line them up, space them evenly, flip them, and swap two of them. The frame around the selection on the field has handles to turn and resize it. To place marchers in a box, line or arc instead, use [Shapes](/guides/shapes/).
+When several marchers are selected, the <Ui k="inspector.arrange.title" /> section at the top of the inspector has the tools that arrange them as a group: line them up, flip them, turn them and space them evenly. Further down, the marcher section can swap two of them and place them where they stand on another page. The frame around the selection on the field has handles to turn and resize it. To place marchers in a box, line or arc instead, use [Shapes](/guides/shapes/).
 
 <Media
   id="marchers-inspector"
-  alt="The inspector's tools for eight selected marchers: four Align buttons, two Distribute buttons each with a Steps box, and the Place selected marchers menu."
+  alt="The inspector's Arrange section for eight selected marchers: four Align buttons, Rotate with a 3 by 3 pivot grid beside a Rotation box, and two Distribute buttons each with a Steps box."
   maxWidth={340}
 />
 
@@ -73,7 +73,7 @@ The last two <Ui k="inspector.marcher.alignHeading" /> buttons mirror the select
 
 ## Turn and resize a group
 
-Select two or more marchers. The frame around them has square handles on its corners and sides, and a round one above the top edge. A yellow crosshair in the middle is the pivot: the point the group turns around.
+Select two or more marchers. The frame around them has square handles on its corners and sides, and a round one above the top edge. A small yellow dot in the middle is the pivot: the point the group turns around.
 
 <Media
   id="marchers-rotate"
@@ -88,14 +88,19 @@ Select two or more marchers. The frame around them has square handles on its cor
 
 Only positions change: dots and drill numbers stay upright and the same size. Dragging a handle past the opposite side stops the group at its smallest size instead of flipping it. One marcher on its own has no handles.
 
-To turn the group around another point, drag the pivot crosshair there first. It snaps onto any marcher and onto the frame's corners, side middles and center, and otherwise to the half-step grid. Hold <Kbd keys="Shift" gesture="drag" />, or turn <Ui k="toolbar.alignment.snapToggleCaption" /> off, to place it freely. The pivot stays with the group while you move it, and goes back to the center when you select different marchers, when you drag it back onto the center, or when you double-click it.
+To turn the group around another point, move the pivot first:
+
+- Select a dot in the pivot grid under <Ui k="inspector.marcher.rotateHeading" /> in the <Ui k="inspector.arrange.title" /> section to put it on a corner, a side's middle or the center of the group. Pointing at a dot shows where that is on the field.
+- Or hold <Kbd keys="Mod" gesture="drag" /> and drag the pivot out of the middle of the group. A plain drag there still moves the group. The pivot snaps onto any marcher and onto the group's corners, side middles and center, and otherwise to the half-step grid. Hold <Kbd keys="Shift" gesture="drag" /> as well, or turn <Ui k="toolbar.alignment.snapToggleCaption" /> off, to place it freely.
+
+Once it's out of the middle, the pivot is drawn as a crosshair, and you can drag it again without holding a key. A pivot on a marcher or a point of the group stays there as the group moves. One on any other spot moves with the group when you drag it, and goes back to the middle when you go to another page. It also goes back to the middle when you select different marchers, drag it back onto the middle, or double-click it. It's hidden while the show plays.
 
 <Media
   id="marchers-pivot"
-  alt="The yellow crosshair in the middle of a selected block is dragged onto the marcher at the block's back-left corner and snaps there. Then the round handle above the frame is dragged a quarter turn, and the block turns around that corner marcher."
+  alt="With Ctrl held, the pivot in the middle of a selected block is dragged onto the marcher at the block's back-left corner and snaps there, where it becomes a yellow crosshair. Then the round handle above the frame is dragged a quarter turn, and the block turns around that corner marcher."
 />
 
-To turn the group by an exact angle, type an angle in the <Ui k="inspector.marcher.rotation" plain /> box under <Ui k="inspector.marcher.rotateHeading" /> in the inspector, or drag across it. The group turns around the pivot as you change the angle, and the turn is saved when you leave the box.
+To turn the group by an exact angle, type an angle in the <Ui k="inspector.marcher.rotation" plain /> box under <Ui k="inspector.marcher.rotateHeading" /> in the <Ui k="inspector.arrange.title" /> section, or drag across it. It's off while a shape is open or a placed shape is selected; turn the shape in its own editor then. The group turns around the pivot as you change the angle, and the turn is saved when you leave the box.
 
 ## Swap two marchers
 

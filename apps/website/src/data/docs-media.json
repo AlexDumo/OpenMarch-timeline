@@ -169,7 +169,7 @@
         "chapter": "marchers",
         "kind": "still",
         "width": 644,
-        "height": 1116
+        "height": 732
     },
     "marchers-move-drag": {
         "chapter": "marchers",
@@ -189,7 +189,7 @@
         "kind": "clip",
         "width": 1240,
         "height": 960,
-        "seconds": 6.7
+        "seconds": 7
     },
     "marchers-rotate": {
         "chapter": "marchers",

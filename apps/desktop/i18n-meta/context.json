@@ -647,6 +647,7 @@
     "formButtons.saveChanges": "Button that saves the edits made in a form.",
     "formField.valueMissing": "Validation message under a required form field that was left empty. Imperative.",
     "infoTip.moreInfo": "Default screen-reader label of a small round info button that opens a tooltip with extra explanation. Not shown visually.",
+    "inspector.arrange.title": "Title of the inspector section with the tools for two or more selected marchers: align, flip, rotate around a pivot, distribute. Verb or noun, like a menu name.",
     "inspector.marcher.addToTagCaption": "Small caption under an icon-only button in the marcher inspector's tag row. Shown only on touch screens. The button adds the selected marchers to an existing tag (a named group of marchers). Keep it very short; it sits under a small icon.",
     "inspector.marcher.alignHeading": "Heading above the align and flip buttons in the marcher inspector, shown when several marchers are selected. The buttons line the selected marchers up in a row or column.",
     "inspector.marcher.alignHorizontallyCaption": "Small caption under an icon-only button in the marcher inspector's align row, shown only on touch screens. The button lines the selected marchers up along a horizontal line (same vertical position on the field). One word; the sibling caption 'Vertical' is its counterpart.",

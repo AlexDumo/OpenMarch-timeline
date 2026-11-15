@@ -290,22 +290,18 @@ const shots = [
     {
         id: "marchers-inspector",
         kind: "still",
-        // The inspector's Align and Distribute tools, with eight marchers selected
+        // The inspector's Arrange section, with eight marchers selected
         async setup({ page, wait }) {
             await toPage1(page, wait);
             const all = await marchers(page);
             await shiftSelect(page, named(all, range("B", 1, 8)), wait);
             await wait(600);
-            const align = page.getByRole("heading", {
-                name: "Align",
-                exact: true,
-            });
-            await align.evaluate((el) => el.scrollIntoView({ block: "start" }));
+            const title = page.getByText("Arrange", { exact: true }).first();
+            await title.evaluate((el) => el.scrollIntoView({ block: "start" }));
             await wait(400);
-            const a = await align.boundingBox();
-            const place = await page
-                .getByText("Place selected marchers")
-                .first()
+            const a = await title.boundingBox();
+            const section = await page
+                .getByTestId("arrange-section")
                 .boundingBox();
             const top = a.y - 14;
             return {
@@ -313,7 +309,7 @@ const shots = [
                     x: 1272,
                     y: top,
                     width: 322,
-                    height: place.y + place.height + 16 - top,
+                    height: section.y + section.height + 16 - top,
                 },
             };
         },
@@ -419,7 +415,8 @@ const shots = [
     {
         id: "marchers-pivot",
         kind: "clip",
-        // Dragging a selected block's pivot onto its corner marcher, then turning around it
+        // Ctrl-dragging a selected block's pivot out of its center onto its corner marcher, then
+        // turning around it
         async setup({ page, wait }) {
             await toPage1(page, wait);
             const all = await marchers(page);
@@ -461,9 +458,12 @@ const shots = [
             await page.mouse.move(rest.x, rest.y);
             await film.hold(0.3);
             await film.moveTo(page, rest, pivot.screen, 0.5);
+            await page.keyboard.down("Control");
+            await film.hold(0.3);
             await page.mouse.down();
             await film.moveTo(page, pivot.screen, corner, 0.9);
             await page.mouse.up();
+            await page.keyboard.up("Control");
             await film.hold(0.6);
             // Turn a quarter around it with the round handle
             const rot = handles.rot;

@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    type ReactNode,
+} from "react";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import {
     fieldPropertiesQueryOptions,
@@ -47,7 +54,6 @@ import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import { TagButtons } from "./marcher/TagEditor";
 import TimelineHoldLine, { TimelineHeldCount } from "./TimelineHoldLine";
 import MovePad from "./marcher/MovePad";
-import MarcherRotationInput from "./marcher/MarcherRotationInput";
 import { sectionDisplayName } from "@/components/marcher/sectionDisplayName";
 import { formatList } from "@/utilities/formatList";
 
@@ -168,20 +174,18 @@ const evenlyDistributeVertically = ({
     });
 };
 
-/**
- * Component that renders all alignment, distribution, and transformation buttons
- * for multiple selected marchers
- */
 /** In touch mode the caption stacks under the icon and the button grows to fit. */
 const alignButtonClassName =
     "flex flex-1 items-center justify-center touch:h-auto touch:min-h-44 touch:flex-col touch:gap-2 touch:py-4";
 
-function AlignmentButtons() {
+/**
+ * The Arrange section's buttons for two or more selected marchers: align and flip, then
+ * `rotate` (the rotation and its pivot), then distribute.
+ */
+export function ArrangeButtons({ rotate }: { rotate: ReactNode }) {
     const { t } = useTranslate();
     const [horizontalStepInterval, setHorizontalStepInterval] = useState("");
     const [verticalStepInterval, setVerticalStepInterval] = useState("");
-    const [placeMenuOpen, setPlaceMenuOpen] = useState(false);
-    const closePlaceMenu = () => setPlaceMenuOpen(false);
     const { mutate: updateSelectedMarchers } =
         useUpdateSelectedMarchersOnSelectedPage();
     const { data: fieldProperties } = useQuery(fieldPropertiesQueryOptions());
@@ -323,6 +327,8 @@ function AlignmentButtons() {
                 </ActionButton>
             </div>
 
+            {rotate}
+
             {/* Distribute buttons */}
             <div className="flex flex-col gap-8">
                 <h5 className="text-h5">
@@ -401,8 +407,16 @@ function AlignmentButtons() {
                     />
                 </div>
             </div>
+        </>
+    );
+}
 
-            <hr className="border-stroke w-full border" />
+/** Puts the selected marchers where they stand on the page before or after */
+function PlaceMenu() {
+    const [placeMenuOpen, setPlaceMenuOpen] = useState(false);
+    const closePlaceMenu = () => setPlaceMenuOpen(false);
+    return (
+        <>
             {/* Set Marcher Positions Dropdowns */}
             <div className="flex flex-col gap-8">
                 <Dropdown.Root
@@ -740,16 +754,8 @@ function MarcherEditor() {
                                         </ActionButton>
                                     )}
 
-                                    {/* Alignment, distribution, and transformation buttons */}
-                                    <AlignmentButtons />
-
-                                    {/* Turns the selection around its pivot, the crosshair on the field */}
-                                    <div className="flex flex-col gap-8">
-                                        <h5 className="text-h5">
-                                            <T keyName="inspector.marcher.rotateHeading" />
-                                        </h5>
-                                        <MarcherRotationInput />
-                                    </div>
+                                    {/* Align, flip, rotate and distribute are in the Arrange section above */}
+                                    <PlaceMenu />
 
                                     <TagButtons
                                         selectedMarcherIds={

@@ -2005,7 +2005,7 @@ async function spacings(page: Page): Promise<[number, number]> {
     ];
 }
 
-test("change: a plain selection turns around its pivot, dragged onto a corner marcher, writing positions only", async ({
+test("change: a plain selection turns around its pivot, pulled out of the center with Ctrl onto a corner marcher, writing positions only", async ({
     show,
 }) => {
     const { page } = show;
@@ -2015,16 +2015,18 @@ test("change: a plain selection turns around its pivot, dragged onto a corner ma
     await expect.poll(async () => (await pivot())?.own).toBe(false);
     const steps = await undoSteps(show);
 
-    // Drag the crosshair onto the back-left marcher: it snaps there
+    // Ctrl-drag the pivot out of the center onto the back-left marcher: it snaps there
     const before = await savedPositions(show, 0);
     const corner = before.reduce((a, b) => (b.x + b.y < a.x + a.y ? b : a));
     const target = await marcherScreen(page, corner.id);
     const from = (await pivot())!.screen;
     await page.mouse.move(from.x, from.y);
+    await page.keyboard.down("Control");
     await page.mouse.down();
     await page.mouse.move((from.x + target.x) / 2, (from.y + target.y) / 2);
     await page.mouse.move(target.x + 2, target.y + 1);
     await page.mouse.up();
+    await page.keyboard.up("Control");
     await expect
         .poll(async () => {
             const p = await pivot();
@@ -2033,8 +2035,10 @@ test("change: a plain selection turns around its pivot, dragged onto a corner ma
         .toBeLessThan(0.01);
     expect(await undoSteps(show)).toBe(steps);
 
-    // A quarter turn clockwise, typed in the marcher section
-    const rotation = page.getByRole("textbox", { name: "Rotation" });
+    // A quarter turn clockwise, typed in the Arrange section
+    const rotation = page
+        .getByTestId("arrange-section")
+        .getByRole("textbox", { name: "Rotation" });
     await rotation.fill("90");
     await rotation.blur();
     await expect

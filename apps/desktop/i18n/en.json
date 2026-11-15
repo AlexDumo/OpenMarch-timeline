@@ -762,6 +762,9 @@
         "valueMissing": "Please enter a value."
     },
     "inspector": {
+        "arrange": {
+            "title": "Arrange"
+        },
         "marcher": {
             "drillNumber": "Drill Number",
             "errorLoadingCoords": "Error loading coordinates",
