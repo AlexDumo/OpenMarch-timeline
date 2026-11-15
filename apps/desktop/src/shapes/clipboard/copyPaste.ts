@@ -24,6 +24,9 @@ import { copiedPicture, keepPicture } from "./pictureStore";
  * shape drawn here, and Escape throws it away. Pasting rearranges: no marcher is ever added.
  */
 
+const COPIED_TOAST = "formation-copied";
+const LEFT_TOAST = "formation-paste-left";
+
 /**
  * Copies the formation of the marchers `ids`, in selection order: as its shape when they are
  * exactly one placed shape, as loose dots otherwise. Nothing on the field changes. False when
@@ -65,6 +68,8 @@ export function copyFormation(ids: readonly number[]): boolean {
                   "{count, plural, one {# marcher copied} other {# marchers copied}}",
                   { count: positions.length },
               ),
+        // One notice, however often it's copied
+        { id: COPIED_TOAST },
     );
     return true;
 }
@@ -114,6 +119,7 @@ export function pasteFormation(
                 "{count, plural, one {# marcher has no spot and stays put} other {# marchers have no spot and stay put}}",
                 { count: plan.left },
             ),
+            { id: LEFT_TOAST },
         );
     return true;
 }
