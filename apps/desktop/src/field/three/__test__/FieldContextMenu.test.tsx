@@ -189,7 +189,7 @@ describe("FieldContextMenu", () => {
         expect(item("copyFormation")).toHaveTextContent("Copy");
         expect(item("pasteFormation")).toHaveTextContent("Paste");
         expect(item("pasteFormationInPlace")).toHaveTextContent(
-            "Paste in place",
+            "Paste exactly",
         );
         expect(item("timelineHoldFromPrevious")).toHaveTextContent(
             "Hold from last keyframe",

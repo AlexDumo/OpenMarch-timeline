@@ -229,7 +229,7 @@ const middle = (points: readonly XY[]): XY => {
 /**
  * How far a picture whose middle is `from` moves to sit on the receiving marchers: onto the
  * middle of where they stand, in whole half steps, so every spot keeps its place on the grid.
- * Nowhere for a paste in place.
+ * Nowhere for Paste exactly.
  */
 function shift(
     from: XY,

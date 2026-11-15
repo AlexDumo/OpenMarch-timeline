@@ -258,7 +258,7 @@ test("a box pasted onto fewer marchers is laid out for them with its spacing kep
     expect(await savedShapes(show)).toBe(1);
 });
 
-test("loose dots pasted in place onto fewer marchers take the nearest dots and stay plain marchers", async ({
+test("loose dots pasted exactly onto fewer marchers take the nearest dots and stay plain marchers", async ({
     show,
 }) => {
     const { page } = show;
@@ -340,7 +340,7 @@ test("the copied picture is the app's own: still there after a reload", async ({
     expect((await shapeOverlay(page))!.spots).toHaveLength(4);
 });
 
-test("the field menu offers Copy, Paste and Paste in place: the pastes only once something is copied", async ({
+test("the field menu offers Copy, Paste and Paste exactly: the pastes only once something is copied", async ({
     show,
 }) => {
     const { page } = show;

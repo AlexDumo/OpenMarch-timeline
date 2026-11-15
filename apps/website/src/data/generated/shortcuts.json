@@ -478,7 +478,7 @@
                     ]
                 },
                 {
-                    "label": "Paste in place",
+                    "label": "Paste exactly",
                     "other": [
                         {
                             "keys": [
@@ -2178,7 +2178,7 @@
                     ]
                 },
                 {
-                    "label": "Paste in place",
+                    "label": "Paste exactly",
                     "other": [
                         {
                             "keys": [

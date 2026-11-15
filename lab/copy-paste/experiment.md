@@ -37,7 +37,7 @@ marchers you have selected into the copied formation.
 - Copy a box, then pick **Positions** under **Paste as** on the Clipboard
   card and paste onto fewer marchers: they take some of the box's exact
   spots instead of a smaller box, and stay plain marchers.
-- Go to another page and use **Paste in place** (Ctrl/Cmd+Shift+V): the
+- Go to another page and use **Paste exactly** (Ctrl/Cmd+Shift+V): the
   preview starts exactly where the formation was copied.
 - Watch the **Clipboard** card in the inspector as you copy and change the
   selection. It shows a picture of what's copied, whether it's a shape or

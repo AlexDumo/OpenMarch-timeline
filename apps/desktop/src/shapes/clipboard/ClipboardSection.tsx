@@ -24,7 +24,7 @@ import { setClipboardFolded, useCopiedPictureStore } from "./pictureStore";
  * The inspector's Clipboard card (#961, owner 2026-11-15): what Copy kept, so it's plain before
  * pasting whether any number of marchers can take it or how many to select. A small picture of
  * it, what it is ("Box", "Positions") and how many marchers, a line saying how it fits the
- * selection now, and Paste and Paste in place. Shown once something is copied.
+ * selection now, and Paste and Paste exactly. Shown once something is copied.
  */
 export function ClipboardSection() {
     const { t } = useTranslate();

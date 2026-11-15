@@ -882,7 +882,7 @@ const STATIC_ACTIONS = {
 
     // Copy and paste a formation (#961, owner 2026-11-15): Copy keeps where the selected marchers
     // stand (one whole placed shape as a shape); Paste shows it on the marchers selected then, as
-    // an open shape centered on them that Enter places, and Paste in place starts it where it was
+    // an open shape centered on them that Enter places, and Paste exactly starts it where it was
     // copied. Nothing is created, so there's no Cut or Duplicate. The app's own clipboard, not the
     // system's; in a text field these keys stay the text's (shapes/clipboard)
     copyFormation: {

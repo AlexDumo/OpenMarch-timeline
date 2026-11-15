@@ -1426,7 +1426,7 @@
         "bindings": []
     },
     "pasteFormationInPlace": {
-        "label": "Paste in place",
+        "label": "Paste exactly",
         "category": "edit",
         "bindings": [
             {
