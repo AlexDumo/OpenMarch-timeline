@@ -39,7 +39,20 @@ These are the default controls, called <Ui k="settings.view3d.controls.map" plai
 
 <Media
   id="3d-move-view"
-  alt="The 3D View with the default controls: a drag pans across the field, a drag with the right mouse button orbits the camera, and the mouse wheel zooms in toward the band."
+  alt="With the default controls, a drag across the 3D View pans the camera sideways along the field."
+  maxWidth={460}
+/>
+
+<Media
+  id="3d-orbit-view"
+  alt="A drag with the right mouse button orbits the camera around the field, so the band is seen from a new angle."
+  maxWidth={460}
+/>
+
+<Media
+  id="3d-zoom-view"
+  alt="Scrolling with the pointer on the band zooms the camera in toward it."
+  maxWidth={460}
 />
 
 The camera never goes below the ground. As soon as you move the view, the camera menu reads <Ui k="view3d.overlay.freeCamera" plain />; choose a camera to go back to a set position.
@@ -56,7 +69,7 @@ Every venue comes with its own cameras, such as the press box, the front row and
 
 1. In the 3D View, select the camera menu at the top left. It shows the name of the camera you're on.
 
-2. Choose a camera. The view flies there.
+2. Choose a camera. The view flies there. The menu lists the same cameras as the panel pictured under [Save your own cameras](#save-your-own-cameras).
 
 </Steps>
 
@@ -76,7 +89,7 @@ In a venue with stands, you can watch from any seat.
 
 <Media
   id="3d-pick-seat"
-  alt="Pick a seat is selected next to the camera menu, then clicking a seat in the visitors' stands across the field flies the view there, looking back at the band."
+  alt="Pick a seat is selected next to the camera menu, the pointer moves to a seat near the top of the visitors' stands across the field, and a click flies the view there, looking over the field at the band and the home stands."
 />
 
 Press <Kbd keys="Escape" /> to stop picking without moving. Spectators around your seat step aside so they don't block the view.
@@ -99,7 +112,7 @@ The cameras are a list you can change. It's saved in the show, one list for each
 
 <Media
   id="3d-cameras-panel"
-  alt="The Cameras panel under the camera menu: a row for each camera with its number, name and buttons to set it to the current view, move it up or down, or remove it, and Add current view and Reset to defaults at the bottom."
+  alt="The Cameras panel under the camera menu: six cameras, each row with its number, name and buttons to set it to the current view, move it up or down, or remove it; the note that the number is the camera's key and the view opens on camera 1; and Add current view and Reset to defaults at the bottom."
   maxWidth={480}
 />
 

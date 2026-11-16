@@ -43,7 +43,7 @@ The timeline has the playback controls, the pages of the show, its counts and me
 
 <Media
   id="window-toolbar"
-  alt="The title bar and the toolbar: the menu, the app's name and version, undo and redo, the show's name, the search button and Submit bug or feedback; under them the File, Alignment, Shapes and Select tabs with the Alignment tab's controls, and Open 3D View and the Editor and Preview switch."
+  alt="The left end of the title bar and the toolbar: the menu, the app's name and version, and undo and redo; under them the File, Alignment, Shapes and Select tabs, with the Alignment tab's controls showing."
 />
 
 The toolbar's tabs hold:
@@ -53,7 +53,13 @@ The toolbar's tabs hold:
 - <Ui k="inspector.shape.shapesTab" />: drawing a box, circle, line, curve or arc and placing marchers in it.
 - <Ui k="inspector.shape.selectTab" />: selecting marchers by section, tag, family or drill prefix, or all of them.
 
-After the tabs, <Ui k="view3d.open" /> opens the show in the 3D View, and the <Ui k="workspace.editor" /> and <Ui k="workspace.preview" /> switch changes between editing the show and watching it (<Kbd action="togglePreview" />). In the tablet layout the tabs are in the title bar instead; see [Use OpenMarch on a tablet](/guides/workspace/on-a-tablet/#the-tablet-layout).
+<Media
+  id="window-toolbar-end"
+  alt="The right end of the title bar and the toolbar: the search button and Submit bug or feedback in the title bar, and under them Open 3D View and the Editor and Preview switch."
+  maxWidth={430}
+/>
+
+At the right end, <Ui k="view3d.open" /> opens the show in the 3D View, and the <Ui k="workspace.editor" /> and <Ui k="workspace.preview" /> switch changes between editing the show and watching it (<Kbd action="togglePreview" />). In the tablet layout the tabs are in the title bar instead; see [Use OpenMarch on a tablet](/guides/workspace/on-a-tablet/#the-tablet-layout).
 
 ## The sidebar
 
@@ -75,11 +81,17 @@ The music has no panel. It lives on the timeline; see [Add the show's music](/gu
   maxWidth={360}
 />
 
-The inspector shows the details of what you've selected. With no marchers selected, it shows the page: its counts and measures. With two or more marchers selected, the <Ui k="inspector.arrange.title" /> section at the top lines them up, turns them and spaces them ([Align and space marchers](/guides/marchers/align-and-space/)). Each page's notes are at the end of the inspector.
+The inspector shows the details of what you've selected. With no marchers selected, it shows the page: its counts and measures. With two or more marchers selected, the <Ui k="inspector.arrange.title" /> section at the top lines them up, turns them and spaces them ([Align, space and turn marchers](/guides/marchers/align-and-space/)). Each page's notes are at the end of the inspector.
 
 ## Find a command by name
 
-Every command in OpenMarch can be found by name in the <Term id="command-palette">command palette</Term>. Select the magnifying glass in the title bar, or press <Kbd action="openCommandPalette" />, and start typing what you want to do. Commands that can't run right now are listed but dimmed, and each one shows its shortcut. [Keyboard shortcuts](/guides/reference/keyboard-shortcuts/) lists them all.
+Every command in OpenMarch can be found by name in the command palette. Select the magnifying glass in the title bar, or press <Kbd action="openCommandPalette" /> (or <Kbd action="openCommandBar" /> when you're not typing in a box), and start typing what you want to do. Commands that can't run right now are listed but dimmed, and each one shows its shortcut. [Keyboard shortcuts](/guides/reference/keyboard-shortcuts/) lists the shortcuts.
+
+<Media
+  id="window-command-palette"
+  alt="The command palette with split typed: Split the move at the playhead, and under it, dimmed, Split selected marchers into a new move."
+  maxWidth={560}
+/>
 
 ## Related
 

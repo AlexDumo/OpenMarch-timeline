@@ -19,13 +19,13 @@ import Ui from "@/components/docs/Ui.astro";
 import InShort from "@/components/docs/InShort.astro";
 import { Steps } from "@astrojs/starlight/components";
 
-<InShort>Select the speaker button in the timeline's controls, then <Ui k="timeline.sound.metronomeOff" />, or press <Kbd action="toggleMetronome" />.</InShort>
+<InShort>Press <Kbd action="toggleMetronome" />, or select the speaker button in the timeline's controls and then the metronome item in its menu.</InShort>
 
 The metronome clicks on every count while the show plays. Use it to hear whether the counts sit on the music, and to rehearse a page at its tempo with the music muted.
 
 ## Turn the metronome on or off
 
-Press <Kbd action="toggleMetronome" />, or select the speaker button in the timeline's controls, then <Ui k="timeline.sound.metronomeOff" />. While it's on, the item reads <Ui k="timeline.sound.metronomeOn" /> and a dot shows on the speaker button. In Edit music, <Ui k="tempoMode.toolbar.metronome" /> in the header does the same.
+The speaker button's metronome item names its state: <Ui k="timeline.sound.metronomeOff" /> until you select it, <Ui k="timeline.sound.metronomeOn" /> after, and a dot shows on the speaker button while it's on. In Edit music, <Ui k="tempoMode.toolbar.metronome" /> in the header does the same.
 
 <Media
   id="music-sound"
@@ -46,6 +46,13 @@ Select the speaker button, then the speaker icon in its menu (<Ui k="timeline.so
 <Steps>
 
 1. Select <Ui k="sidebar.metronome" /> in the sidebar.
+
+   <Media
+     id="music-metronome-panel"
+     alt="The Metronome panel beside the sidebar, its button highlighted: On/Off off, Accent first beat on, measure-only clicks off, Volume at 50%, and Beat style Standard."
+     maxWidth={420}
+   />
+
 2. Change any of these:
    - <Ui k="music.onOff" />: the metronome itself, as above.
    - <Ui k="music.accent" />: the first count of each measure clicks louder.
@@ -59,5 +66,5 @@ Stop playback to change the accent, measure-only clicks and beat style. The metr
 
 ## Related
 
-- [Line the counts up with the music](/guides/music/tempo/): use the click to find where the counts drift.
+- [Set the tempo to match the music](/guides/music/tempo/): use the click to find where the counts drift.
 - [Play the show](/guides/timeline/play-the-show/): playback, speed and looping.

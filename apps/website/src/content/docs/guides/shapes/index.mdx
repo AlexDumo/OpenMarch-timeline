@@ -22,11 +22,11 @@ import Kbd from "@/components/docs/Kbd.astro";
 import Ui from "@/components/docs/Ui.astro";
 import Term from "@/components/docs/Term.astro";
 
-A shape places the selected marchers at one count, the count the <Term id="playhead">playhead</Term> is on. You draw a box, circle, line, curve or arc on the field, it shows a <Term id="spot">spot</Term> for every selected marcher, and when you place it each marcher stands on a spot.
+A shape places the selected marchers at one count, the count the <Term id="playhead">playhead</Term> is on. You draw a box, circle, line, curve or arc on the field, it shows a spot for every selected marcher, and when you place it each marcher stands on a spot.
 
 <Media
   id="shapes-open-box"
-  alt="A 4 × 3 box drawn above a row of trumpets and not yet placed: twelve spots labeled T1 to T12 inside a purple outline, square handles on its corners and sides, a round knob above it, and under it the floating editor with the size, spacings and buttons, ending in Place."
+  alt="A 4 × 3 box drawn on empty field and not yet placed: twelve spots labeled with trumpets' drill numbers inside a purple outline, square handles on its corners and sides, a round knob above it, and under it the floating editor with the size, spacings and buttons, ending in Place."
 />
 
 Placing writes ordinary positions, as if you'd dragged the marchers there, so the timeline walks them into the shape like any other move. The shape is kept with them, so you can select it later and change it.
@@ -52,15 +52,15 @@ To pick a kind without the toolbar, hold <Kbd action="openShapeRing" /> with the
 
 <Media
   id="shapes-ring"
-  alt="The shape ring open around the pointer on the field, above a selected row of trumpets: five buttons in a circle, Box, Circle, Line, Curve and Arc, each with its small picture, and the hint Click a shape, or anywhere else to close."
+  alt="The shape ring open around the pointer on empty field: five buttons in a circle, Box, Circle, Line, Curve and Arc, each with its small picture, and the hint Click a shape, or anywhere else to close."
   maxWidth={360}
 />
 
-You can also type a shape: press <Kbd action="openCommandBar" />, type its name, and answer the command bar's questions. See [Draw a box](/guides/shapes/draw-a-box/#type-a-box-instead).
+You can also type a shape: press <Kbd action="openCommandBar" /> or <Kbd action="openCommandPalette" /> to open the <Term id="command-palette">command palette</Term>, type its name, and answer its questions. See [Draw a box](/guides/shapes/draw-a-box/#type-a-box-instead).
 
 ## A shape on the field
 
-A drawn shape stays open until you place it or discard it. While it's open, the field shows its outline and spots, each labeled with the marcher who will stand there; a faint dot where each of its marchers starts; handles to reshape, turn and move it; and its <Term id="floating-editor">floating editor</Term>, with its numbers and buttons. Everyone else fades.
+A drawn shape stays open until you place it or discard it. While it's open, the field shows its outline and spots, each labeled with the marcher who will stand there; rings and faint dots showing where its marchers come from; handles to reshape, turn and move it; and its floating editor, with its numbers and buttons. Everyone else fades to a faint dot.
 
 A shape has exactly one spot for each marcher selected when you drew it, so more marchers make a bigger shape or a closer spacing. Changing the selection while it's open doesn't change who's in it.
 
@@ -70,7 +70,7 @@ The shape stays open if you go to another count. Away from its count it waits be
 
 ## Spots, intervals and steps
 
-Spacings are <Term id="interval">intervals</Term>: steps from one marcher to the next. "2 steps" means each marcher is two steps from its neighbor. Every spot sits on the field's half-step grid unless you ask for something finer.
+Spacings are intervals: steps from one marcher to the next. "2 steps" means each marcher is two steps from its neighbor. Every spot sits on the field's half-step grid unless you ask for something finer.
 
 To set a spacing, click the number in the floating editor and type it, or drag it. Typed spacings can be whole steps, halves or fractions: 2, 2.5, 2½, 1⅔ or 5/3, and the shape keeps them exactly. Dragged spacings, and the − and + buttons, move in half steps. No spacing goes under half a step.
 
@@ -84,7 +84,12 @@ Who goes where is worked out when you draw the shape, and again when its spots a
 
 - To work it out again by least travel after a change, select <Ui k="shapes.edit.recalculate.label" /> in the floating editor (<Kbd action="shapeRecalculate" />). It's greyed out when nothing would change.
 - On a line, curve or arc, the <Ui k="shapes.edit.order.label" /> menu on the editor's second row also has <Ui k="shapes.edit.order.reverse" />, which turns the order end for end, and, when every marcher comes from one placed line, <Ui k="shapes.edit.order.keep" />, which keeps them in the same order along the new one.
-- To check the walks before you place the shape, select the pathways button near the end of the editor's first row (its tip reads <Ui k="shapes.edit.pathways.show" plain />). It draws a line from where each marcher starts to their spot.
+- To check the walks before you place the shape, select the pathways button, the last one before <Ui k="shapes.edit.place" /> on the editor's first row (its tip reads <Ui k="shapes.edit.pathways.show" plain />). It draws a line from where each marcher starts to their spot.
+
+<Media
+  id="shapes-pathways"
+  alt="An open 4 × 3 box with the pathways button on, looking pressed: a line runs from where each trumpet starts, in a row below, to its spot in the box, and none of the lines cross."
+/>
 
 ## Placed shapes
 

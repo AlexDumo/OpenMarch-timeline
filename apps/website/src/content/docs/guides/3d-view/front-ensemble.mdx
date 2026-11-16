@@ -22,7 +22,7 @@ import Ui from "@/components/docs/Ui.astro";
 import InShort from "@/components/docs/InShort.astro";
 import { Steps } from "@astrojs/starlight/components";
 
-<InShort>In the <Ui k="sidebar.marchers" /> panel, select <Ui k="frontEnsemble.summary.setUp" /> next to <Ui k="frontEnsemble.summary.title" plain />, then <Ui k="frontEnsemble.presets.start" /> and choose a size.</InShort>
+<InShort>In the <Ui k="sidebar.marchers" /> panel, select <Ui k="frontEnsemble.summary.setUp" /> next to <Ui k="frontEnsemble.summary.title" plain />, then <Ui k="frontEnsemble.presets.start" />, choose a size and select <Ui k="frontEnsemble.presets.apply" />.</InShort>
 
 The front ensemble, or pit, is the equipment that stands in front of the field all show: marimbas, vibraphones, synths, racks, a drum set, speakers, and the drum major's podium. You set it up once and it stays put on every page. On the field each piece is drawn from above; in the 3D View it's the real instrument, with its player standing at it.
 
@@ -58,11 +58,17 @@ The front ensemble view lists the show's equipment and its podiums. The command 
 
 </Steps>
 
+<Media
+  id="3d-front-ensemble-presets"
+  alt="The front ensemble view of a show with no pit yet, with Start from a preset open: Small, Medium and Large, Medium chosen and the line under them saying what it holds, Also add performers on, and Apply."
+  maxWidth={480}
+/>
+
 The pit is laid out in two rows in front of the front sideline, centered on the 50, with the speakers on the yard lines either side, a podium on the 50 and a mixer behind the pit. Small and Medium use 4.3-octave marimbas, Large uses 4.6, and the vibraphones are 3.0 octaves. Applying is one undo step.
 
 <Media
   id="3d-front-ensemble-field"
-  alt="A Medium pit on the field below the front sideline: a rack, xylophone, drum set, glockenspiel and synth in the back row, vibraphones and marimbas in the front row with a red player dot behind each, speakers at the ends, and the drum major on the podium, on a light gray area."
+  alt="A Medium pit on the field below the front sideline, drawn from above on a light gray area: a rack, xylophone, drum set, glockenspiel and synth in the back row, vibraphones and marimbas in the front row, each with its player's dot on the field side of it, speakers at the ends, the drum major on the podium in front, and the mixer behind the pit."
 />
 
 Once the show has a pit, the button reads <Ui k="frontEnsemble.presets.reset" />. Applying another size replaces the equipment the last preset placed; equipment you added yourself stays. The last preset's players move onto the new instruments of their section, and those whose instrument the new size doesn't have are removed, unless they have moves later in the show. Undo brings everything back.
@@ -105,7 +111,7 @@ In the 3D View each piece is the real instrument at its real size. A player whos
 
 <Media
   id="3d-front-ensemble-3d"
-  alt="The 3D View from the front row: speakers and a row of marimbas and vibraphones on the track in front of the field, a player in uniform behind each, and the band on the field beyond."
+  alt="The 3D View from the front row: a speaker and a row of marimbas and vibraphones on the grass between the front sideline and the track, a player in uniform behind each, and the band on the field beyond."
 />
 
 ## Related

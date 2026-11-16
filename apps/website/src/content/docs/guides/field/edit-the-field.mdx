@@ -1,6 +1,6 @@
 ---
 title: Edit the field
-description: Change the field's template, size, step size, side names, markings, background image and colors (a football field, an indoor floor, or your own).
+description: Change the field's template (high school, college or pro football hashes, an indoor floor or SoundSport), size, step size, side names, markings, background image and colors.
 type: how-to
 covers:
   - apps/desktop/src/field/editMode
@@ -35,11 +35,11 @@ Every show has its own field: its size, its <Term id="step-size">step size</Term
 
 ## Open the Field panel
 
-Select <Ui k="sidebar.field" /> in the sidebar, or press <Kbd action="fieldEditMode" />. You can also choose <Ui k="actions.field.editField" /> from the field's right-click menu or the command palette. The panel opens beside the field, and the field is fitted beside it and holds still: you can't pan, zoom or pick marchers until you're done.
+Besides the sidebar button and the shortcut, you can choose <Ui k="actions.field.editField" /> from the field's right-click menu or the command palette. The panel opens beside the field, and the field is fitted beside it and holds still: you can't pan, zoom or pick marchers until you're done.
 
 <Media
   id="field-inspector"
-  alt="The Field panel as it opens: Done and its X, the Setup, Lines and Appearance tabs, and the Setup tab with the template the field is based on, its size and steps, and its names."
+  alt="The Field panel as it opens: Done and its X, the Setup, Lines and Appearance tabs, and the Setup tab with the template the field is based on, its size and steps, and the field's name."
   maxWidth={480}
 />
 
@@ -68,7 +68,7 @@ On the <Ui k="fieldEditMode.panel.tabs.setup" /> tab:
 
 <Steps>
 
-1. On the <Ui k="fieldEditMode.panel.tabs.setup" /> tab, choose a template from <Ui k="fieldEditMode.template.basedOn" />. A sheet says how the lines and the size change.
+1. On the <Ui k="fieldEditMode.panel.tabs.setup" /> tab, under <Ui k="fieldEditMode.panel.sections.template" />, choose a template from <Ui k="fieldEditMode.template.basedOn" />. A sheet says how the lines and the size change.
 2. Leave <Ui k="fieldEditMode.template.keepLook" /> on to keep your colors, labels, image settings and side names, or turn it off to take the template's look too.
 3. Select <Ui k="fieldEditMode.template.apply" />.
 
@@ -82,10 +82,10 @@ On the <Ui k="fieldEditMode.panel.tabs.setup" /> tab:
 
 The templates are:
 
-- <Ui k="fieldProperties.fieldTemplate.football" />: high school, college and pro football fields, each with or without end zones, at 8 to 5 (22.5-inch steps).
+- <Ui k="fieldProperties.fieldTemplate.football" />: High school football field, College football field and Pro football field, each with or without end zones, at 8 to 5 (22.5-inch steps). Each puts the hashes where that level of football does: high school, college (NCAA) or pro (NFL) hashes. For college hashes, choose College football field.
 - <Ui k="fieldProperties.fieldTemplate.grid" />: indoor floors of 40 × 60, 50 × 70, 50 × 80 and 50 × 90 feet, with 24-inch steps or 6 to 5 steps, and SoundSport fields at 8 to 5 or 6 to 5.
 
-Next to <Ui k="fieldEditMode.panel.sections.template" />, the panel says how many changes you've made to the template. To go back to the template's lines, select <Ui k="fieldEditMode.template.resetShort" />, then <Ui k="fieldEditMode.template.resetApply" />.
+Beside the <Ui k="fieldEditMode.panel.sections.template" /> heading, the panel says how many changes you've made to the template. To go back to the template's lines, select <Ui k="fieldEditMode.template.resetShort" />, then <Ui k="fieldEditMode.template.resetApply" />.
 
 ## Use this field in another show
 
@@ -93,14 +93,14 @@ Select <Ui k="field.general.exportField" /> and save the `.fieldots` file. In th
 
 ## Name the field and its sides
 
-- <Ui k="fieldProperties.labels.fieldName" />: the field's name. Until you choose a venue in the 3D View, it picks one from the field: a name with "football" in it gets a stadium, and an indoor, grid, gym or SoundSport name gets a gym. With neither, it goes by the front-to-back lines' names (sidelines and hashes for football, front and back edges for a floor). See [Change the venue and uniforms](/guides/3d-view/venue-and-uniforms/).
+- <Ui k="fieldProperties.labels.fieldName" />: the field's name. Until you choose a venue in the 3D View, the 3D View guesses one from the field's name and lines (see [Change the venue and uniforms](/guides/3d-view/venue-and-uniforms/)).
 - <Ui k="fieldProperties.sections.sideDescriptions" />: the names of the two sides and their short forms, used in coordinates, such as Side 1 and Side 2, or Stage Right and Stage Left.
 
 ## Change the markings and labels
 
 <Media
   id="field-appearance"
-  alt="The Field panel's Appearance tab: Markings and labels with the half line X and Y intervals at 4 steps, Edge labels switches for the top, bottom, left and right, and the yard numbers' distances from the front, with Background image starting below."
+  alt="The Field panel's Appearance tab: Markings and labels with the half line X and Y intervals at 4 steps, Edge labels switches for the top, bottom, left and right, and the Yard numbers' distances from the front for the home and away numbers."
   maxWidth={480}
 />
 

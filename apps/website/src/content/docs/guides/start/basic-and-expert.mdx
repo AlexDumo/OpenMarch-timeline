@@ -35,8 +35,8 @@ The mode belongs to the app, not to the show. Switching never changes the open s
 | The timeline | One row of page boxes, each with its counts and music. | The page boxes, with a bar under them for each move that doesn't fill a page. |
 | Where Play starts | At the start of the page the playhead is on, playing on to the end of the show. | At the <Term id="start-flag">start flag</Term>, which you place. Play stops at the playhead, and <Kbd action="playOn" /> plays on. See [Play the show](/guides/timeline/play-the-show/). |
 | Moves | Each page has its move. A position in the middle of a page splits it at that count. | Moves start and end on any count, cross pages, cover some marchers and overlap. You drag, resize, split, merge and rename their bars. |
-| Dragging the playhead | Lands on every count. | Lands on measures and page flags when it's near one; hold <Kbd keys="Alt" gesture="drag" /> for any count. |
-| Expert-only tools | Not available. | Selecting a stretch of counts, the loop (<Kbd action="toggleLoop" />), working on one move alone, <Ui k="timeline.terms.holdOverWindow" plain />, resizing the timeline and the compact timeline. |
+| Dragging the playhead | Lands on every count. | Lands on measures and pages' flags when it's near one; hold <Kbd keys="Alt" gesture="drag" /> for any count. |
+| Expert-only tools | Not available. | [Selecting a stretch of counts](/guides/timeline/how-the-timeline-works/#the-playhead-and-the-start-flag), [the loop](/guides/timeline/play-the-show/#loop-a-passage) (<Kbd action="toggleLoop" />), [working on one move alone](/guides/timeline/moves/#work-on-one-move-alone), [<Ui k="timeline.terms.holdOverWindow" plain />](/guides/timeline/holds/#hold-from-the-start-flag-to-the-playhead), [dragging the timeline's top edge to make it taller, and the <Ui k="timeline.compact.label" plain /> button](/guides/timeline/play-the-show/#zoom-scroll-and-resize-the-timeline). |
 
 Everything Basic does works the same way in Expert.
 
@@ -47,7 +47,7 @@ Everything Basic does works the same way in Expert.
 
 <Media
   id="start-timeline-expert"
-  alt="The same pages in Expert: the yellow start flag at the start of Page 2 and the playhead at its end, with the counts between them shaded, a bar named Move 1 under the page for a few marchers, and a Loop button among the playback controls."
+  alt="The same pages in Expert: the yellow start flag four counts into Page 2 and the playhead at its end, with the counts between them shaded and labeled counts 5–8, a bar named Move 1 under them for a few marchers who move only in those counts, and a Loop button, off, among the playback controls."
 />
 
 ## Basic
@@ -62,13 +62,13 @@ Expert adds a bar for every move that doesn't fill a page, such as one that star
 
 ## Shows edited in Expert, opened in Basic
 
-Some moves made in Expert can't be shown as pages: a move that crosses a page's flag, moves that overlap, a move into a shape, or a move along a curve. Basic keeps them, plays them and draws them, but doesn't change them.
+Some moves made in Expert can't be shown as pages: a move that crosses a page's flag, moves that overlap, a move into a shape, or a move along a curve. Basic keeps them, plays them and draws them, but doesn't change them. Other Expert moves, such as some marchers split off into a move of their own inside one page, Basic edits like any page's move; [Known issues](/troubleshooting/known-issues/#basic-can-take-a-marcher-out-of-a-move-made-in-expert) has the one case to watch.
 
 A page with such marchers shows an E at the start of its box; point at it to see how many marchers it is. If you move a group that includes them, the others move and they stay, and a message says so with a <Ui k="timeline.basic.switchToExpert" /> button.
 
 <Media
   id="start-basic-expert-mark"
-  alt="Pages 5 and 5A in Basic, each with a small E at the start of its box. Pointing at the first E shows the tooltip: 3 marchers use Expert moves on page 5. Basic can't edit them here."
+  alt="Pages 5 and 5A in Basic, each with a small E at the start of its box. The pointer is on the first E, and its tooltip says: 3 marchers use Expert moves on page 5. Basic can't edit them here."
   maxWidth={640}
 />
 

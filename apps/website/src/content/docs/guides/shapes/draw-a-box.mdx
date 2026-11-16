@@ -25,8 +25,6 @@ import { Steps } from "@astrojs/starlight/components";
 
 <InShort>Select the marchers, press <Kbd action="shapeBlock" />, drag on the field from one corner of the box to the other, then select <Ui k="shapes.edit.place" /> (<Kbd action="applyShape" />).</InShort>
 
-A box puts the selected marchers in rows, round the edge of a rectangle, or spread evenly inside one. You draw it corner to corner, then change its numbers before you place it.
-
 **Before you start:** select the marchers who go in the box, and put the <Term id="playhead">playhead</Term> on the count where they should stand in it, usually the end of a move.
 
 <Steps>
@@ -43,7 +41,7 @@ A box puts the selected marchers in rows, round the edge of a rectangle, or spre
 
 <Media
   id="shapes-draw-box"
-  alt="B is pressed, and a drag above a row of trumpets draws a 4 × 3 box of spots. The pointer moves to Place and clicks it, and the trumpets move onto the spots."
+  alt="B is pressed, and a drag on empty field beside a row of trumpets draws a 4 × 3 box of spots. The pointer moves to Place and clicks it, and the trumpets move onto the spots."
 />
 
 The marchers take their spots, as one step you can undo. Until you place it, nobody moves, and <Kbd action="cancelAlignmentUpdates" /> throws the box away. On a tablet, drag with one finger, and select <Ui k="shapes.edit.discard" /> beside <Ui k="shapes.edit.place" /> to throw it away.
@@ -62,7 +60,7 @@ The <Term id="floating-editor">floating editor</Term> under the box holds its nu
 
 <Media
   id="shapes-box-editor"
-  alt="The floating editor of an open box. First row: minus, 4 × 3, plus; the side-to-side spacing 6½ and front-to-back spacing 7 steps with a chain button; a turn button, 0°, and the pivot menu; two flip buttons, Shrink, Expand and Recalculate; an eye, a magnet and a pathways button; and Place. Second row: Fill set to Grid and Layout set to Full."
+  alt="The floating editor of an open box. First row: minus, 4 × 3, plus; the side-to-side spacing 9 and front-to-back spacing 7½ steps with a chain button; a turn button, 0°, and the pivot menu; two flip buttons, Shrink, Expand and Recalculate; an eye, a magnet and a pathways button; and Place. Second row: Fill set to Grid and Layout set to Full."
 />
 
 From left to right, the first row has:
@@ -80,9 +78,8 @@ From left to right, the first row has:
 The <Ui k="shapes.edit.mode.label" /> menu on the editor's second row has three choices:
 
 <Media
-  id="shapes-fill-menu"
-  alt="The floating editor of an open box, with its Fill menu open below it listing Grid, Outline and Spread, each with a small picture."
-  maxWidth={520}
+  id="shapes-fills"
+  alt="An open 4 × 3 box of twelve trumpets in Grid. The Fill menu is opened and Outline chosen: the marchers move to the box's edge, a marcher on every corner and the middle empty. Then Spread is chosen, and they scatter evenly over the whole box in no rows."
 />
 
 | Fill                                 | What it does                                                                                                                                                         |
@@ -107,7 +104,7 @@ Switching fills keeps the box where you drew it, and each fill remembers its own
 
 <Steps>
 
-1. With the marchers selected, press <Kbd action="openCommandBar" /> to open the command bar.
+1. With the marchers selected, press <Kbd action="openCommandBar" /> or <Kbd action="openCommandPalette" /> to open the <Term id="command-palette">command palette</Term>.
 
 2. Type "box", then press <Kbd keys="Enter" />.
 

@@ -1,6 +1,6 @@
 ---
 title: Add props to the field
-description: Draw props such as risers, platforms, tarps and walls on the field, size and turn them, move them during the show, and see them as blocks in the 3D View.
+description: Draw props such as risers, platforms, tarps, walls and backdrops on the field, size and turn them, move them during the show, and see them as blocks in the 3D View.
 type: how-to
 covers:
   - apps/desktop/src/components/items
@@ -23,7 +23,7 @@ import { Steps } from "@astrojs/starlight/components";
 
 <InShort>Put the playhead where the prop first appears, select <Ui k="props.title" /> (the cube) in the sidebar, choose an outline such as <Ui k="props.outline.rectangle" plain />, and draw it on the field.</InShort>
 
-A <Term id="prop">prop</Term> is a set piece on the field: a riser, a platform, a floor tarp, a wall. You draw its outline on the field, give it a height, and move it during the show the way you move marchers. The 3D View draws each prop as a plain block.
+A prop is a set piece on the field: a riser, a platform, a floor tarp, a wall or a backdrop. You draw its outline on the field, give it a height, and move it during the show the way you move marchers. The 3D View draws each prop as a plain block.
 
 The pit's instruments, speakers and podiums aren't props: see [Set up the front ensemble](/guides/3d-view/front-ensemble/).
 
@@ -48,7 +48,7 @@ The pit's instruments, speakers and podiums aren't props: see [Set up the front 
 
 <Media
   id="3d-props-draw"
-  alt="Rectangle is chosen in the Props panel, the panel closes, and a drag behind the band draws a rectangle prop on the field."
+  alt="Rectangle is chosen in the Props panel, the panel closes and a note at the bottom of the field says to drag, then a drag in the open field behind the band draws a rectangle prop about ten yards wide."
 />
 
 The prop appears as soon as you finish, and the drawing tool turns off. To stop drawing without making a prop, select <Ui k="props.draw.cancel" /> in the note or press <Kbd keys="Escape" />.
@@ -58,7 +58,7 @@ The prop appears as soon as you finish, and the drawing tool turns off. To stop 
   alt="Polygon is chosen in the Props panel, then three clicks near the back sideline set three corners and a double-click sets the fourth and finishes a four-sided prop."
 />
 
-Corners and ends snap to the coordinate rounding set in the toolbar's <Ui k="inspector.shape.alignmentTab" plain /> tab, as marcher positions do. Freehand outlines don't snap.
+Corners and ends snap to the coordinate rounding grid, as dragged marchers do ([Snap to a grid of steps](/guides/marchers/move-marchers/#snap-to-a-grid-of-steps)). Freehand outlines don't snap.
 
 A new prop is on the field from the playhead's count, not before. It starts as a <Ui k="props.surface.floor" plain /> prop with no height, like a tarp; give it a height (below) to make it a riser or a wall.
 
@@ -68,7 +68,7 @@ On a tablet, tap the corners of an arc or a polygon. The note's <Ui k="props.dra
 
 <Steps>
 
-1. Right-click the prop on the field and choose <Ui k="actions.items.editNamed" values={{ name: "Riser" }} />. Or select <Ui k="props.title" /> in the sidebar, then <Ui k="props.edit" /> (the pencil) next to the prop.
+1. Right-click the prop on the field and choose the edit item, which carries the prop's name, such as <Ui k="actions.items.editNamed" values={{ name: "Riser" }} />. Or select <Ui k="props.title" /> in the sidebar, then <Ui k="props.edit" /> (the pencil) next to the prop.
 
 2. Change what you want in the <Ui k="props.editTitle" plain /> panel.
 

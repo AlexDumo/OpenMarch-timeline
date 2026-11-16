@@ -37,8 +37,7 @@ Add a recording of the show's music so it plays with the drill and its waveform 
 
 <Media
   id="music-add"
-  alt="Edit music's header in a show with no music yet: Editing music, then Add music…, Tap tempo and Metronome."
-  maxWidth={560}
+  alt="Edit music's whole header in a show with no music yet: Editing music, Add music…, Tap tempo and Metronome on the left, and Import, the question mark and Done on the right."
 />
 
 The file's name takes the place of <Ui k="tempoMode.music.add" />, its waveform fills the <Ui k="tempoMode.lanes.music.name" /> lane, and it becomes the recording the show plays. Select <Ui k="tempoMode.toolbar.done" /> or press <Kbd keys="Escape" /> to go back to the timeline.
@@ -51,7 +50,8 @@ A show can keep several recordings, such as a full-band recording and a MIDI moc
 
 <Media
   id="music-file-menu"
-  alt="Edit music's header with the music file Washington_post_march.mp3 selected and its menu open: the file with a check mark, Music offset 0 s, Import another audio file and Delete this audio file."
+  alt="Edit music's header with the music file Washington_post_march.mp3 selected and its menu open: the two recordings in the show, Washington_post_march.mp3 with a check mark and Washington_post_march_MIDI.mp3, then Music offset… 0 s, Import another audio file… and Delete this audio file…."
+  maxWidth={560}
 />
 
 ## Set where the music starts
@@ -68,7 +68,7 @@ The music offset is how many seconds after count 1 the music starts.
 
 The waveform slides under the counts, and <Kbd action="performUndo" /> puts the offset back. The same number is <Ui k="workspaceSettings.audioOffsetSeconds" /> in [Show settings](/guides/field/show-settings/).
 
-To make the first hit land on a count, play the opening with the metronome on ([The metronome](/guides/music/metronome/)) and change the offset until the click and the hit sound together. Then line up the rest with the tempo: see [Line the counts up with the music](/guides/music/tempo/).
+To make the first hit land on a count, play the opening with the metronome on ([The metronome](/guides/music/metronome/)) and change the offset until the click and the hit sound together. Then line up the rest with the tempo: see [Set the tempo to match the music](/guides/music/tempo/).
 
 ## Delete a recording
 
@@ -90,5 +90,5 @@ The volume and muting the music are on the timeline's speaker button: see [The m
 ## Related
 
 - [How counts and the music fit together](/guides/music/counts-and-music/): counts, tempo and the music offset.
-- [Line the counts up with the music](/guides/music/tempo/): make the counts follow the recording.
+- [Set the tempo to match the music](/guides/music/tempo/): make the counts follow the recording.
 - [The metronome](/guides/music/metronome/): hear the counts against the music.

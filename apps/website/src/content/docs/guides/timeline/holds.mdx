@@ -1,6 +1,6 @@
 ---
 title: Make marchers stand still
-description: Keep marchers still for a stretch of counts (a hold), change how long the hold lasts, end or remove it, and choose whether they stand or mark time in it.
+description: Keep marchers still for a stretch of counts (a hold), change how long the hold lasts, end or remove it, and choose whether they stand or mark time in it in the 3D View.
 type: how-to
 covers:
   - apps/desktop/src/timeline/timelineHoldFromPrevious.ts
@@ -23,7 +23,7 @@ covers:
   - i18n:timeline.holdFromPrevious
   - i18n:inspector.marcher.timeline.holdStyle
 sidebar:
-  order: 6
+  order: 7
 ---
 
 import Media from "@/components/docs/Media.astro";
@@ -38,16 +38,21 @@ A hold keeps marchers still on purpose, so they're <Term id="held">Held</Term> o
 
 ## Hold marchers on a page
 
-<Ui k="timeline.terms.holdFromPrevious" /> keeps marchers still on this page, where their last keyframe put them.
+<Ui k="timeline.terms.holdFromPrevious" /> keeps marchers still on this page, where their last <Term id="keyframe">keyframe</Term> put them.
 
 1. Go to the page and select the marchers.
-2. Right-click the page's box, or a selected marcher on the field, and select <Ui k="timeline.terms.holdFromPrevious" />. You can also press <Kbd action="timelineHoldFromPrevious" />, or find it in the command palette (<Kbd action="openCommandPalette" />).
+2. Right-click the page's box, or a selected marcher on the field, and select <Ui k="timeline.terms.holdFromPrevious" />. You can also press <Kbd action="timelineHoldFromPrevious" /> (on a Mac, ⌘H hides OpenMarch, so press ⌃H), or find it in the command palette (<Kbd action="openCommandPalette" />).
 
 While you point at the command, before you select it, the timeline shows the hold it would make: the page row fills from the keyframe the hold grows out of to the end of the page, then pulses. Once it's made, a solid line runs under the page.
 
+<Media
+  id="timeline-hold-page"
+  alt="Trumpet marchers selected on Page 4. Page 4's box is right-clicked and the pointer rests on Hold from last keyframe, so Page 4's row fills in to show the hold it would make; once it's selected, a solid line runs under Page 4 from the diamond on Page 3's flag."
+/>
+
 A marcher that had its own move on the page loses it and stays still for the page. When the pages before it are Not defined for the marcher, the hold reaches back over them to its last keyframe, or to the start of the show, so it's one hold over all those pages, and a message says who is now Held and on which pages. A hold that touches another hold of the same marcher joins it.
 
-Some marchers can't be held, and a message names them with the reason: a marcher in a shape or following the leader on the page, one whose last move is a shape's move, or one in the middle of a move that crosses the page's start.
+Some marchers can't be held, such as marchers placed in a shape on the page or in the middle of a move that runs past a page's flag; a message names them with the reason.
 
 ## Hold from the start flag to the playhead
 
@@ -84,7 +89,7 @@ Right-click the solid line at the count and select <Ui k="timeline.terms.splitHo
 
 ## Remove a hold
 
-Select the marchers and use <Ui k="timeline.terms.clearThisPage" /> on the page: it takes their positions and their hold off it, so they're Not defined there again. See [Clear a page's positions](/guides/timeline/defined-held-not-defined/#clear-a-pages-positions).
+Select the marchers and use <Ui k="timeline.terms.clearThisPage" /> on the page: it takes their positions and their hold off it, so they're Not defined there again. See [Clear a page's positions](/guides/timeline/reset-marchers/#clear-a-pages-positions).
 
 ## Stand or mark time on a hold
 

@@ -84,7 +84,7 @@ Every idea is explained in full on one page, its home: the start flag on How the
 
 A reader going start to finish tires of being told the same thing six times, and the copies drift until two pages give different answers. A reader landing cold on one page loses nothing: the link, or the hover text of a glossary term, is one step away. An agent reading one page's plain-text copy follows the link the same way.
 
-- The first time a page uses a glossary word it doesn't explain itself, write it with `<Term id="start-flag">start flag</Term>`. It links to the glossary entry and shows the entry's first sentence when the reader points at it. Once per page is enough.
+- The first time a page uses a glossary word it doesn't explain itself, write it with `<Term id="start-flag">start flag</Term>`. It links to the glossary entry and shows the entry's first sentence when the reader points at it. Once per page is enough. Not on the term's own home page.
 - A glossary entry's first sentence is its whole definition: it's what the hover text shows. Write it to stand alone.
 - When a page has to say something its home also says (a limit, a mode difference), say it in one clause and link.
 
@@ -95,7 +95,7 @@ People search the guide, and agents pick pages from its index, by what they want
 - Title a how-to page with the task, verb first, in the reader's words: "Split a move", "Make marchers stand still". Title a concept page with the thing.
 - Write the `description` as the task or question in plain words, including the word a newcomer or a Pyware user might search for: "Keep marchers still for a stretch of counts (a hold)."
 - Head each section with the task it answers ("Change a move's length"), and answer it in the section's first sentence.
-- Start every how-to page with `<InShort>`: the whole answer in one line, the mouse way first, then the shortcut. "Right-click the move and select **Split**, or press S." The steps below it say the same thing slowly.
+- Start every how-to page with `<InShort>`: the whole answer in one line, the mouse way first, then the shortcut. "Right-click the move and select **Split**, or press S." The steps below it say the same thing slowly. Nothing between it and the steps restates it, and when the task needs Expert it starts "In Expert, …".
 - Add the other names people use for a thing to its glossary entry, as "Also called …".
 
 ## Voice

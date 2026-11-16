@@ -5,6 +5,12 @@
         "width": 752,
         "height": 836
     },
+    "3d-controls": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 900,
+        "height": 132
+    },
     "3d-front-ensemble-3d": {
         "chapter": "3d-view",
         "kind": "still",
@@ -23,6 +29,12 @@
         "width": 1600,
         "height": 924
     },
+    "3d-front-ensemble-presets": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 1176,
+        "height": 576
+    },
     "3d-front-ensemble-summary": {
         "chapter": "3d-view",
         "kind": "still",
@@ -40,20 +52,21 @@
         "kind": "clip",
         "width": 1280,
         "height": 780,
-        "seconds": 7.37
+        "seconds": 4.5
     },
-    "3d-open-button": {
+    "3d-orbit-view": {
         "chapter": "3d-view",
-        "kind": "still",
-        "width": 608,
-        "height": 104
+        "kind": "clip",
+        "width": 1280,
+        "height": 780,
+        "seconds": 4.7
     },
     "3d-pick-seat": {
         "chapter": "3d-view",
         "kind": "clip",
         "width": 1280,
         "height": 768,
-        "seconds": 7
+        "seconds": 7.7
     },
     "3d-props-block": {
         "chapter": "3d-view",
@@ -65,7 +78,7 @@
         "chapter": "3d-view",
         "kind": "clip",
         "width": 1280,
-        "height": 1252,
+        "height": 730,
         "seconds": 6.3
     },
     "3d-props-edit": {
@@ -90,9 +103,9 @@
     "3d-props-polygon": {
         "chapter": "3d-view",
         "kind": "clip",
-        "width": 788,
-        "height": 628,
-        "seconds": 7.2
+        "width": 1280,
+        "height": 572,
+        "seconds": 7.8
     },
     "3d-settings": {
         "chapter": "3d-view",
@@ -112,11 +125,17 @@
         "width": 684,
         "height": 1032
     },
+    "3d-uniforms": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 1600,
+        "height": 640
+    },
     "3d-venue-arena": {
         "chapter": "3d-view",
         "kind": "still",
         "width": 1280,
-        "height": 630
+        "height": 640
     },
     "3d-window": {
         "chapter": "3d-view",
@@ -124,17 +143,24 @@
         "width": 1600,
         "height": 1000
     },
+    "3d-zoom-view": {
+        "chapter": "3d-view",
+        "kind": "clip",
+        "width": 1280,
+        "height": 780,
+        "seconds": 4.3
+    },
     "field-appearance": {
         "chapter": "field",
         "kind": "still",
         "width": 920,
-        "height": 1364
+        "height": 1256
     },
     "field-edit-mode": {
         "chapter": "field",
         "kind": "still",
         "width": 1600,
-        "height": 944
+        "height": 1166
     },
     "field-inspector": {
         "chapter": "field",
@@ -146,38 +172,38 @@
         "chapter": "field",
         "kind": "still",
         "width": 912,
-        "height": 724
+        "height": 720
     },
     "field-ruler-drag": {
         "chapter": "field",
         "kind": "clip",
-        "width": 1036,
-        "height": 712,
-        "seconds": 4.9
+        "width": 968,
+        "height": 852,
+        "seconds": 6.2
     },
     "field-show-settings": {
         "chapter": "field",
         "kind": "still",
-        "width": 1028,
-        "height": 1408
+        "width": 1012,
+        "height": 1392
     },
     "field-step-inspector": {
         "chapter": "field",
         "kind": "still",
-        "width": 640,
-        "height": 220
+        "width": 600,
+        "height": 200
     },
     "field-step-warnings": {
         "chapter": "field",
         "kind": "still",
-        "width": 496,
-        "height": 396
+        "width": 1400,
+        "height": 688
     },
     "field-template": {
         "chapter": "field",
         "kind": "still",
-        "width": 912,
-        "height": 660
+        "width": 880,
+        "height": 628
     },
     "files-export-charts": {
         "chapter": "files",
@@ -195,7 +221,13 @@
         "chapter": "files",
         "kind": "still",
         "width": 1552,
-        "height": 988
+        "height": 956
+    },
+    "files-file-tab": {
+        "chapter": "files",
+        "kind": "still",
+        "width": 1600,
+        "height": 176
     },
     "files-launch": {
         "chapter": "files",
@@ -203,18 +235,18 @@
         "width": 1436,
         "height": 660
     },
-    "files-mobile-panel": {
-        "chapter": "files",
-        "kind": "still",
-        "width": 1060,
-        "height": 1000
-    },
     "files-video-overlay": {
         "chapter": "files",
         "kind": "clip",
         "width": 1280,
         "height": 738,
         "seconds": 6.7
+    },
+    "files-video-settings": {
+        "chapter": "files",
+        "kind": "still",
+        "width": 1552,
+        "height": 584
     },
     "marchers-add-form": {
         "chapter": "marchers",
@@ -225,15 +257,9 @@
     "marchers-align": {
         "chapter": "marchers",
         "kind": "clip",
-        "width": 1120,
-        "height": 520,
-        "seconds": 5.6
-    },
-    "marchers-alignment-tab": {
-        "chapter": "marchers",
-        "kind": "still",
-        "width": 1540,
-        "height": 188
+        "width": 1000,
+        "height": 480,
+        "seconds": 3.9
     },
     "marchers-appearance": {
         "chapter": "marchers",
@@ -245,7 +271,7 @@
         "chapter": "marchers",
         "kind": "still",
         "width": 768,
-        "height": 916
+        "height": 748
     },
     "marchers-inspector": {
         "chapter": "marchers",
@@ -259,6 +285,12 @@
         "width": 1280,
         "height": 674,
         "seconds": 6.4
+    },
+    "marchers-move-pad": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 636,
+        "height": 444
     },
     "marchers-pivot": {
         "chapter": "marchers",
@@ -300,23 +332,36 @@
         "width": 920,
         "height": 368
     },
+    "marchers-space": {
+        "chapter": "marchers",
+        "kind": "clip",
+        "width": 1120,
+        "height": 400,
+        "seconds": 4.2
+    },
+    "marchers-tags": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 644,
+        "height": 172
+    },
     "music-add": {
         "chapter": "music",
         "kind": "still",
-        "width": 1280,
-        "height": 80
+        "width": 1600,
+        "height": 50
     },
     "music-count-ask": {
         "chapter": "music",
         "kind": "still",
-        "width": 1048,
-        "height": 1088
+        "width": 800,
+        "height": 1020
     },
     "music-count-menu": {
         "chapter": "music",
         "kind": "still",
-        "width": 888,
-        "height": 552
+        "width": 800,
+        "height": 520
     },
     "music-edit-music": {
         "chapter": "music",
@@ -327,14 +372,14 @@
     "music-file-menu": {
         "chapter": "music",
         "kind": "still",
-        "width": 1072,
-        "height": 372
+        "width": 1260,
+        "height": 432
     },
     "music-gradual": {
         "chapter": "music",
         "kind": "clip",
         "width": 900,
-        "height": 256,
+        "height": 240,
         "seconds": 7.4
     },
     "music-import-checks": {
@@ -343,48 +388,72 @@
         "width": 1136,
         "height": 820
     },
+    "music-import-menu": {
+        "chapter": "music",
+        "kind": "still",
+        "width": 992,
+        "height": 236
+    },
     "music-import-score": {
         "chapter": "music",
         "kind": "still",
         "width": 928,
         "height": 552
     },
+    "music-metronome-panel": {
+        "chapter": "music",
+        "kind": "still",
+        "width": 1064,
+        "height": 764
+    },
     "music-sound": {
         "chapter": "music",
         "kind": "still",
         "width": 512,
-        "height": 284
+        "height": 268
+    },
+    "music-tap-tempo": {
+        "chapter": "music",
+        "kind": "still",
+        "width": 680,
+        "height": 504
     },
     "music-tempo-drag": {
         "chapter": "music",
         "kind": "clip",
         "width": 1280,
-        "height": 562,
-        "seconds": 4.8
+        "height": 390,
+        "seconds": 6.5
     },
     "music-time-signature": {
         "chapter": "music",
         "kind": "still",
-        "width": 852,
-        "height": 1100
+        "width": 668,
+        "height": 1088
     },
     "music-timeline-waveform": {
         "chapter": "music",
         "kind": "still",
-        "width": 1560,
-        "height": 356
+        "width": 1600,
+        "height": 222
     },
     "reference-shortcut-settings": {
         "chapter": "reference",
         "kind": "still",
+        "width": 1256,
+        "height": 1064
+    },
+    "shapes-arc-closed": {
+        "chapter": "shapes",
+        "kind": "still",
         "width": 1600,
-        "height": 1138
+        "height": 1000
     },
     "shapes-arc-editor": {
         "chapter": "shapes",
         "kind": "still",
-        "width": 1516,
-        "height": 200
+        "width": 664,
+        "height": 112
     },
     "shapes-box-editor": {
         "chapter": "shapes",
@@ -396,7 +465,7 @@
         "chapter": "shapes",
         "kind": "clip",
         "width": 1280,
-        "height": 802,
+        "height": 800,
         "seconds": 6.1
     },
     "shapes-draw-arc": {
@@ -404,28 +473,35 @@
         "kind": "clip",
         "width": 1280,
         "height": 800,
-        "seconds": 8.4
+        "seconds": 7.3
     },
     "shapes-draw-box": {
         "chapter": "shapes",
         "kind": "clip",
         "width": 1280,
-        "height": 816,
-        "seconds": 6.8
+        "height": 800,
+        "seconds": 6.9
     },
     "shapes-draw-circle": {
         "chapter": "shapes",
         "kind": "clip",
         "width": 1280,
         "height": 800,
-        "seconds": 6.5
+        "seconds": 6.6
     },
     "shapes-draw-line": {
         "chapter": "shapes",
         "kind": "clip",
         "width": 1280,
         "height": 800,
-        "seconds": 7.3
+        "seconds": 7.4
+    },
+    "shapes-draw-straight-line": {
+        "chapter": "shapes",
+        "kind": "clip",
+        "width": 1280,
+        "height": 800,
+        "seconds": 6.7
     },
     "shapes-edit-placed": {
         "chapter": "shapes",
@@ -434,11 +510,12 @@
         "height": 800,
         "seconds": 6.4
     },
-    "shapes-fill-menu": {
+    "shapes-fills": {
         "chapter": "shapes",
-        "kind": "still",
-        "width": 1296,
-        "height": 388
+        "kind": "clip",
+        "width": 1280,
+        "height": 852,
+        "seconds": 7.7
     },
     "shapes-layout-menu": {
         "chapter": "shapes",
@@ -457,19 +534,31 @@
         "kind": "clip",
         "width": 1280,
         "height": 800,
-        "seconds": 7.3
+        "seconds": 7.8
     },
     "shapes-open-box": {
         "chapter": "shapes",
         "kind": "still",
-        "width": 1376,
-        "height": 860
+        "width": 1424,
+        "height": 892
+    },
+    "shapes-pathways": {
+        "chapter": "shapes",
+        "kind": "still",
+        "width": 1424,
+        "height": 892
     },
     "shapes-ring": {
         "chapter": "shapes",
         "kind": "still",
         "width": 800,
         "height": 800
+    },
+    "shapes-snap-button": {
+        "chapter": "shapes",
+        "kind": "still",
+        "width": 1164,
+        "height": 172
     },
     "shapes-snap-guide": {
         "chapter": "shapes",
@@ -484,6 +573,13 @@
         "width": 940,
         "height": 172
     },
+    "shapes-take-out": {
+        "chapter": "shapes",
+        "kind": "clip",
+        "width": 1280,
+        "height": 800,
+        "seconds": 5.1
+    },
     "start-basic-expert-mark": {
         "chapter": "start",
         "kind": "still",
@@ -495,6 +591,27 @@
         "kind": "still",
         "width": 880,
         "height": 872
+    },
+    "start-first-show-box": {
+        "chapter": "start",
+        "kind": "clip",
+        "width": 1280,
+        "height": 782,
+        "seconds": 7.2
+    },
+    "start-first-show-move": {
+        "chapter": "start",
+        "kind": "clip",
+        "width": 1280,
+        "height": 742,
+        "seconds": 6.4
+    },
+    "start-first-show-play": {
+        "chapter": "start",
+        "kind": "clip",
+        "width": 1280,
+        "height": 1162,
+        "seconds": 5.9
     },
     "start-new-show": {
         "chapter": "start",
@@ -508,11 +625,11 @@
         "width": 1280,
         "height": 1152
     },
-    "start-report-drawer": {
+    "start-report-drawer-form": {
         "chapter": "start",
         "kind": "still",
         "width": 912,
-        "height": 560
+        "height": 1904
     },
     "start-select-first-page": {
         "chapter": "start",
@@ -536,27 +653,27 @@
     "timeline-add-page": {
         "chapter": "timeline",
         "kind": "still",
-        "width": 1480,
-        "height": 340
+        "width": 1600,
+        "height": 192
     },
     "timeline-basic-point": {
         "chapter": "timeline",
         "kind": "still",
-        "width": 908,
-        "height": 312
+        "width": 916,
+        "height": 236
     },
     "timeline-cross-pages": {
         "chapter": "timeline",
         "kind": "clip",
         "width": 1280,
-        "height": 448,
-        "seconds": 5.9
+        "height": 516,
+        "seconds": 6.9
     },
     "timeline-held": {
         "chapter": "timeline",
         "kind": "still",
         "width": 1184,
-        "height": 340
+        "height": 264
     },
     "timeline-hold-drag": {
         "chapter": "timeline",
@@ -569,8 +686,15 @@
         "chapter": "timeline",
         "kind": "clip",
         "width": 1184,
-        "height": 340,
+        "height": 264,
         "seconds": 6.1
+    },
+    "timeline-hold-page": {
+        "chapter": "timeline",
+        "kind": "clip",
+        "width": 1184,
+        "height": 716,
+        "seconds": 6.4
     },
     "timeline-hold-style": {
         "chapter": "timeline",
@@ -584,6 +708,13 @@
         "width": 1296,
         "height": 1272
     },
+    "timeline-later-pages": {
+        "chapter": "timeline",
+        "kind": "clip",
+        "width": 1188,
+        "height": 928,
+        "seconds": 5.4
+    },
     "timeline-loop": {
         "chapter": "timeline",
         "kind": "clip",
@@ -594,8 +725,8 @@
     "timeline-make-move": {
         "chapter": "timeline",
         "kind": "clip",
-        "width": 1280,
-        "height": 564,
+        "width": 1080,
+        "height": 1056,
         "seconds": 6.8
     },
     "timeline-merge": {
@@ -608,7 +739,7 @@
     "timeline-move-menu": {
         "chapter": "timeline",
         "kind": "still",
-        "width": 816,
+        "width": 776,
         "height": 556
     },
     "timeline-next-paths": {
@@ -620,33 +751,45 @@
     "timeline-not-defined": {
         "chapter": "timeline",
         "kind": "still",
-        "width": 1600,
-        "height": 1354
+        "width": 564,
+        "height": 572
+    },
+    "timeline-not-defined-line": {
+        "chapter": "timeline",
+        "kind": "still",
+        "width": 468,
+        "height": 84
     },
     "timeline-page-flag": {
         "chapter": "timeline",
         "kind": "clip",
         "width": 1184,
-        "height": 340,
+        "height": 264,
         "seconds": 5.6
+    },
+    "timeline-page-inspector": {
+        "chapter": "timeline",
+        "kind": "still",
+        "width": 636,
+        "height": 420
     },
     "timeline-page-menu": {
         "chapter": "timeline",
         "kind": "still",
-        "width": 608,
+        "width": 676,
         "height": 616
     },
     "timeline-parts": {
         "chapter": "timeline",
         "kind": "still",
-        "width": 1472,
-        "height": 340
+        "width": 1600,
+        "height": 330
     },
     "timeline-paths": {
         "chapter": "timeline",
         "kind": "still",
-        "width": 952,
-        "height": 452
+        "width": 1032,
+        "height": 532
     },
     "timeline-play-guide": {
         "chapter": "timeline",
@@ -658,15 +801,21 @@
         "chapter": "timeline",
         "kind": "clip",
         "width": 1024,
-        "height": 340,
+        "height": 264,
         "seconds": 7.2
     },
     "timeline-scrub": {
         "chapter": "timeline",
         "kind": "clip",
         "width": 1280,
-        "height": 886,
+        "height": 1252,
         "seconds": 5.5
+    },
+    "timeline-speed-slider": {
+        "chapter": "timeline",
+        "kind": "still",
+        "width": 552,
+        "height": 424
     },
     "timeline-start-flag-positions": {
         "chapter": "timeline",
@@ -679,7 +828,13 @@
         "kind": "clip",
         "width": 1280,
         "height": 296,
-        "seconds": 5.6
+        "seconds": 6.9
+    },
+    "window-command-palette": {
+        "chapter": "workspace",
+        "kind": "still",
+        "width": 1320,
+        "height": 436
     },
     "window-inspector": {
         "chapter": "workspace",
@@ -703,7 +858,13 @@
         "chapter": "workspace",
         "kind": "still",
         "width": 1600,
-        "height": 152
+        "height": 214
+    },
+    "window-toolbar-end": {
+        "chapter": "workspace",
+        "kind": "still",
+        "width": 860,
+        "height": 144
     },
     "workspace-pan-zoom": {
         "chapter": "workspace",

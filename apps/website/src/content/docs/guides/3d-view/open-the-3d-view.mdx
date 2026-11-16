@@ -1,6 +1,6 @@
 ---
 title: Open the 3D View
-description: Watch the show in 3D from the stands, in a window of its own that plays along with the editor.
+description: Watch the show in 3D from the stands, in a window of its own that plays along with the editor; then choose a stadium and a seat.
 type: how-to
 covers:
   - apps/desktop/src/view3d/window
@@ -17,25 +17,10 @@ import Media from "@/components/docs/Media.astro";
 import Kbd from "@/components/docs/Kbd.astro";
 import Ui from "@/components/docs/Ui.astro";
 import InShort from "@/components/docs/InShort.astro";
-import { Steps } from "@astrojs/starlight/components";
 
 <InShort>With a show open, select <Ui k="view3d.open" /> at the right end of the toolbar, beside the Editor and Preview switch.</InShort>
 
-The 3D View shows the show from the stands: the band in uniform on a lit field, with instruments, flags and a crowd. It opens in a window of its own and follows the editor, so you can write drill in one window and watch it in the other.
-
-<Steps>
-
-1. Open a show.
-
-2. Select <Ui k="view3d.open" /> at the right end of the toolbar.
-
-</Steps>
-
-<Media
-  id="3d-open-button"
-  alt="The right end of the editor's toolbar: the Open 3D View button with a cube icon, then the Editor and Preview switch."
-  maxWidth={520}
-/>
+The 3D View shows the show from the stands: the band in uniform on a lit field, with instruments, flags and a crowd. It opens in a window of its own and follows the editor, so you can write drill in one window and watch it in the other. To watch from a stadium, choose it in [Change the venue and uniforms](/guides/3d-view/venue-and-uniforms/); to watch from a seat, see [Move the camera](/guides/3d-view/cameras/#sit-in-the-stands).
 
 The 3D View opens on the first camera in its camera menu, at the same moment as the editor. While it's open, the <Ui k="view3d.open" plain /> button leaves the toolbar; use your system's window switcher to bring the window forward. You can also open it from the command palette (<Kbd action="openCommandPalette" />), or in the desktop app from **View › Open 3D View** in the app menu.
 
@@ -52,7 +37,13 @@ The first time the 3D View opens with a show, it asks <Ui k="view3d.autoOpenProm
 
 ## Play the show in 3D
 
-The 3D View has no playback of its own: play, pause, scrub or change pages in either window and both move together. The window has the editor's play, previous and next buttons and the playback speed, and the editor's playback keys work in it too; they're explained in [Play the show](/guides/timeline/play-the-show/).
+The 3D View has no playback of its own: play, pause, scrub or change pages in either window and both move together. The window has the editor's play, previous and next buttons and the playback speed. The editor's keys for playing, pages, counts and speed work in it too (<Kbd action="playPause" />, <Kbd action="previousPage" /> and <Kbd action="nextPage" />, <Kbd keys="Home" /> and <Kbd keys="End" />, <Kbd action="holdSlowerPlayback" /> and <Kbd action="holdFasterPlayback" />); they're explained in [Play the show](/guides/timeline/play-the-show/). <Kbd keys="C" /> is different: in the 3D View it turns the crowd on or off, not the loop. <Ui k="view3d.settings.title" plain /> (the gear) lists every key the 3D View takes under <Ui k="view3d.settings.keysSection" plain />.
+
+<Media
+  id="3d-controls"
+  alt="The 3D View's bottom left corner: previous, play and next buttons, the playback speed 1×, the footprints button, and the readout Page 3, Count 5 of 10, 0:23.462."
+  maxWidth={460}
+/>
 
 Next to the controls, the readout shows the page, the count within the page and the show time. Past the last page it shows how many counts past the end the playhead is.
 
@@ -66,7 +57,7 @@ Select <Ui k="view3d.overlay.enterFullscreen" /> in the 3D View, or press <Kbd k
 
 ## If the 3D View is slow
 
-How much the 3D View draws is set for each computer, not in the show. In [Settings](/guides/reference/settings/#3d-view) › <Ui k="settings.view3d" plain />, set <Ui k="settings.view3d.quality" plain /> to <Ui k="settings.view3d.quality.low" plain /> (no shadows, a lighter crowd), or <Ui k="settings.view3d.resolution" plain /> to <Ui k="settings.view3d.resolution.balanced" plain /> or <Ui k="settings.view3d.resolution.fast" plain />. On <Ui k="settings.view3d.quality.auto" plain />, the default, the 3D View switches to Low by itself when it stutters, and a notice says so.
+Lower <Ui k="settings.view3d.quality" plain /> to <Ui k="settings.view3d.quality.low" plain />, or <Ui k="settings.view3d.resolution" plain /> to <Ui k="settings.view3d.resolution.fast" plain />, in [Settings](/guides/reference/settings/#3d-view) › <Ui k="settings.view3d" plain />. These are set for each computer, not in the show.
 
 If it's still slow on Low, your computer is drawing without its graphics card: update the graphics drivers and restart OpenMarch. In the web editor, turn on the browser's graphics acceleration and restart the browser.
 

@@ -1,6 +1,6 @@
 ---
 title: Move marchers
-description: Drag marchers on the field, nudge them by steps with the keyboard or the tablet move pad, snap them to a step grid and lock them to one direction.
+description: Drag marchers on the field, nudge them by steps with the arrow keys or the tablet move pad, snap them to a grid of steps or turn snapping off, and lock them to one direction.
 type: how-to
 covers:
   - apps/desktop/src/field/editor/moveGesture.ts
@@ -43,7 +43,7 @@ Drag a marcher to move it. To move several together, [select them](/guides/march
 
 While you drag:
 
-- Hold <Kbd keys="Shift" gesture="drag" /> for fine control. The marchers move at a quarter of the pointer's speed and don't snap to the grid. You can press and release Shift in the middle of a drag; the marchers don't jump.
+- Hold <Kbd keys="Shift" gesture="drag" /> for fine control. The marchers move at a quarter of the pointer's speed and ignore [coordinate rounding](#snap-to-a-grid-of-steps). You can press and release Shift in the middle of a drag; the marchers don't jump.
 - Hold <Kbd keys="Mod" gesture="drag" /> to keep the move straight: across the field or front to back, whichever way you've dragged further.
 
 Where the marchers are <Term id="held">Held</Term>, a drag moves the whole hold; see [Drag marchers that are Held](/guides/timeline/defined-held-not-defined/#drag-marchers-that-are-held).
@@ -58,7 +58,7 @@ Select marchers, then press an arrow key or <Kbd keys="W" />, <Kbd keys="A" />, 
 
 | Keys                                     | Moves the selection                                              |
 | ---------------------------------------- | ---------------------------------------------------------------- |
-| <Kbd keys="Up" /> or <Kbd keys="W" />    | One step, or one grid step when [coordinate rounding](#snap-to-a-step-grid) is on, snapped to the grid |
+| <Kbd keys="Up" /> or <Kbd keys="W" />    | One step, or one grid step when [coordinate rounding](#snap-to-a-grid-of-steps) is on, snapped to the grid |
 | <Kbd keys="Alt+Up" />                    | The same distance, without snapping                              |
 | <Kbd keys="Shift+Up" />                  | ¼ step, without snapping                                         |
 | <Kbd keys="Mod+Up" />                    | 4 steps, snapped to the grid                                     |
@@ -71,34 +71,39 @@ The same keys work with the other arrows. <Kbd keys="W" />, <Kbd keys="A" />, <K
 
 In the tablet layout, the inspector shows a <Ui k="inspector.marcher.move.title" /> pad for the selected marchers. Choose how far each press goes, <Ui k="inspector.marcher.move.quarterStep" />, <Ui k="inspector.marcher.move.oneStep" /> or <Ui k="inspector.marcher.move.fourSteps" />, then select an arrow. The pad always moves exactly that far and never snaps. Each arrow is labeled with the way it goes: <Ui k="inspector.marcher.move.back" plain />, <Ui k="inspector.marcher.move.front" plain />, or the name of a side.
 
-## Snap to a step grid
+<Media
+  id="marchers-move-pad"
+  alt="The inspector's Move pad in the tablet layout: three step sizes, a quarter step, 1 step and 4 steps, above four arrows labeled with the way each one moves the marchers."
+  maxWidth={340}
+/>
 
-Coordinate rounding makes dragged marchers land on a grid of steps, for example every half step across the field and every step front to back. It's off until you choose a size.
+## Snap to a grid of steps
+
+In a new show nothing snaps: a dragged marcher goes exactly where the pointer puts it, and the arrow keys move it in whole steps. Coordinate rounding makes dragged marchers land on a grid of steps instead, for example every half step across the field and every step front to back.
 
 <Media
   id="marchers-coordinate-rounding"
-  alt="The Alignment tab with the Coordinate Rounding menu open: a row of choices for the X axis and another for the Y axis, None, a quarter, a half, 1, 2 and Custom."
+  alt="The Alignment tab with X set to a half step, and the Coordinate Rounding menu open below it: an Enable Offset button, the note Does not yet work with groups, and a row of choices for the X axis and another for the Y axis, None, a quarter, a half, 1, 2 and Custom."
 />
 
 1. In the toolbar's <Ui k="inspector.shape.alignmentTab" /> tab, open <Ui k="coordinateRoundingSettings.title" />.
 2. For each axis, choose <Ui k="coordinateRoundingSettings.none" />, ¼, ½, 1 or 2 steps, or <Ui k="coordinateRoundingSettings.custom" /> to type a size. X is across the field, side to side; Y is front to back.
-3. To shift the grid off the yard lines and hashes, select <Ui k="coordinateRoundingSettings.enableOffset" /> and enter how many steps to shift it by. The button then reads <Ui k="coordinateRoundingSettings.disableOffset" plain />.
+3. To shift the grid off the yard lines and hashes, select <Ui k="coordinateRoundingSettings.enableOffset" /> and enter how many steps to shift it by.
 
 The X and Y buttons next to the menu show the current sizes. Click one to step to the next size, or right-click it to go back one.
 
-With rounding on, one marcher snaps onto the grid as you drag it. Several marchers move in whole grid steps together, so each keeps its distance from the others, even if they started off the grid.
+With rounding on, one marcher snaps onto the grid as you drag it. Several marchers move in whole grid steps together, so each keeps its distance from the others, even if they started off the grid. The menu's note "<Ui k="coordinateRoundingSettings.groupNotice" plain />" is out of date: groups round this way.
 
-- To drag without snapping for a moment, hold <Kbd keys="Shift" gesture="drag" />. To turn snapping off for a while, see [Turn snapping off](/guides/shapes/snapping-and-modifier-keys/#turn-snapping-off).
-- To put marchers that are off the grid onto it, select them and select <Ui k="toolbar.alignment.snapCaption" /> in the <Ui k="inspector.shape.alignmentTab" /> tab, or press <Kbd action="snapToNearestCustomFraction" />. Each one moves to the nearest grid point.
+To put marchers that are off the grid onto it, select them and select <Ui k="toolbar.alignment.snapCaption" /> in the <Ui k="inspector.shape.alignmentTab" /> tab, or press <Kbd action="snapToNearestCustomFraction" />. Each one moves to the nearest grid point.
+
+## Turn snapping off
+
+To drag without snapping for a moment, hold <Kbd keys="Shift" gesture="drag" />. To turn it off for a while, select <Ui k="toolbar.alignment.snapToggleCaption" /> (the magnet) in the <Ui k="inspector.shape.alignmentTab" /> tab, or press <Kbd action="toggleSnap" />. While it's off, drags ignore coordinate rounding, the arrow keys don't round to the grid, and the round handle turns a group freely instead of in 15° steps. The same switch turns off snapping for shapes; [Snapping and modifier keys](/guides/shapes/snapping-and-modifier-keys/#turn-snapping-off) says what it does there, and when it comes back on.
 
 ## Move in one direction only
 
-The two lock buttons in the <Ui k="inspector.shape.alignmentTab" /> tab keep marchers from moving along one axis until you turn the lock off:
+The two lock buttons in the <Ui k="inspector.shape.alignmentTab" /> tab, next to <Ui k="coordinateRoundingSettings.title" />, keep marchers from moving along one axis until you turn the lock off:
 
-<Media
-  id="marchers-alignment-tab"
-  alt="The Alignment tab: Coordinate Rounding with the X and Y sizes, then four buttons (up-and-down arrows, side-to-side arrows, a magnet and four arrows pointing inward), then Place all marchers."
-/>
 
 - <Ui k="toolbar.alignment.lockXCaption" /> (the up-and-down arrows, <Kbd action="lockX" />) keeps every marcher's side-to-side position, so drags move them only front to back.
 - <Ui k="toolbar.alignment.lockYCaption" /> (the side-to-side arrows, <Kbd action="lockY" />) keeps their front-to-back position, so drags move them only across the field.
@@ -107,6 +112,6 @@ Each key is the letter of the axis the marchers can still move along. A lock but
 
 ## Related
 
-- [Align and space marchers](/guides/marchers/align-and-space/): line marchers up, space them evenly, turn and resize a group.
+- [Align, space and turn marchers](/guides/marchers/align-and-space/): line marchers up, space them evenly, turn and resize a group.
 - [How shapes work](/guides/shapes/): place marchers in a box, circle, line or arc instead of one by one.
 - [Defined, Held, Not defined](/guides/timeline/defined-held-not-defined/): what moving a marcher does to its state on a page.

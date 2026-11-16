@@ -41,6 +41,26 @@ When no show is open, OpenMarch shows the start page. Select <Ui k="launchpage.f
 
 In the desktop app, <Ui k="launchpage.files.title" plain /> lists the shows you've opened, with a preview of each field; select one to open it. A show that was moved or deleted is marked <Ui k="launchpage.files.movedOrMissing" plain />. Each show has a button to <Ui k="launchpage.files.removeFile" plain />, and <Ui k="launchpage.files.clearMissingRecentFiles" /> and <Ui k="launchpage.files.clearAllRecentFiles" /> tidy the list. None of these delete files from your computer.
 
+## The File tab and the File menu
+
+The toolbar's <Ui k="inspector.shape.fileTab" plain /> tab has the commands for the show's file. In the desktop app the app menu's **File** menu has the same commands under other names.
+
+<Media
+  id="files-file-tab"
+  alt="The toolbar's File tab: Open File, New File and Save Copy, then Exit File, Export and App Settings."
+  maxWidth={560}
+/>
+
+| File tab | File menu | Does |
+| --- | --- | --- |
+| <Ui k="fileTab.openFile" plain /> | <Ui k="menu.file.open" plain /> (<Kbd keys="Mod+O" />) | [Opens a show](#open-a-show) |
+| <Ui k="fileTab.newFile" plain /> | <Ui k="menu.file.createNew" plain /> (<Kbd keys="Mod+N" />) | [Starts a new show](#start-a-new-show) |
+| <Ui k="fileTab.saveFile" plain /> | <Ui k="menu.file.saveAsCopy" plain /> | [Saves a copy](#save-a-copy-or-close-the-show) |
+| <Ui k="fileTab.exitFile" plain /> | <Ui k="menu.file.closeFile" plain /> | [Closes the show](#save-a-copy-or-close-the-show) |
+| <Ui k="exportCoordinates.exportButton" plain /> | | Opens the Export dialog: [coordinate sheets and drill charts](/guides/files/print-charts/), [video](/guides/files/export-video/) and [On the Move](/guides/files/on-the-move/) |
+
+The menu is the menu bar on a Mac, or the <Ui k="titlebar.menu" plain /> button in the title bar on Windows and Linux. The web editor's file commands are in its own <Ui k="web.fileMenu" plain /> menu ([below](#keep-shows-safe-in-the-web-editor)).
+
 ## Start a new show
 
 <Steps>
@@ -49,7 +69,7 @@ In the desktop app, <Ui k="launchpage.files.title" plain /> lists the shows you'
 
 2. Choose <Ui k="launchpage.newShow.steps.start.blank" />, or <Ui k="launchpage.newShow.steps.start.importPrevious" /> to start from another show's marchers, field and last set of positions.
 
-3. Enter a <Ui k="launchpage.newShow.showName" plain /> and choose where to save the file. Then work through the remaining steps, or select <Ui k="launchpage.newShow.skip" /> on any you want to do later: the activity, the field, the marchers, the music and the tempo.
+3. Enter a <Ui k="launchpage.newShow.showName" plain /> and choose where to save the file. Then work through the remaining steps, or select <Ui k="launchpage.newShow.skip" /> on any you want to do later: the activity, the field, the marchers, the front ensemble, the music and the tempo. A show started from another show skips the field, the marchers and the front ensemble, since it takes them from that show.
 
 4. Select <Ui k="launchpage.newShow.create" />.
 
@@ -59,7 +79,7 @@ In the desktop app, <Ui k="launchpage.files.title" plain /> lists the shows you'
 
 ## Open a show
 
-Select <Ui k="fileTab.openFile" /> in the toolbar's <Ui k="inspector.shape.fileTab" plain /> tab, or <Ui k="launchpage.files.openFile" /> on the start page, and choose a `.dots` file. In the desktop app you can also choose **File › Open File** in the app menu (<Kbd keys="Mod+O" />): the menu bar on a Mac, or the <Ui k="titlebar.menu" plain /> button in the title bar on Windows and Linux.
+Select <Ui k="fileTab.openFile" /> in the toolbar's <Ui k="inspector.shape.fileTab" plain /> tab, or <Ui k="launchpage.files.openFile" /> on the start page, and choose a `.dots` file. In the desktop app, **File › Open File** in the app menu (<Kbd keys="Mod+O" />) does the same.
 
 A show made in OpenMarch 0.1 opens after you confirm that it can be converted to timelines; see [Coming from OpenMarch 0.1](/guides/start/coming-from-0-1/). If a show won't open, see [File errors](/troubleshooting/file-errors/).
 

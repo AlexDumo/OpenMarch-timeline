@@ -31,7 +31,14 @@ Export from Finale, Sibelius, Dorico, MuseScore or any program that writes Music
 <Steps>
 
 1. Select <Ui k="tempoMode.button.text" /> in the timeline's controls (<Kbd keys="Shift+T" />).
-2. Select <Ui k="tempoMode.import.button" />, then <Ui k="tempoMode.import.score" />.
+2. Select <Ui k="tempoMode.import.button" /> at the right end of the header, then <Ui k="tempoMode.import.score" />.
+
+   <Media
+     id="music-import-menu"
+     alt="The right end of Edit music's header: Import with its menu open, listing Audio file… and MusicXML score…, beside the question mark button and Done."
+     maxWidth={480}
+   />
+
 3. Read what the import replaces, then select <Ui k="tempoMode.importScore.choose" />.
 4. Choose the file.
 
@@ -39,11 +46,11 @@ Export from Finale, Sibelius, Dorico, MuseScore or any program that writes Music
 
 <Media
   id="music-import-score"
-  alt="The dialog Use a score's timing?, saying the score's tempos, time signatures, measures and rehearsal marks replace the show's, and that pages, drill and props stay on their counts. Buttons: Cancel and Choose a file."
-  maxWidth={560}
+  alt="The dialog Use a score's timing?, saying the score's tempos, time signatures, measures and rehearsal marks replace the show's, and that pages, drill, cues and props stay on their counts. Buttons: Cancel and Choose a file."
+  maxWidth={480}
 />
 
-The score's timing replaces the show's: its tempos, time signatures, measures and rehearsal marks, including any holds and tempo changes you made in Edit music. Pages, moves and props stay on their counts, so they now play at the score's tempos. One undo (<Kbd action="performUndo" />) puts everything back.
+The score's timing replaces the show's: its tempos, time signatures, measures and rehearsal marks, including any fermatas and tempo changes you made in Edit music. Pages, moves, cues and props stay on their counts, so they now play at the score's tempos. One undo (<Kbd action="performUndo" />) puts everything back.
 
 When you create a new show, you can also start from a score; see [Write your first show](/guides/start/first-show/).
 
@@ -56,9 +63,9 @@ When you create a new show, you can also start from a score; see [Write your fir
 - Repeats, first and second endings, D.C., D.S., To Coda and Fine are played out, so the counts follow the music as it's performed. A strain that repeats takes its measures twice on the timeline.
 - Rehearsal marks. In a section that's played more than once, each pass gets its own mark: A, then A-2 on the repeat.
 
-A score with no tempo marking at all gets a tempo of 120 throughout. A fermata in the score is counted as an ordinary count; hold it yourself afterwards (see [Line the counts up with the music](/guides/music/tempo/#hold-a-count-fermata)).
+A score with no tempo marking at all gets a tempo of 120 throughout. A fermata in the score is counted as an ordinary count; add the fermata yourself afterwards (see [Set the tempo to match the music](/guides/music/tempo/#add-a-fermata)).
 
-Because repeats are played out, the timeline's measure numbers count every measure as it's played, and can differ from the score's after the first repeat. To match the score's numbers in a section, use <Ui k="tempoMode.band.menu.renumber" /> (see [Line the counts up with the music](/guides/music/tempo/#renumber-measures)).
+Because repeats are played out, the timeline's measure numbers count every measure as it's played, and can differ from the score's after the first repeat. To match the score's numbers in a section, use <Ui k="tempoMode.band.menu.renumber" /> (see [Set the tempo to match the music](/guides/music/tempo/#renumber-measures)).
 
 ## Check what the importer guessed
 
@@ -66,7 +73,7 @@ When the importer had to guess, or couldn't read something, a notice at the bott
 
 <Media
   id="music-import-checks"
-  alt="The Check these in the score dialog for RepeatsTest Finale.musicxml, listing five jumps read from their words (D.C. al Fine at m12, D.C. al Coda at m13, D.S. al Fine at m14, D.S. al Coda and Fine at m19), each to check where it goes."
+  alt="The Check these in the score dialog for Opener - full score.musicxml, listing five jumps read from their words (D.C. al Fine at m12, D.C. al Coda at m13, D.S. al Fine at m14, D.S. al Coda and Fine at m19), each to check where it goes."
   maxWidth={560}
 />
 
@@ -84,11 +91,11 @@ The score is how the music is written; the recording is how it was played. Befor
 
 1. Set the music offset so count 1 lands on the first note ([Add the show's music](/guides/music/audio/#set-where-the-music-starts)).
 2. Play through with the metronome on ([The metronome](/guides/music/metronome/)) and listen for spots where the clicks drift from the recording, especially at tempo changes, fermatas and the ends of rit.s.
-3. Fix those spots in Edit music: [Line the counts up with the music](/guides/music/tempo/).
+3. Fix those spots in Edit music: [Set the tempo to match the music](/guides/music/tempo/).
 
 <Aside type="caution">Importing a score again replaces everything you fixed by hand. Import first, then fix.</Aside>
 
 ## Related
 
 - [How counts and the music fit together](/guides/music/counts-and-music/): what the import changes.
-- [Line the counts up with the music](/guides/music/tempo/): fix tempos, holds and measures after the import.
+- [Set the tempo to match the music](/guides/music/tempo/): fix tempos, fermatas and measures after the import.

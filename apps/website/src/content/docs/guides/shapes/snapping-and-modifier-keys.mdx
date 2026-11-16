@@ -1,6 +1,6 @@
 ---
 title: Snapping and modifier keys
-description: Make shapes land on yard lines and hashes, turn snapping off, and use Shift, Ctrl or Command, and Alt or Option while you drag (fine, constrain, from center).
+description: Make shapes land on yard lines and hashes, turn snapping off for shapes and marchers, and use Shift, Ctrl or Command, and Alt or Option while you drag (fine, constrain, from center).
 type: how-to
 covers:
   - apps/desktop/src/input/modifierRoles.ts
@@ -21,15 +21,13 @@ import Ui from "@/components/docs/Ui.astro";
 import Term from "@/components/docs/Term.astro";
 import InShort from "@/components/docs/InShort.astro";
 
-<InShort>Shapes snap to half steps, yard lines and hashes on their own. To turn snapping off, select <Ui k="toolbar.alignment.snapToggleCaption" /> in the <Ui k="inspector.shape.alignmentTab" /> tab or press <Kbd action="toggleSnap" />.</InShort>
-
-While you draw or drag a shape, every spot, corner and spacing lands on the field's half-step grid, so the far side of a shape lands near the pointer rather than exactly under it. Its corners, sides and center also catch the field's lines. Three keys change what a drag does while you hold them.
+<InShort>Shapes snap to half steps, and boxes, lines and arcs also catch yard lines and hashes. Select <Ui k="toolbar.alignment.snapToggleCaption" /> in the <Ui k="inspector.shape.alignmentTab" /> tab or press <Kbd action="toggleSnap" /> to turn snapping off. While you drag, hold <Kbd keys="Shift" /> for fine, <Kbd keys="Mod" /> to constrain, <Kbd keys="Alt" /> to work from the center.</InShort>
 
 ## Land on yard lines, hashes and sidelines
 
 When a moving corner, side or center comes near one of the field's lines, it lands on the line. The lines are the ones the coordinate sheets count from: yard lines, hashes and sidelines, and half lines if the field has them. This works on custom fields too.
 
-- Drawing or stretching a box, the corner that moves lands on the line and the fixed side stays put. The spacing becomes whatever that takes and is kept exactly: 7 files from the 40 to the 50 are 2⅔ steps apart.
+- Drawing or stretching a box, the corner that moves lands on the line and the fixed side stays put. The spacing becomes whatever that takes and is kept exactly: 7 marchers across from the 40 to the 50 stand 2⅔ steps apart.
 - Moving a shape, its nearest corner or its center lands on the line, side to side and front to back. Centering a block on the 50 or on a hash works this way.
 - Dragging a box's spacing number lands a corner or the center on a line in the same way. Typing a number never snaps.
 
@@ -44,11 +42,19 @@ The pull only reaches a few pixels on screen, so every half step near a line can
 
 ## Turn snapping off
 
-Select <Ui k="toolbar.alignment.snapToggleCaption" /> in the toolbar's <Ui k="inspector.shape.alignmentTab" /> tab, or press <Kbd action="toggleSnap" />. The same magnet button is in every shape's floating editor. While snapping is off:
+Select <Ui k="toolbar.alignment.snapToggleCaption" /> in the toolbar's <Ui k="inspector.shape.alignmentTab" /> tab, or press <Kbd action="toggleSnap" />. The same magnet button is in every shape's floating editor.
 
-- shapes and marchers you drag on the field go exactly where the pointer goes, off the half steps, and nothing pulls them onto lines or other marchers;
-- shapes turn freely, not in 15° steps;
-- the arrow keys move marchers without rounding them to the grid.
+<Media
+  id="shapes-snap-button"
+  alt="The toolbar's Alignment tab: Coordinate Rounding, the two lock buttons, the Snap button's magnet lit in the accent color because snapping is off, and Snap to grid, four arrows pointing inward."
+  maxWidth={520}
+/>
+
+While snapping is off:
+
+- shapes you drag on the field go exactly where the pointer goes, off the half steps, and nothing pulls them onto lines or other marchers;
+- shapes and groups of marchers turn freely, not in 15° steps;
+- marchers you drag or nudge ignore coordinate rounding ([Move marchers](/guides/marchers/move-marchers/#snap-to-a-grid-of-steps) has the rest).
 
 The button looks pressed while snapping is off, and a drag shows <Ui k="field.gestureChip.snapOff" /> by the pointer, so you can't forget it's off. Snapping comes back on when you restart OpenMarch or open a show. The timeline has its own snapping, which this doesn't change.
 
@@ -68,7 +74,7 @@ Hold these keys during a drag on a shape. They take effect as soon as you press 
 
 <Media
   id="shapes-modifier-keys"
-  alt="With Alt held, a drag from a point above the trumpets draws a box that grows out both ways from where the press was. Ctrl is then held too, and the box's side-to-side and front-to-back spacings become equal. Both keys show at the bottom of the clip."
+  alt="With Alt held, a drag from a point on empty field draws a box that grows out both ways from where the press was. Ctrl is then held too, and the box's side-to-side and front-to-back spacings become equal, so it turns from a long box of two rows into a 4 × 3 block. An orange guide shows for a moment where an edge passes a hash. Both keys show at the bottom of the clip."
 />
 
 While you drag, a small label by the pointer names each key that does something there and what it does, such as "⌥ from center" or "⇧ fine". A key that does nothing for that drag isn't listed.
@@ -84,4 +90,4 @@ The buttons over the field stand in for these keys: <Ui k="touch.modifiers.fine"
 - [How shapes work](/guides/shapes/): spots, intervals and steps.
 - [Draw a box](/guides/shapes/draw-a-box/): the handles and floating editor these keys change.
 - [Draw a line or curve](/guides/shapes/draw-a-line/): points, ends and intervals along a path.
-- [Move marchers](/guides/marchers/move-marchers/): snapping when you drag marchers themselves.
+- [Move marchers](/guides/marchers/move-marchers/): what a marcher you drag snaps to, and coordinate rounding.

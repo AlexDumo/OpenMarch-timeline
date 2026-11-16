@@ -21,7 +21,7 @@ import Term from "@/components/docs/Term.astro";
 import InShort from "@/components/docs/InShort.astro";
 import { Steps } from "@astrojs/starlight/components";
 
-<InShort>Open the <Ui k="sidebar.appearance" /> panel, select <Ui k="marchers.list.addSectionStyle" />, choose the section and set its colors and shape.</InShort>
+<InShort>Open the <Ui k="sidebar.appearance" /> panel and, on the <Ui k="marchers.sectionText" /> tab, select <Ui k="marchers.list.addSectionStyle" />, choose the section and set its colors and shape.</InShort>
 
 Every marcher is a dot with its drill number, in the field's colors until you change it. Looks show on the field and in printed drill charts.
 
@@ -57,7 +57,7 @@ A new style starts with no colors set, shown as dashed boxes. A color that isn't
 
 ## Change a group's look from a page on
 
-To change how some marchers look partway through the show, for example the flags after an equipment change, give them a <Term id="tag">tag</Term>, a named group you choose, then give the tag a look from a page on.
+To change how some marchers look partway through the show, for example the flags after an equipment change, give them a tag, a named group you choose, then give the tag a look from a page on.
 
 ### Make a tag
 
@@ -70,6 +70,12 @@ To change how some marchers look partway through the show, for example the flags
 3. Type a name if you want one, then select <Ui k="tags.create" />.
 
 </Steps>
+
+<Media
+  id="marchers-tags"
+  alt="The inspector's tag row for four selected marchers: three buttons, a tag with a sparkle to create a tag from the selection, a tag with a plus to add them to one, and a tag with a trash can to remove them from one; under them their tags, Brass and Soloists."
+  maxWidth={340}
+/>
 
 The tag appears in the inspector whenever any of its marchers are selected. To add more marchers to it later, select them and use <Ui k="tags.addSelectedTo" /> (the tag icon with a plus); <Ui k="tags.removeSelectedFrom" /> takes them out. Select a tag's name to rename or delete it.
 
@@ -103,4 +109,4 @@ So a tag appearance that only sets a fill color changes the fill and keeps the s
 
 - [Add, edit and remove marchers](/guides/marchers/add-marchers/): sections come from here.
 - [Select marchers](/guides/marchers/select-marchers/): select a tag's marchers from the Select tab.
-- [Print drill charts](/guides/files/print-charts/): charts use the same looks.
+- [Print coordinate sheets and drill charts](/guides/files/print-charts/): charts use the same looks.

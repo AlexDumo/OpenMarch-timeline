@@ -13,7 +13,7 @@ covers:
   - i18n:timeline.startFlagPositions
   - i18n:toolbar.view.nextPaths
 sidebar:
-  order: 7
+  order: 8
 ---
 
 import Media from "@/components/docs/Media.astro";
@@ -24,20 +24,18 @@ import InShort from "@/components/docs/InShort.astro";
 
 <InShort>Hold <Kbd action="toggleStartFlagPositions" /> to see where every marcher came from and the path it walks; press <Kbd action="toggleNextPagePaths" /> to show where each one goes on the next page.</InShort>
 
-While you set a page, it helps to see where the marchers came from and where they go next. The field can draw two things: start flag positions, which show where marchers were at the <Term id="start-flag">start flag</Term> (in Basic, the start of the page) and the path each one walks to the playhead, and next paths, which show where each marcher goes on the following page.
-
 ## Start flag positions
 
 Start flag positions draw, for each marcher:
 
-- a small dot where it was at the start flag, and
+- a small dot where it was at the <Term id="start-flag">start flag</Term> (in Basic, the start of the page), and
 - a thin gray path from that dot to where it is at the playhead.
 
 When you've selected a page, that's where the marchers start the page and the route they walk to its set. On the selected marchers' paths, small squares mark each count where they have a <Term id="keyframe">keyframe</Term>.
 
 <Media
   id="timeline-paths"
-  alt="The middle of the field at the end of Page 5 with start flag positions on for everyone: a thin gray line runs from each marcher back to a small dot where it stood at the start of the page. B1 and B2 are selected."
+  alt="The middle of the field at the end of Page 5 with start flag positions on for everyone: a thin gray line runs from each marcher back to a small dot where it stood at the start of the page. B3 is selected, and a small square on its path marks count 6, where it has a keyframe."
 />
 
 By default the field shows dots for the selected marchers only, and no paths. To see everyone's dots and paths for a moment, hold <Kbd action="toggleStartFlagPositions" />. Tap it instead to keep them on, and tap again to go back.
@@ -57,7 +55,7 @@ Paths are never shown for more marchers than dots: choosing All paths also shows
 
 ## Next paths
 
-Next paths show where each marcher goes on the page after the one the playhead is on: a line from its spot at this page's set to its spot at the next page's set, with a dot at the end.
+Next paths show where each marcher goes on the page after the one the playhead is on: a line from its spot at this page's set to its spot at the next page's set, with a hollow circle halfway along and a dot at the end.
 
 To turn them on or off, turn on <Ui k="toolbar.view.nextPaths" /> in the <Ui k="timeline.startFlagPositions.label" /> menu, or press <Kbd action="toggleNextPagePaths" />.
 

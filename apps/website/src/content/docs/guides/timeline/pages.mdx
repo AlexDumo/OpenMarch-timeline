@@ -1,6 +1,6 @@
 ---
 title: Add and change pages
-description: Add a page (a set) at the playhead or at the end of the show, change how many counts a page has, make subsets, split and delete pages.
+description: Add a page (a set) at the playhead or at the end of the show, add a page between two pages without renumbering the rest (a subset), change how many counts a page has, and split or delete pages.
 type: how-to
 covers:
   - apps/desktop/src/components/timeline/AddPageFlagMenu.tsx
@@ -25,9 +25,15 @@ import Ui from "@/components/docs/Ui.astro";
 import Term from "@/components/docs/Term.astro";
 import InShort from "@/components/docs/InShort.astro";
 
-<InShort>Put the playhead where the new set should be, right-click it and select <Ui k="actions.timeline.createPageAtPlayhead" />, or press <Kbd action="timelineCreatePageAtPlayhead" />.</InShort>
+<InShort>Put the playhead where the new set should be, right-click it and select <Ui k="actions.timeline.createPageAtPlayhead" /> (<Kbd action="timelineCreatePageAtPlayhead" />), or <Ui k="actions.timeline.createSubsetAtPlayhead" /> (<Kbd action="timelineCreateSubsetAtPlayhead" />) to keep the numbers of the pages after it.</InShort>
 
-Each page is a box on the timeline that ends at its <Term id="pages-flag">page's flag</Term>, the count where marchers reach its set. [How the timeline works](/guides/timeline/how-the-timeline-works/#pages-and-their-flags) explains pages. Select a page's box to see it in the inspector: its <Ui k="inspector.page.counts" />, whether it's a <Ui k="inspector.page.subset" />, and the measures it covers.
+Each page is a box on the timeline that ends at its page's flag, the count where marchers reach its set; [How the timeline works](/guides/timeline/how-the-timeline-works/#pages-and-their-flags) explains pages. Select a page's box, with no marchers selected, to see the page in the inspector: its <Ui k="inspector.page.counts" />, whether it's a <Ui k="inspector.page.subset" />, the measures it covers, and <Ui k="inspector.page.splitPage" />.
+
+<Media
+  id="timeline-page-inspector"
+  alt="The inspector with Page 4 selected and no marchers: Counts, the Subset switch, the measures the page covers, and the Split page button."
+  maxWidth={360}
+/>
 
 ## Add a page at the playhead
 
@@ -36,11 +42,11 @@ A new page ends at the playhead: the playhead's count becomes the new page's fla
 1. Put the playhead on the count where the new page's set should be. It can be inside a page or past the last page.
 2. Right-click the playhead and select <Ui k="actions.timeline.createPageAtPlayhead" />, or press <Kbd action="timelineCreatePageAtPlayhead" />.
 
-The menu shows the number the new page will get. Inside a page, the new flag cuts that page in two, and the pages after it are numbered one higher. To add a subset instead, which keeps the numbers of the pages after it, select <Ui k="actions.timeline.createSubsetAtPlayhead" /> or press <Kbd action="timelineCreateSubsetAtPlayhead" />.
+The menu shows the number the new page will get. Inside a page, the new flag cuts that page in two, and the pages after it are numbered one higher. To add a page between two others without renumbering the rest, select <Ui k="actions.timeline.createSubsetAtPlayhead" /> or press <Kbd action="timelineCreateSubsetAtPlayhead" /> instead: the new page is a subset, such as 2A, and the pages after it keep their numbers.
 
 <Media
   id="timeline-add-page"
-  alt="The last pages of the show with the playhead five counts past the last page's flag. The shaded counts after it have a button reading Add 5-Count Page, and the playhead's right-click menu offers Create page at playhead and Create subset at playhead, each with the number the page will get and its shortcut, F and Shift+F."
+  alt="Page 17, Page 18 and the counts after it, with the playhead eight counts past Page 18's flag. A button reading Add 8-Count Page sits over the shaded counts, and the playhead's right-click menu offers Create page at playhead (19, F) and Create subset at playhead (18A, Shift+F)."
 />
 
 ## Add a page at the end of the show
@@ -82,9 +88,14 @@ Right-click the page's box and choose one:
 
 Both can be undone with <Kbd action="performUndo" />.
 
+<Media
+  id="timeline-page-menu"
+  alt="The right-click menu of Page 18's box with four trumpet marchers selected who are Not defined there: Split selected into new move (greyed out), Define as shown, Hold from last keyframe, Clear Page 18 (greyed out, as there's nothing to clear), Subset, Delete page, and Delete page and its moves."
+/>
+
 ## Page numbers
 
-Pages are numbered in order from the start of the show, with subsets lettered after the page before them. The number of the first page comes from <Ui k="workspaceSettings.pageNumberOffset" /> in [Show settings](/guides/field/show-settings/).
+Pages are numbered in order from the start of the show, with subsets lettered after the page before them. Home, the start of the show, takes the number in <Ui k="workspaceSettings.pageNumberOffset" /> in [Show settings](/guides/field/show-settings/), 0 unless you change it, and the pages after it count up from there.
 
 ## Related
 

@@ -41,6 +41,11 @@ A line stands the selected marchers along a path: a straight line from one end t
 
 </Steps>
 
+<Media
+  id="shapes-draw-straight-line"
+  alt="L is pressed, and one drag on empty field draws a straight line of spots, one on each end and the rest spaced evenly between. The pointer moves to Place and clicks it, and the trumpets move onto the line."
+/>
+
 A line drawn diagonally from one yard line to another starts measured side to side, so each marcher is the same distance across from the next: the usual way to write a diagonal.
 
 ## Draw a line with corners
@@ -59,7 +64,7 @@ A line drawn diagonally from one yard line to another starts measured side to si
 
 <Media
   id="shapes-draw-line"
-  alt="L is pressed, then three clicks above a row of trumpets draw a line that rises to a corner and runs flat to the right, with a spot on each end, one on the corner and the rest spaced along it. The pointer moves to Place and clicks it, and the trumpets move onto the line."
+  alt="L is pressed, then three clicks on empty field draw a line that rises to a corner and runs flat to the right, with a spot on each end, one on the corner and the rest spaced along it. The pointer moves to Place and clicks it, and the trumpets move onto the line."
 />
 
 While you're clicking, a right-click or <Kbd action="shapeRemoveLastPoint" /> takes the last point back, and <Kbd action="cancelAlignmentUpdates" /> cancels the line. Click the first point again to close the line into a loop.
@@ -84,17 +89,17 @@ Every point of a line is a handle, and so is the middle of each part between two
 
 <Media
   id="shapes-curve-bend"
-  alt="An open curve rising to a peak above a row of trumpets. The point at the peak is clicked and a short bar appears through it; the bar's right end is dragged further out, and the top of the curve becomes broader and flatter."
+  alt="An open curve rising to a peak on empty field. The point at the peak is clicked and a short bar appears through it; the bar's right end is dragged further out, and the top of the curve becomes broader and flatter."
 />
 
 ## Set the interval
 
 <Media
   id="shapes-line-editor"
-  alt="The floating editor of an open line with a corner. First row: the interval, about 3⅓ to 3.4 steps, with a lock beside it, then the turn, flip, Shrink, Expand and Recalculate buttons, an eye, a magnet, a pathways button and Place. Second row: Open, Fit, Along the path, Marcher on every corner, and Who goes where set to Least travel."
+  alt="The floating editor of an open line with a corner. First row: the interval, about 3½ to 3.68 steps, with a lock beside it, then the turn, flip, Shrink, Expand and Recalculate buttons, an eye, a magnet, a pathways button and Place. Second row: Open, Fit, Along the path, Marcher on every corner, and Who goes where set to Least travel."
 />
 
-The second row's menus are, in order, the line's ends, its spacing, what the interval measures, its corners, and who goes where.
+On a line with corners, each stretch between corners is spaced on its own, so the interval can show as a range, such as ≈ 3½–3.68: the smallest and the largest. The second row's menus are, in order, the line's ends, its spacing, what the interval measures, its corners, and who goes where.
 
 A new line is drawn to fit: you choose where its ends go, and the floating editor shows the interval that spaces the marchers between them. Typing an interval there makes the line longer or shorter to match. Dragging an end changes the interval, in whole steps, or half steps when you're zoomed in far.
 

@@ -1,6 +1,6 @@
 ---
-title: Align and space marchers
-description: Line selected marchers up, space them evenly or a set number of steps apart, flip, turn or resize a group around its pivot, and swap two marchers.
+title: Align, space and turn marchers
+description: Line selected marchers up, space them evenly or a set number of steps apart, flip, turn (rotate) or resize a group around its pivot, and swap two marchers.
 type: how-to
 covers:
   - apps/desktop/src/components/inspector/MarcherEditor.tsx
@@ -34,7 +34,7 @@ import InShort from "@/components/docs/InShort.astro";
 
 <InShort>Select the marchers and use the <Ui k="inspector.arrange.title" /> section at the top of the inspector: <Kbd action="alignVertically" /> lines them up across the field and <Kbd action="evenlyDistributeHorizontally" /> spaces them evenly.</InShort>
 
-With several marchers selected, the inspector's <Ui k="inspector.arrange.title" /> section lines them up, flips, turns and spaces them as a group, and the frame around them on the field has handles to turn and resize it. To put marchers in a box, line or arc instead, see [How shapes work](/guides/shapes/).
+To put marchers in a box, line or arc instead, see [How shapes work](/guides/shapes/).
 
 <Media
   id="marchers-inspector"
@@ -53,7 +53,7 @@ Select the marchers, then use the first two <Ui k="inspector.marcher.alignHeadin
 
 <Media
   id="marchers-align"
-  alt="An arc of twelve selected marchers. Alt+V pulls them into one straight line across the field, then Shift+H spaces them evenly along it."
+  alt="An arc of twelve selected marchers. Alt+V pulls them into one straight line across the field."
 />
 
 ## Space marchers evenly
@@ -62,6 +62,11 @@ Select three or more marchers. The two at the ends stay where they are, and the 
 
 - To space them side to side, select the first <Ui k="inspector.marcher.distributeHeading" /> button, or press <Kbd action="evenlyDistributeHorizontally" />.
 - To space them front to back, select the second, or press <Kbd action="evenlyDistributeVertically" />.
+
+<Media
+  id="marchers-space"
+  alt="A selected line of twelve marchers with uneven gaps. Shift+H spaces them evenly between the two at the ends."
+/>
 
 To space them a set number of steps apart instead, type the number in the <Ui k="inspector.marcher.distributeStepsPlaceholder" /> box beside the button before you select it. The marcher furthest to the left as you look at the field (side to side), or furthest toward the back sideline (front to back), stays put, and the others line up that many steps from it. Clear the box to go back to spacing them between the ends.
 
@@ -76,7 +81,7 @@ The last two <Ui k="inspector.marcher.alignHeading" /> buttons mirror the select
 
 ## Turn and resize a group
 
-Select two or more marchers. The frame around them has square handles on its corners and sides, a round handle above the top edge, and a small yellow dot in the middle: the <Term id="pivot">pivot</Term>.
+Select two or more marchers. The frame around them has square handles on its corners and sides, a round handle above the top edge, and a small yellow dot in the middle: the pivot.
 
 <Media
   id="marchers-rotate"
@@ -115,7 +120,7 @@ Select exactly two marchers, then select <Ui k="inspector.marcher.swapMarchers" 
 
 Open <Ui k="toolbar.alignment.placeSelectedMarchers" /> at the bottom of the inspector and choose <Ui k="toolbar.alignment.toNextPageSpots" />, or press <Kbd action="setSelectedMarchersToNextPage" />. For every marcher at once, use <Ui k="toolbar.alignment.placeAllMarchers" /> in the toolbar's <Ui k="inspector.shape.alignmentTab" /> tab (<Kbd action="setAllMarchersToNextPage" />). It moves them like a drag does.
 
-To have marchers stay where the previous page left them instead, use <Ui k="timeline.terms.clearThisPage" />; see [Defined, Held, Not defined](/guides/timeline/defined-held-not-defined/).
+To have marchers stay where the previous page left them instead, use <Ui k="timeline.terms.clearThisPage" />; see [Reset or lock marchers on a page](/guides/timeline/reset-marchers/#clear-a-pages-positions).
 
 ## Related
 

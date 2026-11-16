@@ -31,7 +31,7 @@ A placed shape keeps its kind and its numbers, so you can come back and change i
 
 ## Change a placed shape
 
-Click any marcher in a placed shape to select the whole shape. Its outline, handles and <Term id="floating-editor">floating editor</Term> come back, with no Place button: every change saves as soon as you let go, and each is one step you can undo.
+Selecting a placed shape brings back its outline, handles and <Term id="floating-editor">floating editor</Term>, with no Place button. Each change is one step you can undo.
 
 <Media
   id="shapes-edit-placed"
@@ -46,7 +46,12 @@ Double-click a marcher in the shape to select that marcher alone. <Kbd keys="Mod
 
 ## Take a marcher out of a shape
 
-Move a marcher off their spot and they leave the shape; a notice says so, and their spot stays empty. In a closed shape, <Ui k="shapes.box.left.closeUp" /> in that notice, or in the floating editor while the shape is selected, spaces the marchers left over the shape again. A box also offers <Ui k="shapes.box.left.resplit" />, which lays it out again for the marchers left. Undo puts the marcher back.
+Move a marcher off their spot and they leave the shape; a notice says so, and their spot stays empty. In a closed shape, <Ui k="shapes.box.left.closeUp" /> in that notice, or in the floating editor while the shape is selected, lays the marchers left out in the shape again: a box in Grid takes the layout that fits the new count, or Short back, and an outline spreads round again. A box also offers <Ui k="shapes.box.left.resplit" />, which lays it out again for the marchers left. Undo puts the marcher back.
+
+<Media
+  id="shapes-take-out"
+  alt="A placed 4 × 3 box of trumpets with one spot empty: its trumpet stands outside, below the box. Clicking the box selects it, Close up is selected in its floating editor, and the eleven trumpets left fill the box again, the back row one short."
+/>
 
 ## Ungroup a shape
 
