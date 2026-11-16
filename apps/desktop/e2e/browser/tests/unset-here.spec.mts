@@ -121,7 +121,8 @@ async function unsetFromPalette(page: Page) {
 async function expectUnsetDisabled(page: Page) {
     await page.keyboard.press("ControlOrMeta+k");
     await page.getByPlaceholder("Search commands…").fill("Remove keyframe");
-    const option = page.getByRole("option", { name: /^Remove keyframe\b/ });
+    // Not "Remove keyframe, later pages move back too"
+    const option = page.getByRole("option", { name: /^Remove keyframe(?!,)/ });
     await expect(option).toHaveAttribute("aria-disabled", "true");
     await expect(option.getByTestId("palette-item-reason")).toHaveText(
         "No selected marcher has a keyframe here",
