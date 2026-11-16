@@ -21,6 +21,7 @@ function setup({
     selected = [] as number[],
     dimmed = [] as number[],
     hidden = [] as number[],
+    locked = [] as number[],
     isMac = false,
     takePress = undefined as (() => boolean) | undefined,
     moveTransform = undefined as MoveTransform | undefined,
@@ -58,6 +59,7 @@ function setup({
         }),
         zoom: () => 2,
         canSelect: (id) => !dimmed.includes(id),
+        isLocked: (id) => locked.includes(id),
         takePress,
         pressSelection,
         doubleClickMarcher,
@@ -1655,6 +1657,15 @@ describe("FieldEditor marquee", () => {
             choice: null,
             pointer: { x: 450, y: 150 },
         });
+        editor.pointerUp(at(450, 150));
+        expect(state.selected).toEqual([2, 4]);
+    });
+
+    it("leaves locked marchers out of the preview, as release does", () => {
+        const { editor, state } = setup({ locked: [3] });
+        editor.pointerDown(at(150, 50));
+        editor.pointerMove(at(450, 150));
+        expect(editor.areaShape()?.preview.ids).toEqual([2, 4]);
         editor.pointerUp(at(450, 150));
         expect(state.selected).toEqual([2, 4]);
     });
