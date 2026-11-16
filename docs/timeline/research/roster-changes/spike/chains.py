@@ -48,7 +48,7 @@ for p in pages:
         if len(best)>=4:
             i=best.index(m)
             if 0<i<len(best)-1: interior+=1
-        # signature: 3 nearest neighbour ids + offsets rounded
+        # signature: 3 nearest neighbor ids + offsets rounded
         near=[k for _,k in ds[:3]]
         sig[(m,p)]=(tuple(sorted(near)),tuple((round((P[k][0]-pm[0])/d1*4),round((P[k][1]-pm[1])/d1*4)) for k in sorted(near)), round(d1,1))
 stops=[]
@@ -71,5 +71,5 @@ for i in range(1,len(pages)):
 print("pages",len(pages),"marcher-pages",tot)
 print("in an evenly spaced line/curve of >=4: %.0f%%"%(100*in4/tot),"  >=3: %.0f%%"%(100*in3/tot),"  none(<3): %.0f%%"%(100*alone/tot))
 print("of all, interior of a >=4 chain: %.0f%%"%(100*interior/tot),"  in 2+ chain directions (grid-like): %.0f%%"%(100*multi/tot))
-print("stops per marcher (same 3 nearest neighbours, same relative offsets, same interval): mean %.1f min %d max %d of %d pages"%(sum(stops)/len(stops),min(stops),max(stops),len(pages)))
+print("stops per marcher (same 3 nearest neighbors, same relative offsets, same interval): mean %.1f min %d max %d of %d pages"%(sum(stops)/len(stops),min(stops),max(stops),len(pages)))
 print("marcher-pages where the marcher did not move from the previous page: %.0f%%"%(100*still/mv))

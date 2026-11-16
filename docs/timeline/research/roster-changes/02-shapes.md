@@ -126,7 +126,7 @@ Today there's no N+1 path on a placed shape. Re-drawing with one more selected m
 - FACT: Close up and Re-split use `nearest` from the current spots, not from the start flag (`placed/placedBox.ts:258-287`, `editor/editTargets.ts:298-314`).
 - FACT, #960 (open, owner decision pending): one app-wide rule. Triage found two rules: shapes and paste use squared least travel, and timeline casting uses plain distance (`timelineCasting.ts`). The suggested picks are shortest walk as the default, Keep and Reverse only where order matters, and moving casting onto the shared solver. Paste chose shortest walk (#961); picking spots by hand is #982.
 
-## Open or unbuilt items (Shapes epic #942 and related)
+## Open or not built items (Shapes epic #942 and related)
 
 - **#358** (open): its decisions are recorded, but nothing is built. That covers spots without marchers, joining the nearest empty spot, drag to fill or swap, Reassign, shrink limits and spot identity. "How empty spots draw" is still open.
 - **#504** (open): recipes re-keyed to `transition_id`, with an empty spot as a slot with no marcher.

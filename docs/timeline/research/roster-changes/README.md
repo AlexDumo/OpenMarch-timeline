@@ -4,7 +4,7 @@ Exploration, 2026-11-16. Nothing here is decided.
 
 | File                              | What                                                                                    |
 | --------------------------------- | --------------------------------------------------------------------------------------- |
-| 01-current-behaviour.md           | What delete and add do today on fork main                                               |
+| 01-current-behavior.md           | What delete and add do today on fork main                                               |
 | 02-shapes.md                      | Shape kinds, recipes, holes, Close up and Re-split                                      |
 | 03-pathways-holds-placeholders.md | Drawn paths, holds, placeholder dots, data keyed by marcher                             |
 | 04-prior-art-and-llm.md           | Prior art from other fields, and whether an LLM helps                                   |
