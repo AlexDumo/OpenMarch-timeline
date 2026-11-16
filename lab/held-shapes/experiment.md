@@ -8,6 +8,7 @@ status: open
 questions:
   - After holding the shape through a later page, did changing it there change it on the earlier page, as you expected?
   - Selecting one marcher of the shape held the whole shape. Was that what you wanted?
+  - Shortening or clearing one marcher's hold did the same for the rest of the shape. Was that what you wanted?
   - Before you held it, the later page showed the shape as Not defined (dashed). Did that make sense?
   - Did anything about holds or shapes surprise you, or refuse something you expected to work?
 ---
@@ -34,9 +35,9 @@ Open a demo show. Basic or Expert both work.
 - Hold Page 4 as well, then change the box on Page 4: Pages 2–4 all follow.
 - On a page where you had already changed the box before holding, hold it: the
   page's own copy goes, and the box goes back to how Page 2 has it.
-- Hold only part of a box (shorten one marcher's hold by dragging the end of
-  its bar), then try to change the box: it's refused with a message, because a
-  shape is held whole or not at all.
+- With the box held through Page 4, drag the end of one marcher's bar back to
+  the end of Page 3: the whole box's hold gets shorter, and the rest join the
+  selection. Split hold here, and Clear this page for one marcher, do the same.
 
 **Good to know**
 
