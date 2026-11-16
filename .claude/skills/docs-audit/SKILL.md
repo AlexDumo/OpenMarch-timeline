@@ -52,7 +52,13 @@ Judging whether a step needs a picture, or what a newcomer is missing, is a judg
 
 When a chapter is added, put it in the smallest group. Give each reviewer [reviewer-prompt.md](reviewer-prompt.md) with its placeholders filled in. Reviewers write findings files; they never edit the guide.
 
-## 5. Verify, then report
+## 5. Read the whole guide once, as one reader
+
+The chapter reviewers each see a quarter of the guide, so none of them notices an idea explained on five pages, two pages that disagree, or a chapter that wears a reader out. Run one more Fable reader, in parallel with step 4, over the whole of `dist/llms-full.txt` with [holistic-prompt.md](holistic-prompt.md). It reads as a newcomer start to finish, as someone landing on one page, and as an agent fetching one page's Markdown copy, and reports which page should own each repeated idea, where pages disagree, what to slim or merge, and where a picture is wanted.
+
+Its findings are structural: one fix ("this page owns holds; the others keep a sentence and a link") touches several pages. Report them before the per-page findings they overlap, since slimming a page makes some of its per-page findings moot.
+
+## 6. Verify, then report
 
 A reviewer's findings are claims. Before reporting:
 
@@ -70,6 +76,7 @@ Measured on 2026-11-15, on the 54 guide and troubleshooting pages (about 190 til
 | ---------------------------------------- | ------------------------------------ | ----------------- |
 | Each Fable reviewer (11 to 15 pages)     | 230k to 300k                         | 4 to 6.5 min      |
 | All four reviewers                       | about 1.05M                          | 6.5 min, parallel |
-| The orchestrating session (steps 1–3, 5) | about 150k                           | 20 to 30 min      |
+| The whole-guide reader (step 5)          | about 250k                           | 6 min, parallel   |
+| The orchestrating session (steps 1–3, 6) | about 150k                           | 20 to 30 min      |
 
-Plan on about 20k reviewer tokens per page. At Fable's API list prices that comes to roughly $5 to $12 for the whole guide, depending on how much of the input was cached; on a subscription, it uses Fable allowance instead. One chapter of five to seven pages is about 130k tokens. The findings are the same size either way: about 200 for the whole guide, of which 15 to 20 are high.
+Plan on about 20k reviewer tokens per page, plus the whole-guide reader. At Fable's API list prices that comes to roughly $6 to $15 for the whole guide, depending on how much of the input was cached; on a subscription, it uses Fable allowance instead. One chapter of five to seven pages is about 130k tokens. The findings are the same size either way: about 200 for the whole guide, of which 15 to 20 are high.
