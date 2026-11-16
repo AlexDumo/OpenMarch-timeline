@@ -87,6 +87,18 @@ export default function ActionButton({
         hoverTimer.current = null;
     };
     useEffect(() => clearHoverTimer, []);
+    // Escape closes a shown reason and nothing else: the app's own Escape (cancel a tool) must
+    // not run under it. Listening in the capture phase, it's handled before the shortcuts are
+    useEffect(() => {
+        if (!hintOpen || !reason) return;
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key !== "Escape") return;
+            event.stopPropagation();
+            setHintOpen(false);
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+    }, [hintOpen, reason]);
     const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
     const closeHint = useCallback(() => setHintOpen(false), []);
     const longPress = useLongPress(() => setHintOpen(true), {
@@ -150,7 +162,8 @@ export default function ActionButton({
                 rest.onPointerLeave?.(e);
                 if (e.pointerType !== "mouse") return;
                 clearHoverTimer();
-                if (isTouch) setHintOpen(false);
+                // The touch layout's hover hint, and a clicked reason, go with the pointer
+                setHintOpen(false);
             }}
             data-own-long-press
             ref={setAnchor}

@@ -84,6 +84,41 @@ describe("ActionButton", () => {
         off();
     });
 
+    it("a clicked reason closes on Escape, which goes no further, and when the mouse leaves", () => {
+        const off = registerActionHandler("swapMarchers", {
+            run: vi.fn(),
+            isEnabled: () => false,
+            disabledReason: () => "Select 2 marchers to swap them",
+        });
+        const beyond = vi.fn();
+        window.addEventListener("keydown", beyond);
+        render(<ActionButton action="swapMarchers">Swap</ActionButton>, {
+            wrapper: Providers,
+        });
+        const button = screen.getByRole("button", { name: "Swap" });
+        const shown = () =>
+            screen.queryAllByText("Select 2 marchers to swap them").length;
+        const hidden = shown();
+        fireEvent.click(button);
+        expect(shown()).toBeGreaterThan(hidden);
+        fireEvent.keyDown(window, { key: "Escape" });
+        expect(shown()).toBe(hidden);
+        expect(beyond).not.toHaveBeenCalled();
+
+        fireEvent.click(button);
+        expect(shown()).toBeGreaterThan(hidden);
+        // React makes its pointer leave from a pointerout to outside the button
+        const out = new MouseEvent("pointerout", {
+            bubbles: true,
+            relatedTarget: document.body,
+        });
+        Object.defineProperty(out, "pointerType", { value: "mouse" });
+        fireEvent(button, out);
+        expect(shown()).toBe(hidden);
+        window.removeEventListener("keydown", beyond);
+        off();
+    });
+
     it("greyed out with no reason stays plainly disabled", () => {
         const off = registerActionHandler("swapMarchers", {
             run: vi.fn(),

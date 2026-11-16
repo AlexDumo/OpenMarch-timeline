@@ -127,11 +127,11 @@ const CHECKABLE: ReadonlySet<ActionId> = new Set([
 /** The room for a check in front of a checkable entry's words */
 const CHECK_SLOT_CLASS = "flex w-[14px] shrink-0 justify-center";
 
-/** Each action's enabled state and live label, as one string, so a change re-renders. */
+/** Each action's enabled state, live label and reason, as one string, so a change re-renders. */
 const handlerSnapshot = () =>
     FIELD_MENU_ACTIONS.map(
         (id) =>
-            `${isActionEnabled(id) ? 1 : 0}${isActionChecked(id) ? 1 : 0}${actionLabelNow(id) ?? ""}`,
+            `${isActionEnabled(id) ? 1 : 0}${isActionChecked(id) ? 1 : 0}${actionLabelNow(id) ?? ""}\t${actionDisabledReason(id) ?? ""}`,
     ).join("\n");
 
 /** Closed, the menu shows nothing, so it reads no handler (a label may run a check) */
