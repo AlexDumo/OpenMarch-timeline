@@ -353,6 +353,12 @@
         "width": 1600,
         "height": 1138
     },
+    "shapes-clipboard-card": {
+        "chapter": "shapes",
+        "kind": "still",
+        "width": 620,
+        "height": 396
+    },
     "shapes-draw-arc": {
         "chapter": "shapes",
         "kind": "clip",
@@ -406,6 +412,13 @@
         "kind": "still",
         "width": 1404,
         "height": 876
+    },
+    "shapes-paste": {
+        "chapter": "shapes",
+        "kind": "clip",
+        "width": 1280,
+        "height": 680,
+        "seconds": 6.5
     },
     "shapes-snap-guide": {
         "chapter": "shapes",

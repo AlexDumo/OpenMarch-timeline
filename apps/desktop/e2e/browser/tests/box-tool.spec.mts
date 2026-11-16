@@ -4524,6 +4524,16 @@ test("change: the pivot of a box placed on a page and again on the next one chan
     await expect(pivotButton).toHaveAttribute("data-pivot", "nw");
 });
 
+/**
+ * The field menu's first entry after Copy, Paste and Paste exactly (#961), which always lead it:
+ * where the shape entries (Group, Ungroup) start
+ */
+const firstShapeItem = (menu: Locator) =>
+    menu
+        .getByRole("menuitem")
+        .filter({ hasNotText: /^(Copy|Paste)/ })
+        .first();
+
 test.describe("a box carried onto a page with no positions of its own (#485)", () => {
     test.use({
         seedSql: seedShowSql({
@@ -4850,7 +4860,7 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         await page.mouse.click(member.x, member.y, { button: "right" });
         const menu = page.getByTestId("field-menu");
         await expect(menu).toBeVisible();
-        await expect(menu.getByRole("menuitem").first()).toHaveText(/Ungroup/);
+        await expect(firstShapeItem(menu)).toHaveText(/Ungroup/);
         await page.keyboard.press("Escape");
         await expect(menu).toBeHidden();
 
@@ -4901,10 +4911,8 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         const steps = await undoSteps(show);
         await page.mouse.click(member.x, member.y, { button: "right" });
         await expect(menu).toBeVisible();
-        await expect(menu.getByRole("menuitem").first()).toHaveText(
-            /Group selection/,
-        );
-        await menu.getByRole("menuitem").first().click();
+        await expect(firstShapeItem(menu)).toHaveText(/Group selection/);
+        await firstShapeItem(menu).click();
         await expect.poll(kinds).toEqual(["group"]);
         await waitForIdle(page);
         // Nobody moves; Page 1 takes the change, as one undo step
@@ -4920,7 +4928,7 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         ).toHaveCount(0);
         await page.mouse.click(member.x, member.y, { button: "right" });
         await expect(menu).toBeVisible();
-        await expect(menu.getByRole("menuitem").first()).toHaveText(/Ungroup/);
+        await expect(firstShapeItem(menu)).toHaveText(/Ungroup/);
         await page.keyboard.press("Escape");
         await expect(menu).toBeHidden();
 
