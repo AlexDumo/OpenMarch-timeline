@@ -107,14 +107,54 @@ async function dragMarchers(page, from, dx, dy, wait) {
  * Page 3 with B1–B4 moving from count 5 to the page's end in a move of their own ("Move 1"), the
  * move's clip selected.
  */
-async function withMove(page, wait) {
+async function withMove(page, wait, dy = 40) {
     await selectPage(page, 11, wait);
     const { perCount } = await countWidth(page, 11);
     await dragStartFlag(page, perCount, 4, wait);
     const [b1] = await select(page, range("B", 1, 4), wait);
-    await dragMarchers(page, b1, 0, 40, wait);
+    await dragMarchers(page, b1, 0, dy, wait);
     await tidy(page);
     return { perCount };
+}
+
+/**
+ * The timeline pane's full height, from `left` to `right` (window x), so a picture shows two or
+ * three pages at a size that can be read instead of the whole show.
+ */
+async function paneSpan(page, left, right) {
+    const p = await page.getByTestId("timeline-pane").boundingBox();
+    const x = Math.max(0, Math.floor(left));
+    return {
+        x,
+        y: Math.floor(p.y),
+        width: Math.min(1600, Math.ceil(right)) - x,
+        height: Math.ceil(p.height),
+    };
+}
+
+/** The timeline from page `fromId`'s box to page `toId`'s, with `pad` points each side. */
+async function pagesSpan(page, fromId, toId, pad = 24) {
+    const a = await pageBox(page, fromId).boundingBox();
+    const b = await pageBox(page, toId).boundingBox();
+    return paneSpan(page, a.x - pad, b.x + b.width + pad);
+}
+
+/** The box around the named marchers on the field, grown by `pad` (window points). */
+async function marchersBox(page, labels, pad = 60) {
+    const all = await marchers(page);
+    const pts = labels.map((l) => all.get(l)).filter(Boolean);
+    const x0 = Math.min(...pts.map((p) => p.x)) - pad;
+    const y0 = Math.min(...pts.map((p) => p.y)) - pad;
+    const x1 = Math.max(...pts.map((p) => p.x)) + pad;
+    const y1 = Math.max(...pts.map((p) => p.y)) + pad;
+    const x = Math.max(0, Math.floor(x0));
+    const y = Math.max(0, Math.floor(y0));
+    return {
+        x,
+        y,
+        width: Math.min(1600, Math.ceil(x1)) - x,
+        height: Math.min(1000, Math.ceil(y1)) - y,
+    };
 }
 
 /** The field and the timeline, without the inspector (for clips where both matter). */
@@ -144,7 +184,9 @@ const shots = [
             await wait(800);
             await page.mouse.move(5, 500);
             await tidy(page);
-            return { box: await pane(around, page) };
+            // From the controls and the readout to the end of Page 4, so each part can be read
+            const p4 = await pageBox(page, 12).boundingBox();
+            return { box: await paneSpan(page, 0, p4.x + p4.width + 24) };
         },
     },
     {
@@ -175,6 +217,41 @@ const shots = [
         },
     },
 
+    {
+        id: "timeline-swap",
+        kind: "clip",
+        // Expert, Page 3 selected: the playhead dragged back past the start flag into Page 2. The
+        // two lines trade places, so the stretch between them is still the one being edited
+        async setup({ page, wait }) {
+            await ready(page, wait);
+            await selectPage(page, 11, wait);
+            await page.mouse.move(800, 990);
+            await tidy(page);
+            const p4 = await pageBox(page, 12).boundingBox();
+            return { box: await paneSpan(page, 0, p4.x + p4.width + 24) };
+        },
+        async perform({ page, film, overlay }) {
+            await overlay.enable();
+            const ph = await page
+                .getByTestId("timeline-playhead")
+                .boundingBox();
+            const { box: p2 } = await countWidth(page, 10);
+            const grab = { x: ph.x + ph.width / 2, y: ph.y + 8 };
+            const rest = { x: grab.x + 60, y: grab.y + 70 };
+            await page.mouse.move(rest.x, rest.y);
+            await film.moveTo(page, rest, grab, 0.6);
+            await film.hold(0.3);
+            await film.drag(
+                page,
+                grab,
+                { x: p2.x + p2.width / 2, y: grab.y },
+                2,
+            );
+            await page.mouse.move(rest.x, rest.y);
+            await film.hold(1.5);
+        },
+    },
+
     // Play the show
     {
         id: "timeline-play-guide",
@@ -196,12 +273,14 @@ const shots = [
         id: "timeline-loop",
         kind: "clip",
         // Loop on (C) over Page 3, then the loop bar's end dragged to the end of Page 4
-        async setup({ page, around, wait }) {
+        async setup({ page, wait }) {
             await ready(page, wait);
             await selectPage(page, 11, wait);
             await page.mouse.move(800, 990);
             await tidy(page);
-            return { box: await pane(around, page) };
+            // From the Loop button to past the end of Page 4
+            const p4 = await pageBox(page, 12).boundingBox();
+            return { box: await paneSpan(page, 0, p4.x + p4.width + 60) };
         },
         async perform({ page, film, overlay, box }) {
             await overlay.enable();
@@ -258,8 +337,12 @@ const shots = [
             await wait(800);
             await tidy(page);
             const menu = page.getByRole("menu").first();
+            // The last pages, the shaded counts after them and the menu, not the whole show
             return {
-                box: union(await pane(around, page), await around(menu, 8)),
+                box: union(
+                    await paneSpan(page, ph.x - 420, ph.x + 260),
+                    await around(menu, 8),
+                ),
             };
         },
     },
@@ -267,13 +350,13 @@ const shots = [
         id: "timeline-page-flag",
         kind: "clip",
         // Page 3's flag dragged two counts later: Page 3 grows, Page 4 shrinks
-        async setup({ page, around, wait }) {
+        async setup({ page, wait }) {
             await ready(page, wait);
             await selectPage(page, 10, wait);
             await page.keyboard.press("Escape");
             await page.mouse.move(800, 990);
             await tidy(page);
-            return { box: await pane(around, page) };
+            return { box: await pagesSpan(page, 10, 13, 24) };
         },
         async perform({ page, film, overlay, box }) {
             await overlay.enable();
@@ -402,7 +485,7 @@ const shots = [
             await selectPage(page, 9, wait);
             await page.mouse.move(800, 990);
             await wait(500);
-            return { box: await pane(around, page) };
+            return { box: await pagesSpan(page, 10, 12, 80) };
         },
         async perform({ page, film, overlay, box }) {
             await overlay.enable();
@@ -446,10 +529,11 @@ const shots = [
     {
         id: "timeline-isolate",
         kind: "still",
-        // The move isolated (double-click): everyone else dimmed, its paths drawn
-        async setup({ page, wait }) {
+        // The move isolated (double-click): everyone else dimmed, its paths drawn. A short drag,
+        // so the paths are within the step size limit (not red)
+        async setup({ page, wait, around, union }) {
             await ready(page, wait);
-            await withMove(page, wait);
+            await withMove(page, wait, 16);
             await page
                 .locator("[data-timeline-range-track]")
                 .first()
@@ -457,7 +541,107 @@ const shots = [
             await wait(1500);
             await page.mouse.move(800, 990);
             await tidy(page);
-            return { box: await fieldAndTimeline(page) };
+            // The isolation bar at the top of the field and the move's marchers below it
+            const bar = await around(
+                page.getByTestId("timeline-isolation-bar"),
+                12,
+            );
+            const near = await marchersBox(page, range("B", 1, 4), 160);
+            const box = union(bar, near);
+            // No wider than the field
+            const c = await page
+                .getByTestId("fieldCanvas")
+                .first()
+                .boundingBox();
+            const x = Math.max(box.x, Math.floor(c.x));
+            const right = Math.min(box.x + box.width, Math.ceil(c.x + c.width));
+            return { box: { ...box, x, width: right - x } };
+        },
+    },
+
+    {
+        id: "timeline-merge",
+        kind: "clip",
+        // Page 3: B1 to B4 split into a move of their own, then its bar dragged up onto Page 3's
+        // box, which is outlined with "Merge into Page 3"; on release the bar is gone
+        async setup({ page, wait }) {
+            await ready(page, wait);
+            await selectPage(page, 11, wait);
+            await select(page, range("B", 1, 4), wait);
+            await pageBox(page, 11).click({
+                button: "right",
+                position: { x: 8, y: 13 },
+            });
+            await wait(800);
+            await page
+                .getByRole("menuitem", { name: /into new move/ })
+                .first()
+                .click();
+            await wait(1500);
+            // Out of the move's isolation, then nobody selected
+            await page.keyboard.press("Escape");
+            await wait(600);
+            await page.keyboard.press("Escape");
+            await wait(600);
+            await page.mouse.move(800, 990);
+            await tidy(page);
+            return { box: await pagesSpan(page, 10, 12, 60) };
+        },
+        async perform({ page, film, overlay }) {
+            await overlay.enable();
+            const bar = await page
+                .locator("[data-timeline-range-track]")
+                .first()
+                .boundingBox();
+            const p3 = await pageBox(page, 11).boundingBox();
+            const grab = {
+                x: bar.x + bar.width / 2,
+                y: bar.y + bar.height / 2,
+            };
+            const rest = { x: grab.x + 80, y: grab.y + 10 };
+            const drop = { x: grab.x, y: p3.y + p3.height / 2 };
+            await page.mouse.move(rest.x, rest.y);
+            await film.moveTo(page, rest, grab, 0.6);
+            await film.hold(0.3);
+            await page.mouse.down();
+            await film.moveTo(page, grab, drop, 1.2);
+            await film.hold(1.2);
+            await page.mouse.up();
+            await page.mouse.move(rest.x, rest.y);
+            await film.hold(1.5);
+        },
+    },
+    {
+        id: "timeline-basic-point",
+        kind: "still",
+        mode: "basic",
+        // Basic, Page 3: the playhead put on count 5 and B1 to B4 dragged there, so a tick marks
+        // their position at that count; the tick's right-click menu open on "Remove this count's
+        // position"
+        async setup({ page, wait, around, union }) {
+            await ready(page, wait);
+            await selectPage(page, 11, wait);
+            const { box: p3, perCount } = await countWidth(page, 11);
+            // On the measure row under the page boxes: a click there moves the playhead (on the box
+            // it selects the page)
+            await page.mouse.click(p3.x + perCount * 4, p3.y + p3.height + 14);
+            await wait(1000);
+            const [b1] = await select(page, range("B", 1, 4), wait);
+            await dragMarchers(page, b1, 0, 24, wait);
+            // The playhead off the tick (it sits on it and takes the click), still in Page 3
+            await page.mouse.click(p3.x + perCount * 8, p3.y + p3.height + 14);
+            await wait(1000);
+            await tidy(page);
+            const tick = page.getByTestId("basic-point-tick").first();
+            await tick.click({ button: "right" });
+            await wait(800);
+            const menu = page.getByRole("menu").first();
+            return {
+                box: union(
+                    await pagesSpan(page, 10, 12, 40),
+                    await around(menu, 8),
+                ),
+            };
         },
     },
 
@@ -491,18 +675,19 @@ const shots = [
         kind: "still",
         // T1–T4 held on Page 4 (Hold from last keyframe): the solid Held line under Page 4 from
         // Page 3's diamond, the keyframe diamonds at the flags where they're defined, and the
-        // departure ticks where they move again. Page 2 is selected afterwards, so Page 4's box
-        // isn't outlined over the line
+        // departure ticks where they move again. Page 1 is selected afterwards, so Page 4's box
+        // isn't outlined over the line and the start flag is out of the crop (Pages 3 to 5A)
         async setup({ page, wait, around }) {
             await ready(page, wait);
             await selectPage(page, 12, wait);
             await select(page, range("T", 1, 4), wait);
             await page.keyboard.press("Control+KeyH");
             await wait(1500);
-            await selectPage(page, 10, wait);
+            // Page 1 selected, so the start flag and the playhead sit outside the picture
+            await selectPage(page, 9, wait);
             await tidy(page);
             await page.mouse.move(800, 990);
-            return { box: await pane(around, page) };
+            return { box: await pagesSpan(page, 11, 14, 24) };
         },
     },
     {
@@ -555,7 +740,7 @@ const shots = [
             await tidy(page);
             await page.mouse.move(800, 990);
             await wait(500);
-            return { box: await pane(around, page) };
+            return { box: await pagesSpan(page, 11, 14, 24) };
         },
         async perform({ page, film, overlay, box }) {
             await overlay.enable();
@@ -612,6 +797,49 @@ const shots = [
         },
     },
 
+    {
+        id: "timeline-hold-drag",
+        kind: "clip",
+        // Expert: T1 to T4 Held over Pages 4 and 5, Page 5 selected, so the start flag is on Page
+        // 4's flag, later than the hold's start. While they're dragged on the field the hold's
+        // line stays dark before the start flag and lights from it on: the drag ends the hold
+        // there and adds a move into Page 5
+        async setup({ page, wait, union }) {
+            await ready(page, wait);
+            await selectPage(page, 12, wait);
+            await select(page, range("T", 1, 4), wait);
+            await page.keyboard.press("Control+KeyH");
+            await wait(1500);
+            await selectPage(page, 13, wait);
+            await page.keyboard.press("Control+KeyH");
+            await wait(1500);
+            await tidy(page);
+            await page.mouse.move(800, 990);
+            await wait(500);
+            return {
+                box: union(
+                    await marchersBox(page, range("T", 1, 4), 120),
+                    await pagesSpan(page, 11, 14, 24),
+                ),
+            };
+        },
+        async perform({ page, film, overlay }) {
+            await overlay.enable();
+            const t1 = (await marchers(page)).get("T1");
+            const rest = { x: t1.x + 80, y: t1.y + 80 };
+            const to = { x: t1.x + 60, y: t1.y - 40 };
+            await page.mouse.move(rest.x, rest.y);
+            await film.moveTo(page, rest, t1, 0.6);
+            await page.mouse.down();
+            await film.moveTo(page, t1, to, 1.2);
+            // Held down a moment, so the lit line can be seen before the drop
+            await film.hold(1.5);
+            await page.mouse.up();
+            await page.mouse.move(rest.x, rest.y);
+            await film.hold(1.2);
+        },
+    },
+
     // See where marchers go
     {
         id: "timeline-start-flag-positions",
@@ -644,20 +872,32 @@ const shots = [
         async setup({ page, wait }) {
             await ready(page, wait);
             await selectPage(page, 13, wait);
+            // Two selected, so the squares at their keyframes show on their paths
+            await select(page, ["B1", "B2"], wait);
             await page.mouse.move(800, 990);
             await tidy(page);
-            const c = await page
-                .getByTestId("fieldCanvas")
-                .first()
-                .boundingBox();
-            return {
-                box: {
-                    x: Math.round(c.x),
-                    y: Math.round(c.y),
-                    width: Math.round(c.width),
-                    height: Math.round(c.height),
-                },
-            };
+            // The brass block, not the whole field
+            return { box: await marchersBox(page, range("B", 1, 8), 90) };
+        },
+    },
+    {
+        id: "timeline-next-paths",
+        kind: "still",
+        // Page 4 with Next paths on and start flag positions off: a line from each marcher's spot
+        // at Page 4's set to a dot at its spot at Page 5's set (the brass move on Page 5)
+        uiSettings: {
+            nextPaths: true,
+            startFlagPositions: {
+                always: { dots: "off", paths: "off" },
+                hold: { dots: "all", paths: "all" },
+            },
+        },
+        async setup({ page, wait }) {
+            await ready(page, wait);
+            await selectPage(page, 12, wait);
+            await page.mouse.move(800, 990);
+            await tidy(page);
+            return { box: await marchersBox(page, range("B", 1, 8), 120) };
         },
     },
 ];

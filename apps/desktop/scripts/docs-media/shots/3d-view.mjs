@@ -348,6 +348,30 @@ async function zoomFieldAt(page, at, steps) {
 
 const shots = [
     {
+        id: "3d-open-button",
+        kind: "still",
+        // Open 3D View at the toolbar's right end, beside the Editor and Preview switch
+        async setup({ page, around, wait }) {
+            await tidy(page);
+            await page.mouse.move(800, 600);
+            await wait(400);
+            // The 3D View button and the Editor and Preview switch, a little of the toolbar around them
+            const end = await around(
+                page.getByTestId("open-view3d").locator("xpath=.."),
+                10,
+            );
+            const x = Math.max(0, end.x - 40);
+            return {
+                box: {
+                    x,
+                    y: end.y,
+                    width: end.x + end.width - x,
+                    height: end.height,
+                },
+            };
+        },
+    },
+    {
         id: "3d-window",
         kind: "still",
         // The whole 3D View window on its default camera, a few pages in
@@ -360,7 +384,7 @@ const shots = [
     {
         id: "3d-move-view",
         kind: "clip",
-        // Orbit with a drag, pan with Shift+drag, zoom with the wheel
+        // The default (Map) controls: pan with a drag, orbit with a right-drag, zoom with the wheel
         async setup(ctx) {
             await seekInPage(ctx.page, 3, 0.5);
             const { view } = await open3d(ctx);
@@ -381,52 +405,57 @@ const shots = [
             const view = this.view;
             await overlayIn(view, box);
             const c = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-            await view.mouse.move(c.x - 160, c.y + 130);
+            // Small moves: from the press box a long drag carries the camera off the field
+            const a = { x: c.x - 40, y: c.y + 150 };
+            const b = { x: c.x + 50, y: c.y + 150 };
+            await view.mouse.move(a.x, a.y);
             await film.hold(0.4);
-            // Orbit: drag sideways
-            await film.drag(
-                view,
-                { x: c.x - 160, y: c.y + 130 },
-                { x: c.x + 120, y: c.y + 110 },
-                1.4,
-            );
-            await film.hold(0.8);
-            // Pan: Shift+drag
-            await view.keyboard.down("Shift");
-            await film.hold(0.3);
-            await film.drag(
-                view,
-                { x: c.x + 120, y: c.y + 110 },
-                { x: c.x - 40, y: c.y + 90 },
-                1.0,
-            );
-            await view.keyboard.up("Shift");
+            // Pan: a plain drag
+            await film.drag(view, a, b, 1.0);
+            await film.hold(0.7);
+            // Orbit: a right-drag sideways
+            const o = { x: b.x - 110, y: b.y - 5 };
+            await film.drag(view, b, o, 1.2, { button: "right" });
             await film.hold(0.6);
-            // Zoom: the wheel, toward the pointer
-            for (let i = 0; i < 6; i++) {
+            // Zoom: the wheel, toward the band
+            const z = { x: c.x, y: c.y + 140 };
+            await film.moveTo(view, o, z, 0.4);
+            for (let i = 0; i < 4; i++) {
                 await view.mouse.wheel(0, -120);
-                await film.hold(0.12);
+                await film.hold(0.15);
             }
             await film.hold(1.2);
         },
     },
     {
-        id: "3d-camera-menu",
-        kind: "still",
+        id: "3d-pick-seat",
+        kind: "clip",
+        // Pick a seat: select the armchair, click a seat in the visitors' stands, the view flies there
         async setup(ctx) {
             await seekInPage(ctx.page, 3, 0.5);
             const { view } = await open3d(ctx);
-            await view.getByTestId("view3d-camera-menu").click();
-            await ctx.wait(600);
-            const menu = view.getByTestId("view3d-camera-picker");
-            await menu.waitFor();
+            this.view = view;
             return {
-                box: ctx.union(
-                    await ctx.around(view.getByTestId("view3d-camera-bar"), 16),
-                    await ctx.around(menu, 16),
-                ),
+                box: { x: 0, y: 0, width: 1600, height: 960 },
                 target: view,
             };
+        },
+        async perform({ film, box }) {
+            const view = this.view;
+            await overlayIn(view, box);
+            const b = await view.getByTestId("view3d-pick-seat").boundingBox();
+            const at = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+            // A seat in the middle of the visitors' stands, across the field from the press box
+            const seat = { x: 800, y: 572 };
+            await view.mouse.move(at.x + 160, at.y + 140);
+            await film.hold(0.3);
+            await film.moveTo(view, { x: at.x + 160, y: at.y + 140 }, at, 0.6);
+            await view.mouse.click(at.x, at.y);
+            await film.hold(0.5);
+            await film.moveTo(view, at, seat, 0.9);
+            await film.hold(0.3);
+            await view.mouse.click(seat.x, seat.y);
+            await film.hold(3.2);
         },
     },
     {
@@ -462,8 +491,54 @@ const shots = [
             await panel.waitFor();
             await view.mouse.move(4, ctx.window.height / 2);
             await ctx.wait(800);
+            // The panel from its title down to the Lighting row: the rows this still is about
+            const top = await ctx.around(panel, 16);
+            const lighting = await ctx.around(
+                view.getByTestId("view3d-lighting-picker"),
+                8,
+            );
             return {
-                box: await ctx.around(panel, 16),
+                box: {
+                    x: top.x,
+                    y: top.y,
+                    width: top.width,
+                    height: lighting.y + lighting.height - top.y,
+                },
+                target: view,
+            };
+        },
+    },
+    {
+        id: "3d-venue-arena",
+        kind: "still",
+        // Narrower than the usual 1600 pixels: the crowd is busy, and a full-size still runs past 150 KB
+        width: 1280,
+        // Another venue for comparison: the Indoor arena under Show lights, from its first camera
+        async setup(ctx) {
+            await seekInPage(ctx.page, 3, 0.5);
+            const { view, baked } = await open3d(ctx);
+            await view.getByTestId("view3d-settings-button").click();
+            await view.getByTestId("view3d-settings").waitFor();
+            await view
+                .getByTestId("view3d-venue-picker")
+                .locator('[data-value="arena"]')
+                .click();
+            await baked(2);
+            await ctx.wait(1500);
+            await view
+                .getByTestId("view3d-lighting-picker")
+                .locator('[data-value="show"]')
+                .click()
+                .catch(() => {});
+            await ctx.wait(1500);
+            await view.getByTestId("view3d-settings-button").click();
+            await tidy(view);
+            await view.keyboard.press("Digit1");
+            await view.mouse.move(ctx.window.width - 4, ctx.window.height / 2);
+            await ctx.wait(3000);
+            return {
+                // The band, the stands and the scoreboard, without the judges' table in front
+                box: { x: 200, y: 126, width: 1200, height: 590 },
                 target: view,
             };
         },
@@ -534,7 +609,7 @@ const shots = [
     {
         id: "3d-marchers",
         kind: "still",
-        // Close in on the band: the uniforms, instruments and flags
+        // Close in on the band: brass with horns up, the drumline, a flag
         async setup(ctx) {
             await seekInPage(ctx.page, 3, 0.5);
             const { view } = await open3d(ctx);
@@ -542,12 +617,13 @@ const shots = [
             await view.keyboard.press("Digit2");
             await view.mouse.move(ctx.window.width - 4, ctx.window.height / 2);
             await ctx.wait(3000);
+            // A tight crop on the drumline and the brass beside it (the capture is 2×)
             return {
                 box: {
-                    x: 200,
-                    y: 330,
-                    width: ctx.window.width - 400,
-                    height: 440,
+                    x: 700,
+                    y: 440,
+                    width: 680,
+                    height: 250,
                 },
                 target: view,
             };
@@ -561,8 +637,18 @@ const shots = [
             const { page } = ctx;
             await drawRiser(page, { height: 1.2, color: AMBER, name: "Riser" });
             await propsPanel(page);
+            // The pointer off the panel, so no row shows its hover color
+            await page.mouse.move(1596, 996);
             await ctx.wait(800);
-            return { box: await sidebarPanelBox(page) };
+            // Down to the prop's row: the list has one prop, and the panel runs on empty below it
+            const panel = await sidebarPanelBox(page);
+            const row = await ctx.around(
+                page.getByRole("button", { name: "Edit prop" }).first(),
+                44,
+            );
+            return {
+                box: { ...panel, height: row.y + row.height - panel.y },
+            };
         },
     },
     {
@@ -621,6 +707,60 @@ const shots = [
         },
     },
     {
+        id: "3d-props-polygon",
+        kind: "clip",
+        // Choose Polygon, click three corners, then double-click the fourth to finish
+        async setup(ctx) {
+            const { page } = ctx;
+            await seekInPage(page, 2, 0.02);
+            await propsPanel(page);
+            await tidy(page);
+            const toScreen = await fieldToScreen(page);
+            const { pps, center } = await riserSpot(page);
+            const at = (dx, dy) =>
+                toScreen({ x: center.x + dx * pps, y: center.y + dy * pps });
+            this.corners = [at(-6, -2), at(6, -2), at(4, 2.5), at(-4, 2.5)];
+            const panel = await ctx.around(
+                page.getByRole("button", { name: "Polygon" }),
+                40,
+            );
+            // The panel's outline buttons and the corners, without the field below them
+            const xs = this.corners.map((c) => c.x);
+            const ys = this.corners.map((c) => c.y);
+            const corners = {
+                x: Math.min(...xs) - 140,
+                y: Math.min(...ys) - 140,
+                width: Math.max(...xs) - Math.min(...xs) + 280,
+                height: Math.max(...ys) - Math.min(...ys) + 280,
+            };
+            return { box: ctx.union(panel, corners) };
+        },
+        async perform({ page, film, overlay }) {
+            await overlay.enable();
+            const b = await page
+                .getByRole("button", { name: "Polygon" })
+                .boundingBox();
+            const at = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+            await page.mouse.move(at.x + 120, at.y + 120);
+            await film.hold(0.3);
+            await film.moveTo(page, { x: at.x + 120, y: at.y + 120 }, at, 0.6);
+            await page.mouse.click(at.x, at.y);
+            await film.hold(0.6);
+            let from = at;
+            const [c1, c2, c3, c4] = this.corners;
+            for (const c of [c1, c2, c3]) {
+                await film.moveTo(page, from, c, 0.5);
+                await page.mouse.click(c.x, c.y);
+                await film.hold(0.3);
+                from = c;
+            }
+            await film.moveTo(page, from, c4, 0.5);
+            await page.mouse.dblclick(c4.x, c4.y);
+            await page.waitForTimeout(600);
+            await film.hold(1.6);
+        },
+    },
+    {
         id: "3d-props-edit",
         kind: "still",
         // The Edit Prop panel for a riser 1.2 m tall
@@ -638,7 +778,25 @@ const shots = [
                 .nth(index)
                 .click();
             await ctx.wait(800);
-            return { box: await sidebarPanelBox(page) };
+            // Round sizes, so the picture matches its alt text
+            await setPropField(page, "Width", 6);
+            await setPropField(page, "Depth", 2);
+            // No focus ring left on the last field
+            await page.evaluate(() => document.activeElement?.blur());
+            await page.mouse.move(1596, 996);
+            await ctx.wait(600);
+            // From the panel's top to its last control, the Roll-out menu
+            const panel = await sidebarPanelBox(page);
+            const last = await ctx.around(
+                page.getByText("Roll-out", { exact: true }).locator("xpath=.."),
+                16,
+            );
+            return {
+                box: {
+                    ...panel,
+                    height: last.y + last.height - panel.y,
+                },
+            };
         },
     },
     {
@@ -649,6 +807,10 @@ const shots = [
             const { page } = ctx;
             const { item } = await drawRiser(page, { color: AMBER });
             await seekInPage(page, 2, 0.02);
+            await tidy(page);
+            // Zoom the field in on the prop, so its handles are easy to tell apart
+            const before = (await items(page)).find((i) => i.id === item.id);
+            await zoomFieldAt(page, before.screen, 3);
             const now = (await items(page)).find((i) => i.id === item.id);
             await page.mouse.click(now.screen.x, now.screen.y);
             await ctx.wait(600);
@@ -711,12 +873,21 @@ const shots = [
             await page.keyboard.press("Escape");
             await seekInPage(page, 2, 0.5);
             const { view } = await open3d(ctx);
+            // From the press box the block is behind the band, left of the 50: zoom toward it
+            const block = { x: 633, y: 649 };
+            await view.mouse.move(block.x, block.y);
+            for (let i = 0; i < 5; i++) {
+                await view.mouse.wheel(0, -120);
+                await ctx.wait(150);
+            }
+            await view.mouse.move(ctx.window.width - 4, ctx.window.height / 2);
+            await ctx.wait(3000);
             return {
                 box: {
-                    x: 200,
-                    y: 120,
-                    width: ctx.window.width - 400,
-                    height: ctx.window.height - 300,
+                    x: block.x - 450,
+                    y: block.y - 290,
+                    width: 900,
+                    height: 540,
                 },
                 target: view,
             };
@@ -779,6 +950,8 @@ const shots = [
     {
         id: "3d-front-ensemble-3d",
         kind: "still",
+        // A little under the usual 1600 pixels, to stay under 150 KB
+        width: 1400,
         // The Medium pit in the 3D View: players at their instruments, the drum major on the podium
         async setup(ctx) {
             const { page } = ctx;
@@ -789,14 +962,41 @@ const shots = [
             await view.keyboard.press("Digit2");
             await view.mouse.move(ctx.window.width - 4, ctx.window.height / 2);
             await ctx.wait(3000);
+            // The pit and its players, with the band beyond
             return {
                 box: {
-                    x: 0,
-                    y: 120,
-                    width: ctx.window.width,
-                    height: ctx.window.height - 240,
+                    x: 560,
+                    y: 380,
+                    width: 1040,
+                    height: 400,
                 },
                 target: view,
+            };
+        },
+    },
+    {
+        id: "3d-front-ensemble-summary",
+        kind: "still",
+        // The Front ensemble and podiums row at the top of the Marchers panel, for a Medium pit
+        async setup(ctx) {
+            const { page } = ctx;
+            await applyPitPreset(page, "medium");
+            await closeMarchersPanel(page);
+            await tidy(page);
+            await page.locator("#sidebar-launcher-marchers").click();
+            const row = page.getByTestId("front-ensemble-summary");
+            await row.waitFor();
+            await page.mouse.move(1596, 996);
+            await ctx.wait(800);
+            const panel = await sidebarPanelBox(page);
+            const r = await ctx.around(row, 16);
+            return {
+                box: {
+                    x: panel.x,
+                    y: panel.y,
+                    width: panel.width,
+                    height: r.y + r.height - panel.y,
+                },
             };
         },
     },

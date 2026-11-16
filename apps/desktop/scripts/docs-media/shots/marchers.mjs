@@ -96,17 +96,15 @@ async function toolbar(page) {
     };
 }
 
+/** The toolbar cut off just past `last`, so its tools show near full size. */
+async function toolbarUpTo(page, last) {
+    const bar = await toolbar(page);
+    const end = await last.boundingBox();
+    if (!end) return bar;
+    return { ...bar, width: end.x + end.width + 16 - bar.x };
+}
+
 const shots = [
-    {
-        id: "marchers-panel",
-        kind: "still",
-        // The Marchers panel: the list, with Add and Marcher Appearance
-        async setup({ page, wait }) {
-            await toPage1(page, wait);
-            await openSidebarPanel(page, "Marchers", wait);
-            return { box: await sidebarPanel(page, 520) };
-        },
-    },
     {
         id: "marchers-add-form",
         kind: "still",
@@ -247,7 +245,11 @@ const shots = [
             await toPage1(page, wait);
             await page.getByRole("tab", { name: "Select" }).click();
             await wait(600);
-            return { box: await toolbar(page) };
+            const all = page
+                .locator("[role='tabpanel'][data-state='active']")
+                .getByText("Select all", { exact: true })
+                .last();
+            return { box: await toolbarUpTo(page, all) };
         },
     },
     {
@@ -256,7 +258,11 @@ const shots = [
         // The Alignment tab: coordinate rounding, the locks, Snap and Snap to grid, Place all marchers
         async setup({ page, wait }) {
             await toPage1(page, wait);
-            return { box: await toolbar(page) };
+            const place = page
+                .locator("[role='tabpanel'][data-state='active']")
+                .getByText("Place all marchers", { exact: false })
+                .first();
+            return { box: await toolbarUpTo(page, place) };
         },
     },
     {
@@ -442,66 +448,6 @@ const shots = [
         },
     },
     {
-        id: "marchers-pivot-pick",
-        kind: "clip",
-        // Resting on a selected block's pivot dot shows the Ctrl-drag reminder; then Pick on
-        // field, and a click on the block's front-right marcher puts the pivot there
-        async setup({ page, wait }) {
-            await toPage1(page, wait);
-            const all = await marchers(page);
-            const block = named(all, [
-                ...range("U", 1, 4),
-                ...range("B", 1, 8),
-            ]);
-            await shiftSelect(page, block, wait);
-            const b = bounds(block);
-            return {
-                box: boxAround(
-                    {
-                        x: (b.left + b.right) / 2 + 20,
-                        y: (b.top + b.bottom) / 2,
-                    },
-                    620,
-                    360,
-                ),
-            };
-        },
-        async perform({ page, film, overlay }) {
-            await overlay.enable();
-            const pivot = await page.evaluate(() =>
-                window.fieldTest.selectionPivot(),
-            );
-            const b8 = (await marchers(page)).get("B8");
-            const target = { x: b8.x, y: b8.y };
-            const rest = { x: pivot.screen.x + 70, y: pivot.screen.y + 60 };
-            await page.mouse.move(rest.x, rest.y);
-            await film.hold(0.3);
-            await film.moveTo(page, rest, pivot.screen, 0.5);
-            // The reminder waits half a second, as a tooltip does
-            await film.hold(1.6);
-            await page.keyboard.down("Control");
-            await film.hold(0.8);
-            await page.keyboard.up("Control");
-            await film.moveTo(page, pivot.screen, rest, 0.4);
-            await film.hold(0.3);
-            const pick = page.getByTestId("arrange-pick-pivot");
-            await pick.click();
-            const near = { x: target.x - 60, y: target.y - 40 };
-            await page.mouse.move(near.x, near.y);
-            await film.hold(0.4);
-            await film.moveTo(
-                page,
-                near,
-                { x: target.x + 3, y: target.y + 2 },
-                0.7,
-            );
-            await film.hold(0.6);
-            await page.mouse.down();
-            await page.mouse.up();
-            await film.hold(1.2);
-        },
-    },
-    {
         id: "marchers-pivot",
         kind: "clip",
         // Ctrl-dragging a selected block's pivot out of its center onto its corner marcher, then
@@ -581,7 +527,8 @@ const shots = [
     {
         id: "marchers-appearance",
         kind: "still",
-        // The Appearance panel's Section tab with a style for the Trumpets
+        // The Appearance panel's Section tab with a style for one section, given a red fill and a
+        // square shape
         async setup({ page, wait }) {
             await toPage1(page, wait);
             await openSidebarPanel(page, "Appearance", wait);
@@ -595,7 +542,23 @@ const shots = [
                     .click();
                 await wait(800);
             }
-            return { box: await sidebarPanel(page, 270) };
+            const panel = page.locator(".animate-scale-in").first();
+            // A red fill, from the color picker's swatches
+            await panel
+                .getByText("Fill Color", { exact: true })
+                .first()
+                .click();
+            await wait(500);
+            await page.locator("[title='#D0021B']").first().click();
+            await wait(300);
+            await page.getByText("Save", { exact: true }).last().click();
+            await wait(600);
+            // A square dot
+            await panel.getByRole("combobox").first().click();
+            await wait(400);
+            await page.getByRole("option").nth(2).click();
+            await wait(1000);
+            return { box: await sidebarPanel(page, 262) };
         },
     },
 ];

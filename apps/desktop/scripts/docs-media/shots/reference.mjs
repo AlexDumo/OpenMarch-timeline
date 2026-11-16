@@ -3,15 +3,6 @@ import { settingsWindow } from "./start.mjs";
 
 const shots = [
     {
-        id: "reference-settings-window",
-        kind: "still",
-        // The Settings window on its first section
-        async setup(ctx) {
-            await ctx.wait(2000);
-            return settingsWindow(ctx, "General");
-        },
-    },
-    {
         id: "reference-shortcut-settings",
         kind: "still",
         // Settings › Keyboard shortcuts, where any action's keys can be changed

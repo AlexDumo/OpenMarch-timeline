@@ -56,7 +56,7 @@ const shots = [
         id: "files-launch",
         kind: "still",
         // The start page with the show in Recent Files, after closing it
-        async setup({ page, wait, whole }) {
+        async setup({ page, wait, around }) {
             await tidy(page);
             await fileTab(page);
             await page.getByRole("button", { name: "Exit File" }).click();
@@ -67,31 +67,24 @@ const shots = [
             await wait(2500);
             await page.mouse.move(1596, 996);
             await wait(400);
-            return { box: whole };
-        },
-    },
-    {
-        id: "files-file-tab",
-        kind: "still",
-        async setup({ page, around }) {
-            await tidy(page);
-            await fileTab(page);
-            await page.mouse.move(1000, 600);
-            const tabs = page.getByRole("tablist").first();
-            const panel = page.getByRole("tabpanel").first();
-            const a = await around(tabs, 8);
-            const b = await around(panel, 8);
-            const x = Math.min(a.x, b.x);
-            const y = Math.min(a.y, b.y);
+            // The sidebar's New File and Open File, and the Recent Files card beside them
+            const card = await around(
+                page
+                    .getByText("show.dots", { exact: true })
+                    .first()
+                    .locator("xpath=../.."),
+                24,
+            );
+            const clear = await around(
+                page.getByRole("button", { name: "Clear missing" }),
+                16,
+            );
             return {
                 box: {
-                    x,
-                    y,
-                    width: Math.min(
-                        1000,
-                        Math.max(a.x + a.width, b.x + b.width) - x,
-                    ),
-                    height: Math.max(a.y + a.height, b.y + b.height) - y,
+                    x: 0,
+                    y: 40,
+                    width: Math.max(card.x + card.width, clear.x + clear.width),
+                    height: card.y + card.height - 40,
                 },
             };
         },
@@ -109,6 +102,10 @@ const shots = [
         kind: "still",
         async setup({ page, around }) {
             const dialog = await exportDialog(page, "Drill Charts");
+            // Individual Drill Charts on, so the preview shows one marcher's chart with its paths
+            await dialog.getByRole("checkbox").first().click();
+            await page.waitForTimeout(1500);
+            await page.mouse.move(4, 996);
             return { box: await settledBox(page, around, dialog, 4) };
         },
     },
@@ -118,7 +115,91 @@ const shots = [
         async setup({ page, around, wait }) {
             const dialog = await exportDialog(page, "Video");
             await wait(2500);
-            return { box: await settledBox(page, around, dialog, 4) };
+            // Scrolled to the bottom: the preview with its info box, the framing sliders and
+            // the On-screen info checkboxes
+            // Scrolled to the end: the preview's lower part with the info box, the framing
+            // sliders and the On-screen info checkboxes
+            await page
+                .locator(".export-coordinates-dialog")
+                .evaluate((el) => (el.scrollTop = el.scrollHeight));
+            await wait(800);
+            const d = await settledBox(page, around, dialog, 4);
+            // Down to the last On-screen info checkbox (not the music file's path under it)
+            const last = await around(
+                dialog.getByText("Elapsed time", { exact: true }),
+                16,
+            );
+            const bottom = Math.min(d.y + d.height, last.y + last.height);
+            return {
+                box: { x: d.x, y: d.y, width: d.width, height: bottom - d.y },
+            };
+        },
+    },
+    {
+        id: "files-video-overlay",
+        kind: "clip",
+        // In the video preview: drag the info box to the top, then drag its corner to make it larger
+        async setup({ page, around, wait }) {
+            await exportDialog(page, "Video");
+            await wait(2500);
+            const canvas = page
+                .locator(".export-coordinates-dialog canvas")
+                .first();
+            await canvas.evaluate((el) =>
+                el.scrollIntoView({ block: "center" }),
+            );
+            await wait(800);
+            const b = await canvas.boundingBox();
+            // Find the box's corner and side handles from the cursor the preview shows over them
+            const found = {};
+            for (
+                let y = b.y + b.height - 4;
+                y > b.y + 4 && !found.scale;
+                y -= 3
+            )
+                for (let x = b.x + 4; x < b.x + b.width - 4; x += 6) {
+                    await page.mouse.move(x, y);
+                    const cursor = await canvas.evaluate(
+                        (el) => el.style.cursor,
+                    );
+                    if (cursor === "nwse-resize") {
+                        found.scale = { x, y };
+                        break;
+                    }
+                }
+            if (!found.scale)
+                throw new Error("no info box corner in the preview");
+            this.corner = found.scale;
+            this.canvas = b;
+            await page.mouse.move(b.x + b.width + 40, b.y - 30);
+            await wait(400);
+            return { box: await around(canvas, 12) };
+        },
+        async perform({ page, film, overlay }) {
+            await overlay.enable();
+            const b = this.canvas;
+            const c = this.corner;
+            // Inside the box, a little in from its corner
+            const grab = { x: c.x - 60, y: c.y - 14 };
+            const start = { x: b.x + b.width - 40, y: b.y + 40 };
+            await page.mouse.move(start.x, start.y);
+            await film.hold(0.3);
+            await film.moveTo(page, start, grab, 0.6);
+            const up = { x: grab.x + b.width * 0.15, y: b.y + b.height * 0.25 };
+            await film.drag(page, grab, up, 1.2);
+            await film.hold(0.5);
+            const corner = {
+                x: c.x + (up.x - grab.x),
+                y: c.y + (up.y - grab.y),
+            };
+            await film.moveTo(page, up, corner, 0.5);
+            await film.drag(
+                page,
+                corner,
+                { x: corner.x + 40, y: corner.y + 50 },
+                1.0,
+            );
+            await film.hold(1.4);
         },
     },
     {
@@ -133,7 +214,15 @@ const shots = [
             const panel = page
                 .locator("div.backdrop-blur-32.absolute.z-40")
                 .first();
-            return { box: await around(panel, 12) };
+            // The panel's buttons, without the promotional pictures under them
+            const p = await around(panel, 12);
+            const signIn = await around(
+                panel.getByRole("button", { name: "Sign In" }).first(),
+                24,
+            );
+            return {
+                box: { ...p, height: signIn.y + signIn.height - p.y },
+            };
         },
     },
 ];

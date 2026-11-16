@@ -233,6 +233,38 @@ const boxCorners = ({ x, y, width: w }) => [
     { x: x + w * 0.85, y: y - 95 },
 ];
 
+/**
+ * Corners for a box about as deep as it is wide, so twelve marchers come out 4 × 3 and the
+ * spots read as a grid rather than an outline.
+ */
+const gridCorners = ({ x, y, width: w }) => [
+    { x: x + w * 0.2, y: y - 250 },
+    { x: x + w * 0.75, y: y - 95 },
+];
+
+/** Draws an open box between `gridCorners`, off camera; returns the corners. */
+async function openGridBox(page, bounds) {
+    const [a, b] = gridCorners(bounds);
+    await page.keyboard.press("KeyB");
+    await page.waitForTimeout(300);
+    await quickDrag(page, a, b);
+    // The pointer over the box, so its controls are at full strength
+    await page.mouse.move((a.x + b.x) / 2 + 30, a.y + 12);
+    await page.waitForTimeout(900);
+    return [a, b];
+}
+
+/** Clicks each point in turn, double-clicking the last, off camera. */
+async function clickPoints(page, points) {
+    for (const p of points.slice(0, -1)) {
+        await page.mouse.click(p.x, p.y);
+        await page.waitForTimeout(250);
+    }
+    const last = points[points.length - 1];
+    await page.mouse.dblclick(last.x, last.y);
+    await page.waitForTimeout(600);
+}
+
 const placeButton = (page) => page.getByTestId("shape-editor-place");
 
 /** Clicks Place, filmed: the pointer glides to it first. */
@@ -277,13 +309,7 @@ const shots = [
         // floating editor
         async setup({ page }) {
             const { bounds } = await startZoomed(page);
-            const [a, b] = boxCorners(bounds);
-            await page.keyboard.press("KeyB");
-            await page.waitForTimeout(300);
-            await quickDrag(page, a, b);
-            // The pointer over the box, so its controls are at full strength
-            await page.mouse.move((a.x + b.x) / 2 + 30, a.y + 12);
-            await page.waitForTimeout(900);
+            const [a, b] = await openGridBox(page, bounds);
             const bar = await editorBar(page).boundingBox();
             return {
                 box: inside(
@@ -299,7 +325,7 @@ const shots = [
         // B, a drag corner to corner, then Place
         async setup({ page }) {
             const { bounds } = await startZoomed(page);
-            this.corners = boxCorners(bounds);
+            this.corners = gridCorners(bounds);
             return {
                 box: inside(
                     frameFor(bounds, ...this.corners),
@@ -641,6 +667,148 @@ const shots = [
             await film.drag(page, side, { x: side.x + 70, y: side.y }, 1.2);
             await page.waitForTimeout(600);
             await film.hold(1.6);
+        },
+    },
+    {
+        id: "shapes-box-editor",
+        kind: "still",
+        // An open 4 × 3 box's floating editor, both rows, menus closed
+        async setup({ page }) {
+            const { bounds } = await startZoomed(page);
+            await openGridBox(page, bounds);
+            return { box: grow(await editorBar(page).boundingBox(), 12) };
+        },
+    },
+    {
+        id: "shapes-layout-menu",
+        kind: "still",
+        // An open box in Grid with its Layout menu open: Full, Stagger, Rounded, Short back, Notched
+        async setup({ page }) {
+            const { bounds } = await startZoomed(page);
+            await openGridBox(page, bounds);
+            await page.getByTestId("shape-layout-menu").click();
+            await page.waitForTimeout(600);
+            const bar = await editorBar(page).boundingBox();
+            const menu = await page
+                .getByTestId("shape-layout-menu-content")
+                .boundingBox();
+            return { box: grow(unionOf(bar, menu), 16) };
+        },
+    },
+    {
+        id: "shapes-ring",
+        kind: "still",
+        // R tapped over the field with a section selected: the shape ring open around the pointer
+        async setup({ page }) {
+            const { bounds } = await start(page);
+            this.at = { x: bounds.x + bounds.width / 2, y: bounds.y - 160 };
+            await page.mouse.move(this.at.x, this.at.y);
+            await page.waitForTimeout(300);
+            await page.keyboard.press("KeyR");
+            await page.waitForTimeout(800);
+            const ring = await page.getByTestId("shape-ring").boundingBox();
+            return { box: grow(ring, 40) };
+        },
+        async perform({ overlay }) {
+            await overlay.enable();
+            await overlay.place(this.at.x, this.at.y);
+        },
+    },
+    {
+        id: "shapes-line-editor",
+        kind: "still",
+        // An open line with a corner: its floating editor, both rows
+        async setup({ page }) {
+            const { bounds } = await startZoomed(page);
+            const { x, y, width: w } = bounds;
+            await page.keyboard.press("KeyL");
+            await page.waitForTimeout(300);
+            await clickPoints(page, [
+                { x: x + w * 0.05, y: y - 80 },
+                { x: x + w * 0.4, y: y - 210 },
+                { x: x + w * 0.95, y: y - 210 },
+            ]);
+            await page.mouse.move(x + w * 0.4, y - 200);
+            await page.waitForTimeout(900);
+            return { box: grow(await editorBar(page).boundingBox(), 12) };
+        },
+    },
+    {
+        id: "shapes-arc-editor",
+        kind: "still",
+        // An open arc: its floating editor, both rows
+        async setup({ page }) {
+            const { bounds } = await startZoomed(page);
+            const { x, y, width: w } = bounds;
+            await page.getByTestId("shapes-tab-arc").click();
+            await page.waitForTimeout(300);
+            await quickDrag(
+                page,
+                { x: x + w * 0.25, y: y - 120 },
+                { x: x + w * 0.75, y: y - 120 },
+            );
+            // The pointer on the arc's middle handle, so the editor shows at full strength
+            const mid = await handleNear(page, { x: x + w * 0.5, y: y - 200 });
+            await page.mouse.move(mid.x, mid.y);
+            await page.waitForTimeout(900);
+            return { box: grow(await editorBar(page).boundingBox(), 12) };
+        },
+    },
+    {
+        id: "shapes-curve-bend",
+        kind: "clip",
+        // An open curve through three points: its middle point is clicked, and one end of the
+        // bar through it is dragged out, so the bend gets rounder
+        async setup({ page }) {
+            const { bounds } = await startZoomed(page);
+            const { x, y, width: w } = bounds;
+            await page.getByTestId("shapes-tab-curve").click();
+            await page.waitForTimeout(300);
+            this.points = [
+                { x: x + w * 0.05, y: y - 80 },
+                { x: x + w * 0.5, y: y - 220 },
+                { x: x + w * 0.95, y: y - 80 },
+            ];
+            await clickPoints(page, this.points);
+            await page.mouse.move(x + w * 0.5, y + 40);
+            await page.waitForTimeout(600);
+            return {
+                box: inside(
+                    frameFor(
+                        bounds,
+                        { x: this.points[0].x, y: y - 300 },
+                        this.points[2],
+                        70,
+                        760,
+                    ),
+                    await fieldBox(page),
+                ),
+            };
+        },
+        async perform({ page, film, overlay }) {
+            await film.release();
+            await overlay.enable();
+            const mid = await handleNear(page, this.points[1]);
+            const rest = { x: mid.x + 60, y: mid.y + 90 };
+            await page.mouse.move(rest.x, rest.y);
+            await film.hold(0.4);
+            await film.moveTo(page, rest, mid, 0.6);
+            await page.mouse.click(mid.x, mid.y);
+            await page.waitForTimeout(400);
+            await film.hold(0.8);
+            const o = await overlayNow(page);
+            const bar = o?.barHandles ?? [];
+            if (!bar.length) throw new Error("the point shows no bar");
+            // The bar end on the right, dragged further out along the bar
+            const end = [...bar].sort((p, q) => q.at.x - p.at.x)[0].at;
+            const out = {
+                x: mid.x + (end.x - mid.x) * 2.2,
+                y: mid.y + (end.y - mid.y) * 2.2,
+            };
+            await film.moveTo(page, mid, end, 0.5);
+            await film.drag(page, end, out, 1.2);
+            await page.waitForTimeout(300);
+            await film.hold(1.4);
         },
     },
 ];
