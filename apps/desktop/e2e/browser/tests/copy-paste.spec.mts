@@ -182,9 +182,9 @@ test("a placed box copied and pasted onto other marchers previews centered on th
     const by = { x: b[0].x - a[0].x, y: b[0].y - a[0].y };
     expect(Math.abs(by.x) + Math.abs(by.y)).toBeGreaterThan(S);
     for (const v of [by.x, by.y])
-        expect(
-            Math.abs(v / (S / 2) - Math.round(v / (S / 2))),
-        ).toBeLessThan(CLOSE);
+        expect(Math.abs(v / (S / 2) - Math.round(v / (S / 2)))).toBeLessThan(
+            CLOSE,
+        );
     b.forEach((spot, i) =>
         expect(near(spot, { x: a[i].x + by.x, y: a[i].y + by.y })).toBe(true),
     );
@@ -197,7 +197,9 @@ test("a placed box copied and pasted onto other marchers previews centered on th
     };
     const at = {
         x: (b[0].x + b[3].x) / 2,
-        y: (Math.min(...b.map((s) => s.y)) + Math.max(...b.map((s) => s.y))) / 2,
+        y:
+            (Math.min(...b.map((s) => s.y)) + Math.max(...b.map((s) => s.y))) /
+            2,
     };
     expect(Math.abs(at.x - middle.x)).toBeLessThanOrEqual(S / 4 + CLOSE);
     expect(Math.abs(at.y - middle.y)).toBeLessThanOrEqual(S / 4 + CLOSE);
@@ -219,9 +221,7 @@ test("a placed box copied and pasted onto other marchers previews centered on th
 
     // One undo puts the four back and takes the second box away
     await page.keyboard.press("ControlOrMeta+z");
-    await expect
-        .poll(async () => savedAt(show, [5, 6, 7, 8]))
-        .toEqual(before);
+    await expect.poll(async () => savedAt(show, [5, 6, 7, 8])).toEqual(before);
     await expect.poll(() => savedShapes(show)).toBe(1);
 });
 
@@ -470,9 +470,10 @@ test("a copied box switched to Positions on the Clipboard card pastes onto its e
         .poll(async () => (await readField(page)).selection.length)
         .toBe(4);
     await page.keyboard.press("ControlOrMeta+c");
-    await expect(
-        card.getByTestId("clipboard-paste-as-shape"),
-    ).toHaveAttribute("data-state", "on");
+    await expect(card.getByTestId("clipboard-paste-as-shape")).toHaveAttribute(
+        "data-state",
+        "on",
+    );
 });
 
 test("the Clipboard card sits at the top of the inspector, folds (remembered after a reload) and Clear empties it", async ({
