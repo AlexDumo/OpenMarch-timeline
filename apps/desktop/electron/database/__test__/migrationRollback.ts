@@ -145,8 +145,13 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
             if (object.type === "index" && PAGE_ERA_TABLES.includes(object.tbl))
                 db.exec(object.sql);
     },
-    // Performer cues (ADR 0015 D-9): the two tables go, with their history triggers
+    // Imported silk Artwork (fork #973): its table and the undo triggers on it
     19: (db) => {
+        dropTriggers(db);
+        dropTables(db, ["view3d_silk_artwork"]);
+    },
+    // Performer cues (ADR 0015 D-9): the two tables go, with their history triggers
+    20: (db) => {
         dropTriggers(db);
         dropTables(db, ["cue_marchers", "cues"]);
     },

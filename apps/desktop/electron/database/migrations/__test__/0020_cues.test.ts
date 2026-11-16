@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * 0019 adds the cue tables (ADR 0015 D-9): a file from before it gets them empty and ends with a
+ * 0020 adds the cue tables (ADR 0015 D-9): a file from before it gets them empty and ends with a
  * new file's schema, and a cue of a type this build doesn't know is still there after the file
  * is opened again.
  */
@@ -18,10 +18,10 @@ import {
     normalizedSchema,
 } from "../../legacyFork/__test__/forkFileFixtures";
 
-describe("0019_cues", () => {
+describe("0020_cues", () => {
     let dir: string;
     beforeEach(() => {
-        dir = fs.mkdtempSync(path.join(os.tmpdir(), "om-0019-"));
+        dir = fs.mkdtempSync(path.join(os.tmpdir(), "om-0020-"));
         vi.spyOn(console, "log").mockImplementation(() => {});
         vi.spyOn(console, "debug").mockImplementation(() => {});
     });
@@ -44,7 +44,7 @@ describe("0019_cues", () => {
         const file = path.join(dir, "show.dots");
         await createNewTimelineShow(file);
         const fresh = withDb(file, normalizedSchema);
-        rollBackMigrationsFrom(file, 19);
+        rollBackMigrationsFrom(file, 20);
         expect(tables(file)).toEqual([]);
 
         await migrateFile(file);
@@ -54,6 +54,31 @@ describe("0019_cues", () => {
         expect(
             withDb(file, (db) => db.prepare("SELECT * FROM cues").all()),
         ).toEqual([]);
+    });
+
+    it("reaches a file from before 0019 too: it takes the silk Artwork table and then the cue tables", async () => {
+        const file = path.join(dir, "show.dots");
+        await createNewTimelineShow(file);
+        const fresh = withDb(file, normalizedSchema);
+        rollBackMigrationsFrom(file, 19);
+        const hasSilkArtwork = () =>
+            withDb(
+                file,
+                (db) =>
+                    db
+                        .prepare(
+                            "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'view3d_silk_artwork'",
+                        )
+                        .all().length === 1,
+            );
+        expect(tables(file)).toEqual([]);
+        expect(hasSilkArtwork()).toBe(false);
+
+        await migrateFile(file);
+
+        expect(withDb(file, normalizedSchema)).toEqual(fresh);
+        expect(tables(file)).toEqual(["cue_marchers", "cues"]);
+        expect(hasSilkArtwork()).toBe(true);
     });
 
     it("keeps a cue of a type and value no build knows yet when the file is opened again", async () => {
