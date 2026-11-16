@@ -8,12 +8,14 @@ import {
     type ShapeRecipeRecord,
 } from "@/db-functions/shapeRecipes";
 import { historyKeys } from "@/hooks/queries/useHistory";
+import { samePosition } from "@/db-functions/timelineMoves";
 import {
+    timelineCoordinateRecords,
     transformMarchersInSelection,
     type CanvasEditPlan,
 } from "@/timeline/timelineCoordinateWrites";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
-import { invalidatePlacedBoxes } from "../placed/placedBoxStore";
+import { invalidatePlacedBoxes, placedBoxesAt } from "../placed/placedBoxStore";
 import type { ShapeContext } from "../types";
 import { orderOf, targetsOf, type ToolState } from "./toolMachine";
 
@@ -72,6 +74,41 @@ export function placementOf(
         })),
         ...(tool.kind.loose && { plain: true }),
     };
+}
+
+/**
+ * Whether writing `placement` at `beat` would change nothing: nobody moves, and its members are
+ * plain dots placed plain or already stand as one placed shape of its kind (a paste onto the same
+ * marchers again). Placing it then writes nothing, so it costs no undo step.
+ */
+export function placesNothing(
+    placement: ShapePlacement,
+    beat: number,
+): boolean {
+    const ids = placement.members.map((m) => m.marcherId);
+    let now: readonly { marcher_id: number; x: number; y: number }[];
+    try {
+        now = timelineCoordinateRecords(beat, ids);
+    } catch {
+        return false;
+    }
+    const to = new Map(placement.members.map((m) => [m.marcherId, m]));
+    const nobodyMoves =
+        now.length === ids.length &&
+        now.every((c) => {
+            const spot = to.get(c.marcher_id);
+            return (
+                spot !== undefined && samePosition([c.x, c.y], [spot.x, spot.y])
+            );
+        });
+    if (!nobodyMoves) return false;
+    if (placement.plain) return true;
+    return placedBoxesAt(beat).some(
+        (box) =>
+            box.recipe.kind === placement.recipe.kind &&
+            box.recipe.members.length === to.size &&
+            box.recipe.members.every((m) => to.has(m.marcherId)),
+    );
 }
 
 /**

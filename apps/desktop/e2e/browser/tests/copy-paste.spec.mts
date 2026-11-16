@@ -125,8 +125,9 @@ const savedAt = async (show: Show, ids: readonly number[]) =>
 
 /**
  * Draws a 2 × 2 box, 2 steps between neighbors, with T1 to T4 and places it. Returns its spots.
+ * Unless `settle` is false, waits until it's saved and selected whole.
  */
-async function placeBox(show: Show): Promise<Point[]> {
+async function placeBox(show: Show, { settle = true } = {}): Promise<Point[]> {
     const { page } = show;
     const grid = await fieldGrid(show);
     const S = grid.pixelsPerStep;
@@ -144,6 +145,7 @@ async function placeBox(show: Show): Promise<Point[]> {
     const spots = (await shapeOverlay(page))!.spots;
     expect(spots).toHaveLength(4);
     await page.keyboard.press("Enter");
+    if (!settle) return spots;
     await expect(preview(page)).toBeHidden();
     await expect.poll(() => savedShapes(show)).toBe(1);
     // Placed, it's selected whole
@@ -223,6 +225,37 @@ test("a placed box copied and pasted onto other marchers previews centered on th
     await page.keyboard.press("ControlOrMeta+z");
     await expect.poll(async () => savedAt(show, [5, 6, 7, 8])).toEqual(before);
     await expect.poll(() => savedShapes(show)).toBe(1);
+});
+
+test("Copy right after Place copies the box, and pasting it again onto the same marchers changes nothing and costs no undo step", async ({
+    show,
+}) => {
+    const { page } = show;
+    const spots = await placeBox(show, { settle: false });
+    // Copied the moment the shape tool closes, before the box is read back
+    await expect(preview(page)).toBeHidden();
+    await page.keyboard.press("ControlOrMeta+c");
+    await expect(toasts(page).filter({ hasText: "Box copied" })).toBeVisible();
+    await expect.poll(() => savedShapes(show)).toBe(1);
+    await waitForIdle(page);
+
+    const steps = await undoSteps(show);
+    await page.keyboard.press("ControlOrMeta+v");
+    await expect(preview(page)).toBeVisible();
+    expect(sorted((await shapeOverlay(page))!.spots)).toEqual(sorted(spots));
+    await page.keyboard.press("Enter");
+    await expect(preview(page)).toBeHidden();
+    await waitForIdle(page);
+    expect(await undoSteps(show)).toBe(steps);
+    expect(await savedShapes(show)).toBe(1);
+    expect(sorted(await savedAt(show, [1, 2, 3, 4]))).toEqual(sorted(spots));
+
+    // So one undo takes the box itself away
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(() => savedShapes(show)).toBe(0);
+    await expect
+        .poll(async () => savedAt(show, [1, 2, 3, 4]))
+        .toEqual(asPositions(HOME.slice(0, 4)));
 });
 
 test("a box pasted onto fewer marchers is laid out for them with its spacing kept, and Escape discards the preview", async ({
