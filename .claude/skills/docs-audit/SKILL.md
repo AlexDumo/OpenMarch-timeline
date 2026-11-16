@@ -58,7 +58,13 @@ The chapter reviewers each see a quarter of the guide, so none of them notices a
 
 Its findings are structural: one fix ("this page owns holds; the others keep a sentence and a link") touches several pages. Report them before the per-page findings they overlap, since slimming a page makes some of its per-page findings moot.
 
-## 6. Verify, then report
+## 6. Test whether people and agents find answers
+
+Run one Fable agent on the questions in [find-it-questions.md](find-it-questions.md), real tasks in a band director's words. It starts from `dist/llms.txt`, opens only the pages' Markdown copies, and for each question records the pages it opened, its answer, its confidence and what slowed it down; then it says whether a person would find the page from the sidebar titles or the front page's "Find what you need" list. Add a question whenever a real user asks something the guide answered badly.
+
+On 2026-11-16 it took about 170k tokens and 4 minutes. It went from 24 to 26 of 30 answered with confidence from the first page after one round of fixes, and the misses pointed straight at titles, descriptions and missing control names.
+
+## 7. Verify, then report
 
 A reviewer's findings are claims. Before reporting:
 
@@ -77,6 +83,7 @@ Measured on 2026-11-15, on the 54 guide and troubleshooting pages (about 190 til
 | Each Fable reviewer (11 to 15 pages)     | 230k to 300k                         | 4 to 6.5 min      |
 | All four reviewers                       | about 1.05M                          | 6.5 min, parallel |
 | The whole-guide reader (step 5)          | about 250k                           | 6 min, parallel   |
-| The orchestrating session (steps 1–3, 6) | about 150k                           | 20 to 30 min      |
+| The find-it test (step 6)                | about 170k                           | 4 min, parallel   |
+| The orchestrating session (steps 1–3, 7) | about 150k                           | 20 to 30 min      |
 
 Plan on about 20k reviewer tokens per page, plus the whole-guide reader. At Fable's API list prices that comes to roughly $6 to $15 for the whole guide, depending on how much of the input was cached; on a subscription, it uses Fable allowance instead. One chapter of five to seven pages is about 130k tokens. The findings are the same size either way: about 200 for the whole guide, of which 15 to 20 are high.
