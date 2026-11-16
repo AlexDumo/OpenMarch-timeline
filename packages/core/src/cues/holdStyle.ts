@@ -1,7 +1,8 @@
 /**
  * The hold style: what a performer's feet do on counts where their dot
- * doesn't travel. It is not a cue (ADR 0015 D-1): it comes from the show
- * setting, and the compile hands it out beside the cue types.
+ * doesn't travel. It is not a cue (ADR 0015 D-1): it comes from the styles the
+ * performer's holds carry and, elsewhere, the show setting (D-5). The compile
+ * hands it out beside the cue types.
  */
 import type {
     CompileInput,
@@ -17,7 +18,12 @@ export const isItem = (marcher: CueMarcher) =>
 /** What the hold style reads of the compile's input. */
 export type HoldStyleInput = Pick<
     CompileInput,
-    "beats" | "marchers" | "showDefaults" | "travels" | "bandTravels"
+    | "beats"
+    | "marchers"
+    | "showDefaults"
+    | "travels"
+    | "bandTravels"
+    | "holdStyles"
 >;
 
 /** Whether any performer travels on each count, from `bandTravels` or else `travels`. */
@@ -36,17 +42,39 @@ function bandTravelsByCount(input: HoldStyleInput): boolean[] | null {
 }
 
 /**
- * The show's hold style on each count: a holding performer marks time (or the
- * show's `holdWhileBandMoves`) on counts where any performer travels, and
- * stands where the whole band holds. The style only matters on counts the
- * performer's own dot doesn't travel.
+ * The show's hold style on each count (ADR 0015 D-5): a holding performer
+ * stands, unless the show's `holdWhileBandMoves` asks for mark time, which it
+ * then does on counts where any performer travels (it still stands where the
+ * whole band holds). The style only matters on counts the performer's own dot
+ * doesn't travel.
  */
 function showHoldTechniques(input: HoldStyleInput): HoldTechnique[] {
-    const moving = input.showDefaults?.holdWhileBandMoves ?? "markTime";
+    const moving = input.showDefaults?.holdWhileBandMoves ?? "stand";
     const band = moving === "stand" ? null : bandTravelsByCount(input);
     return Array.from({ length: input.beats.length }, (_, c) =>
         band?.[c] ? moving : "stand",
     );
+}
+
+/**
+ * The hold style on each count of each performer whose holds carry a style
+ * (`CompileInput.holdStyles`): the show's with each style laid over the counts
+ * it covers, so it wins there whether or not the band moves.
+ */
+function ownHoldTechniques(
+    input: HoldStyleInput,
+    show: readonly HoldTechnique[],
+): Map<number, HoldTechnique[]> {
+    const byMarcher = new Map<number, HoldTechnique[]>();
+    for (const hold of input.holdStyles ?? []) {
+        const from = Math.max(Math.ceil(hold.from), 0);
+        const to = Math.min(Math.ceil(hold.to), show.length);
+        if (to <= from) continue;
+        let own = byMarcher.get(hold.marcherId);
+        if (!own) byMarcher.set(hold.marcherId, (own = [...show]));
+        own.fill(hold.style, from, to);
+    }
+    return byMarcher;
 }
 
 /** The spans of a hold style given per count: a new span wherever it changes. */
@@ -63,14 +91,21 @@ function holdSpans(onHolds: readonly HoldTechnique[]): HoldStyleSpan[] {
 }
 
 /**
- * Each performer's hold style over the show. Every performer gets the show's
- * (the same spans, shared), so `of` answers for any marcher id.
+ * Each performer's hold style over the show: their own spans when their holds
+ * carry a style, else the show's (the same spans, shared), so `of` answers for
+ * any marcher id.
  */
 export function holdStyles(input: HoldStyleInput): {
     of(marcherId: number): readonly HoldStyleSpan[];
 } {
-    const show = holdSpans(showHoldTechniques(input));
-    return { of: () => show };
+    const techniques = showHoldTechniques(input);
+    const show = holdSpans(techniques);
+    const own = new Map(
+        [...ownHoldTechniques(input, techniques)].map(
+            ([id, onHolds]) => [id, holdSpans(onHolds)] as const,
+        ),
+    );
+    return { of: (marcherId) => own.get(marcherId) ?? show };
 }
 
 /** The hold style at count `count`; `stand` outside the spans. */

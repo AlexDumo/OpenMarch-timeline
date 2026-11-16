@@ -16,5 +16,10 @@ change (the module is not in a released version yet).
 - Segment kinds are `default`, `lasting`, `transition` and `momentary`.
 - The hold style is no longer a Feet cue: `CompiledCues.holdStyle(marcherId)`
   gives it per performer, and `holdStyles` and `holdStyleAt` are exported.
+- Holds stand by default (ADR 0015 D-5): `showDefaults.holdWhileBandMoves` is
+  `stand` when omitted, where it was `markTime`. Set it to `markTime` for the
+  old rule. `CompileInput.holdStyles` (`CueHoldStyle`) gives the styles the
+  holds themselves carry, each of which wins over the show setting for its
+  counts.
 - New queries: `whoHasValue`, `whoHolds`, `heldAt` and `cueValueAt`.
 - `RecompileOptions.channels` becomes `types`.

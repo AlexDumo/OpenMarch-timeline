@@ -33,7 +33,6 @@ import { pageKeys } from "@/hooks/queries/usePages";
 import { itemGeometryKeys } from "@/hooks/queries/useItems";
 import { cueKeys } from "@/hooks/queries/useCues";
 import { remapCuesOntoReplacementBeatsInTransaction } from "@/db-functions/cues";
-import { toast } from "sonner";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import tolgee from "@/global/singletons/Tolgee";
 
@@ -433,7 +432,6 @@ export const _performDatabaseOperations = async (
 const useAudioPlayerMutation = <TArgs>(
     mutationFn: (args: TArgs) => Promise<void>,
     errorKey: string,
-    successKey?: string,
 ) => {
     const queryClient = useQueryClient();
     return useMutation({
@@ -454,8 +452,6 @@ const useAudioPlayerMutation = <TArgs>(
                 queryKey: itemGeometryKeys.all(),
             });
             void queryClient.invalidateQueries({ queryKey: cueKeys.all() });
-
-            if (successKey) toast.success(tolgee.t(successKey));
         },
         onError: (error) => {
             // Timeline refusals get their own message (P8.6); anything else the generic one
@@ -500,11 +496,7 @@ export const _createBeats = async ({
  * Mutation hook for creating beats
  */
 export const useCreateBeats = () => {
-    return useAudioPlayerMutation(
-        _createBeats,
-        "audio.beats.create.error",
-        "audio.beats.create.success",
-    );
+    return useAudioPlayerMutation(_createBeats, "audio.beats.create.error");
 };
 
 /**
@@ -514,7 +506,6 @@ export const useReplaceAllBeatObjects = () => {
     return useAudioPlayerMutation(
         _replaceAllBeatObjects,
         "audio.beats.replace.error",
-        "audio.beats.replace.success",
     );
 };
 

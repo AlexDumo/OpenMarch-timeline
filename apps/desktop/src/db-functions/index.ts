@@ -17,3 +17,4 @@ export * from "./timelineChanges";
 export * from "./items";
 export * from "./itemBeatRemap";
 export * from "./cues";
+export * from "./pitPreset";

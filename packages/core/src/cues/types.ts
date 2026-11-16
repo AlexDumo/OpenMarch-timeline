@@ -127,16 +127,31 @@ export type HoldTechnique = "stand" | "markTime" | "highMarkTime";
 /** Show-wide defaults a parameter has before its first cue (ADR 0015 D-2). */
 export interface CueShowDefaults {
     /**
-     * The hold style, which is not a cue (ADR 0015 D-1): what a holding
-     * performer does on a count where any performer travels. `markTime` when
-     * omitted (marchers mark time while the band moves). On counts where the
-     * whole band holds, they stand.
+     * The hold style, which is not a cue (ADR 0015 D-1), where the hold itself
+     * carries none (`CompileInput.holdStyles`): what a holding performer does
+     * on a count where any performer travels. `stand` when omitted (holds
+     * stand still unless asked, ADR 0015 D-5). On counts where the whole band
+     * holds, they stand.
      */
     holdWhileBandMoves?: HoldTechnique;
     /** The band's default look; `builtin:look.band` when omitted. */
     bandLook?: string;
     /** The guard's default look; `builtin:look.guard` when omitted. */
     guardLook?: string;
+}
+
+/**
+ * One performer's hold style over the counts `[from, to)` (ADR 0015 D-5): what
+ * its feet do while its dot holds there. It comes from the hold itself, so it
+ * wins over the show default whether or not the band moves.
+ */
+export interface CueHoldStyle {
+    marcherId: number;
+    /** The first count it covers. */
+    from: number;
+    /** The count after the last one it covers. */
+    to: number;
+    style: HoldTechnique;
 }
 
 export interface CompileInput {
@@ -157,6 +172,14 @@ export interface CompileInput {
      * hold.
      */
     bandTravels?: (count: number) => boolean;
+    /**
+     * The styles the performers' holds carry (ADR 0015 D-5). Each wins over
+     * the show setting for the counts it covers; where two of one performer's
+     * overlap, the later in the list wins. They are not cues, so a recompile
+     * that changes them needs no cue type named: the hold style is worked out
+     * afresh on every compile.
+     */
+    holdStyles?: readonly CueHoldStyle[];
     /** Each section's usual equipment and 2D color, for the Equipment and Silk defaults. */
     sections?: readonly CueSection[];
     /**
@@ -321,7 +344,7 @@ export interface CompiledCues {
     /**
      * The performer's hold style over the show: what their feet do on counts
      * where their dot doesn't travel. Not a cue (ADR 0015 D-1); it comes from
-     * the show setting.
+     * the styles their holds carry and, elsewhere, the show setting (D-5).
      */
     holdStyle(marcherId: number): readonly HoldStyleSpan[];
     flags: readonly CueFlag[];

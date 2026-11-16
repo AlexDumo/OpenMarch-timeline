@@ -1,7 +1,7 @@
 {
     "version": "6",
     "dialect": "sqlite",
-    "id": "29151844-4e37-4e90-8af1-07d2595a2158",
+    "id": "34890fed-2476-4271-ab19-01fd74dcf1ee",
     "prevId": "30991c44-51e4-4a2e-8945-8128aec2e042",
     "tables": {
         "audio_files": {
@@ -154,191 +154,6 @@
                 "beats_include_in_measure": {
                     "name": "beats_include_in_measure",
                     "value": "include_in_measure IN (0, 1)"
-                }
-            }
-        },
-        "cue_marchers": {
-            "name": "cue_marchers",
-            "columns": {
-                "id": {
-                    "name": "id",
-                    "type": "integer",
-                    "primaryKey": true,
-                    "notNull": true,
-                    "autoincrement": false
-                },
-                "cue_id": {
-                    "name": "cue_id",
-                    "type": "integer",
-                    "primaryKey": false,
-                    "notNull": true,
-                    "autoincrement": false
-                },
-                "marcher_id": {
-                    "name": "marcher_id",
-                    "type": "integer",
-                    "primaryKey": false,
-                    "notNull": true,
-                    "autoincrement": false
-                }
-            },
-            "indexes": {
-                "cue_marchers_marcher_id_idx": {
-                    "name": "cue_marchers_marcher_id_idx",
-                    "columns": ["marcher_id"],
-                    "isUnique": false
-                },
-                "cue_marchers_cue_marcher_unique": {
-                    "name": "cue_marchers_cue_marcher_unique",
-                    "columns": ["cue_id", "marcher_id"],
-                    "isUnique": true
-                }
-            },
-            "foreignKeys": {
-                "cue_marchers_cue_id_cues_id_fk": {
-                    "name": "cue_marchers_cue_id_cues_id_fk",
-                    "tableFrom": "cue_marchers",
-                    "tableTo": "cues",
-                    "columnsFrom": ["cue_id"],
-                    "columnsTo": ["id"],
-                    "onDelete": "cascade",
-                    "onUpdate": "no action"
-                },
-                "cue_marchers_marcher_id_marchers_id_fk": {
-                    "name": "cue_marchers_marcher_id_marchers_id_fk",
-                    "tableFrom": "cue_marchers",
-                    "tableTo": "marchers",
-                    "columnsFrom": ["marcher_id"],
-                    "columnsTo": ["id"],
-                    "onDelete": "cascade",
-                    "onUpdate": "no action"
-                }
-            },
-            "compositePrimaryKeys": {},
-            "uniqueConstraints": {},
-            "checkConstraints": {}
-        },
-        "cues": {
-            "name": "cues",
-            "columns": {
-                "id": {
-                    "name": "id",
-                    "type": "integer",
-                    "primaryKey": true,
-                    "notNull": true,
-                    "autoincrement": false
-                },
-                "type": {
-                    "name": "type",
-                    "type": "text",
-                    "primaryKey": false,
-                    "notNull": true,
-                    "autoincrement": false
-                },
-                "beat_id": {
-                    "name": "beat_id",
-                    "type": "integer",
-                    "primaryKey": false,
-                    "notNull": true,
-                    "autoincrement": false
-                },
-                "value": {
-                    "name": "value",
-                    "type": "text",
-                    "primaryKey": false,
-                    "notNull": true,
-                    "autoincrement": false
-                },
-                "settings_json": {
-                    "name": "settings_json",
-                    "type": "text",
-                    "primaryKey": false,
-                    "notNull": true,
-                    "autoincrement": false,
-                    "default": "'{}'"
-                },
-                "length": {
-                    "name": "length",
-                    "type": "integer",
-                    "primaryKey": false,
-                    "notNull": false,
-                    "autoincrement": false
-                },
-                "transition": {
-                    "name": "transition",
-                    "type": "integer",
-                    "primaryKey": false,
-                    "notNull": false,
-                    "autoincrement": false
-                },
-                "label": {
-                    "name": "label",
-                    "type": "text",
-                    "primaryKey": false,
-                    "notNull": false,
-                    "autoincrement": false
-                },
-                "notes": {
-                    "name": "notes",
-                    "type": "text",
-                    "primaryKey": false,
-                    "notNull": false,
-                    "autoincrement": false
-                },
-                "created_at": {
-                    "name": "created_at",
-                    "type": "text",
-                    "primaryKey": false,
-                    "notNull": true,
-                    "autoincrement": false,
-                    "default": "(CURRENT_TIMESTAMP)"
-                },
-                "updated_at": {
-                    "name": "updated_at",
-                    "type": "text",
-                    "primaryKey": false,
-                    "notNull": true,
-                    "autoincrement": false,
-                    "default": "(CURRENT_TIMESTAMP)"
-                }
-            },
-            "indexes": {
-                "cues_beat_id_idx": {
-                    "name": "cues_beat_id_idx",
-                    "columns": ["beat_id"],
-                    "isUnique": false
-                },
-                "cues_type_beat_id_idx": {
-                    "name": "cues_type_beat_id_idx",
-                    "columns": ["type", "beat_id"],
-                    "isUnique": false
-                }
-            },
-            "foreignKeys": {
-                "cues_beat_id_beats_id_fk": {
-                    "name": "cues_beat_id_beats_id_fk",
-                    "tableFrom": "cues",
-                    "tableTo": "beats",
-                    "columnsFrom": ["beat_id"],
-                    "columnsTo": ["id"],
-                    "onDelete": "cascade",
-                    "onUpdate": "no action"
-                }
-            },
-            "compositePrimaryKeys": {},
-            "uniqueConstraints": {},
-            "checkConstraints": {
-                "cues_settings_json_check": {
-                    "name": "cues_settings_json_check",
-                    "value": "json_valid(settings_json)"
-                },
-                "cues_length_check": {
-                    "name": "cues_length_check",
-                    "value": "length IS NULL OR (typeof(length) = 'integer' AND length >= 1)"
-                },
-                "cues_transition_check": {
-                    "name": "cues_transition_check",
-                    "value": "transition IS NULL OR (typeof(transition) = 'integer' AND transition >= 1)"
                 }
             }
         },
@@ -685,6 +500,29 @@
                     "primaryKey": false,
                     "notNull": false,
                     "autoincrement": false
+                },
+                "model": {
+                    "name": "model",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": false,
+                    "autoincrement": false
+                },
+                "locked": {
+                    "name": "locked",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false,
+                    "default": false
+                },
+                "from_preset": {
+                    "name": "from_preset",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false,
+                    "default": false
                 },
                 "created_at": {
                     "name": "created_at",

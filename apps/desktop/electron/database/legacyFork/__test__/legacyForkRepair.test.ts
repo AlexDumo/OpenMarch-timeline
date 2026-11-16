@@ -252,7 +252,7 @@ describe.each([20, 24, 28, 32])(
         it("drops the parked tables and empties the undo history", async () => {
             await openFile(file);
             withDb(file, (db) => {
-                // 0020 makes the cue tables again, in ADR 0015's shape: the old cues are gone
+                // 0022 makes the cue tables again, in ADR 0015's shape: the old cues are gone
                 for (const table of PARKED_TABLES)
                     if (table === "cues" || table === "cue_marchers")
                         expect(rowsOf(db, table), table).toEqual([]);

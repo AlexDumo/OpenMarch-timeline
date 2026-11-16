@@ -16,6 +16,13 @@
  * - Paused, the om-pose marchers stand in the closed position (at attention,
  *   feet together, on their dots) unless the viewer chose the actual step
  *   (`pausedPose.ts`); playing always shows the actual motion.
+ * - A performer whose dot is on a pit instrument's playing spot plays it
+ *   (docs/3d/instruments.md §6): snapped onto the spot, facing the
+ *   instrument, holding still in the playing pose (`pitPlayers.ts`). Only
+ *   the drawing moves; the drill keeps their dot.
+ * - A performer standing on a podium holds its stance (`PODIUM_CLIP`, second
+ *   position: feet apart) instead of their step, at attention until that
+ *   clip is baked; off the podium they march their drill again.
  *
  * Meshes and buffers are rebuilt only when the marcher set changes.
  */
@@ -25,7 +32,12 @@ import { pickMarchers } from "../camera/inputMath";
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CueSection, FieldProperties, RgbaColor } from "@openmarch/core";
+import type {
+    CueHoldStyle,
+    CueSection,
+    FieldProperties,
+    RgbaColor,
+} from "@openmarch/core";
 import {
     Color,
     CylinderGeometry,
@@ -54,6 +66,7 @@ import { GROUND_LAYER, setGroundLayer } from "@/view3d/core/environment";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
 import { workspaceSettingsQueryOptions } from "@/hooks/queries/useWorkspaceSettings";
 import { performerDefaults } from "@/view3d/core/performerDefaults";
+import { useHoldStyles } from "./useHoldStyles";
 import { isPercussionSection } from "@/view3d/core/marchers/crab";
 import { marcherHeading } from "@/view3d/core/marchers/facing";
 import {
@@ -70,7 +83,14 @@ import {
 } from "@/view3d/core/marchers/looks";
 import { useShowPositions } from "@/view3d/positions";
 import { useShowProps } from "@/hooks/useShowProps";
-import { writePerformerLifts } from "../props/performerLift";
+import {
+    findPerformerPlayers,
+    findPerformersOnPodiums,
+    writePerformerLifts,
+    writePerformerPodiumStands,
+} from "../props/performerLift";
+import { PLAYING_CLIP, writePlayers } from "@/view3d/core/pit/pitPlayers";
+import { PODIUM_CLIP } from "@/view3d/core/props/platformLift";
 import { useView3dSyncStore } from "@/view3d/sync/view3dSyncStore";
 import type { View3dSelection } from "@/view3d/sync/protocol";
 import { useView3dSceneStore } from "../sceneStore";
@@ -243,7 +263,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     const { beats } = useTimingObjects();
     // Performers stand on the platform under their dot (C4.5), as drawn
     const hiddenItemIds = useView3dSyncStore((s) => s.hiddenItemIds);
-    const { props: showProps } = useShowProps(hiddenItemIds);
+    const { props: showProps, instruments } = useShowProps(hiddenItemIds);
     const clock = useMemo(() => buildCountClock(beats), [beats]);
     // How marchers move where no cue says otherwise: the show's performer
     // defaults (Show settings), field by field so an unrelated settings
@@ -280,8 +300,8 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             ),
         );
     }, [marchers, marcherLooks, slots.ids]);
-    // Which counts anyone travels on, for the Feet default (marchers mark
-    // time while the band moves). Keyed on its content, so a drill edit that
+    // Which counts anyone travels on, for the hold style (with the show set
+    // to mark time, marchers mark time while the band moves). Keyed on its content, so a drill edit that
     // keeps the band's moving counts doesn't recompile and replan everyone.
     const bandMovingKey = useMemo(
         () =>
@@ -293,11 +313,15 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             ).join(""),
         [slots, clock, fieldProperties],
     );
+    // The styles the Held holds carry (ADR 0015 D-5), by count. Keyed on its
+    // content, so only a change of style or of a styled hold's counts
+    // compiles again.
+    const holdStylesKey = useHoldStyles(clock);
     // The show's stored cues (ADR 0015), compiled for every marcher over the
-    // show defaults: the Show settings' hold while the band moves (mark time
-    // unless changed), else stand; face the front; horns up; the Show
-    // settings' step-off foot. `carries` decides each marcher's Position
-    // default.
+    // show defaults: a hold stands, unless it carries a style or the Show
+    // settings ask for mark time while the band moves; face the front; horns
+    // up; the Show settings' step-off foot. `carries` decides each marcher's
+    // Position default.
     const storedCues = useStoredCues();
     const cues = useMemo(() => {
         if (!marchers || !carriesKey || !cueSectionsKey || !storedCues)
@@ -313,6 +337,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             sections: JSON.parse(cueSectionsKey) as CueSection[],
             bandMoving: Array.from(bandMovingKey, Number),
             holdWhileBandMoves,
+            holdStyles: JSON.parse(holdStylesKey) as CueHoldStyle[],
             carries: (id) => carries.get(id) ?? "none",
         });
     }, [
@@ -324,6 +349,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         bandMovingKey,
         stepOffFoot,
         holdWhileBandMoves,
+        holdStylesKey,
     ]);
     const previousPlans = useRef<ShowPlans | null>(null);
     const showPlans = useMemo(() => {
@@ -364,17 +390,24 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         const names = plannedClips(
             (showPlans?.plans ?? []).filter((p) => p !== null),
         );
-        for (const h of heightClasses) names.add(clipName("attention", h));
+        for (const h of heightClasses) {
+            names.add(clipName("attention", h));
+            names.add(clipName(PLAYING_CLIP, h));
+            names.add(clipName(PODIUM_CLIP, h));
+        }
         // a right-foot move's rows are baked from their mirrored partners
         return clipsToLoad([...names], "left");
     }, [showPlans, heightClasses]);
     // Only the Feet rows some marcher plays: its planned clips, and
-    // attention for its height class.
+    // attention, the pit's playing pose and the podium stance for its height
+    // class.
     const bakeRows = useMemo(() => {
         if (!marcherLooks) return undefined;
         const out = new Set<string>();
         marcherLooks.forEach((look, i) => {
             out.add(clipName("attention", look.body.heightClass));
+            out.add(clipName(PLAYING_CLIP, look.body.heightClass));
+            out.add(clipName(PODIUM_CLIP, look.body.heightClass));
             const plan = showPlans?.plans[i];
             if (!plan) return;
             for (const e of plan.events)
@@ -427,6 +460,12 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                       hornSlots ?? [],
                       marcherLooks.map((l) =>
                           clipName("attention", l.body.heightClass),
+                      ),
+                      marcherLooks.map((l) =>
+                          clipName(PLAYING_CLIP, l.body.heightClass),
+                      ),
+                      marcherLooks.map((l) =>
+                          clipName(PODIUM_CLIP, l.body.heightClass),
                       ),
                   )
                 : null,
@@ -526,6 +565,12 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             xz: new Float32Array(count * 2),
             placed: new Uint8Array(count),
             lift: new Float32Array(count),
+            // the dots at the show time itself, for who plays the pit and
+            // who stands on a podium
+            dots: new Float32Array(count * 2),
+            dotPlaced: new Uint8Array(count),
+            players: new Int32Array(count).fill(-1),
+            onPodium: new Uint8Array(count),
         };
     }, [assets, count]);
     useEffect(
@@ -566,6 +611,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         motion,
         silkMotion,
         showProps,
+        instruments,
     ]);
 
     // Colors and visibility, only when the looks change.
@@ -656,13 +702,10 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             // they're placed from the drill a count later; closed, they stand
             // on the dot at the show time itself
             const c = countAt(clock, ms, countRef.current);
-            const placedMs =
-                marcherBodies && motion && !closed
-                    ? msAtCount(clock, c + STEP_AHEAD)
-                    : ms;
+            const ahead = !!(marcherBodies && motion && !closed);
             writePerformerPositions(
                 slots,
-                placedMs,
+                ahead ? msAtCount(clock, c + STEP_AHEAD) : ms,
                 fieldProperties,
                 visible,
                 xz,
@@ -675,12 +718,52 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 ms,
                 fieldProperties,
             };
+            // who plays the pit: whoever's dot is on a playing spot now; and
+            // who stands on a podium: whoever's dot puts them on one now
+            const { dots, dotPlaced, players, onPodium } = meshes;
+            if (
+                ahead &&
+                (instruments.length > 0 || showProps.some((p) => p.facesAcross))
+            )
+                writePerformerPositions(
+                    slots,
+                    ms,
+                    fieldProperties,
+                    visible,
+                    dots,
+                    dotPlaced,
+                );
+            const spots = findPerformerPlayers(
+                instruments,
+                propsNow,
+                ahead ? dots : xz,
+                ahead ? dotPlaced : placed,
+                players,
+            );
+            findPerformersOnPodiums(
+                propsNow,
+                ahead ? dots : xz,
+                ahead ? dotPlaced : placed,
+                onPodium,
+            );
             if (marcherBodies) {
                 countRef.current = c;
-                if (closed) motion?.updateClosed(c, headings);
-                else motion?.update(c, xz, placed, headings);
+                if (closed)
+                    motion?.updateClosed(c, headings, players, onPodium);
+                else motion?.update(c, xz, placed, headings, players, onPodium);
+                // players snap onto their instrument, facing it
+                writePlayers(spots, players, xz, headings);
                 // where the bodies are now
                 writePerformerLifts(propsNow, xz, placed, lift);
+                // a drum major at a podium stands on its deck facing the band,
+                // whatever the drill says: before anything is drawn at the feet
+                writePerformerPodiumStands(
+                    propsNow,
+                    xz,
+                    placed,
+                    lift,
+                    headings,
+                );
                 marcherBodies.writeFrame(
                     xz,
                     headings,
@@ -695,7 +778,15 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 lod[1] = cam[1];
                 lod[2] = cam[2];
             } else {
+                writePlayers(spots, players, xz);
                 writePerformerLifts(propsNow, xz, placed, lift);
+                writePerformerPodiumStands(
+                    propsNow,
+                    xz,
+                    placed,
+                    lift,
+                    headings,
+                );
                 writePerformerMatrices(
                     count,
                     xz,

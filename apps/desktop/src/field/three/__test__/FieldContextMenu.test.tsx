@@ -153,6 +153,13 @@ describe("FieldContextMenu", () => {
         expect(item("alignVertically")).toHaveAttribute("data-disabled");
     });
 
+    it("offers editing the item right-clicked, first, only while one is selected", () => {
+        for (const id of FIELD_MENU_ACTIONS) handle(id);
+        handle("editSelectedItem", { enabled: false });
+        open();
+        expect(screen.queryByTestId("field-menu-editSelectedItem")).toBeNull();
+    });
+
     it("lists the actions in groups, with the page state commands together", () => {
         for (const id of FIELD_MENU_ACTIONS) handle(id);
         handle("shapeGroup", { enabled: false });
@@ -168,10 +175,17 @@ describe("FieldContextMenu", () => {
                 );
         }
         expect(groups).toEqual([
+            ["editSelectedItem"],
             [
                 "timelineHoldFromPrevious",
                 "timelineHoldOverWindow",
                 "setSelectedMarchersToPreviousPage",
+            ],
+            [
+                "timelineHoldStyleDefault",
+                "timelineHoldStyleStand",
+                "timelineHoldStyleMarkTime",
+                "timelineHoldStyleHighMarkTime",
             ],
             [
                 "alignHorizontally",
@@ -196,6 +210,43 @@ describe("FieldContextMenu", () => {
         expect(item("setSelectedMarchersToNextPage")).toHaveTextContent(
             "Move to next page's spots (selected)",
         );
+    });
+
+    it("shows Hold style as a group while any of it can run, with the style in effect checked (#775)", () => {
+        const styles = [
+            "timelineHoldStyleDefault",
+            "timelineHoldStyleStand",
+            "timelineHoldStyleMarkTime",
+            "timelineHoldStyleHighMarkTime",
+        ] as const;
+        // Nobody Held at the playhead: none can run, and none is in effect
+        for (const id of styles) handle(id, { enabled: false });
+        open();
+        for (const id of styles) expect(item(id)).toBeNull();
+        cleanup();
+        handlers.splice(0).forEach((off) => off());
+
+        // A Held hold on the show setting: that entry is checked (so off), the others run
+        handle("timelineHoldStyleDefault", { enabled: false, checked: true });
+        const markTime = handle("timelineHoldStyleMarkTime");
+        handle("timelineHoldStyleStand");
+        handle("timelineHoldStyleHighMarkTime");
+        open();
+        expect(item("timelineHoldStyleDefault")).toHaveAttribute(
+            "aria-checked",
+            "true",
+        );
+        expect(item("timelineHoldStyleDefault")).toHaveTextContent(
+            "Hold style: Show setting",
+        );
+        expect(item("timelineHoldStyleStand")).toHaveTextContent(
+            "Hold style: Stand",
+        );
+        expect(item("timelineHoldStyleHighMarkTime")).toHaveTextContent(
+            "Hold style: High mark time",
+        );
+        fireEvent.click(item("timelineHoldStyleMarkTime")!);
+        expect(markTime).toHaveBeenCalledTimes(1);
     });
 
     it("keeps room for a check only in front of the page state commands", () => {

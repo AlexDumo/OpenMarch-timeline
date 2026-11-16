@@ -93,8 +93,21 @@ describe("the hold style", () => {
     // the band travels on counts 2-5
     const bandTravels = (c: number) => c >= 2 && c < 6;
 
-    it("marks time on the counts the band moves, from the compile's hold style", () => {
+    /** The show set to mark time on holds (Show settings). */
+    const markTime = {
+        showDefaults: { holdWhileBandMoves: "markTime" },
+    } as const;
+
+    it("stands by default, though the band moves (ADR 0015 D-5)", () => {
         const out = inputs(drill(holds(8)), [], undefined, { bandTravels });
+        expect(out.feet.every((f) => f.onHolds === "stand")).toBe(true);
+    });
+
+    it("marks time on the counts the band moves when the show asks, from the compile's hold style", () => {
+        const out = inputs(drill(holds(8)), [], undefined, {
+            bandTravels,
+            ...markTime,
+        });
         expect(out.feet.map((f) => f.onHolds)).toEqual([
             "stand",
             "stand",
@@ -115,12 +128,33 @@ describe("the hold style", () => {
         expect(out.feet[3].onHolds).toBe("highMarkTime");
     });
 
+    it("takes a hold's own style over the show's, for its counts", () => {
+        const out = inputs(drill(holds(8)), [], undefined, {
+            bandTravels,
+            ...markTime,
+            holdStyles: [
+                { marcherId: 1, from: 3, to: 5, style: "stand" },
+                { marcherId: 1, from: 6, to: 8, style: "highMarkTime" },
+            ],
+        });
+        expect(out.feet.map((f) => f.onHolds)).toEqual([
+            "stand",
+            "stand",
+            "markTime",
+            "stand",
+            "stand",
+            "markTime",
+            "highMarkTime",
+            "highMarkTime",
+        ]);
+    });
+
     it("stands under a kneel, from the count it starts going down", () => {
         const out = inputs(
             drill(holds(8)),
             [on(2, 5, "builtin:posture.kneel")],
             undefined,
-            { bandTravels: () => true },
+            { bandTravels: () => true, ...markTime },
         );
         expect(out.feet[1].onHolds).toBe("markTime");
         // kneel takes 3 counts, landing on 5: the feet are its from count 3

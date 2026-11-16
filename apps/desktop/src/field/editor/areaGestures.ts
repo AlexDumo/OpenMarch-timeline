@@ -42,6 +42,8 @@ export type AreaPorts = {
     canSelect(id: number): boolean;
     /** Whether a marcher is an item (C2.2), which an area takes only when nothing else is in it */
     isItem?(id: number): boolean;
+    /** Whether a marcher is a locked item, which an area never takes */
+    isLocked?(id: number): boolean;
     selection(): readonly number[];
     select(ids: readonly number[]): void;
     /** The shape changed: the overlay draws it again. */
@@ -105,6 +107,7 @@ export function startMarquee(
                     ports.canSelect,
                 ),
                 (id) => ports.isItem?.(id) ?? false,
+                (id) => ports.isLocked?.(id) ?? false,
             );
             ports.select(selectionAfterArea(ports.selection(), inside, choice));
         },
@@ -117,8 +120,8 @@ export function startMarquee(
  * `LASSO_CLOSE_DISTANCE` (50) screen px of its start it closes, and replaces
  * the selection with every marcher whose center is inside it, as a marquee
  * picks them (Shift at the press adds them, Alt removes them). Released farther away, it selects
- * nothing and changes nothing; the double-click's first click has already cleared the selection,
- * unless Shift or Alt was held.
+ * nothing and changes nothing. After a double-click, its first click has already cleared the
+ * selection, unless Shift or Alt was held; with the Lasso tool there was no first click.
  *
  * Drawn by a finger or a pen (#933, owner), it closes when released within 150 screen px of its
  * start, or when the path closed back to its start takes in a real area
@@ -162,6 +165,7 @@ export function startLasso(
             const inside = areaPicks(
                 marchersInPolygon(ports.marchers(), points, ports.canSelect),
                 (id) => ports.isItem?.(id) ?? false,
+                (id) => ports.isLocked?.(id) ?? false,
             );
             ports.select(selectionAfterArea(ports.selection(), inside, choice));
         },

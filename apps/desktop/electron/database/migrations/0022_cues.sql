@@ -1,3 +1,12 @@
+-- A file can already hold `cues` and `cue_marchers` in another shape: fork builds from before the
+-- merge with upstream made them (old 0022), and the fork-file repair drops them only from files it
+-- repairs. Whatever is there is not this migration's, so it goes first, with its rows, indexes and
+-- triggers. Never run this migration on a file that took it (under a new date, say): it would
+-- delete the file's cues.
+DROP TABLE IF EXISTS `cue_marchers`;
+--> statement-breakpoint
+DROP TABLE IF EXISTS `cues`;
+--> statement-breakpoint
 CREATE TABLE `cue_marchers` (
 	`id` integer PRIMARY KEY NOT NULL,
 	`cue_id` integer NOT NULL,

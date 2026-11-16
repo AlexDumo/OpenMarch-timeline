@@ -1,8 +1,9 @@
 // @vitest-environment node
 /**
- * 0020 adds the cue tables (ADR 0015 D-9): a file from before it gets them empty and ends with a
+ * 0022 adds the cue tables (ADR 0015 D-9): a file from before it gets them empty and ends with a
  * new file's schema, and a cue of a type this build doesn't know is still there after the file
- * is opened again.
+ * is opened again. A file that already has tables of those names, left by an older fork build,
+ * gets this migration's in their place.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as fs from "fs";
@@ -18,10 +19,10 @@ import {
     normalizedSchema,
 } from "../../legacyFork/__test__/forkFileFixtures";
 
-describe("0020_cues", () => {
+describe("0022_cues", () => {
     let dir: string;
     beforeEach(() => {
-        dir = fs.mkdtempSync(path.join(os.tmpdir(), "om-0020-"));
+        dir = fs.mkdtempSync(path.join(os.tmpdir(), "om-0022-"));
         vi.spyOn(console, "log").mockImplementation(() => {});
         vi.spyOn(console, "debug").mockImplementation(() => {});
     });
@@ -44,7 +45,7 @@ describe("0020_cues", () => {
         const file = path.join(dir, "show.dots");
         await createNewTimelineShow(file);
         const fresh = withDb(file, normalizedSchema);
-        rollBackMigrationsFrom(file, 20);
+        rollBackMigrationsFrom(file, 22);
         expect(tables(file)).toEqual([]);
 
         await migrateFile(file);
@@ -56,7 +57,89 @@ describe("0020_cues", () => {
         ).toEqual([]);
     });
 
-    it("reaches a file from before 0019 too: it takes the silk Artwork table and then the cue tables", async () => {
+    it("replaces cue tables an older fork build left in the file, and the file opens", async () => {
+        const file = path.join(dir, "show.dots");
+        await createNewTimelineShow(file);
+        const fresh = withDb(file, normalizedSchema);
+        rollBackMigrationsFrom(file, 22);
+        // The fork's old `cues` (its 0022, before the merge with upstream), with a row, an index
+        // and a trigger, in a file the fork-file repair has no reason to touch
+        withDb(file, (db) =>
+            db.exec(`
+                INSERT INTO marchers (id, section, drill_prefix, drill_order) VALUES (1, 'Brass', 'B', 1);
+                CREATE TABLE cues (
+                    id integer PRIMARY KEY NOT NULL,
+                    channel text NOT NULL,
+                    kind text NOT NULL,
+                    beat_id integer NOT NULL,
+                    target_kind text NOT NULL,
+                    value text NOT NULL,
+                    name text,
+                    notes text,
+                    FOREIGN KEY (beat_id) REFERENCES beats(id) ON DELETE cascade
+                );
+                CREATE INDEX cues_beat_id_idx ON cues (beat_id);
+                CREATE TABLE cue_marchers (
+                    cue_id integer NOT NULL,
+                    marcher_id integer NOT NULL,
+                    PRIMARY KEY (cue_id, marcher_id),
+                    FOREIGN KEY (cue_id) REFERENCES cues(id) ON DELETE cascade,
+                    FOREIGN KEY (marcher_id) REFERENCES marchers(id) ON DELETE cascade
+                );
+                CREATE TRIGGER legacy_cues_ut AFTER UPDATE ON cues BEGIN SELECT 1; END;
+                INSERT INTO cues (id, channel, kind, beat_id, target_kind, value, name)
+                    VALUES (4, 'feet', 'state', 0, 'band', 'builtin:feet.step', 'Mark time');
+                INSERT INTO cue_marchers (cue_id, marcher_id) VALUES (4, 1);
+            `),
+        );
+
+        await migrateFile(file);
+
+        expect(withDb(file, normalizedSchema)).toEqual(fresh);
+        expect(tables(file)).toEqual(["cue_marchers", "cues"]);
+        withDb(file, (db) => {
+            // the old rows went with the old tables, and nothing else did
+            expect(db.prepare("SELECT * FROM cues").all()).toEqual([]);
+            expect(db.prepare("SELECT * FROM cue_marchers").all()).toEqual([]);
+            expect(db.prepare("SELECT id FROM marchers").all()).toEqual([
+                { id: 1 },
+            ]);
+            expect(
+                db
+                    .prepare(
+                        "SELECT name FROM sqlite_schema WHERE name = 'legacy_cues_ut'",
+                    )
+                    .all(),
+            ).toEqual([]);
+            // the new tables take a cue in ADR 0015's shape
+            db.exec(`
+                INSERT INTO cues (id, type, beat_id, value) VALUES (7, 'look', 0, 'builtin:look.guard');
+                INSERT INTO cue_marchers (cue_id, marcher_id) VALUES (7, 1);
+            `);
+        });
+    });
+
+    it("replaces a lone old `cues` table too, as the bug-report fixture once had", async () => {
+        const file = path.join(dir, "show.dots");
+        await createNewTimelineShow(file);
+        const fresh = withDb(file, normalizedSchema);
+        rollBackMigrationsFrom(file, 22);
+        withDb(file, (db) =>
+            db.exec(`
+                CREATE TABLE cues (id INTEGER PRIMARY KEY, name TEXT, notes TEXT);
+                INSERT INTO cues (name, notes) VALUES ('Mr. Hayes solo', 'Count off from Jordan');
+            `),
+        );
+
+        await migrateFile(file);
+
+        expect(withDb(file, normalizedSchema)).toEqual(fresh);
+        expect(
+            withDb(file, (db) => db.prepare("SELECT * FROM cues").all()),
+        ).toEqual([]);
+    });
+
+    it("reaches a file from before 0019 too: it takes the silk Artwork table, the migrations between, and then the cue tables", async () => {
         const file = path.join(dir, "show.dots");
         await createNewTimelineShow(file);
         const fresh = withDb(file, normalizedSchema);
