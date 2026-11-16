@@ -2,6 +2,12 @@ import { and, eq, gt, inArray, isNull, lt, or } from "drizzle-orm";
 import * as schema from "@om-electron/database/migrations/schema";
 import type { DbTransaction } from "./types";
 import { hasShapeRecipes, shapeRecipesOnly } from "./shapeRecipes";
+import {
+    HOME_ARRIVAL,
+    readArrival,
+    readHeldMarks,
+    type HeldMark,
+} from "./timelineHeldArrival";
 
 /**
  * **A shape is Held whole** (owner, 2026-11-15: a hold links counts, a shape only arranges
@@ -185,4 +191,67 @@ export async function carriedShapeMates(
             out.push(id);
     }
     return out.sort((x, y) => x - y);
+}
+
+/**
+ * **The same hold of the same shape** (owner, 2026-11-15: a shape is Held whole, so it stops being
+ * Held whole too). For `marks`, the Held marks of the other members of the placed shapes they're
+ * carried in: a mate's mark starts where one of `marks` starts and grows out of the same move (the
+ * shape's, `readArrival`) or the same starting spots (a shape at the starting spots). Shortening,
+ * splitting or clearing a hold changes these the same way, so the shape is never left partly Held
+ * (`setHoldEdge`, `splitHoldAt`, Clear this page). By marcher and start, none of `marks`.
+ */
+export async function heldShapeMateMarks(
+    tx: DbTransaction,
+    marks: readonly HeldMark[],
+): Promise<HeldMark[]> {
+    if (marks.length === 0 || !(await hasShapeRecipes(tx))) return [];
+    const r = schema.timeline_shape_recipes;
+    const m = schema.timeline_shape_recipe_marchers;
+    const given = new Set(marks.map((k) => k.id));
+    const out = new Map<number, HeldMark>();
+    for (const mark of marks) {
+        const arrival = await readArrival(tx, mark.marcherId, mark.start);
+        if (arrival === null) continue;
+        const timelineId = arrival === HOME_ARRIVAL ? null : arrival.timelineId;
+        const recipeIds = (
+            await tx
+                .select({ id: r.id })
+                .from(r)
+                .innerJoin(m, eq(m.recipe_id, r.id))
+                .where(
+                    and(
+                        shapeRecipesOnly(),
+                        eq(m.marcher_id, mark.marcherId),
+                        timelineId === null
+                            ? isNull(r.timeline_id)
+                            : eq(r.timeline_id, timelineId),
+                    ),
+                )
+                .all()
+        ).map((row) => row.id);
+        if (recipeIds.length === 0) continue;
+        const mateIds = (
+            await tx
+                .selectDistinct({ marcherId: m.marcher_id })
+                .from(m)
+                .where(inArray(m.recipe_id, recipeIds))
+                .all()
+        )
+            .map((row) => row.marcherId)
+            .filter((id) => id !== mark.marcherId);
+        for (const mate of await readHeldMarks(tx, mateIds)) {
+            if (mate.start !== mark.start || given.has(mate.id)) continue;
+            if (out.has(mate.id)) continue;
+            const its = await readArrival(tx, mate.marcherId, mate.start);
+            const same =
+                its === HOME_ARRIVAL
+                    ? timelineId === null
+                    : its !== null && its.timelineId === timelineId;
+            if (same) out.set(mate.id, mate);
+        }
+    }
+    return [...out.values()].sort(
+        (x, y) => x.marcherId - y.marcherId || x.start - y.start,
+    );
 }

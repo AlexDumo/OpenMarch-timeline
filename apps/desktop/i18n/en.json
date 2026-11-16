@@ -2731,7 +2731,8 @@
                 "wholePage": "{holdFromPrevious} works on a whole page, not {counts}"
             },
             "holdEdge": {
-                "outside": "The hold can't reach that count: it stops at the marcher's next move, the end of the show, or one count from its other end."
+                "outside": "The hold can't reach that count: it stops at the marcher's next move, the end of the show, or one count from its other end.",
+                "shapeMate": "The rest of this shape can't hold that long: a shape is held whole, and one of them moves again sooner."
             },
             "moveTimeline": {
                 "tooEarly": "the timeline starts at beat {start}, so it can't move {count, plural, one {# beat} other {# beats}} earlier",

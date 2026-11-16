@@ -38,6 +38,7 @@ import {
 import { readHeldMarks } from "../timelineHeldMarks";
 import { holdFromPreviousPage } from "../timelineHoldFromPrevious";
 import { holdOverWindow } from "../timelineHoldOverWindow";
+import { setHoldEdge, splitHoldAt } from "../timelineHoldExtent";
 import { setAsShownOnPage } from "../timelineSetAsShown";
 import { unsetMarchersAt } from "../timelineUnset";
 import { setMarchersToNeighborPage } from "@/utilities/setMarchersToNeighborPage";
@@ -2588,6 +2589,155 @@ describeDbTests(
                 expect(await marksOf(db, id)).toEqual([
                     { start: PAGE3.start, end: PAGE4.end },
                 ]);
+        });
+
+        /** A box moved on page 2, Held through pages 3 and 4 */
+        const heldBox = async (db: DbConnection) => {
+            const { a, b, c } = await show(db);
+            const page2 = await moveEndingAt(db, a, PAGE3.start);
+            await boxOn(db, page2, [
+                { marcherId: a, xy: UP },
+                { marcherId: b, xy: UP2 },
+            ]);
+            await holdFromPreviousPage({ db, pageBox: PAGE3, marcherIds: [a] });
+            await holdFromPreviousPage({ db, pageBox: PAGE4, marcherIds: [a] });
+            return { a, b, c };
+        };
+
+        it("shortening one member's hold shortens the rest of the box's", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b } = await heldBox(db);
+            const before = await snapshot(db);
+            expect(
+                await setHoldEdge({
+                    db,
+                    marcherIds: [a],
+                    from: PAGE4.end,
+                    to: PAGE4.start,
+                }),
+            ).toEqual({
+                changed: [a, b].sort((x, y) => x - y),
+                alsoChanged: [b],
+            });
+            for (const id of [a, b])
+                expect(await marksOf(db, id)).toEqual([PAGE3]);
+            await roundTrip(db, before, await snapshot(db));
+        });
+
+        it("shortened past where a mate's hold ends, the mate's ends there too", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b } = await heldBox(db);
+            // b's hold already ends sooner (a file from before the rule)
+            await db
+                .update(schema.timeline_held_marks)
+                .set({ end_beat: 29 })
+                .where(eqId(schema.timeline_held_marks.marcher_id, b));
+            await setHoldEdge({
+                db,
+                marcherIds: [a],
+                from: PAGE4.end,
+                to: 21,
+            });
+            for (const id of [a, b])
+                expect(await marksOf(db, id)).toEqual([
+                    { start: PAGE3.start, end: 21 },
+                ]);
+        });
+
+        it("lengthening one member's hold lengthens the box's, refused when a mate moves sooner", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b } = await show(db);
+            const page2 = await moveEndingAt(db, a, PAGE3.start);
+            await boxOn(db, page2, [
+                { marcherId: a, xy: UP },
+                { marcherId: b, xy: UP2 },
+            ]);
+            await holdFromPreviousPage({ db, pageBox: PAGE3, marcherIds: [a] });
+            expect(
+                (
+                    await setHoldEdge({
+                        db,
+                        marcherIds: [a],
+                        from: PAGE3.end,
+                        to: 29,
+                    })
+                ).alsoChanged,
+            ).toEqual([b]);
+            for (const id of [a, b])
+                expect(await marksOf(db, id)).toEqual([
+                    { start: PAGE3.start, end: 29 },
+                ]);
+            // b moves on page 4 from count 29: a can't hold past it, as the box
+            await move(db, { start: 29, end: PAGE4.end }, [
+                { marcherId: b, xy: FAR },
+            ]);
+            const rows = await snapshot(db);
+            const refused = await setHoldEdge({
+                db,
+                marcherIds: [a],
+                from: 29,
+                to: PAGE4.end,
+            }).catch((e: unknown) => e);
+            expect(timelineErrorCode(refused)).toBe("E-ARGS");
+            expect(refusalText(refused)).toContain(
+                "The rest of this shape can't hold that long",
+            );
+            expect(await snapshot(db)).toEqual(rows);
+        });
+
+        it("Split hold here on one member splits the box's hold", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b } = await heldBox(db);
+            const before = await snapshot(db);
+            expect(
+                await splitHoldAt({ db, marcherIds: [a], beat: PAGE4.start }),
+            ).toEqual({
+                split: [a, b].sort((x, y) => x - y),
+                alsoSplit: [b],
+            });
+            for (const id of [a, b])
+                expect(await marksOf(db, id)).toEqual([PAGE3]);
+            await roundTrip(db, before, await snapshot(db));
+        });
+
+        it("Clear this page for one member of a box held onto it clears the box's hold there", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b } = await heldBox(db);
+            const before = await snapshot(db);
+            const result = await moveMarchersInTarget({
+                db,
+                target: { kind: "range", ...PAGE4 },
+                moves: [{ marcherId: a, x: UP[0], y: UP[1] }],
+                clearPage: true,
+            });
+            expect(result.cleared).toEqual([a, b].sort((x, y) => x - y));
+            for (const id of [a, b])
+                expect(await marksOf(db, id)).toEqual([PAGE3]);
+            await roundTrip(db, before, await snapshot(db));
+        });
+
+        it("an unrelated marcher's hold is left alone", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b, c } = await heldBox(db);
+            await holdFromPreviousPage({ db, pageBox: PAGE3, marcherIds: [c] });
+            const cBefore = await marksOf(db, c);
+            await splitHoldAt({ db, marcherIds: [a], beat: 21 });
+            expect(await marksOf(db, b)).toEqual([
+                { start: PAGE3.start, end: 21 },
+            ]);
+            expect(await marksOf(db, c)).toEqual(cBefore);
         });
     },
 );

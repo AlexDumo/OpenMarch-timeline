@@ -436,7 +436,8 @@ holds to the resolver (spec R-6), so the mark is app data:
   crossing one of the box's flags, Expert moves in the box, a shape or placed shape's recipe on
   the page, following the leader on the page, or an arrival that is a shape's move or a
   follow-the-leader move, which a drag inside the hold would rewrite (shape and follow-the-leader
-  members are skipped and named until fork #504).
+  members are skipped and named until fork #504). _Superseded for placed shapes by the 2026-11-15
+  amendment below: only stored shapes and follow-the-leader are still skipped._
 - **Holds from the starting spots** (owner, 2026-11-01, fork #619). This amends "where a move of
   the marcher must end" above: a marcher with no row starting before the box's start (Page 1, or a
   later page it reaches only by standing on its starting spot) is Held from its starting spot
@@ -452,6 +453,8 @@ holds to the resolver (spec R-6), so the mark is app data:
   carried on is its hold, so
   the way to hold its marchers one by one is to ungroup it at the start of the show (Ungroup on a
   later page only marks that page's move). No schema change: the arrival follows from the rows.
+  _Superseded by the 2026-11-15 amendment below: a placed shape's starting spots can be Held, and
+  placing one no longer drops holds._
 - **A drag on a count inside a Held hold** (a range edit whose end, or a Basic point edit whose
   count, is inside it) sets the marcher's ending in the move that arrives at the hold's start, as
   an edit of that move's timeline would. The arrival and the whole hold move together; earlier and
@@ -463,7 +466,8 @@ holds to the resolver (spec R-6), so the mark is app data:
   Held marchers were dragged, and `keepUnchanged` applies to Held marchers too. When everyone
   dragged is Held from the starting spot, it gets the homes (`null`), so a shape placed there is
   stored at the starting spots, and in the same edit those marchers' holds from the starting spot
-  go: a starting spot a shape sets can't be held.
+  go: a starting spot a shape sets can't be held. _Superseded by the 2026-11-15 amendment below: a
+  placed shape's move is an arrival like any other._
 - **An Expert window over a hold** (decision 6, review R2; fork #476). The rule above applies to a
   window that starts at or before the hold's start and ends inside it. A window that starts
   **inside** a hold wins: the marcher's edit becomes the window's move, and the hold ends at the
@@ -611,6 +615,12 @@ passages of the 2026-10-30 amendment:
   spots) from the same count, and their only rows in the stretch are in that shape's own move.
   Members that walked off since, or move on their own in the stretch, stay as they are. The
   results list them as `alsoHeld`.
+- **It stops being Held whole too.** Shortening a hold's end, Split hold here and Clear this page
+  change the same hold of the rest of the shape (its other members' marks starting at the same
+  count and growing out of the same move or starting spots) the same way: each past the new end
+  ends there. Lengthening takes those ending where the dragged ones did, and is refused when one
+  of them can't hold that long. The results list them (`alsoChanged`, `alsoSplit`, and Clear this
+  page's cleared marchers), and the app selects them so their holds show.
 - **Holding a page with its own copy of the shape** removes the page's moves as before, and the
   copy goes with them. A recipe that keeps members after marchers are cleared off its move keeps
   its spot count (`params.spots`), so the cleared ones leave holes, as when members walk away.

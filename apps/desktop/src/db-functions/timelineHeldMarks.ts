@@ -7,7 +7,6 @@ import {
     hasHeldMarksTable,
     isInsideHeldMark,
     readArrival,
-    readHeldMarkArrivals,
     readHeldMarks,
     HOME_ARRIVAL,
     type HeldArrival,
@@ -16,6 +15,7 @@ import {
 
 import { windowWinsOverHold } from "@/timeline/heldRules";
 import type { HeldConflictSpot } from "./timelineHeldConflict";
+import { heldShapeMateMarks } from "./timelineShapeHoldMates";
 
 export {
     heldConflictInTransaction,
@@ -204,7 +204,9 @@ export async function marcherRecipeTimelines(
  * **Clear this page** for Held marchers (#472): the part of each of `marcherIds`' marks over `box`
  * goes, so the page is Not set for them. A part before the box stays (its arrival is unchanged); a
  * part after it goes too, since clearing a page clears the hold (#472, #566), and is reported in
- * `later` so the toast can say so.
+ * `later` so the toast can say so. A shape held onto the page is Held whole (owner, 2026-11-15):
+ * the same hold of the rest of it (`heldShapeMateMarks`) is cleared with them, and they're in
+ * `marchers` and `later` too.
  *
  * @returns `marchers`, those whose marks changed, ascending, and `later`, the marchers whose
  *   hold on later pages went too, each at the box's end
@@ -217,9 +219,20 @@ export async function clearHeldMarksOverInTransaction(
     if (marcherIds.length === 0 || !(await hasHeldMarksTable(tx)))
         return { marchers: [], later: [] };
     const h = schema.timeline_held_marks;
-    const over = (await readHeldMarks(tx, marcherIds)).filter(
-        (m) => m.start < box.end && box.start < m.end,
-    );
+    const overBox = (m: HeldMark) => m.start < box.end && box.start < m.end;
+    const asked = (await readHeldMarks(tx, marcherIds)).filter(overBox);
+    // A shape held onto the page from an earlier move stops being Held there whole: the same hold
+    // of the rest of it goes too (a hold starting on the page grows out of the shape's move there,
+    // which the clear takes these marchers out of, so they leave the shape)
+    const over = [
+        ...asked,
+        ...(
+            await heldShapeMateMarks(
+                tx,
+                asked.filter((m) => m.start < box.start),
+            )
+        ).filter(overBox),
+    ];
     for (const mark of over) {
         if (mark.start < box.start)
             await tx

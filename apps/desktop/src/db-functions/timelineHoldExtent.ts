@@ -12,6 +12,7 @@ import { transactionWithHistory } from "./history";
 import { NothingToDo, refuse } from "./timelineErrors";
 import { readPageGrid, showEndBeat } from "./timelinePageGrid";
 import { readHeldMarks } from "./timelineHeldArrival";
+import { heldShapeMateMarks } from "./timelineShapeHoldMates";
 
 /**
  * **Shaping a hold** (holds README decisions 3, 5 and 6; 01-edit-rules "Bar-end drag", "Split hold
@@ -26,6 +27,11 @@ import { readHeldMarks } from "./timelineHeldArrival";
  *   inside them. What follows is Not defined: an edit there starts a new move where the hold now
  *   ends (leaving early, decision 6).
  *
+ * **A shape is Held whole** (owner, 2026-11-15): the same hold of the rest of a placed shape
+ * (`heldShapeMateMarks`) changes with the ones asked for, listed in `alsoChanged`. Shortened or
+ * split to a count, each of its marks past that count ends there; lengthened, those ending where
+ * the dragged ones did go along, and the drag is refused when one of them can't.
+ *
  * Holds that touch or overlap afterwards become one (`mergeTouchingMarks`, 04-anchors), keeping
  * the earliest's id. A changed mark keeps its id, so undo restores the same row. One undo step
  * each; one that changes nothing opens no edit.
@@ -34,12 +40,23 @@ import { readHeldMarks } from "./timelineHeldArrival";
 export interface SetHoldEdgeResult {
     /** The marchers whose holds changed, ascending */
     readonly changed: number[];
+    /** Those of `changed` not asked for: the rest of a shape Held with them */
+    readonly alsoChanged?: number[];
 }
 
 export interface SplitHoldResult {
     /** The marchers whose holds now end at the count, ascending */
     readonly split: number[];
+    /** Those of `split` not asked for: the rest of a shape Held with them */
+    readonly alsoSplit?: number[];
 }
+
+/** Those of `changed` not in `asked`, or nothing when there are none */
+const notAsked = (changed: readonly number[], asked: readonly number[]) => {
+    const was = new Set(asked);
+    const more = changed.filter((id) => !was.has(id));
+    return more.length > 0 ? more : undefined;
+};
 
 /** Every row of `marcherIds`' as a beat range, by marcher. */
 async function readMoves(
@@ -129,9 +146,18 @@ export async function setHoldEdge({
     try {
         return await transactionWithHistory(db, "setHoldEdge", async (tx) => {
             const ids = [...new Set(marcherIds)];
-            const marks = await readHeldMarks(tx, ids);
-            const dragged = marks.filter((m) => m.end === from);
-            if (dragged.length === 0) throw new NothingToDo({ changed: [] });
+            const asked = (await readHeldMarks(tx, ids)).filter(
+                (m) => m.end === from,
+            );
+            if (asked.length === 0) throw new NothingToDo({ changed: [] });
+            // The same hold of the rest of their shapes: lengthened, those ending here go along;
+            // shortened, each ending past `to` ends there
+            const mates = await heldShapeMateMarks(tx, asked);
+            const dragged = [...asked, ...mates.filter((m) => m.end === from)];
+            const cut =
+                to < from
+                    ? mates.filter((m) => m.end !== from && m.end > to)
+                    : [];
             const moves = await readMoves(
                 tx,
                 dragged.map((m) => m.marcherId),
@@ -144,18 +170,31 @@ export async function setHoldEdge({
                     showEnd,
                 });
                 if (!limits || !holdEdgeAllows(limits, to))
-                    refuse(text.t("timeline.refusals.holdEdge.outside"));
+                    refuse(
+                        ids.includes(mark.marcherId)
+                            ? text.t("timeline.refusals.holdEdge.outside")
+                            : text.t("timeline.refusals.holdEdge.shapeMate"),
+                    );
             }
             const draggedIds = [...new Set(dragged.map((m) => m.marcherId))];
-            const own = marks.filter((m) => draggedIds.includes(m.marcherId));
-            const after = applyHoldEdgeDrag(own, {
+            const marks = await readHeldMarks(tx, draggedIds);
+            const after = applyHoldEdgeDrag(marks, {
                 from,
                 to,
                 marcherIds: draggedIds,
             });
-            const changed = await writeMarks(tx, own, after);
+            const changed = [
+                ...(await writeMarks(tx, marks, after)),
+                ...(await writeMarks(
+                    tx,
+                    cut,
+                    cut.map((m) => ({ ...m, end: to })),
+                )),
+            ];
             if (changed.length === 0) throw new NothingToDo({ changed: [] });
-            return { changed };
+            const all = [...new Set(changed)].sort((x, y) => x - y);
+            const alsoChanged = notAsked(all, ids);
+            return { changed: all, ...(alsoChanged ? { alsoChanged } : {}) };
         });
     } catch (e) {
         if (e instanceof NothingToDo) return e.result as SetHoldEdgeResult;
@@ -180,12 +219,19 @@ export async function splitHoldAt({
         return { split: [] };
     try {
         return await transactionWithHistory(db, "splitHold", async (tx) => {
-            const marks = (
-                await readHeldMarks(tx, [...new Set(marcherIds)])
-            ).filter((m) => m.start < beat && beat < m.end);
-            if (marks.length === 0) throw new NothingToDo({ split: [] });
+            const ids = [...new Set(marcherIds)];
+            const inside = (m: HoldMark) => m.start < beat && beat < m.end;
+            const asked = (await readHeldMarks(tx, ids)).filter(inside);
+            if (asked.length === 0) throw new NothingToDo({ split: [] });
+            // The same hold of the rest of their shapes ends here too
+            const marks = [
+                ...asked,
+                ...(await heldShapeMateMarks(tx, asked)).filter(inside),
+            ];
             const after = marks.map((m) => ({ ...m, end: beat }));
-            return { split: await writeMarks(tx, marks, after) };
+            const split = await writeMarks(tx, marks, after);
+            const alsoSplit = notAsked(split, ids);
+            return { split, ...(alsoSplit ? { alsoSplit } : {}) };
         });
     } catch (e) {
         if (e instanceof NothingToDo) return e.result as SplitHoldResult;

@@ -270,6 +270,8 @@ the consequence about splits. None of this changes the schema.
 4. **A later page gets its own copy on any edit there.** A recipe shown at a later moment
    (Revision, 2026-10-14) is saved as a copy on that later move by any edit made there that
    changes the box, a pivot change included (#492, #499); the earlier page keeps its recipe.
+   _Amended 2026-11-15, see below: not where the shape is Held, where the edit goes to the move
+   the hold grows out of._
 5. **Saved shapes match kind and version.** A saved shape whose kind version this app doesn't
    have is skipped, not migrated, and the library says how many need a newer OpenMarch.
 
@@ -580,7 +582,8 @@ positions.
    own copy of a box (a pivot changed there) sits on the earlier page's spots.
 2. **On a later page the shape is carried onto**, the change belongs to that page. Its members are
    set there, as an edit that moves nobody sets them, and the mark is saved on that page's move.
-   Earlier pages keep their shape.
+   Earlier pages keep their shape. _Amended 2026-11-15: a page where the shape is Held is the move
+   its hold grows out of, so Ungroup there ungroups it on that move._
 3. Where no edit can be made (past the last page in Basic, the timeline not ready), Ungroup is
    refused as an edit is. While isolating a move, a shape from another move is
    refused with a toast: the isolated move can't take the change, and the shape's own move
@@ -644,4 +647,5 @@ replaced in place, since the after-write step is called with the move the positi
    (`boxesAt`), and selecting it there still works. Showing is not holding.
 
 Verification: "A shape is Held whole" in `db-functions/__test__/timelineHoldFromPrevious.test.ts`
-and `shapes/__test__/oneMoveForShape.test.ts`.
+(including shortening, splitting and clearing the hold of part of a shape),
+`shapes/__test__/oneMoveForShape.test.ts` and `shapes/__test__/heldShapeEdit.test.ts`.

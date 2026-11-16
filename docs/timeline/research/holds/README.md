@@ -95,6 +95,7 @@ Tickets built from this doc should say the same.
 **2026-11-15 (owner):** a placed shape is held like any marchers, and held whole: a hold links
 counts, a shape only arranges marchers (ADR 0012, amendment of 2026-11-15). The rules below that
 skip shape members now apply only to transitions into stored shapes and to follow-the-leader.
+Shortening, splitting or clearing part of a shape's hold changes the rest of it the same way.
 
 ## Vocabulary (owner, 2026-10-28)
 
