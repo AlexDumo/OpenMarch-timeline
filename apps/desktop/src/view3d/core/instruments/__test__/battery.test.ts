@@ -217,6 +217,24 @@ describe("battery placement", () => {
         expect(left[0]).toBeLessThan(0);
     });
 
+    it("lands the snare's two tips as mirror images, the left stick in from the side", () => {
+        // the left hand holds in traditional grip: its stick crosses the hand
+        // and comes in at a wider angle, to the same spot on the head
+        const [right, left] = tips("snare");
+        // the beads' centers, a few millimeters short of the tips, within 2 mm
+        expect(Math.abs(left[0] + right[0])).toBeLessThan(0.002);
+        expect(Math.abs(left[1] - right[1])).toBeLessThan(0.002);
+        expect(Math.abs(left[2] - right[2])).toBeLessThan(0.002);
+        const butts = (["handR", "handL"] as const).map((bone) => {
+            const wood = batteryModel("snare").pieces.filter(
+                (p) => p.part === PART_WOOD && p.bone === bone,
+            );
+            return bounds([wood[0]]);
+        });
+        // the shafts' far ends: the left butt sits further out than the right
+        expect(-butts[1].min[0]).toBeGreaterThan(butts[0].max[0] + 0.04);
+    });
+
     it("puts each tenor stick's tip over one of the two front drums", () => {
         const [right, left] = tips("tenors");
         // drum 1 (10 inch) front left, drum 2 (12 inch) front right

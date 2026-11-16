@@ -50,6 +50,29 @@ export interface ArmTargets {
     wrist: Vec3;
     /** Unit vector: the hand bone's +Y, wrist toward the fingertips. */
     fingers: Vec3;
+    /**
+     * The way the palm faces, a unit vector. The hand turns about its
+     * fingers to face it as nearly as it can, the forearm half as far, and
+     * the upper arm the way round that leaves the wrist the smaller twist.
+     *
+     * Absent: the arm keeps the turn of its bend plane, the thumb side of
+     * every bone toward (shoulder to elbow) × (elbow to wrist). That rule
+     * is the same on both arms, so on mirrored targets the left arm lands
+     * half a turn from the right arm's mirror image (issue #980). The
+     * winds and the guard were tuned by eye on it and keep it.
+     */
+    palm?: Vec3;
+    /**
+     * Without `palm`: the arm turned half a turn about its length from the
+     * bend plane's rule. On the left arm of a mirrored hold this makes it
+     * the right arm's mirror image.
+     */
+    halfTurn?: boolean;
+    /**
+     * The stick this hand holds, when it doesn't run along the fingers: a
+     * point on it at the hand (its fulcrum) and the way to its tip.
+     */
+    stick?: { fulcrum: Vec3; along: Vec3 };
 }
 
 export interface Hold {
@@ -954,7 +977,7 @@ const SNARE: Record<HoldState, Hold> = {
     up: {
         family: "snare",
         state: "up",
-        // matched grip: hands just behind the back rim, palms down, sticks angled in to meet near the center a little above the head
+        // hands just behind the back rim, sticks angled in to meet near the center a little above the head; the grips (right matched, left traditional) come from `battery` below
         right: {
             elbow: [-0.281, 1.227, -0.066],
             wrist: [-0.209, 1.068, 0.132],
@@ -974,7 +997,7 @@ const SNARE: Record<HoldState, Hold> = {
     carry: {
         family: "snare",
         state: "carry",
-        // matched grip: hands just behind the back rim, palms down, sticks angled in to meet near the center a little above the head
+        // hands just behind the back rim, sticks angled in to meet near the center a little above the head; the grips (right matched, left traditional) come from `battery` below
         right: {
             elbow: [-0.281, 1.227, -0.066],
             wrist: [-0.209, 1.068, 0.132],
@@ -994,7 +1017,7 @@ const SNARE: Record<HoldState, Hold> = {
     trail: {
         family: "snare",
         state: "trail",
-        // matched grip: hands just behind the back rim, palms down, sticks angled in to meet near the center a little above the head
+        // hands just behind the back rim, sticks angled in to meet near the center a little above the head; the grips (right matched, left traditional) come from `battery` below
         right: {
             elbow: [-0.281, 1.227, -0.066],
             wrist: [-0.209, 1.068, 0.132],
@@ -1744,13 +1767,17 @@ const TABLE: Record<HoldFamily, () => Record<HoldState, Hold>> = {
         trail: saxTrail("bariSax", ["bariSax"], [-0.29, 0.88, 0.4]),
     }),
     // battery (drum corps photos, 2026-11-10): the upper arms hang close to
-    // the ribs, 10 to 20 degrees off vertical, the forearms reach forward
+    // the ribs, 10 to 20 degrees off vertical, the forearms reach forward.
+    // Each family says where its palms face (#980): down on the sticks,
+    // in toward the heads on the bass mallets. The snare's left hand holds
+    // its stick in traditional grip (owner, 2026-11-16).
     snare: () =>
         battery(
             SNARE,
             [-0.135, 1.085, 0.26],
             [0.34, -0.04, 0.9],
             [-0.1, -1, 0.25],
+            { palm: [0, -1, 0], traditional: true },
             [0, 1.0, 0.45],
         ),
     tenors: () =>
@@ -1759,16 +1786,22 @@ const TABLE: Record<HoldFamily, () => Record<HoldState, Hold>> = {
             [-0.19, 1.09, 0.24],
             [0.12, -0.12, 0.95],
             [-0.15, -1, 0.3],
+            { palm: [0, -1, 0] },
         ),
     // the hands at the lower ribs, mallets steep, the drum high (photos, 2026-11-10)
-    bass: () => battery(BASS, [-0.255, 1.13, 0.27], undefined, [-0.3, -1, 0.2]),
-    // the plates at the chest, hands 0.26 m apart, elbows only a little out
+    bass: () =>
+        battery(BASS, [-0.255, 1.13, 0.27], undefined, [-0.3, -1, 0.2], {
+            palm: [1, 0, 0],
+        }),
+    // the plates at the chest, hands 0.26 m apart, elbows only a little out;
+    // the left arm the right's mirror image (owner, 2026-11-16)
     cymbals: () =>
         battery(
             CYMBALS,
             [-0.13, 1.23, 0.3],
             undefined,
             [-0.5, -1, 0.1],
+            {},
             [0, 1.23, 0.3],
         ),
     flag: () => ({ ...FLAG, up: FLAG_PRESENT }),
@@ -1882,25 +1915,126 @@ const FLAG_PRESENT: Hold = {
     },
 };
 
+/** A drum stick's fulcrum: this far up the fingers from the wrist of a matched-grip hand. */
+export const STICK_FULCRUM = 0.07;
+/** How far a matched-grip stick tips down from the fingers toward the head, per unit along them. */
+export const STICK_TIP_DOWN = 0.22;
+/** A stick's tip from its fulcrum (`battery.ts`: 0.41 long, the butt 0.12 behind the fulcrum). */
+export const STICK_REACH = 0.29;
+
+/** The stick a hand holds: its own when it has one, or the matched-grip one along the fingers. */
+export function stickOf(arm: ArmTargets): NonNullable<ArmTargets["stick"]> {
+    return (
+        arm.stick ?? {
+            fulcrum: add(arm.wrist, mul(arm.fingers, STICK_FULCRUM)),
+            along: unit(add(arm.fingers, [0, -STICK_TIP_DOWN, 0])),
+        }
+    );
+}
+
+/**
+ * Traditional grip, the snare's left hand (owner, 2026-11-16, after drum
+ * corps snare lines; docs/3d/instruments.md lists the reference photos).
+ * The hand is turned over, its palm up and in toward the body and its
+ * thumb on top. The stick rests in the web of the thumb and runs across
+ * the palm to leave past the ring finger, so the hand doesn't point along
+ * its stick as a matched-grip hand does: it points ahead and the stick
+ * crosses it, coming in more from the side to the same spot on the head as
+ * the right stick's mirror image. The hand sits a little further out and
+ * forward than a matched one, level with the rim, and holds the stick
+ * nearer its butt (about 9 cm up, where snare handbooks put the fulcrum).
+ */
+const TRADITIONAL = {
+    /** The wrist, from a matched-grip left wrist: toward the performer's left, up, forward. */
+    wrist: [0.02, 0, 0.02] as Vec3,
+    /** The way the hand points: ahead, a little down. */
+    fingers: unit([0, -0.1, 1]),
+    /** The web of the thumb from the wrist: up the fingers, toward the thumb, toward the palm. */
+    web: [0.045, 0.02, 0.012] as Vec3,
+    /**
+     * Degrees the palm turns in toward the body from lying flat under the
+     * stick, so the stick lifts off the palm toward the fingers and the
+     * thumb comes up on top.
+     */
+    roll: 20,
+};
+
+/** `matched`, a matched-grip left arm, holding its stick in traditional grip instead. */
+function traditionalLeft(matched: ArmTargets, out: Vec3): ArmTargets {
+    const was = stickOf(matched);
+    const tip = add(was.fulcrum, mul(was.along, STICK_REACH));
+    const wrist = add(matched.wrist, TRADITIONAL.wrist);
+    const fingers = TRADITIONAL.fingers;
+    const [up, toThumb, toPalm] = TRADITIONAL.web;
+    const r = (TRADITIONAL.roll * Math.PI) / 180;
+    // the stick runs from the thumb's web to the tip and the palm lies
+    // under it (then rolls in); the web's place depends on the palm's
+    // way, so settle the two together
+    let palm: Vec3 = [0, 1, 0];
+    let along = was.along;
+    for (let i = 0; i < 6; i++) {
+        const thumb = cross(palm, fingers);
+        const web = add(
+            wrist,
+            add(add(mul(fingers, up), mul(thumb, toThumb)), mul(palm, toPalm)),
+        );
+        along = unit(sub(tip, web));
+        const flat = unit(cross(along, fingers));
+        palm = unit(
+            sub(mul(flat, Math.cos(r)), mul(cross(flat, fingers), Math.sin(r))),
+        );
+    }
+    return {
+        ...armTo("left", wrist, fingers, out),
+        palm,
+        // `battery.ts` puts a stick's tip STICK_REACH ahead of its fulcrum
+        stick: { fulcrum: sub(tip, mul(along, STICK_REACH)), along },
+    };
+}
+
+/** How a battery family's hands hold. */
+interface BatteryGrip {
+    /**
+     * The way the right palm faces; the left palm is its mirror image.
+     * Absent: the right arm keeps the turn of its bend plane and the left
+     * arm is its mirror image.
+     */
+    palm?: Vec3;
+    /** The left hand holds its stick in traditional grip rather than as the right hand's mirror image. */
+    traditional?: boolean;
+}
+
 /**
  * A battery family's hold in every state (it plays the same in each): the
  * right wrist at `wrist` with its fingers along `fingers` (unchanged when
- * absent), the elbow solved toward `out`, the left arm the mirror image,
- * and the instrument at `origin` when given.
+ * absent), the elbow solved toward `out`, the left arm the mirror image
+ * (or in traditional grip), and the instrument at `origin` when given.
  */
 function battery(
     r: Record<HoldState, Hold>,
     wrist: Vec3,
     fingers: Vec3 | undefined,
     out: Vec3,
+    grip: BatteryGrip,
     origin?: Vec3,
 ): Record<HoldState, Hold> {
     const mirror = (v: Vec3): Vec3 => [-v[0], v[1], v[2]];
     const f = unit(fingers ?? r.up.right.fingers);
+    const palm = grip.palm && unit(grip.palm);
+    const right: ArmTargets = {
+        ...armTo("right", wrist, f, out),
+        ...(palm && { palm }),
+    };
+    const mirrored: ArmTargets = {
+        ...armTo("left", mirror(wrist), mirror(f), mirror(out)),
+        ...(palm ? { palm: mirror(palm) } : { halfTurn: true }),
+    };
     const up: Hold = {
         ...r.up,
-        right: armTo("right", wrist, f, out),
-        left: armTo("left", mirror(wrist), mirror(f), mirror(out)),
+        right,
+        left: grip.traditional
+            ? traditionalLeft(mirrored, mirror(out))
+            : mirrored,
         instrument: origin ? { ...r.up.instrument, origin } : r.up.instrument,
     };
     return {
