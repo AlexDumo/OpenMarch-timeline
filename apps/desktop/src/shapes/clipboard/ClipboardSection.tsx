@@ -11,6 +11,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fieldPropertiesQueryOptions } from "@/hooks/queries/useFieldProperties";
 import { frameCorners } from "../frame/frame";
 import { placedOf } from "../placed/placedBox";
+import type { ShapeContext, XY } from "../types";
 import {
     pictureFit,
     pictureSummary,
@@ -75,7 +76,16 @@ export function ClipboardSection() {
             className="mt-12 flex flex-col gap-8"
         >
             <div className="flex items-center gap-12">
-                <PicturePreview picture={picture} summary={summary} />
+                <PicturePreview
+                    picture={picture}
+                    summary={summary}
+                    // A shape is drawn as it will paste: laid out for the marchers selected
+                    count={
+                        fit.fit === "laidOut"
+                            ? fit.selected
+                            : picture.dots.length
+                    }
+                />
                 <div className="flex min-w-0 flex-col">
                     <span
                         className="text-body font-medium"
@@ -211,20 +221,26 @@ const VIEW = { width: 72, height: 52 } as const;
 const PAD = 6;
 
 /**
- * The copied picture drawn small: its dots where they stood, and a shape's outline. North is the
+ * The copied picture drawn small: its dots where they stood, and a shape's outline, a shape laid
+ * out for the marchers selected when it pastes for another count. North is the
  * back of the field, as on the field itself. Decoration: the words beside it say what it is.
  */
 function PicturePreview({
     picture,
     summary,
+    count,
 }: {
     picture: CopiedPicture;
     summary: PictureSummary;
+    /** How many dots to draw: a shape laid out for another count draws that many */
+    count: number;
 }) {
     const { t } = useTranslate();
     const drawn = useMemo(() => {
-        const outline = shapeOutline(picture, summary);
-        const points = [...picture.dots, ...(outline?.points ?? [])];
+        const shape = shapeDrawn(picture, summary, count);
+        const dots = shape?.dots ?? picture.dots;
+        const outline = shape?.outline ?? null;
+        const points = [...dots, ...(outline?.points ?? [])];
         const xs = points.map((p) => p.x);
         const ys = points.map((p) => p.y);
         const left = Math.min(...xs);
@@ -244,7 +260,7 @@ function PicturePreview({
             y: oy + p.y * k,
         });
         return {
-            dots: picture.dots.map(at),
+            dots: dots.map(at),
             outline: outline && {
                 open: outline.open,
                 points: outline.points
@@ -253,14 +269,10 @@ function PicturePreview({
                     .join(" "),
             },
         };
-    }, [picture, summary]);
+    }, [picture, summary, count]);
     // Smaller dots when there are many, so a block still reads as a block
     const r =
-        picture.dots.length > 40
-            ? 1.25
-            : picture.dots.length > 16
-              ? 1.75
-              : 2.25;
+        drawn.dots.length > 40 ? 1.25 : drawn.dots.length > 16 ? 1.75 : 2.25;
     return (
         <svg
             width={VIEW.width}
@@ -270,7 +282,7 @@ function PicturePreview({
             aria-label={t("shapes.clipboard.pictureLabel")}
             className="rounded-6 bg-fg-2 text-text shrink-0"
             data-testid="clipboard-picture"
-            data-dots={picture.dots.length}
+            data-dots={drawn.dots.length}
         >
             {drawn.outline &&
                 (drawn.outline.open ? (
@@ -300,23 +312,46 @@ function PicturePreview({
     );
 }
 
-/** A copied shape's outline in field units, as its kind draws it; none for positions or a group */
-function shapeOutline(
+/** Snaps nothing: the picture is drawn too small for the grid to show */
+const PICTURE_CONTEXT: ShapeContext = { stepPx: 1, snapPoint: (p) => p };
+
+/**
+ * A copied shape in field units as its kind draws it for `count` marchers: its outline, and its
+ * spots when `count` isn't the number copied. None for positions or a group.
+ */
+function shapeDrawn(
     picture: CopiedPicture,
     summary: PictureSummary,
-): { points: { x: number; y: number }[]; open: boolean } | null {
+    count: number,
+): {
+    dots: readonly XY[] | null;
+    outline: { points: XY[]; open: boolean } | null;
+} | null {
     if (summary.type !== "shape" || !picture.shape) return null;
     const read = placedOf({ id: 0, ...picture.shape, members: [] });
     if (!read) return null;
-    const n = picture.dots.length;
     const { kind, params } = read;
     try {
+        const dots =
+            count === picture.dots.length
+                ? null
+                : kind.shape.generate(params, count, {
+                      ...PICTURE_CONTEXT,
+                      stepPx: picture.stepPx,
+                  });
         const points = kind.outline
-            ? [...kind.outline(params, n)]
-            : frameCorners(kind.frameOf(params, n));
-        return points.length > 1
-            ? { points, open: kind.outlineOpen?.(params, n) ?? false }
-            : null;
+            ? [...kind.outline(params, count)]
+            : frameCorners(kind.frameOf(params, count));
+        return {
+            dots,
+            outline:
+                points.length > 1
+                    ? {
+                          points,
+                          open: kind.outlineOpen?.(params, count) ?? false,
+                      }
+                    : null,
+        };
     } catch {
         return null;
     }

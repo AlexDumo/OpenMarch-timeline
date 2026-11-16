@@ -474,6 +474,11 @@ test("the inspector's Clipboard card shows what is copied and how it fits the se
     await expect(card.getByTestId("clipboard-fit")).toHaveText(
         "Laid out for the 3 marchers selected",
     );
+    // Its picture is laid out for them too
+    await expect(card.getByTestId("clipboard-picture")).toHaveAttribute(
+        "data-dots",
+        "3",
+    );
 });
 
 test("a copied box switched to Positions on the Clipboard card pastes onto its exact spots as plain marchers", async ({
