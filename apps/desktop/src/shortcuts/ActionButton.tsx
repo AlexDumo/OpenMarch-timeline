@@ -69,12 +69,12 @@ export default function ActionButton({
     ...rest
 }: ActionButtonProps) {
     const { t } = useTranslate();
-    const runnable = useSyncExternalStore(subscribeToActionHandlers, () =>
-        isActionEnabled(action),
+    // Whether it can run, and when it can't, why: a new reason re-renders it too
+    const state = useSyncExternalStore(subscribeToActionHandlers, () =>
+        isActionEnabled(action) ? null : (actionDisabledReason(action) ?? ""),
     );
-    // Read on each render; `runnable` changing re-renders it
-    const reason =
-        !runnable && !disabled ? actionDisabledReason(action) : undefined;
+    const runnable = state === null;
+    const reason = !disabled && state ? state : undefined;
     const reasonId = useId();
     const translate = (key: string, params?: Record<string, string | number>) =>
         t(key, params as never);
@@ -160,9 +160,10 @@ export default function ActionButton({
             aria-describedby={reason ? reasonId : rest["aria-describedby"]}
             onClick={(event) => {
                 if (reason) {
-                    // A finger has no hover: pressing it shows why instead
+                    // Pressing it shows why instead, as the menus' entries do: a press closes
+                    // the tooltip, and a finger has no hover
                     event.preventDefault();
-                    if (isTouch) setHintOpen(true);
+                    setHintOpen(true);
                     return;
                 }
                 // A caller's onClick can take the click over with preventDefault

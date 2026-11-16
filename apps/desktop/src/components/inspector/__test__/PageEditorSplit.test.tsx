@@ -19,6 +19,7 @@ globalThis.ResizeObserver ??= class {
 const state = vi.hoisted(() => ({
     beats: 4,
     playing: false,
+    first: false,
 }));
 vi.mock("../InspectorPageContext", () => ({
     useInspectorPage: () => ({
@@ -30,7 +31,7 @@ vi.mock("../InspectorPageContext", () => ({
                 index: i,
             })),
             counts: state.beats,
-            previousPageId: 1,
+            previousPageId: state.first ? null : 1,
             nextPageId: null,
             isSubset: false,
             measures: [],
@@ -73,6 +74,7 @@ afterEach(() => {
     cleanup();
     state.beats = 4;
     state.playing = false;
+    state.first = false;
 });
 
 const mount = async () => {
@@ -82,7 +84,7 @@ const mount = async () => {
             <PageEditor />
         </QueryClientProvider>,
     );
-    return screen.getByRole("button", { name: "Split page" });
+    return screen.queryByRole("button", { name: "Split page" })!;
 };
 
 describe("Split page in the page inspector", () => {
@@ -103,6 +105,13 @@ describe("Split page in the page inspector", () => {
         );
         // Screen readers hear the reason with the button
         expect(button.getAttribute("aria-describedby")).toBe(reason.id);
+    });
+
+    it("isn't offered on the first page, the show's 0-count start", async () => {
+        state.beats = 1;
+        state.first = true;
+        expect(await mount()).toBeNull();
+        expect(screen.queryByTestId("inspector-page-split-reason")).toBeNull();
     });
 
     it("while playing, shows only the pause note, not the count reason", async () => {

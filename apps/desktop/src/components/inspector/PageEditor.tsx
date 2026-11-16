@@ -114,20 +114,23 @@ function PageEditor() {
                             {measureRangeString(selectedPage)}
                         </p>
                     </div>
-                    <Button
-                        variant="secondary"
-                        size="compact"
-                        onClick={() => splitPage({ page: selectedPage })}
-                        disabled={tooShortToSplit || playing}
-                        aria-describedby={
-                            tooShortToSplit && !playing
-                                ? splitReasonId
-                                : undefined
-                        }
-                    >
-                        <T keyName="inspector.page.splitPage" />
-                    </Button>
-                    {tooShortToSplit && !playing && (
+                    {/* The first page is the show's 0-count start: there's nothing to split */}
+                    {!isFirstPage && (
+                        <Button
+                            variant="secondary"
+                            size="compact"
+                            onClick={() => splitPage({ page: selectedPage })}
+                            disabled={tooShortToSplit || playing}
+                            aria-describedby={
+                                tooShortToSplit && !playing
+                                    ? splitReasonId
+                                    : undefined
+                            }
+                        >
+                            <T keyName="inspector.page.splitPage" />
+                        </Button>
+                    )}
+                    {!isFirstPage && tooShortToSplit && !playing && (
                         <Help
                             id={splitReasonId}
                             testId="inspector-page-split-reason"

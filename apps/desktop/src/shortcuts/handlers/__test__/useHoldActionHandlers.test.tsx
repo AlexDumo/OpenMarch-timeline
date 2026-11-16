@@ -45,6 +45,7 @@ const page = (id: number, name: string, first: number, last: number) => ({
     id,
     name,
     previousPageId: id === 1 ? null : id - 1,
+    nextPageId: id === 3 ? null : id + 1,
     beats: Array.from({ length: last - first + 1 }, (_, i) => ({
         index: first + i,
     })),
@@ -520,5 +521,45 @@ describe("the field menu shows the selection's state on the current page", () =>
                 "field-menu-setSelectedMarchersToPreviousPage-reason-icon",
             ),
         ).toBeTruthy();
+    });
+
+    it("on the last page, next page's spots is off and says there's no page after", () => {
+        mocks.selectedPage = PAGES[2];
+        openFieldMenu([1]);
+        expect(isActionEnabled("setSelectedMarchersToNextPage")).toBe(false);
+        expect(actionDisabledReason("setSelectedMarchersToNextPage")).toBe(
+            "There's no page after this one",
+        );
+        expect(actionDisabledReason("setAllMarchersToNextPage")).toBe(
+            "There's no page after this one",
+        );
+        // Clear this page has a page before it there: no reason about pages
+        expect(
+            actionDisabledReason("setAllMarchersToPreviousPage"),
+        ).toBeUndefined();
+    });
+
+    it("in a show of one page, each says which page is missing", () => {
+        mocks.selectedPage = { ...PAGES[0], nextPageId: null };
+        openFieldMenu([1]);
+        expect(actionDisabledReason("setSelectedMarchersToNextPage")).toBe(
+            "There's no page after this one",
+        );
+        expect(actionDisabledReason("setSelectedMarchersToPreviousPage")).toBe(
+            "There's no page before this one",
+        );
+    });
+
+    it("on a middle page with nobody selected, the selection's actions say so and the menu shows no ?", () => {
+        mocks.selectedPage = PAGES[1];
+        openFieldMenu([]);
+        expect(actionDisabledReason("setSelectedMarchersToNextPage")).toBe(
+            "No marchers selected",
+        );
+        expect(
+            screen.queryByTestId(
+                "field-menu-setSelectedMarchersToNextPage-reason-icon",
+            ),
+        ).toBeNull();
     });
 });

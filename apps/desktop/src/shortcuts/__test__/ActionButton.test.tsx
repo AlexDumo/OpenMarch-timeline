@@ -77,6 +77,10 @@ describe("ActionButton", () => {
         );
         fireEvent.click(button);
         expect(run).not.toHaveBeenCalled();
+        // A click shows why, as a press on a menu's entry does
+        expect(
+            screen.getAllByText("Select 2 marchers to swap them").length,
+        ).toBeGreaterThan(1);
         off();
     });
 

@@ -13,6 +13,7 @@ import {
     KEEP_MENU_EVENTS,
     MenuItemWithReason,
     TIMELINE_MENU_CONTENT_CLASS,
+    TimelineMenuClose,
 } from "@/components/timeline/TimelineRangeMenu";
 import type { FieldEditor } from "@/field/editor/fieldEditor";
 import type { ActionId } from "@/shortcuts/definitions";
@@ -232,62 +233,94 @@ export default function FieldContextMenu({
                             : TIMELINE_MENU_CONTENT_CLASS
                     }
                 >
-                    {groups.map((group, i) => (
-                        <Fragment key={group[0]}>
-                            {i > 0 && (
-                                <DropdownMenu.Separator
-                                    className={MENU_SEPARATOR_CLASS}
-                                />
-                            )}
-                            {group.map((id) => {
-                                const label =
-                                    actionLabelNow(id) ??
-                                    getActionLabel(id, (key, params) =>
-                                        t(key, params as never),
+                    {/* One Escape closes an open reason tip and the menu together */}
+                    <TimelineMenuClose.Provider value={onClose}>
+                        {groups.map((group, i) => (
+                            <Fragment key={group[0]}>
+                                {i > 0 && (
+                                    <DropdownMenu.Separator
+                                        className={MENU_SEPARATOR_CLASS}
+                                    />
+                                )}
+                                {group.map((id) => {
+                                    const label =
+                                        actionLabelNow(id) ??
+                                        getActionLabel(id, (key, params) =>
+                                            t(key, params as never),
+                                        );
+                                    const shortcut = (
+                                        <span className="ml-auto pl-16">
+                                            <Shortcut action={id} />
+                                        </span>
                                     );
-                                const shortcut = (
-                                    <span className="ml-auto pl-16">
-                                        <Shortcut action={id} />
-                                    </span>
-                                );
-                                if (isActionChecked(id))
+                                    if (isActionChecked(id))
+                                        return (
+                                            <DropdownMenu.CheckboxItem
+                                                key={id}
+                                                data-testid={`field-menu-${id}`}
+                                                checked
+                                                disabled
+                                                className={MENU_ITEM_CLASS}
+                                            >
+                                                <span
+                                                    className={CHECK_SLOT_CLASS}
+                                                >
+                                                    <DropdownMenu.ItemIndicator className="flex">
+                                                        <CheckIcon size={14} />
+                                                    </DropdownMenu.ItemIndicator>
+                                                </span>
+                                                {label}
+                                                {shortcut}
+                                            </DropdownMenu.CheckboxItem>
+                                        );
+                                    const run = () =>
+                                        runAction(
+                                            id,
+                                            ON_A_MARCHER.has(id) &&
+                                                marcher !== null
+                                                ? { marcherId: marcher }
+                                                : undefined,
+                                        );
+                                    // Greyed out with a reason: a ? says why, as the timeline's
+                                    // menus do, instead of a toast after a press. With nobody
+                                    // selected every selection command is off for the same plain
+                                    // reason, so none of them gets a ?
+                                    const reason =
+                                        enabled(id) || selectedCount === 0
+                                            ? undefined
+                                            : actionDisabledReason(id);
+                                    if (reason)
+                                        return (
+                                            <MenuItemWithReason
+                                                key={id}
+                                                testId={`field-menu-${id}`}
+                                                reason={reason}
+                                                reasonTestId={`field-menu-${id}-reason`}
+                                                onSelect={run}
+                                                className={MENU_ITEM_CLASS}
+                                            >
+                                                {CHECKABLE.has(id) && (
+                                                    <span
+                                                        className={
+                                                            CHECK_SLOT_CLASS
+                                                        }
+                                                    />
+                                                )}
+                                                {label}
+                                            </MenuItemWithReason>
+                                        );
                                     return (
-                                        <DropdownMenu.CheckboxItem
+                                        <DropdownMenu.Item
                                             key={id}
                                             data-testid={`field-menu-${id}`}
-                                            checked
-                                            disabled
-                                            className={MENU_ITEM_CLASS}
-                                        >
-                                            <span className={CHECK_SLOT_CLASS}>
-                                                <DropdownMenu.ItemIndicator className="flex">
-                                                    <CheckIcon size={14} />
-                                                </DropdownMenu.ItemIndicator>
-                                            </span>
-                                            {label}
-                                            {shortcut}
-                                        </DropdownMenu.CheckboxItem>
-                                    );
-                                const run = () =>
-                                    runAction(
-                                        id,
-                                        ON_A_MARCHER.has(id) && marcher !== null
-                                            ? { marcherId: marcher }
-                                            : undefined,
-                                    );
-                                // Greyed out with a reason: a ? says why, as the timeline's
-                                // menus do, instead of a toast after a press
-                                const reason = enabled(id)
-                                    ? undefined
-                                    : actionDisabledReason(id);
-                                if (reason)
-                                    return (
-                                        <MenuItemWithReason
-                                            key={id}
-                                            testId={`field-menu-${id}`}
-                                            reason={reason}
-                                            reasonTestId={`field-menu-${id}-reason`}
+                                            disabled={!enabled(id)}
                                             onSelect={run}
+                                            onFocus={() =>
+                                                previewAction(id, true)
+                                            }
+                                            onBlur={() =>
+                                                previewAction(id, false)
+                                            }
                                             className={MENU_ITEM_CLASS}
                                         >
                                             {CHECKABLE.has(id) && (
@@ -296,30 +329,13 @@ export default function FieldContextMenu({
                                                 />
                                             )}
                                             {label}
-                                        </MenuItemWithReason>
+                                            {shortcut}
+                                        </DropdownMenu.Item>
                                     );
-                                return (
-                                    <DropdownMenu.Item
-                                        key={id}
-                                        data-testid={`field-menu-${id}`}
-                                        disabled={!enabled(id)}
-                                        onSelect={run}
-                                        onFocus={() => previewAction(id, true)}
-                                        onBlur={() => previewAction(id, false)}
-                                        className={MENU_ITEM_CLASS}
-                                    >
-                                        {CHECKABLE.has(id) && (
-                                            <span
-                                                className={CHECK_SLOT_CLASS}
-                                            />
-                                        )}
-                                        {label}
-                                        {shortcut}
-                                    </DropdownMenu.Item>
-                                );
-                            })}
-                        </Fragment>
-                    ))}
+                                })}
+                            </Fragment>
+                        ))}
+                    </TimelineMenuClose.Provider>
                 </DropdownMenu.Content>
             </DropdownMenu.Portal>
         </DropdownMenu.Root>

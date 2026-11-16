@@ -72,6 +72,22 @@ export function useActionHandler(
 const read = <T>(value: T | (() => T)): T =>
     typeof value === "function" ? (value as () => T)() : value;
 
+/**
+ * A ref to `value` that tells the action's subscribers when it changes. A function is read when
+ * asked, so a new one each render tells nobody.
+ */
+function useWatchedRef<T>(value: T) {
+    const ref = useRef(value);
+    useLayoutEffect(() => {
+        if (ref.current === value) return;
+        const quiet =
+            typeof ref.current === "function" && typeof value === "function";
+        ref.current = value;
+        if (!quiet) notifyActionHandlersChanged();
+    }, [value]);
+    return ref;
+}
+
 export function useActionHandlerGroup(
     ids: readonly ActionId[],
     run: (id: ActionId, args: ActionArgs | undefined) => void,
@@ -79,17 +95,18 @@ export function useActionHandlerGroup(
 ): void {
     const enabled = options.enabled ?? true;
     const runRef = useRef(run);
-    const enabledRef = useRef(enabled);
+    // Subscribers such as ActionButton re-read these when they change
+    const enabledRef = useWatchedRef(enabled);
     const ignoreRepeatRef = useRef<boolean | (() => boolean)>(
         options.ignoreRepeat ?? false,
     );
     const pressRef = useRef(options.onPress);
     const hasPress = options.onPress !== undefined;
     const releaseRef = useRef(options.onRelease);
-    const labelRef = useRef(options.label);
+    const labelRef = useWatchedRef(options.label);
     const checkedRef = useRef(options.checked ?? false);
     const previewRef = useRef(options.preview);
-    const reasonRef = useRef(options.disabledReason);
+    const reasonRef = useWatchedRef(options.disabledReason);
     const hasRelease = options.onRelease !== undefined;
     useLayoutEffect(() => {
         runRef.current = run;
@@ -97,32 +114,13 @@ export function useActionHandlerGroup(
         pressRef.current = options.onPress;
         releaseRef.current = options.onRelease;
         previewRef.current = options.preview;
-        reasonRef.current = options.disabledReason;
     });
-    // A function is read when asked, so a new one each render tells nobody
-    useLayoutEffect(() => {
-        if (labelRef.current === options.label) return;
-        const quiet =
-            typeof labelRef.current === "function" &&
-            typeof options.label === "function";
-        labelRef.current = options.label;
-        if (!quiet) notifyActionHandlersChanged();
-    }, [options.label]);
     useLayoutEffect(() => {
         const checked = options.checked ?? false;
         if (checkedRef.current === checked) return;
         checkedRef.current = checked;
         notifyActionHandlersChanged();
     }, [options.checked]);
-    useLayoutEffect(() => {
-        if (enabledRef.current === enabled) return;
-        const quiet =
-            typeof enabledRef.current === "function" &&
-            typeof enabled === "function";
-        enabledRef.current = enabled;
-        // Lets subscribers such as ActionButton re-read isActionEnabled().
-        if (!quiet) notifyActionHandlersChanged();
-    }, [enabled]);
 
     const idsKey = ids.join("|");
     useEffect(() => {
@@ -152,5 +150,6 @@ export function useActionHandlerGroup(
             }),
         );
         return () => unregister.forEach((off) => off());
-    }, [idsKey, hasPress, hasRelease]);
+        // The refs are stable (useWatchedRef)
+    }, [idsKey, hasPress, hasRelease, enabledRef, labelRef, reasonRef]);
 }
