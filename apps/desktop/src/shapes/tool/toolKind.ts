@@ -699,6 +699,13 @@ export interface ToolKind<P> {
      * pasted from the clipboard, #961). It isn't read back from recipes or offered by a picker.
      */
     readonly loose?: boolean;
+    /**
+     * Spots nobody takes (loose dots pasted onto fewer marchers, #961): drawn as empty rings
+     * while it's open
+     */
+    emptySpots?(params: P, n: number): readonly XY[];
+    /** The params as placing saves them, when the open shape holds more than a recipe keeps */
+    forPlacing?(params: P): P;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

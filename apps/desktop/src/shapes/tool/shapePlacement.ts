@@ -62,7 +62,11 @@ export function placementOf(
             kind: kind.id,
             kindVersion: kind.version,
             // The spot count keeps holes when members leave later
-            params: { ...(tool.params as object), spots: tool.spots },
+            params: {
+                ...((tool.kind.forPlacing?.(tool.params) ??
+                    tool.params) as object),
+                spots: tool.spots,
+            },
             // Least travel, or a Line's order (#528); drill order is gone (#429)
             ...orderOf(tool),
         },

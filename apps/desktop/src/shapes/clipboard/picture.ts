@@ -432,17 +432,28 @@ export function planPaste({
     const kind = read ? pastedGroupTool : dotsTool;
     const starts = marchers.map(startOf);
 
-    if (n <= dots.length) {
-        // The dots that give the shortest walk; all of them with as many marchers as dots
-        const used =
-            n === dots.length
-                ? dots
-                : (fit?.spots ?? leastTravelOnto(starts, dots)).map(
-                      (spot) => dots[spot]!,
-                  );
+    if (n === dots.length)
         return {
             kind,
-            params: groupAt(used),
+            params: groupAt(dots),
+            marchers,
+            pivotMoved: false,
+            left: 0,
+        };
+
+    if (n < dots.length) {
+        // The dots that give the shortest walk are the spots; the rest stay empty, drawn with
+        // them while the paste is open so the whole copy shows
+        const whole = groupAt(dots);
+        const used = fit?.spots ?? leastTravelOnto(starts, dots);
+        const taken = new Set(used);
+        return {
+            kind,
+            params: {
+                ...whole,
+                points: used.map((spot) => whole.points[spot]!),
+                empty: whole.points.filter((_, spot) => !taken.has(spot)),
+            },
             marchers,
             pivotMoved: false,
             left: 0,

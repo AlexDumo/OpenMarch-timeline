@@ -291,7 +291,7 @@ test("a box pasted onto fewer marchers is laid out for them with its spacing kep
     expect(await savedShapes(show)).toBe(1);
 });
 
-test("loose dots pasted exactly onto fewer marchers take the nearest dots and stay plain marchers", async ({
+test("loose dots pasted exactly onto fewer marchers take the nearest dots, draw the rest as empty spots and stay plain marchers", async ({
     show,
 }) => {
     const { page } = show;
@@ -305,7 +305,8 @@ test("loose dots pasted exactly onto fewer marchers take the nearest dots and st
     const steps = await undoSteps(show);
     await page.keyboard.press("ControlOrMeta+Shift+v");
     await expect(preview(page)).toBeVisible();
-    const spots = sorted((await shapeOverlay(page))!.spots);
+    const overlay = (await shapeOverlay(page))!;
+    const spots = sorted(overlay.spots);
     // T5 and T6 stand nearest T1's and T2's dots
     expect(spots).toEqual(
         sorted([
@@ -313,8 +314,17 @@ test("loose dots pasted exactly onto fewer marchers take the nearest dots and st
             { x: 600, y: 350 },
         ]),
     );
+    // The other two dots are drawn as empty spots while the paste is open
+    expect(sorted(overlay.emptySpots)).toEqual(
+        sorted([
+            { x: 700, y: 280 },
+            { x: 800, y: 400 },
+        ]),
+    );
+    await expect(page.getByTestId("fieldShapeEmptySpot")).toHaveCount(2);
     await page.keyboard.press("Enter");
     await expect(preview(page)).toBeHidden();
+    await expect(page.getByTestId("fieldShapeEmptySpot")).toHaveCount(0);
     await expect
         .poll(async () => sorted(await savedAt(show, [5, 6])))
         .toEqual(spots);

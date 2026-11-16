@@ -17,7 +17,12 @@ import {
     type CopiedPicture,
     type PastePlan,
 } from "../clipboard/picture";
-import { groupRecipe } from "../group/groupGeometry";
+import {
+    groupFrame,
+    groupRecipe,
+    groupSpots,
+    type GroupParams,
+} from "../group/groupGeometry";
 import { groupShape } from "../group/groupShape";
 import { placementOf } from "../tool/shapePlacement";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
@@ -233,6 +238,68 @@ describe("pasting loose dots", () => {
             { x: 100, y: 100 },
             { x: 110, y: 100 },
         ]);
+    });
+
+    it("with fewer marchers, draws the dots nobody takes as empty spots that move with it", () => {
+        const dots = [0, 10, 20, 30].map((x) => ({ x: 100 + x, y: 100 }));
+        const receivers = [
+            { id: 1, at: { x: 100, y: 100 }, drillRank: 0 },
+            { id: 2, at: { x: 110, y: 100 }, drillRank: 1 },
+        ];
+        const plan = planPaste({
+            picture: loose(dots),
+            marchers: receivers,
+            stepPx: STEP,
+            inPlace: true,
+        })!;
+        const empty = (params: unknown) =>
+            sorted(plan.kind.emptySpots!(params, 2));
+        expect(empty(plan.params)).toEqual([
+            { x: 120, y: 100 },
+            { x: 130, y: 100 },
+        ]);
+        // The frame holds the whole copy
+        expect(plan.kind.frameOf(plan.params, 2)).toMatchObject({
+            center: { x: 115, y: 100 },
+            halfWidth: 15,
+        });
+        // Moved, turned and scaled, the empty spots go with the spots
+        const moved = plan.kind.move(plan.params, 2, { x: 0, y: 20 }, env);
+        expect(empty(moved)).toEqual([
+            { x: 120, y: 120 },
+            { x: 130, y: 120 },
+        ]);
+        const turned = plan.kind.withFrame(plan.params, 2, {
+            ...plan.kind.frameOf(plan.params, 2),
+            rotation: Math.PI,
+        });
+        expect(empty(turned)).toEqual([
+            { x: 100, y: 100 },
+            { x: 110, y: 100 },
+        ]);
+        const interval = plan.kind.params[0]!;
+        const doubled = interval.set!(plan.params, 2, 2, env)!;
+        expect(empty(doubled)).toEqual([
+            { x: 125, y: 100 },
+            { x: 145, y: 100 },
+        ]);
+        // Placing them saves nothing of the empty spots, and no spot moves
+        const placement = placementOf(opened(plan), ctx)!;
+        expect(placement.plain).toBe(true);
+        expect(placement.recipe.params).not.toHaveProperty("empty");
+        expect(sorted(placement.members.map((m) => m))).toEqual([
+            { x: 100, y: 100 },
+            { x: 110, y: 100 },
+        ]);
+    });
+
+    it("with as many marchers as dots, has no empty spots", () => {
+        const plan = planPaste({
+            picture: loose(),
+            marchers: row(4, { x: 0, y: 0 }),
+            stepPx: STEP,
+        })!;
+        expect(plan.kind.emptySpots!(plan.params, 4)).toEqual([]);
     });
 
     it("with more marchers, the nearest take the dots and the rest are left out", () => {
@@ -470,9 +537,15 @@ describe("pasting a shape", () => {
         })!;
         expect(plan.kind).toBe(pastedGroupTool);
         expect(spotsOf(plan)).toHaveLength(3);
+        expect(plan.kind.emptySpots!(plan.params, 3)).toHaveLength(1);
         const placement = placementOf(opened(plan), ctx)!;
         expect(placement.plain).toBeUndefined();
         expect(placement.recipe.kind).toBe(groupShape.id);
+        // The group saved is fitted to its 3 spots, its empty one left out
+        const saved = placement.recipe.params as GroupParams;
+        expect(saved).not.toHaveProperty("empty");
+        expect(sorted(groupSpots(saved))).toEqual(sorted(spotsOf(plan)));
+        expect(groupFrame(saved).center).toEqual(middleOf(spotsOf(plan)));
     });
 
     it("pastes a shape this app can't lay out as loose dots", () => {

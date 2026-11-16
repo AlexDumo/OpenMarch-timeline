@@ -262,6 +262,8 @@ export type FieldTestShapeOverlay = {
     rings: { x: number; y: number }[];
     /** Spots it leaves empty on purpose (an odd-count outline's gap), field units. */
     gaps: { x: number; y: number }[];
+    /** Spots a paste leaves empty (#961) */
+    emptySpots: { x: number; y: number }[];
     /** Circles it's drawn on (an Arc's whole circle, #634), field units. */
     construction: {
         center: { x: number; y: number };
