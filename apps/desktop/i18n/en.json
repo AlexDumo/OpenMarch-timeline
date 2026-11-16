@@ -2292,7 +2292,7 @@
             "left": "{count, plural, one {# marcher has no spot and stays put} other {# marchers have no spot and stay put}}",
             "marchers": "{count, plural, one {# marcher} other {# marchers}}",
             "pasteAs": "Paste as",
-            "pasteExactlyHint": "Puts the copy on the exact spot it was copied from, not centered on the selected marchers.",
+            "pasteExactlyHint": "Puts the copy on the exact spot it was copied from, and the selected marchers take its spots by shortest walk.",
             "pictureLabel": "Picture of the copied formation",
             "positions": "Positions",
             "shapeAsPositions": "{name} positions",
