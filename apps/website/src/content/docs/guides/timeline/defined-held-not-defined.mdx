@@ -68,11 +68,11 @@ Select marchers, and the timeline shows their states along the bottom edge of th
 - A diamond marks each count where the selected marchers have a keyframe, a position you set. It's filled when every selected marcher has a keyframe there, and hollow when only some do. A Defined marcher has a diamond at the page's flag.
 - A thin line runs from each keyframe to where the marchers move again, over the counts where they stand still. It's solid where they're Held, and dashed where they're Not defined. Where some of the selection is Held and some Not defined over the same counts, the line is dashed.
 - A short upright tick marks where the marchers move again: the start of their next move.
-- A shape carried onto later pages draws a solid line too: the shape is what keeps its marchers there.
+- A shape shown on later pages doesn't hold its marchers by itself: until you hold it, those pages are Not defined, and the line is dashed.
 
 While you drag marchers on the field, the lines that the drag will change grow thicker and turn the accent color, so you can see which later pages move too before you let go. The same happens while you point at an item such as "Remove keyframe, Pages 4–5 move back too" in a diamond's menu.
 
-On the field, a marcher is drawn with a dashed outline only where it's Not defined at the playhead. Defined and Held marchers, marchers walking in a move, and marchers in a shape carried on are drawn solid. A marcher's label is bold at its keyframes and lighter between them.
+On the field, a marcher is drawn with a dashed outline only where it's Not defined at the playhead. Defined and Held marchers, and marchers walking in a move, are drawn solid. A marcher's label is bold at its keyframes and lighter between them.
 
 In the inspector, the selected marchers' section says what decides where they are on the playhead's page:
 
@@ -106,7 +106,9 @@ Dragging a Not defined marcher on a page also makes it Defined, at the spot you 
 
 While you point at the command, before you select it, the timeline shows the hold it would make: the page row fills from the keyframe the hold grows out of to the end of the page, then pulses.
 
-A marcher that had its own move on the page loses it and stays still for the page. When the pages before it are Not defined for the marcher, the hold reaches back over them to the last keyframe, or to the start of the show for a marcher that hasn't moved, so it's one hold over all those pages. A hold that touches another hold of the same marcher joins it. A message says who is now Held and on which pages, and lists anyone who couldn't be, with the reason: for example a marcher in a shape or following the leader on the page, one whose last move is a shape's move, or one in the middle of a move that crosses the page's start.
+A marcher that had its own move on the page loses it and stays still for the page. When the pages before it are Not defined for the marcher, the hold reaches back over them to the last keyframe, or to the start of the show for a marcher that hasn't moved, so it's one hold over all those pages. A hold that touches another hold of the same marcher joins it. A message says who is now Held and on which pages, and lists anyone who couldn't be, with the reason: for example a marcher following the leader on the page, or one in the middle of a move that crosses the page's start.
+
+A shape is held whole. When the selected marchers stand in a shape carried onto the page, the rest of the shape is held with them and added to the selection, and the message says so. Holding a page where you had already changed the shape replaces that page's copy with the hold. After that, changing the shape on a Held page changes it on the page the hold grows out of, as dragging any Held marcher does. A member who has walked off since, or moves on its own on the page, stays as it is. Shortening the hold, splitting it or clearing the page for some of the shape does the same for the rest of it, and selects them so you can see their holds change.
 
 <Media
   id="timeline-held"
@@ -148,7 +150,7 @@ This needs Expert mode: see [Basic and Expert](/guides/start/basic-and-expert/).
 2. Select the marchers.
 3. Right-click a selected marcher on the field and select <Ui k="timeline.terms.holdOverWindow" />, or find it in the command palette. It has no shortcut.
 
-As with Hold from last keyframe, pointing at the command shows the hold before you select it, and where the marchers are Not defined before the start flag, the hold reaches back over those pages to their last keyframe. Their moves between the two flags are taken out. A move that crosses the start flag is cut there. A move that crosses the playhead keeps its destination, so the marchers walk the rest of it faster, and a step size warning shows if it's too fast. Marchers in a shape or following the leader are left alone, and a message names them.
+As with Hold from last keyframe, pointing at the command shows the hold before you select it, and where the marchers are Not defined before the start flag, the hold reaches back over those pages to their last keyframe. Their moves between the two flags are taken out. A move that crosses the start flag is cut there. A move that crosses the playhead keeps its destination, so the marchers walk the rest of it faster, and a step size warning shows if it's too fast. Marchers following the leader are left alone, and a message names them. A shape is held whole here too.
 
 ## Clear this page
 

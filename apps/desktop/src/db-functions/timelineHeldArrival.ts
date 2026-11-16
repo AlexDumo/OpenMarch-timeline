@@ -173,31 +173,3 @@ export async function readArrival(
         pathStyle: String(rowValue(row, 3, "path_style")),
     };
 }
-
-/**
- * Those of `marcherIds` whose starting spot a placed shape sets: a member of a recipe with no move
- * (`timeline_id` NULL), other than an ungrouped mark (`shapeRecipesOnly`), which stores no shape.
- * A shape's starting spots get no Held hold: the shape carried on is its hold (owner, 2026-11-01;
- * #619).
- */
-export async function marchersWithShapeHome(
-    db: DbConnection | DbTransaction,
-    marcherIds: readonly number[],
-): Promise<Set<number>> {
-    if (marcherIds.length === 0) return new Set();
-    const r = schema.timeline_shape_recipes;
-    const m = schema.timeline_shape_recipe_marchers;
-    const rows = await db
-        .selectDistinct({ marcherId: m.marcher_id })
-        .from(m)
-        .innerJoin(r, sql`${r.id} = ${m.recipe_id}`)
-        .where(
-            and(
-                isNull(r.timeline_id),
-                shapeRecipesOnly(),
-                inArray(m.marcher_id, [...new Set(marcherIds)]),
-            ),
-        )
-        .all();
-    return new Set(rows.map((row) => row.marcherId));
-}

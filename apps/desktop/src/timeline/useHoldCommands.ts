@@ -10,6 +10,7 @@ import { resolverSpans, useTimelineResolverStore } from "./timelineStore";
 import { setAsShownMenu } from "./timelineSetAsShown";
 import { usePageKeepStates } from "./useKeepLaterPages";
 import { useHeldMarksStore } from "./useHeldMarks";
+import { useAddToSelection } from "./useAddToSelection";
 import {
     holdEntryStates,
     type HoldCommand,
@@ -43,6 +44,9 @@ export function useHoldCommands(
     const keepStates = usePageKeepStates(pages, marcherIds);
     const marks = useHeldMarksStore((s) => s.marks);
     const resolver = useTimelineResolverStore((s) => s.resolver);
+    // The rest of a shape held with the selection joins it, so its new holds show (owner,
+    // 2026-11-15: a shape is Held whole)
+    const selectAlsoHeld = useAddToSelection();
     const defineAsShown = useMemo(
         () => setAsShownMenu(keepStates, undefined, marks),
         [keepStates, marks],
@@ -68,13 +72,14 @@ export function useHoldCommands(
                 nameOf,
                 undefined,
                 marks,
+                selectAlsoHeld,
             ),
             onPreview: (pageId: string | number, on: boolean) =>
                 on
                     ? setHoldLight(HOLD_PREVIEW_LIGHT, lightOn(pageId))
                     : clearHoldLight(HOLD_PREVIEW_LIGHT),
         };
-    }, [keepStates, marcherIds, nameOf, marks, resolver]);
+    }, [keepStates, marcherIds, nameOf, marks, resolver, selectAlsoHeld]);
     const entriesOn = useMemo(
         () =>
             (
@@ -89,7 +94,7 @@ export function useHoldCommands(
             },
         [keepStates, marcherIds, marks],
     );
-    return { defineAsShown, holdFromPrevious, entriesOn };
+    return { defineAsShown, holdFromPrevious, entriesOn, selectAlsoHeld };
 }
 
 /**

@@ -15,11 +15,6 @@ import {
 } from "@/timeline/timelineHoldState";
 import { holdTerms } from "@/timeline/holdTerms";
 import { useHeldMarksStore } from "@/timeline/useHeldMarks";
-import { carriedSince } from "@/timeline/timelineCarried";
-import {
-    placedBoxesAt,
-    usePlacedBoxStore,
-} from "@/shapes/placed/placedBoxStore";
 import { pageFlags } from "@/timeline/timelinePlayhead";
 import {
     resolverSpans,
@@ -45,9 +40,6 @@ export function useSelectionHoldState(
     const { pages } = useTimingObjects()!;
     const { selectedPage } = useSelectedPage()!;
     const marks = useHeldMarksStore((s) => s.marks);
-    // Placed shapes are read from these, so a change to them is a new carried set
-    const recipes = usePlacedBoxStore((s) => s.recipes);
-    const ends = usePlacedBoxStore((s) => s.ends);
     return useMemo(() => {
         void version; // a new version means new spans
         if (!resolver || !selectedPage || marcherIds.length === 0) return null;
@@ -58,14 +50,6 @@ export function useSelectionHoldState(
             beat: f.flag,
             name: f.page.name,
         }));
-        void ends; // placedBoxesAt reads the end beats from the store
-        // Where the shape carried onto the flag with the marcher in it was placed or last laid out
-        let carried: Map<number, number> | null = null;
-        const carriedOnFlag = (id: number) => {
-            carried ??= carriedSince(placedBoxesAt(current.flag, recipes));
-            const placed = carried.get(id);
-            return placed === undefined ? null : heldSince(placed, flags);
-        };
         // Where the Held mark over the flag starts (Hold from last keyframe: this page only, R3)
         const heldOnFlag = (id: number) => {
             const mark = marks.find(
@@ -84,23 +68,11 @@ export function useSelectionHoldState(
                         current.flag,
                         flags,
                     ),
-                    {
-                        held: heldOnFlag(id),
-                        carried: carriedOnFlag(id),
-                    },
+                    { held: heldOnFlag(id) },
                 ),
             ),
         );
-    }, [
-        resolver,
-        version,
-        pages,
-        selectedPage,
-        marcherIds,
-        marks,
-        recipes,
-        ends,
-    ]);
+    }, [resolver, version, pages, selectedPage, marcherIds, marks]);
 }
 
 const LINK_CLASS =
@@ -111,9 +83,7 @@ const LINK_CLASS =
  * move on the current page or hold there, with a link to the page they last moved on
  * (defined-coordinates 08: readable, and visibly a link). A hold names its state in the working
  * words (`holdTerms`, fork #478): "Not defined · showing Page 2", or "Held · since Page 3" for the
- * page its Held mark starts on (holds review R3). A carried shape's members read Held too, since
- * the page the shape was placed or last laid out on (owner, holds wave 2), and the link goes
- * there. A mix of Held and Not defined keeps "Last moved on Page 2". Nothing where they don't
+ * page its Held mark starts on (holds review R3). A mix of Held and Not defined keeps "Last moved on Page 2". Nothing where they don't
  * agree.
  *
  * How many of the selection are Held is `TimelineHeldCount`'s line, higher up.

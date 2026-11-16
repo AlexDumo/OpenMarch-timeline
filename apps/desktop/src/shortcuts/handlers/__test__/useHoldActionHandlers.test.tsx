@@ -153,7 +153,12 @@ function mount(ids: number[]) {
         id,
         drill_number: `T${id}`,
     }));
-    render(<Harness marcherIds={ids} />);
+    // The hold commands read the marchers, to add the rest of a held shape to the selection
+    render(
+        <QueryClientProvider client={new QueryClient()}>
+            <Harness marcherIds={ids} />
+        </QueryClientProvider>,
+    );
 }
 
 beforeAll(async () => {

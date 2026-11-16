@@ -23,11 +23,6 @@ import {
     type DecidedStretch,
 } from "@/timeline/timelineDecided";
 import { useHeldMarksStore } from "@/timeline/useHeldMarks";
-import { carriedMembers } from "@/timeline/timelineCarried";
-import {
-    placedBoxesAt,
-    usePlacedBoxStore,
-} from "@/shapes/placed/placedBoxStore";
 import { useTimelineFocusScene } from "@/timeline/useTimelineFocusScene";
 import { ghostColorFor } from "@/timeline/useTimelineFocusScene";
 import { useTimelinePathSamples } from "@/timeline/useTimelinePathSamples";
@@ -200,14 +195,13 @@ function useFieldDimming(enabled: boolean): FieldDimming {
 
 /**
  * #478 (holds decisions 8 and 9): while paused or scrubbing, the marchers whose position nothing
- * decides on the count shown are Not defined, drawn with a dashed edge; walking, Held, arriving
- * and carried shape members are solid (`timelineDecided.ts`). Labels are bold only on a keyframe,
+ * decides on the count shown are Not defined, drawn with a dashed edge; walking, Held and arriving
+ * marchers are solid (`timelineDecided.ts`). Labels are bold only on a keyframe,
  * the count a marcher's own coordinate is set (`marcherSetBeats`). Playing, everyone is solid and
  * bold.
  *
  * Each marcher's Set beats and decided stretches are worked out once per resolver version and set
- * of Held marks, so a playhead move only looks them up; the carried shapes are read per count,
- * only when someone would otherwise be Not defined. `FieldNotDefined` redraws only when the look
+ * of Held marks, so a playhead move only looks them up. `FieldNotDefined` redraws only when the look
  * changes. Stopping eases the look in (#302), unless the system asks for reduced motion. The
  * count is the one the field draws (`fieldBeat`), so a dragged start flag (UI-26) shows its own.
  */
@@ -242,9 +236,7 @@ function useFieldDecidedLook(
             const beat = fieldBeat(useTimelineSelectionStore.getState());
             look.set(
                 {
-                    notDefined: notDefinedAt(read.decided, beat, () =>
-                        carriedAt(beat),
-                    ),
+                    notDefined: notDefinedAt(read.decided, beat),
                     offKeyframe: followingAt(read.setBeats, beat),
                 },
                 { ease },
@@ -276,13 +268,6 @@ function useFieldDecidedLook(
                 )
                     safely(true);
             }),
-            usePlacedBoxStore.subscribe((state, previous) => {
-                if (
-                    state.recipes !== previous.recipes ||
-                    state.ends !== previous.ends
-                )
-                    safely(false);
-            }),
             useTimelineSelectionStore.subscribe((state, previous) => {
                 if (fieldBeat(state) !== fieldBeat(previous)) safely(false);
             }),
@@ -310,14 +295,6 @@ function readDecided(resolver: Resolver): DecidedRead {
         decided.set(id, marcherDecided(spans, marks.get(id) ?? []));
     }
     return { setBeats, decided };
-}
-
-/**
- * The members of the shapes carried onto `beat` (`placedBoxesAt`): a shape carried onto later pages
- * is the shape's hold (owner, 2026-11-01 on #477), so they draw decided.
- */
-function carriedAt(beat: number): Set<number> {
-    return carriedMembers(placedBoxesAt(beat));
 }
 
 const prefersReducedMotion = () =>

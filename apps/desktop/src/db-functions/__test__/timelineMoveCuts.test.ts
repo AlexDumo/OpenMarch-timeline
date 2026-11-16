@@ -620,7 +620,7 @@ describeDbTests("remove marchers from a move for a range of counts", (it) => {
         });
     });
 
-    it("shape recipe and follow-the-leader members stay and are named; the others leave", async ({
+    it("follow-the-leader members stay and are named; the others leave, a whole placed shape with its recipe (owner, 2026-11-15)", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -655,26 +655,24 @@ describeDbTests("remove marchers from a move for a range of counts", (it) => {
             }),
         );
 
-        expect(result.removed).toEqual([b, c].sort((x, y) => x! - y!));
-        expect(result.skipped.map((s) => [s.marcherId, s.reason])).toEqual(
-            [
-                [a!, "shape"],
-                [leaders[0]!, "followTheLeader"],
-            ].sort((x, y) => (x[0] as number) - (y[0] as number)),
-        );
-        expect(await rowsOver(db, [b!, c!], PAGE2)).toEqual([]);
-        expect(await rowsOver(db, [a!], PAGE2)).toHaveLength(1);
+        expect(result.removed).toEqual([a, b, c].sort((x, y) => x! - y!));
+        expect(result.skipped.map((s) => [s.marcherId, s.reason])).toEqual([
+            [leaders[0]!, "followTheLeader"],
+        ]);
+        expect(await rowsOver(db, [a!, b!, c!], PAGE2)).toEqual([]);
         expect(await rowsOver(db, [leaders[0]!], PAGE2)).toHaveLength(1);
+        // The shape's only member left it: its recipe went too
+        expect(
+            await db.select().from(schema.timeline_shape_recipes).all(),
+        ).toEqual([]);
 
         const refusal = await db.transaction((tx) =>
             skippedRefusal(tx, result.skipped),
         );
         expect(refusal!.refusal).toBe("inShapeOrFollowTheLeader");
-        expect(refusal!.marcherIds).toEqual(
-            [a!, leaders[0]!].sort((x, y) => x - y),
-        );
+        expect(refusal!.marcherIds).toEqual([leaders[0]!]);
         expect(refusal!.message).toMatch(
-            /is in a shape, and FX\d+ follows the leader, so they keep their move here\.$/,
+            /^FX\d+ follows the leader, so it keeps its move here\.$/,
         );
     });
 
@@ -762,7 +760,7 @@ describeDbTests(
             expect(await dataOf(db)).toEqual(before);
         });
 
-        it("a shape recipe member stays and is named; nobody left to take writes nothing", async ({
+        it("part of a placed shape stays and is named; nobody left to take writes nothing; the whole shape goes with its recipe", async ({
             db,
             marchersAndPages: _,
         }) => {
@@ -780,11 +778,15 @@ describeDbTests(
                         orderMode: "slot",
                         reverse: false,
                     },
-                    members: [{ marcherId: a!, slot: 0, x: 10, y: 10 }],
+                    members: [
+                        { marcherId: a!, slot: 0, x: 10, y: 10 },
+                        { marcherId: b!, slot: 1, x: 20, y: 10 },
+                    ],
                 }),
             );
             const before = await dataOf(db);
 
+            // Taken alone, a would leave the shape while still on its spot
             const alone = await db.transaction((tx) =>
                 takeMarchersIntoOwnMoveInTransaction({
                     tx,
@@ -808,10 +810,17 @@ describeDbTests(
                     marcherIds: [a!, b!],
                 }),
             );
-            expect(both.taken).toEqual([b]);
-            expect(both.stayed.map((s) => s.marcherId)).toEqual([a]);
-            expect(await membersOf(db, pageMove.id)).toContain(a);
-            expect(await membersOf(db, both.timelineId!)).toEqual([b]);
+            expect(both.taken).toEqual([a, b].sort((x, y) => x! - y!));
+            expect(both.stayed).toEqual([]);
+            expect(await membersOf(db, both.timelineId!)).toEqual(
+                [a, b].sort((x, y) => x! - y!),
+            );
+            // The recipe went with them
+            const [recipe] = await db
+                .select()
+                .from(schema.timeline_shape_recipes)
+                .all();
+            expect(recipe!.timeline_id).toBe(both.timelineId);
         });
 
         it("a member of an ungrouped mark is taken: it isn't in a shape", async ({
@@ -852,7 +861,7 @@ describeDbTests(
 );
 
 describeDbTests("the drag back (holds decision 16)", (it) => {
-    it("skips and names a shape member: it keeps its move, untouched; the others are taken out", async ({
+    it("takes a placed shape's member out like anyone, the shape's recipe with it (owner, 2026-11-15)", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -888,16 +897,15 @@ describeDbTests("the drag back (holds decision 16)", (it) => {
             moveMarchersInRangeInTransaction({ tx, range: PAGE2, moves: back }),
         );
 
-        expect(result.cleared).toEqual([b]);
-        expect(result.skipped!.refusal).toBe("inShapeOrFollowTheLeader");
-        expect(result.skipped!.marcherIds).toEqual([a]);
-        expect(result.skipped!.message).toMatch(
-            /^\S+ is in a shape, so it keeps its move here\.$/,
-        );
+        expect(result.cleared).toEqual([a, b].sort((x, y) => x! - y!));
+        expect(result.skipped).toBeUndefined();
         expect(result.slots).toEqual([]);
-        expect(await rowsOver(db, [b!], PAGE2)).toEqual([]);
-        expect(await rowsOver(db, [a!], PAGE2)).toEqual(aRows);
-        expectClose(aTrack, track(await resolverOf(db), [a!], 33));
+        expect(await rowsOver(db, [a!, b!], PAGE2)).toEqual([]);
+        expect(aRows).not.toEqual([]);
+        expect(track(await resolverOf(db), [a!], 33)).not.toEqual(aTrack);
+        expect(
+            await db.select().from(schema.timeline_shape_recipes).all(),
+        ).toEqual([]);
     });
 });
 
