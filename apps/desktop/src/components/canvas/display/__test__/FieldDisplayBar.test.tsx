@@ -3,6 +3,11 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { TolgeeProvider } from "@tolgee/react";
 import tolgee from "@/global/singletons/Tolgee";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { useInputModeStore } from "@/stores/InputModeStore";
+import {
+    FIELD_SELECT_TOOL_KEY,
+    useFieldSelectToolStore,
+} from "@/field/fieldSelectTool";
 import FieldDisplayBar from "../FieldDisplayBar";
 
 /** The field's display bar: path overlays, marcher labels, shape outlines, and placeholders. */
@@ -29,7 +34,11 @@ beforeEach(() => {
         nextPaths: false,
     });
 });
-afterEach(cleanup);
+afterEach(() => {
+    cleanup();
+    useInputModeStore.setState({ mode: "pointer" });
+    useFieldSelectToolStore.getState().setTool("box");
+});
 
 describe("FieldDisplayBar", () => {
     it("holds start flag positions, labels and shapes", () => {
@@ -40,6 +49,30 @@ describe("FieldDisplayBar", () => {
             "field-display-shapes",
         ])
             expect(screen.getByTestId(id)).toBeTruthy();
+    });
+
+    it("picks Box or Lasso above the display bar, and keeps it on this device", () => {
+        open();
+        const box = screen.getByTestId("field-select-tool-box");
+        const lasso = screen.getByTestId("field-select-tool-lasso");
+        expect(box.getAttribute("aria-pressed")).toBe("true");
+        fireEvent.click(lasso);
+        expect(useFieldSelectToolStore.getState().tool).toBe("lasso");
+        expect(lasso.getAttribute("aria-pressed")).toBe("true");
+        expect(box.getAttribute("aria-pressed")).toBe("false");
+        expect(localStorage.getItem(FIELD_SELECT_TOOL_KEY)).toBe("lasso");
+        // It stays until Box is picked
+        fireEvent.click(lasso);
+        expect(useFieldSelectToolStore.getState().tool).toBe("lasso");
+        fireEvent.click(box);
+        expect(useFieldSelectToolStore.getState().tool).toBe("box");
+    });
+
+    it("leaves the Select tool to the pill in the touch layout", () => {
+        useInputModeStore.setState({ mode: "touch" });
+        open();
+        expect(screen.queryByTestId("field-select-tool")).toBeNull();
+        expect(screen.getByTestId("field-display-bar")).toBeTruthy();
     });
 
     it("sets the marcher labels", () => {

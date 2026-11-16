@@ -101,7 +101,8 @@ export type FieldPointer = {
     /**
      * What a drag of this press draws if it starts on empty field, as the
      * pill's drag mode chose for a finger or pen (tablet 1.3). Unset (a mouse,
-     * always): a marquee, or a lasso after a double-click.
+     * always): the Select bar's tool ({@link FieldEditor.setAreaTool}), or a
+     * lasso after a double-click.
      */
     area?: AreaKind;
 };
@@ -309,6 +310,8 @@ type LastClick = {
 
 export type FieldCursor =
     | "default"
+    /** Empty field with the Lasso tool: the DOM layer draws a lasso (`fieldPointerInput.ts`). */
+    | "lasso"
     | "pointer"
     | "crosshair"
     | "move"
@@ -575,6 +578,8 @@ export class FieldEditor {
     private gesture: FieldGesture | null = null;
     private gestureButton = 0;
     private hover: FieldCursor = "default";
+    /** What a drag from empty field draws when its press didn't choose (the Select bar's tool). */
+    private areaTool: AreaKind = "marquee";
     private lastClick: LastClick | null = null;
     /** The marquee or lasso last started, which the overlay draws while it's the gesture. */
     private area: AreaGesture | null = null;
@@ -1351,6 +1356,17 @@ export class FieldEditor {
         this.emit();
     }
 
+    /**
+     * The Select bar's tool (`fieldSelectTool.ts`): what a drag from empty field draws when its
+     * press didn't choose. A lasso shows its cursor over empty field. A double-click and drag
+     * draws a lasso with either.
+     */
+    setAreaTool(tool: AreaKind): void {
+        if (this.areaTool === tool) return;
+        this.areaTool = tool;
+        this.emit();
+    }
+
     /** The show started or stopped playing: the pivot hides while it plays. */
     setPlaying(playing: boolean): void {
         if (this.playing === playing) return;
@@ -1587,7 +1603,11 @@ export class FieldEditor {
 
     /** The cursor the field shows. */
     cursor(): FieldCursor {
-        return this.propTool ? "crosshair" : this.hover;
+        if (this.propTool) return "crosshair";
+        // Over empty field a drag would draw the lasso, unless a field mode takes the press
+        if (this.hover === "default" && this.areaTool === "lasso" && !this.mode)
+            return "lasso";
+        return this.hover;
     }
 
     /** Calls `listener` whenever the gesture or cursor changes. Returns the unsubscribe. */
@@ -1603,7 +1623,7 @@ export class FieldEditor {
      * empty field inside a multi-selection's box (owner decision, #196) with
      * no add or subtract choice; marquee and lasso (#195) start from the rest
      * of the empty field, and from inside the box with one: a lasso
-     * after a double-click, else a marquee. A press on a marcher that moves
+     * after a double-click or with the Lasso tool, else a marquee. A press on a marcher that moves
      * nothing (Shift took a group or a box's member out) is done, and starts
      * no marquee.
      */
@@ -1763,12 +1783,12 @@ export class FieldEditor {
             : new ItemResizeGesture(press.start, frame, host, handle, keys);
     }
 
-    /** A marquee, or a lasso after a double-click, from empty field. */
+    /** From empty field: what the press or the Select bar's tool chose, or a lasso after a double-click. */
     private startArea(press: FieldPress): FieldGesture {
         const start = this.areaStart(press);
         const isMac = this.options.isMac ?? false;
         this.area =
-            press.double || press.area === "lasso"
+            press.double || (press.area ?? this.areaTool) === "lasso"
                 ? startLasso(this.areaPorts, start, isMac)
                 : startMarquee(this.areaPorts, start, isMac);
         return this.area;

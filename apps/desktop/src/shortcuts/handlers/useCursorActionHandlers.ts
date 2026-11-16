@@ -1,4 +1,6 @@
 import { useItemDrawingStore } from "@/stores/ItemDrawingStore";
+import { useFieldSelectToolStore } from "@/field/fieldSelectTool";
+import tolgee from "@/global/singletons/Tolgee";
 import { activeFieldEditor } from "@/field/editor/activeFieldEditor";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useActionHandler } from "../useActionHandler";
@@ -29,5 +31,17 @@ export function useCursorActionHandlers() {
             activeFieldEditor()?.selectAll();
         },
         { enabled: ready },
+    );
+
+    // Box to Lasso, or back, as the field's Select bar does. The palette names the tool it picks
+    useActionHandler(
+        "toggleLassoSelect",
+        () => useFieldSelectToolStore.getState().toggle(),
+        {
+            label: () =>
+                useFieldSelectToolStore.getState().tool === "lasso"
+                    ? tolgee.t("actions.select.useBox")
+                    : tolgee.t("actions.select.useLasso"),
+        },
     );
 }
