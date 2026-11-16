@@ -145,8 +145,21 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
             if (object.type === "index" && PAGE_ERA_TABLES.includes(object.tbl))
                 db.exec(object.sql);
     },
-    // A Held mark's hold style (ADR 0015 D-5): the column goes. The history triggers name it
+    // Imported silk Artwork (fork #973): its table and the undo triggers on it
     19: (db) => {
+        dropTriggers(db);
+        dropTables(db, ["view3d_silk_artwork"]);
+    },
+    // An item's built-in 3D model and lock. Its history triggers name the columns
+    20: (db) => {
+        for (const suffix of ["it", "ut", "dt"])
+            db.exec(`DROP TRIGGER IF EXISTS \`items_${suffix}\``);
+        db.exec("ALTER TABLE items DROP COLUMN model");
+        db.exec("ALTER TABLE items DROP COLUMN locked");
+        db.exec("ALTER TABLE items DROP COLUMN from_preset");
+    },
+    // A Held mark's hold style (ADR 0015 D-5): the column goes. The history triggers name it
+    21: (db) => {
         dropTriggers(db);
         db.exec("ALTER TABLE timeline_held_marks DROP COLUMN style");
     },

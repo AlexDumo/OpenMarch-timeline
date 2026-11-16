@@ -11,7 +11,10 @@ import {
     FIRST_TIMELINE_MIGRATION_TAG,
     readTaggedMigrations,
 } from "@/../electron/database/services/DrizzleMigrationService";
-import { skipsExistingColumn } from "@/../electron/database/migrations/addColumnGuard";
+import {
+    addedColumn,
+    skipsExistingColumn,
+} from "@/../electron/database/migrations/addColumnGuard";
 import { PAGE_MODEL_USER_VERSION } from "@/../electron/database/fileVersion";
 import { convertFileOnOpen } from "@/../electron/database/convertOnOpen";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
@@ -70,13 +73,14 @@ export const timelineHistoryTables = (): Table[] => [
 let pageEraBlank: string | undefined;
 
 /**
- * Runs, without recording them, the timeline-only migrations after the page-era drop
- * (`FIRST_TIMELINE_MIGRATION_TAG`) on a page-era test file. They change tables such a file
- * already has (0019 adds a Held mark's hold style). The app runs them when the file converts, but
- * a test that keeps its page-era fixtures (`keepFixturesInPageMode`) writes timeline rows without
- * converting, and the app's code reads the current columns. Finishing the conversion runs them
- * again, recorded this time, skipping a column the table already has (`addColumnGuard.ts`): so a
- * migration added here must be safe to run twice, as an `ADD COLUMN` is.
+ * Adds, without recording them, the columns that the timeline-only migrations after the page-era
+ * drop (`FIRST_TIMELINE_MIGRATION_TAG`) add to tables a page-era test file already has (0021 adds
+ * a Held mark's hold style). The app runs those migrations when the file converts, but a test
+ * that keeps its page-era fixtures (`keepFixturesInPageMode`) writes timeline rows without
+ * converting, and the app's code reads the current columns. Finishing the conversion runs the
+ * migrations in full, recorded this time, skipping a column the table already has
+ * (`addColumnGuard.ts`). Anything else they do (0019 creates the silk Artwork table) waits for
+ * the conversion: only an `ADD COLUMN` is safe to run twice.
  */
 function applyLaterTimelineMigrationsUnrecorded(db: DatabaseSync): void {
     const migrations = readTaggedMigrations(migrationsFolder);
@@ -90,9 +94,15 @@ function applyLaterTimelineMigrationsUnrecorded(db: DatabaseSync): void {
         ).map((c) => c.name);
     for (const m of migrations) {
         if (m.folderMillis <= drop.folderMillis) continue;
-        for (const statement of m.sql)
-            if (statement.trim() && !skipsExistingColumn(statement, columnsOf))
+        for (const statement of m.sql) {
+            const added = addedColumn(statement);
+            if (!added) continue;
+            const columns = columnsOf(added.table);
+            // A table a later migration makes gets its columns when the file converts
+            if (columns.length === 0) continue;
+            if (!skipsExistingColumn(statement, () => columns))
                 db.exec(statement);
+        }
     }
 }
 

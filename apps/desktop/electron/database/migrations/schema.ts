@@ -320,6 +320,25 @@ export const view3d_venue = sqliteTable(
 );
 
 /**
+ * Silk Artwork the show imported (fork #973, ADR 0010 amendment 2026-11-15):
+ * a painted silk template, as the PNG's own bytes. Rows are referenced by
+ * id: the venue settings' `silkArtwork` names the one the guard's flags
+ * start the show with, and Silk cues can name others later. In the undo
+ * history, so an import or a removal is one undo step.
+ */
+export const view3d_silk_artwork = sqliteTable("view3d_silk_artwork", {
+    id: integer().primaryKey(),
+    /** The imported file's name, shown beside the picture. */
+    name: text().notNull(),
+    /** The PNG file, as imported. */
+    data: browserSafeBinaryBlob().notNull(),
+    /** Its size in pixels. */
+    width: integer().notNull(),
+    height: integer().notNull(),
+    ...timestamps,
+});
+
+/**
  * The show's 3D View cameras (ADR 0010 D-5, amended 2026-10-16). A single
  * row with `id = 1` whose `json_data` is validated by `showCamerasSchema` in
  * `src/view3d/core/cameraList.ts`: the show's own camera list for each venue
@@ -698,6 +717,23 @@ export const items = sqliteTable(
          * it in the field theme's line color (2D) and neutral grey (3D).
          */
         color: text(),
+        /**
+         * A built-in 3D model the item is drawn as, such as `pit/marimba-5.0`: its path under
+         * `apps/desktop/src/view3d/assets/pit/` without `.glb`. Null draws the item as a block.
+         * Imported models will use the same column as `library:<uuid>@<version hash>` (ADR 0010,
+         * amendment 2026-11-11); an app that doesn't know a value draws the block.
+         */
+        model: text(),
+        /**
+         * One position for the whole show: the item has no moves, so dragging it on any page moves
+         * it on every page, and lasso and select-all skip it. Equipment is created locked.
+         */
+        locked: integer({ mode: "boolean" }).notNull().default(false),
+        /**
+         * Placed by a front ensemble preset. Re-applying a preset replaces only these items, so
+         * hand-added ones stay. Renaming or moving the item keeps it; copies don't take it.
+         */
+        from_preset: integer({ mode: "boolean" }).notNull().default(false),
         ...timestamps,
     },
     (_table) => [

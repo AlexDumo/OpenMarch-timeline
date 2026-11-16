@@ -598,7 +598,7 @@ hold and not a cue.
 
 - `timeline_held_marks` gains a nullable text column `style`: `stand`, `markTime` or
   `highMarkTime`. `NULL` means the show setting (the `holdWhileBandMoves` performer default, whose
-  built-in value becomes `stand`). Migration `0019_held_mark_style` adds it in place; existing
+  built-in value becomes `stand`). Migration `0021_held_mark_style` adds it in place; existing
   marks read as `NULL`.
 - The value is checked in code, not by a CHECK constraint: a value a build doesn't know reads as
   `NULL` and stays in the file.
