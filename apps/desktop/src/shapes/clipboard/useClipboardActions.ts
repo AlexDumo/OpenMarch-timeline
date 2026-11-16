@@ -27,9 +27,28 @@ export function useClipboardActions(): void {
     const copied = useCopiedPictureStore((s) => s.picture !== null);
     const selected = ready && !shapeShown && selectedPerformers.length > 0;
     const ids = () => selectedPerformers.map((m) => m.id);
+    // Why they're greyed out, for the palette and the field menu's ?
+    const openShape = () =>
+        shapeShown
+            ? tolgee.t(
+                  "shapes.clipboard.reasonOpenShape",
+                  "Place or discard the open shape first",
+              )
+            : undefined;
+    const noSelection = selectedPerformers.length === 0;
     useActionHandler("copyFormation", () => void copyFormation(ids()), {
         enabled: selected,
         ignoreRepeat: true,
+        disabledReason: () =>
+            !ready
+                ? undefined
+                : (openShape() ??
+                  (noSelection
+                      ? tolgee.t(
+                            "shapes.clipboard.reasonSelectToCopy",
+                            "Select marchers to copy them",
+                        )
+                      : undefined)),
     });
     useActionHandlerGroup(
         ["pasteFormation", "pasteFormationInPlace"],
@@ -37,12 +56,34 @@ export function useClipboardActions(): void {
             void pasteFormation(ids(), {
                 inPlace: id === "pasteFormationInPlace",
             }),
-        { enabled: selected && copied, ignoreRepeat: true },
+        {
+            enabled: selected && copied,
+            ignoreRepeat: true,
+            disabledReason: () =>
+                !ready
+                    ? undefined
+                    : (openShape() ??
+                      (!copied
+                          ? tolgee.t(
+                                "shapes.clipboard.reasonNothingCopied",
+                                "Copy marchers first",
+                            )
+                          : noSelection
+                            ? tolgee.t(
+                                  "shapes.clipboard.reasonSelectToPaste",
+                                  "Select the marchers to paste onto",
+                              )
+                            : undefined)),
+        },
     );
     // Empty the clipboard (the Clipboard card's Clear)
     useActionHandler("clearClipboard", clearPicture, {
         enabled: ready && copied,
         ignoreRepeat: true,
+        disabledReason: () =>
+            ready && !copied
+                ? tolgee.t("shapes.clipboard.reasonEmpty", "Nothing is copied")
+                : undefined,
     });
     // A copied shape pastes as the shape or as its exact positions (the Clipboard card's switch)
     const picture = useCopiedPictureStore((s) => s.picture);

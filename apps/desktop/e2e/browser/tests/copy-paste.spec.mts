@@ -383,7 +383,7 @@ test("the copied picture is the app's own: still there after a reload", async ({
     expect((await shapeOverlay(page))!.spots).toHaveLength(4);
 });
 
-test("the field menu offers Copy, Paste and Paste exactly: the pastes only once something is copied", async ({
+test("the field menu offers Copy, Paste and Paste exactly: the pastes only once something is copied, saying why", async ({
     show,
 }) => {
     const { page } = show;
@@ -403,6 +403,11 @@ test("the field menu offers Copy, Paste and Paste exactly: the pastes only once 
     await expect(item("copyFormation")).toBeEnabled();
     await expect(item("pasteFormation")).toBeDisabled();
     await expect(item("pasteFormationInPlace")).toBeDisabled();
+    // Greyed out, they say why behind a ?
+    for (const id of ["pasteFormation", "pasteFormationInPlace"])
+        await expect(page.getByTestId(`field-menu-${id}-reason`)).toHaveText(
+            "Copy marchers first",
+        );
     await item("copyFormation").click();
     await expect(menu).toBeHidden();
     await expect(
