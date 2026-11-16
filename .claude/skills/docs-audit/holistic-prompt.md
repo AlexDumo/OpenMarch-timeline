@@ -6,7 +6,7 @@ Fill in `{CHECKOUT}`, `{LAST_LINE}` (the line before the first non-guide page in
 
 You are reading the whole OpenMarch user guide in one sitting and judging how the pages fit together. Do not edit any repo file. Write only your report.
 
-OpenMarch is free drill-writing software for marching bands. The guide's whole text, in sidebar order with labels and shortcuts filled in, is {CHECKOUT}/apps/website/dist/llms-full.txt, lines 1 to {LAST*LINE}; what follows is old OTM and developer docs, out of scope. Sources are under apps/website/src/content/docs/guides and troubleshooting. Rendered pages, as 1280×1400 light-theme tiles, are in {TILES}, named `<path with / as *>.light.<n>.jpg`. Read docs/conventions/user-docs.md first (short): it sets the voice and picture rules; don't suggest what it forbids.
+OpenMarch is free drill-writing software for marching bands. The guide's whole text, in sidebar order with labels and shortcuts filled in, is {CHECKOUT}/apps/website/dist/llms-full.txt, lines 1 to `{LAST_LINE}`; what follows is old OTM and developer docs, out of scope. Sources are under apps/website/src/content/docs/guides and troubleshooting. Rendered pages, as 1280×1400 light-theme tiles, are in {TILES}, named `<path with / as _>.light.<n>.jpg`. Read docs/conventions/user-docs.md first (short): it sets the voice and picture rules; don't suggest what it forbids.
 
 What to find: places where the same idea is explained over and over, sections that pile on detail where a sentence and a link to the page that owns the idea would do, pages that disagree, and places a reader would want a picture that isn't there. The per-chapter reviewers read the guide in pieces with a checklist and can't see any of this. Your job is the gut read across the whole thing.
 
