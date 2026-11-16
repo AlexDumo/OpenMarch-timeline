@@ -1,0 +1,1978 @@
+<!doctype html>
+<!-- cspell:disable -->
+<!--
+  PROTOTYPE, throwaway. Fork issue #991: what a cue lane shows when performers differ.
+
+  Plan: five variants of a cue lane (ADR 0015 D-7) on one mock timeline, switchable with
+  ?variant=A|B|C|D|E|all, the floating bar at the bottom, or the left and right arrow keys.
+
+  Not app code. One file, no build: open it in a browser. State lives in memory and the URL.
+  Other URL switches: t=<count>, sel=rifles|g7-9|g3, filter=1, open=equipment,facing,
+  fold=equipment (E only),
+  hide=facing, cue=e1, messy=1, theme=light.
+-->
+<html lang="en" class="dark">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Prototype · cue lanes when performers differ (#991)</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+            href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;700&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            /* The app's theme tokens, copied from packages/ui/src/tailwind.css */
+            :root {
+                --bg-1: rgb(236, 235, 240);
+                --stroke: rgba(0, 0, 0, 0.1);
+                --text: rgb(32, 32, 32);
+                --text-subtitle: rgba(32, 32, 32, 0.6);
+                --text-disabled: rgba(32, 32, 32, 0.3);
+                --text-invert: rgb(255, 255, 255);
+                --accent: rgb(100, 66, 255);
+                --yellow: rgb(200, 170, 0);
+                --fg-1: linear-gradient(
+                    rgba(0, 0, 0, 0.015),
+                    rgba(0, 0, 0, 0.025)
+                );
+                --fg-2: linear-gradient(
+                    rgba(255, 255, 255, 0.17),
+                    rgba(250, 249, 251, 0.35)
+                );
+                --modal: linear-gradient(
+                    rgba(250, 249, 251, 0.96),
+                    rgba(236, 235, 240, 0.98)
+                );
+                --modal-shadow: rgba(0, 0, 0, 0.15);
+                --v-neutral: #6c7896;
+                --micro: 10px;
+                --sub: 11px;
+                --body: 14px;
+            }
+            .dark {
+                --bg-1: rgb(15, 14, 19);
+                --stroke: rgba(255, 255, 255, 0.06);
+                --text: rgb(208, 208, 208);
+                --text-subtitle: rgba(208, 208, 208, 0.6);
+                --text-disabled: rgba(208, 208, 208, 0.3);
+                --text-invert: rgb(0, 0, 0);
+                --accent: rgb(150, 126, 255);
+                --yellow: rgb(236, 211, 71);
+                --fg-1: linear-gradient(
+                    rgba(255, 255, 255, 0.02),
+                    rgba(255, 255, 255, 0.04)
+                );
+                --fg-2: linear-gradient(
+                    rgba(255, 255, 255, 0.03),
+                    rgba(255, 255, 255, 0.05)
+                );
+                --modal: linear-gradient(
+                    rgba(21, 20, 26, 0.97),
+                    rgba(21, 20, 26, 0.99)
+                );
+                --modal-shadow: rgba(0, 0, 0, 0.5);
+                --v-neutral: #8793ad;
+            }
+            * {
+                box-sizing: border-box;
+            }
+            html,
+            body {
+                margin: 0;
+                background: var(--bg-1);
+                color: var(--text);
+                font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+                font-size: var(--body);
+                -webkit-font-smoothing: antialiased;
+            }
+            button {
+                font: inherit;
+                color: inherit;
+                cursor: pointer;
+                background: none;
+                border: 0;
+                padding: 0;
+            }
+            .mono {
+                font-family: "DM Mono", ui-monospace, monospace;
+            }
+            #app {
+                max-width: 1400px;
+                margin: 0 auto;
+                padding: 12px 16px 96px;
+            }
+
+            /* ---------- prototype chrome (not part of the design) ---------- */
+            .proto-head {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: baseline;
+                gap: 4px 12px;
+                margin-bottom: 8px;
+            }
+            .proto-tag {
+                font-size: var(--sub);
+                font-weight: 700;
+                letter-spacing: 0.06em;
+                color: var(--bg-1);
+                background: var(--yellow);
+                border-radius: 999px;
+                padding: 2px 8px;
+            }
+            .proto-head h1 {
+                font-size: 18px;
+                margin: 0;
+                font-weight: 500;
+            }
+            .proto-head p {
+                margin: 0;
+                font-size: var(--sub);
+                color: var(--text-subtitle);
+                flex-basis: 100%;
+            }
+            .controls {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                align-items: center;
+                margin-bottom: 12px;
+            }
+            .controls .grp {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                padding: 3px;
+                border: 1px solid var(--stroke);
+                border-radius: 999px;
+                background: var(--fg-1);
+            }
+            .controls .lbl {
+                font-size: var(--sub);
+                color: var(--text-subtitle);
+                padding: 0 4px 0 8px;
+            }
+            .pill {
+                height: 26px;
+                padding: 0 10px;
+                border-radius: 999px;
+                font-size: var(--sub);
+                border: 1px solid transparent;
+                white-space: nowrap;
+            }
+            .pill:hover {
+                border-color: var(--stroke);
+            }
+            .pill.on {
+                background: var(--accent);
+                color: var(--text-invert);
+            }
+
+            /* ---------- the mock app ---------- */
+            .mock {
+                border: 1px solid var(--stroke);
+                border-radius: 6px;
+                overflow: hidden;
+            }
+            .field {
+                position: relative;
+                height: 132px;
+                background-color: #fbfbfb;
+                background-image:
+                    linear-gradient(rgba(0, 0, 0, 0.07) 1px, transparent 1px),
+                    linear-gradient(
+                        90deg,
+                        rgba(0, 0, 0, 0.07) 1px,
+                        transparent 1px
+                    );
+                background-size: 12px 12px;
+                color: #202020;
+                overflow: hidden;
+            }
+            .field .hint {
+                position: absolute;
+                left: 8px;
+                top: 6px;
+                font-size: var(--micro);
+                color: rgba(32, 32, 32, 0.6);
+                background: rgba(251, 251, 251, 0.85);
+                padding: 1px 4px;
+                border-radius: 4px;
+            }
+            .field .legend {
+                position: absolute;
+                right: 8px;
+                top: 6px;
+                display: flex;
+                gap: 8px;
+                font-size: var(--micro);
+                color: rgba(32, 32, 32, 0.75);
+                background: rgba(251, 251, 251, 0.85);
+                padding: 1px 4px;
+                border-radius: 4px;
+            }
+            .legend i {
+                display: inline-block;
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background: var(--c);
+                margin-right: 3px;
+            }
+            .dot {
+                position: absolute;
+                width: 36px;
+                height: 36px;
+                margin-left: -18px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
+            .dot .nm {
+                font:
+                    500 9px "DM Mono",
+                    monospace;
+                line-height: 10px;
+                color: #202020;
+            }
+            .dot .disc {
+                position: relative;
+                width: 18px;
+                height: 18px;
+                border-radius: 50%;
+                background: var(--c);
+                margin-top: 2px;
+                display: grid;
+                place-items: center;
+            }
+            .dot .gl {
+                font:
+                    700 9px "DM Sans",
+                    sans-serif;
+                color: #fff;
+                position: relative;
+            }
+            .dot .nose {
+                position: absolute;
+                left: 50%;
+                top: 50%;
+                width: 2px;
+                height: 6px;
+                background: #202020;
+                transform-origin: 50% 0;
+                border-radius: 1px;
+            }
+            .dot.sel .disc {
+                box-shadow:
+                    0 0 0 2px #fbfbfb,
+                    0 0 0 4px rgb(100, 66, 255);
+            }
+            .dot.incue .disc {
+                outline: 2px dashed rgb(100, 66, 255);
+                outline-offset: 3px;
+            }
+            .hovering .dot:not(.hov) {
+                opacity: 0.3;
+            }
+            .hovering .dot.hov .disc {
+                outline: 2px solid #202020;
+                outline-offset: 2px;
+            }
+
+            .tl {
+                background: var(--fg-1);
+                border-top: 1px solid var(--stroke);
+            }
+            .tl-bar {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                height: 34px;
+                padding: 0 10px;
+                font-size: var(--sub);
+                color: var(--text-subtitle);
+            }
+            .tl-bar svg {
+                width: 14px;
+                height: 14px;
+                fill: var(--text);
+            }
+            .tl-bar > * {
+                flex: none;
+                white-space: nowrap;
+            }
+            .tl-bar .sp {
+                flex: 1;
+            }
+            .tl-bar .chip {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                height: 22px;
+                padding: 0 8px;
+                border-radius: 999px;
+                border: 1px solid var(--stroke);
+                color: var(--text);
+                font-size: var(--sub);
+            }
+            .tl-bar .chip.off {
+                color: var(--text-disabled);
+            }
+            .tl-bar .chip svg {
+                width: 12px;
+                height: 12px;
+                fill: none;
+                stroke: currentColor;
+                stroke-width: 1.4;
+            }
+            .scroller {
+                overflow-x: auto;
+                overflow-y: hidden;
+                padding-bottom: 8px;
+            }
+            .content {
+                position: relative;
+            }
+            .row {
+                display: flex;
+                position: relative;
+                z-index: 1;
+            }
+            .gut {
+                position: sticky;
+                left: 0;
+                z-index: 6;
+                flex: none;
+                background: var(--bg-1);
+            }
+            .gut::before {
+                content: "";
+                position: absolute;
+                inset: 0;
+                background: var(--fg-1);
+                pointer-events: none;
+            }
+            .cv {
+                position: relative;
+                flex: none;
+            }
+            .overlay {
+                position: absolute;
+                top: 0;
+                bottom: 0;
+                pointer-events: none;
+            }
+            .overlay.grid {
+                z-index: 0;
+            }
+            .overlay.play {
+                z-index: 5;
+            }
+            .gl-line {
+                position: absolute;
+                top: 46px;
+                bottom: 0;
+                width: 1px;
+                background: var(--stroke);
+            }
+            .gl-line.pg {
+                top: 8px;
+                background: color-mix(in srgb, var(--text) 22%, transparent);
+            }
+            .ph {
+                position: absolute;
+                top: 0;
+                bottom: 0;
+                width: 2px;
+                margin-left: -1px;
+                background: var(--accent);
+            }
+            .ph-head {
+                position: absolute;
+                top: 0;
+                left: -5px;
+                width: 12px;
+                height: 12px;
+                background: var(--accent);
+                border-radius: 4px 4px 6px 6px;
+                clip-path: polygon(0 0, 100% 0, 100% 60%, 50% 100%, 0 60%);
+            }
+            .pages {
+                margin-top: 8px;
+                height: 28px;
+                border: 1px solid var(--stroke);
+                border-left: 0;
+                border-radius: 0 6px 6px 0;
+                background: var(--fg-2);
+                cursor: ew-resize;
+            }
+            .pages-gut {
+                margin-top: 8px;
+                height: 28px;
+                border: 1px solid var(--stroke);
+                border-radius: 6px 0 0 6px;
+                display: flex;
+                align-items: center;
+                padding-left: 10px;
+            }
+            .pages-gut svg {
+                width: 14px;
+                height: 14px;
+                fill: none;
+                stroke: var(--text);
+                stroke-width: 1.3;
+                position: relative;
+            }
+            .page {
+                position: absolute;
+                top: 0;
+                bottom: 0;
+                border-right: 1px solid var(--stroke);
+                font:
+                    500 12px "DM Mono",
+                    monospace;
+                line-height: 26px;
+                text-align: right;
+                padding-right: 6px;
+            }
+            .ruler {
+                height: 18px;
+                cursor: ew-resize;
+            }
+            .ruler span {
+                position: absolute;
+                top: 3px;
+                font:
+                    400 10px "DM Mono",
+                    monospace;
+                color: var(--text-subtitle);
+                padding-left: 3px;
+            }
+            .ruler i {
+                position: absolute;
+                top: 12px;
+                width: 1px;
+                height: 4px;
+                background: var(--text-disabled);
+            }
+            .clip {
+                position: absolute;
+                height: 14px;
+                border-radius: 4px;
+                background: color-mix(in srgb, var(--c) 82%, var(--bg-1));
+                font-size: var(--micro);
+                font-weight: 500;
+                line-height: 14px;
+                padding-left: 4px;
+                overflow: hidden;
+                white-space: nowrap;
+            }
+            .gutlab {
+                position: relative;
+                font-size: var(--micro);
+                color: var(--text-subtitle);
+                padding-left: 10px;
+            }
+
+            /* ---------- lanes ---------- */
+            .lane {
+                border-top: 1px solid var(--stroke);
+            }
+            .lane-title {
+                height: 18px;
+                display: flex;
+                align-items: center;
+                gap: 2px;
+                padding: 0 6px 0 4px;
+                font-size: var(--micro);
+                font-weight: 500;
+            }
+            .lane-title > * {
+                position: relative;
+            }
+            .lane-title .nm {
+                flex: 1;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .lane-title .nm small {
+                font-weight: 400;
+                color: var(--text-subtitle);
+                font-size: var(--micro);
+            }
+            .icon-btn {
+                width: 16px;
+                height: 16px;
+                display: grid;
+                place-items: center;
+                border-radius: 4px;
+                flex: none;
+            }
+            .icon-btn:hover {
+                background: color-mix(in srgb, var(--text) 12%, transparent);
+            }
+            .icon-btn svg {
+                width: 10px;
+                height: 10px;
+                fill: none;
+                stroke: var(--text-subtitle);
+                stroke-width: 1.6;
+                transition: transform 120ms;
+            }
+            .icon-btn.open svg {
+                transform: rotate(90deg);
+            }
+            .icon-spacer {
+                width: 16px;
+                flex: none;
+            }
+            .rowlab {
+                position: absolute;
+                left: 20px;
+                right: 6px;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                font-size: var(--micro);
+                color: var(--text-subtitle);
+                text-align: left;
+                border-radius: 4px;
+                padding: 0 4px;
+                white-space: nowrap;
+            }
+            .rowlab:hover {
+                background: color-mix(in srgb, var(--text) 10%, transparent);
+                color: var(--text);
+            }
+            .rowlab i {
+                width: 7px;
+                height: 7px;
+                border-radius: 2px;
+                background: var(--c);
+                flex: none;
+            }
+            .rowlab b {
+                font-weight: 500;
+                flex: 1;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .rowlab em {
+                font:
+                    400 10px "DM Mono",
+                    monospace;
+                color: var(--text-subtitle);
+            }
+            .rowlab.selected {
+                color: var(--accent);
+            }
+            .rowlab.incue b {
+                text-decoration: underline dashed var(--accent);
+                text-underline-offset: 2px;
+            }
+            .sep {
+                position: absolute;
+                left: 0;
+                right: 0;
+                height: 1px;
+                background: var(--stroke);
+            }
+
+            .run,
+            .seg,
+            .cell,
+            .mark,
+            .wedge {
+                position: absolute;
+                cursor: pointer;
+            }
+            .run .step {
+                position: absolute;
+                bottom: 0;
+            }
+            .step.l,
+            .seg {
+                border-top-left-radius: 4px;
+                border-bottom-left-radius: 4px;
+            }
+            .step.r,
+            .seg {
+                border-top-right-radius: 4px;
+                border-bottom-right-radius: 4px;
+            }
+            .k-lasting {
+                background: color-mix(in srgb, var(--c) 62%, var(--bg-1));
+            }
+            .k-lasting.head {
+                box-shadow: inset 2px 0 0 var(--c);
+            }
+            .k-default {
+                background: color-mix(in srgb, var(--c) 12%, transparent);
+                border: 1px dashed color-mix(in srgb, var(--c) 75%, transparent);
+            }
+            .k-momentary {
+                background: color-mix(in srgb, var(--c) 92%, var(--bg-1));
+                border-radius: 999px !important;
+            }
+            .lab {
+                position: absolute;
+                left: 6px;
+                right: 3px;
+                top: 0;
+                bottom: 0;
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                font-size: var(--micro);
+                font-weight: 500;
+                white-space: nowrap;
+                overflow: hidden;
+                pointer-events: none;
+            }
+            .lab i {
+                font-style: normal;
+                font-weight: 400;
+                color: color-mix(in srgb, var(--text) 78%, transparent);
+            }
+            .k-default > .lab,
+            .run.is-default .lab {
+                color: var(--text-subtitle);
+            }
+            .k-momentary > .lab,
+            .run.is-momentary .lab {
+                color: var(--text-invert);
+            }
+            .run.is-momentary .lab i {
+                color: var(--text-invert);
+            }
+            .stepn {
+                position: absolute;
+                font:
+                    400 9px "DM Mono",
+                    monospace;
+                line-height: 9px;
+                color: var(--text-subtitle);
+                pointer-events: none;
+            }
+            .wedge {
+                background: color-mix(in srgb, var(--c) 62%, var(--bg-1));
+                clip-path: polygon(0 100%, 100% 0, 100% 100%);
+                opacity: 0.75;
+            }
+            .ramp {
+                position: absolute;
+                pointer-events: none;
+                background: linear-gradient(
+                    to right,
+                    transparent,
+                    color-mix(in srgb, var(--c) 62%, var(--bg-1))
+                );
+            }
+            .seg.micro {
+                border-radius: 0;
+                border: 0;
+            }
+            .seg.micro.k-default {
+                background: color-mix(in srgb, var(--c) 28%, transparent);
+            }
+            .cell {
+                border-radius: 0;
+                box-shadow: inset 0 -1px 0 var(--bg-1);
+            }
+            .cell.k-default {
+                border-left: 0;
+                border-right: 0;
+            }
+            .mark.diamond {
+                width: 7px;
+                height: 7px;
+                margin-left: -3.5px;
+                transform: rotate(45deg);
+                background: var(--c);
+                box-shadow: 0 0 0 1px var(--bg-1);
+            }
+            .mark.block {
+                height: 5px;
+                border-radius: 999px;
+                background: var(--c);
+            }
+            .mark-ramp {
+                position: absolute;
+                height: 1px;
+                background: var(--c);
+                pointer-events: none;
+            }
+            .cue-sel {
+                box-shadow: 0 0 0 2px var(--accent) !important;
+                border-radius: 4px;
+                z-index: 3;
+            }
+            .mark.diamond.cue-sel {
+                border-radius: 0;
+            }
+            .miss {
+                opacity: 0.22;
+            }
+            .hovering .lane [data-perfs]:not(.hov) {
+                opacity: 0.35;
+            }
+            .hovering .lane .hov {
+                filter: brightness(1.15);
+            }
+            .empty {
+                position: absolute;
+                left: 8px;
+                top: 3px;
+                font-size: var(--micro);
+                color: var(--text-disabled);
+            }
+
+            /* ---------- notes ---------- */
+            .notes {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+                gap: 12px;
+                margin-top: 12px;
+            }
+            .card {
+                border: 1px solid var(--stroke);
+                border-radius: 6px;
+                background: var(--fg-1);
+                padding: 12px;
+                font-size: var(--sub);
+                line-height: 1.5;
+            }
+            .card h3 {
+                margin: 0 0 4px;
+                font-size: var(--sub);
+                font-weight: 700;
+                color: var(--text-subtitle);
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+            }
+            .card p {
+                margin: 0 0 6px;
+            }
+            .card .big {
+                font-size: var(--body);
+            }
+            .state {
+                font:
+                    400 11px/1.6 "DM Mono",
+                    monospace;
+                white-space: pre-wrap;
+            }
+            .all-head {
+                display: flex;
+                align-items: baseline;
+                gap: 8px;
+                padding: 8px 10px 2px;
+                font-size: var(--sub);
+                border-top: 1px solid var(--stroke);
+                background: var(--fg-1);
+            }
+            .all-head b {
+                font-size: var(--body);
+            }
+            .all-head span {
+                color: var(--text-subtitle);
+            }
+
+            #tip {
+                position: fixed;
+                z-index: 50;
+                pointer-events: none;
+                display: none;
+                max-width: 280px;
+                background: var(--modal);
+                border: 1px solid var(--stroke);
+                border-radius: 6px;
+                box-shadow: 0 10px 64px 0 var(--modal-shadow);
+                padding: 6px 8px;
+                font-size: var(--sub);
+                line-height: 1.45;
+                white-space: pre-line;
+            }
+            #switcher {
+                position: fixed;
+                left: 50%;
+                bottom: 14px;
+                transform: translateX(-50%);
+                z-index: 40;
+                display: flex;
+                align-items: center;
+                gap: 2px;
+                padding: 4px;
+                border-radius: 999px;
+                background: #f5c400;
+                color: #1a1500;
+                box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+                font-size: var(--sub);
+                max-width: calc(100vw - 16px);
+            }
+            #switcher button {
+                height: 28px;
+                min-width: 28px;
+                padding: 0 9px;
+                border-radius: 999px;
+                font-weight: 700;
+                white-space: nowrap;
+            }
+            #switcher button.on {
+                background: #1a1500;
+                color: #f5c400;
+            }
+            #switcher .name {
+                padding: 0 8px;
+                font-weight: 500;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            @media (max-width: 640px) {
+                #switcher .name,
+                .field .hint,
+                .tl-bar svg,
+                .tl-bar .mono + .mono {
+                    display: none;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div id="app"></div>
+        <div id="tip"></div>
+        <div id="switcher"></div>
+        <script>
+            /* ================= the show ================= */
+            const N = 96; // counts
+            const G = 124; // gutter width
+            const P = Array.from({ length: 12 }, (_, i) => ({
+                id: i + 1,
+                name: "G" + (i + 1),
+                section: i < 6 ? "Rifle" : "Flag",
+            }));
+            const ids = (a, b) =>
+                Array.from({ length: b - a + 1 }, (_, i) => a + i);
+
+            // ADR 0015 D-3: one parameter per type. The type's default value is drawn in the
+            // quiet neutral; other values take a hue.
+            const TYPES = {
+                equipment: {
+                    name: "Equipment",
+                    def: "flag",
+                    values: {
+                        flag: { label: "Flag", color: "var(--v-neutral)" },
+                        rifle: { label: "Rifle", color: "#e3913d" },
+                        sabre: { label: "Sabre", color: "#9cc04a" },
+                    },
+                },
+                facing: {
+                    name: "Facing",
+                    def: "front",
+                    values: {
+                        front: { label: "Front", color: "var(--v-neutral)" },
+                        back: { label: "Back", color: "#5b8def" },
+                    },
+                },
+            };
+
+            // D-4: a cue stores its performers; `label` only says how they were picked.
+            // D-2: `length` makes a cue momentary; `transition` is how many counts the change
+            // takes. Drawn arriving on the cue's count, as the parked design did (open detail).
+            const BASE_CUES = [
+                {
+                    id: "e1",
+                    type: "equipment",
+                    count: 24,
+                    value: "rifle",
+                    perfs: ids(1, 6),
+                    label: "Rifles",
+                    how: "picked as the Rifle section",
+                },
+                {
+                    id: "e2",
+                    type: "equipment",
+                    count: 40,
+                    value: "sabre",
+                    perfs: ids(7, 9),
+                    label: "G7–G9",
+                    how: "hand-picked",
+                },
+                {
+                    id: "e3",
+                    type: "equipment",
+                    count: 56,
+                    value: "sabre",
+                    perfs: ids(10, 12),
+                    label: "G10–G12",
+                    length: 8,
+                    how: "hand-picked",
+                },
+                {
+                    id: "e4",
+                    type: "equipment",
+                    count: 72,
+                    value: "flag",
+                    perfs: ids(1, 12),
+                    label: "Guard",
+                    how: "picked as the whole guard",
+                },
+                {
+                    id: "f1",
+                    type: "facing",
+                    count: 48,
+                    value: "back",
+                    perfs: ids(1, 6),
+                    label: "Rifles",
+                    transition: 4,
+                    how: "picked as whoever holds a rifle at the playhead",
+                },
+                {
+                    id: "f2",
+                    type: "facing",
+                    count: 72,
+                    value: "front",
+                    perfs: ids(1, 6),
+                    label: "Rifles",
+                    transition: 2,
+                    how: "picked as whoever holds a rifle at the playhead",
+                },
+            ];
+            // The harder case: a later cue takes half of an earlier cue's performers.
+            const MESSY_CUES = [
+                {
+                    id: "e5",
+                    type: "equipment",
+                    count: 48,
+                    value: "sabre",
+                    perfs: ids(4, 6),
+                    label: "G4–G6",
+                    how: "hand-picked",
+                },
+            ];
+            const PAGES = [
+                [0, 24, "1"],
+                [24, 40, "2"],
+                [40, 56, "3"],
+                [56, 72, "4"],
+                [72, 96, "5"],
+            ];
+            const DRILL = [
+                { row: 0, from: 0, to: 16, label: "Move 1", color: "#2fc4b2" },
+                { row: 0, from: 24, to: 40, label: "Move 2", color: "#2fc4b2" },
+                { row: 1, from: 32, to: 48, label: "Move 3", color: "#e56a82" },
+                { row: 0, from: 48, to: 64, label: "Move 4", color: "#2fc4b2" },
+                { row: 1, from: 64, to: 72, label: "Move 5", color: "#e56a82" },
+                { row: 0, from: 72, to: 88, label: "Move 6", color: "#2fc4b2" },
+            ];
+
+            const VARIANTS = {
+                A: {
+                    name: "One row per cue",
+                    what: "Each cue is its own bar: the value, how its performers were picked, and how many. A cue that overlaps another goes on the next free row. The bar steps down as its performers move on to a later cue.",
+                    pre: "Premiere and Resolve video tracks: a clip that overlaps another sits a track up.",
+                    good: "Cues are whole objects you can grab. The picked-by label has room.",
+                    bad: "A row means nothing, so what one performer holds takes tracing across rows. The lane changes height as cues overlap.",
+                    touch: "Tap a bar to select the cue (its performers ring on the field). Long-press for its menu.",
+                },
+                B: {
+                    name: "One row per value",
+                    what: "A row for each value in use. A cue's bar sits in its value's row and steps down as performers leave. The row heading counts who holds the value at the playhead; clicking it selects them.",
+                    pre: "A piano roll or drum grid (a row per pitch or kit piece), and Figma's selection colors (every value in use, each with a select-all).",
+                    good: "Answers “how many rifles here” at a glance, and the heading is the “select Rifles” tool. Rows don't move when cues are edited.",
+                    bad: "One performer's line zigzags between rows. A type with many values (an angle, a look per section) grows many rows.",
+                    touch: "Row headings are finger targets: tap one to select who holds that value now. Bars as in A.",
+                },
+                C: {
+                    name: "Summary row that opens",
+                    what: "One row: a stacked bar of how many hold each value, with a diamond on every cue. The chevron opens it into a row per performer.",
+                    pre: "A folded group track in Ableton or a closed track stack in Logic shows an overview of what is inside; a comp row sits over its take lanes.",
+                    good: "Always one row tall when folded, however messy the show. Proportions read instantly.",
+                    bad: "Folded, it can't say who. Small groups make thin bands without room for a label, and cues are only diamonds until opened.",
+                    touch: "Tap a band to select who holds that value there. The chevron and the diamonds get 44 px hit areas.",
+                },
+                D: {
+                    name: "A row per performer",
+                    what: "Always one row per performer. Folded, the rows are 3 px stripes: a picture of the lane without labels. Open, every row is named.",
+                    pre: "After Effects layer bars (a row per layer), and the stripes a folded Ableton group shows for its tracks.",
+                    good: "Nothing is summarized, so it can't mislead. A selected performer's line is easy to follow.",
+                    bad: "12 rows for 3 different stories. A band of 150 needs folding by section. Stripes are too thin to read or grab.",
+                    touch: "Stripes are too thin for a finger, so a tap picks the cue under it by count. Open rows are full targets.",
+                },
+                E: {
+                    name: "A row per group that differs",
+                    what: "Performers with the same history share a row. When everyone does the same thing the lane is one row, and it only grows by the number of different stories. A row is named after how its performers were picked. The chevron folds the lane into C's summary row.",
+                    pre: "Take lanes in Ableton and Logic exist only where there are alternatives. After Effects' U shows only what changes.",
+                    good: "Every row is unambiguous: one value at a time, room for labels. The simple case stays one bar, as ADR 0015 D-7 describes.",
+                    bad: "A cue for part of a row splits the row, so rows appear and merge as you edit. A cue that spans rows is drawn once per row.",
+                    touch: "As clips: tap a bar to select the cue, tap the row name to select its performers.",
+                },
+            };
+            const ORDER = ["A", "B", "C", "D", "E", "ALL"];
+
+            /* ================= state ================= */
+            const qs = new URLSearchParams(location.search);
+            const state = {
+                variant: (qs.get("variant") || "A").toUpperCase(),
+                t: Math.max(0, Math.min(N - 1, +(qs.get("t") ?? 60))),
+                sel: new Set(),
+                selName: qs.get("sel") || "",
+                cue: qs.get("cue") || null,
+                filter: qs.get("filter") === "1",
+                open: new Set(
+                    (qs.get("open") || "").split(",").filter(Boolean),
+                ),
+                folded: new Set(
+                    (qs.get("fold") || "").split(",").filter(Boolean),
+                ),
+                hidden: new Set(
+                    (qs.get("hide") || "").split(",").filter(Boolean),
+                ),
+                messy: qs.get("messy") === "1",
+                theme: qs.get("theme") || "dark",
+            };
+            if (!ORDER.includes(state.variant)) state.variant = "A";
+            const CUES = () =>
+                state.messy ? [...BASE_CUES, ...MESSY_CUES] : BASE_CUES;
+
+            /* ================= compile (what core will answer) ================= */
+            function compile(type) {
+                const cues = CUES()
+                    .filter((c) => c.type === type)
+                    .sort((a, b) => a.count - b.count);
+                const out = new Map();
+                for (const p of P) {
+                    const mine = cues.filter((c) => c.perfs.includes(p.id));
+                    let segs = [];
+                    let from = 0,
+                        value = TYPES[type].def,
+                        cue = null;
+                    const push = (to) =>
+                        segs.push({
+                            from,
+                            to,
+                            value,
+                            cue,
+                            kind: cue ? "lasting" : "default",
+                        });
+                    for (const c of mine.filter((c) => !c.length)) {
+                        if (c.count > from) push(c.count);
+                        from = c.count;
+                        value = c.value;
+                        cue = c;
+                    }
+                    push(N);
+                    for (const m of mine.filter((c) => c.length)) {
+                        const a = m.count,
+                            b = Math.min(N, m.count + m.length);
+                        const next = [];
+                        for (const s of segs) {
+                            if (s.to <= a || s.from >= b) {
+                                next.push(s);
+                                continue;
+                            }
+                            if (s.from < a) next.push({ ...s, to: a });
+                            if (s.to > b)
+                                next.push({ ...s, from: b, resumed: true });
+                        }
+                        next.push({
+                            from: a,
+                            to: b,
+                            value: m.value,
+                            cue: m,
+                            kind: "momentary",
+                        });
+                        segs = next.sort((x, y) => x.from - y.from);
+                    }
+                    out.set(p.id, segs);
+                }
+                return out;
+            }
+            const segAt = (comp, pid, t) =>
+                comp.get(pid).find((s) => s.from <= t && t < s.to);
+            const valueAt = (comp, pid, t) => segAt(comp, pid, t).value;
+
+            /** The performers a lane draws: those with a cue of the type, or the selection when filtering. */
+            function scope(type) {
+                if (state.filter && state.sel.size)
+                    return P.filter((p) => state.sel.has(p.id)).map(
+                        (p) => p.id,
+                    );
+                const has = new Set(
+                    CUES()
+                        .filter((c) => c.type === type)
+                        .flatMap((c) => c.perfs),
+                );
+                return P.filter((p) => has.has(p.id)).map((p) => p.id);
+            }
+
+            /** One piece per cue (and one for the default): where it applies, and to how many. */
+            function pieces(type, sc, comp) {
+                const by = new Map();
+                for (const pid of sc)
+                    for (const s of comp.get(pid)) {
+                        const key = s.cue ? s.cue.id : "default";
+                        let e = by.get(key);
+                        if (!e) {
+                            e = {
+                                key,
+                                cue: s.cue,
+                                value: s.value,
+                                kind: s.kind,
+                                ints: [],
+                                perfs: new Set(),
+                            };
+                            by.set(key, e);
+                        }
+                        e.ints.push({ from: s.from, to: s.to, pid });
+                        e.perfs.add(pid);
+                    }
+                const list = [...by.values()];
+                for (const e of list) {
+                    const bps = [
+                        ...new Set(e.ints.flatMap((i) => [i.from, i.to])),
+                    ].sort((a, b) => a - b);
+                    e.runs = [];
+                    let run = null;
+                    for (let i = 0; i < bps.length - 1; i++) {
+                        const a = bps[i],
+                            b = bps[i + 1];
+                        const perfs = e.ints
+                            .filter((n) => n.from <= a && n.to >= b)
+                            .map((n) => n.pid);
+                        if (!perfs.length) {
+                            run = null;
+                            continue;
+                        }
+                        if (!run) {
+                            run = { from: a, to: b, steps: [] };
+                            e.runs.push(run);
+                        }
+                        const last = run.steps[run.steps.length - 1];
+                        if (last && last.perfs.join() === perfs.join())
+                            last.to = b;
+                        else
+                            run.steps.push({
+                                from: a,
+                                to: b,
+                                n: perfs.length,
+                                perfs,
+                            });
+                        run.to = b;
+                    }
+                }
+                return list.sort(
+                    (a, b) =>
+                        (a.cue ? a.cue.count : -1) - (b.cue ? b.cue.count : -1),
+                );
+            }
+
+            /** Performers whose whole history on the type is the same. */
+            function groups(sc, comp) {
+                const m = new Map();
+                for (const pid of sc) {
+                    const key = comp
+                        .get(pid)
+                        .map(
+                            (s) =>
+                                `${s.from}-${s.to}-${s.value}-${s.cue ? s.cue.id : "d"}`,
+                        )
+                        .join("|");
+                    if (!m.has(key)) m.set(key, []);
+                    m.get(key).push(pid);
+                }
+                return [...m.values()];
+            }
+            function groupLabel(type, g) {
+                const hit = CUES().find(
+                    (c) =>
+                        c.type === type &&
+                        c.perfs.length === g.length &&
+                        c.perfs.every((p) => g.includes(p)),
+                );
+                return hit ? hit.label : nameRange(g);
+            }
+            function nameRange(list) {
+                const s = [...list].sort((a, b) => a - b);
+                const out = [];
+                for (let i = 0; i < s.length; i++) {
+                    let j = i;
+                    while (j + 1 < s.length && s[j + 1] === s[j] + 1) j++;
+                    out.push(j > i ? `G${s[i]}–G${s[j]}` : `G${s[i]}`);
+                    i = j;
+                }
+                return out.join(", ");
+            }
+            function facingAngle(pid, t) {
+                const ang = { front: 0, back: 180 };
+                const comp = compile("facing");
+                const now = segAt(comp, pid, t);
+                const next = comp.get(pid).find((s) => s.from > t);
+                if (next && next.cue && next.cue.transition && !next.resumed) {
+                    const start = next.from - next.cue.transition;
+                    if (t > start)
+                        return (
+                            ang[now.value] +
+                            (ang[next.value] - ang[now.value]) *
+                                ((t - start) / next.cue.transition)
+                        );
+                }
+                return ang[now.value];
+            }
+
+            /* ================= drawing ================= */
+            let ppb = 11;
+            const x = (c) => c * ppb;
+            const esc = (s) =>
+                String(s)
+                    .replace(/&/g, "&amp;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/</g, "&lt;");
+            const BACK = "↩︎";
+            const hl = (perfIds) =>
+                state.filter || !state.sel.size
+                    ? ""
+                    : perfIds.some((id) => state.sel.has(id))
+                      ? " hit"
+                      : " miss";
+            const cueSel = (cue) =>
+                cue && state.cue === cue.id ? " cue-sel" : "";
+
+            function cueTip(type, cue, n) {
+                const T = TYPES[type];
+                const kind = cue.length
+                    ? `momentary: ${cue.length} counts, then back`
+                    : "lasting, until their next " + T.name + " cue";
+                const tr = cue.transition
+                    ? `\nThe change takes ${cue.transition} counts`
+                    : "";
+                const who =
+                    n !== undefined && n !== cue.perfs.length
+                        ? `${n} of ${cue.perfs.length} shown`
+                        : `${cue.perfs.length} performers`;
+                return `${T.values[cue.value].label} at count ${cue.count} · ${kind}${tr}\n“${cue.label}” (${cue.how}): ${nameRange(cue.perfs)} · ${who}`;
+            }
+            const defTip = (type, perfs) =>
+                `${TYPES[type].values[TYPES[type].def].label} by default (not a cue): ${nameRange(perfs)}`;
+
+            /** A cue's bar on A and B: steps down as performers leave it. */
+            function runHTML(type, p, r, top, BAR, showValue, first) {
+                const T = TYPES[type];
+                const col = T.values[p.value].color;
+                const total = p.perfs.size;
+                const perfIds = [...p.perfs];
+                const tip = p.cue
+                    ? cueTip(type, p.cue, total)
+                    : defTip(type, perfIds);
+                let h = "";
+                if (first && p.cue && p.cue.transition)
+                    h += `<div class="wedge${hl(perfIds)}" style="left:${x(r.from - p.cue.transition)}px;width:${x(p.cue.transition)}px;top:${top}px;height:${BAR}px;--c:${col}" data-cue="${p.cue.id}" data-perfs="${perfIds.join(" ")}" data-tip="${esc(tip)}"></div>`;
+                h += `<div class="run is-${p.kind}${hl(perfIds)}${cueSel(p.cue)}" style="left:${x(r.from)}px;width:${x(r.to - r.from)}px;top:${top}px;height:${BAR}px;--c:${col}" data-perfs="${perfIds.join(" ")}"${p.cue ? ` data-cue="${p.cue.id}"` : ""} data-tip="${esc(tip)}">`;
+                r.steps.forEach((s, i) => {
+                    const sh = Math.max(3, Math.round((BAR * s.n) / total));
+                    h += `<div class="step k-${p.kind}${i === 0 && first ? " head" : ""}${i === 0 ? " l" : ""}${i === r.steps.length - 1 ? " r" : ""}" style="left:${x(s.from - r.from)}px;width:${x(s.to - s.from)}px;height:${sh}px"></div>`;
+                    if (s.n < total && x(s.to - s.from) >= 14)
+                        h += `<span class="stepn" style="left:${x(s.from - r.from) + 3}px;bottom:${sh + 1}px">${s.n}</span>`;
+                });
+                if (first) {
+                    const who = p.cue ? p.cue.label : "default";
+                    const v =
+                        T.values[p.value].label +
+                        (p.kind === "momentary" ? " " + BACK : "");
+                    h += `<span class="lab" style="width:${Math.max(0, x(r.steps[0].to - r.from) - 9)}px;right:auto">${showValue ? `<b>${v}</b><i>${who} · ${total}</i>` : `<b>${who}${p.kind === "momentary" ? " " + BACK : ""}</b><i>${total}</i>`}</span>`;
+                }
+                return h + "</div>";
+            }
+
+            /** One row of segments: a performer, or a group that shares a history. */
+            function perfRowHTML(type, segs, perfIds, top, H, mode, rowName) {
+                const T = TYPES[type];
+                let h = "";
+                for (const s of segs) {
+                    const col = T.values[s.value].color;
+                    const w = x(s.to - s.from);
+                    const tip = s.cue
+                        ? cueTip(type, s.cue)
+                        : defTip(type, perfIds);
+                    const head = s.kind === "lasting" && !s.resumed;
+                    let lab = "";
+                    if (mode !== "micro" && w >= 30) {
+                        const v = T.values[s.value].label;
+                        lab = `<span class="lab"><b>${v}${s.kind === "momentary" ? " " + BACK : ""}</b>${s.kind === "default" && w >= 84 ? "<i>default</i>" : ""}${mode === "group" && s.cue && !s.resumed && s.cue.label !== rowName && w >= 110 ? `<i>${s.cue.label}</i>` : ""}</span>`;
+                    }
+                    h += `<div class="seg k-${s.kind}${mode === "micro" ? " micro" : ""}${head ? " head" : ""}${hl(perfIds)}${cueSel(s.cue)}" style="left:${x(s.from)}px;width:${w}px;top:${top}px;height:${H}px;--c:${col}" data-perfs="${perfIds.join(" ")}"${s.cue ? ` data-cue="${s.cue.id}"` : ""} data-tip="${esc(tip)}">${lab}</div>`;
+                    if (head && s.cue.transition)
+                        h += `<div class="ramp" style="left:${x(s.from - s.cue.transition)}px;width:${x(s.cue.transition)}px;top:${top}px;height:${H}px;--c:${col}"></div>`;
+                }
+                return h;
+            }
+
+            /** C's folded row: how many hold each value, stacked. */
+            function summaryHTML(type, sc, comp, top, H) {
+                const T = TYPES[type];
+                const bps = new Set([0, N]);
+                sc.forEach((pid) =>
+                    comp.get(pid).forEach((s) => {
+                        bps.add(s.from);
+                        bps.add(s.to);
+                    }),
+                );
+                const b = [...bps].sort((a, c) => a - c);
+                // Stack from the bottom: other values in order of first use, the default on top
+                const first = new Map();
+                sc.forEach((pid) =>
+                    comp.get(pid).forEach((s) => {
+                        if (!first.has(s.value) || first.get(s.value) > s.from)
+                            first.set(s.value, s.from);
+                    }),
+                );
+                const order = [...first.keys()]
+                    .filter((v) => v !== T.def)
+                    .sort((a, c) => first.get(a) - first.get(c));
+                if (first.has(T.def)) order.push(T.def);
+                let h = "";
+                let prev = {};
+                const placed = [];
+                for (let i = 0; i < b.length - 1; i++) {
+                    const a = b[i],
+                        e = b[i + 1];
+                    const by = new Map();
+                    sc.forEach((pid) => {
+                        const s = segAt(comp, pid, a);
+                        if (!by.has(s.value))
+                            by.set(s.value, {
+                                perfs: [],
+                                allDefault: true,
+                                cues: new Set(),
+                            });
+                        const c = by.get(s.value);
+                        c.perfs.push(pid);
+                        if (s.cue) {
+                            c.allDefault = false;
+                            c.cues.add(s.cue.id);
+                        }
+                    });
+                    let acc = 0;
+                    const now = {};
+                    for (const v of order) {
+                        const c = by.get(v);
+                        if (!c) continue;
+                        const y0 = Math.round((H * acc) / sc.length);
+                        acc += c.perfs.length;
+                        const y1 = Math.round((H * acc) / sc.length);
+                        const ch = y1 - y0;
+                        const w = x(e - a);
+                        now[v] = c.perfs.length;
+                        const lab =
+                            ch >= 11 && w >= 44 && prev[v] !== c.perfs.length
+                                ? `<span class="lab"><b>${T.values[v].label}</b><i>${c.perfs.length}</i></span>`
+                                : "";
+                        placed.push({ a, v, top: top + H - y1, ch });
+                        h += `<div class="cell k-${c.allDefault ? "default" : "lasting"}${hl(c.perfs)}" style="left:${x(a)}px;width:${w}px;top:${top + H - y1}px;height:${ch}px;--c:${T.values[v].color}" data-perfs="${c.perfs.join(" ")}" data-selperfs="${c.perfs.join(" ")}" data-cues="${[...c.cues].join(" ")}" data-tip="${esc(`${T.values[v].label}: ${c.perfs.length} of ${sc.length}, counts ${a}–${e}\n${nameRange(c.perfs)}\nClick to select them`)}">${lab}</div>`;
+                    }
+                    prev = now;
+                }
+                for (const c of CUES().filter(
+                    (c) =>
+                        c.type === type &&
+                        c.transition &&
+                        c.perfs.some((p) => sc.includes(p)),
+                )) {
+                    const cell = placed.find(
+                        (p) => p.a === c.count && p.v === c.value,
+                    );
+                    if (cell)
+                        h += `<div class="ramp" style="left:${x(c.count - c.transition)}px;width:${x(c.transition)}px;top:${cell.top}px;height:${cell.ch}px;--c:${T.values[c.value].color}"></div>`;
+                }
+                return h;
+            }
+
+            /** Cue marks on a lane's title strip (C and D): a diamond per lasting cue, a block per momentary one. */
+            function marksHTML(type, sc) {
+                const T = TYPES[type];
+                let h = "";
+                for (const c of CUES().filter((c) => c.type === type)) {
+                    const perfs = c.perfs.filter((p) => sc.includes(p));
+                    if (!perfs.length) continue;
+                    const col = T.values[c.value].color;
+                    const common = `--c:${col}" data-cue="${c.id}" data-perfs="${perfs.join(" ")}" data-tip="${esc(cueTip(type, c, perfs.length))}"`;
+                    if (c.transition)
+                        h += `<div class="mark-ramp" style="left:${x(c.count - c.transition)}px;width:${x(c.transition)}px;top:9px;--c:${col}"></div>`;
+                    h += c.length
+                        ? `<div class="mark block${hl(perfs)}${cueSel(c)}" style="left:${x(c.count)}px;width:${x(c.length)}px;top:7px;${common}></div>`
+                        : `<div class="mark diamond${hl(perfs)}${cueSel(c)}" style="left:${x(c.count)}px;top:6px;${common}></div>`;
+                }
+                return h;
+            }
+
+            const selCue = () =>
+                state.cue ? CUES().find((c) => c.id === state.cue) : null;
+            function rowLab(perfIds, top, H, inner) {
+                const allSel =
+                    state.sel.size && perfIds.every((p) => state.sel.has(p));
+                const cue = selCue();
+                const inCue =
+                    cue && perfIds.every((p) => cue.perfs.includes(p));
+                return `<button class="rowlab${allSel ? " selected" : ""}${inCue ? " incue" : ""}" style="top:${top}px;height:${H}px" data-selperfs="${perfIds.join(" ")}" data-perfs="${perfIds.join(" ")}">${inner}</button>`;
+            }
+
+            /** A lane's body for a variant: { h, g (gutter), c (canvas), marks, foldable }. */
+            function laneBody(type, v) {
+                const T = TYPES[type];
+                const comp = compile(type);
+                const sc = scope(type);
+                if (!sc.length)
+                    return {
+                        h: 18,
+                        g: "",
+                        c: `<span class="empty">The selection has no ${T.name} cues here</span>`,
+                    };
+                let h = 0,
+                    g = "",
+                    c = "";
+                const pack = (rows, p) => {
+                    const spans = p.runs.map((r, i) => [
+                        r.from -
+                            (i === 0 && p.cue && p.cue.transition
+                                ? p.cue.transition
+                                : 0),
+                        r.to,
+                    ]);
+                    let ri = rows.findIndex((row) =>
+                        spans.every(([a, b]) =>
+                            row.every(([s, e]) => b <= s || a >= e),
+                        ),
+                    );
+                    if (ri < 0) {
+                        rows.push([]);
+                        ri = rows.length - 1;
+                    }
+                    rows[ri].push(...spans);
+                    return ri;
+                };
+                if (v === "A") {
+                    const BAR = 16,
+                        PITCH = 20;
+                    const rows = [];
+                    for (const p of pieces(type, sc, comp)) {
+                        const ri = pack(rows, p);
+                        p.runs.forEach((r, i) => {
+                            c += runHTML(
+                                type,
+                                p,
+                                r,
+                                ri * PITCH + 2,
+                                BAR,
+                                true,
+                                i === 0,
+                            );
+                        });
+                    }
+                    h = rows.length * PITCH + 2;
+                } else if (v === "B") {
+                    const BAR = 16,
+                        PITCH = 20;
+                    const ps = pieces(type, sc, comp);
+                    const vals = [];
+                    for (const p of ps)
+                        if (!vals.includes(p.value)) vals.push(p.value);
+                    let y = 0;
+                    for (const val of vals) {
+                        const rows = [];
+                        for (const p of ps.filter((p) => p.value === val)) {
+                            const ri = pack(rows, p);
+                            p.runs.forEach((r, i) => {
+                                c += runHTML(
+                                    type,
+                                    p,
+                                    r,
+                                    y + ri * PITCH + 2,
+                                    BAR,
+                                    false,
+                                    i === 0,
+                                );
+                            });
+                        }
+                        const holders = sc.filter(
+                            (pid) => valueAt(comp, pid, state.t) === val,
+                        );
+                        g += `<button class="rowlab${holders.length && state.sel.size === holders.length && holders.every((p) => state.sel.has(p)) ? " selected" : ""}" style="top:${y + 2}px;height:${BAR}px;--c:${T.values[val].color}" data-selperfs="${holders.join(" ")}" data-perfs="${holders.join(" ")}" data-tip="${esc(`${holders.length} hold ${T.values[val].label} at the playhead${holders.length ? ": " + nameRange(holders) + "\nClick to select them" : ""}`)}"><i></i><b>${T.values[val].label}</b><em>${holders.length}</em></button>`;
+                        if (y > 0)
+                            c += `<div class="sep" style="top:${y}px"></div>`;
+                        y += rows.length * PITCH + 2;
+                    }
+                    h = y;
+                } else if (v === "C") {
+                    const SUM = 28;
+                    c += summaryHTML(type, sc, comp, 2, SUM);
+                    g += `<span class="rowlab" style="top:2px;height:${SUM}px;cursor:default"><b>${sc.length} performers</b></span>`;
+                    h = SUM + 6;
+                    if (state.open.has(type)) {
+                        c += `<div class="sep" style="top:${h - 2}px"></div>`;
+                        for (const pid of sc) {
+                            c += perfRowHTML(
+                                type,
+                                comp.get(pid),
+                                [pid],
+                                h,
+                                12,
+                                "named",
+                            );
+                            g += rowLab([pid], h, 12, `<b>G${pid}</b>`);
+                            h += 14;
+                        }
+                        h += 2;
+                    }
+                    return {
+                        h,
+                        g,
+                        c,
+                        marks: marksHTML(type, sc),
+                        foldable: "open",
+                        isOpen: state.open.has(type),
+                    };
+                } else if (v === "D") {
+                    const open = state.open.has(type);
+                    const RH = open ? 12 : 3,
+                        PITCH = open ? 14 : 3;
+                    h = 2;
+                    if (!open)
+                        g += `<span class="rowlab" style="top:2px;height:${Math.max(12, sc.length * 3)}px;cursor:default"><b>${sc.length} rows</b></span>`;
+                    for (const pid of sc) {
+                        c += perfRowHTML(
+                            type,
+                            comp.get(pid),
+                            [pid],
+                            h,
+                            RH,
+                            open ? "named" : "micro",
+                        );
+                        if (open) g += rowLab([pid], h, RH, `<b>G${pid}</b>`);
+                        h += PITCH;
+                    }
+                    h = Math.max(h + 4, 18);
+                    return {
+                        h,
+                        g,
+                        c,
+                        marks: marksHTML(type, sc),
+                        foldable: "open",
+                        isOpen: state.open.has(type),
+                    };
+                } else if (v === "E") {
+                    const RH = 16,
+                        PITCH = 20;
+                    const grps = groups(sc, comp);
+                    if (state.folded.has(type)) {
+                        const SUM = 28;
+                        return {
+                            h: SUM + 6,
+                            g: `<span class="rowlab" style="top:2px;height:${SUM}px;cursor:default"><b>${grps.length} ${grps.length === 1 ? "group" : "groups"} · ${sc.length}</b></span>`,
+                            c: summaryHTML(type, sc, comp, 2, SUM),
+                            marks: marksHTML(type, sc),
+                            foldable: "folded",
+                            isOpen: false,
+                        };
+                    }
+                    h = 2;
+                    for (const grp of grps) {
+                        c += perfRowHTML(
+                            type,
+                            comp.get(grp[0]),
+                            grp,
+                            h,
+                            RH,
+                            "group",
+                            groupLabel(type, grp),
+                        );
+                        g += rowLab(
+                            grp,
+                            h,
+                            RH,
+                            `<b>${groupLabel(type, grp)}</b><em>${grp.length}</em>`,
+                        ).replace(
+                            'data-perfs="',
+                            `data-tip="${esc(nameRange(grp) + "\nClick to select them")}" data-perfs="`,
+                        );
+                        h += PITCH;
+                    }
+                    return { h, g, c, foldable: "folded", isOpen: true };
+                }
+                return { h, g, c };
+            }
+
+            const ICON = {
+                chev: '<svg viewBox="0 0 10 10"><path d="M3.5 1.5 7 5 3.5 8.5"/></svg>',
+                eye: '<svg viewBox="0 0 12 12"><path d="M1 6s2-3.5 5-3.5S11 6 11 6s-2 3.5-5 3.5S1 6 1 6Z"/><circle cx="6" cy="6" r="1.5"/></svg>',
+                home: '<svg viewBox="0 0 14 14"><path d="M2 6.5 7 2l5 4.5V12H8.5V8.5h-3V12H2Z"/></svg>',
+                play: '<svg viewBox="0 0 14 14"><path d="M3 1.5v11l9-5.5Z"/></svg>',
+                prev: '<svg viewBox="0 0 14 14"><path d="M2 2h1.5v10H2zM12 2v10L4.5 7Z"/></svg>',
+                next: '<svg viewBox="0 0 14 14"><path d="M10.5 2H12v10h-1.5zM2 2v10l7.5-5Z"/></svg>',
+            };
+
+            function laneHTML(type, v, W) {
+                const T = TYPES[type];
+                const body = laneBody(type, v);
+                const open = body.isOpen;
+                return `<div class="lane" data-type="${type}">
+                  <div class="row"><div class="gut lane-title" style="width:${G}px">${body.foldable ? `<button class="icon-btn${open ? " open" : ""}" data-act="fold" data-set="${body.foldable}" data-type="${type}" title="${open ? "Fold" : "Open"}">${ICON.chev}</button>` : '<span class="icon-spacer"></span>'}<span class="nm">${T.name}</span><button class="icon-btn" data-act="hide" data-type="${type}" title="Hide lane">${ICON.eye}</button></div><div class="cv" style="width:${W}px;height:18px">${body.marks || ""}</div></div>
+                  <div class="row"><div class="gut" style="width:${G}px;height:${body.h}px">${body.g}</div><div class="cv" style="width:${W}px;height:${body.h}px">${body.c}</div></div>
+                </div>`;
+            }
+
+            function timelineHTML(v, opts) {
+                const W = x(N) + 24;
+                const page =
+                    PAGES.find(([a, b]) => state.t >= a && state.t < b) ||
+                    PAGES[PAGES.length - 1];
+                let grid = "";
+                for (let c = 0; c <= N; c += 8)
+                    grid += `<div class="gl-line${PAGES.some(([a]) => a === c) || c === N ? " pg" : ""}" style="left:${x(c)}px"></div>`;
+                for (const [a] of PAGES)
+                    if (a % 8)
+                        grid += `<div class="gl-line pg" style="left:${x(a)}px"></div>`;
+                let ruler = "";
+                for (let c = 0; c < N; c += 4)
+                    ruler +=
+                        c % 8 === 0
+                            ? `<span style="left:${x(c)}px">${c}</span>`
+                            : `<i style="left:${x(c)}px"></i>`;
+                const lanes = opts.types
+                    .filter((t) => !state.hidden.has(t))
+                    .map((t) => laneHTML(t, v, W))
+                    .join("");
+                const chips = Object.keys(TYPES)
+                    .map(
+                        (t) =>
+                            `<button class="chip${state.hidden.has(t) ? " off" : ""}" data-act="hide" data-type="${t}" title="Show or hide the ${TYPES[t].name} lane">${ICON.eye}${TYPES[t].name}</button>`,
+                    )
+                    .join("");
+                return `<div class="tl" data-variant="${v}">
+                  ${
+                      opts.bar
+                          ? `<div class="tl-bar">${ICON.prev}${ICON.play}${ICON.next}<span class="mono">Pg ${page[2]} · ct ${state.t - page[0]}/${page[1] - page[0]}</span><span class="mono">count ${state.t}</span><span class="sp"></span><span>Lanes</span>${chips}</div>`
+                          : ""
+                  }
+                  <div class="scroller"><div class="content" style="width:${G + W}px">
+                    <div class="overlay grid" style="left:${G}px;width:${W}px">${grid}</div>
+                    <div class="overlay play" style="left:${G}px;width:${W}px"><div class="ph" style="left:${x(state.t)}px"><span class="ph-head"></span></div></div>
+                    <div class="row"><div class="gut pages-gut" style="width:${G}px">${ICON.home}</div><div class="cv pages scrub" style="width:${W - 24}px">${PAGES.map(([a, b, l]) => `<div class="page" style="left:${x(a)}px;width:${x(b - a)}px">${l}</div>`).join("")}</div></div>
+                    <div class="row"><div class="gut" style="width:${G}px;height:18px"></div><div class="cv ruler scrub" style="width:${W}px">${ruler}</div></div>
+                    ${
+                        opts.drill
+                            ? `<div class="row"><div class="gut" style="width:${G}px;height:42px"><div class="gutlab" style="padding-top:12px">Drill</div></div><div class="cv" style="width:${W}px;height:42px">${DRILL.map((d) => `<div class="clip" style="left:${x(d.from)}px;width:${x(d.to - d.from)}px;top:${2 + d.row * 18}px;--c:${d.color}">${d.label}</div>`).join("")}</div></div>`
+                            : ""
+                    }
+                    ${lanes}
+                  </div></div>
+                </div>`;
+            }
+
+            function fieldHTML() {
+                const eq = compile("equipment");
+                const T = TYPES.equipment;
+                const cue = selCue();
+                const dots = P.map((p, i) => {
+                    const front = i < 6;
+                    const col = i % 6;
+                    const v = valueAt(eq, p.id, state.t);
+                    return `<button class="dot${state.sel.has(p.id) ? " sel" : ""}${cue && cue.perfs.includes(p.id) ? " incue" : ""}" data-perf="${p.id}" style="left:calc(50% + ${(col - 2.5) * 46 + (front ? 0 : 23)}px);top:${front ? 80 : 30}px;--c:${T.values[v].color}" title="${p.name} · ${p.section} section · ${T.values[v].label}"><span class="nm">${p.name}</span><span class="disc"><span class="nose" style="transform:translateX(-50%) rotate(${facingAngle(p.id, state.t)}deg) translateY(8px)"></span><span class="gl">${T.values[v].label[0]}</span></span></button>`;
+                }).join("");
+                return `<div class="field"><span class="hint">Field at the playhead. Click a marcher to select or deselect.</span><span class="legend">${Object.values(
+                    T.values,
+                )
+                    .map(
+                        (v) =>
+                            `<span><i style="--c:${v.color}"></i>${v.label}</span>`,
+                    )
+                    .join("")}<span>line = facing</span></span>${dots}</div>`;
+            }
+
+            function stateText() {
+                const lines = [];
+                for (const type of Object.keys(TYPES)) {
+                    const comp = compile(type);
+                    const T = TYPES[type];
+                    const parts = Object.keys(T.values)
+                        .map((v) => {
+                            const who = P.filter(
+                                (p) => valueAt(comp, p.id, state.t) === v,
+                            ).map((p) => p.id);
+                            return who.length
+                                ? `${T.values[v].label} ${who.length} (${nameRange(who)})`
+                                : null;
+                        })
+                        .filter(Boolean);
+                    lines.push(
+                        `${T.name.padEnd(9)} at count ${state.t}: ${parts.join(" · ")}`,
+                    );
+                }
+                lines.push(
+                    `Selected marchers: ${state.sel.size ? nameRange([...state.sel]) : "none"}${state.filter && state.sel.size ? "  (lanes show only them)" : ""}`,
+                );
+                const c = selCue();
+                lines.push(
+                    `Selected cue: ${c ? cueTip(c.type, c).replace(/\n/g, " · ") : "none"}`,
+                );
+                return lines.join("\n");
+            }
+
+            function render() {
+                document.documentElement.className =
+                    state.theme === "light" ? "" : "dark";
+                const app = document.getElementById("app");
+                const scrolls = [...app.querySelectorAll(".scroller")].map(
+                    (s) => s.scrollLeft,
+                );
+                const avail =
+                    Math.min(window.innerWidth, 1400) - 32 - 2 - G - 24;
+                ppb = Math.max(7, Math.min(14, Math.floor(avail / N)));
+                const all = state.variant === "ALL";
+                const pill = (act, label, on, extra = "") =>
+                    `<button class="pill${on ? " on" : ""}" data-act="${act}" ${extra}>${label}</button>`;
+                let h = `<div class="proto-head"><span class="proto-tag">PROTOTYPE</span><h1>What a cue lane shows when performers differ</h1><p>Fork issue #991 · ADR 0015 D-7 · throwaway, not app code. A guard of 12 over 96 counts: all on flag; count 24 the Rifles take rifles; count 40 G7–G9 take sabres; count 56 G10–G12 take sabres for 8 counts, then back; count 72 everyone back to flag. The Facing lane has a turn to the back over 4 counts.</p></div>
+                <div class="controls">
+                  <div class="grp"><span class="lbl">Select</span>${pill("sel", "None", !state.sel.size, 'data-sel=""')}${pill("sel", "Rifles at the playhead", state.selName === "rifles", 'data-sel="rifles"')}${pill("sel", "G7–G9", state.selName === "g7-9", 'data-sel="g7-9"')}${pill("sel", "G3", state.selName === "g3", 'data-sel="g3"')}</div>
+                  <div class="grp">${pill("filter", "Show only the selection", state.filter)}</div>
+                  <div class="grp">${pill("messy", "Harder case: split a cue's group", state.messy)}</div>
+                  <div class="grp">${pill("theme", state.theme === "light" ? "Theme: light" : "Theme: dark", false)}</div>
+                </div>
+                <div class="mock">${fieldHTML()}`;
+                if (all) {
+                    for (const v of ["A", "B", "C", "D", "E"])
+                        h += `<div class="all-head"><b>${v}</b><b>${VARIANTS[v].name}</b><span>${VARIANTS[v].what}</span></div>${timelineHTML(v, { bar: false, drill: false, types: ["equipment"] })}`;
+                } else {
+                    h += timelineHTML(state.variant, {
+                        bar: true,
+                        drill: true,
+                        types: ["equipment", "facing"],
+                    });
+                }
+                h += `</div><div class="notes">`;
+                if (!all) {
+                    const V = VARIANTS[state.variant];
+                    h += `<div class="card"><h3>Option ${state.variant}</h3><p class="big"><b>${V.name}</b></p><p>${V.what}</p><p><b>Precedent.</b> ${V.pre}</p></div>
+                    <div class="card"><h3>Trade-offs</h3><p><b>Good.</b> ${V.good}</p><p><b>Weak.</b> ${V.bad}</p><p><b>Touch.</b> ${V.touch}</p></div>`;
+                }
+                h += `<div class="card"><h3>State</h3><div class="state">${esc(stateText())}</div></div>
+                <div class="card"><h3>Try</h3><p>Hover or click a cue: its performers ring on the field. Click a marcher, or a row name: their cues stay lit and the rest dim. “Show only the selection” redraws the lane for just them. Drag on the page row or the ruler to move the playhead. Dashed bars are the default, which is not a cue. A pill with ${BACK} is momentary. A slope into a bar is a transition.</p></div></div>`;
+                app.innerHTML = h;
+                app.querySelectorAll(".scroller").forEach(
+                    (s, i) => (s.scrollLeft = scrolls[i] || 0),
+                );
+                const sw = document.getElementById("switcher");
+                sw.innerHTML =
+                    `<button data-step="-1" title="Previous (←)">‹</button>` +
+                    ORDER.map(
+                        (v) =>
+                            `<button class="${v === state.variant ? "on" : ""}" data-variant="${v}">${v === "ALL" ? "All" : v}</button>`,
+                    ).join("") +
+                    `<span class="name">${all ? "All five, Equipment lane only" : VARIANTS[state.variant].name}</span><button data-step="1" title="Next (→)">›</button>`;
+                const p = new URLSearchParams();
+                p.set("variant", all ? "all" : state.variant);
+                p.set("t", state.t);
+                if (state.selName) p.set("sel", state.selName);
+                if (state.filter) p.set("filter", "1");
+                if (state.open.size) p.set("open", [...state.open].join(","));
+                if (state.folded.size)
+                    p.set("fold", [...state.folded].join(","));
+                if (state.hidden.size)
+                    p.set("hide", [...state.hidden].join(","));
+                if (state.cue) p.set("cue", state.cue);
+                if (state.messy) p.set("messy", "1");
+                if (state.theme === "light") p.set("theme", "light");
+                history.replaceState(null, "", "?" + p.toString());
+            }
+
+            /* ================= interaction ================= */
+            function applySelName(name) {
+                state.selName = name;
+                if (name === "rifles") {
+                    const eq = compile("equipment");
+                    state.sel = new Set(
+                        P.filter(
+                            (p) => valueAt(eq, p.id, state.t) === "rifle",
+                        ).map((p) => p.id),
+                    );
+                } else if (name) {
+                    const m = name.match(/^g(\d+)(?:-(\d+))?$/);
+                    state.sel = new Set(m ? ids(+m[1], +(m[2] || m[1])) : []);
+                } else state.sel = new Set();
+            }
+            applySelName(state.selName);
+
+            const app = document.getElementById("app");
+            const tip = document.getElementById("tip");
+            let dragging = null;
+            let justDragged = false;
+
+            app.addEventListener("click", (e) => {
+                if (justDragged) return;
+                const act = e.target.closest("[data-act]");
+                if (act) {
+                    const a = act.dataset.act;
+                    const set = (s, k) => (s.has(k) ? s.delete(k) : s.add(k));
+                    if (a === "sel") applySelName(act.dataset.sel);
+                    else if (a === "filter") state.filter = !state.filter;
+                    else if (a === "messy") {
+                        state.messy = !state.messy;
+                        if (!selCue()) state.cue = null;
+                    } else if (a === "theme")
+                        state.theme =
+                            state.theme === "light" ? "dark" : "light";
+                    else if (a === "fold")
+                        set(state[act.dataset.set], act.dataset.type);
+                    else if (a === "hide") set(state.hidden, act.dataset.type);
+                    return render();
+                }
+                const dot = e.target.closest("[data-perf]");
+                if (dot) {
+                    const id = +dot.dataset.perf;
+                    state.sel.has(id)
+                        ? state.sel.delete(id)
+                        : state.sel.add(id);
+                    state.selName = "";
+                    return render();
+                }
+                const cue = e.target.closest("[data-cue]");
+                if (cue) {
+                    state.cue =
+                        state.cue === cue.dataset.cue ? null : cue.dataset.cue;
+                    return render();
+                }
+                const sp = e.target.closest("[data-selperfs]");
+                if (sp) {
+                    const list = sp.dataset.selperfs
+                        .split(" ")
+                        .filter(Boolean)
+                        .map(Number);
+                    const same =
+                        list.length === state.sel.size &&
+                        list.every((p) => state.sel.has(p));
+                    state.sel = new Set(same ? [] : list);
+                    state.selName = "";
+                    return render();
+                }
+                if (e.target.closest(".tl") && state.cue) {
+                    state.cue = null;
+                    render();
+                }
+            });
+
+            function light(el) {
+                clearLight();
+                const perfs = (el.dataset.perfs || "")
+                    .split(" ")
+                    .filter(Boolean);
+                app.classList.add("hovering");
+                const cue = el.dataset.cue;
+                const lit = cue
+                    ? app.querySelectorAll(
+                          `[data-cue="${cue}"],[data-cues~="${cue}"]`,
+                      )
+                    : [el];
+                lit.forEach((n) => n.classList.add("hov"));
+                el.classList.add("hov");
+                perfs.forEach((p) =>
+                    app
+                        .querySelectorAll(`.dot[data-perf="${p}"]`)
+                        .forEach((n) => n.classList.add("hov")),
+                );
+            }
+            function clearLight() {
+                app.classList.remove("hovering");
+                app.querySelectorAll(".hov").forEach((n) =>
+                    n.classList.remove("hov"),
+                );
+            }
+            app.addEventListener("mouseover", (e) => {
+                if (dragging) return;
+                const el = e.target.closest(".lane [data-perfs]");
+                if (el) light(el);
+                const t = e.target.closest("[data-tip]");
+                if (t) {
+                    tip.textContent = t.dataset.tip;
+                    tip.style.display = "block";
+                }
+            });
+            app.addEventListener("mousemove", (e) => {
+                if (tip.style.display !== "block") return;
+                const w = tip.offsetWidth;
+                tip.style.left =
+                    Math.min(window.innerWidth - w - 8, e.clientX + 12) + "px";
+                tip.style.top = e.clientY + 16 + "px";
+            });
+            app.addEventListener("mouseout", (e) => {
+                if (e.target.closest(".lane [data-perfs]")) clearLight();
+                if (e.target.closest("[data-tip]")) tip.style.display = "none";
+            });
+
+            function scrubTo(clientX) {
+                const tl = app.querySelectorAll(".tl")[dragging.index];
+                const r = tl.querySelector(".ruler").getBoundingClientRect();
+                const t = Math.max(
+                    0,
+                    Math.min(N - 1, Math.round((clientX - r.left) / ppb)),
+                );
+                if (t !== state.t) {
+                    state.t = t;
+                    if (state.selName === "rifles") applySelName("rifles");
+                    render();
+                }
+            }
+            app.addEventListener("pointerdown", (e) => {
+                const s = e.target.closest(".scrub");
+                if (!s) return;
+                dragging = {
+                    index: [...app.querySelectorAll(".tl")].indexOf(
+                        s.closest(".tl"),
+                    ),
+                };
+                tip.style.display = "none";
+                scrubTo(e.clientX);
+                e.preventDefault();
+            });
+            window.addEventListener("pointermove", (e) => {
+                if (dragging) scrubTo(e.clientX);
+            });
+            window.addEventListener("pointerup", () => {
+                if (!dragging) return;
+                dragging = null;
+                justDragged = true;
+                setTimeout(() => (justDragged = false), 0);
+            });
+
+            function step(d) {
+                const i = ORDER.indexOf(state.variant);
+                state.variant = ORDER[(i + d + ORDER.length) % ORDER.length];
+                render();
+            }
+            document
+                .getElementById("switcher")
+                .addEventListener("click", (e) => {
+                    const b = e.target.closest("button");
+                    if (!b) return;
+                    if (b.dataset.step) step(+b.dataset.step);
+                    else {
+                        state.variant = b.dataset.variant;
+                        render();
+                    }
+                });
+            window.addEventListener("keydown", (e) => {
+                if (e.target.closest("input, textarea, [contenteditable]"))
+                    return;
+                if (e.key === "ArrowLeft") step(-1);
+                else if (e.key === "ArrowRight") step(1);
+                else if (e.key === "Escape") {
+                    state.cue = null;
+                    applySelName("");
+                    render();
+                }
+            });
+            window.addEventListener("resize", render);
+            render();
+        </script>
+    </body>
+</html>
