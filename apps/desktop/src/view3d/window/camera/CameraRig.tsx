@@ -52,6 +52,7 @@ import { pickAlong } from "../scenePick";
 import {
     cameraIndexForKey,
     FLY_IN_OFFSET,
+    MIN_EYE_Y,
     openingCamera,
     SEAT_FOV_DEG,
     SEATED_EYE,
@@ -82,6 +83,8 @@ const PINCH_MAX_STEP = 0.3;
  * pans at its ordinary speed instead.
  */
 const MAX_GRAB_DISTANCE = 250;
+/** A wheel event at the same pointer position within this long (ms) zooms toward the same point. */
+const ZOOM_POINT_REUSE_MS = 300;
 
 function prefersReducedMotion(): boolean {
     return (
@@ -362,6 +365,18 @@ export default function CameraRig() {
         };
 
         /**
+         * The last zoom point, kept while the pointer stays put: zooming
+         * keeps that point under the pointer, so the next wheel event would
+         * find it again, and raycasting the stands on every event costs a
+         * few ms in the big venues. Any press or key drops it.
+         */
+        let lastZoom: {
+            x: number;
+            y: number;
+            atMs: number;
+            point: Vector3Tuple;
+        } | null = null;
+        /**
          * The point to zoom toward under a client position: the surface
          * there, or, looking at the sky, the point at the orbit's distance
          * along the ray.
@@ -370,11 +385,24 @@ export default function CameraRig() {
             clientX: number,
             clientY: number,
         ): Vector3Tuple => {
-            const surface = surfaceAt(clientX, clientY);
-            if (surface) return surface;
-            const { o, d } = rayAt(clientX, clientY);
-            const t = rig.spherical.radius;
-            return [o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t];
+            const now = performance.now();
+            if (
+                lastZoom &&
+                lastZoom.x === clientX &&
+                lastZoom.y === clientY &&
+                now - lastZoom.atMs < ZOOM_POINT_REUSE_MS
+            ) {
+                lastZoom.atMs = now;
+                return lastZoom.point;
+            }
+            let point = surfaceAt(clientX, clientY);
+            if (!point) {
+                const { o, d } = rayAt(clientX, clientY);
+                const t = rig.spherical.radius;
+                point = [o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t];
+            }
+            lastZoom = { x: clientX, y: clientY, atMs: now, point };
+            return point;
         };
 
         /** The surface under a client position, if a grab pan can hold it (`canHold`). */
@@ -406,6 +434,7 @@ export default function CameraRig() {
         let orbiting = false;
 
         const onPointerDown = (e: PointerEvent) => {
+            lastZoom = null;
             el.setPointerCapture?.(e.pointerId);
             pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
             moved = 0;
@@ -503,6 +532,8 @@ export default function CameraRig() {
                     zoomPointAt(e.clientX, e.clientY),
                 );
             } else if (action !== "zoom") {
+                // The view moves under a still pointer: aim the next zoom afresh.
+                lastZoom = null;
                 // natural scrolling: moving the fingers right gives a negative
                 // deltaX; orbit and pan as if the fingers dragged the scene
                 const dx = -wheelPixels(e.deltaX, e.deltaMode);
@@ -525,11 +556,18 @@ export default function CameraRig() {
         const onDoubleClick = (e: MouseEvent) => {
             const hit = surfaceAt(e.clientX, e.clientY);
             if (!hit || rig.flying) return;
+            // The spot itself becomes the center, at its own height (a seat
+            // up in the stands too), and the camera shifts with it, keeping
+            // its angle and distance, above the ground.
             const p = camera.position;
             const t = rig.target;
-            const target: Vector3Tuple = [hit[0], t[1], hit[2]];
+            const target: Vector3Tuple = [...hit];
             rig.flyTo(
-                [p.x + target[0] - t[0], p.y, p.z + target[2] - t[2]],
+                [
+                    p.x + target[0] - t[0],
+                    Math.max(MIN_EYE_Y, p.y + target[1] - t[1]),
+                    p.z + target[2] - t[2],
+                ],
                 target,
                 {
                     nowMs: performance.now(),
@@ -540,6 +578,7 @@ export default function CameraRig() {
         };
         const onContextMenu = (e: Event) => e.preventDefault();
         const onKeyDown = (e: KeyboardEvent) => {
+            lastZoom = null;
             if (e.defaultPrevented || isTypingTarget(e.target)) return;
             if (e.ctrlKey || e.metaKey || e.altKey) return;
             const store = useCameraStore.getState();

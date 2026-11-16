@@ -186,6 +186,15 @@ export function zoomRatioLimits(
         position[1] - target[1],
         position[2] - target[2],
     );
-    const hi = radius > 0 ? limits.maxRadius / radius : Infinity;
+    let hi = radius > 0 ? limits.maxRadius / radius : Infinity;
+    // Zooming out about a point above them lowers the eye and the target:
+    // keep the eye at `minEyeY` and the target on or above the ground.
+    if (point[1] > position[1])
+        hi = Math.min(
+            hi,
+            (point[1] - limits.minEyeY) / (point[1] - position[1]),
+        );
+    if (point[1] > target[1] && target[1] >= 0)
+        hi = Math.min(hi, point[1] / (point[1] - target[1]));
     return [Math.min(lo, 1), Math.max(hi, 1)];
 }
