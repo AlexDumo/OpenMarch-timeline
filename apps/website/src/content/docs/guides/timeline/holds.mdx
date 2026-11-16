@@ -32,7 +32,7 @@ import Ui from "@/components/docs/Ui.astro";
 import Term from "@/components/docs/Term.astro";
 import InShort from "@/components/docs/InShort.astro";
 
-<InShort>Select the marchers, right-click the page's box and select <Ui k="timeline.terms.holdFromPrevious" />, or press <Kbd action="timelineHoldFromPrevious" />.</InShort>
+<InShort>Select the marchers, right-click the page's box and select <Ui k="timeline.terms.holdFromPrevious" />, or press <Kbd keys="Control+H" />.</InShort>
 
 A hold keeps marchers still on purpose, so they're <Term id="held">Held</Term> on those pages. Marchers you haven't moved yet stand still too, but they're Not defined: [Defined, Held, Not defined](/guides/timeline/defined-held-not-defined/) explains the difference, and what a drag inside a hold does.
 
@@ -41,7 +41,7 @@ A hold keeps marchers still on purpose, so they're <Term id="held">Held</Term> o
 <Ui k="timeline.terms.holdFromPrevious" /> keeps marchers still on this page, where their last <Term id="keyframe">keyframe</Term> put them.
 
 1. Go to the page and select the marchers.
-2. Right-click the page's box, or a selected marcher on the field, and select <Ui k="timeline.terms.holdFromPrevious" />. You can also press <Kbd action="timelineHoldFromPrevious" /> (on a Mac, ⌘H hides OpenMarch, so press ⌃H), or find it in the command palette (<Kbd action="openCommandPalette" />).
+2. Right-click the page's box, or a selected marcher on the field, and select <Ui k="timeline.terms.holdFromPrevious" />. You can also press <Kbd keys="Control+H" />, or find it in the command palette (<Kbd action="openCommandPalette" />).
 
 While you point at the command, before you select it, the timeline shows the hold it would make: the page row fills from the keyframe the hold grows out of to the end of the page, then pulses. Once it's made, a solid line runs under the page.
 
