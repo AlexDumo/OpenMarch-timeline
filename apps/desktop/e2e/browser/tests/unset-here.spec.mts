@@ -117,16 +117,15 @@ async function unsetFromPalette(page: Page) {
     await page.keyboard.press("Enter");
 }
 
-/** Whether Remove keyframe is offered in the command palette, which it then closes. */
+/** Remove keyframe is greyed out in the command palette and says why; then closes the palette. */
 async function expectUnsetDisabled(page: Page) {
     await page.keyboard.press("ControlOrMeta+k");
     await page.getByPlaceholder("Search commands…").fill("Remove keyframe");
-    await expect(
-        page.getByRole("option", {
-            name: "Remove keyframe Timeline",
-            exact: true,
-        }),
-    ).toHaveAttribute("aria-disabled", "true");
+    const option = page.getByRole("option", { name: /^Remove keyframe\b/ });
+    await expect(option).toHaveAttribute("aria-disabled", "true");
+    await expect(option.getByTestId("palette-item-reason")).toHaveText(
+        "No selected marcher has a keyframe here",
+    );
     await page.keyboard.press("Escape");
 }
 
