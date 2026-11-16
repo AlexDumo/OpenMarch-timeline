@@ -50,7 +50,9 @@ function useHoldStyleAction(
             ? tolgee.t("timeline.holdFromPrevious.paused")
             : holdStyle.held === 0
               ? tolgee.t("timeline.holdFromPrevious.styleNoneHeld")
-              : undefined,
+              : checked
+                ? tolgee.t("timeline.holdFromPrevious.styleInEffect")
+                : undefined,
     });
 }
 
@@ -91,9 +93,11 @@ export function useHoldActionHandlers() {
     const reasonOn = (command: typeof defineAsShown) => () =>
         isPlaying
             ? tolgee.t("timeline.holdFromPrevious.paused")
-            : pageId === undefined
-              ? undefined
-              : (command.reasonFor(pageId) ?? undefined);
+            : marcherIds.length === 0
+              ? tolgee.t("actions.shape.noMarchersSelected")
+              : pageId === undefined
+                ? undefined
+                : (command.reasonFor(pageId) ?? undefined);
     const expert = useExpertHolds(marcherIds);
     const holdStyle = useSelectionHoldStyle(marcherIds);
     useHoldStyleAction(HOLD_STYLE_ACTIONS[0], holdStyle, isPlaying);
@@ -138,7 +142,9 @@ export function useHoldActionHandlers() {
             preview: expert.onPreview,
             disabledReason: isPlaying
                 ? tolgee.t("timeline.holdFromPrevious.paused")
-                : undefined,
+                : marcherIds.length === 0
+                  ? tolgee.t("actions.shape.noMarchersSelected")
+                  : undefined,
         },
     );
 }

@@ -370,12 +370,17 @@ describe("FieldContextMenu", () => {
     });
 
     it("offers Swap only with two marchers selected", () => {
-        const run = handle("swapMarchers");
-        // Three selected: it can't run, and with no reason from its handler it isn't shown
+        // Three selected: its handler says it can't, and why
+        const off = handle("swapMarchers", {
+            enabled: false,
+            reason: "Select 2 marchers to swap them",
+        });
         open({ selectedCount: 3 });
-        expect(item("swapMarchers")).toBeNull();
-        expect(run).not.toHaveBeenCalled();
+        expect(item("swapMarchers")).toHaveAttribute("aria-disabled", "true");
         cleanup();
+        handlers.splice(0).forEach((h) => h());
+        void off;
+        const run = handle("swapMarchers");
         open({ selectedCount: 2 });
         fireEvent.click(item("swapMarchers")!);
         expect(run).toHaveBeenCalledTimes(1);

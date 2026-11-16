@@ -189,8 +189,8 @@ export default function FieldContextMenu({
                 : HOLDS.has(id)
                   ? timelineMode
                   : true;
-    const enabled = (id: ActionId) =>
-        isActionEnabled(id) && (id !== "swapMarchers" || selectedCount === 2);
+    // Swap's handler counts the marchers (props aren't swapped), so its own state is the answer
+    const enabled = (id: ActionId) => isActionEnabled(id);
     // An entry that can't run and can't say why isn't shown: with nobody selected, that's every
     // selection command (owner rule: no greyed-out entry without a reason)
     const explained = (id: ActionId) =>
