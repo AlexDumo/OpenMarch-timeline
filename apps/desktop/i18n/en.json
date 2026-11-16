@@ -233,7 +233,16 @@
             "togglePreviewKeywords": "preview cinematic watch present presentation fullscreen play",
             "reportFeedback": "Report a bug or send feedback",
             "reportFeedbackKeywords": "bug issue problem feedback feature request support",
-            "viewMyReports": "View my reports"
+            "viewMyReports": "View my reports",
+            "openFrontEnsemble": "Open front ensemble and podiums",
+            "openFrontEnsembleKeywords": "pit front ensemble podium drum major marimba vibraphone percussion speaker equipment preset",
+            "addFrontEnsembleEquipment": "Add front ensemble equipment or podium",
+            "addFrontEnsembleEquipmentKeywords": "pit podium drum major marimba vibraphone percussion speaker mixer tower stepladder instrument"
+        },
+        "items": {
+            "edit": "Edit selected prop or equipment",
+            "editNamed": "Edit {name}",
+            "editKeywords": "edit settings properties prop equipment podium instrument name size lock"
         }
     },
     "analyticsOptIn": {
@@ -253,7 +262,7 @@
     "audio": {
         "beats": {
             "create": {
-                "error": "Error creating beats",
+                "error": "Couldn't add the beats",
                 "success": "Beats created successfully"
             },
             "replace": {
@@ -261,16 +270,13 @@
                 "success": "Beats replaced successfully"
             },
             "update": {
-                "error": "Error updating beats"
+                "error": "Couldn't change the beats"
             },
             "delete": {
-                "error": "Error deleting beats"
+                "error": "Couldn't delete the beats"
             },
             "shift": {
-                "error": "Error shifting beats"
-            },
-            "flatten": {
-                "error": "Error flattening beat order"
+                "error": "Couldn't move the beats"
             }
         },
         "context": {
@@ -777,6 +783,7 @@
             "drillNumber": "Drill Number",
             "errorLoadingCoords": "Error loading coordinates",
             "itemsSelected": "{count, plural, one {# prop selected. Edit it in the Props panel.} other {# props selected. Edit them in the Props panel.}}",
+            "equipmentSelected": "{count, plural, =1 {# piece of equipment selected. Right-click it to edit it.} other {# pieces of equipment selected. Right-click one to edit it.}}",
             "playing": "Playing. Pause to see and edit the selected marchers.",
             "maxStepSize": "Largest step size",
             "minStepSize": "Smallest step size",
@@ -925,10 +932,10 @@
             "designer": "Designer",
             "errors": {
                 "audioNotSaved": "Audio may not have been saved. You can add audio later in the editor.",
-                "createFailed": "Failed to create show",
+                "createFailed": "Couldn't create the show",
                 "databaseNotReady": "Database is not ready. Complete the project step first.",
                 "filePathRequired": "File path is required",
-                "importFailed": "Failed to import previous .dots file",
+                "importFailed": "Couldn't import the .dots file",
                 "saveFailed": "Failed to save show at {path}",
                 "xmlNotImported": "MusicXML may not have been imported. You can import it later in the editor."
             },
@@ -965,6 +972,11 @@
                     "removeMarcher": "Remove {marcher}",
                     "sectionCount": "{section} ({count})",
                     "title": "Performers"
+                },
+                "frontEnsemble": {
+                    "title": "Front ensemble",
+                    "description": "Does the show have a pit? You can change it later.",
+                    "hint": "A size places the equipment and a performer at each instrument in front of the field, with a podium on the 50."
                 },
                 "project": {
                     "description": "Name your show and choose where to save it.",
@@ -1126,7 +1138,7 @@
         "errors": {
             "create": "Error creating marchers",
             "delete": "Error deleting marchers",
-            "update": "Error updating marchers"
+            "update": "Couldn't change the marchers"
         },
         "backToList": "Back to marcher list",
         "deleteWarningWithShortcut": "You are about to delete these marchers: {marchers}. This can be undone with <keys></keys>."
@@ -1146,9 +1158,9 @@
         }
     },
     "measures": {
-        "createFailed": "Failed to create measures - {error}",
-        "deleteFailed": "Failed to delete measures - {error}",
-        "updateFailed": "Failed to update measures - {error}"
+        "addFailed": "Couldn't add the measures",
+        "removeFailed": "Couldn't delete the measures",
+        "changeFailed": "Couldn't change the measures"
     },
     "mobileExport": {
         "accessError": {
@@ -1198,7 +1210,7 @@
             "cancel": "Cancel",
             "confirm": "Are you sure you want to detach this file from the OTM Production? This means you will not be able to upload revisions to the mobile app. You can always re-attach it later",
             "confirmButton": "Yes, Detach",
-            "failed": "Failed to detach file from production"
+            "failed": "Couldn't detach the file from the production"
         },
         "loading": {
             "checkingSignIn": "Checking sign-in...",
@@ -1299,7 +1311,7 @@
         "import": "Import",
         "importAudioFile": "Import audio file",
         "importButton": "Import MusicXML File",
-        "importError": "Failed to import MusicXML file",
+        "importError": "Couldn't import the MusicXML file",
         "importDataMissing": "Failed to fetch required data",
         "importing": "Importing...",
         "importLabel": "MusicXML Import",
@@ -1369,8 +1381,7 @@
         "pushPastEnd": "Cannot push pages further than the end of the show",
         "yankEmptyPages": "Cannot yank pages that have no beats",
         "yankOutOfBounds": "Beat yank would result in out of bounds beats",
-        "splitTooShort": "Cannot split page that has less than 2 beats",
-        "splitNoStartBeat": "Failed to find a new start beat",
+        "splitNeedsTwoCounts": "A page needs at least 2 counts to split",
         "deleteWithMoves": {
             "changed": "{count, plural, =1 {Page {pages} changed} other {Pages {pages} changed}}",
             "changedBoth": "{keptCount, plural, =1 {Page {kept}} other {Pages {kept}}} and {renamedCount, plural, =1 {old Page {renamed}} other {old Pages {renamed}}} changed",
@@ -1380,8 +1391,8 @@
             "grownOld": "old Page {page} is now {counts, plural, one {# count} other {# counts}}",
             "noOtherChanged": "No other page changed"
         },
-        "createError": "Failed to create page - {error}",
-        "updateError": "Failed to update page - {error}"
+        "createFailed": "Couldn't create the page",
+        "updateFailed": "Couldn't change the page"
     },
     "props": {
         "back": "Back",
@@ -1413,7 +1424,8 @@
             "create": "Couldn't create the prop",
             "delete": "Couldn't delete the prop",
             "outline": "Couldn't change the prop's outline",
-            "update": "Couldn't change the prop"
+            "update": "Couldn't change the prop",
+            "preset": "Couldn't apply the preset"
         },
         "height": "Height",
         "hide": "Hide on the field",
@@ -1451,7 +1463,74 @@
         "width": "Width",
         "units": {
             "meters": "m"
-        }
+        },
+        "locked": "Locked",
+        "lockLabel": "Locked",
+        "lockHint": "One position for the whole show"
+    },
+    "frontEnsemble": {
+        "title": "Front ensemble and podiums",
+        "add": {
+            "title": "Add equipment",
+            "button": "Add"
+        },
+        "empty": "No front ensemble yet. Add equipment and podiums, or start from a preset.",
+        "list": {
+            "equipment": "Equipment",
+            "podiums": "Podiums"
+        },
+        "placeInstructions": "Click the field to place the {name}. It is on the field from the playhead's count.",
+        "equipment": {
+            "block": "Equipment",
+            "delete": "Delete equipment",
+            "edit": "Edit equipment",
+            "editTitle": "Edit Equipment",
+            "model": "{family} model"
+        },
+        "podium": {
+            "delete": "Delete podium",
+            "edit": "Edit podium",
+            "editTitle": "Edit Podium"
+        },
+        "default": "Default",
+        "footprint": "{width} × {depth} m",
+        "groups": {
+            "audio": "Audio",
+            "keyboards": "Keyboards",
+            "percussion": "Percussion",
+            "podiums": "Podiums"
+        },
+        "presets": {
+            "title": "Presets",
+            "size": "Preset size",
+            "small": "Small",
+            "medium": "Medium",
+            "large": "Large",
+            "summary": {
+                "small": "2 marimbas, 2 vibes, a rack, a synth and 2 speakers",
+                "medium": "4 marimbas, 3 vibes, xylophone, glockenspiel, rack, drum set, synth and 4 speakers",
+                "large": "6 marimbas, 4 vibes, xylophone, glockenspiel, 2 racks, drum set, 2 synths and 6 speakers",
+                "none": "No pit. You can set one up later in the Marchers panel."
+            },
+            "always": "Each also adds a podium on the 50 and a mixer behind the pit.",
+            "addPerformers": "Also add performers",
+            "apply": "Apply",
+            "replaces": "Replaces the equipment the last preset added. Its players move to the new spots; those left without an instrument are removed, unless they have moves later in the show. Undo brings everything back. Equipment you added yourself stays.",
+            "none": "None",
+            "start": "Start from a preset",
+            "reset": "Reset to preset"
+        },
+        "summary": {
+            "title": "Front ensemble and podiums",
+            "none": "No pit yet",
+            "setUp": "Set up",
+            "edit": "Edit",
+            "equipment": "{count, plural, one {# piece of equipment} other {# pieces of equipment}}",
+            "podiums": "{count, plural, one {# podium} other {# podiums}}"
+        },
+        "search": "Search equipment",
+        "noMatch": "No equipment matches.",
+        "results": "{count, plural, =0 {No equipment matches.} one {# model} other {# models}}"
     },
     "section": {
         "drumMajor": "Drum Major",
@@ -1495,8 +1574,12 @@
         "other": "Other",
         "pit": {
             "auxPercussion": "Aux Percussion",
+            "drumSet": "Drum Set",
+            "glockenspiel": "Glockenspiel",
             "marimba": "Marimba",
+            "rack": "Rack",
             "synthesizer": "Synthesizer",
+            "timpani": "Timpani",
             "vibraphone": "Vibraphone",
             "xylophone": "Xylophone"
         },
@@ -1505,9 +1588,9 @@
         },
         "appearances": {
             "errors": {
-                "create": "Error creating section appearances",
-                "delete": "Error deleting section appearances",
-                "update": "Error updating section appearances"
+                "create": "Couldn't add the section style",
+                "delete": "Couldn't delete the section style",
+                "update": "Couldn't change the section style"
             }
         }
     },
@@ -1661,7 +1744,7 @@
         "input.interface.mouse": "Desktop",
         "input.interface.touch": "Tablet",
         "repairDotsFile.reopenFailed": "The repaired file was saved at {path} but couldn't be opened (status {status}).",
-        "utilityUpdateFailed": "Failed to update utility settings",
+        "utilityUpdateFailed": "Couldn't save the settings",
         "shortcuts.conflictWith": "<keys></keys> is already used by {actions}.",
         "shortcuts.recordingHint": "Press keys… (<keys></keys> to cancel)",
         "shortcuts.category.field": "Field"
@@ -2189,25 +2272,25 @@
         "addSelectedTo": "Add selected marchers to tag",
         "removeSelectedFrom": "Remove selected marchers from tag",
         "errors": {
-            "createAppearances": "Error creating tag appearances",
-            "createFromMarchers": "Error creating new tag from marcher ids",
-            "createMarcherTags": "Error creating marcher tags",
-            "createTags": "Error creating tags",
-            "deleteAppearances": "Error deleting tag appearances",
-            "deleteMarcherTags": "Error deleting marcher tags",
-            "deleteTags": "Error deleting tags",
-            "updateAppearances": "Error updating tag appearances",
-            "updateMarcherTags": "Error updating marcher tags",
-            "updateTags": "Error updating tags"
+            "createAppearances": "Couldn't add the tag appearance",
+            "createFromMarchers": "Couldn't create a tag for the selected marchers",
+            "createMarcherTags": "Couldn't add the marchers to the tag",
+            "createTags": "Couldn't create the tag",
+            "deleteAppearances": "Couldn't delete the tag appearance",
+            "deleteMarcherTags": "Couldn't remove the marchers from the tag",
+            "deleteTags": "Couldn't delete the tag",
+            "updateAppearances": "Couldn't change the tag appearance",
+            "updateMarcherTags": "Couldn't change the tag's marchers",
+            "updateTags": "Couldn't change the tag"
         },
         "unnamed": "tag-{id}"
     },
     "tempoGroup": {
-        "createNewBeatsError": "Error creating new beats",
+        "createNewBeatsError": "Couldn't add the beats",
         "deletedSuccessfully": "Tempo group deleted successfully",
-        "deleteFailed": "Failed to delete tempo group",
-        "differentBeatsError": "Tempo group has different number of beats. This should not happen. Please reach out to us!",
-        "errorUpdatingTempoGroup": "Error updating tempo group"
+        "deleteFailed": "Couldn't delete the tempo group",
+        "temposFailed": "Couldn't change the tempos",
+        "errorUpdatingTempoGroup": "Couldn't change the tempo group"
     },
     "timeline": {
         "edit": {
@@ -3090,10 +3173,10 @@
             "removed": "Removed “{name}”",
             "undo": "Undo",
             "replace": "Replace",
-            "saveFailed": "Failed to save the 3D View cameras"
+            "saveFailed": "Couldn't save the 3D View cameras"
         },
         "venue": {
-            "updateFailed": "Failed to update the 3D View venue"
+            "updateFailed": "Couldn't change the 3D View venue"
         },
         "pausedPose": {
             "label": "Show the actual step when paused",
@@ -3125,7 +3208,7 @@
             "tooLarge": "That PNG is too large. Export it at a lower resolution and import it again.",
             "unreadable": "That PNG couldn't be read.",
             "templateFailed": "The template couldn't be made.",
-            "saveFailed": "The flag silk artwork couldn't be saved."
+            "saveFailed": "Couldn't save the flag silk artwork"
         }
     },
     "web": {
@@ -3333,7 +3416,7 @@
         "unsavedChanges": "You have unsaved changes",
         "close": "Close",
         "saved": "Show settings saved",
-        "updateFailed": "Failed to update workspace settings",
+        "updateFailed": "Couldn't save the workspace settings",
         "showInfo": {
             "projectName": "Show name",
             "projectNamePlaceholder": "Uses the file name",
@@ -3979,6 +4062,57 @@
         "label": "Workspace",
         "editor": "Editor",
         "preview": "Preview"
+    },
+    "pit": {
+        "family": {
+            "auxRack": "Aux rack",
+            "bongos": "Bongos",
+            "chimes": "Chimes",
+            "concertBassDrum": "Concert bass drum",
+            "congas": "Congas",
+            "drumSet": "Drum set",
+            "glockenspiel": "Glockenspiel",
+            "gong": "Gong",
+            "marimba": "Marimba",
+            "mixer": "Mixer",
+            "podium": "Podium",
+            "speaker": "Speaker",
+            "synth": "Synth",
+            "timpani": "Timpani",
+            "trapTable": "Trap table",
+            "vibraphone": "Vibraphone",
+            "xylophone": "Xylophone",
+            "podiumStand": "Podium stand",
+            "podiumTower": "Tower",
+            "rollingPodium": "Rolling podium",
+            "stepladder": "Stepladder",
+            "scaffold": "Scaffold tower"
+        },
+        "variant": {
+            "accessories": "Accessories",
+            "cage": "Cage rack",
+            "covered": "Covered",
+            "double": "Two keyboards",
+            "gold": "Gold",
+            "inches": "{size} in",
+            "keys": "{size} keys",
+            "low": "Low",
+            "mixed": "Mixed",
+            "octaves": "{size} octaves",
+            "open": "Open",
+            "plain": "Standard",
+            "rosewood": "Rosewood",
+            "silver": "Silver",
+            "single": "One keyboard",
+            "square": "Square",
+            "syntheticBlack": "Black synthetic",
+            "tall": "Tall",
+            "toms": "Toms",
+            "wide": "Wide",
+            "aluminum": "Aluminum",
+            "black": "Black",
+            "feet": "{size} ft"
+        }
     },
     "feedback": {
         "window.title": "Report a bug or send feedback",
