@@ -473,6 +473,41 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: [],
     },
+    // Hold style (ADR 0015 D-5, #775): what the selected marchers' feet do over the Held hold the
+    // playhead is in, for the 3D View: the show setting, or the hold's own style. The inspector's
+    // Hold style choice and the field menu run these. Unbound
+    timelineHoldStyleDefault: {
+        labelKey: "actions.batchEdit.holdStyleDefault",
+        keywordsKey: "actions.batchEdit.holdStyleKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: [],
+        args: { style: "default" },
+    },
+    timelineHoldStyleStand: {
+        labelKey: "actions.batchEdit.holdStyleStand",
+        keywordsKey: "actions.batchEdit.holdStyleKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: [],
+        args: { style: "stand" },
+    },
+    timelineHoldStyleMarkTime: {
+        labelKey: "actions.batchEdit.holdStyleMarkTime",
+        keywordsKey: "actions.batchEdit.holdStyleKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: [],
+        args: { style: "markTime" },
+    },
+    timelineHoldStyleHighMarkTime: {
+        labelKey: "actions.batchEdit.holdStyleHighMarkTime",
+        keywordsKey: "actions.batchEdit.holdStyleKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: [],
+        args: { style: "highMarkTime" },
+    },
     setAllMarchersToNextPage: {
         labelKey: "actions.batchEdit.moveAllToNextSpots",
         category: "batchEdit",
@@ -631,6 +666,32 @@ const STATIC_ACTIONS = {
     openView3d: {
         labelKey: "actions.ui.openView3d",
         keywordsKey: "actions.ui.openView3dKeywords",
+        category: "ui",
+        scope: "global",
+        defaultBindings: [],
+    },
+    // Opens the front ensemble and podiums view of the Marchers panel (instruments.md §6), as its
+    // row at the top of the panel does. Unbound by default: a pit is set up about once per show
+    openFrontEnsemble: {
+        labelKey: "actions.ui.openFrontEnsemble",
+        keywordsKey: "actions.ui.openFrontEnsembleKeywords",
+        category: "ui",
+        scope: "global",
+        defaultBindings: [],
+    },
+    // Opens the one selected item's edit view (a prop, front ensemble equipment, a podium), as its
+    // row's edit button does; the field's right-click menu offers it on an item
+    editSelectedItem: {
+        labelKey: "actions.items.edit",
+        keywordsKey: "actions.items.editKeywords",
+        category: "edit",
+        scope: "global",
+        defaultBindings: [],
+    },
+    // Opens the front ensemble's Add view (the pictures of every model), as its Add button does
+    addFrontEnsembleEquipment: {
+        labelKey: "actions.ui.addFrontEnsembleEquipment",
+        keywordsKey: "actions.ui.addFrontEnsembleEquipmentKeywords",
         category: "ui",
         scope: "global",
         defaultBindings: [],
@@ -944,6 +1005,16 @@ const STATIC_ACTIONS = {
         category: "select",
         scope: "global",
         defaultBindings: ["$mod+A", "Control+A"],
+    },
+    // The field's Select tool (`fieldSelectTool.ts`): a mouse drag from empty field draws a box or
+    // a lasso. V, the selection tool's key in Figma and Illustrator (L is Shape › Line)
+    toggleLassoSelect: {
+        labelKey: "actions.select.toggleLasso",
+        keywordsKey: "actions.select.toggleLassoKeywords",
+        category: "select",
+        scope: "canvas",
+        defaultBindings: ["V"],
+        ignoreRepeat: true,
     },
 
     // Set vs Following (#304): the selected marchers Set on the count shown lose that

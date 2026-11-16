@@ -4,6 +4,38 @@
 // waits for the scene to draw; a shot returns `{ box, target: view }` to film it. Props are
 // drawn in the editor window with the Props panel's tools.
 
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+/** The demo silk Artwork, painted on the Standard silk's template (fork #973). */
+const SILK_ARTWORK = path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "assets",
+    "silk-artwork.png",
+);
+
+/**
+ * Opens View settings, picks the Standard silk and imports the demo Artwork;
+ * leaves the panel open and returns it.
+ */
+async function paintSilks(view) {
+    await view.getByTestId("view3d-settings-button").click();
+    const panel = view.getByTestId("view3d-settings");
+    await panel.waitFor();
+    await view
+        .getByTestId("view3d-silk-shape-picker")
+        .locator('[data-value="standard"]')
+        .click();
+    await view
+        .getByTestId("view3d-silk-artwork-file")
+        .setInputFiles(SILK_ARTWORK);
+    await view
+        .getByTestId("view3d-silk-artwork-name")
+        .waitFor({ timeout: 20000 });
+    return panel;
+}
+
 /** The nth page box on the timeline ruler, in order. */
 const pageBox = (page, n) => page.locator("[data-timeline-range-page]").nth(n);
 
@@ -235,7 +267,13 @@ async function sidebarPanelBox(page) {
                 if (b.height > 0 && b.height < r.height - 40)
                     bottom = Math.max(bottom, b.bottom);
             }
-            return { x: r.left, y: r.top, width: r.width, bottom };
+            // A scrolled list's rows run on past the panel: stop at its edge
+            return {
+                x: r.left,
+                y: r.top,
+                width: r.width,
+                bottom: Math.min(bottom, r.bottom - 24),
+            };
         });
     return {
         x: Math.max(0, box.x - 12),
@@ -243,6 +281,69 @@ async function sidebarPanelBox(page) {
         width: box.width + 24,
         height: box.bottom - box.y + 36,
     };
+}
+
+/** The front ensemble view, opened from its row at the top of the Marchers panel. */
+async function frontEnsembleView(page) {
+    const presets = page.getByTestId("pit-presets-button");
+    for (let i = 0; i < 4; i++) {
+        if (await presets.isVisible().catch(() => false)) return;
+        const row = page.getByTestId("front-ensemble-summary");
+        if (await row.isVisible().catch(() => false))
+            await row.getByRole("button").click();
+        else await page.locator("#sidebar-launcher-marchers").click();
+        await page.waitForTimeout(700);
+    }
+}
+
+/** Applies a front ensemble preset from the front ensemble view's header, with its players. */
+async function applyPitPreset(page, size) {
+    await frontEnsembleView(page);
+    await page.getByTestId("pit-presets-button").click();
+    const popover = page.getByRole("dialog", { name: "Presets" });
+    await popover.getByTestId(`pit-preset-${size}`).click();
+    await popover.getByRole("button", { name: "Apply" }).click();
+    await page.waitForTimeout(2500);
+}
+
+/** Closes the sidebar panel the front ensemble view lives in. */
+async function closeMarchersPanel(page) {
+    for (let i = 0; i < 3; i++) {
+        const open =
+            (await page
+                .getByTestId("pit-presets-button")
+                .isVisible()
+                .catch(() => false)) ||
+            (await page
+                .getByTestId("front-ensemble-summary")
+                .isVisible()
+                .catch(() => false));
+        if (!open) return;
+        await page.locator("#sidebar-launcher-marchers").click();
+        await page.waitForTimeout(600);
+    }
+}
+
+/** Zooms the field `steps` wheel notches about a screen point (ctrl-wheel, as a trackpad pinch). */
+async function zoomFieldAt(page, at, steps) {
+    await page.evaluate(
+        ([x, y, n]) => {
+            const target = document.elementFromPoint(x, y);
+            for (let i = 0; i < n; i++)
+                target.dispatchEvent(
+                    new WheelEvent("wheel", {
+                        deltaY: -100,
+                        ctrlKey: true,
+                        clientX: x,
+                        clientY: y,
+                        bubbles: true,
+                        cancelable: true,
+                    }),
+                );
+        },
+        [at.x, at.y, steps],
+    );
+    await page.waitForTimeout(1200);
 }
 
 const shots = [
@@ -363,6 +464,69 @@ const shots = [
             await ctx.wait(800);
             return {
                 box: await ctx.around(panel, 16),
+                target: view,
+            };
+        },
+    },
+    {
+        id: "3d-silk-settings",
+        kind: "still",
+        // The flag silk rows of View settings: the shapes, and imported Artwork
+        async setup(ctx) {
+            await seekInPage(ctx.page, 3, 0.5);
+            const { view } = await open3d(ctx);
+            await paintSilks(view);
+            // the rows, labels and all: the shapes, and the Artwork under them
+            const shapeRow = view
+                .getByTestId("view3d-silk-shape-picker")
+                .locator("xpath=..");
+            const artworkRow = view
+                .getByTestId("view3d-silk-artwork")
+                .locator("xpath=..");
+            // the shapes' row near the top of the panel, clear of its edge
+            await shapeRow.evaluate((el) => {
+                el.scrollIntoView({ block: "start" });
+                let scroller = el.parentElement;
+                while (
+                    scroller &&
+                    !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)
+                )
+                    scroller = scroller.parentElement;
+                if (scroller) scroller.scrollTop -= 24;
+            });
+            await view.mouse.move(4, ctx.window.height / 2);
+            await ctx.wait(1500);
+            return {
+                // tight below the Artwork, so the next row's control stays out
+                box: ctx.union(
+                    await ctx.around(shapeRow, 10),
+                    await ctx.around(artworkRow, 4),
+                ),
+                target: view,
+            };
+        },
+    },
+    {
+        id: "3d-silk-artwork",
+        kind: "still",
+        // The guard's flags in the Standard shape, painted with imported Artwork
+        async setup(ctx) {
+            await seekInPage(ctx.page, 3, 0.5);
+            const { view } = await open3d(ctx);
+            await paintSilks(view);
+            await view.getByTestId("view3d-settings-button").click();
+            await ctx.wait(1500);
+            // The Front row camera: close to the sideline, at the band's height
+            await view.keyboard.press("Digit2");
+            await view.mouse.move(ctx.window.width - 4, ctx.window.height / 2);
+            await ctx.wait(3000);
+            return {
+                box: {
+                    x: 200,
+                    y: 330,
+                    width: ctx.window.width - 400,
+                    height: 440,
+                },
                 target: view,
             };
         },
@@ -553,6 +717,84 @@ const shots = [
                     y: 120,
                     width: ctx.window.width - 400,
                     height: ctx.window.height - 300,
+                },
+                target: view,
+            };
+        },
+    },
+    {
+        id: "3d-front-ensemble-add",
+        kind: "still",
+        // The front ensemble's Add view: every model as a picture, by group, with search
+        async setup(ctx) {
+            const { page } = ctx;
+            await frontEnsembleView(page);
+            await page
+                .getByRole("button", { name: "Add", exact: true })
+                .click();
+            // Let the pictures load
+            await ctx.wait(1500);
+            return { box: await sidebarPanelBox(page) };
+        },
+    },
+    {
+        id: "3d-front-ensemble-field",
+        kind: "still",
+        // A Medium pit on the field, close enough to show the bars, drums and podium steps
+        async setup(ctx) {
+            const { page } = ctx;
+            await applyPitPreset(page, "medium");
+            await closeMarchersPanel(page);
+            await tidy(page);
+            // Pan the field up so the pit is mid-canvas, then zoom on the drum set
+            await page.evaluate(() => {
+                const c = document.elementFromPoint(800, 450);
+                for (let i = 0; i < 6; i++)
+                    c.dispatchEvent(
+                        new WheelEvent("wheel", {
+                            deltaY: 100,
+                            clientX: 800,
+                            clientY: 450,
+                            bubbles: true,
+                            cancelable: true,
+                        }),
+                    );
+            });
+            await ctx.wait(1000);
+            const drumSet = (await items(page)).reduce((a, b) =>
+                Math.abs(b.x - 900) + Math.abs(b.y - 990) <
+                Math.abs(a.x - 900) + Math.abs(a.y - 990)
+                    ? b
+                    : a,
+            );
+            await zoomFieldAt(page, drumSet.screen, 3);
+            return {
+                box: await ctx.around(
+                    page.getByTestId("fieldCanvas").first(),
+                    0,
+                ),
+            };
+        },
+    },
+    {
+        id: "3d-front-ensemble-3d",
+        kind: "still",
+        // The Medium pit in the 3D View: players at their instruments, the drum major on the podium
+        async setup(ctx) {
+            const { page } = ctx;
+            await applyPitPreset(page, "medium");
+            await closeMarchersPanel(page);
+            const { view } = await open3d(ctx);
+            // The Front row camera: down at the pit, from the audience side
+            await view.keyboard.press("Digit2");
+            await view.mouse.move(ctx.window.width - 4, ctx.window.height / 2);
+            await ctx.wait(3000);
+            return {
+                box: {
+                    x: 0,
+                    y: 120,
+                    width: ctx.window.width,
+                    height: ctx.window.height - 240,
                 },
                 target: view,
             };

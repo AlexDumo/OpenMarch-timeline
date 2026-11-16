@@ -19,6 +19,7 @@ import { PlacedBoxKeys } from "@/shapes/placed/PlacedBoxKeys";
 import { useBoxSelectionStore } from "@/shapes/placed/boxSelectionStore";
 import { useUnsetActionHandlers } from "./handlers/useUnsetActionHandlers";
 import { useHoldActionHandlers } from "./handlers/useHoldActionHandlers";
+import { useItemActionHandlers } from "./handlers/useItemActionHandlers";
 import { useFieldEditActionHandlers } from "./handlers/useFieldEditActionHandlers";
 import {
     useFieldEditModeEntry,
@@ -48,6 +49,7 @@ export function EditorActionHandlers() {
     useUnsetActionHandlers();
     useHoldActionHandlers();
     useFieldEditActionHandlers();
+    useItemActionHandlers();
     useFieldEditModeEntry();
     useTimelineActionEffects();
     // Mounted after the handlers above, so the open shape tool's keys are on top, and a selected

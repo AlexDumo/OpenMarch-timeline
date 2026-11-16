@@ -48,7 +48,7 @@ export async function placeShape(
     return writePlacement(
         placement,
         queryClient,
-        tolgee.t("shapes.tool.placeError", "Error placing the shape"),
+        tolgee.t("shapes.tool.placeError", "Couldn't place the shape"),
         plan,
     );
 }

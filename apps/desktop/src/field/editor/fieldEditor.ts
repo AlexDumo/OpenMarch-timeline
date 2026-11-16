@@ -36,7 +36,7 @@ import {
     type ItemFrame,
     type ItemSize,
 } from "./itemTransform";
-import { PropTool, type PropToolShape } from "./propTool";
+import { PropTool, type PropToolShape, type PropToolStamp } from "./propTool";
 import type { OutlineType } from "@/db-functions/items";
 import type { DrawnOutline } from "@/items/itemOutlines";
 import {
@@ -101,7 +101,8 @@ export type FieldPointer = {
     /**
      * What a drag of this press draws if it starts on empty field, as the
      * pill's drag mode chose for a finger or pen (tablet 1.3). Unset (a mouse,
-     * always): a marquee, or a lasso after a double-click.
+     * always): the Select bar's tool ({@link FieldEditor.setAreaTool}), or a
+     * lasso after a double-click.
      */
     area?: AreaKind;
 };
@@ -182,6 +183,11 @@ export type FieldEditorPorts = {
      * hit by their Outline ({@link itemAt}), not by a dot at their center.
      */
     isItem?(id: number): boolean;
+    /**
+     * Whether item `id` is locked to one position for the whole show (the pit's equipment): a
+     * marquee and a lasso never take it, a click still selects it.
+     */
+    isLocked?(id: number): boolean;
     /** The item whose Outline holds `point`, topmost first, or null. */
     itemAt?(point: FieldPoint): number | null;
     /** Item `id`'s Outline as drawn, or null when it isn't drawn. */
@@ -309,6 +315,8 @@ type LastClick = {
 
 export type FieldCursor =
     | "default"
+    /** Empty field with the Lasso tool: the DOM layer draws a lasso (`fieldPointerInput.ts`). */
+    | "lasso"
     | "pointer"
     | "crosshair"
     | "move"
@@ -575,6 +583,13 @@ export class FieldEditor {
     private gesture: FieldGesture | null = null;
     private gestureButton = 0;
     private hover: FieldCursor = "default";
+    /**
+     * Whether a drag from the empty spot under the pointer would draw an area: false inside a
+     * multi-selection's box, where it moves the selection ({@link startMove}).
+     */
+    private hoverDraws = true;
+    /** What a drag from empty field draws when its press didn't choose (the Select bar's tool). */
+    private areaTool: AreaKind = "marquee";
     private lastClick: LastClick | null = null;
     /** The marquee or lasso last started, which the overlay draws while it's the gesture. */
     private area: AreaGesture | null = null;
@@ -644,6 +659,7 @@ export class FieldEditor {
             canSelect: (id) =>
                 ports.canSelect(id) && !ports.marcherHidden?.(id),
             isItem: (id) => ports.isItem?.(id) ?? false,
+            isLocked: (id) => ports.isLocked?.(id) ?? false,
             selection: () => ports.selection.get(),
             select: (ids) => this.write(ids),
             changed: () => this.emit(),
@@ -783,13 +799,9 @@ export class FieldEditor {
                 return;
             }
             const handle = this.handleAt(pointer);
-            this.setHover(
-                handle
-                    ? handleCursor(handle)
-                    : this.marcherAt(pointer) === null
-                      ? "default"
-                      : "pointer",
-            );
+            if (handle) this.setHover(handleCursor(handle));
+            else if (this.marcherAt(pointer) !== null) this.setHover("pointer");
+            else this.setHover("default", !this.pressMoves(pointer));
             return;
         }
         if (!isPastSlop(press.start, pointer)) return;
@@ -1133,10 +1145,14 @@ export class FieldEditor {
 
     /**
      * Turns the prop tool on to draw an Outline of `outlineType` (the Props
-     * panel's Draw), or off with null. Turning it on ends any press or
-     * gesture; turning it on again starts the drawing over.
+     * panel's Draw), or to place a fixed `stamp` with a click (its Front
+     * ensemble), or off with null. Turning it on ends any press or gesture;
+     * turning it on again starts the drawing over.
      */
-    setPropTool(outlineType: OutlineType | null): void {
+    setPropTool(
+        outlineType: OutlineType | null,
+        stamp: PropToolStamp | null = null,
+    ): void {
         if (outlineType === null) {
             if (!this.propTool) return;
             this.propTool = null;
@@ -1147,22 +1163,26 @@ export class FieldEditor {
         this.press = null;
         this.lastClick = null;
         this.lastToolPress = null;
-        this.propTool = new PropTool(outlineType, {
-            snap: (point) => this.ports.snap?.(point) ?? point,
-            finished: (outline) => this.ports.propDrawn?.(outline),
-            changed: () => this.emit(),
-            isDoubleClick: (pointer) => {
-                const last = this.lastToolPress;
-                return (
-                    last !== null &&
-                    this.now() - last.time <= DOUBLE_CLICK_MS &&
-                    Math.hypot(
-                        pointer.screen.x - last.screen.x,
-                        pointer.screen.y - last.screen.y,
-                    ) <= thresholdsFor(pointer.kind).doubleClickSlop
-                );
+        this.propTool = new PropTool(
+            outlineType,
+            {
+                snap: (point) => this.ports.snap?.(point) ?? point,
+                finished: (outline) => this.ports.propDrawn?.(outline),
+                changed: () => this.emit(),
+                isDoubleClick: (pointer) => {
+                    const last = this.lastToolPress;
+                    return (
+                        last !== null &&
+                        this.now() - last.time <= DOUBLE_CLICK_MS &&
+                        Math.hypot(
+                            pointer.screen.x - last.screen.x,
+                            pointer.screen.y - last.screen.y,
+                        ) <= thresholdsFor(pointer.kind).doubleClickSlop
+                    );
+                },
             },
-        });
+            stamp,
+        );
         this.emit();
     }
 
@@ -1348,6 +1368,17 @@ export class FieldEditor {
     resetSelectionPivot(): void {
         if (!this.ownPivot) return;
         this.ownPivot = null;
+        this.emit();
+    }
+
+    /**
+     * The Select bar's tool (`fieldSelectTool.ts`): what a drag from empty field draws when its
+     * press didn't choose. A lasso shows its cursor over empty field. A double-click and drag
+     * draws a lasso with either.
+     */
+    setAreaTool(tool: AreaKind): void {
+        if (this.areaTool === tool) return;
+        this.areaTool = tool;
         this.emit();
     }
 
@@ -1587,7 +1618,17 @@ export class FieldEditor {
 
     /** The cursor the field shows. */
     cursor(): FieldCursor {
-        return this.propTool ? "crosshair" : this.hover;
+        if (this.propTool) return "crosshair";
+        // Over empty field a drag would draw the lasso, unless a field mode takes the press or
+        // it's inside the selection's box, where a drag moves the selection
+        if (
+            this.hover === "default" &&
+            this.hoverDraws &&
+            this.areaTool === "lasso" &&
+            !this.mode
+        )
+            return "lasso";
+        return this.hover;
     }
 
     /** Calls `listener` whenever the gesture or cursor changes. Returns the unsubscribe. */
@@ -1603,7 +1644,7 @@ export class FieldEditor {
      * empty field inside a multi-selection's box (owner decision, #196) with
      * no add or subtract choice; marquee and lasso (#195) start from the rest
      * of the empty field, and from inside the box with one: a lasso
-     * after a double-click, else a marquee. A press on a marcher that moves
+     * after a double-click or with the Lasso tool, else a marquee. A press on a marcher that moves
      * nothing (Shift took a group or a box's member out) is done, and starts
      * no marquee.
      */
@@ -1763,12 +1804,12 @@ export class FieldEditor {
             : new ItemResizeGesture(press.start, frame, host, handle, keys);
     }
 
-    /** A marquee, or a lasso after a double-click, from empty field. */
+    /** From empty field: what the press or the Select bar's tool chose, or a lasso after a double-click. */
     private startArea(press: FieldPress): FieldGesture {
         const start = this.areaStart(press);
         const isMac = this.options.isMac ?? false;
         this.area =
-            press.double || press.area === "lasso"
+            press.double || (press.area ?? this.areaTool) === "lasso"
                 ? startLasso(this.areaPorts, start, isMac)
                 : startMarquee(this.areaPorts, start, isMac);
         return this.area;
@@ -1870,11 +1911,7 @@ export class FieldEditor {
                       ? [...selection, press.hit]
                       : [press.hit]);
             this.write(ids);
-        } else if (
-            !this.modeOwnsSelectionBox() &&
-            areaChoice(this.areaStart(press), this.options.isMac) === null &&
-            this.insideSelectionBox(selection, press.start.field)
-        ) {
+        } else if (this.movesFromBox(this.areaStart(press), selection)) {
             ids = selection;
         } else return null;
 
@@ -1935,6 +1972,31 @@ export class FieldEditor {
             });
         }
         return starts;
+    }
+
+    /**
+     * Whether a press on empty field with `keys` moves the whole selection: inside the box drawn
+     * around it, with no add or subtract choice (owner decision, #196).
+     */
+    private movesFromBox(keys: FieldPointer, selection: readonly number[]) {
+        return (
+            !this.modeOwnsSelectionBox() &&
+            areaChoice(keys, this.options.isMac) === null &&
+            this.insideSelectionBox(selection, keys.field)
+        );
+    }
+
+    /** Whether a press at empty `pointer` would move the selection, with the pill's Add and Subtract as a press reads them */
+    private pressMoves(pointer: FieldPointer) {
+        const screen = this.options.onScreen;
+        return this.movesFromBox(
+            {
+                ...pointer,
+                shift: pointer.shift || (screen?.add() ?? false),
+                alt: pointer.alt || (screen?.subtract?.() ?? false),
+            },
+            this.ports.selection.get(),
+        );
     }
 
     /** Whether `point` is inside the box drawn around a selection of two or more. */
@@ -2104,9 +2166,11 @@ export class FieldEditor {
         this.emit();
     }
 
-    private setHover(cursor: FieldCursor) {
-        if (cursor === this.hover) return;
+    /** `draws`: whether a drag from there would draw an area ({@link hoverDraws}) */
+    private setHover(cursor: FieldCursor, draws = true) {
+        if (cursor === this.hover && draws === this.hoverDraws) return;
         this.hover = cursor;
+        this.hoverDraws = draws;
         this.emit();
     }
 

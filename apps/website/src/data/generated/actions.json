@@ -573,6 +573,26 @@
         "category": "batchEdit",
         "bindings": []
     },
+    "timelineHoldStyleDefault": {
+        "label": "Hold style: Show setting",
+        "category": "batchEdit",
+        "bindings": []
+    },
+    "timelineHoldStyleStand": {
+        "label": "Hold style: Stand",
+        "category": "batchEdit",
+        "bindings": []
+    },
+    "timelineHoldStyleMarkTime": {
+        "label": "Hold style: Mark time",
+        "category": "batchEdit",
+        "bindings": []
+    },
+    "timelineHoldStyleHighMarkTime": {
+        "label": "Hold style: High mark time",
+        "category": "batchEdit",
+        "bindings": []
+    },
     "setAllMarchersToNextPage": {
         "label": "Move to next page's spots (all marchers)",
         "category": "batchEdit",
@@ -966,6 +986,21 @@
     },
     "openView3d": {
         "label": "Open 3D View",
+        "category": "ui",
+        "bindings": []
+    },
+    "openFrontEnsemble": {
+        "label": "Open front ensemble and podiums",
+        "category": "ui",
+        "bindings": []
+    },
+    "editSelectedItem": {
+        "label": "Edit selected prop or equipment",
+        "category": "edit",
+        "bindings": []
+    },
+    "addFrontEnsembleEquipment": {
+        "label": "Add front ensemble equipment or podium",
         "category": "ui",
         "bindings": []
     },
@@ -1510,6 +1545,24 @@
                     "keys": [
                         "Ctrl",
                         "A"
+                    ]
+                }
+            }
+        ]
+    },
+    "toggleLassoSelect": {
+        "label": "Switch between box and lasso select",
+        "category": "select",
+        "bindings": [
+            {
+                "mac": {
+                    "keys": [
+                        "V"
+                    ]
+                },
+                "other": {
+                    "keys": [
+                        "V"
                     ]
                 }
             }

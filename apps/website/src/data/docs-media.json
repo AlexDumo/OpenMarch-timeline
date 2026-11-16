@@ -11,6 +11,24 @@
         "width": 752,
         "height": 836
     },
+    "3d-front-ensemble-3d": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 1600,
+        "height": 760
+    },
+    "3d-front-ensemble-add": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 996,
+        "height": 1412
+    },
+    "3d-front-ensemble-field": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 1600,
+        "height": 924
+    },
     "3d-marchers": {
         "chapter": "3d-view",
         "kind": "still",
@@ -61,6 +79,18 @@
         "kind": "still",
         "width": 752,
         "height": 1784
+    },
+    "3d-silk-artwork": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 1600,
+        "height": 586
+    },
+    "3d-silk-settings": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 684,
+        "height": 1032
     },
     "3d-window": {
         "chapter": "3d-view",
@@ -236,13 +266,19 @@
         "kind": "clip",
         "width": 1120,
         "height": 720,
-        "seconds": 5.1
+        "seconds": 5
     },
     "marchers-select-tab": {
         "chapter": "marchers",
         "kind": "still",
         "width": 1600,
         "height": 118
+    },
+    "marchers-select-tool": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 920,
+        "height": 368
     },
     "music-count-menu": {
         "chapter": "music",
@@ -452,6 +488,12 @@
         "width": 1280,
         "height": 174,
         "seconds": 6.1
+    },
+    "timeline-hold-style": {
+        "chapter": "timeline",
+        "kind": "still",
+        "width": 656,
+        "height": 444
     },
     "timeline-isolate": {
         "chapter": "timeline",
