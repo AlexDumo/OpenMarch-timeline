@@ -100,6 +100,7 @@ export function pasteFormation(
         stepPx: field.fieldProperties.pixelsPerStep,
         inPlace,
         asPositions: useCopiedPictureStore.getState().pasteAs === "positions",
+        ctx: shapeContextFor(field),
     });
     if (!plan) return false;
     // One waiting away from its moment is dismissed, as a new shape started there does (#416)

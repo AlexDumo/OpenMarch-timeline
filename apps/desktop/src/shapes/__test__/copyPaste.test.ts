@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { AssignMarcher } from "../assign";
+import { arcTool } from "../arc/arcTool";
 import { boxTool } from "../box/boxTool";
 import { circleTool } from "../circle/circleTool";
-import { lineTool } from "../line/lineTool";
+import { curveTool, lineTool } from "../line/lineTool";
 import {
     dotsTool,
     pastedGroupTool,
@@ -500,6 +501,99 @@ describe("pasting a shape", () => {
         expect(sorted(spotsOf(scaled))).toEqual(
             sorted(picture.dots.map((d) => ({ x: d.x / 2, y: d.y / 2 }))),
         );
+    });
+});
+
+describe("pasting onto marchers already standing in it", () => {
+    // Pasting again onto the same marchers leaves them where they are (#961, simulated users:
+    // a second paste moved them about 5 steps)
+    const standing = (points: readonly XY[], firstId = 1): AssignMarcher[] =>
+        points.map((at, i) => ({ id: firstId + i, at, drillRank: i }));
+
+    it("loose dots, fewer marchers: they stay on the dots they stand on", () => {
+        const dots = [0, 20, 40, 60, 80, 100].map((x) => ({
+            x: 100 + x,
+            y: 100,
+        }));
+        for (const on of [[0, 1, 2], [3, 4, 5], [0, 2, 5], [1]]) {
+            const receivers = standing(on.map((i) => dots[i]!));
+            const plan = planPaste({
+                picture: loose(dots),
+                marchers: receivers,
+                stepPx: STEP,
+            })!;
+            expect(sorted(spotsOf(plan))).toEqual(
+                sorted(receivers.map((m) => m.at)),
+            );
+        }
+    });
+
+    it("loose dots, more marchers: those on the dots stay, the rest are left out", () => {
+        const dots = [
+            { x: 100, y: 100 },
+            { x: 120, y: 100 },
+            { x: 140, y: 110 },
+        ];
+        const receivers = standing([
+            { x: 100, y: 100 },
+            { x: 300, y: 200 },
+            { x: 120, y: 100 },
+            { x: 140, y: 110 },
+            { x: 60, y: 260 },
+        ]);
+        const plan = planPaste({
+            picture: loose(dots),
+            marchers: receivers,
+            stepPx: STEP,
+        })!;
+        expect(plan.left).toBe(2);
+        expect(plan.marchers.map((m) => m.id)).toEqual([1, 3, 4]);
+        expect(sorted(spotsOf(plan))).toEqual(sorted(dots));
+    });
+
+    it("pasted twice in a row, loose dots land where the first paste put them", () => {
+        const dots = [0, 20, 40, 60, 80, 100].map((x) => ({
+            x: 100 + x,
+            y: 100,
+        }));
+        let receivers = row(3, { x: 403, y: 307 }, 13);
+        const first = spotsOf(
+            planPaste({
+                picture: loose(dots),
+                marchers: receivers,
+                stepPx: STEP,
+            })!,
+        );
+        receivers = standing(first);
+        const second = spotsOf(
+            planPaste({
+                picture: loose(dots),
+                marchers: receivers,
+                stepPx: STEP,
+            })!,
+        );
+        expect(sorted(second)).toEqual(sorted(first));
+    });
+
+    const SHAPES: readonly [string, AnyToolKind, XY, XY][] = [
+        ["a box", boxTool, { x: 100, y: 100 }, { x: 160, y: 140 }],
+        ["a circle", circleTool, { x: 100, y: 100 }, { x: 180, y: 180 }],
+        ["a line", lineTool, { x: 100, y: 100 }, { x: 220, y: 160 }],
+        ["a curve", curveTool, { x: 100, y: 100 }, { x: 220, y: 160 }],
+        ["an arc", arcTool, { x: 100, y: 100 }, { x: 220, y: 160 }],
+    ];
+    it.each(SHAPES)("%s: they stay on its spots", (_name, kind, from, to) => {
+        for (const n of [12, 7]) {
+            const tool = drawn(kind, n, from, to);
+            const spots = slotsOf(tool, ctx).map((s) => ({ x: s.x, y: s.y }));
+            const plan = planPaste({
+                picture: copiedShape(tool),
+                marchers: standing(spots),
+                stepPx: STEP,
+                ctx,
+            })!;
+            expect(sorted(spotsOf(plan))).toEqual(sorted(spots));
+        }
     });
 });
 

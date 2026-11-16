@@ -6,7 +6,7 @@ import { leastTravelOnto } from "../leastTravel";
 import { PLACED_KINDS, placedOf, type PlacedBox } from "../placed/placedBox";
 import type { AnyToolKind, ToolKind } from "../tool/toolKind";
 import type { GroupParams } from "../group/groupGeometry";
-import type { XY } from "../types";
+import type { ShapeContext, XY } from "../types";
 
 /**
  * A copied picture (#961): where a selection of marchers stood, to paste onto other marchers.
@@ -248,6 +248,102 @@ function shift(
 
 const startOf = (m: AssignMarcher): XY => m.from ?? m.at;
 
+/** `v` to the nearest whole half step */
+const toHalf = (v: number, stepPx: number) =>
+    Math.round(v / (stepPx / 2)) * (stepPx / 2);
+
+const plus = (points: readonly XY[], by: XY): XY[] =>
+    points.map((p) => ({ x: p.x + by.x, y: p.y + by.y }));
+
+/** How many times a centered paste of loose dots refits them onto the receivers at most */
+const FITS = 8;
+
+/**
+ * Loose dots fitted onto receivers they don't match in number (#961): where the dots go, which
+ * dots are used (fewer receivers) or which receivers take one (more). From centered on the
+ * receivers, the dots move by whole half steps until the pairs that would walk least line up
+ * on average. So receivers already standing on some of the dots stay on them, and pasting
+ * again onto the same marchers doesn't move them (simulated users saw about 5 steps a paste).
+ */
+function fitDots(
+    copied: readonly XY[],
+    marchers: readonly AssignMarcher[],
+    start: XY,
+    stepPx: number,
+): { by: XY; spots: number[] | null; taking: number[] | null } {
+    const at = marchers.map((m) => m.at);
+    let by = start;
+    let spots: number[] | null = null;
+    let taking: number[] | null = null;
+    for (let i = 0; i < FITS; i++) {
+        const dots = plus(copied, by);
+        // Each pair: a receiver where it stands, and the dot it would take
+        let pairs: [XY, XY][];
+        if (marchers.length <= dots.length) {
+            spots = leastTravelOnto(at, dots);
+            pairs = spots.map((spot, m) => [at[m]!, dots[spot]!]);
+        } else {
+            taking = leastTravelOnto(dots, at);
+            pairs = taking.map((m, spot) => [at[m]!, dots[spot]!]);
+        }
+        const off = {
+            x: toHalf(
+                pairs.reduce((sum, [a, d]) => sum + a.x - d.x, 0) /
+                    pairs.length,
+                stepPx,
+            ),
+            y: toHalf(
+                pairs.reduce((sum, [a, d]) => sum + a.y - d.y, 0) /
+                    pairs.length,
+                stepPx,
+            ),
+        };
+        if (off.x === 0 && off.y === 0) break;
+        by = { x: by.x + off.x, y: by.y + off.y };
+    }
+    return { by, spots, taking };
+}
+
+/**
+ * A copied shape laid out for `marchers`: centered on them by the middle of its spots where it has
+ * them, since a frame's center can sit off them (7 on a circle) and pasting again onto marchers
+ * standing in it would move it; where it was copied for a paste `inPlace`
+ */
+function planShape(
+    { kind, params }: { kind: AnyToolKind; params: unknown },
+    marchers: readonly AssignMarcher[],
+    stepPx: number,
+    inPlace: boolean,
+    ctx: ShapeContext | undefined,
+): PastePlan {
+    const n = marchers.length;
+    const frame = kind.frameOf(params, n);
+    const spots = ctx ? kind.shape.generate(params, n, ctx) : [];
+    const by = shift(
+        spots.length > 0 ? middle(spots) : frame.center,
+        marchers,
+        stepPx,
+        inPlace,
+    );
+    const moved =
+        by.x === 0 && by.y === 0
+            ? params
+            : kind.withFrame(params, n, {
+                  ...frame,
+                  center: {
+                      x: frame.center.x + by.x,
+                      y: frame.center.y + by.y,
+                  },
+              });
+    return {
+        kind,
+        params: moved,
+        marchers,
+        pivotMoved: pivotByHand(kind, moved),
+        left: 0,
+    };
+}
+
 /**
  * What pasting `picture` onto `marchers` opens (#961, owner 2026-11-15). The preview starts
  * centered on the receiving marchers, or where it was copied for a paste `inPlace`.
@@ -257,6 +353,8 @@ const startOf = (m: AssignMarcher): XY => m.from ?? m.at;
  * - **Loose dots** (and a group, whose spots have no rule either) only fill spots. With fewer
  *   marchers than dots, the dots that give the shortest total walk are used; with more, the
  *   marchers with the shortest total walk take the dots and the rest are left where they are.
+ *   Centered, the dots are fitted onto the receivers, so marchers already standing on some of
+ *   them stay there.
  *
  * A shape this app can't lay out (a newer kind, or a picture from a field with another step size)
  * pastes as loose dots, kept the same size in steps. Null with nobody to paste onto.
@@ -268,6 +366,7 @@ export function planPaste({
     inPlace = false,
     asPositions = false,
     kinds = PLACED_KINDS,
+    ctx,
 }: {
     picture: CopiedPicture;
     /** The receiving marchers, where they stand and where they start the move */
@@ -278,6 +377,8 @@ export function planPaste({
     /** A copied shape pasted as its exact positions, plain marchers with no shape */
     asPositions?: boolean;
     kinds?: readonly AnyToolKind[];
+    /** The field's shape context: a shape centers its spots, not its frame, on the receivers */
+    ctx?: ShapeContext;
 }): PastePlan | null {
     const n = marchers.length;
     if (n === 0) return null;
@@ -285,35 +386,20 @@ export function planPaste({
     const sameStep = Math.abs(scale - 1) <= SAME_STEP;
     const read = readShape(picture, stepPx, kinds, asPositions);
 
-    if (read && read.kind !== groupTool) {
-        const { kind, params } = read;
-        const frame = kind.frameOf(params, n);
-        const by = shift(frame.center, marchers, stepPx, inPlace);
-        const moved =
-            by.x === 0 && by.y === 0
-                ? params
-                : kind.withFrame(params, n, {
-                      ...frame,
-                      center: {
-                          x: frame.center.x + by.x,
-                          y: frame.center.y + by.y,
-                      },
-                  });
-        return {
-            kind,
-            params: moved,
-            marchers,
-            pivotMoved: pivotByHand(kind, moved),
-            left: 0,
-        };
-    }
+    if (read && read.kind !== groupTool)
+        return planShape(read, marchers, stepPx, inPlace, ctx);
 
     // Loose dots: the same spot in steps on a field with another step size
     const copied = sameStep
         ? picture.dots
         : picture.dots.map((p) => ({ x: p.x * scale, y: p.y * scale }));
-    const by = shift(middle(copied), marchers, stepPx, inPlace);
-    const dots = copied.map((p) => ({ x: p.x + by.x, y: p.y + by.y }));
+    const centered = shift(middle(copied), marchers, stepPx, inPlace);
+    // A centered paste onto another number of marchers fits the dots onto them
+    const fit =
+        inPlace || n === copied.length
+            ? null
+            : fitDots(copied, marchers, centered, stepPx);
+    const dots = plus(copied, fit?.by ?? centered);
     const kind = read ? pastedGroupTool : dotsTool;
     const starts = marchers.map(startOf);
 
@@ -322,7 +408,9 @@ export function planPaste({
         const used =
             n === dots.length
                 ? dots
-                : leastTravelOnto(starts, dots).map((spot) => dots[spot]!);
+                : (fit?.spots ?? leastTravelOnto(starts, dots)).map(
+                      (spot) => dots[spot]!,
+                  );
         return {
             kind,
             params: groupAt(used),
@@ -333,7 +421,7 @@ export function planPaste({
     }
 
     // More marchers than dots: the marchers with the shortest walk take them
-    const taking = new Set(leastTravelOnto(dots, starts));
+    const taking = new Set(fit?.taking ?? leastTravelOnto(dots, starts));
     return {
         kind,
         params: groupAt(dots),
