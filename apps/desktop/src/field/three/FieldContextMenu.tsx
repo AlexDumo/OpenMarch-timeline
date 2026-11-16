@@ -11,6 +11,7 @@ import { CheckIcon } from "@phosphor-icons/react";
 import { useTranslate } from "@tolgee/react";
 import {
     KEEP_MENU_EVENTS,
+    MenuItemWithReason,
     TIMELINE_MENU_CONTENT_CLASS,
 } from "@/components/timeline/TimelineRangeMenu";
 import type { FieldEditor } from "@/field/editor/fieldEditor";
@@ -18,6 +19,7 @@ import type { ActionId } from "@/shortcuts/definitions";
 import { getActionLabel } from "@/shortcuts/labels";
 import Shortcut from "@/components/ui/Shortcut";
 import {
+    actionDisabledReason,
     actionLabelNow,
     isActionChecked,
     isActionEnabled,
@@ -266,20 +268,42 @@ export default function FieldContextMenu({
                                             {shortcut}
                                         </DropdownMenu.CheckboxItem>
                                     );
+                                const run = () =>
+                                    runAction(
+                                        id,
+                                        ON_A_MARCHER.has(id) && marcher !== null
+                                            ? { marcherId: marcher }
+                                            : undefined,
+                                    );
+                                // Greyed out with a reason: a ? says why, as the timeline's
+                                // menus do, instead of a toast after a press
+                                const reason = enabled(id)
+                                    ? undefined
+                                    : actionDisabledReason(id);
+                                if (reason)
+                                    return (
+                                        <MenuItemWithReason
+                                            key={id}
+                                            testId={`field-menu-${id}`}
+                                            reason={reason}
+                                            reasonTestId={`field-menu-${id}-reason`}
+                                            onSelect={run}
+                                            className={MENU_ITEM_CLASS}
+                                        >
+                                            {CHECKABLE.has(id) && (
+                                                <span
+                                                    className={CHECK_SLOT_CLASS}
+                                                />
+                                            )}
+                                            {label}
+                                        </MenuItemWithReason>
+                                    );
                                 return (
                                     <DropdownMenu.Item
                                         key={id}
                                         data-testid={`field-menu-${id}`}
                                         disabled={!enabled(id)}
-                                        onSelect={() =>
-                                            runAction(
-                                                id,
-                                                ON_A_MARCHER.has(id) &&
-                                                    marcher !== null
-                                                    ? { marcherId: marcher }
-                                                    : undefined,
-                                            )
-                                        }
+                                        onSelect={run}
                                         onFocus={() => previewAction(id, true)}
                                         onBlur={() => previewAction(id, false)}
                                         className={MENU_ITEM_CLASS}

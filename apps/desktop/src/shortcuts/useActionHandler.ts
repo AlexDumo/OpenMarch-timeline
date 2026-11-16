@@ -39,6 +39,12 @@ interface HandlerOptions {
      */
     checked?: boolean;
     /**
+     * Why the action is disabled, said where it's greyed out (the palette shows it beside the
+     * entry), instead of a toast after a press. Translated by the caller. A function is read only
+     * when asked, and only while the action is disabled. Default: none.
+     */
+    disabledReason?: string | (() => string | undefined);
+    /**
      * Shows what the action would change while the palette highlights it (true), and stops
      * (false). It must not edit anything.
      */
@@ -62,6 +68,10 @@ export function useActionHandler(
     );
 }
 
+/** A value, or a function read only when asked */
+const read = <T>(value: T | (() => T)): T =>
+    typeof value === "function" ? (value as () => T)() : value;
+
 export function useActionHandlerGroup(
     ids: readonly ActionId[],
     run: (id: ActionId, args: ActionArgs | undefined) => void,
@@ -79,6 +89,7 @@ export function useActionHandlerGroup(
     const labelRef = useRef(options.label);
     const checkedRef = useRef(options.checked ?? false);
     const previewRef = useRef(options.preview);
+    const reasonRef = useRef(options.disabledReason);
     const hasRelease = options.onRelease !== undefined;
     useLayoutEffect(() => {
         runRef.current = run;
@@ -86,6 +97,7 @@ export function useActionHandlerGroup(
         pressRef.current = options.onPress;
         releaseRef.current = options.onRelease;
         previewRef.current = options.preview;
+        reasonRef.current = options.disabledReason;
     });
     // A function is read when asked, so a new one each render tells nobody
     useLayoutEffect(() => {
@@ -133,11 +145,9 @@ export function useActionHandlerGroup(
                 release: hasRelease
                     ? (reason) => releaseRef.current?.(reason)
                     : undefined,
-                label: () => {
-                    const label = labelRef.current;
-                    return typeof label === "function" ? label() : label;
-                },
+                label: () => read(labelRef.current),
                 checked: () => checkedRef.current,
+                disabledReason: () => read(reasonRef.current),
                 preview: (on) => previewRef.current?.(on),
             }),
         );

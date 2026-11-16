@@ -58,6 +58,42 @@ describe("ActionButton", () => {
     });
     afterEach(() => cleanup());
 
+    it("greyed out with a reason: stays focusable, says why, and a click does nothing", () => {
+        const run = vi.fn();
+        const off = registerActionHandler("swapMarchers", {
+            run,
+            isEnabled: () => false,
+            disabledReason: () => "Select 2 marchers to swap them",
+        });
+        render(<ActionButton action="swapMarchers">Swap</ActionButton>, {
+            wrapper: Providers,
+        });
+        const button = screen.getByRole("button", { name: "Swap" });
+        // Not the native disabled: that can't be hovered or focused to read the reason
+        expect(button).not.toBeDisabled();
+        expect(button).toHaveAttribute("aria-disabled", "true");
+        expect(button).toHaveAccessibleDescription(
+            "Select 2 marchers to swap them",
+        );
+        fireEvent.click(button);
+        expect(run).not.toHaveBeenCalled();
+        off();
+    });
+
+    it("greyed out with no reason stays plainly disabled", () => {
+        const off = registerActionHandler("swapMarchers", {
+            run: vi.fn(),
+            isEnabled: () => false,
+        });
+        render(<ActionButton action="swapMarchers">Swap</ActionButton>, {
+            wrapper: Providers,
+        });
+        const button = screen.getByRole("button", { name: "Swap" });
+        expect(button).toBeDisabled();
+        expect(button).not.toHaveAttribute("aria-disabled");
+        off();
+    });
+
     it("runs the action on click", () => {
         const run = vi.fn();
         const off = registerActionHandler("flipHorizontal", {

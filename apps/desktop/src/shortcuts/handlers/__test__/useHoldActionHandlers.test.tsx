@@ -26,6 +26,7 @@ import { setHoldStyle } from "@/db-functions/timelineHoldStyle";
 import { useEditorModeStore } from "@/stores/EditorModeStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import {
+    actionDisabledReason,
     isActionChecked,
     isActionEnabled,
     previewAction,
@@ -500,13 +501,24 @@ describe("the field menu shows the selection's state on the current page", () =>
         }
     });
 
-    it("on the first page the holds are off; Clear this page still runs and says there's no previous page", () => {
+    it("on the first page the holds are off, and Clear this page is too, saying why", () => {
         mocks.selectedPage = PAGES[0];
         openFieldMenu([1]);
         expect(entry("timelineHoldFromPrevious")).toHaveAttribute(
             "data-disabled",
         );
         expect(isActionEnabled("timelineDefineAsShown")).toBe(false);
-        expect(isActionEnabled("setSelectedMarchersToPreviousPage")).toBe(true);
+        expect(isActionEnabled("setSelectedMarchersToPreviousPage")).toBe(
+            false,
+        );
+        expect(actionDisabledReason("setSelectedMarchersToPreviousPage")).toBe(
+            "There's no page before this one",
+        );
+        // The menu's entry says so with its ?
+        expect(
+            screen.getByTestId(
+                "field-menu-setSelectedMarchersToPreviousPage-reason-icon",
+            ),
+        ).toBeTruthy();
     });
 });
