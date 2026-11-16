@@ -441,6 +441,9 @@ test("a copied box switched to Positions on the Clipboard card pastes onto its e
     const card = page.getByTestId("clipboard-section");
     await expect(card.getByTestId("clipboard-kind")).toHaveText("Box");
     await card.getByTestId("clipboard-paste-as-positions").click();
+    await expect(card.getByTestId("clipboard-kind")).toHaveText(
+        "Box positions",
+    );
     await expect(card.getByTestId("clipboard-rule")).toHaveText(
         "Fills 4 spots: select 4 marchers to fill them all",
     );

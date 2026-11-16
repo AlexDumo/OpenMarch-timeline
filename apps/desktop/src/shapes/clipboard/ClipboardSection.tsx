@@ -51,7 +51,13 @@ export function ClipboardSection() {
     );
     if (!picture || !copied || !summary) return null;
     const fit = pictureFit(summary, selected);
-    const name = copied.kind?.shape.label ?? t("shapes.clipboard.positions");
+    // A shape pasting as its positions says both, so the card doesn't still read "Box"
+    const shapeName = copied.kind?.shape.label;
+    const name = !shapeName
+        ? t("shapes.clipboard.positions")
+        : summary.type === "positions"
+          ? t("shapes.clipboard.shapeAsPositions", { name: shapeName })
+          : shapeName;
     return (
         <InspectorCollapsible
             data-testid="clipboard-section"

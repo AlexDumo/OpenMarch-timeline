@@ -2191,6 +2191,7 @@
             "pasteExactlyHint": "Puts the copy on the exact spot it was copied from, not centered on the selected marchers.",
             "pictureLabel": "Picture of the copied formation",
             "positions": "Positions",
+            "shapeAsPositions": "{name} positions",
             "title": "Clipboard",
             "titleFolded": "Clipboard: {name}, {count, plural, one {# marcher} other {# marchers}}"
         }
