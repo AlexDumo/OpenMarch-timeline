@@ -13,10 +13,11 @@
  *   cameras;
  * - moves on drag and scroll as the viewer's control scheme says
  *   (`controlScheme.ts`): orbits (a flung drag coasts to a stop), grab-pans
- *   (the ground point under the pointer stays under it), zooms toward the
- *   cursor on the wheel (eased) or a pinch; double-click moves the orbit
- *   center to the clicked spot; never below the ground; any of these clears
- *   the active camera;
+ *   (the point pressed stays under the pointer: the ground, the stands or a
+ *   performer, whichever is in front), zooms toward what's under the cursor
+ *   on the wheel (eased) or a pinch; double-click moves the orbit center to
+ *   the clicked spot; never below the ground; any of these clears the active
+ *   camera;
  * - in pick-a-seat mode, raycasts the kit's `pickTargets`, snaps to the
  *   nearest seat row and flies to a seated eye looking at the focus; Esc
  *   cancels;
@@ -44,7 +45,7 @@ import type { CameraSeat, KitResult } from "@/view3d/core/types";
 import { CROWD_CLEAR_RADIUS, useView3dSceneStore } from "../sceneStore";
 import { useCameraStore } from "./cameraStore";
 import { RigController } from "./rigController";
-import { groundHit, wheelPixels } from "./inputMath";
+import { canHold, groundHit, levelHit, wheelPixels } from "./inputMath";
 import { dragAction, wheelAction } from "./controlScheme";
 import { requestDraw } from "../drawWake";
 import { pickAlong } from "../scenePick";
@@ -76,7 +77,7 @@ const PINCH_ZOOM = 0.01;
 /** The most one pinch event zooms (log of the ratio); Ctrl + a mouse wheel takes this path with big deltas. */
 const PINCH_MAX_STEP = 0.3;
 /**
- * Grab pan keeps the ground under the pointer only this close (m, along the
+ * Grab pan holds the point under the pointer only this close (m, along the
  * ground). Past it a few pixels cover a huge stretch of ground, so the drag
  * pans at its ordinary speed instead.
  */
@@ -301,11 +302,11 @@ export default function CameraRig() {
         const focus = () => useView3dSceneStore.getState().focus;
         const scheme = () => useView3dSceneStore.getState().controlScheme;
 
-        /** The ground point under a client position, from the camera's current pose. */
-        const groundAt = (
+        /** The camera's ray through a client position, from its current pose. */
+        const rayAt = (
             clientX: number,
             clientY: number,
-        ): Vector3Tuple | null => {
+        ): { o: Vector3Tuple; d: Vector3Tuple } => {
             const rect = el.getBoundingClientRect();
             const ndc = new Vector2(
                 ((clientX - rect.left) / rect.width) * 2 - 1,
@@ -313,38 +314,32 @@ export default function CameraRig() {
             );
             rig.sync();
             raycaster.setFromCamera(ndc, camera);
-            const o = raycaster.ray.origin;
-            const d = raycaster.ray.direction;
-            return groundHit([o.x, o.y, o.z], [d.x, d.y, d.z]);
+            const { origin, direction } = raycaster.ray;
+            return {
+                o: [origin.x, origin.y, origin.z],
+                d: [direction.x, direction.y, direction.z],
+            };
         };
 
         /**
-         * The point to zoom toward under a client position: the nearest
-         * marcher or ground along the cursor's ray, or, looking at the sky,
-         * the point at the orbit's distance along it.
+         * The nearest surface along a ray: a performer, the stands (the
+         * kit's `pickTargets`) or the ground, whichever it meets first. Null
+         * for the sky. The ground alone would see through the stands to the
+         * ground behind them. Reads the raycaster `rayAt` set up.
          */
-        const zoomPointAt = (
-            clientX: number,
-            clientY: number,
-        ): Vector3Tuple => {
-            const rect = el.getBoundingClientRect();
-            const ndc = new Vector2(
-                ((clientX - rect.left) / rect.width) * 2 - 1,
-                -((clientY - rect.top) / rect.height) * 2 + 1,
-            );
-            rig.sync();
-            raycaster.setFromCamera(ndc, camera);
-            const o: Vector3Tuple = [
-                raycaster.ray.origin.x,
-                raycaster.ray.origin.y,
-                raycaster.ray.origin.z,
-            ];
-            const d: Vector3Tuple = [
-                raycaster.ray.direction.x,
-                raycaster.ray.direction.y,
-                raycaster.ray.direction.z,
-            ];
+        const surfaceAlong = (
+            o: Vector3Tuple,
+            d: Vector3Tuple,
+        ): Vector3Tuple | null => {
             let t = pickAlong(o, d);
+            const kit = useView3dSceneStore.getState().kit;
+            if (kit && kit.pickTargets.length > 0) {
+                const hit = raycaster.intersectObjects(
+                    kit.pickTargets,
+                    true,
+                )[0];
+                if (hit && (t === null || hit.distance < t)) t = hit.distance;
+            }
             const ground = groundHit(o, d);
             if (ground) {
                 const tg = Math.hypot(
@@ -354,22 +349,59 @@ export default function CameraRig() {
                 );
                 if (t === null || tg < t) t = tg;
             }
-            if (t === null) t = rig.spherical.radius;
+            if (t === null) return null;
             return [o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t];
         };
-        /** The ground under a client position, if it's near enough to grab. */
-        const nearGroundAt = (
+        /** The nearest surface under a client position (see `surfaceAlong`). */
+        const surfaceAt = (
             clientX: number,
             clientY: number,
         ): Vector3Tuple | null => {
-            const hit = groundAt(clientX, clientY);
-            if (!hit) return null;
-            const p = camera.position;
-            return Math.hypot(hit[0] - p.x, hit[2] - p.z) <= MAX_GRAB_DISTANCE
-                ? hit
-                : null;
+            const { o, d } = rayAt(clientX, clientY);
+            return surfaceAlong(o, d);
         };
-        /** The ground point held by a pan drag, or null while the drag pans at its ordinary speed. */
+
+        /**
+         * The point to zoom toward under a client position: the surface
+         * there, or, looking at the sky, the point at the orbit's distance
+         * along the ray.
+         */
+        const zoomPointAt = (
+            clientX: number,
+            clientY: number,
+        ): Vector3Tuple => {
+            const surface = surfaceAt(clientX, clientY);
+            if (surface) return surface;
+            const { o, d } = rayAt(clientX, clientY);
+            const t = rig.spherical.radius;
+            return [o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t];
+        };
+
+        /** The surface under a client position, if a grab pan can hold it (`canHold`). */
+        const grabAt = (
+            clientX: number,
+            clientY: number,
+        ): Vector3Tuple | null => {
+            const { o, d } = rayAt(clientX, clientY);
+            const hit = surfaceAlong(o, d);
+            return hit && canHold(o, d, hit, MAX_GRAB_DISTANCE) ? hit : null;
+        };
+        /**
+         * Where the pointer is now at the held point's height, while it can
+         * still be held: the pan moves the camera level, so the held point
+         * stays on this plane, and putting it here keeps it under the
+         * pointer.
+         */
+        const heldAt = (
+            clientX: number,
+            clientY: number,
+            held: Vector3Tuple,
+        ): Vector3Tuple | null => {
+            const { o, d } = rayAt(clientX, clientY);
+            const hit = levelHit(o, d, held[1]);
+            return hit && canHold(o, d, hit, MAX_GRAB_DISTANCE) ? hit : null;
+        };
+        /** The point held by a pan drag, or null while the drag pans at its ordinary speed. */
         let grab: Vector3Tuple | null = null;
         let orbiting = false;
 
@@ -381,7 +413,7 @@ export default function CameraRig() {
             orbiting = false;
             grab =
                 dragAction(scheme(), e) === "pan" && !rig.flying
-                    ? nearGroundAt(e.clientX, e.clientY)
+                    ? grabAt(e.clientX, e.clientY)
                     : null;
             if (pointers.size === 2) {
                 const [a, b] = [...pointers.values()];
@@ -406,9 +438,9 @@ export default function CameraRig() {
                 pinch = d;
                 changed = rig.pan(dx * 0.5, dy * 0.5, focus()) || changed;
             } else if (dragAction(scheme(), e) === "pan") {
-                const now = grab ? nearGroundAt(e.clientX, e.clientY) : null;
-                // Once the pointer leaves the ground, finish the press without
-                // a held point, or coming back would snap to it.
+                const now = grab ? heldAt(e.clientX, e.clientY, grab) : null;
+                // Once the held point can't follow the pointer, finish the
+                // press without it, or coming back would snap to it.
                 if (!now) grab = null;
                 changed =
                     grab && now
@@ -491,7 +523,7 @@ export default function CameraRig() {
             if (changed) manualMove();
         };
         const onDoubleClick = (e: MouseEvent) => {
-            const hit = groundAt(e.clientX, e.clientY);
+            const hit = surfaceAt(e.clientX, e.clientY);
             if (!hit || rig.flying) return;
             const p = camera.position;
             const t = rig.target;
