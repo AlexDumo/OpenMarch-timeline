@@ -57,7 +57,7 @@ export function useSelectionHoldStyle(
                             error,
                             tolgee.t(
                                 "timeline.holdEdge.styleError",
-                                "Error changing the hold style",
+                                "Couldn't change the hold style",
                             ),
                         ),
                 );

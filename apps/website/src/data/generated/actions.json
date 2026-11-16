@@ -1434,6 +1434,24 @@
             }
         ]
     },
+    "toggleLassoSelect": {
+        "label": "Switch between box and lasso select",
+        "category": "select",
+        "bindings": [
+            {
+                "mac": {
+                    "keys": [
+                        "V"
+                    ]
+                },
+                "other": {
+                    "keys": [
+                        "V"
+                    ]
+                }
+            }
+        ]
+    },
     "timelineUnsetHere": {
         "label": "Remove keyframe",
         "category": "timeline",
