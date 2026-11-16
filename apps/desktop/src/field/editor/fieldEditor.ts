@@ -578,6 +578,11 @@ export class FieldEditor {
     private gesture: FieldGesture | null = null;
     private gestureButton = 0;
     private hover: FieldCursor = "default";
+    /**
+     * Whether a drag from the empty spot under the pointer would draw an area: false inside a
+     * multi-selection's box, where it moves the selection ({@link startMove}).
+     */
+    private hoverDraws = true;
     /** What a drag from empty field draws when its press didn't choose (the Select bar's tool). */
     private areaTool: AreaKind = "marquee";
     private lastClick: LastClick | null = null;
@@ -788,13 +793,9 @@ export class FieldEditor {
                 return;
             }
             const handle = this.handleAt(pointer);
-            this.setHover(
-                handle
-                    ? handleCursor(handle)
-                    : this.marcherAt(pointer) === null
-                      ? "default"
-                      : "pointer",
-            );
+            if (handle) this.setHover(handleCursor(handle));
+            else if (this.marcherAt(pointer) !== null) this.setHover("pointer");
+            else this.setHover("default", !this.pressMoves(pointer));
             return;
         }
         if (!isPastSlop(press.start, pointer)) return;
@@ -1604,8 +1605,14 @@ export class FieldEditor {
     /** The cursor the field shows. */
     cursor(): FieldCursor {
         if (this.propTool) return "crosshair";
-        // Over empty field a drag would draw the lasso, unless a field mode takes the press
-        if (this.hover === "default" && this.areaTool === "lasso" && !this.mode)
+        // Over empty field a drag would draw the lasso, unless a field mode takes the press or
+        // it's inside the selection's box, where a drag moves the selection
+        if (
+            this.hover === "default" &&
+            this.hoverDraws &&
+            this.areaTool === "lasso" &&
+            !this.mode
+        )
             return "lasso";
         return this.hover;
     }
@@ -1890,11 +1897,7 @@ export class FieldEditor {
                       ? [...selection, press.hit]
                       : [press.hit]);
             this.write(ids);
-        } else if (
-            !this.modeOwnsSelectionBox() &&
-            areaChoice(this.areaStart(press), this.options.isMac) === null &&
-            this.insideSelectionBox(selection, press.start.field)
-        ) {
+        } else if (this.movesFromBox(this.areaStart(press), selection)) {
             ids = selection;
         } else return null;
 
@@ -1955,6 +1958,31 @@ export class FieldEditor {
             });
         }
         return starts;
+    }
+
+    /**
+     * Whether a press on empty field with `keys` moves the whole selection: inside the box drawn
+     * around it, with no add or subtract choice (owner decision, #196).
+     */
+    private movesFromBox(keys: FieldPointer, selection: readonly number[]) {
+        return (
+            !this.modeOwnsSelectionBox() &&
+            areaChoice(keys, this.options.isMac) === null &&
+            this.insideSelectionBox(selection, keys.field)
+        );
+    }
+
+    /** Whether a press at empty `pointer` would move the selection, with the pill's Add and Subtract as a press reads them */
+    private pressMoves(pointer: FieldPointer) {
+        const screen = this.options.onScreen;
+        return this.movesFromBox(
+            {
+                ...pointer,
+                shift: pointer.shift || (screen?.add() ?? false),
+                alt: pointer.alt || (screen?.subtract?.() ?? false),
+            },
+            this.ports.selection.get(),
+        );
     }
 
     /** Whether `point` is inside the box drawn around a selection of two or more. */
@@ -2124,9 +2152,11 @@ export class FieldEditor {
         this.emit();
     }
 
-    private setHover(cursor: FieldCursor) {
-        if (cursor === this.hover) return;
+    /** `draws`: whether a drag from there would draw an area ({@link hoverDraws}) */
+    private setHover(cursor: FieldCursor, draws = true) {
+        if (cursor === this.hover && draws === this.hoverDraws) return;
         this.hover = cursor;
+        this.hoverDraws = draws;
         this.emit();
     }
 

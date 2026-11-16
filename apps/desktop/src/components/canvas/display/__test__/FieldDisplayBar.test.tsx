@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+    cleanup,
+    fireEvent,
+    render,
+    screen,
+    within,
+} from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { TolgeeProvider } from "@tolgee/react";
 import tolgee from "@/global/singletons/Tolgee";
@@ -53,17 +59,21 @@ describe("FieldDisplayBar", () => {
 
     it("picks Box or Lasso above the display bar, and keeps it on this device", () => {
         open();
-        const box = screen.getByTestId("field-select-tool-box");
-        const lasso = screen.getByTestId("field-select-tool-lasso");
-        expect(box.getAttribute("aria-pressed")).toBe("true");
+        const group = screen.getByRole("group", { name: "Select tool" });
+        const box = within(group).getByRole("radio", { name: "Box select" });
+        const lasso = within(group).getByRole("radio", {
+            name: "Lasso select",
+        });
+        expect(box.getAttribute("aria-checked")).toBe("true");
         fireEvent.click(lasso);
         expect(useFieldSelectToolStore.getState().tool).toBe("lasso");
-        expect(lasso.getAttribute("aria-pressed")).toBe("true");
-        expect(box.getAttribute("aria-pressed")).toBe("false");
+        expect(lasso.getAttribute("aria-checked")).toBe("true");
+        expect(box.getAttribute("aria-checked")).toBe("false");
         expect(localStorage.getItem(FIELD_SELECT_TOOL_KEY)).toBe("lasso");
-        // It stays until Box is picked
+        // It stays until Box is picked: one of two, not a toggle
         fireEvent.click(lasso);
         expect(useFieldSelectToolStore.getState().tool).toBe("lasso");
+        expect(lasso.getAttribute("aria-checked")).toBe("true");
         fireEvent.click(box);
         expect(useFieldSelectToolStore.getState().tool).toBe("box");
     });

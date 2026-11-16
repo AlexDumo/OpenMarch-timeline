@@ -1785,6 +1785,20 @@ describe("FieldEditor lasso", () => {
             expect(editor.cursor()).toBe("pointer");
         });
 
+        it("doesn't show it inside a multi-selection's box, where a drag moves the selection (#196)", () => {
+            const { editor } = setup({ selected: [1, 3] });
+            editor.setAreaTool("lasso");
+            // On empty field between 2 and 3, inside the box from 1 to 3
+            editor.pointerMove(at(250, 100));
+            expect(editor.cursor()).toBe("default");
+            // With Shift the press adds an area there, so the lasso shows
+            editor.pointerMove(at(250, 101, { shift: true }));
+            expect(editor.cursor()).toBe("lasso");
+            editor.pointerDown(at(250, 101, { shift: true }));
+            editor.pointerMove(at(350, 50, { shift: true }));
+            expect(editor.activeGesture()).toBe("lasso");
+        });
+
         it("draws a box again once Box is picked, and a double-click still lassos", () => {
             const { editor } = setup();
             editor.setAreaTool("lasso");
