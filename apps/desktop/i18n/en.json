@@ -18,7 +18,8 @@
             "snapOn": "Snap off: turn it back on",
             "snapToCustomFraction": "Snap to grid",
             "toggleSnap": "Toggle Snap",
-            "toggleSnapKeywords": "snap magnet grid free"
+            "toggleSnapKeywords": "snap magnet grid free",
+            "propsOnly": "Only props are selected: props aren't lined up or spaced"
         },
         "batchEdit": {
             "clearPage": "Clear Page {page}",
@@ -323,6 +324,7 @@
         "title": "Command palette",
         "unavailable": "Not available right now",
         "offInPreview": "Not in Preview — exit Preview to edit",
+        "offInEditMusic": "Not while editing music — select Edit music to go back",
         "shape": "Shape",
         "next": "Next",
         "done": "Done",
@@ -2384,7 +2386,9 @@
             "none": "Nobody {held} on {page}",
             "notHeldReasons": "Not {heldLower}: {reasons}",
             "shape": "{names}: in a shape on this page",
-            "holdError": "Couldn't hold the marchers"
+            "holdError": "Couldn't hold the marchers",
+            "paused": "Pause to change holds",
+            "styleNoneHeld": "No selected marcher is Held at the playhead"
         },
         "keep": {
             "followed": {

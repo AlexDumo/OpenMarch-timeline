@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import { useMemo } from "react";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
@@ -44,6 +45,12 @@ function useHoldStyleAction(
     useActionHandler(id, () => holdStyle.set(style), {
         enabled: !isPlaying && holdStyle.held > 0 && !checked,
         checked,
+        // Greyed out says why (a checked one shows ticked instead)
+        disabledReason: isPlaying
+            ? tolgee.t("timeline.holdFromPrevious.paused")
+            : holdStyle.held === 0
+              ? tolgee.t("timeline.holdFromPrevious.styleNoneHeld")
+              : undefined,
     });
 }
 
@@ -80,6 +87,13 @@ export function useHoldActionHandlers() {
         nameOf,
     );
     const entries = entriesOn(pageId);
+    // Why a page command is greyed out: playing, else the page box menu's own reason
+    const reasonOn = (command: typeof defineAsShown) => () =>
+        isPlaying
+            ? tolgee.t("timeline.holdFromPrevious.paused")
+            : pageId === undefined
+              ? undefined
+              : (command.reasonFor(pageId) ?? undefined);
     const expert = useExpertHolds(marcherIds);
     const holdStyle = useSelectionHoldStyle(marcherIds);
     useHoldStyleAction(HOLD_STYLE_ACTIONS[0], holdStyle, isPlaying);
@@ -95,6 +109,7 @@ export function useHoldActionHandlers() {
         {
             enabled: !isPlaying && canRunOn(defineAsShown, pageId),
             ...holdActionOptions(entries?.defineAsShown),
+            disabledReason: reasonOn(defineAsShown),
         },
     );
     useActionHandler(
@@ -105,6 +120,7 @@ export function useHoldActionHandlers() {
         {
             enabled: !isPlaying && canRunOn(holdFromPrevious, pageId),
             ...holdActionOptions(entries?.holdFromPrevious),
+            disabledReason: reasonOn(holdFromPrevious),
             preview: (on) => {
                 if (pageId !== undefined)
                     holdFromPrevious.onPreview(pageId, on);
@@ -120,6 +136,9 @@ export function useHoldActionHandlers() {
         {
             enabled: !isPlaying && expert.window !== null,
             preview: expert.onPreview,
+            disabledReason: isPlaying
+                ? tolgee.t("timeline.holdFromPrevious.paused")
+                : undefined,
         },
     );
 }
