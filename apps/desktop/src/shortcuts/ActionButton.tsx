@@ -22,9 +22,18 @@ import { getActionDefinition } from "./definitions";
 import {
     actionDisabledReason,
     isActionEnabled,
+    onRefusedPress,
     runAction,
     subscribeToActionHandlers,
 } from "./registry";
+
+/** How long a refused key press shows the button's reason */
+export const REFUSED_PRESS_MS = 2000;
+
+/** Whether the button is on screen to point at (not in a closed menu or a hidden panel) */
+const isShown = (el: HTMLElement) =>
+    el.isConnected &&
+    (typeof el.checkVisibility === "function" ? el.checkVisibility() : true);
 
 /** How long a trackpad pointer rests on the button before its hint shows (touch layout). */
 const HOVER_HINT_MS = 600;
@@ -87,6 +96,29 @@ export default function ActionButton({
         hoverTimer.current = null;
     };
     useEffect(() => clearHoverTimer, []);
+    const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
+    // A key press for this action that can't run now: the button lights up and shows why for a
+    // moment, instead of a toast (or nothing at all)
+    const [flash, setFlash] = useState(false);
+    useEffect(() => {
+        if (!anchor) return;
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        const off = onRefusedPress((id) => {
+            if (id !== action || !isShown(anchor)) return;
+            if (timer !== null) clearTimeout(timer);
+            setFlash(true);
+            setHintOpen(true);
+            timer = setTimeout(() => {
+                timer = null;
+                setFlash(false);
+                setHintOpen(false);
+            }, REFUSED_PRESS_MS);
+        });
+        return () => {
+            off();
+            if (timer !== null) clearTimeout(timer);
+        };
+    }, [action, anchor]);
     // Escape closes a shown reason and nothing else: the app's own Escape (cancel a tool) must
     // not run under it. Listening in the capture phase, it's handled before the shortcuts are
     useEffect(() => {
@@ -99,7 +131,6 @@ export default function ActionButton({
         window.addEventListener("keydown", onKey, true);
         return () => window.removeEventListener("keydown", onKey, true);
     }, [hintOpen, reason]);
-    const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
     const closeHint = useCallback(() => setHintOpen(false), []);
     const longPress = useLongPress(() => setHintOpen(true), {
         onPointerDown: rest.onPointerDown,
@@ -192,6 +223,7 @@ export default function ActionButton({
                     // Looks as a disabled one does, without the hover color
                     reason &&
                         "cursor-not-allowed opacity-50 enabled:hover:text-inherit",
+                    flash && "ring-accent/50 ring-2",
                 ),
             )}
         >

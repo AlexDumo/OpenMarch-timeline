@@ -12,7 +12,7 @@ import tolgee from "@/global/singletons/Tolgee";
 import ActionButton from "../ActionButton";
 import { Button } from "@openmarch/ui";
 import { getActionLabel, getActionShortcutLabel } from "../labels";
-import { registerActionHandler } from "../registry";
+import { notifyRefusedPress, registerActionHandler } from "../registry";
 import { useActionHandler } from "../useActionHandler";
 import { useInputModeStore } from "@/stores/InputModeStore";
 
@@ -116,6 +116,35 @@ describe("ActionButton", () => {
         fireEvent(button, out);
         expect(shown()).toBe(hidden);
         window.removeEventListener("keydown", beyond);
+        off();
+    });
+
+    it("a refused key press lights the button up and shows why, for a moment", () => {
+        vi.useFakeTimers();
+        const off = registerActionHandler("swapMarchers", {
+            run: vi.fn(),
+            isEnabled: () => false,
+            disabledReason: () => "Select 2 marchers to swap them",
+        });
+        render(<ActionButton action="swapMarchers">Swap</ActionButton>, {
+            wrapper: Providers,
+        });
+        const button = screen.getByRole("button", { name: "Swap" });
+        const shown = () =>
+            screen.queryAllByText("Select 2 marchers to swap them").length;
+        const hidden = shown();
+        // Another action's refusal isn't this button's
+        act(() => notifyRefusedPress("flipHorizontal"));
+        expect(shown()).toBe(hidden);
+        act(() => notifyRefusedPress("swapMarchers"));
+        expect(shown()).toBeGreaterThan(hidden);
+        expect(button.className).toMatch(/ring-2/);
+        act(() => {
+            vi.advanceTimersByTime(2100);
+        });
+        expect(shown()).toBe(hidden);
+        expect(button.className).not.toMatch(/ring-2/);
+        vi.useRealTimers();
         off();
     });
 

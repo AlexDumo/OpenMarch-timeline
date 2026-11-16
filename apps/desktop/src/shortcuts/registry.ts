@@ -84,6 +84,22 @@ export function actionDisabledReason(id: ActionId): string | undefined {
     return handler.disabledReason?.() || undefined;
 }
 
+const refusedListeners = new Set<(id: ActionId) => void>();
+
+/**
+ * Listens for key presses of an action that can't run now but says why
+ * (`notifyRefusedPress`): its button shows the reason briefly instead of a toast.
+ */
+export function onRefusedPress(listener: (id: ActionId) => void): () => void {
+    refusedListeners.add(listener);
+    return () => refusedListeners.delete(listener);
+}
+
+/** A key for `id` was pressed while it's disabled with a reason (the shortcut dispatcher) */
+export function notifyRefusedPress(id: ActionId): void {
+    refusedListeners.forEach((listener) => listener(id));
+}
+
 /** The label the action's handler gives right now (`useActionHandler`'s `label`), if any */
 export function actionLabelNow(id: ActionId): string | undefined {
     return top(id)?.label?.();
