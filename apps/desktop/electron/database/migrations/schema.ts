@@ -714,7 +714,8 @@ export const items = sqliteTable(
         /**
          * A built-in 3D model the item is drawn as, such as `pit/marimba-5.0`: its path under
          * `apps/desktop/src/view3d/assets/pit/` without `.glb`. Null draws the item as a block.
-         * Separate from a future Asset Library reference (a library item and version hash).
+         * Imported models will use the same column as `library:<uuid>@<version hash>` (ADR 0010,
+         * amendment 2026-11-11); an app that doesn't know a value draws the block.
          */
         model: text(),
         /**
