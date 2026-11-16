@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import { useTranslate } from "@tolgee/react";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { toggleRatioLock } from "@/shapes/frame/shapeEditorStore";
 import * as CoordinateActions from "@/utilities/CoordinateActions";
 import { useActionHandler } from "../useActionHandler";
 import { useEditorReadiness } from "./useEditorReadiness";
@@ -66,6 +67,9 @@ export function useAlignmentActionHandlers() {
     useActionHandler("toggleSnap", () =>
         useUiSettingsStore.getState().setSnap(),
     );
+
+    // One lock for a selection's scale handles and a box's spacings, for the session (#586)
+    useActionHandler("toggleRatioLock", () => toggleRatioLock());
 
     useActionHandler(
         "alignVertically",

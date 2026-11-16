@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
+import clsx from "clsx";
 import { T, useTranslate } from "@tolgee/react";
-import { CrosshairSimpleIcon } from "@phosphor-icons/react";
-import { Button } from "@openmarch/ui";
+import { CrosshairSimpleIcon, LinkSimpleIcon } from "@phosphor-icons/react";
+import { Button, getButtonClassName } from "@openmarch/ui";
+import ActionButton from "@/shortcuts/ActionButton";
+import { useShowShortcutHints } from "@/stores/KeyboardSeenStore";
+import { useShapeEditorStore } from "@/shapes/frame/shapeEditorStore";
 import { Tip } from "@/components/ui/Tip";
 import { isMacPlatform } from "@/shortcuts/platform";
 import { InspectorCollapsible } from "@/components/inspector/InspectorCollapsible";
@@ -20,7 +24,7 @@ import MarcherRotationInput from "./marcher/MarcherRotationInput";
 
 /**
  * The tools that act on two or more selected marchers, at the top of the inspector: align and
- * flip, rotate around a pivot, distribute. On the field there are only the handles and the pivot
+ * flip, rotate around a pivot, the resize ratio lock, distribute. On the field there are only the handles and the pivot
  * you drag; the commands live here (owner, 2026-11-14: a plain selection has no recipe, so no
  * floating editor; a shape keeps its own). Hidden while the show plays.
  */
@@ -35,7 +39,14 @@ export function ArrangeSection() {
             className="mt-12 flex flex-col gap-16"
         >
             <div className="flex flex-col gap-16" data-testid="arrange-section">
-                <ArrangeButtons rotate={<RotateRow />} />
+                <ArrangeButtons
+                    rotate={
+                        <>
+                            <RotateRow />
+                            <ResizeRow />
+                        </>
+                    }
+                />
             </div>
         </InspectorCollapsible>
     );
@@ -56,6 +67,62 @@ function RotateRow() {
                     </div>
                     <SelectionPivotPick />
                 </div>
+            </div>
+        </div>
+    );
+}
+
+/**
+ * The ratio lock for the selection's scale handles (#586): on, a corner or side handle keeps the
+ * width-to-depth ratio and Cmd/Ctrl frees it for one drag; off, the other way round. The same
+ * lock as the box editor's chain button (`toggleRatioLock`), for the session. It runs the
+ * action, so the palette and the touch layout reach the same thing.
+ */
+function ResizeRow() {
+    const { t } = useTranslate();
+    const locked = useShapeEditorStore((s) => s.ratioLocked);
+    const showHints = useShowShortcutHints();
+    const key = isMacPlatform() ? "⌘" : "Ctrl";
+    return (
+        <div className="flex flex-col gap-8">
+            <h5 className="text-h5">
+                <T keyName="inspector.arrange.resizeHeading" />
+            </h5>
+            <div>
+                <ActionButton
+                    action="toggleRatioLock"
+                    // The label says what pressing does: lock while off, unlock while on
+                    toggleState={locked ? "off" : "on"}
+                    hint={
+                        showHints
+                            ? t(
+                                  locked
+                                      ? "inspector.arrange.ratioLockHintOn"
+                                      : "inspector.arrange.ratioLockHintOff",
+                                  { key },
+                              )
+                            : undefined
+                    }
+                    aria-pressed={locked}
+                    onPointerDown={keepFocus}
+                    data-testid="arrange-ratio-lock"
+                    className={getButtonClassName({
+                        variant: locked ? "primary" : "secondary",
+                        size: "compact",
+                        // Pressed, the accent fill stays readable on hover
+                        className: clsx(
+                            "flex items-center gap-6",
+                            locked && "enabled:hover:text-text-invert",
+                        ),
+                    })}
+                >
+                    <LinkSimpleIcon size={14} weight="bold" />
+                    {/* The size on the text, not the button: tailwind-merge reads text-body as a
+                        color and would drop the variant's (ui-styling.md) */}
+                    <span className="text-body">
+                        <T keyName="inspector.arrange.keepRatioButton" />
+                    </span>
+                </ActionButton>
             </div>
         </div>
     );

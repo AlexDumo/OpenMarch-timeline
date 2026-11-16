@@ -556,6 +556,18 @@ const STATIC_ACTIONS = {
         defaultBindings: ["Shift+M"],
         ignoreRepeat: true,
     },
+    // The ratio lock a selection's scale handles and a box's spacings share (#586): on, a resize
+    // keeps the ratio and Cmd/Ctrl frees it for one drag. No key yet; the palette, the inspector's
+    // Arrange section and the box's floating editor reach it
+    toggleRatioLock: {
+        labelKey: "actions.alignment.toggleRatioLock",
+        toggleOnKey: "actions.alignment.ratioLockOn",
+        toggleOffKey: "actions.alignment.ratioLockOff",
+        keywordsKey: "actions.alignment.toggleRatioLockKeywords",
+        category: "alignment",
+        scope: "canvas",
+        defaultBindings: [],
+    },
     alignVertically: {
         labelKey: "actions.alignment.alignVertically",
         category: "alignment",

@@ -2106,6 +2106,39 @@ describe("FieldEditor scale and rotate handles (#198)", () => {
             expect(dropped({}, () => true)).toEqual(BOTH_WAYS);
             expect(dropped({ ctrl: true }, () => true)).toEqual(ONE_AXIS);
         });
+
+        it("keeps the ratio on a corner with the lock on and no key held, and Ctrl frees it (#586)", () => {
+            // The bottom-right corner handle, 10 units out from (400, 200)
+            const SE = { x: 410, y: 210 };
+            const corner = (
+                modifiers: Parameters<typeof at>[2],
+                ratioLocked?: () => boolean,
+            ) => {
+                const { editor, state } = setup({
+                    selected: ALL,
+                    positions: TALL,
+                    ratioLocked,
+                });
+                // Much wider, barely deeper: a free corner stretches it out of shape
+                drag(editor, SE, { x: 560, y: 220 }, modifiers);
+                return state.drops[0].positions;
+            };
+            const ratio = (positions: readonly { x: number; y: number }[]) => {
+                const xs = positions.map((p) => p.x);
+                const ys = positions.map((p) => p.y);
+                return (
+                    (Math.max(...xs) - Math.min(...xs)) /
+                    (Math.max(...ys) - Math.min(...ys))
+                );
+            };
+            const locked = () => true;
+            // 300 across, 100 deep before the drag
+            expect(ratio(corner({}, locked))).toBeCloseTo(3);
+            expect(ratio(corner({ ctrl: true }, locked))).not.toBeCloseTo(3);
+            // The lock swaps what Ctrl does, nothing more
+            expect(corner({}, locked)).toEqual(corner({ ctrl: true }));
+            expect(corner({ ctrl: true }, locked)).toEqual(corner({}));
+        });
     });
 
     it("scales at a quarter speed with fine (Shift)", () => {

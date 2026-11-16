@@ -90,7 +90,6 @@ import {
 } from "../frame/gestures";
 import { currentShapeField } from "../field/shapeFieldContext";
 import {
-    toggleRatioLock,
     toggleSizesLock,
     useShapeEditorStore,
 } from "../frame/shapeEditorStore";
@@ -1075,8 +1074,13 @@ const RatioLockButton = memo(function RatioLockButton({
                             "Lock the two spacings together",
                         )
             }
+            // The spacings' lock is the toggleRatioLock action, as in the inspector's Arrange
+            // section (#586): one lock, so the two buttons always agree
+            action={sizes ? undefined : "toggleRatioLock"}
             pressed={ratioLocked}
-            onClick={sizes ? toggleSizesLock : toggleRatioLock}
+            onClick={
+                sizes ? toggleSizesLock : () => runAction("toggleRatioLock")
+            }
             testId="shape-editor-ratio-lock"
         >
             {/* One chain either way, lit in the accent when locked: a broken

@@ -36,6 +36,8 @@ export type ActionButtonProps =
         tooltip?: string;
         /** Selects the toggle on/off label for toggle actions */
         toggleState?: "on" | "off";
+        /** A second, quieter line under the label, in the tooltip and the long-press bubble */
+        hint?: string;
         /**
          * A short word or two shown with the icon in touch mode, where the tooltip
          * can't be seen. Give it to icon-only buttons.
@@ -56,6 +58,7 @@ export default function ActionButton({
     args,
     tooltip,
     toggleState,
+    hint,
     caption,
     onRun,
     children,
@@ -171,6 +174,7 @@ export default function ActionButton({
             <Tip
                 label={hintLabel || undefined}
                 action={showShortcut ? action : undefined}
+                hint={hint}
                 disabled={isTouch}
             >
                 {button}
@@ -180,9 +184,12 @@ export default function ActionButton({
                 open={hintOpen}
                 onClose={closeHint}
             >
-                <span className="flex items-center gap-8">
-                    <span>{hintLabel}</span>
-                    {showShortcut && <Shortcut action={action} />}
+                <span className="flex flex-col gap-2">
+                    <span className="flex items-center gap-8">
+                        <span>{hintLabel}</span>
+                        {showShortcut && <Shortcut action={action} />}
+                    </span>
+                    {hint && <span className="text-text-subtitle">{hint}</span>}
                 </span>
             </LongPressBubble>
         </>

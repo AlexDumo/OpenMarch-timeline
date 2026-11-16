@@ -725,6 +725,11 @@
             }
         ]
     },
+    "toggleRatioLock": {
+        "label": "Toggle ratio lock",
+        "category": "alignment",
+        "bindings": []
+    },
     "alignVertically": {
         "label": "Align vertically",
         "category": "alignment",

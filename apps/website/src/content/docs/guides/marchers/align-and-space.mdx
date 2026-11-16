@@ -4,6 +4,7 @@ description: Line selected marchers up, space them evenly or a set number of ste
 type: how-to
 covers:
   - apps/desktop/src/components/inspector/MarcherEditor.tsx
+  - apps/desktop/src/components/inspector/ArrangeSection.tsx
   - apps/desktop/src/utilities/CoordinateActions.ts
   - apps/desktop/src/shortcuts/handlers/useAlignmentActionHandlers.ts
   - apps/desktop/src/field/editor/groupTransform.ts
@@ -18,9 +19,11 @@ covers:
   - action:flipHorizontal
   - action:flipVertical
   - action:swapMarchers
+  - action:toggleRatioLock
   - action:setSelectedMarchersToNextPage
   - action:setAllMarchersToNextPage
   - i18n:inspector.marcher
+  - i18n:inspector.arrange
   - i18n:toolbar.alignment
 sidebar:
   order: 4
@@ -35,7 +38,7 @@ When several marchers are selected, the <Ui k="inspector.arrange.title" /> secti
 
 <Media
   id="marchers-inspector"
-  alt="The inspector's Arrange section for eight selected marchers: four Align buttons, Rotate with a 3 by 3 pivot grid beside a Rotation box, and two Distribute buttons each with a Steps box."
+  alt="The inspector's Arrange section for eight selected marchers: four Align buttons, Rotate with a 3 by 3 pivot grid beside a Rotation box, Resize with a Keep ratio button, and two Distribute buttons each with a Steps box."
   maxWidth={340}
 />
 
@@ -85,6 +88,8 @@ Select two or more marchers. The frame around them has square handles on its cor
 - Drag a side handle to stretch or shrink it in one direction only. Hold <Kbd keys="Mod" gesture="drag" /> to scale the other direction along with it.
 - Hold <Kbd keys="Alt" gesture="drag" /> while resizing to resize from the group's center instead of the opposite edge.
 - Hold <Kbd keys="Shift" gesture="drag" /> while resizing for fine control.
+
+To keep the group's proportions on every resize without holding a key, select <Ui k="inspector.arrange.keepRatioButton" /> under <Ui k="inspector.arrange.resizeHeading" /> in the <Ui k="inspector.arrange.title" /> section. The button is highlighted while the lock is on. Corner and side handles then keep the ratio of the group's width to its depth, and holding <Kbd keys="Mod" gesture="drag" /> frees it for that one drag. It's the same lock as the chain button beside a box's spacings in the shape editor ([Draw a box](/guides/shapes/draw-a-box/)), so turning one on turns both on. It stays as you left it until you close OpenMarch. It's also in the command palette as <Ui k="actions.alignment.toggleRatioLock" />.
 
 Only positions change: dots and drill numbers stay upright and the same size. Dragging a handle past the opposite side stops the group at its smallest size instead of flipping it. One marcher on its own has no handles.
 
