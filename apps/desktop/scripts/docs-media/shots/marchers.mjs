@@ -104,6 +104,23 @@ async function toolbarUpTo(page, last) {
     return { ...bar, width: end.x + end.width + 16 - bar.x };
 }
 
+/** Switches the window to the tablet layout, as Settings › Touch & Input › Layout › Tablet does. */
+async function toTablet(page, wait) {
+    await page.evaluate(() => {
+        localStorage.setItem("openmarch:inputMode", "touch");
+        window.dispatchEvent(
+            new StorageEvent("storage", {
+                key: "openmarch:inputMode",
+                newValue: "touch",
+            }),
+        );
+    });
+    await page
+        .getByTestId("touch-modifier-buttons")
+        .waitFor({ timeout: 10000 });
+    await wait(1500);
+}
+
 const shots = [
     {
         id: "marchers-add-form",
@@ -253,22 +270,10 @@ const shots = [
         },
     },
     {
-        id: "marchers-alignment-tab",
-        kind: "still",
-        // The Alignment tab: coordinate rounding, the locks, Snap and Snap to grid, Place all marchers
-        async setup({ page, wait }) {
-            await toPage1(page, wait);
-            const place = page
-                .locator("[role='tabpanel'][data-state='active']")
-                .getByText("Place all marchers", { exact: false })
-                .first();
-            return { box: await toolbarUpTo(page, place) };
-        },
-    },
-    {
         id: "marchers-coordinate-rounding",
         kind: "still",
-        // The Coordinate Rounding menu open
+        // The Coordinate Rounding menu open, X rounding to half steps, the offset off
+        uiSettings: { coordinateRounding: { nearestXSteps: 0.5 } },
         async setup({ page, wait, around, union }) {
             await toPage1(page, wait);
             const bar = await toolbar(page);
@@ -276,6 +281,13 @@ const shots = [
                 .getByText("Coordinate Rounding", { exact: true })
                 .click();
             await wait(600);
+            const disable = page.getByRole("button", {
+                name: "Disable Offset",
+            });
+            if (await disable.count()) {
+                await disable.click();
+                await wait(400);
+            }
             const menu = await around(
                 page.locator("[data-radix-popper-content-wrapper]").last(),
                 12,
@@ -352,7 +364,7 @@ const shots = [
     {
         id: "marchers-align",
         kind: "clip",
-        // An arc of marchers aligned into a line (Alt+V), then spaced evenly (Shift+H)
+        // An arc of marchers aligned into a line (Alt+V)
         async setup({ page, wait }) {
             await toPage1(page, wait);
             const all = await marchers(page);
@@ -379,13 +391,126 @@ const shots = [
             await page.keyboard.press("KeyV");
             await film.hold(0.3);
             await page.keyboard.up("Alt");
-            await film.hold(1.3);
+            await film.hold(1.6);
+        },
+    },
+    {
+        id: "marchers-space",
+        kind: "clip",
+        // A line of marchers with uneven gaps spaced evenly between its ends (Shift+H)
+        async setup({ page, wait }) {
+            await toPage1(page, wait);
+            const labels = range("T", 1, 12);
+            await shiftSelect(page, named(await marchers(page), labels), wait);
+            await page.keyboard.press("Alt+KeyV");
+            await wait(800);
+            // Uneven gaps: two marchers in the middle of the line pulled sideways
+            await page.keyboard.press("Escape");
+            await wait(400);
+            const line = named(await marchers(page), labels).sort(
+                (m, n) => m.x - n.x,
+            );
+            for (const [m, dx] of [
+                [line[3], 22],
+                [line[7], -20],
+            ]) {
+                await page.mouse.move(m.x, m.y);
+                await page.mouse.down();
+                for (let i = 1; i <= 8; i++) {
+                    await page.mouse.move(m.x + (dx * i) / 8, m.y);
+                    await wait(30);
+                }
+                await page.mouse.up();
+                await wait(500);
+            }
+            await page.keyboard.press("Escape");
+            await wait(300);
+            const now = named(await marchers(page), labels);
+            await shiftSelect(page, now, wait);
+            const b = bounds(now);
+            return {
+                box: boxAround(
+                    { x: (b.left + b.right) / 2, y: (b.top + b.bottom) / 2 },
+                    560,
+                    200,
+                ),
+            };
+        },
+        async perform({ page, film, overlay }) {
+            await overlay.enable();
+            await page.mouse.move(1500, 960);
+            await film.hold(0.6);
             await page.keyboard.down("Shift");
             await film.hold(0.2);
             await page.keyboard.press("KeyH");
-            await film.hold(0.3);
+            await film.hold(0.4);
             await page.keyboard.up("Shift");
-            await film.hold(1.5);
+            await film.hold(1.8);
+        },
+    },
+    {
+        id: "marchers-move-pad",
+        kind: "still",
+        // The tablet layout's inspector with three marchers selected: the Move pad
+        async setup({ page, wait, around }) {
+            await toPage1(page, wait);
+            await toTablet(page, wait);
+            const all = await marchers(page);
+            await page.keyboard.down("Shift");
+            for (const label of ["B3", "B4", "B5"]) {
+                const m = all.get(label);
+                await page.mouse.click(m.x, m.y);
+            }
+            await page.keyboard.up("Shift");
+            await page.mouse.move(5, 500);
+            await wait(800);
+            const pad = page.getByTestId("move-pad");
+            await pad.evaluate((el) => el.scrollIntoView({ block: "center" }));
+            await wait(500);
+            return { box: await around(pad, 14) };
+        },
+    },
+    {
+        id: "marchers-tags",
+        kind: "still",
+        // The inspector's tag row for selected marchers: a tag, and the create, add and remove buttons
+        async setup({ page, wait }) {
+            await toPage1(page, wait);
+            const all = await marchers(page);
+            await shiftSelect(page, named(all, range("B", 1, 4)), wait);
+            const create = page.getByRole("button", {
+                name: "Create new tag with selected marchers",
+            });
+            await create.evaluate((el) =>
+                el.scrollIntoView({ block: "center" }),
+            );
+            await wait(400);
+            await create.click();
+            await wait(500);
+            await page.locator("#tag-name-input").fill("Soloists");
+            await page.getByRole("button", { name: "Create Tag" }).click();
+            await wait(1200);
+            await page.mouse.move(800, 950);
+            await create.evaluate((el) =>
+                el.scrollIntoView({ block: "center" }),
+            );
+            await wait(500);
+            const chip = await page
+                .getByText("Soloists", { exact: true })
+                .first()
+                .boundingBox();
+            const c = await create.boundingBox();
+            const remove = await page
+                .getByRole("button", {
+                    name: "Remove selected marchers from tag",
+                })
+                .boundingBox();
+            const parts = [chip, c, remove].filter(Boolean);
+            const top = Math.min(...parts.map((p) => p.y)) - 12;
+            const bottom = Math.max(...parts.map((p) => p.y + p.height)) + 14;
+            return {
+                box: { x: 1272, y: top, width: 322, height: bottom - top },
+            };
         },
     },
     {

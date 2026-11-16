@@ -144,6 +144,125 @@ async function createNewShow(ctx) {
     await wait(500);
 }
 
+/** The new show's marchers on screen, by drill number. */
+const trumpets = (page) =>
+    page.evaluate(() =>
+        window.fieldTest
+            .marchers()
+            .map((m) => ({ label: m.label, x: m.screen.x, y: m.screen.y })),
+    );
+
+/** The box around `points`, grown by `pad`. */
+function boundsOf(points, pad = 0) {
+    const xs = points.map((p) => p.x);
+    const ys = points.map((p) => p.y);
+    const x = Math.min(...xs) - pad;
+    const y = Math.min(...ys) - pad;
+    return {
+        x,
+        y,
+        width: Math.max(...xs) + pad - x,
+        height: Math.max(...ys) + pad - y,
+    };
+}
+
+/** Zooms the field by `factor` about `at` (Ctrl + wheel), off camera. */
+async function zoomAt(page, at, factor) {
+    await page.mouse.move(at.x, at.y);
+    await page.keyboard.down("Control");
+    const total = (2 * Math.log(factor)) / Math.log(0.99);
+    for (let i = 0; i < 10; i++) {
+        await page.mouse.wheel(0, total / 10);
+        await page.waitForTimeout(30);
+    }
+    await page.keyboard.up("Control");
+    await page.waitForTimeout(600);
+}
+
+/** A drag off camera, in small steps. */
+async function quickDrag(page, a, b, steps = 15) {
+    await page.mouse.move(a.x, a.y);
+    await page.mouse.down();
+    for (let i = 1; i <= steps; i++) {
+        await page.mouse.move(
+            a.x + ((b.x - a.x) * i) / steps,
+            a.y + ((b.y - a.y) * i) / steps,
+        );
+        await page.waitForTimeout(20);
+    }
+    await page.mouse.up();
+    await page.waitForTimeout(600);
+}
+
+/** The two corners of a 4 × 2 box below and right of the trumpets' row. */
+function tutorialBoxCorners(row) {
+    const b = boundsOf(row);
+    const a = { x: b.x + b.width * 0.35, y: b.y + 110 };
+    return [a, { x: a.x + b.width * 0.9, y: a.y + b.width * 0.42 }];
+}
+
+/** `area` moved, and shrunk if it must be, to lie inside `field`. */
+function inside(area, field) {
+    const width = Math.min(area.width, field.width);
+    const height = Math.min(area.height, field.height);
+    const x = Math.min(
+        Math.max(area.x, field.x),
+        field.x + field.width - width,
+    );
+    const y = Math.min(
+        Math.max(area.y, field.y),
+        field.y + field.height - height,
+    );
+    return { x, y, width, height };
+}
+
+/**
+ * The tutorial's new show (eight trumpets in a row at the back corner, Basic), zoomed in on the
+ * corner of the field where they stand, all of them selected.
+ */
+async function tutorialShow(ctx) {
+    const { page, wait } = ctx;
+    await createNewShow(ctx);
+    const row = await trumpets(page);
+    const b = boundsOf(row);
+    // Zoomed about the row itself, so it stays clear of the field's top edge
+    await zoomAt(page, { x: b.x + b.width / 2, y: b.y }, 1.8);
+    await page.keyboard.press("Control+KeyA");
+    await wait(600);
+    await page.mouse.move(5, 500);
+    await wait(400);
+}
+
+/** The tutorial's opening set: the trumpets placed in a 4 × 2 box at home, off camera. */
+async function tutorialOpeningSet(ctx) {
+    const { page, wait } = ctx;
+    await tutorialShow(ctx);
+    const [a, b] = tutorialBoxCorners(await trumpets(page));
+    await page.keyboard.press("KeyB");
+    await wait(400);
+    await quickDrag(page, a, b);
+    await wait(800);
+    await page.keyboard.press("Enter");
+    await wait(2000);
+    await tidy(page);
+}
+
+/** Selects Page 1's box (the first wide one; home's is narrow), off camera. */
+async function selectPage1(page, wait) {
+    const boxes = await page
+        .locator("[data-timeline-range-page]")
+        .evaluateAll((els) =>
+            els.map((e) => {
+                const r = e.getBoundingClientRect();
+                return { x: r.x, y: r.y, width: r.width };
+            }),
+        );
+    const p1 = boxes.filter((r) => r.width > 60).sort((m, n) => m.x - n.x)[0];
+    await page.mouse.click(p1.x + p1.width / 2, p1.y + 13);
+    await wait(1200);
+    return p1;
+}
+
 const shots = [
     {
         id: "start-new-show-performers",
@@ -220,17 +339,48 @@ const shots = [
         id: "start-timeline-expert",
         kind: "still",
         mode: "expert",
-        // The same page, with a few marchers split off into a move of their own, so the
-        // timeline shows a move's bar under the pages
+        // The same page, with a few marchers moving from partway through it in a move of their
+        // own, so the timeline shows a move's bar that doesn't fill the page. The loop stays off.
         async setup(ctx) {
             const { page, wait } = ctx;
             const framed = await timelineAtPage3(ctx);
+            // The page the start flag is on, and its width per count
+            const pennant = await page
+                .getByTestId("timeline-start-pennant")
+                .boundingBox();
+            const boxes = await page
+                .locator("[data-timeline-range-page]")
+                .evaluateAll((els) =>
+                    els.map((e) => {
+                        const r = e.getBoundingClientRect();
+                        return {
+                            x: r.x,
+                            width: r.width,
+                            start: Number(e.dataset.timelineRangeStart),
+                            end: Number(e.dataset.timelineRangeEnd),
+                        };
+                    }),
+                );
+            const px = pennant.x + pennant.width / 2;
+            const on = boxes.find((b) => px >= b.x - 2 && px < b.x + b.width);
+            const perCount = on.width / (on.end - on.start);
+            // The start flag four counts into the page
+            const a = { x: px, y: pennant.y + pennant.height / 2 };
+            await page.mouse.move(a.x, a.y);
+            await page.mouse.down();
+            for (let i = 1; i <= 12; i++) {
+                await page.mouse.move(a.x + (perCount * 4 * i) / 12, a.y);
+                await wait(25);
+            }
+            await page.mouse.up();
+            await wait(1000);
+            // Four marchers moved from there to the page's end
             const picks = await page.evaluate(() =>
                 window.fieldTest
                     .marchers()
                     .filter((m) => m.onScreen)
                     .sort((a, b) => a.label.localeCompare(b.label))
-                    .slice(0, 6)
+                    .slice(0, 4)
                     .map((m) => m.screen),
             );
             await page.mouse.click(picks[0].x, picks[0].y);
@@ -238,14 +388,23 @@ const shots = [
             for (const p of picks.slice(1)) await page.mouse.click(p.x, p.y);
             await page.keyboard.up("Shift");
             await wait(500);
-            await page.keyboard.press("Control+KeyK");
+            const from = picks[0];
+            await page.mouse.move(from.x, from.y);
+            await page.mouse.down();
+            for (let i = 1; i <= 12; i++) {
+                await page.mouse.move(from.x, from.y + (40 * i) / 12);
+                await wait(25);
+            }
+            await page.mouse.up();
+            await wait(1500);
+            await page.keyboard.press("Escape");
             await wait(500);
-            await page.keyboard.type("Split selected marchers");
-            await wait(500);
-            await page.keyboard.press("Enter");
-            await wait(2000);
+            const loop = page.getByTestId("timeline-loop");
+            if ((await loop.getAttribute("aria-pressed")) === "true")
+                await loop.click();
             await tidy(page);
             await page.mouse.move(5, 500);
+            await wait(800);
             return framed;
         },
     },
@@ -299,6 +458,8 @@ const shots = [
             await mark.waitFor({ timeout: 10000 });
             await mark.hover();
             await wait(1200);
+            const m = await mark.boundingBox();
+            this.mark = { x: m.x + m.width / 2, y: m.y + m.height / 2 };
             const a = await box(13).boundingBox();
             const b = await box(14).boundingBox();
             const pane = await page.getByTestId("timeline-pane").boundingBox();
@@ -320,6 +481,11 @@ const shots = [
                     height: Math.ceil(pane.y + pane.height) - y,
                 },
             };
+        },
+        // The pointer on the first E, so it's clear which mark the tooltip is for
+        async perform({ overlay }) {
+            await overlay.enable();
+            await overlay.place(this.mark.x, this.mark.y);
         },
     },
     {
@@ -345,12 +511,169 @@ const shots = [
         },
     },
     {
-        id: "start-report-drawer",
+        id: "start-first-show-box",
+        kind: "clip",
+        mode: "basic",
+        // The tutorial's opening set: the eight new trumpets selected at home, B, a drag below
+        // them for a 4 × 2 box, then Place
+        async setup(ctx) {
+            const { page } = ctx;
+            await tutorialShow(ctx);
+            const row = await trumpets(page);
+            this.corners = tutorialBoxCorners(row);
+            const area = boundsOf([...row, ...this.corners], 70);
+            const width = Math.max(area.width, 720);
+            area.x -= (width - area.width) / 2;
+            area.width = width;
+            const height = Math.max(area.height, 440);
+            area.height = height;
+            const field = await page.locator("canvas").first().boundingBox();
+            return { box: inside(area, field) };
+        },
+        async perform({ page, film, overlay }) {
+            await film.release();
+            await overlay.enable();
+            const [a, b] = this.corners;
+            const rest = { x: a.x - 60, y: a.y + 60 };
+            await page.mouse.move(rest.x, rest.y);
+            await film.hold(0.4);
+            await page.keyboard.press("KeyB");
+            await film.hold(0.5);
+            await film.moveTo(page, rest, a, 0.5);
+            await film.drag(page, a, b, 1.2);
+            await film.hold(0.8);
+            const place = await page
+                .getByTestId("shape-editor-place")
+                .boundingBox();
+            const to = {
+                x: place.x + place.width / 2,
+                y: place.y + place.height / 2,
+            };
+            await film.moveTo(page, b, to, 0.6);
+            await page.mouse.click(to.x, to.y);
+            await film.hold(2.0);
+        },
+    },
+    {
+        id: "start-first-show-move",
+        kind: "clip",
+        mode: "basic",
+        // Page 1 selected in the tutorial's show: the trumpets dragged toward the 50, then
+        // dragged again with Shift held, moving more slowly than the pointer
+        async setup(ctx) {
+            const { page, wait } = ctx;
+            await tutorialOpeningSet(ctx);
+            await selectPage1(page, wait);
+            await page.keyboard.press("Control+KeyA");
+            await wait(600);
+            await page.mouse.move(5, 500);
+            await wait(400);
+            const row = await trumpets(page);
+            const b = boundsOf(row);
+            // T4: a marcher on the box's edge between its handles, so the drag moves the marchers
+            this.grab = row.find((m) => m.label === "T4");
+            const area = {
+                x: b.x - 120,
+                y: b.y - 110,
+                width: Math.max(760, b.width + 420),
+                height: 440,
+            };
+            const field = await page.locator("canvas").first().boundingBox();
+            return { box: inside(area, field) };
+        },
+        async perform({ page, film, overlay }) {
+            await overlay.enable();
+            const grab = this.grab;
+            const rest = { x: grab.x + 70, y: grab.y + 80 };
+            await page.mouse.move(rest.x, rest.y);
+            await film.hold(0.3);
+            await film.moveTo(page, rest, grab, 0.5);
+            const to = { x: grab.x + 170, y: grab.y + 60 };
+            await film.drag(page, grab, to, 1.1);
+            await film.hold(0.6);
+            await page.keyboard.down("Shift");
+            await film.hold(0.3);
+            await film.drag(page, to, { x: to.x + 120, y: to.y }, 1.2);
+            await film.hold(0.2);
+            await page.keyboard.up("Shift");
+            await film.hold(1.0);
+        },
+    },
+    {
+        id: "start-first-show-play",
+        kind: "clip",
+        mode: "basic",
+        // Basic, the tutorial's show with Page 1 set: the playhead dragged from home to the end
+        // of Page 1, and the trumpets walk from the opening set to Page 1's set
+        async setup(ctx) {
+            const { page, wait } = ctx;
+            await tutorialOpeningSet(ctx);
+            const p1 = await selectPage1(page, wait);
+            this.p1 = p1;
+            await page.keyboard.press("Control+KeyA");
+            await wait(600);
+            const row = await trumpets(page);
+            const grab = row.find((m) => m.label === "T4");
+            await quickDrag(page, grab, { x: grab.x + 260, y: grab.y + 90 });
+            await wait(1200);
+            await page.keyboard.press("Escape");
+            await wait(400);
+            await page.keyboard.press("Home");
+            await wait(1200);
+            await tidy(page);
+            await page.mouse.move(5, 500);
+            await wait(400);
+            const pane = await page.getByTestId("timeline-pane").boundingBox();
+            return {
+                box: {
+                    x: 0,
+                    y: 120,
+                    width: Math.max(960, Math.round(p1.x + p1.width + 200)),
+                    height: Math.ceil(pane.y + pane.height) - 120,
+                },
+            };
+        },
+        async perform({ page, film, overlay }) {
+            await overlay.enable();
+            const ph = await page
+                .getByTestId("timeline-playhead")
+                .boundingBox();
+            const grab = { x: ph.x + ph.width / 2, y: ph.y + 8 };
+            const rest = { x: grab.x + 60, y: grab.y + 70 };
+            await page.mouse.move(rest.x, rest.y);
+            await film.moveTo(page, rest, grab, 0.6);
+            await film.hold(0.3);
+            const end = { x: this.p1.x + this.p1.width - 1, y: grab.y };
+            await film.drag(page, grab, end, 2.6);
+            await film.hold(1.2);
+        },
+    },
+    {
+        id: "start-report-drawer-form",
         kind: "still",
-        // The report drawer over the editor, before signing in (the recorder isn't signed in)
-        async setup({ page, around, wait }) {
+        // The report drawer signed in (the session is stubbed), with Something is broken chosen
+        async setup({ app, page, around, wait }) {
             await wait(2000);
             await tidy(page);
+            await app.evaluate(({ ipcMain, BrowserWindow }) => {
+                const state = {
+                    isAuthenticated: true,
+                    isLoading: false,
+                    user: {
+                        id: "user_docs",
+                        email: "director@example.com",
+                        firstName: "Sam",
+                        lastName: "Rivera",
+                        imageUrl: null,
+                    },
+                    error: null,
+                };
+                ipcMain.removeHandler("auth:get-state");
+                ipcMain.handle("auth:get-state", () => state);
+                for (const w of BrowserWindow.getAllWindows())
+                    w.webContents.send("auth:state-changed", state);
+            });
+            await wait(800);
             await page
                 .getByRole("button", { name: "Submit bug or feedback" })
                 .click();
@@ -359,10 +682,15 @@ const shots = [
             });
             await drawer.waitFor({ timeout: 10000 });
             await wait(800);
+            await drawer
+                .getByText("Something is broken", { exact: false })
+                .first()
+                .click()
+                .catch(() => {});
+            await wait(800);
             await page.mouse.move(5, 500);
-            // Only the top: the rest of the drawer is empty until you sign in
-            const box = await around(drawer, 8);
-            return { box: { ...box, height: 280 } };
+            await wait(300);
+            return { box: await around(drawer, 8) };
         },
     },
 ];

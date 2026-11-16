@@ -90,6 +90,33 @@ const shots = [
         },
     },
     {
+        id: "files-file-tab",
+        kind: "still",
+        // The toolbar's File tab: Open File, New File, Save Copy, Exit File, Export and Settings
+        async setup({ page, wait, around, union }) {
+            await tidy(page);
+            await fileTab(page);
+            await page.mouse.move(1596, 996);
+            await wait(400);
+            return {
+                box: union(
+                    await around(
+                        page.getByRole("tab", { name: "File", exact: true }),
+                        10,
+                    ),
+                    await around(
+                        page.getByRole("button", { name: "Settings" }).first(),
+                        10,
+                    ),
+                    await around(
+                        page.getByRole("button", { name: "Open File" }),
+                        10,
+                    ),
+                ),
+            };
+        },
+    },
+    {
         id: "files-export-sheets",
         kind: "still",
         async setup({ page, around }) {
@@ -110,28 +137,54 @@ const shots = [
         },
     },
     {
+        id: "files-video-settings",
+        kind: "still",
+        // The top of the Video tab: the dialog's tabs and the Resolution, Frame rate and Video
+        // background settings, down to the top of the preview
+        async setup({ page, around, wait }) {
+            const dialog = await exportDialog(page, "Video");
+            await wait(2500);
+            await page
+                .locator(".export-coordinates-dialog")
+                .evaluate((el) => (el.scrollTop = 0));
+            await wait(800);
+            const d = await settledBox(page, around, dialog, 4);
+            const canvas = await page
+                .locator(".export-coordinates-dialog canvas")
+                .first()
+                .boundingBox();
+            const bottom = Math.min(d.y + d.height, canvas.y + 24);
+            return {
+                box: { x: d.x, y: d.y, width: d.width, height: bottom - d.y },
+            };
+        },
+    },
+    {
         id: "files-export-video",
         kind: "still",
         async setup({ page, around, wait }) {
             const dialog = await exportDialog(page, "Video");
             await wait(2500);
-            // Scrolled to the bottom: the preview with its info box, the framing sliders and
-            // the On-screen info checkboxes
-            // Scrolled to the end: the preview's lower part with the info box, the framing
-            // sliders and the On-screen info checkboxes
-            await page
-                .locator(".export-coordinates-dialog")
-                .evaluate((el) => (el.scrollTop = el.scrollHeight));
+            // Scrolled so the preview starts near the top
+            const canvas = page
+                .locator(".export-coordinates-dialog canvas")
+                .first();
+            await page.locator(".export-coordinates-dialog").evaluate(
+                (el, c) => {
+                    const r = c.getBoundingClientRect();
+                    el.scrollTop += r.top - el.getBoundingClientRect().top - 60;
+                },
+                await canvas.elementHandle(),
+            );
             await wait(800);
             const d = await settledBox(page, around, dialog, 4);
-            // Down to the last On-screen info checkbox (not the music file's path under it)
-            const last = await around(
-                dialog.getByText("Elapsed time", { exact: true }),
-                16,
-            );
-            const bottom = Math.min(d.y + d.height, last.y + last.height);
+            const c = await canvas.boundingBox();
+            // The On-screen info heading and the whole preview; the checkboxes under it don't
+            // fit in the window with it, and the page lists them
+            const top = Math.max(d.y, c.y - 52);
+            const bottom = Math.min(d.y + d.height, c.y + c.height + 20);
             return {
-                box: { x: d.x, y: d.y, width: d.width, height: bottom - d.y },
+                box: { x: d.x, y: top, width: d.width, height: bottom - top },
             };
         },
     },
@@ -200,29 +253,6 @@ const shots = [
                 1.0,
             );
             await film.hold(1.4);
-        },
-    },
-    {
-        id: "files-mobile-panel",
-        kind: "still",
-        // The Mobile app panel before signing in
-        async setup({ page, wait, around }) {
-            await tidy(page);
-            await page.locator("#sidebar-launcher-mobile-export").click();
-            await wait(3000);
-            await page.mouse.move(1596, 996);
-            const panel = page
-                .locator("div.backdrop-blur-32.absolute.z-40")
-                .first();
-            // The panel's buttons, without the promotional pictures under them
-            const p = await around(panel, 12);
-            const signIn = await around(
-                panel.getByRole("button", { name: "Sign In" }).first(),
-                24,
-            );
-            return {
-                box: { ...p, height: signIn.y + signIn.height - p.y },
-            };
         },
     },
 ];

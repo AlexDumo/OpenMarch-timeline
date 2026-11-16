@@ -76,16 +76,21 @@ const STEP_WARNING_PAGES = 5;
 const STEP_WARNING_INCHES = "9";
 
 /** Lowers the step limit, closes the Field panel and goes to the page whose moves break it. */
-async function stepWarningsPage(page, wait) {
+async function stepWarningsPage(
+    page,
+    wait,
+    inches = STEP_WARNING_INCHES,
+    pages = STEP_WARNING_PAGES,
+) {
     await wait(3000);
     await openFieldPanel(page, wait);
     const input = page.getByTestId("field-step-warning");
-    await input.fill(STEP_WARNING_INCHES);
+    await input.fill(inches);
     await input.press("Enter");
     await wait(600);
     await page.getByTestId("field-edit-done").click();
     await wait(600);
-    for (let i = 0; i < STEP_WARNING_PAGES; i++) {
+    for (let i = 0; i < pages; i++) {
         await page.keyboard.press("KeyE");
         await wait(500);
     }
@@ -116,9 +121,19 @@ const shots = [
         kind: "still",
         // The Lines tab beside the field: the list and the picked line's Line section, the rulers,
         // the hint and the dimmed drill (the window's toolbar, inspector and timeline cut away)
+        // The 45s hidden first (H), so the list shows a crossed-out eye beside the reference
+        // crosshair icons; then the 40 picked. Cropped to the panel and the left two thirds of the
+        // field, below the toolbar, so the list and the panel's notes read at page width
         async setup({ page, wait, union }) {
             await wait(3000);
             await editField(page, wait);
+            const xs = (await fieldLines(page))
+                .filter((l) => l.axis === "x" && l.steps > 0)
+                .sort((a, b) => a.steps - b.steps);
+            await page.mouse.click(xs[0].screen.x, xs[0].screen.y);
+            await wait(300);
+            await page.keyboard.press("KeyH");
+            await wait(400);
             const [line] = await sideTwoPair(page);
             await page.mouse.click(line.screen.x, line.screen.y);
             await page.mouse.move(800, 990);
@@ -127,13 +142,18 @@ const shots = [
                 .getByTestId("field-edit-panel")
                 .boundingBox();
             const field = await fieldPane(page);
-            const b = union(panelBox, field);
+            const b = union(panelBox, {
+                ...field,
+                width: (field.width * 2) / 3,
+            });
+            // The panel's and the rulers' top, no higher: the toolbar above stays out
+            const top = Math.min(panelBox.y, field.y + 4);
             return {
                 box: {
                     x: b.x - 6,
-                    y: b.y - 6,
+                    y: top,
                     width: b.width + 12,
-                    height: b.height + 12,
+                    height: b.y + b.height + 6 - top,
                 },
             };
         },
@@ -154,26 +174,41 @@ const shots = [
                 .sort((p, q) => p.steps - q.steps);
             const at = (steps) => xs.find((l) => l.steps === steps).screen.x;
             const left = at(-24) - 40;
-            const right = at(32) + 260;
+            // Ends inside the field's own pane: the panel beside it stays out
+            const right = Math.min(at(32) + 260, field.x + field.width - 4);
             return {
                 box: {
                     x: left,
                     y: field.y,
                     width: right - left,
-                    height: (await backEdgeY(page)) + 160 - field.y,
+                    height: (await backEdgeY(page)) + 230 - field.y,
                 },
             };
         },
         async perform({ page, film, overlay }) {
             await overlay.enable();
+            // Pressed on the ruler halfway between side 2's 40 and 35 tabs, on bare ruler (not a
+            // tab, which would move that line): a new line, the 37.5, comes out
             const [a, b] = await sideTwoPair(page);
-            const from = { x: (a.tab.x + b.tab.x) / 2 + 2, y: a.tab.y };
+            const from = { x: (a.tab.x + b.tab.x) / 2, y: a.tab.y };
+            const hit = await page.evaluate(
+                ({ x, y }) =>
+                    document
+                        .elementFromPoint(x, y)
+                        ?.closest("[data-field-line-tab]") != null,
+                from,
+            );
+            if (hit) throw new Error("the press would land on a line's tab");
             await page.mouse.move(from.x, from.y + 160);
             await film.moveTo(page, { x: from.x, y: from.y + 160 }, from, 0.6);
             await film.hold(0.3);
-            const to = { x: from.x, y: (await backEdgeY(page)) + 110 };
+            // Let go above the back hash, clear of the key cap at the bottom of the clip
+            const to = { x: from.x, y: (await backEdgeY(page)) + 60 };
             await film.drag(page, from, to, 1.6);
-            await film.hold(1.2);
+            await film.hold(0.6);
+            // The pointer leaves the field, so no line lights up under it
+            await film.moveTo(page, to, { x: to.x + 40, y: to.y + 400 }, 0.5);
+            await film.hold(1.4);
         },
     },
     {
@@ -188,8 +223,31 @@ const shots = [
             await page.mouse.move(800, 990);
             const detail = page.getByTestId("field-line-detail");
             await detail.getByTestId("field-line-position").waitFor();
+            // Scrolled so the section's last control (Delete line) is in view too
+            await detail
+                .getByRole("button", { name: /Delete/ })
+                .last()
+                .scrollIntoViewIfNeeded()
+                .catch(() => {});
             await wait(500);
-            return { box: await around(detail, 8) };
+            // The section only: the transport below the panel stays out
+            const d = await detail.boundingBox();
+            const panelBox = await page
+                .getByTestId("field-edit-panel")
+                .boundingBox();
+            const top = Math.max(d.y, panelBox.y) - 8;
+            const bottom = Math.min(
+                d.y + d.height,
+                panelBox.y + panelBox.height,
+            );
+            return {
+                box: {
+                    x: d.x - 8,
+                    y: top,
+                    width: d.width + 16,
+                    height: bottom + 8 - top,
+                },
+            };
         },
     },
     {
@@ -220,19 +278,25 @@ const shots = [
             const dialog = page.getByRole("alertdialog");
             await dialog.waitFor();
             await wait(600);
-            return { box: await around(dialog, 8) };
+            // To the sheet's edge, with no padding onto the field
+            return { box: await around(dialog, 0) };
         },
     },
     {
         id: "field-step-warnings",
         kind: "still",
-        // Warnings are off until turned on in Settings › Field
-        uiSettings: { stepSizeWarnings: true },
-        // The threshold lowered so this page's long moves show in red; cropped to a few guard
-        // marchers (G19 to G25) so the dashed red paths read
+        // Warnings are off until turned on in Settings › Field; paths on, so an ordinary path
+        // shows beside a warned one
+        uiSettings: { stepSizeWarnings: true, nextPaths: true },
+        // A 25-inch limit on page 11, whose move to page 12 is 8 counts: of guards G1 to G5, G3
+        // and G5 go over it and their neighbors don't, so warned and ordinary paths sit side by side
         async setup({ page, wait }) {
-            await stepWarningsPage(page, wait);
-            return { box: await aroundMarchers(page, /^G(19|2[0-5])$/, 40) };
+            await stepWarningsPage(page, wait, "25", 11);
+            await page.mouse.move(800, 990);
+            await wait(800);
+            const b = await aroundMarchers(page, /^G[1-5]$/, 130);
+            const cx = b.x + b.width / 2;
+            return { box: { ...b, x: cx - 350, width: 700 } };
         },
     },
     {
@@ -262,13 +326,20 @@ const shots = [
                 .getByText("Smallest step size")
                 .first()
                 .boundingBox();
-            const top = (smallest ?? l).y - 16;
+            // From the marcher heading with the selection count down to the two rows, inside the
+            // scrollbar
+            const heading = await page
+                .getByText(/^7 marchers/)
+                .first()
+                .boundingBox({ timeout: 2000 })
+                .catch(() => null);
+            const top = (heading ?? smallest ?? l).y - 12;
             return {
                 box: {
                     x: l.x - 16,
                     y: top,
-                    width: 320,
-                    height: l.y + l.height + 30 - top,
+                    width: 300,
+                    height: l.y + l.height + 24 - top,
                 },
             };
         },
@@ -281,7 +352,8 @@ const shots = [
             await wait(3000);
             await openPanel(page, wait, "workspace-settings");
             await page.mouse.move(800, 990);
-            return { box: await around(panel(page), 4) };
+            // To the panel's edge: the field's ruler beside it stays out
+            return { box: await around(panel(page), 0) };
         },
     },
     {
@@ -294,9 +366,16 @@ const shots = [
             await page.getByTestId("field-tab-appearance").click();
             await wait(800);
             await page.mouse.move(800, 990);
-            return {
-                box: await around(page.getByTestId("field-edit-panel"), 6),
-            };
+            // Down to just above the Background image heading, so no control is cut in half
+            const b = await around(page.getByTestId("field-edit-panel"), 6);
+            const heading = await page
+                .getByTestId("field-edit-panel")
+                .getByText("Background image", { exact: true })
+                .first()
+                .boundingBox({ timeout: 3000 })
+                .catch(() => null);
+            if (!heading || heading.y > b.y + b.height) return { box: b };
+            return { box: { ...b, height: heading.y - 8 - b.y } };
         },
     },
 ];

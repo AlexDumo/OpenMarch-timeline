@@ -3,10 +3,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const TEMPO_SHOW = "scripts/docs-media/shows/music-tempo.dots";
-/** A score with repeats, a D.S. al Coda written in words, and no problems otherwise */
+/**
+ * A score with repeats and jumps written in words, and no problems otherwise: a copy of the
+ * parser corpus's RepeatsTest Finale.musicxml, named like a band's score
+ */
 const SCORE = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
-    "../../../../../packages/musicxml-parser/src/__test__/corpus/files/scorewriter-comparison/Finale/RepeatsTest/RepeatsTest Finale.musicxml",
+    "../assets/Opener - full score.musicxml",
 );
 
 /** Closes notices that would sit over the picture (the low-quality field notice, toasts). */
@@ -54,6 +57,25 @@ async function bandGeometry(page) {
     return { band: b, ppb, xOfBeat: (beat) => b.x + (beat - 1) * ppb };
 }
 
+/**
+ * Zooms the timeline in (Mod+scroll over the band's left end, so count 1 stays put) until
+ * `counts` counts fill `width` window points. Edit music only: it reads the band's pixels a count.
+ */
+async function zoomToCounts(page, wait, counts, width) {
+    const band = page.getByTestId("tempo-band");
+    const b = await box(band);
+    await page.mouse.move(b.x + 2, b.y + 60);
+    for (let i = 0; i < 60; i++) {
+        const ppb = Number(await band.getAttribute("data-ppb"));
+        if (ppb * counts >= width) break;
+        await page.keyboard.down("Control");
+        await page.mouse.wheel(0, -60);
+        await page.keyboard.up("Control");
+        await wait(120);
+    }
+    await wait(800);
+}
+
 /** The band's first tempo label (♩118) and where its line is. */
 async function tempoLine(page) {
     const label = await box(page.getByTestId("tempo-label").first());
@@ -65,10 +87,12 @@ const shots = [
         id: "music-edit-music",
         kind: "still",
         show: TEMPO_SHOW,
-        // Measures 1 to 10: the header's left half and the four lanes, with the ramp and the jump
+        // Zoomed in a little, to measures 1 to 11:
+        // the header's left half and the four lanes, with the ramp and the jump
         async setup({ page, wait, around }) {
             await wait(3000);
             await editMusic(page, wait);
+            await zoomToCounts(page, wait, 46, 780);
             await page.mouse.move(800, 200);
             return { box: await leftOfPane(page, around) };
         },
@@ -77,18 +101,26 @@ const shots = [
         id: "music-timeline-waveform",
         kind: "still",
         show: TEMPO_SHOW,
-        // The ordinary timeline: pages, counts, measures and the music's waveform, first two pages
+        // The ordinary timeline across its whole width, so Edit music at the right end of the
+        // controls is in it: pages, counts, measures and the music's waveform
         async setup({ page, wait, around }) {
             await wait(3000);
             await tidy(page);
             await page.mouse.move(800, 200);
-            return { box: await leftOfPane(page, around, 780) };
+            const b = await around(pane(page), 4);
+            // From the controls row down: the panel above the timeline stays out
+            const controls = await box(page.getByTestId("timeline-tempo-mode"));
+            const top = controls.y - 10;
+            return {
+                box: { ...b, y: top, height: b.y + b.height - top },
+            };
         },
     },
     {
         id: "music-file-menu",
         kind: "still",
-        show: TEMPO_SHOW,
+        // Two recordings, so the check mark shows which one plays
+        show: "scripts/docs-media/shows/music-two-recordings.dots",
         async setup({ page, wait, union }) {
             await wait(3000);
             await editMusic(page, wait);
@@ -98,8 +130,20 @@ const shots = [
             await wait(500);
             const header = await box(page.getByTestId("tempo-mode-header"));
             const m = await box(menu);
+            // The menu and the header above it, ending after Metronome (not mid-button)
+            const metronome = await box(
+                page
+                    .getByTestId("tempo-mode-header")
+                    .getByRole("button", { name: /Metronome/ })
+                    .first(),
+            );
             const b = union(
-                { x: header.x, y: header.y, width: 520, height: header.height },
+                {
+                    x: header.x,
+                    y: header.y,
+                    width: metronome.x + metronome.width + 8 - header.x,
+                    height: header.height,
+                },
                 m,
             );
             return {
@@ -116,21 +160,28 @@ const shots = [
         id: "music-tempo-drag",
         kind: "clip",
         show: TEMPO_SHOW,
-        // The first tempo stretch's line dragged from ♩118 up
+        // Zoomed in to measures 1 to 6, the first tempo stretch's line dragged well down from ♩118:
+        // the counts get longer, so the waveform squeezes and slides left under them
         async setup({ page, wait, around }) {
             await wait(3000);
             await editMusic(page, wait);
+            await zoomToCounts(page, wait, 24, 780);
             await page.mouse.move(800, 200);
-            return { box: await leftOfPane(page, around) };
+            const b = await leftOfPane(page, around);
+            // From the Marks lane down: the header and transport stay out
+            const band = await box(page.getByTestId("tempo-band"));
+            const top = band.y - 4;
+            return { box: { ...b, y: top, height: b.y + b.height - top } };
         },
         async perform({ page, film, overlay }) {
             await overlay.enable();
             const line = await tempoLine(page);
-            const at = { x: line.x + 160, y: line.y };
-            await film.moveTo(page, { x: at.x + 200, y: at.y - 120 }, at, 0.6);
-            await film.hold(0.3);
-            await film.drag(page, at, { x: at.x, y: at.y - 24 }, 1.2);
-            await film.hold(1.5);
+            const at = { x: line.x + 300, y: line.y };
+            await film.moveTo(page, { x: at.x + 200, y: at.y + 120 }, at, 0.6);
+            await film.hold(0.4);
+            // Down (slower): ♩118 is the top of the lane here, so a drag up only rescales it
+            await film.drag(page, at, { x: at.x, y: at.y + 36 }, 1.8);
+            await film.hold(2.5);
         },
     },
     {
@@ -139,11 +190,17 @@ const shots = [
         show: TEMPO_SHOW,
         // A count made a hold, then right-clicked again: Hold length… and Not a hold, over the
         // tempo line's gap and the fermata sign
+        // Zoomed in so a count is wide, and right-clicked near its right edge, so the menu opens
+        // clear of the fermata sign over the middle of the count
         async setup({ page, wait, union }) {
             await wait(3000);
             await editMusic(page, wait);
+            await zoomToCounts(page, wait, 16, 780);
+            const { ppb, xOfBeat } = await bandGeometry(page);
             const line = await tempoLine(page);
-            const at = { x: line.x + 330, y: line.y + 20 };
+            // m. 3, count 2
+            const count = 10;
+            const at = { x: xOfBeat(count) + ppb - 6, y: line.y + 30 };
             await page.mouse.click(at.x, at.y, { button: "right" });
             const menu = page.getByTestId("tempo-menu");
             await menu.waitFor();
@@ -162,8 +219,12 @@ const shots = [
             await wait(500);
             const band = await box(page.getByTestId("tempo-band"));
             const m = await box(menu);
-            const left = Math.max(band.x, Math.min(at.x, m.x) - 200);
-            const b = union({ x: left, y: band.y, width: 1, height: 130 }, m);
+            // Two counts before the held one, through the Tempo lane; the menu above it
+            const left = Math.max(band.x, xOfBeat(count - 2));
+            const b = union(
+                { x: left, y: line.y - 34, width: 1, height: 100 },
+                m,
+            );
             return {
                 box: {
                     x: b.x - 4,
@@ -192,16 +253,15 @@ const shots = [
             await ask.waitFor();
             await page.mouse.move(at.x, at.y + 300);
             await wait(600);
-            const band = await box(page.getByTestId("tempo-band"));
+            // The box and the Tempo lane under it, no wider than the box
             const a = await box(ask);
-            const left = Math.max(band.x, Math.min(at.x, a.x) - 120);
-            const b = union({ x: left, y: band.y, width: 1, height: 130 }, a);
+            const b = union(a, { x: a.x, y: line.y, width: 1, height: 40 });
             return {
                 box: {
-                    x: b.x - 4,
-                    y: b.y - 8,
-                    width: b.width + 24,
-                    height: b.height + 16,
+                    x: b.x - 10,
+                    y: b.y - 10,
+                    width: b.width + 20,
+                    height: b.height + 14,
                 },
             };
         },
@@ -234,7 +294,8 @@ const shots = [
                     x: band.x - 60,
                     y: band.y - 4,
                     width: 24 * ppb + 60,
-                    height: 42 + 76 + 10,
+                    // ends above the Music lane's name
+                    height: 42 + 76 + 2,
                 },
             };
         },
@@ -286,7 +347,7 @@ const shots = [
         id: "music-add",
         kind: "still",
         show: TEMPO_SHOW,
-        // Edit music in a show with no music yet: Add music… in the header
+        // Edit music in a show with no music yet: the whole header, from Add music… to Done
         async setup({ page, wait, union }) {
             await wait(3000);
             await editMusic(page, wait);
@@ -302,7 +363,7 @@ const shots = [
                 box: {
                     x: header.x - 4,
                     y: header.y - 4,
-                    width: 640,
+                    width: header.width + 8,
                     height: header.height + 8,
                 },
             };
@@ -323,17 +384,123 @@ const shots = [
             await menu.waitFor();
             await wait(500);
             const m = await box(menu);
-            const left = Math.min(chip.x, m.x) - 140;
+            // The menu and the Meas. lane under it, with the chip and a measure before it
+            const left = Math.min(chip.x, m.x) - 60;
             const b = union(
-                { x: left, y: chip.y, width: 1, height: chip.height + 8 },
+                { x: left, y: chip.y, width: 1, height: chip.height + 4 },
                 m,
             );
             return {
                 box: {
-                    x: b.x - 4,
+                    x: b.x,
                     y: b.y - 8,
-                    width: b.width + 24,
+                    width: b.width + 12,
+                    height: b.height + 14,
+                },
+            };
+        },
+    },
+    {
+        id: "music-import-menu",
+        kind: "still",
+        show: TEMPO_SHOW,
+        // Edit music's Import button with its menu open: Audio file and MusicXML score, at the
+        // header's right end beside the question mark and Done
+        async setup({ page, wait, union }) {
+            await wait(3000);
+            await editMusic(page, wait);
+            const button = page.getByTestId("tempo-import");
+            await button.click();
+            const item = page.getByTestId("tempo-import-score");
+            await item.waitFor();
+            await item.hover();
+            await wait(600);
+            const header = await box(page.getByTestId("tempo-mode-header"));
+            const b = union(await box(item.locator("..")), {
+                x: header.x + header.width - 480,
+                y: header.y,
+                width: 480,
+                height: header.height,
+            });
+            return {
+                box: {
+                    x: b.x - 8,
+                    y: b.y - 8,
+                    width: b.width + 16,
                     height: b.height + 16,
+                },
+            };
+        },
+    },
+    {
+        id: "music-tap-tempo",
+        kind: "still",
+        show: TEMPO_SHOW,
+        // Tap tempo after eight taps half a second apart: about ♩120 and Use
+        async setup({ page, wait, union }) {
+            await wait(3000);
+            await editMusic(page, wait);
+            await page
+                .getByTestId("tempo-mode-header")
+                .getByRole("button", { name: "Tap tempo" })
+                .click();
+            const panel = page.getByTestId("tap-tempo");
+            await panel.waitFor();
+            for (let i = 0; i < 8; i++) {
+                await page.keyboard.press("KeyT");
+                await wait(500);
+            }
+            await page.mouse.move(800, 990);
+            await wait(400);
+            const header = await box(page.getByTestId("tempo-mode-header"));
+            const p = await box(panel);
+            const b = union(p, {
+                x: p.x,
+                y: header.y,
+                width: p.width,
+                height: header.height,
+            });
+            return {
+                box: {
+                    x: b.x - 10,
+                    y: b.y - 10,
+                    width: b.width + 20,
+                    height: b.height + 20,
+                },
+            };
+        },
+    },
+    {
+        id: "music-metronome-panel",
+        kind: "still",
+        show: TEMPO_SHOW,
+        // The Metronome panel from the sidebar: on/off, accent, measure-only clicks, volume and
+        // the click's sound, with the sidebar button beside it
+        async setup({ page, wait }) {
+            await wait(3000);
+            await tidy(page);
+            const launcher = page.locator(
+                '[id="sidebar-launcher-@openmarch/metronome"]',
+            );
+            await launcher.click();
+            const panel = page.locator("div.absolute.z-40.bg-modal").first();
+            await panel.waitFor();
+            await page.mouse.move(800, 990);
+            await wait(800);
+            const l = await box(launcher);
+            const p = await box(panel);
+            // Ends under the last control (Beat style), not at the panel's foot
+            const last = await box(panel.getByText("Beat style").first());
+            const bottom = Math.min(p.y + p.height, last.y + last.height + 40);
+            return {
+                box: {
+                    x: l.x - 8,
+                    y: Math.min(l.y, p.y) - 8,
+                    width: p.x + p.width + 8 - (l.x - 8),
+                    height:
+                        Math.max(bottom, l.y + l.height) +
+                        8 -
+                        (Math.min(l.y, p.y) - 8),
                 },
             };
         },
@@ -397,9 +564,9 @@ const shots = [
             return {
                 box: {
                     x: b.x - 12,
-                    y: b.y - 12,
+                    y: b.y - 4,
                     width: b.width + 24,
-                    height: b.height + 24,
+                    height: b.height + 16,
                 },
             };
         },

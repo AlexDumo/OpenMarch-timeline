@@ -89,7 +89,34 @@ const shots = [
             await toPage1(page, wait);
             await page.mouse.move(800, 500);
             await wait(500);
-            return { box: { x: 0, y: 0, width: 1268, height: 120 } };
+            // The menu to the end of the Alignment tab's controls, so the tab names can be read
+            return { box: { x: 0, y: 0, width: 900, height: 120 } };
+        },
+    },
+    {
+        id: "window-toolbar-end",
+        kind: "still",
+        // The right end of the title bar and toolbar: search, Submit bug or feedback, Open 3D
+        // View and the Editor and Preview switch
+        async setup({ page, wait }) {
+            await toPage1(page, wait);
+            await page.mouse.move(800, 500);
+            await wait(500);
+            return { box: { x: 1010, y: 0, width: 430, height: 72 } };
+        },
+    },
+    {
+        id: "window-command-palette",
+        kind: "still",
+        // The command palette with "split" typed: the matching commands, one dimmed
+        async setup({ page, wait, around }) {
+            await toPage1(page, wait);
+            await page.keyboard.press("Control+KeyK");
+            await wait(800);
+            await page.keyboard.type("split", { delay: 60 });
+            await wait(1000);
+            const dialog = page.getByRole("dialog").last();
+            return { box: await around(dialog, 10) };
         },
     },
     {
