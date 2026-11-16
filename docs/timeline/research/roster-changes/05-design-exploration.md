@@ -13,14 +13,14 @@ No drill-writing software is used as a precedent.
 
 ## Changes from draft 1
 
-1. **The state is by set, not for the whole show.** A part is *marching*, *unfilled* or *out*,
+1. **The state is by set, not for the whole show.** A part is _marching_, _unfilled_ or _out_,
    from a page onward. Draft 1 had one whole-show flag. It could not say "kept through set 30,
    gone after", and a part halfway through a review had no defined state (06 B1, B4).
 2. **Recipe-less shows are the main case.** The bundled demo and every v0.1.7 file have no shape
    recipes (06 B2, confirmed). Stops are now found from the dots themselves, and a hand-placed
    stop has real options: move the hole to the end of its line, or spread the line evenly.
 3. **The 0.2.0 split is re-derived.** There is no freeze on file changes (owner, #994,
-   2026-11-15). The storage is cheapest *before* 0.2.0. I now put the storage and the first
+   2026-11-15). The storage is cheapest _before_ 0.2.0. I now put the storage and the first
    command in 0.2.0, and the review in 0.2.x.
 4. **Step 1 changed.** It was a list of empty spots in shapes, which is empty on the demo show.
    It is now **Mark as unfilled** and **Assign**.
@@ -29,7 +29,7 @@ No drill-writing software is used as a precedent.
 6. **Swap parts became Swap drill**, whole show or from a set on. It runs on main with no
    pathways work (06 S7). Labels and people stay with the row.
 7. **Working words changed** because open, fill and keep already mean things in the shape UI
-   (06 S2): *unfilled*, *out*, **Assign**, **Leave the spot**.
+   (06 S2): _unfilled_, _out_, **Assign**, **Leave the spot**.
 8. **Close up is no longer called mechanical** where it isn't. The cost table gained columns,
    and "shift within the line" comes before free least travel (06 S3).
 9. **Batch got guards**, **Add next to** no longer defaults onto a neighbor, review state lives
@@ -65,15 +65,15 @@ column is my **INFERENCE** from how bands work; the owner should correct it.
 
 ### Jobs when someone leaves
 
-| # | Job | What the designer wants | How common (INFERENCE) | Today |
-| --- | --- | --- | --- | --- |
-| L1 | **The person left, the part stays, nobody marches it** | Every set keeps its spacing. The band marches around a marked hole. | Most common in season | Delete. Spacing stays, the part is destroyed, and nothing marks where it was. |
-| L2 | **Someone else takes the part** | Same dot, same drill, new name. | Common | Edit the row's name in place. It works because the row is the part (**FACT**, `MarcherForm.tsx:158-170`). Nothing says so. |
-| L3 | **The hole moves to another part** | T7's person marches T3's drill, often only from the next untaught set. T7's part becomes the hole. | Common. This is how designers choose where the hole is. | Nothing. Swap marchers trades one moment (**FACT**, 01 §5). |
-| L4 | **The part is removed and the drill restaged** | Set by set: leave the spot, close up, or lay out again. | Common before the season. In season, usually only for untaught sets. | Delete, then fix every set by hand. |
-| L4b | **Taught sets keep the part, later sets drop it** | Sets 1 to 30 keep T3's hole. Sets 31 on are restaged without T3. | The usual in-season form of L4 | Not possible in one file. |
-| L5 | **Temporary absence** | Print and show without that person. Change nothing. Bring them back. | Common, short | A tag with a hidden look hides the dot on the field and the drill chart (**FACT**, `marcherLooks.ts:47`, `drillChartSvg.ts:170`). 06 reports coordinate sheets still print it. I found no check in the 3D View (**INFERENCE**). |
-| L6 | **A performer leaves the field partway** | On in the opener, off from the ballad. | Unknown | The same tag look, from a page onward (`tag_appearances` is keyed by tag and start page, **FACT** `schema.ts:225-245`). Display only. |
+| #   | Job                                                    | What the designer wants                                                                            | How common (INFERENCE)                                               | Today                                                                                                                                                                                                                           |
+| --- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| L1  | **The person left, the part stays, nobody marches it** | Every set keeps its spacing. The band marches around a marked hole.                                | Most common in season                                                | Delete. Spacing stays, the part is destroyed, and nothing marks where it was.                                                                                                                                                   |
+| L2  | **Someone else takes the part**                        | Same dot, same drill, new name.                                                                    | Common                                                               | Edit the row's name in place. It works because the row is the part (**FACT**, `MarcherForm.tsx:158-170`). Nothing says so.                                                                                                      |
+| L3  | **The hole moves to another part**                     | T7's person marches T3's drill, often only from the next untaught set. T7's part becomes the hole. | Common. This is how designers choose where the hole is.              | Nothing. Swap marchers trades one moment (**FACT**, 01 §5).                                                                                                                                                                     |
+| L4  | **The part is removed and the drill restaged**         | Set by set: leave the spot, close up, or lay out again.                                            | Common before the season. In season, usually only for untaught sets. | Delete, then fix every set by hand.                                                                                                                                                                                             |
+| L4b | **Taught sets keep the part, later sets drop it**      | Sets 1 to 30 keep T3's hole. Sets 31 on are restaged without T3.                                   | The usual in-season form of L4                                       | Not possible in one file.                                                                                                                                                                                                       |
+| L5  | **Temporary absence**                                  | Print and show without that person. Change nothing. Bring them back.                               | Common, short                                                        | A tag with a hidden look hides the dot on the field and the drill chart (**FACT**, `marcherLooks.ts:47`, `drillChartSvg.ts:170`). 06 reports coordinate sheets still print it. I found no check in the 3D View (**INFERENCE**). |
+| L6  | **A performer leaves the field partway**               | On in the opener, off from the ballad.                                                             | Unknown                                                              | The same tag look, from a page onward (`tag_appearances` is keyed by tag and start page, **FACT** `schema.ts:225-245`). Display only.                                                                                           |
 
 Draft 1 said L5 and L6 had nothing. That was wrong: a display-only form exists, and it is the
 storage pattern this draft reuses.
@@ -87,12 +87,12 @@ Still unsupported after this design, stated plainly:
 
 ### Jobs when someone joins
 
-| # | Job | Today |
-| --- | --- | --- |
-| A1 | **Take an unfilled part** | Edit a name, if the row still exists. If it was deleted, Add offers the old number and the new marcher stands at home with no drill (**FACT**, 01 §3). |
-| A2 | **Insert into existing forms** (one more trumpet; or 48 grows to 60 for a reused show) | Add, then re-place every form by hand. |
-| A3 | **A new part from scratch** | Add. Fine as it is. |
-| A4 | **A new season's roster on last year's show** | The CSV import refuses every row whose drill number exists (**FACT**, `marcherCsv.ts:228`). |
+| #   | Job                                                                                    | Today                                                                                                                                                  |
+| --- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A1  | **Take an unfilled part**                                                              | Edit a name, if the row still exists. If it was deleted, Add offers the old number and the new marcher stands at home with no drill (**FACT**, 01 §3). |
+| A2  | **Insert into existing forms** (one more trumpet; or 48 grows to 60 for a reused show) | Add, then re-place every form by hand.                                                                                                                 |
+| A3  | **A new part from scratch**                                                            | Add. Fine as it is.                                                                                                                                    |
+| A4  | **A new season's roster on last year's show**                                          | The CSV import refuses every row whose drill number exists (**FACT**, `marcherCsv.ts:228`).                                                            |
 
 ### How much of a real show is hand-placed
 
@@ -120,14 +120,14 @@ at an even interval, allowing a steady bend (an arc). It may find none, one, or 
 
 **SPIKE** (one show, the demo; thresholds picked by me, results not checked by eye):
 
-| Measure, over 95 marchers × 23 pages | Demo show |
-| --- | --- |
-| Marcher-sets standing in an evenly spaced line or curve of 4 or more | 74% |
-| ... and not at its end | 52% |
-| Standing in two crossing lines (block-like) | 32% |
-| In no line of 3 or more | 11% |
-| Stops per marcher (same 3 nearest neighbors, same offsets) | mean 8.8 of 23 pages (3 to 11) |
-| Marcher-sets where the marcher did not move from the page before | 61% |
+| Measure, over 95 marchers × 23 pages                                 | Demo show                      |
+| -------------------------------------------------------------------- | ------------------------------ |
+| Marcher-sets standing in an evenly spaced line or curve of 4 or more | 74%                            |
+| ... and not at its end                                               | 52%                            |
+| Standing in two crossing lines (block-like)                          | 32%                            |
+| In no line of 3 or more                                              | 11%                            |
+| Stops per marcher (same 3 nearest neighbors, same offsets)           | mean 8.8 of 23 pages (3 to 11) |
+| Marcher-sets where the marcher did not move from the page before     | 61%                            |
 
 Method: for each neighbor within 1.6× the nearest distance, step along that direction, accepting
 the next dot within 0.3 of an interval of the expected place and within 25% of the same length.
@@ -151,23 +151,23 @@ Working words:
 - **Lay out again**: a new layout for the new count.
 - **By hand**: the part is taken out here and the designer edits the set as usual.
 
-| How the moment was authored | Leave the spot | Options with a default the app can compute | Needs the designer | Impossible today |
-| --- | --- | --- | --- | --- |
-| **Hand-placed, in one detected line** | Yes | Move the hole to either end. Spread evenly. | Which end. Whether the detected line is the right one (the app highlights it; the designer can change the selection). | All of it. Nothing finds the line. |
-| **Hand-placed, in two crossing lines** (block) | Yes | Move the hole to the end of its file, or of its rank. | Which line. Anything that reshapes the block. | All of it. |
-| **Hand-placed, no line** | Yes | None. | By hand. | — |
-| **Box, Files** (recipe) | Yes | Move the hole within its file (new). Close up (built; takes the family's version for n, or Short back as a stand-in). | Awkward counts. Section order. | Choosing which spot is empty. |
-| **Box Outline or Spread; Circle; closed Line or Arc** | Yes | Close up (built). | Section order round the outline. | — |
-| **Open Line, Curve, Arc**, no corners or groups | Yes | Move the hole to an end (new). Spread evenly: Fit widens the interval (new). | Which end. | Close up is not offered (**FACT**, `placedBox.ts:289-296`). |
-| **Open Line with corners or counted groups** | Yes | A default exists, but it is a choice: which leg gives up a marcher, and "too few drop from the end" moves the hole to the last group (**FACT**, ADR 0006; `spacing.ts:155-159` via 02). | Yes | Same. |
-| **Group, "as is"** | Yes | None by design. Treated as hand-placed: the line finder runs on its points. | Yes | — |
-| **Several shapes that make one picture** | Yes | Per shape, but closing one opens a gap at the join (#583 is open). The stop shows every shape at that set, with the touched one highlighted. | Yes | Joined close-up. |
-| **Carried shape** | Yes, decided where it was placed | Close up at the origin covers the carried pages. A range filter that starts *inside* the carry is its own stop kind: the edit writes a copy on the later page, and marchers who were standing still now move (**FACT**, 02 §3). | Yes, when cut | — |
-| **Drawn path lane** (PH) | Yes. Nothing is removed, so the lane and Adjust stay. | None: point moves on a laned row refuse (**FACT**, `timelinePointMoves.ts:251` on PH). | — | Close up; hand-over (casting refuses). |
-| **Follow-the-leader trail** (PH) | Yes (a deleted member already leaves a gap, AP-T6) | "Close the gap" is not built. It also changes every later end spot, so the shape at the next set stops matching its recipe. A choice, not a mechanical step. | Yes | Closing the gap. |
-| **Hold** | Held marks stay with the row. | — | — | After #1015, a part added to a Held-whole shape makes it partly Held, which refuses edits (**INFERENCE**, 03 §3). |
-| **Converted v0.1.7 page** | As hand-placed. | As hand-placed. | — | — |
-| **Prop or equipment item** | Out of scope. Items skip all of this; Mark as unfilled is hidden for them. The pit preset and the new-show wizard keep their own deletes. | — | — | — |
+| How the moment was authored                           | Leave the spot                                                                                                                            | Options with a default the app can compute                                                                                                                                                                                      | Needs the designer                                                                                                    | Impossible today                                                                                                  |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **Hand-placed, in one detected line**                 | Yes                                                                                                                                       | Move the hole to either end. Spread evenly.                                                                                                                                                                                     | Which end. Whether the detected line is the right one (the app highlights it; the designer can change the selection). | All of it. Nothing finds the line.                                                                                |
+| **Hand-placed, in two crossing lines** (block)        | Yes                                                                                                                                       | Move the hole to the end of its file, or of its rank.                                                                                                                                                                           | Which line. Anything that reshapes the block.                                                                         | All of it.                                                                                                        |
+| **Hand-placed, no line**                              | Yes                                                                                                                                       | None.                                                                                                                                                                                                                           | By hand.                                                                                                              | —                                                                                                                 |
+| **Box, Files** (recipe)                               | Yes                                                                                                                                       | Move the hole within its file (new). Close up (built; takes the family's version for n, or Short back as a stand-in).                                                                                                           | Awkward counts. Section order.                                                                                        | Choosing which spot is empty.                                                                                     |
+| **Box Outline or Spread; Circle; closed Line or Arc** | Yes                                                                                                                                       | Close up (built).                                                                                                                                                                                                               | Section order round the outline.                                                                                      | —                                                                                                                 |
+| **Open Line, Curve, Arc**, no corners or groups       | Yes                                                                                                                                       | Move the hole to an end (new). Spread evenly: Fit widens the interval (new).                                                                                                                                                    | Which end.                                                                                                            | Close up is not offered (**FACT**, `placedBox.ts:289-296`).                                                       |
+| **Open Line with corners or counted groups**          | Yes                                                                                                                                       | A default exists, but it is a choice: which leg gives up a marcher, and "too few drop from the end" moves the hole to the last group (**FACT**, ADR 0006; `spacing.ts:155-159` via 02).                                         | Yes                                                                                                                   | Same.                                                                                                             |
+| **Group, "as is"**                                    | Yes                                                                                                                                       | None by design. Treated as hand-placed: the line finder runs on its points.                                                                                                                                                     | Yes                                                                                                                   | —                                                                                                                 |
+| **Several shapes that make one picture**              | Yes                                                                                                                                       | Per shape, but closing one opens a gap at the join (#583 is open). The stop shows every shape at that set, with the touched one highlighted.                                                                                    | Yes                                                                                                                   | Joined close-up.                                                                                                  |
+| **Carried shape**                                     | Yes, decided where it was placed                                                                                                          | Close up at the origin covers the carried pages. A range filter that starts _inside_ the carry is its own stop kind: the edit writes a copy on the later page, and marchers who were standing still now move (**FACT**, 02 §3). | Yes, when cut                                                                                                         | —                                                                                                                 |
+| **Drawn path lane** (PH)                              | Yes. Nothing is removed, so the lane and Adjust stay.                                                                                     | None: point moves on a laned row refuse (**FACT**, `timelinePointMoves.ts:251` on PH).                                                                                                                                          | —                                                                                                                     | Close up; hand-over (casting refuses).                                                                            |
+| **Follow-the-leader trail** (PH)                      | Yes (a deleted member already leaves a gap, AP-T6)                                                                                        | "Close the gap" is not built. It also changes every later end spot, so the shape at the next set stops matching its recipe. A choice, not a mechanical step.                                                                    | Yes                                                                                                                   | Closing the gap.                                                                                                  |
+| **Hold**                                              | Held marks stay with the row.                                                                                                             | —                                                                                                                                                                                                                               | —                                                                                                                     | After #1015, a part added to a Held-whole shape makes it partly Held, which refuses edits (**INFERENCE**, 03 §3). |
+| **Converted v0.1.7 page**                             | As hand-placed.                                                                                                                           | As hand-placed.                                                                                                                                                                                                                 | —                                                                                                                     | —                                                                                                                 |
+| **Prop or equipment item**                            | Out of scope. Items skip all of this; Mark as unfilled is hidden for them. The pit preset and the new-show wizard keep their own deletes. | —                                                                                                                                                                                                                               | —                                                                                                                     | —                                                                                                                 |
 
 Three points:
 
@@ -188,10 +188,10 @@ Three points:
 home, and three optional text fields about a person: `name`, `year`, `notes`
 (`schema.ts:152-188`). Everything else hangs off the row id. So the row is the part.
 
-| Belongs to the part (the row) | Belongs to the person |
-| --- | --- |
+| Belongs to the part (the row)                                        | Belongs to the person   |
+| -------------------------------------------------------------------- | ----------------------- |
 | Drill label, home, moves, holds, shape membership, lanes, cues, tags | `name`, `year`, `notes` |
-| `section` (it drives the dot's look and the 3D uniform) | — |
+| `section` (it drives the dot's look and the 3D uniform)              | —                       |
 
 `section` stays on the row. When a mellophone player takes a trumpet part, the designer edits
 the row's section, as today.
@@ -218,11 +218,11 @@ nothing the designer sees. Rejected.
 One new table, shaped like `tag_appearances`: a marcher, a start page, and a state that holds
 from that page onward.
 
-| State | Meaning | Field | Drill chart | Per-performer outputs | Checks | 3D View |
-| --- | --- | --- | --- | --- | --- | --- |
-| **marching** (no row) | Someone marches it | Normal | Normal | Normal | Normal | Normal |
-| **unfilled** | Nobody marches it; the spot is held | Hollow dot, label kept | **Hollow**, so staff see the hole | Skipped | Skipped | Owner call (decision 6) |
-| **out** | The part is not in this set | Not drawn | Not drawn | Skipped | Skipped | Not drawn |
+| State                 | Meaning                             | Field                  | Drill chart                       | Per-performer outputs | Checks  | 3D View                 |
+| --------------------- | ----------------------------------- | ---------------------- | --------------------------------- | --------------------- | ------- | ----------------------- |
+| **marching** (no row) | Someone marches it                  | Normal                 | Normal                            | Normal                | Normal  | Normal                  |
+| **unfilled**          | Nobody marches it; the spot is held | Hollow dot, label kept | **Hollow**, so staff see the hole | Skipped               | Skipped | Owner call (decision 6) |
+| **out**               | The part is not in this set         | Not drawn              | Not drawn                         | Skipped               | Skipped | Not drawn               |
 
 - "Jordan quit" = unfilled from the first page.
 - L4b = unfilled from page 1, out from page 31.
@@ -239,13 +239,13 @@ Parked. B3 does not block it.
 
 The reviewer pointed at `tag_appearances.visible`. I checked it.
 
-| | A tag with a hidden look | Presence state (B3) |
-| --- | --- | --- |
-| What it says | How a dot looks | Whether anyone marches the part |
-| Scope | Everyone with the tag, from one page | One part, from a page |
-| Who reads it today | The field and the drill chart | Nobody yet |
-| Survives | Until the user deletes or restyles the tag | Until changed by a roster command |
-| Checks and per-performer outputs | Unaffected | Skipped |
+|                                  | A tag with a hidden look                   | Presence state (B3)               |
+| -------------------------------- | ------------------------------------------ | --------------------------------- |
+| What it says                     | How a dot looks                            | Whether anyone marches the part   |
+| Scope                            | Everyone with the tag, from one page       | One part, from a page             |
+| Who reads it today               | The field and the drill chart              | Nobody yet                        |
+| Survives                         | Until the user deletes or restyles the tag | Until changed by a roster command |
+| Checks and per-performer outputs | Unaffected                                 | Skipped                           |
 
 They are different facts, so they stay separate. A hidden look on a marching part still means
 "marching, drawn hidden". The storage pattern is what B3 borrows: keyed by start page, with the
@@ -255,27 +255,27 @@ than page ids. The ADR should pick one on purpose.
 
 ### B3 against each concern
 
-| Concern | B3 |
-| --- | --- |
-| Data model | One new table. No table rebuild. History triggers added like any timeline table. |
-| Undo | Each command is one step. None *needs* undo to be reversed later: a state row can always be changed back. |
-| File format | A new table. Before 0.2.0 it is an ordinary migration with no version bump and no older release to stay readable by: migrations 0020 and 0021 landed that way on 2026-11-15, and no release has shipped version 8 (**FACT**, `fileVersion.ts:20-31`). After 0.2.0 it needs a bump, and 0.2.0 then refuses the file (`refuse-too-new`). Without a bump, 0.2.0 would print unfilled parts as real marchers. That is why it should go in before. |
-| v0.1.7 files | Open as today. No rows, so every part is marching. |
-| Exports | Two defaults, not one switch: drill charts draw unfilled parts hollow; coordinate sheets and the mobile export skip them. Out parts are skipped everywhere for those sets. |
-| `.ompb` | Not a blocker (above). |
-| Cues | `cue_marchers` rows stay. Whoever is assigned inherits the part's cues. |
-| Shapes | An unfilled part is still a member. No hole, Recalculate works. When a review option takes it out of a set, it is also taken out of that set's recipe in the same step, so Close up can run. |
-| Pathways | Nothing is removed, so the lane and Adjust stay. The owner's "empty spot keeps path and Adjust" holds without pathways step 12. |
-| Selection and new shapes | Selecting a section includes its unfilled parts, so a new form keeps the hole. The placement preview draws them hollow so that is a visible choice. |
-| What the designer sees | Hollow dots. A count in the Marchers list ("48 marchers, 2 unfilled"). On the timeline, a thin bar per selected part showing where it is unfilled and where it is out. |
+| Concern                  | B3                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Data model               | One new table. No table rebuild. History triggers added like any timeline table.                                                                                                                                                                                                                                                                                                                                                              |
+| Undo                     | Each command is one step. None _needs_ undo to be reversed later: a state row can always be changed back.                                                                                                                                                                                                                                                                                                                                     |
+| File format              | A new table. Before 0.2.0 it is an ordinary migration with no version bump and no older release to stay readable by: migrations 0020 and 0021 landed that way on 2026-11-15, and no release has shipped version 8 (**FACT**, `fileVersion.ts:20-31`). After 0.2.0 it needs a bump, and 0.2.0 then refuses the file (`refuse-too-new`). Without a bump, 0.2.0 would print unfilled parts as real marchers. That is why it should go in before. |
+| v0.1.7 files             | Open as today. No rows, so every part is marching.                                                                                                                                                                                                                                                                                                                                                                                            |
+| Exports                  | Two defaults, not one switch: drill charts draw unfilled parts hollow; coordinate sheets and the mobile export skip them. Out parts are skipped everywhere for those sets.                                                                                                                                                                                                                                                                    |
+| `.ompb`                  | Not a blocker (above).                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Cues                     | `cue_marchers` rows stay. Whoever is assigned inherits the part's cues.                                                                                                                                                                                                                                                                                                                                                                       |
+| Shapes                   | An unfilled part is still a member. No hole, Recalculate works. When a review option takes it out of a set, it is also taken out of that set's recipe in the same step, so Close up can run.                                                                                                                                                                                                                                                  |
+| Pathways                 | Nothing is removed, so the lane and Adjust stay. The owner's "empty spot keeps path and Adjust" holds without pathways step 12.                                                                                                                                                                                                                                                                                                               |
+| Selection and new shapes | Selecting a section includes its unfilled parts, so a new form keeps the hole. The placement preview draws them hollow so that is a visible choice.                                                                                                                                                                                                                                                                                           |
+| What the designer sees   | Hollow dots. A count in the Marchers list ("48 marchers, 2 unfilled"). On the timeline, a thin bar per selected part showing where it is unfilled and where it is out.                                                                                                                                                                                                                                                                        |
 
 ### Two kinds of emptiness
 
-| | Empty spot | Unfilled part |
-| --- | --- | --- |
-| What | A place in one shape nobody stands on | A part nobody marches |
-| Lives in | The recipe (#358, #504) | The presence table |
-| Identity across sets | No | Yes |
+|                      | Empty spot                            | Unfilled part         |
+| -------------------- | ------------------------------------- | --------------------- |
+| What                 | A place in one shape nobody stands on | A part nobody marches |
+| Lives in             | The recipe (#358, #504)               | The presence table    |
+| Identity across sets | No                                    | Yes                   |
 
 #504's "an empty spot is a recipe slot with no marcher, not a separate concept" stays true. No
 decided position is reversed. "Leaving a shape leaves a hole, filling is an explicit command" is
@@ -302,14 +302,14 @@ and Cancel buttons; Enter and Escape are the fast path.
 
 ### The commands, smallest first
 
-| Command | What it does | Writes |
-| --- | --- | --- |
-| **Mark as unfilled** | From the first page, or from the current set on | One state row |
-| **Assign…** | A name goes on the part; unfilled stretches become marching | The row and its state rows |
-| **Take out from here on** / **Put back** | The part is out of the sets from the playhead, or back | One state row |
-| **Swap drill with…** | Two parts trade their drill, for the whole show or from the current set on. Labels, names and sections stay with their rows. | Assignments, Held marks and recipe members from that set on |
-| **Review…** | The stop-by-stop review below | Per decision |
-| **Remove part** | Deletes a part that is out of every set. Disabled with the reason otherwise. | Today's delete, plus its emptied moves |
+| Command                                  | What it does                                                                                                                 | Writes                                                      |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| **Mark as unfilled**                     | From the first page, or from the current set on                                                                              | One state row                                               |
+| **Assign…**                              | A name goes on the part; unfilled stretches become marching                                                                  | The row and its state rows                                  |
+| **Take out from here on** / **Put back** | The part is out of the sets from the playhead, or back                                                                       | One state row                                               |
+| **Swap drill with…**                     | Two parts trade their drill, for the whole show or from the current set on. Labels, names and sections stay with their rows. | Assignments, Held marks and recipe members from that set on |
+| **Review…**                              | The stop-by-stop review below                                                                                                | Per decision                                                |
+| **Remove part**                          | Deletes a part that is out of every set. Disabled with the reason otherwise.                                                 | Today's delete, plus its emptied moves                      |
 
 All are in the Marchers list row menu, the inspector, the field right-click menu and the command
 palette. Remove has no shortcut. Until the command tree (#357, paused) exists, they are plain
@@ -337,12 +337,12 @@ work only while the panel has focus.
 the app found highlighted, and each option as a preview with lines from where people stand now.
 Nothing is written until Place.
 
-| Option | Moves | Longest | Step size in / out | New collisions | Section order broken | Now move during a hold | Crossings vs the set before | Gaps opened at a join |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Leave the spot | 0 | — | same | 0 | no | 0 | 0 | 0 |
-| Move the hole to the back | 3 | 1 interval | 6.2 → 6.4 / 7.0 → 7.1 | 0 | no | 0 | 0 | 0 |
-| Spread evenly | 7 | 0.5 steps | … | 0 | no | 3 | 0 | 0 |
-| Close up (shape) | 9 | 2 steps | … | 0 | **yes: 1 tuba** | 0 | 1 | 1 |
+| Option                    | Moves | Longest    | Step size in / out    | New collisions | Section order broken | Now move during a hold | Crossings vs the set before | Gaps opened at a join |
+| ------------------------- | ----- | ---------- | --------------------- | -------------- | -------------------- | ---------------------- | --------------------------- | --------------------- |
+| Leave the spot            | 0     | —          | same                  | 0              | no                   | 0                      | 0                           | 0                     |
+| Move the hole to the back | 3     | 1 interval | 6.2 → 6.4 / 7.0 → 7.1 | 0              | no                   | 0                      | 0                           | 0                     |
+| Spread evenly             | 7     | 0.5 steps  | …                     | 0              | no                   | 3                      | 0                           | 0                     |
+| Close up (shape)          | 9     | 2 steps    | …                     | 0              | **yes: 1 tuba**      | 0                      | 1                           | 1                     |
 
 - **Leave the spot is first and preselected.** No option that moves people is ever preselected.
 - Options run in this order: within the line or file, then within the section, then free least
@@ -411,12 +411,12 @@ which waits on the owner's rule in #960 (no milestone).
 
 ### Adding
 
-| Job | Flow |
-| --- | --- |
-| **A1 Take an unfilled part** | Add leads with the section's unfilled parts: "Assign to T3 (unfilled)". If T3 is out of some sets, the dialog says which. |
-| **A3 New part** | Today's Add. |
-| **A4 New season** | **Update names from CSV**: match rows by drill label, set name, year and notes, and offer to mark the unmatched parts unfilled. |
-| **A2 Insert** | **Add at the end of…**: the designer picks an end or edge marcher and a side. The new part starts as that marcher's drill, one interval outside. Then the review runs over that marcher's stops. |
+| Job                          | Flow                                                                                                                                                                                             |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **A1 Take an unfilled part** | Add leads with the section's unfilled parts: "Assign to T3 (unfilled)". If T3 is out of some sets, the dialog says which.                                                                        |
+| **A3 New part**              | Today's Add.                                                                                                                                                                                     |
+| **A4 New season**            | **Update names from CSV**: match rows by drill label, set name, year and notes, and offer to mark the unmatched parts unfilled.                                                                  |
+| **A2 Insert**                | **Add at the end of…**: the designer picks an end or edge marcher and a side. The new part starts as that marcher's drill, one interval outside. Then the review runs over that marcher's stops. |
 
 Draft 1's "Add next to" copied a neighbor at one interval, which lands exactly on the next
 marcher in any regular form (06 S5). So:
@@ -479,28 +479,28 @@ and changes no format.**
 
 ### Hard blockers, in order
 
-| # | Prerequisite | Why | Issue | When |
-| --- | --- | --- | --- | --- |
-| 1 | Owner picks the model, the words, and whether the table may join the 0.2.0 format | Everything depends on it | new | now |
-| 2 | An ADR for the presence table (page or beat keyed; history; what each reader does) | Persistent data | new | before step 1 |
-| 3 | A sweep of every all-marchers loop | Exports, checks, 3D, counts, selection, CSV | new | with step 1 |
-| 4 | Swap drill: a test that positions match the other part's from the set on, on a converted show and an app-made one | It is an INFERENCE today | new | step 3 |
-| 5 | The stop finder measured on five real shows, with the misses looked at | The review rests on it; the spike is one show | new | before step 4 |
-| 6 | Close up reads the shape's pivot, not the user's | Two users must get the same result | new | before step 5 |
+| #   | Prerequisite                                                                                                      | Why                                           | Issue | When          |
+| --- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ----- | ------------- |
+| 1   | Owner picks the model, the words, and whether the table may join the 0.2.0 format                                 | Everything depends on it                      | new   | now           |
+| 2   | An ADR for the presence table (page or beat keyed; history; what each reader does)                                | Persistent data                               | new   | before step 1 |
+| 3   | A sweep of every all-marchers loop                                                                                | Exports, checks, 3D, counts, selection, CSV   | new   | with step 1   |
+| 4   | Swap drill: a test that positions match the other part's from the set on, on a converted show and an app-made one | It is an INFERENCE today                      | new   | step 3        |
+| 5   | The stop finder measured on five real shows, with the misses looked at                                            | The review rests on it; the spike is one show | new   | before step 4 |
+| 6   | Close up reads the shape's pivot, not the user's                                                                  | Two users must get the same result            | new   | before step 5 |
 
 ### Needed for later steps only
 
-| Prerequisite | For | Issue, milestone |
-| --- | --- | --- |
+| Prerequisite                                           | For                                                          | Issue, milestone                                                                                                                                                                         |
+| ------------------------------------------------------ | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | #504 recipes onto the transition, then #358 spot rules | Choosing which spot in a shape is empty; Take the empty spot | #504 is 0.3. **#358 is Later**, so these steps are further off than draft 1 showed. #504 also re-keys recipe queries, so the review's shape step should be written against a small seam. |
-| #960 the assignment rule | Reassign; who goes where in Grow by one | No milestone. **Blocked on an owner decision, not on work.** |
-| #961 / PR #984 paste keeps spacing | Grow by one | #961 is 0.2.0 |
-| #357 command tree | Commands with arguments; agents | 0.3, paused. Interim: plain registered actions. |
-| `pathways/host` merged; step 12 | Hand-over on laned moves | #640; **#653 is milestoned 0.2.0** and ready for an agent, but its text covers only "rejoin after a takeover". The wider scope is in the plan on PH. |
-| Step 17 | Restaging where members arrive on a group path | #658 |
-| #1015 Held shapes | Where a carried shape's edit lands | PR open |
-| #599 Issues | Standing checks for unfilled parts | 0.3 |
-| Version history | Replaces the baseline file picker | planned on the fork |
+| #960 the assignment rule                               | Reassign; who goes where in Grow by one                      | No milestone. **Blocked on an owner decision, not on work.**                                                                                                                             |
+| #961 / PR #984 paste keeps spacing                     | Grow by one                                                  | #961 is 0.2.0                                                                                                                                                                            |
+| #357 command tree                                      | Commands with arguments; agents                              | 0.3, paused. Interim: plain registered actions.                                                                                                                                          |
+| `pathways/host` merged; step 12                        | Hand-over on laned moves                                     | #640; **#653 is milestoned 0.2.0** and ready for an agent, but its text covers only "rejoin after a takeover". The wider scope is in the plan on PH.                                     |
+| Step 17                                                | Restaging where members arrive on a group path               | #658                                                                                                                                                                                     |
+| #1015 Held shapes                                      | Where a carried shape's edit lands                           | PR open                                                                                                                                                                                  |
+| #599 Issues                                            | Standing checks for unfilled parts                           | 0.3                                                                                                                                                                                      |
+| Version history                                        | Replaces the baseline file picker                            | planned on the fork                                                                                                                                                                      |
 
 ### Housekeeping
 
@@ -510,19 +510,19 @@ and changes no format.**
 
 ### Bugs and gaps worth fixing regardless
 
-| Item | Label |
-| --- | --- |
-| Delete leaves empty spots with no notice, and they are not drawn | FACT / INFERENCE |
-| The Add form offers a deleted marcher's number, which looks like a restore | FACT |
-| Close up reads `env.pivot` from the user's tool settings | FACT (`placedBox.ts:318`) |
-| Re-split is reachable only from an 8-second toast and uses the last-used layout | FACT (02) |
-| No Close up for an open Line or Arc | FACT |
-| A move whose only marcher was deleted stays as an empty clip. Remove part must delete these. | FACT |
-| `view3d_cameras` keeps a deleted marcher's id, outside undo | FACT |
-| Stale comments: `marcher.ts:222-236`, `useMarchers.ts:105` | FACT |
-| The CSV import can only create marchers | FACT (`marcherCsv.ts:228`) |
-| The 3D View and coordinate sheets ignore a hidden look | INFERENCE / reported by 06 |
-| Swapping two members of a placed shape may drop both from it | INFERENCE; needs a test |
+| Item                                                                                         | Label                      |
+| -------------------------------------------------------------------------------------------- | -------------------------- |
+| Delete leaves empty spots with no notice, and they are not drawn                             | FACT / INFERENCE           |
+| The Add form offers a deleted marcher's number, which looks like a restore                   | FACT                       |
+| Close up reads `env.pivot` from the user's tool settings                                     | FACT (`placedBox.ts:318`)  |
+| Re-split is reachable only from an 8-second toast and uses the last-used layout              | FACT (02)                  |
+| No Close up for an open Line or Arc                                                          | FACT                       |
+| A move whose only marcher was deleted stays as an empty clip. Remove part must delete these. | FACT                       |
+| `view3d_cameras` keeps a deleted marcher's id, outside undo                                  | FACT                       |
+| Stale comments: `marcher.ts:222-236`, `useMarchers.ts:105`                                   | FACT                       |
+| The CSV import can only create marchers                                                      | FACT (`marcherCsv.ts:228`) |
+| The 3D View and coordinate sheets ignore a hidden look                                       | INFERENCE / reported by 06 |
+| Swapping two members of a placed shape may drop both from it                                 | INFERENCE; needs a test    |
 
 ---
 
@@ -530,21 +530,21 @@ and changes no format.**
 
 Each lab test runs on **the demo show** (no shapes) unless it says otherwise.
 
-| Step | What ships | The lab test asks | Needs | Target |
-| --- | --- | --- | --- | --- |
-| **1** | **Mark as unfilled and Assign.** The presence table and its ADR. Hollow dots on the field and the drill chart. Coordinate sheets, the mobile export and the checks skip unfilled parts. Add leads with Assign. The delete confirm says what a delete destroys and points to Mark as unfilled. Whole-show only in the UI. | Jordan quit on Monday. A new student took the spot on Friday. Was anything lost? | Blockers 1 to 3 | **0.2.0** |
-| **2** | **Take out from here on, and Put back.** The timeline bar for a selected part. | T3 is off the field from the ballad. Print the charts. | Step 1 | 0.2.0 if there is room, else 0.2.x |
-| **3** | **Swap drill**, whole show and from here on. | Move the hole from T3 to T7 from set 12 on. Does anyone jump? | Blocker 4 | 0.2.x |
-| **4** | **The review on hand-placed sets.** The stop finder, the highlighted line, Leave the spot, Move the hole to an end, Spread evenly, By hand, the cost table, visible Place and Cancel. | Take T3 out of the second half of the demo show. How many decisions was it, and was the line the app found the right one? | Blocker 5 | 0.2.x |
-| **5** | **Shapes in the review.** Rings for a shape's empty spots. Close up from a stop, with the shape's own pivot. Move the hole within a file. Open lines: to an end, or spread. Re-split as a real option. | On a show written in the fork: cut one part from a block and one from a line. | Blocker 6 | 0.2.x |
-| **6** | **Batch with guards, the range filter, several parts at once, Remove part.** | Cut three parts from different sections before camp. Which stops did the batch leave for you, and was it right to? | Steps 4, 5 | 0.2.x |
-| **7** | **What changed**, against a baseline file; print only changed sheets. | Hand the changes to a section leader. | — | 0.2.x |
-| **8** | **Update names from CSV.** | Put this year's roster on last year's show. | Step 1 | 0.2.x, if the owner wants it |
-| **9** | **Add at the end of…** and the join review (Extend the line; Grow by one for shapes). | One more trumpet joined. | #984; #960 for shapes | after #960 |
-| **10** | **Choose the empty spot in a shape**; Take the empty spot. | Put the hole in the back corner of a box. | #504, #358 | 0.3 or later |
-| **11** | **Reassign at a stop.** | Fix a crossing after three restaged sets in a row. | #960 | after #960 |
-| **12** | **Pathways.** Swap drill and restaging on laned moves; a trail's gap. | — | PH merged, steps 12 and 17 | later |
-| **13** | **Issues checks** for unfilled parts and empty spots. | — | #599 | 0.3 |
+| Step   | What ships                                                                                                                                                                                                                                                                                                               | The lab test asks                                                                                                         | Needs                      | Target                             |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- | -------------------------- | ---------------------------------- |
+| **1**  | **Mark as unfilled and Assign.** The presence table and its ADR. Hollow dots on the field and the drill chart. Coordinate sheets, the mobile export and the checks skip unfilled parts. Add leads with Assign. The delete confirm says what a delete destroys and points to Mark as unfilled. Whole-show only in the UI. | Jordan quit on Monday. A new student took the spot on Friday. Was anything lost?                                          | Blockers 1 to 3            | **0.2.0**                          |
+| **2**  | **Take out from here on, and Put back.** The timeline bar for a selected part.                                                                                                                                                                                                                                           | T3 is off the field from the ballad. Print the charts.                                                                    | Step 1                     | 0.2.0 if there is room, else 0.2.x |
+| **3**  | **Swap drill**, whole show and from here on.                                                                                                                                                                                                                                                                             | Move the hole from T3 to T7 from set 12 on. Does anyone jump?                                                             | Blocker 4                  | 0.2.x                              |
+| **4**  | **The review on hand-placed sets.** The stop finder, the highlighted line, Leave the spot, Move the hole to an end, Spread evenly, By hand, the cost table, visible Place and Cancel.                                                                                                                                    | Take T3 out of the second half of the demo show. How many decisions was it, and was the line the app found the right one? | Blocker 5                  | 0.2.x                              |
+| **5**  | **Shapes in the review.** Rings for a shape's empty spots. Close up from a stop, with the shape's own pivot. Move the hole within a file. Open lines: to an end, or spread. Re-split as a real option.                                                                                                                   | On a show written in the fork: cut one part from a block and one from a line.                                             | Blocker 6                  | 0.2.x                              |
+| **6**  | **Batch with guards, the range filter, several parts at once, Remove part.**                                                                                                                                                                                                                                             | Cut three parts from different sections before camp. Which stops did the batch leave for you, and was it right to?        | Steps 4, 5                 | 0.2.x                              |
+| **7**  | **What changed**, against a baseline file; print only changed sheets.                                                                                                                                                                                                                                                    | Hand the changes to a section leader.                                                                                     | —                          | 0.2.x                              |
+| **8**  | **Update names from CSV.**                                                                                                                                                                                                                                                                                               | Put this year's roster on last year's show.                                                                               | Step 1                     | 0.2.x, if the owner wants it       |
+| **9**  | **Add at the end of…** and the join review (Extend the line; Grow by one for shapes).                                                                                                                                                                                                                                    | One more trumpet joined.                                                                                                  | #984; #960 for shapes      | after #960                         |
+| **10** | **Choose the empty spot in a shape**; Take the empty spot.                                                                                                                                                                                                                                                               | Put the hole in the back corner of a box.                                                                                 | #504, #358                 | 0.3 or later                       |
+| **11** | **Reassign at a stop.**                                                                                                                                                                                                                                                                                                  | Fix a crossing after three restaged sets in a row.                                                                        | #960                       | after #960                         |
+| **12** | **Pathways.** Swap drill and restaging on laned moves; a trail's gap.                                                                                                                                                                                                                                                    | —                                                                                                                         | PH merged, steps 12 and 17 | later                              |
+| **13** | **Issues checks** for unfilled parts and empty spots.                                                                                                                                                                                                                                                                    | —                                                                                                                         | #599                       | 0.3                                |
 
 Draft 1's step 2 (a separate "honest delete" build) is folded into step 1. Draft 1's step 1 (a
 list of empty spots in shapes) is part of step 5, because it shows nothing on the demo show.
@@ -562,9 +562,9 @@ Recommendation first on each line.
 2. **The presence table is part of the 0.2.0 file format. Yes.** Yes means an ordinary migration
    now and step 1 in 0.2.0. No means it lands after with a version bump, and 0.2.0 cannot open
    files that use it.
-3. **Words.** I suggest *unfilled* and *out* for the states, **Assign** and **Leave the spot**
+3. **Words.** I suggest _unfilled_ and _out_ for the states, **Assign** and **Leave the spot**
    for the actions, and "empty spot" only for shapes. Open, fill and keep are taken: open and
-   closed lines, a shape's fill, Keep order and Keep spacing. *Vacant* is free in the UI but is
+   closed lines, a shape's fill, Keep order and Keep spacing. _Vacant_ is free in the UI but is
    the spec's word for a slot. The owner picks; nothing ships with a word before this.
 4. **Unfilled parts are drawn hollow on the field and on drill charts, and left off coordinate
    sheets and the mobile export. Yes.** No means one switch for all outputs, and either staff
@@ -605,34 +605,34 @@ marcher's transition and lanes go with it. Keeping the part gives Q1's intent wi
 
 ### 06, finding by finding
 
-| Finding | Answer |
-| --- | --- |
-| **B1** mid-review state undefined | **Accepted.** The per-set state is the fix (section 3, B3). I took the reviewer's option 1 over a stored plan, for the reviewer's reason and one more: a plan goes stale as the show is edited under it. |
-| **B2** shows have no recipes | **Accepted.** Stops come from positions; hand-placed stops have two computed options; the spike gives a first number; five real shows are a hard blocker. I took "move the hole along the line" over "make this a shape" as the first option because it invents no coordinates. Fitting a shape is still available: it is the Line tool on the highlighted dots. |
-| **B3** no freeze | **Accepted.** Section 6 re-derives the split. |
-| **B4** whole-show flag | **Accepted.** Same fix as B1. Scenario 2 (two half-parts) is Swap drill from here on. Scenarios 3 and 4 are named as unsupported, with the workaround. |
-| **S1** hidden look exists | **Accepted.** Section 1 corrected; section 3 compares the two and borrows the storage pattern. |
-| **S2** word collisions | **Accepted.** Decision 3 lists them. |
-| **S3** not mechanical | **Accepted**, all rows: cost columns added; line and section options before least travel; the stop is the whole picture; a cut carry is its own stop kind; trails and cornered lines are called choices; the pivot bug is a blocker; crossings are measured from step 4 without waiting for #960. |
-| **S4** batch is a policy | **Accepted.** Guards, a strip of pictures, the hole's place in "like this". Decision 7 says it plainly. |
-| **S5** Add next to | **Accepted.** Edge anchors only, otherwise parked and undecided; grouped adds. |
-| **S6** ticks per user | **Accepted**, and removed: state is derived from the presence table. Only the cursor is per user. |
-| **S7** from-a-set hand-over | **Accepted.** Step 3, on main. My draft 1 filed it under pathways, which was wrong for main. It needs the test in blocker 4. |
-| **S8** telling the band | **Accepted** as step 7, with a baseline file until version history exists. |
-| **S9** exports | **Accepted.** Two defaults (decision 4). |
-| **S10** CSV | **Accepted as optional** (step 8, decision 14). It is not needed for a leaver. |
-| **S11** Swap parts undefined | **Accepted.** Replaced by Swap drill; the column table is in section 3; section stays on the row. |
-| **S12** format contradiction | **Accepted.** Resolved by going before 0.2.0; the after case is stated honestly. |
-| **S13** table errors | **Accepted.** Milestones corrected; #357 interim stated; empty moves cleaned by Remove. |
-| **S14** LLM reasons | **Accepted.** Section 5 rewritten; the comparison to run is named. |
-| **N1** audiences | Accepted (section 4 opening). |
-| **N2** items and other deletes | Accepted (section 2 table). |
-| **N3** renumbering | Out of scope, said in section 4. |
-| **N4** modal or not | Not modal. |
-| **N5** new shapes include the part | Accepted (section 3 table). |
-| **N6** | No change needed. |
-| **N7** unsourced frequencies | Accepted; labelled INFERENCE. |
-| **N8** #504 re-keys the list | Accepted. The hand-placed review does not read recipes, which is another reason it comes first. |
+| Finding                            | Answer                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **B1** mid-review state undefined  | **Accepted.** The per-set state is the fix (section 3, B3). I took the reviewer's option 1 over a stored plan, for the reviewer's reason and one more: a plan goes stale as the show is edited under it.                                                                                                                                                         |
+| **B2** shows have no recipes       | **Accepted.** Stops come from positions; hand-placed stops have two computed options; the spike gives a first number; five real shows are a hard blocker. I took "move the hole along the line" over "make this a shape" as the first option because it invents no coordinates. Fitting a shape is still available: it is the Line tool on the highlighted dots. |
+| **B3** no freeze                   | **Accepted.** Section 6 re-derives the split.                                                                                                                                                                                                                                                                                                                    |
+| **B4** whole-show flag             | **Accepted.** Same fix as B1. Scenario 2 (two half-parts) is Swap drill from here on. Scenarios 3 and 4 are named as unsupported, with the workaround.                                                                                                                                                                                                           |
+| **S1** hidden look exists          | **Accepted.** Section 1 corrected; section 3 compares the two and borrows the storage pattern.                                                                                                                                                                                                                                                                   |
+| **S2** word collisions             | **Accepted.** Decision 3 lists them.                                                                                                                                                                                                                                                                                                                             |
+| **S3** not mechanical              | **Accepted**, all rows: cost columns added; line and section options before least travel; the stop is the whole picture; a cut carry is its own stop kind; trails and cornered lines are called choices; the pivot bug is a blocker; crossings are measured from step 4 without waiting for #960.                                                                |
+| **S4** batch is a policy           | **Accepted.** Guards, a strip of pictures, the hole's place in "like this". Decision 7 says it plainly.                                                                                                                                                                                                                                                          |
+| **S5** Add next to                 | **Accepted.** Edge anchors only, otherwise parked and undecided; grouped adds.                                                                                                                                                                                                                                                                                   |
+| **S6** ticks per user              | **Accepted**, and removed: state is derived from the presence table. Only the cursor is per user.                                                                                                                                                                                                                                                                |
+| **S7** from-a-set hand-over        | **Accepted.** Step 3, on main. My draft 1 filed it under pathways, which was wrong for main. It needs the test in blocker 4.                                                                                                                                                                                                                                     |
+| **S8** telling the band            | **Accepted** as step 7, with a baseline file until version history exists.                                                                                                                                                                                                                                                                                       |
+| **S9** exports                     | **Accepted.** Two defaults (decision 4).                                                                                                                                                                                                                                                                                                                         |
+| **S10** CSV                        | **Accepted as optional** (step 8, decision 14). It is not needed for a leaver.                                                                                                                                                                                                                                                                                   |
+| **S11** Swap parts undefined       | **Accepted.** Replaced by Swap drill; the column table is in section 3; section stays on the row.                                                                                                                                                                                                                                                                |
+| **S12** format contradiction       | **Accepted.** Resolved by going before 0.2.0; the after case is stated honestly.                                                                                                                                                                                                                                                                                 |
+| **S13** table errors               | **Accepted.** Milestones corrected; #357 interim stated; empty moves cleaned by Remove.                                                                                                                                                                                                                                                                          |
+| **S14** LLM reasons                | **Accepted.** Section 5 rewritten; the comparison to run is named.                                                                                                                                                                                                                                                                                               |
+| **N1** audiences                   | Accepted (section 4 opening).                                                                                                                                                                                                                                                                                                                                    |
+| **N2** items and other deletes     | Accepted (section 2 table).                                                                                                                                                                                                                                                                                                                                      |
+| **N3** renumbering                 | Out of scope, said in section 4.                                                                                                                                                                                                                                                                                                                                 |
+| **N4** modal or not                | Not modal.                                                                                                                                                                                                                                                                                                                                                       |
+| **N5** new shapes include the part | Accepted (section 3 table).                                                                                                                                                                                                                                                                                                                                      |
+| **N6**                             | No change needed.                                                                                                                                                                                                                                                                                                                                                |
+| **N7** unsourced frequencies       | Accepted; labelled INFERENCE.                                                                                                                                                                                                                                                                                                                                    |
+| **N8** #504 re-keys the list       | Accepted. The hand-placed review does not read recipes, which is another reason it comes first.                                                                                                                                                                                                                                                                  |
 
 **One place I go further than 06.** The reviewer kept Remove as the end of the flow ("only
 tidying up"). I make it optional: a part that is unfilled in some sets and out of others is a
@@ -644,20 +644,20 @@ page-delete upkeep. It is still the right design.
 
 ### 01 to 04
 
-| Report | Claim | My reading |
-| --- | --- | --- |
-| 03 §1 | App-made shapes write shared transitions that are compacted on delete. | 01 and the code say each marcher has its own one-slot transition (`timelinePointMoves.ts:85`; 06 N6 confirmed it on PH). The outcome 03 reports is the same; the mechanism is not. |
-| 03 §2 | Step 12 is blocking. | Only for hand-over on laned moves. On main, Swap drill needs none of it. |
-| 03 §2 | "A decision on compaction vs Q1" is needed. | Not if the part is kept. |
-| 03 §5 | `.ompb` cannot express a placeholder. | True and not needed: the exporter leaves such parts out and says so. |
-| 03, the brief | #653 is "pathways step 12". | The ticket's text is narrower than the plan row on PH. It is also milestoned 0.2.0. |
-| 04 summary 4 | OpenMarch already separates role and person. | In the data, yes. In no command. |
-| 04 pattern 4 | Stored policies by scope. | No. A guarded batch instead. |
-| 04, end of Part A | One undo group per roster change. | No. One step per placed option or batch. |
-| 04 pattern 1 | Both verbs with keys. | Place and navigation, yes. Remove, no. |
-| 04 pattern 9 | Keep the leaver's motion to revive later. | Yes where the part is unfilled. Where a set was restaged, the old spot no longer fits; coming back is a join. |
-| 04 Part B | A sentence-to-rules LLM job later. | It depends on a rule editor this design does not have. |
-| 01 §2 | A shape "keeps a hole" after a delete. | Agreed from the code, but the hole is a number in a label, not a mark on the field. |
-| 02 §4 | N − 1 is deterministic for most kinds. | Deterministic is not the same as wanted (section 2, point 3; 06 S3). |
-| 02 summary 5 | Re-split is built. | Reachable only from a toast, and tied to the user's last-used layout. |
-| 01 to 04 together | The reports treat shapes as the main case. | The demo show and every v0.1.7 file have none. This was the largest gap in the inputs and in my draft 1. |
+| Report            | Claim                                                                  | My reading                                                                                                                                                                         |
+| ----------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 03 §1             | App-made shapes write shared transitions that are compacted on delete. | 01 and the code say each marcher has its own one-slot transition (`timelinePointMoves.ts:85`; 06 N6 confirmed it on PH). The outcome 03 reports is the same; the mechanism is not. |
+| 03 §2             | Step 12 is blocking.                                                   | Only for hand-over on laned moves. On main, Swap drill needs none of it.                                                                                                           |
+| 03 §2             | "A decision on compaction vs Q1" is needed.                            | Not if the part is kept.                                                                                                                                                           |
+| 03 §5             | `.ompb` cannot express a placeholder.                                  | True and not needed: the exporter leaves such parts out and says so.                                                                                                               |
+| 03, the brief     | #653 is "pathways step 12".                                            | The ticket's text is narrower than the plan row on PH. It is also milestoned 0.2.0.                                                                                                |
+| 04 summary 4      | OpenMarch already separates role and person.                           | In the data, yes. In no command.                                                                                                                                                   |
+| 04 pattern 4      | Stored policies by scope.                                              | No. A guarded batch instead.                                                                                                                                                       |
+| 04, end of Part A | One undo group per roster change.                                      | No. One step per placed option or batch.                                                                                                                                           |
+| 04 pattern 1      | Both verbs with keys.                                                  | Place and navigation, yes. Remove, no.                                                                                                                                             |
+| 04 pattern 9      | Keep the leaver's motion to revive later.                              | Yes where the part is unfilled. Where a set was restaged, the old spot no longer fits; coming back is a join.                                                                      |
+| 04 Part B         | A sentence-to-rules LLM job later.                                     | It depends on a rule editor this design does not have.                                                                                                                             |
+| 01 §2             | A shape "keeps a hole" after a delete.                                 | Agreed from the code, but the hole is a number in a label, not a mark on the field.                                                                                                |
+| 02 §4             | N − 1 is deterministic for most kinds.                                 | Deterministic is not the same as wanted (section 2, point 3; 06 S3).                                                                                                               |
+| 02 summary 5      | Re-split is built.                                                     | Reachable only from a toast, and tied to the user's last-used layout.                                                                                                              |
+| 01 to 04 together | The reports treat shapes as the main case.                             | The demo show and every v0.1.7 file have none. This was the largest gap in the inputs and in my draft 1.                                                                           |

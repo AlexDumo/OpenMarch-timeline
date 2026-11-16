@@ -11,27 +11,27 @@ Status: independent review, 2026-11-16. The reviewer did not write 01 to 05.
 
 ## Summary
 
-| # | Rank | Finding |
-| --- | --- | --- |
-| B1 | Blocker | A part that is half-way through the review has no defined state. Close up cannot even run on it. |
-| B2 | Blocker | The mechanical help covers only recipe-made sets. The bundled demo show and every v0.1.7 show have none. |
-| B3 | Blocker | The 0.2.0 split rests on a freeze that does not exist. The open state is cheaper before 0.2.0 than after. |
-| B4 | Blocker | A whole-show open flag cannot say the commonest in-season outcome: taught sets keep the part, later sets drop it. |
-| S1 | Should-fix | The app can already hide a marcher from a page on. 05 calls this "not possible" and never mentions it. |
-| S2 | Should-fix | "Open", "Fill", "Keep" and "Close up" already mean something else in the shape UI. |
-| S3 | Should-fix | Close up is not mechanical for sections, joined shapes, cornered lines, trails or carried shapes. |
-| S4 | Should-fix | Batch is a stored policy without the storage. It acts on stops the designer has not seen. |
-| S5 | Should-fix | "Add next to" puts the new part on top of a neighbor in any regular formation. |
-| S6 | Should-fix | Keep ticks stored per user by file path lose a multi-day review. |
-| S7 | Should-fix | No "from this set on" hand-over, which is how designers move a hole in season. |
-| S8 | Should-fix | No output that tells the band what changed. |
-| S9 | Should-fix | Exports: one switch for charts and coordinate sheets is wrong for a kept hole. |
-| S10 | Should-fix | Roster CSV import cannot fill or update parts. |
-| S11 | Should-fix | Swap parts does nothing in a show with no names, and section does not travel. |
-| S12 | Should-fix | The file-format row contradicts itself about older builds. |
-| S13 | Should-fix | Prerequisite table errors: #358 milestone, #653 milestone, #357 cost. |
-| S14 | Should-fix | The LLM verdict is right, but two of its four reasons do not hold. |
-| N1–N8 | Nit | Listed at the end. |
+| #     | Rank       | Finding                                                                                                           |
+| ----- | ---------- | ----------------------------------------------------------------------------------------------------------------- |
+| B1    | Blocker    | A part that is half-way through the review has no defined state. Close up cannot even run on it.                  |
+| B2    | Blocker    | The mechanical help covers only recipe-made sets. The bundled demo show and every v0.1.7 show have none.          |
+| B3    | Blocker    | The 0.2.0 split rests on a freeze that does not exist. The open state is cheaper before 0.2.0 than after.         |
+| B4    | Blocker    | A whole-show open flag cannot say the commonest in-season outcome: taught sets keep the part, later sets drop it. |
+| S1    | Should-fix | The app can already hide a marcher from a page on. 05 calls this "not possible" and never mentions it.            |
+| S2    | Should-fix | "Open", "Fill", "Keep" and "Close up" already mean something else in the shape UI.                                |
+| S3    | Should-fix | Close up is not mechanical for sections, joined shapes, cornered lines, trails or carried shapes.                 |
+| S4    | Should-fix | Batch is a stored policy without the storage. It acts on stops the designer has not seen.                         |
+| S5    | Should-fix | "Add next to" puts the new part on top of a neighbor in any regular formation.                                    |
+| S6    | Should-fix | Keep ticks stored per user by file path lose a multi-day review.                                                  |
+| S7    | Should-fix | No "from this set on" hand-over, which is how designers move a hole in season.                                    |
+| S8    | Should-fix | No output that tells the band what changed.                                                                       |
+| S9    | Should-fix | Exports: one switch for charts and coordinate sheets is wrong for a kept hole.                                    |
+| S10   | Should-fix | Roster CSV import cannot fill or update parts.                                                                    |
+| S11   | Should-fix | Swap parts does nothing in a show with no names, and section does not travel.                                     |
+| S12   | Should-fix | The file-format row contradicts itself about older builds.                                                        |
+| S13   | Should-fix | Prerequisite table errors: #358 milestone, #653 milestone, #357 cost.                                             |
+| S14   | Should-fix | The LLM verdict is right, but two of its four reasons do not hold.                                                |
+| N1–N8 | Nit        | Listed at the end.                                                                                                |
 
 ---
 
@@ -205,15 +205,15 @@ test: "unfilled" or "vacant" for the part, "Assign" for Fill, "Leave the spot" f
 
 Each of these is deterministic. None is reliably what a designer wants.
 
-| Claim in 05 | Problem | Evidence |
-| --- | --- | --- |
-| Close up is geometry the app already has (§2 point 3) | Least travel has no idea of section, part order or height order. A tuba can be moved into the trumpet rank. | CHECKED: `src/shapes/leastTravel.ts:8-12` says a better rule "that also weighs step size or drill order" could replace it. Nothing does. |
-| Close up result is the shape's own | `closedUpParams` reads `env.pivot` from the user's tool settings. Two users can get different results from the same stop. | CHECKED: `placedBox.ts:318` |
-| A stop is "one recipe" (§4 step 2) | Pictures are made of several recipes: a front of three lines, a block with a diagonal. Closing or shortening one opens a gap at the join. | REASONED; #583 (join shapes) is open |
-| Open line: "Fit widens the interval, Keep shortens from the pivot" (§2) | With corners, "the two ends always hold a marcher" and each stretch needs a whole number of gaps. Which leg gives up a marcher is a choice. With counted groups, "too few drop from the end", so the hole moves to the last group. | CHECKED: ADR 0006 `:308`, `:344`; 02 §1 Line row (`spacing.ts:155-159`) |
-| Trail: "Close the gap... Mechanical" (§2) | Moving everyone up one slot changes every later end spot. The shape at the next set shows only while every member is on its spot, so that recipe stops showing or must be closed up in step with the trail. | CHECKED: `boxesAt` rule in 02 §3 |
-| A carried shape is "decided once, where it was placed" (§4 step 2) | A carried shape is its hold (#477). Closing up at the origin is fine. But the "from the playhead on" filter can land inside the carry. Then the edit writes a copy on a later page and about nine marchers who were standing still now move. | CHECKED: 02 §3 (edits on a later page save a copy) |
-| Independent close-ups (§4 "A known limit") | 05 names the crossing problem and defers the fix to step 10, behind #960, which has no milestone. So steps 7 to 9 ship with it. | CHECKED: #960 milestone none |
+| Claim in 05                                                             | Problem                                                                                                                                                                                                                                      | Evidence                                                                                                                                 |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Close up is geometry the app already has (§2 point 3)                   | Least travel has no idea of section, part order or height order. A tuba can be moved into the trumpet rank.                                                                                                                                  | CHECKED: `src/shapes/leastTravel.ts:8-12` says a better rule "that also weighs step size or drill order" could replace it. Nothing does. |
+| Close up result is the shape's own                                      | `closedUpParams` reads `env.pivot` from the user's tool settings. Two users can get different results from the same stop.                                                                                                                    | CHECKED: `placedBox.ts:318`                                                                                                              |
+| A stop is "one recipe" (§4 step 2)                                      | Pictures are made of several recipes: a front of three lines, a block with a diagonal. Closing or shortening one opens a gap at the join.                                                                                                    | REASONED; #583 (join shapes) is open                                                                                                     |
+| Open line: "Fit widens the interval, Keep shortens from the pivot" (§2) | With corners, "the two ends always hold a marcher" and each stretch needs a whole number of gaps. Which leg gives up a marcher is a choice. With counted groups, "too few drop from the end", so the hole moves to the last group.           | CHECKED: ADR 0006 `:308`, `:344`; 02 §1 Line row (`spacing.ts:155-159`)                                                                  |
+| Trail: "Close the gap... Mechanical" (§2)                               | Moving everyone up one slot changes every later end spot. The shape at the next set shows only while every member is on its spot, so that recipe stops showing or must be closed up in step with the trail.                                  | CHECKED: `boxesAt` rule in 02 §3                                                                                                         |
+| A carried shape is "decided once, where it was placed" (§4 step 2)      | A carried shape is its hold (#477). Closing up at the origin is fine. But the "from the playhead on" filter can land inside the carry. Then the edit writes a copy on a later page and about nine marchers who were standing still now move. | CHECKED: 02 §3 (edits on a later page save a copy)                                                                                       |
+| Independent close-ups (§4 "A known limit")                              | 05 names the crossing problem and defers the fix to step 10, behind #960, which has no milestone. So steps 7 to 9 ship with it.                                                                                                              | CHECKED: #960 milestone none                                                                                                             |
 
 **Fix.**
 

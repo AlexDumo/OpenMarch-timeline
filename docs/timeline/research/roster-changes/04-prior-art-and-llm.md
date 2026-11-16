@@ -254,11 +254,11 @@ prompts up to 100,000 tokens. Above that it's $0.50 and $2.50. Haiku 4.5 costs $
 API halves the price [V]
 ([Anthropic pricing](https://platform.claude.com/docs/en/about-claude/pricing)).
 
-| Job | Tokens per roster change (est.) | Haiku 5.5 cost |
-| --- | --- | --- |
-| Sentence to rules, 1 call | ~3k in, ~300 out | ~$0.0005 |
-| Classify 60 sets, one call each | ~120k in, ~18k out | ~$0.02 |
-| Same, all 60 sets in one prompt | >100k in, so the higher tier | ~$0.10 |
+| Job                             | Tokens per roster change (est.) | Haiku 5.5 cost |
+| ------------------------------- | ------------------------------- | -------------- |
+| Sentence to rules, 1 call       | ~3k in, ~300 out                | ~$0.0005       |
+| Classify 60 sets, one call each | ~120k in, ~18k out              | ~$0.02         |
+| Same, all 60 sets in one prompt | >100k in, so the higher tier    | ~$0.10         |
 
 Keep each request under 100k tokens. Cost is negligible for a user with a key. For a hosted
 "free" proxy run by the project, it's small but not zero, and it needs accounts and abuse
@@ -267,14 +267,14 @@ one-time restage, but too slow inside a drag.
 
 ### Job by job
 
-| Candidate job | Deterministic alternative | LLM adds | Verdict |
-| --- | --- | --- | --- |
-| Classify each set: hole vs close-up vs re-layout | Rules on placement (recipe or hand), the spot's role in the shape, whether a hole is visible (interior vs end of line), Issues hits after a trial close-up | Little. It can't run the geometry and would guess at things code can measure. | **No.** Use heuristics plus a trial run of each option, scored by the Issues checks. |
-| Re-lay out the form | Recipe re-run with N−1 (Close up exists in `shapes/`), distributor | Nothing. It can't place dots reliably. | **No.** |
-| Explain consequences in words | Templates from the diff: "Set 14: box 8 × 4 keeps a hole at T12. Set 15: line closes up, T13–T16 move 1 step." | Smoother prose and summaries across many sets | **Not needed.** Templates are exact, translatable and offline. |
-| Rank which sets need attention | Score by: hole visible, step size added, new collisions, hand-placed set, a feature or solo set (tag) | Weak. "Is this a feature moment?" is taste, and the model can't see the show either. | **No for v1.** Revisit with tags. |
-| Sentence → rules ("keep holes in the closer, close up the ballad") | A rule editor: pick a range, a filter (shape kind or section) and a policy | Maps fuzzy names, ranges and intent to the rule schema in one step | **Yes, later, optional.** The only clear win. |
-| Suggest who takes the part | Filter by section, rank by added step size and travel | Nothing measurable | **No.** |
+| Candidate job                                                      | Deterministic alternative                                                                                                                                  | LLM adds                                                                             | Verdict                                                                              |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| Classify each set: hole vs close-up vs re-layout                   | Rules on placement (recipe or hand), the spot's role in the shape, whether a hole is visible (interior vs end of line), Issues hits after a trial close-up | Little. It can't run the geometry and would guess at things code can measure.        | **No.** Use heuristics plus a trial run of each option, scored by the Issues checks. |
+| Re-lay out the form                                                | Recipe re-run with N−1 (Close up exists in `shapes/`), distributor                                                                                         | Nothing. It can't place dots reliably.                                               | **No.**                                                                              |
+| Explain consequences in words                                      | Templates from the diff: "Set 14: box 8 × 4 keeps a hole at T12. Set 15: line closes up, T13–T16 move 1 step."                                             | Smoother prose and summaries across many sets                                        | **Not needed.** Templates are exact, translatable and offline.                       |
+| Rank which sets need attention                                     | Score by: hole visible, step size added, new collisions, hand-placed set, a feature or solo set (tag)                                                      | Weak. "Is this a feature moment?" is taste, and the model can't see the show either. | **No for v1.** Revisit with tags.                                                    |
+| Sentence → rules ("keep holes in the closer, close up the ballad") | A rule editor: pick a range, a filter (shape kind or section) and a policy                                                                                 | Maps fuzzy names, ranges and intent to the rule schema in one step                   | **Yes, later, optional.** The only clear win.                                        |
+| Suggest who takes the part                                         | Filter by section, rank by added step size and travel                                                                                                      | Nothing measurable                                                                   | **No.**                                                                              |
 
 ### Why the sentence job fits
 
