@@ -11,6 +11,7 @@ import {
     pictureOf,
     pictureSummary,
     planPaste,
+    standingOnSpots,
     readPicture,
     PICTURE_VERSION,
     type CopiedPicture,
@@ -723,5 +724,44 @@ describe("pasting a shape as its positions", () => {
         expect(
             pictureSummary(picture, STEP, { asPositions: true }),
         ).toMatchObject({ type: "positions", anyNumber: false, count: 6 });
+    });
+});
+
+describe("marchers already standing on the pasted spots", () => {
+    const spots = [
+        { x: 0, y: 0 },
+        { x: 10, y: 0 },
+        { x: 0, y: 10 },
+    ];
+    it("each keeps the spot they stand on", () => {
+        expect(
+            standingOnSpots(
+                [
+                    { x: 0, y: 10 },
+                    { x: 0, y: 0.0004 },
+                ],
+                spots,
+            ),
+        ).toEqual([2, 0]);
+    });
+    it("is nothing when anyone isn't on a spot, or two share one", () => {
+        expect(
+            standingOnSpots(
+                [
+                    { x: 0, y: 0 },
+                    { x: 5, y: 5 },
+                ],
+                spots,
+            ),
+        ).toBeNull();
+        expect(
+            standingOnSpots(
+                [
+                    { x: 0, y: 0 },
+                    { x: 0, y: 0 },
+                ],
+                spots.slice(0, 1),
+            ),
+        ).toBeNull();
     });
 });

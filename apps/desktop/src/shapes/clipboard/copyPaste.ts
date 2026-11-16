@@ -23,8 +23,8 @@ import {
     openShapeTool,
     useShapeToolStore,
 } from "../tool/shapeToolStore";
-import { openDrawn } from "../tool/toolMachine";
-import { pictureOf, planPaste } from "./picture";
+import { openDrawn, slotsOf } from "../tool/toolMachine";
+import { pictureOf, planPaste, standingOnSpots } from "./picture";
 import {
     copiedPicture,
     keepPicture,
@@ -127,14 +127,23 @@ export function pasteFormation(
     // One waiting away from its moment is dismissed, as a new shape started there does (#416)
     const startingOver = useShapeToolStore.getState().tool !== null;
     startOverWaitingShape();
+    const ctx = shapeContextFor(field);
+    const opened = openDrawn(
+        plan.kind,
+        plan.marchers,
+        plan.params,
+        ctx,
+        plan.pivotMoved,
+    );
+    // Marchers already standing on its spots keep them
+    const kept =
+        opened.assignment &&
+        standingOnSpots(
+            plan.marchers.map((m) => m.at),
+            slotsOf(opened, ctx),
+        );
     openShapeTool(
-        openDrawn(
-            plan.kind,
-            plan.marchers,
-            plan.params,
-            shapeContextFor(field),
-            plan.pivotMoved,
-        ),
+        kept ? { ...opened, assignment: kept } : opened,
         planCanvasEdit(),
         undefined,
         { keepDiscarded: startingOver },

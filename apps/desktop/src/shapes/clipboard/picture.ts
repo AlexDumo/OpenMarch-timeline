@@ -304,6 +304,35 @@ function fitDots(
     return { by, spots, taking };
 }
 
+/** Field units within which a marcher stands on a spot */
+const ON_SPOT = 1e-3;
+
+/**
+ * Who goes where when every marcher already stands on a spot of the paste, each on a different
+ * one: each keeps their own (`at[i]` takes spot `result[i]`). A paste onto marchers an earlier
+ * paste put there, as a shape this time, then moves nobody, where least travel from the move's
+ * start could swap them. Null when anyone isn't on a spot.
+ */
+export function standingOnSpots(
+    at: readonly XY[],
+    spots: readonly XY[],
+): number[] | null {
+    const taken = new Set<number>();
+    const kept: number[] = [];
+    for (const p of at) {
+        const spot = spots.findIndex(
+            (s, i) =>
+                !taken.has(i) &&
+                Math.abs(s.x - p.x) <= ON_SPOT &&
+                Math.abs(s.y - p.y) <= ON_SPOT,
+        );
+        if (spot < 0) return null;
+        taken.add(spot);
+        kept.push(spot);
+    }
+    return kept;
+}
+
 /**
  * A copied shape laid out for `marchers`: centered on them by the middle of its spots where it has
  * them, since a frame's center can sit off them (7 on a circle) and pasting again onto marchers
