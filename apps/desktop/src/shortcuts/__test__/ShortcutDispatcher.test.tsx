@@ -171,9 +171,12 @@ describe("ShortcutDispatcher, the field's menu (#315)", () => {
                 disabledReason: () => "Select 2 marchers to swap them",
             }),
         );
-        const refused = vi.fn();
+        // A button on screen showed it
+        const refused = vi.fn(() => true);
         offs.push(onRefusedPress(refused));
-        render(<ShortcutDispatcher />);
+        render(
+            <ShortcutDispatcher overrides={{ swapMarchers: ["Control+S"] }} />,
+        );
         const press = (repeat = false) => {
             const event = new KeyboardEvent("keydown", {
                 key: "s",
@@ -191,8 +194,34 @@ describe("ShortcutDispatcher, the field's menu (#315)", () => {
         expect(refused).toHaveBeenCalledExactlyOnceWith("swapMarchers");
         expect(first.defaultPrevented).toBe(true);
         expect(run).not.toHaveBeenCalled();
+        // A held key keeps it lit
         press(true);
+        expect(refused).toHaveBeenCalledTimes(2);
+    });
+
+    it("a refused key with no button on screen to show why is left alone", () => {
+        offs.push(
+            registerActionHandler("swapMarchers", {
+                run: vi.fn(),
+                isEnabled: () => false,
+                disabledReason: () => "Select 2 marchers to swap them",
+            }),
+        );
+        const refused = vi.fn(() => false);
+        offs.push(onRefusedPress(refused));
+        render(
+            <ShortcutDispatcher overrides={{ swapMarchers: ["Control+S"] }} />,
+        );
+        const event = new KeyboardEvent("keydown", {
+            key: "s",
+            code: "KeyS",
+            ctrlKey: true,
+            cancelable: true,
+            bubbles: true,
+        });
+        window.dispatchEvent(event);
         expect(refused).toHaveBeenCalledOnce();
+        expect(event.defaultPrevented).toBe(false);
     });
 
     it("a key whose action can't run and gives no reason does nothing", () => {
@@ -202,9 +231,11 @@ describe("ShortcutDispatcher, the field's menu (#315)", () => {
                 isEnabled: () => false,
             }),
         );
-        const refused = vi.fn();
+        const refused = vi.fn(() => true);
         offs.push(onRefusedPress(refused));
-        render(<ShortcutDispatcher />);
+        render(
+            <ShortcutDispatcher overrides={{ swapMarchers: ["Control+S"] }} />,
+        );
         const event = new KeyboardEvent("keydown", {
             key: "s",
             code: "KeyS",

@@ -17,6 +17,7 @@ import { fieldEditMode } from "@/field/editMode/fieldEditModeStore";
 import {
     actionDisabledReason,
     actionIgnoresRepeat,
+    hasActionHandler,
     isActionEnabled,
     notifyRefusedPress,
     pressAction,
@@ -96,19 +97,22 @@ export default function ShortcutDispatcher({
                 (id) => isActionEnabled(id) && available(id),
             );
             if (!entry) {
-                // Nothing runs, but the key is a command's that can't run now and says why:
-                // its button shows the reason briefly, instead of a toast or nothing at all
+                // Nothing runs, but the key is the command's that would run here, which can't
+                // now and says why: its button, if it's on screen, shows the reason briefly,
+                // instead of a toast. With no button to show it, the key is left alone
                 const refused = resolveKeyEvent(
                     event,
                     compiled,
                     context,
-                    (id) =>
-                        available(id) && actionDisabledReason(id) !== undefined,
+                    (id) => available(id) && hasActionHandler(id),
                 );
-                if (refused) {
+                if (
+                    refused &&
+                    actionDisabledReason(refused.id) !== undefined &&
+                    // A held key keeps it lit
+                    notifyRefusedPress(refused.id)
+                )
                     event.preventDefault();
-                    if (!event.repeat) notifyRefusedPress(refused.id);
-                }
                 return;
             }
             event.preventDefault();

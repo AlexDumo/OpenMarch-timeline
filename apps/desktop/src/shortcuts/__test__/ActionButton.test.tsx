@@ -134,9 +134,13 @@ describe("ActionButton", () => {
             screen.queryAllByText("Select 2 marchers to swap them").length;
         const hidden = shown();
         // Another action's refusal isn't this button's
-        act(() => notifyRefusedPress("flipHorizontal"));
+        act(() => {
+            notifyRefusedPress("flipHorizontal");
+        });
         expect(shown()).toBe(hidden);
-        act(() => notifyRefusedPress("swapMarchers"));
+        act(() => {
+            notifyRefusedPress("swapMarchers");
+        });
         expect(shown()).toBeGreaterThan(hidden);
         expect(button.className).toMatch(/ring-2/);
         act(() => {
@@ -145,6 +149,52 @@ describe("ActionButton", () => {
         expect(shown()).toBe(hidden);
         expect(button.className).not.toMatch(/ring-2/);
         vi.useRealTimers();
+        off();
+    });
+
+    it("Escape after a refused key closes the reason and still reaches the app", () => {
+        const off = registerActionHandler("swapMarchers", {
+            run: vi.fn(),
+            isEnabled: () => false,
+            disabledReason: () => "Select 2 marchers to swap them",
+        });
+        const beyond = vi.fn();
+        window.addEventListener("keydown", beyond);
+        render(<ActionButton action="swapMarchers">Swap</ActionButton>, {
+            wrapper: Providers,
+        });
+        const shown = () =>
+            screen.queryAllByText("Select 2 marchers to swap them").length;
+        const hidden = shown();
+        let showedIt = false;
+        act(() => {
+            showedIt = notifyRefusedPress("swapMarchers");
+        });
+        expect(showedIt).toBe(true);
+        expect(shown()).toBeGreaterThan(hidden);
+        fireEvent.keyDown(window, { key: "Escape" });
+        expect(shown()).toBe(hidden);
+        expect(beyond).toHaveBeenCalledOnce();
+        window.removeEventListener("keydown", beyond);
+        off();
+    });
+
+    it("a button with no reason to show doesn't light up for a refused key", () => {
+        const off = registerActionHandler("swapMarchers", {
+            run: vi.fn(),
+            isEnabled: () => false,
+        });
+        render(<ActionButton action="swapMarchers">Swap</ActionButton>, {
+            wrapper: Providers,
+        });
+        let showedIt = true;
+        act(() => {
+            showedIt = notifyRefusedPress("swapMarchers");
+        });
+        expect(showedIt).toBe(false);
+        expect(
+            screen.getByRole("button", { name: "Swap" }).className,
+        ).not.toMatch(/ring-2/);
         off();
     });
 
