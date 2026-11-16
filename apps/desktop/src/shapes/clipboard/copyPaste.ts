@@ -1,12 +1,22 @@
 import { toast } from "sonner";
 import tolgee from "@/global/singletons/Tolgee";
-import { planCanvasEdit } from "@/timeline/timelineCoordinateWrites";
+import {
+    planCanvasEdit,
+    timelinePositionsSettled,
+} from "@/timeline/timelineCoordinateWrites";
 import {
     currentShapeField,
     marchersOnField,
     shapeContextFor,
 } from "../field/shapeFieldContext";
+import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import {
+    displayedBeat,
+    useTimelineSelectionStore,
+} from "@/stores/TimelineSelectionStore";
 import { useBoxSelectionStore } from "../placed/boxSelectionStore";
+import type { PlacedBox } from "../placed/placedBox";
+import { placedBoxesAt, placedBoxesRead } from "../placed/placedBoxStore";
 import { startOverWaitingShape } from "../tool/shapeLeave";
 import {
     isShapeShown,
@@ -31,25 +41,36 @@ import {
 const COPIED_TOAST = "formation-copied";
 const LEFT_TOAST = "formation-paste-left";
 
+/** The placed shape on the field whose members are exactly `ids`, if any */
+function shapeSelectedWhole(ids: readonly number[]): PlacedBox | null {
+    const picked = new Set(ids);
+    const exactly = (box: PlacedBox) =>
+        box.recipe.members.length === picked.size &&
+        box.recipe.members.every((m) => picked.has(m.marcherId));
+    const { selected } = useBoxSelectionStore.getState();
+    if (selected && exactly(selected)) return selected;
+    // A shape placed a moment ago isn't selected whole until the field hears of it: read it here
+    if (useUiSettingsStore.getState().uiSettings.shapes === "off") return null;
+    return (
+        placedBoxesAt(displayedBeat(useTimelineSelectionStore.getState())).find(
+            exactly,
+        ) ?? null
+    );
+}
+
 /**
  * Copies the formation of the marchers `ids`, in selection order: as its shape when they are
- * exactly one placed shape, as loose dots otherwise. Nothing on the field changes. False when
- * there was nothing to copy.
+ * exactly one placed shape, as loose dots otherwise. Nothing on the field changes. Waits for a
+ * shape placed just before to be read back, so Copy right after Place copies the shape. False
+ * when there was nothing to copy.
  */
-export function copyFormation(ids: readonly number[]): boolean {
+export async function copyFormation(ids: readonly number[]): Promise<boolean> {
+    await Promise.all([placedBoxesRead(), timelinePositionsSettled()]);
     const field = currentShapeField();
     if (!field) return false;
     const drawn = field.drawn(ids);
     const positions = ids.flatMap((id) => drawn.get(id) ?? []);
-    // The placed shape whose members are exactly the selection, if any
-    const { selected } = useBoxSelectionStore.getState();
-    const picked = new Set(ids);
-    const shape =
-        selected &&
-        selected.recipe.members.length === picked.size &&
-        selected.recipe.members.every((m) => picked.has(m.marcherId))
-            ? selected
-            : null;
+    const shape = shapeSelectedWhole(ids);
     const picture = pictureOf({
         positions,
         shape,
