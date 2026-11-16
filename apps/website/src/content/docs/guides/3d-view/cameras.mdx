@@ -30,11 +30,13 @@ In the 3D View you can look at the show from anywhere: move the view with the mo
 | Drag with the right mouse button, or hold <Kbd keys="Shift" /> while dragging     | Pan across the field               |
 | Scroll or pinch                                                                   | Zoom toward the pointer            |
 | Hold <Kbd keys="Shift" /> or <Kbd keys="Alt" /> while scrolling                   | Pan                                |
-| Double-click a spot on the field                                                  | Orbit around that spot from now on |
+| Double-click a spot on the field or in the stands                                 | Orbit around that spot from now on |
 
 The camera never goes below the ground.
 
-To change this, open <Ui k="view3d.settings.title" /> in the 3D View and pick another <Ui k="settings.view3d.controls" /> choice. The same choice is in Settings › <Ui k="settings.view3d" />.
+When you pan, the spot you pressed stays under the pointer, whether it's the field, a performer or the stands. When that spot is far away, or you see it at a low angle (near the horizon, or level with your eye in the stands), the view pans at a steady speed instead, so it doesn't jump. Zooming heads toward whatever is under the pointer, the stands included.
+
+To change what dragging and scrolling do, open <Ui k="view3d.settings.title" /> in the 3D View and pick another <Ui k="settings.view3d.controls" /> choice. The same choice is in Settings › <Ui k="settings.view3d" />.
 
 - <Ui k="settings.view3d.controls.map" />: dragging pans across the field, and the right mouse button, or holding <Kbd keys="Alt" />, <Kbd keys="Ctrl" /> or <Kbd keys="Shift" /> while dragging, orbits. Scrolling still zooms.
 - <Ui k="settings.view3d.controls.trackpad" />: scrolling and dragging orbit, a pinch zooms, and <Kbd keys="Shift" gesture="drag" /> or the right mouse button pans.
