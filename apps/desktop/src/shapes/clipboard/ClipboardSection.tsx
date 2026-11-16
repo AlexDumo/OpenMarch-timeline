@@ -122,12 +122,7 @@ export function ClipboardSection() {
                     />
                 </div>
             )}
-            <p className="text-sub" data-testid="clipboard-rule">
-                {summary.anyNumber
-                    ? t("shapes.clipboard.anyNumber")
-                    : t("shapes.clipboard.fixed", { count: summary.count })}
-            </p>
-            <FitLine fit={fit} />
+            {/* The buttons sit above the lines that change with the selection, so they never move under the pointer */}
             <div className="flex flex-wrap gap-8">
                 <ActionButton
                     action="pasteFormation"
@@ -165,6 +160,12 @@ export function ClipboardSection() {
                     </span>
                 </ActionButton>
             </div>
+            <p className="text-sub" data-testid="clipboard-rule">
+                {summary.anyNumber
+                    ? t("shapes.clipboard.anyNumber")
+                    : t("shapes.clipboard.fixed", { count: summary.count })}
+            </p>
+            <FitLine fit={fit} />
         </InspectorCollapsible>
     );
 }

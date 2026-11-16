@@ -440,6 +440,17 @@ test("the inspector's Clipboard card shows what is copied and how it fits the se
         "2 selected marchers have no spot and stay put",
     );
 
+    // The buttons stay put when the line about the selection goes
+    const clear = card.getByTestId("clipboard-clear");
+    const clearAt = await clear.boundingBox();
+    await page.keyboard.press("Escape");
+    await expect
+        .poll(async () => (await readField(page)).selection.length)
+        .toBe(0);
+    await expect(card.getByTestId("clipboard-fit")).toBeHidden();
+    expect(await clear.boundingBox()).toEqual(clearAt);
+    await select(page, [3, 4, 5, 6, 7, 8]);
+
     // Paste exactly's tooltip explains it, under its name
     await card.getByTestId("clipboard-paste-in-place").hover();
     await expect(page.getByRole("tooltip")).toContainText(
@@ -510,6 +521,35 @@ test("a copied box switched to Positions on the Clipboard card pastes onto its e
         "data-state",
         "on",
     );
+});
+
+test("pasted exactly again as the shape onto marchers already on its spots, each keeps their own spot", async ({
+    show,
+}) => {
+    const { page } = show;
+    const boxSpots = sorted(await placeBox(show));
+    await page.keyboard.press("ControlOrMeta+c");
+    const card = page.getByTestId("clipboard-section");
+    await card.getByTestId("clipboard-paste-as-positions").click();
+    await select(page, [5, 6, 7, 8]);
+    await page.keyboard.press("ControlOrMeta+Shift+v");
+    await expect(preview(page)).toBeVisible();
+    await page.keyboard.press("Enter");
+    await expect(preview(page)).toBeHidden();
+    await expect
+        .poll(async () => sorted(await savedAt(show, [5, 6, 7, 8])))
+        .toEqual(boxSpots);
+    await waitForIdle(page);
+    const standing = await savedAt(show, [5, 6, 7, 8]);
+
+    await card.getByTestId("clipboard-paste-as-shape").click();
+    await page.keyboard.press("ControlOrMeta+Shift+v");
+    await expect(preview(page)).toBeVisible();
+    await page.keyboard.press("Enter");
+    await expect(preview(page)).toBeHidden();
+    await expect.poll(() => savedShapes(show)).toBe(2);
+    await waitForIdle(page);
+    expect(await savedAt(show, [5, 6, 7, 8])).toEqual(standing);
 });
 
 test("the Clipboard card sits at the top of the inspector, folds (remembered after a reload) and Clear empties it", async ({
