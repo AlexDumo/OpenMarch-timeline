@@ -1112,7 +1112,7 @@
     "pages.noNextPage": "Info toast shown when the user tries to go to the next page but the current page is the last one. A page is one section of the drill, ending at a set.",
     "pages.noPreviousPage": "Info toast shown when the user tries to go to the previous page but the current page is the first one. A page is one section of the drill, ending at a set.",
     "pages.pushPastEnd": "Error toast shown when lengthening a page would push the following pages later than the last beat of the show's music. \"Push\" means moving the later pages later in time.",
-    "pages.splitNeedsTwoCounts": "Error toast shown when someone tries to split a page that is only 1 count long. Splitting cuts a page into two pages. A count is one beat of the show.",
+    "pages.splitNeedsTwoCounts": "Small help text under the page inspector's Split page button, which is greyed out because the selected page is only 1 count long. Splitting cuts a page into two pages. A count is one beat of the show.",
     "pages.undoDeleteUnavailable": "Info toast shown when the user presses the Undo button on a \"page deleted\" toast but the show changed in between, so that exact undo is no longer possible. Points the user to the Undo button in the toolbar to step back through changes.",
     "pages.updateFailed": "Error toast shown when changing a page (its length, name or start) fails. A page is one section of the show that ends in a set (formation).",
     "pages.yankEmptyPages": "Error toast shown when the later pages can't be pulled earlier in time because one of them has no beats (counts) at all. \"Yank\" means pulling the later pages earlier in time.",

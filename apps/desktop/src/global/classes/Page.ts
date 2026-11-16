@@ -363,10 +363,8 @@ export const splitPage = (
 ):
     | { newPageArgs: NewPageArgs; modifyPageRequest?: ModifyPagesRequest }
     | undefined => {
-    if (page.beats.length <= 1) {
-        conToastError(tolgee.t("pages.splitNeedsTwoCounts"), page);
-        return;
-    }
+    // The inspector's Split page button is unavailable then, and says why
+    if (page.beats.length <= 1) return;
 
     const beatIndex = Math.ceil(page.beats.length / 2);
     const newStartBeat = page.beats[beatIndex];
