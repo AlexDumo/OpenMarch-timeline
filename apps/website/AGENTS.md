@@ -74,9 +74,14 @@ import { Steps, Aside } from "@astrojs/starlight/components";
 | `<Aside type="caution">`           | Rarely: something the reader would regret missing.                                           |
 
 The build also writes the guide as plain text for agents (`starlight-llms-txt`, set up in
-`astro.config.mjs`): `dist/llms.txt`, `dist/llms-full.txt` and one file per chapter in
-`dist/_llms-txt/`. It reads each page's HTML, so a new component must leave readable text
-there; `<Kbd>` writes a `.docs-kbd-text` span for it.
+`astro.config.mjs`): `dist/llms.txt` (an index of every page), `dist/llms-full.txt`, one file
+per chapter in `dist/_llms-txt/`, and a Markdown copy of each page at its address plus `.md`
+(`/guides/timeline/moves.md`, from `src/pages/[...slug].md.ts`), which the page's HTML links
+with `rel="alternate"` (`src/routeData.ts`). They read each page's HTML, so a new component
+must leave readable text there; `<Kbd>` writes a `.docs-kbd-text` span for it.
+
+To audit the whole guide as a reader would (missing pictures, missing context, drift from the
+app), agents use the `docs-audit` skill (`.claude/skills/docs-audit`).
 
 To find a label's key, search `en.json` for the text the app shows
 (`grep -n '"Split page"' ../desktop/i18n/en.json`) and take the key path from the nesting.

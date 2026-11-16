@@ -89,24 +89,51 @@ const guideChapters = [
     },
 ];
 
-/** A chapter's page ids in sidebar order (`sidebar.order`, then id), for the llms.txt files. */
-function chapterPageIds(dir) {
+/** A frontmatter field written on one line, with or without quotes. */
+function frontmatterField(source, field) {
+    const match = new RegExp(`^${field}:\\s*(.+)$`, "m").exec(source);
+    return match ? match[1].trim().replace(/^(["'])(.*)\1$/, "$2") : "";
+}
+
+/** A chapter's pages in sidebar order (`sidebar.order`, then id), for the llms.txt files. */
+function chapterPages(dir) {
     const folder = new URL(`./src/content/docs/${dir}/`, import.meta.url);
     return readdirSync(folder)
         .filter((name) => /\.mdx?$/.test(name))
         .map((name) => {
-            const order = /^\s+order:\s*(-?\d+)/m.exec(
-                readFileSync(new URL(name, folder), "utf8"),
-            );
+            const source = readFileSync(new URL(name, folder), "utf8");
+            const order = /^\s+order:\s*(-?\d+)/m.exec(source);
             const base = name.replace(/\.mdx?$/, "");
             return {
                 id: base === "index" ? dir : `${dir}/${base}`,
+                title: frontmatterField(source, "title"),
+                description: frontmatterField(source, "description"),
                 order: order ? Number(order[1]) : Infinity,
             };
         })
-        .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
-        .map((page) => page.id);
+        .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
 }
+
+const site = isPreview
+    ? "https://preview.openmarch.com"
+    : "https://openmarch.com";
+
+/**
+ * llms.txt's page index: every guide page by chapter, linked to its Markdown copy
+ * (src/pages/[...slug].md.ts), so an agent can fetch only the pages it needs.
+ */
+const llmsPageIndex = guideChapters
+    .map((chapter) =>
+        [
+            `### ${chapter.label}`,
+            "",
+            ...chapterPages(chapter.dir).map(
+                (page) =>
+                    `- [${page.title}](${site}/${page.id}.md)${page.description ? `: ${page.description}` : ""}`,
+            ),
+        ].join("\n"),
+    )
+    .join("\n\n");
 
 // https://astro.build/config
 export default defineConfig({
@@ -147,6 +174,11 @@ export default defineConfig({
                         "- Shortcuts are written in Windows and Linux keys, with the Mac keys after them: `Ctrl+Shift+Z (Mac: ⇧⌘Z)`.",
                         "- Pictures are screenshots and short clips from the app; their alt text says what they show.",
                         '- Concept pages such as "How the timeline works" explain how a part of the app works; the Glossary defines terms such as page, set, move and keyframe.',
+                        "- Every page is also plain Markdown: add `.md` to its address without the last slash (`/guides/timeline/moves/` is `/guides/timeline/moves.md`).",
+                        "",
+                        "## Pages",
+                        "",
+                        llmsPageIndex,
                     ].join("\n"),
                     customSets: guideChapters.map((chapter) => ({
                         label: chapter.label,
@@ -165,7 +197,7 @@ export default defineConfig({
                         "guides",
                         "guides/reference/glossary",
                         ...guideChapters.flatMap((chapter) =>
-                            chapterPageIds(chapter.dir),
+                            chapterPages(chapter.dir).map((page) => page.id),
                         ),
                     ],
                     demote: ["otm/**", "developers/**"],
@@ -191,6 +223,8 @@ export default defineConfig({
                 }),
             ],
             title: "OpenMarch",
+            // Each docs page links its Markdown copy for agents (rel="alternate")
+            routeMiddleware: "./src/routeData.ts",
             logo: {
                 light: "./public/openmarch-black.svg",
                 dark: "./public/openmarch-white.svg",
@@ -276,7 +310,7 @@ export default defineConfig({
               ]),
     ],
 
-    site: isPreview ? "https://preview.openmarch.com" : "https://openmarch.com",
+    site,
 
     image: {
         domains: ["localhost", "cms.openmarch.com"],
