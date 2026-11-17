@@ -19,15 +19,25 @@ export function headingSlug(text: string): string {
 
 function plain(markdown: string): string {
     return markdown
-        .replace(/<Ui k="([^"]+)"[^>]*\/>/g, (_, k: string) => uiText(k))
+        .replace(/<Ui\b[^>]*?\bk="([^"]+)"[^>]*\/>/g, (_, k: string) =>
+            uiText(k),
+        )
         .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-        .replace(/[`*_]/g, "")
+        .replace(/[`*]/g, "")
         .trim();
 }
 
+/** Abbreviations whose full stop doesn't end a sentence. */
+const ABBREVIATION = /\b(?:e\.g|i\.e|etc|vs|Dr|Mr|Ms|St)\.$/i;
+
 function firstSentence(text: string): string {
-    const match = /^.+?[.!?](?=\s|$)/.exec(text);
-    return match ? match[0] : text;
+    // A sentence ends at . ! or ? (plus any closing quote or bracket) followed by a space or the end.
+    const end = /[.!?]["'”’)\]]*(?=\s|$)/g;
+    for (let match = end.exec(text); match; match = end.exec(text)) {
+        const sentence = text.slice(0, match.index + match[0].length);
+        if (!ABBREVIATION.test(text.slice(0, match.index + 1))) return sentence;
+    }
+    return text;
 }
 
 let cache: Map<string, { term: string; definition: string }> | undefined;
@@ -39,10 +49,20 @@ export function glossaryEntries() {
     for (const block of source.split(/\n## /).slice(1)) {
         const [heading, ...rest] = block.split("\n");
         const paragraph = rest.find((line) => line.trim() !== "") ?? "";
-        cache.set(headingSlug(heading), {
-            term: heading.trim(),
-            definition: firstSentence(plain(paragraph)),
-        });
+        const slug = headingSlug(heading);
+        const definition = firstSentence(plain(paragraph));
+        // Fail the build rather than show a wrong or empty hover text.
+        if (cache.has(slug))
+            throw new Error(
+                `Glossary: two entries are headed "${heading.trim()}"`,
+            );
+        if (!definition)
+            throw new Error(`Glossary: "${heading.trim()}" has no definition`);
+        if (/[<>{}]/.test(definition))
+            throw new Error(
+                `Glossary: "${heading.trim()}" starts with markup the hover text can't show: ${definition}`,
+            );
+        cache.set(slug, { term: heading.trim(), definition });
     }
     return cache;
 }

@@ -33,7 +33,7 @@ const slot = Astro.slots.has("default")
     href={`${GLOSSARY_URL}#${id}`}
     data-definition={entry.definition}
     aria-description={entry.definition}
-    >{slot ? <Fragment set:html={slot} /> : entry.term.toLowerCase()}</a
+    >{slot ? <Fragment set:html={slot} /> : entry.term}</a
 >
 
 <style>
@@ -50,6 +50,8 @@ const slot = Astro.slots.has("default")
     }
     .docs-term::after {
         content: attr(data-definition);
+        /* Empty alt text: the definition is already the link's aria-description. */
+        content: attr(data-definition) / "";
         position: absolute;
         left: 0;
         bottom: calc(100% + 0.4rem);
@@ -66,16 +68,22 @@ const slot = Astro.slots.has("default")
         line-height: 1.45;
         white-space: normal;
         box-shadow: var(--sl-shadow-md);
-        opacity: 0;
-        visibility: hidden;
         pointer-events: none;
-        transition: opacity 0.12s ease;
+        /* Not just invisible: a hidden box still widens the page and makes it scroll sideways. */
+        display: none;
     }
     .docs-term:hover::after,
     .docs-term:focus-visible::after {
-        opacity: 1;
-        visibility: visible;
-        transition-delay: 0.25s;
+        display: block;
+        animation: docs-term-in 0.12s ease 0.25s both;
+    }
+    @keyframes docs-term-in {
+        from {
+            opacity: 0;
+        }
+        to {
+            opacity: 1;
+        }
     }
     @media (hover: none) {
         .docs-term::after {
