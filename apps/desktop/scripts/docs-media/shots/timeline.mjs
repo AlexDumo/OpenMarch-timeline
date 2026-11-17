@@ -788,7 +788,9 @@ const shots = [
             await wait(600);
             // The timeline pane made taller, so there's room under the Move 1 bar for the pointer
             // and the key cap instead of them covering the bar
-            const sp = await page.getByTestId("timeline-splitter").boundingBox();
+            const sp = await page
+                .getByTestId("timeline-splitter")
+                .boundingBox();
             const grip = { x: sp.x + sp.width / 2, y: sp.y + sp.height / 2 };
             await page.mouse.move(grip.x, grip.y);
             await page.mouse.down();
