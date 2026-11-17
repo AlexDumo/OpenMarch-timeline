@@ -2,7 +2,8 @@
  * Asks, in the 3D View itself, whether it should keep opening with every show. The editor opens
  * it with the show while the "open with the show" setting was never answered
  * (`view3dAutoOpenOnShow`), so this card shows each time the window opens until it is: either
- * answer saves the setting (Settings › General changes it later). It has no close button, since
+ * answer saves the setting (3D View settings › Preferences and Settings › General change it
+ * later). It has no close button, since
  * closing it without answering would only bring it back next time.
  *
  * `window.view3d.autoOpen.get` is undefined while unanswered, and null where the window shouldn't

@@ -4,8 +4,8 @@
  *
  * - top left: the camera menu and Pick a seat, with the Cameras panel
  *   under them when open;
- * - top right: fullscreen and the settings button, with the settings panel
- *   under them when open;
+ * - top right: fullscreen and 3D View settings, with the settings panel
+ *   (Venue, Performers and Preferences tabs) under them when open;
  * - bottom left: playback controls, then the readout;
  * - bottom right: whether to keep opening the 3D View with every show, until
  *   answered (`AutoOpenQuestion.tsx`), and why the view went to low quality,
@@ -265,7 +265,6 @@ export default function View3dOverlay() {
                             label={settingsLabel}
                             tooltip={settingsLabel}
                             tooltipSide="left"
-                            iconOnly
                             testId="view3d-settings-button"
                         />
                     </Panel>
