@@ -1619,6 +1619,23 @@
                     ]
                 },
                 {
+                    "label": "Get help",
+                    "other": [
+                        {
+                            "keys": [
+                                "F1"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "F1"
+                            ]
+                        }
+                    ]
+                },
+                {
                     "label": "Preview the show",
                     "other": [
                         {
@@ -3236,6 +3253,23 @@
                             "keys": [
                                 "⌘",
                                 ","
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Get help",
+                    "other": [
+                        {
+                            "keys": [
+                                "F1"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "F1"
                             ]
                         }
                     ]

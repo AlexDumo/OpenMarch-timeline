@@ -80,6 +80,11 @@ describe("app menu actions (docs/adr/0003-menu-actions-ipc.md)", () => {
         ]);
         expect(HELP_MENU_ACTIONS).toEqual([
             {
+                action: "openHelp",
+                labelKey: "menu.help.openHelp",
+                accelerator: "F1",
+            },
+            {
                 action: "showShortcuts",
                 labelKey: "menu.help.showShortcuts",
                 accelerator: "Shift+/",

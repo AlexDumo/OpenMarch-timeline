@@ -3344,5 +3344,20 @@
     "frontEnsemble.podium.edit": "Tooltip and screen-reader label of the pencil button beside a podium (a platform a drum major or conductor stands on) in the Front ensemble panel's list. Opens its edit view.",
     "pit.variant.feet": "Part of a podium model's name in the Front ensemble panel, joined to other parts with ' · ' (e.g. '6 ft · Aluminum'): how high the podium stands, in feet. {size} is a whole number. Keep the unit short.",
     "pit.family.synth": "Name of a kind of front ensemble equipment in the Front ensemble panel: a synthesizer keyboard on a stand. Also used to name new equipment with a number after it ('Marimba 2'). Short, capitalized as a name.",
-    "timeline.clearPage.error": "Error toast shown when clearing a page fails. Clearing a page sends the selected marchers back to where they were on the page before."
+    "timeline.clearPage.error": "Error toast shown when clearing a page fails. Clearing a page sends the selected marchers back to where they were on the page before.",
+    "actions.ui.openHelp": "Name of an action in the command palette, shortcut settings and the title bar button tooltip (a question mark icon). Opens the Help window, which offers the user guide or a prompt to copy for an AI assistant.",
+    "actions.ui.openHelpKeywords": "Space-separated search words for the Get help action in the command palette. Translate each word; keep brand names such as ChatGPT and Claude.",
+    "help.ai.body": "Explains the Copy prompt button: it copies a text prompt that the user pastes into an AI chat assistant. Keep the brand names ChatGPT and Claude.",
+    "help.ai.copied": "Shown on the Copy prompt button for a moment after the prompt was copied.",
+    "help.ai.copy": "Button that copies the AI assistant prompt to the clipboard.",
+    "help.ai.copyFailed": "Shown when copying to the clipboard failed, above a box holding the prompt for the user to copy by hand.",
+    "help.ai.questionLabel": "Label of an optional text box where the user types their question; it is added to the copied prompt.",
+    "help.ai.questionPlaceholder": "Example question shown greyed out in the empty question box. \"Stand still for 8 counts\" is a marching band term: hold position for eight beats.",
+    "help.ai.title": "Heading of the second part of the Help window, about asking an AI chat assistant such as ChatGPT or Claude.",
+    "help.description": "One-line description under the Help window title. The window has two parts: the user guide, and a prompt for an AI assistant.",
+    "help.guide.body": "Text under \"Read the user guide\" in the Help window, describing the online guide.",
+    "help.guide.open": "Button that opens the online user guide in the web browser.",
+    "help.guide.title": "Heading of the first part of the Help window, about the online user guide (documentation).",
+    "help.title": "Title of the Help window, opened from the question mark button in the title bar.",
+    "menu.help.openHelp": "Item in the Help menu of the menu bar. Opens the Help window. The ellipsis means it opens a window."
 }
