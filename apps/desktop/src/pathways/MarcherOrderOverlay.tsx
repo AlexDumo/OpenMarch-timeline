@@ -86,6 +86,7 @@ import {
     FOLDED_INK,
     haloTone,
     haloWidth,
+    isDarkField,
     laneHalfWidth,
     laneSamplePoints,
     ownHalfWidth,
@@ -431,19 +432,6 @@ function drawLine({
             maxY: Math.max(...ys) + pad,
         },
     };
-}
-
-/** Whether a field color is dark enough that the lane turns light on it */
-function isDarkField({
-    r,
-    g,
-    b,
-}: {
-    r: number;
-    g: number;
-    b: number;
-}): boolean {
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b < 140;
 }
 
 export default function MarcherOrderOverlay({

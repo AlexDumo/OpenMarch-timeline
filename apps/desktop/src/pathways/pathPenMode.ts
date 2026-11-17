@@ -31,6 +31,8 @@ import { toolEnvFor } from "@/shapes/tool/toolEnv";
 import type { ToolEnv } from "@/shapes/tool/toolKind";
 import type { XY } from "@/shapes/types";
 import { drawnAsGroup, type PathTarget } from "./pathTarget";
+import { walkedRoute } from "./walkedRoute";
+import { shapeTuckedUnderTrail } from "./trailShape";
 import { snakeFrom } from "@/db-functions/timelineTrailSnake";
 import {
     aroundArrows,
@@ -1358,6 +1360,14 @@ class PathPenMode implements FieldMode {
         return drawingOf(this.shownSession);
     }
 
+    /**
+     * Whether a placed shape on exactly `ids`, selected over the trail shown, keeps only its body
+     * (the trail's end shape, owner 2026-11-17): its controls wait for Shape controls
+     */
+    tucks(ids: readonly number[]): boolean {
+        return shapeTuckedUnderTrail(ids);
+    }
+
     subscribe(listener: () => void): () => void {
         this.listeners.add(listener);
         return () => this.listeners.delete(listener);
@@ -1687,7 +1697,12 @@ function buildDrawing(
         lanesAdjusted,
         addHandles: bendSpots,
     } = target.trail
-        ? trailParts(target.trail)
+        ? // Selected (closed) or open, a trail's line-up and end line are part of the way it walks
+          // (`walked`), and its marchers carry no rings: who leads is the leader's mark, where
+          // they started their ghosts (owner, 2026-11-17)
+          drawingNow
+            ? trailParts(target.trail)
+            : ({} as LaneParts)
         : looseQuiet
           ? groupParts(
                 session,
@@ -1700,6 +1715,12 @@ function buildDrawing(
     // Whose end spots and start ghosts show: a quiet group path's or an adjusted lane's own
     // marchers only, so one selected marcher doesn't bring the whole group's along
     const shownIds = noLine ? new Set(laneIds ?? []) : null;
+    // A trail not being drawn: the whole way its line walks, one line under the band; selected
+    // (closed) it stands in for the path's line, which runs under the band (owner, 2026-11-17)
+    const walked =
+        target.trail && !drawingNow && outline
+            ? walkedRoute(target.trail, outline)
+            : null;
     const groupShown = group
         ? group.members.filter((m) => !shownIds || shownIds.has(m.marcherId))
         : [];
@@ -1709,6 +1730,12 @@ function buildDrawing(
         // Paths All's lines keep a shown path's color; the selection's quiet line is faint, but
         // the whole group's one line is deep (round 4)
         pathLine: asObject || view === "whole" ? "shown" : pathLineOf(session),
+        ...(walked ? { walked } : {}),
+        ...(walked && session.phase === "closed" && !asObject
+            ? { outlineHidden: true }
+            : {}),
+        // Where a marcher already stands on its end spot, the marcher shows it
+        ...(walked ? { spotsClear: true } : {}),
         stage: drawingNow ? "drawing" : "open",
         spots: target.trail
             ? target.trail.members.map((m) => m.to)
@@ -1802,10 +1829,11 @@ const pathLineOf = (s: PathSession): FieldModeDrawing["pathLine"] => {
 };
 
 /**
- * A trail's parts of the drawing (pathways step 4): the line-up through the line's starts, tail
- * to leader, and the line through its end spots, from the entrance to the leader's, both thin
- * and faint as a group path's lanes are (the pen's line is the drawn part between them); and a
- * ring on each member, the leader's saying so.
+ * A trail's parts of the drawing while it's drawn with the pen (pathways step 4): the line-up
+ * through the line's starts, tail to leader, and the line through its end spots, from the entrance
+ * to the leader's, both thin and faint as a group path's lanes are (the pen's line is the drawn
+ * part between them); and a ring on each member, the leader's saying so. Selected or open, a
+ * stored trail draws the way it walks instead (`walkedRoute`), with no rings (owner, 2026-11-17).
  */
 function trailParts(trail: NonNullable<PathTarget["trail"]>): LaneParts {
     const lineUp = trail.members.map((m) => m.from);

@@ -12,6 +12,7 @@ import {
     ArrowsSplitIcon,
     BackspaceIcon,
     BezierCurveIcon,
+    CheckIcon,
     ColumnsIcon,
     DotsThreeIcon,
     FlagPennantIcon,
@@ -21,6 +22,7 @@ import {
     PencilSimpleIcon,
     PenNibIcon,
     RowsIcon,
+    ShapesIcon,
     TrashIcon,
     UsersThreeIcon,
     WarningIcon,
@@ -40,6 +42,10 @@ import {
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
 import { usePositionAt } from "@/timeline/timelineStore";
+import { useShallow } from "zustand/react/shallow";
+import { LABEL_SIZE_SCALE, useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { DOT_RADIUS } from "@/field/editor/hitTest";
+import { dotSizes, ringReach } from "@/field/three/selectionRing";
 import { stackedPlacement } from "@/shapes/editor/editorPlacement";
 import { useShapeEditorRect } from "@/shapes/editor/shapeEditorRect";
 import {
@@ -63,7 +69,14 @@ import { refitNeeded } from "./pathTarget";
 import { useShapeToolStore } from "@/shapes/tool/shapeToolStore";
 import { selectOnField } from "@/shapes/placed/boxSelection";
 import { setInsideBox } from "@/shapes/placed/boxSelectionStore";
-import { OffCountWarning, TrailCornerCounts } from "./TrailCornerCounts";
+import {
+    CornerSummary,
+    LABEL_HEIGHT,
+    LABEL_LIFT_DOTS,
+    OffCountWarning,
+    TrailCornerCounts,
+} from "./TrailCornerCounts";
+import { useTrailEndShape, useTrailShapeControls } from "./trailShape";
 import { offCountTally, trailCornersOf } from "./trailCorners";
 import {
     EVEN_FIRST,
@@ -335,9 +348,10 @@ function useBarSize(
 const pointOrNull = (p: readonly [number, number] | null): XY | null =>
     p ? { x: p[0], y: p[1] } : null;
 
-/** How far the leader's mark sits from the leader's dot, screen px: above it, or below it */
-const LEADER_MARK_ABOVE_PX = 40;
-const LEADER_MARK_BELOW_PX = 22;
+/** How far the leader's mark stands clear of the leader's ring and label, screen px */
+const LEADER_MARK_GAP_PX = 6;
+/** A marcher label's em width per character (Courier), as the chips estimate it */
+const LABEL_EM_PER_CHAR = 0.62;
 
 /**
  * The beats the leader's mark reads the leader at (owner, 2026-11-17): the field's beat held to the
@@ -359,16 +373,17 @@ export function leaderMarkBeats(
  * Where the leader's mark goes (pathways step 4; owner, 2026-11-17): by the leader where the field
  * shows it (`read`, at `leaderMarkBeats`), so it follows the leader as the playhead scrubs and sits
  * by the line's head at the move's end. While the trail is drawn (the Follow tool's drag, the pen)
- * the field shows the plan, not the move, so it stays where the leader starts. `below` when the
- * leader walks up the screen there, so the mark stays clear of the head's arrow and the way ahead.
+ * the field shows the plan, not the move, so it stays where the leader starts. `upDown` when the
+ * leader walks up or down the screen there: the line and the head's arrow then run up and down
+ * through it, so the mark goes beside it; else (across, or standing) above it.
  */
 export function leaderMarkPlace(
     session: Pick<PathSession, "target" | "phase" | "follow">,
     read: { at: XY | null; back: XY | null; on: XY | null },
-): { at: XY; below: boolean } {
+): { at: XY; upDown: boolean } {
     const leader = session.target.trail!.members.at(-1)!;
     if (session.phase === "drawing" || session.follow || !read.at)
-        return { at: leader.from, below: false };
+        return { at: leader.from, upDown: false };
     const at = read.at;
     // The way it walks: from a beat before to here, or at the move's start from here to a beat on
     const moved = (p: XY | null): p is XY =>
@@ -380,16 +395,64 @@ export function leaderMarkPlace(
           : [at, at];
     const dx = b.x - a.x;
     const dy = b.y - a.y;
-    // The field's y grows down the screen, as the overlay draws it
-    return { at, below: dy < 0 && Math.abs(dy) > Math.abs(dx) };
+    return { at, upDown: Math.abs(dy) > Math.abs(dx) };
 }
+
+/**
+ * Where the leader's mark sits on screen (owner, 2026-11-17: it covered the leader's own drill
+ * label as the leader walked down the screen): clear of the leader's dot and selection ring
+ * (`ring`, px from its middle) and its drill label (`label`: above the dot, or beside it to the
+ * right), whichever way it walks. Walking across (or standing), above the label; walking up or
+ * down, beside the dot, to the right of a label above it, or to the left of a label beside it.
+ * `left`/`top` is the mark's anchor in the field element's px, `align` which of its edges sits
+ * there. Exported for tests.
+ */
+export function leaderMarkBox(
+    at: XY,
+    upDown: boolean,
+    ring: number,
+    label: {
+        width: number;
+        height: number;
+        lift: number;
+        beside: boolean;
+    } | null,
+): { left: number; top: number; align: "above" | "right" | "left" } {
+    const gap = LEADER_MARK_GAP_PX;
+    if (!upDown) {
+        // Above whatever is highest: the ring, or a label's top
+        const labelTop = label
+            ? at.y - (label.beside ? 0 : label.lift) - label.height / 2
+            : Infinity;
+        return {
+            left: at.x,
+            top: Math.min(at.y - ring, labelTop) - gap,
+            align: "above",
+        };
+    }
+    if (label?.beside)
+        return { left: at.x - ring - gap, top: at.y, align: "left" };
+    return {
+        left: at.x + Math.max(ring, label ? label.width / 2 : 0) + gap,
+        top: at.y,
+        align: "right",
+    };
+}
+
+/** How each alignment hangs the mark from its anchor */
+const LEADER_MARK_SHIFT = {
+    above: "translate(-50%, -100%)",
+    right: "translate(0, -50%)",
+    left: "translate(-100%, -50%)",
+} as const;
 
 /**
  * The leader's mark (pathways step 4): a chip by the leader, naming who leads: where it starts
  * while the trail is drawn, else where it is at the playhead (`leaderMarkPlace`). On a stored
  * trail its button turns the line around (Reverse, one undo step), also the way for a finger or a
- * pencil. It sits above the leader's dot (below it when the leader walks up the screen) and takes
- * no room in the path bar.
+ * pencil; it's the trail's one leader indicator and its one Reverse (owner, 2026-11-17). It stands
+ * clear of the leader's dot, ring and drill label whichever way the leader walks
+ * (`leaderMarkBox`) and takes no room in the path bar.
  */
 function TrailLeaderMark({ session }: { session: PathSession }) {
     const view = useFieldViewStore();
@@ -404,19 +467,48 @@ function TrailLeaderMark({ session }: { session: PathSession }) {
         back: pointOrNull(usePositionAt(leader.marcherId, beats.back)),
         on: pointOrNull(usePositionAt(leader.marcherId, beats.on)),
     });
+    const labels = useUiSettingsStore(
+        useShallow((s) => ({
+            form: s.uiSettings.marcherLabels,
+            size: s.uiSettings.marcherLabelSize,
+            position: s.uiSettings.marcherLabelPosition,
+        })),
+    );
     const at = fieldToElement(view, place.at.x, place.at.y);
+    const zoom = view.zoom || 1;
+    const dotScale = dotSizes(zoom).scale;
+    const labelPx =
+        LABEL_HEIGHT *
+        LABEL_SIZE_SCALE[labels.size ?? "normal"] *
+        dotScale *
+        zoom;
+    const box = leaderMarkBox(
+        at,
+        place.upDown,
+        ringReach(zoom) * zoom,
+        labels.form === "off"
+            ? null
+            : {
+                  width:
+                      Math.max(3, leader.drill.length) *
+                      LABEL_EM_PER_CHAR *
+                      labelPx,
+                  height: labelPx,
+                  lift: LABEL_LIFT_DOTS * DOT_RADIUS * dotScale * zoom,
+                  beside: labels.position === "beside",
+              },
+    );
     const stored =
         session.target.routeId !== null && session.phase !== "drawing";
     return (
         <div
-            className="rounded-6 border-stroke bg-modal text-sub text-text shadow-modal absolute z-10 flex -translate-x-1/2 items-center gap-4 border py-2 pr-2 pl-6 whitespace-nowrap"
+            className="rounded-6 border-stroke bg-modal text-sub text-text shadow-modal absolute z-10 flex items-center gap-4 border py-2 pr-2 pl-6 whitespace-nowrap"
             style={{
-                left: at.x,
-                top: place.below
-                    ? at.y + LEADER_MARK_BELOW_PX
-                    : at.y - LEADER_MARK_ABOVE_PX,
+                left: box.left,
+                top: box.top,
+                transform: LEADER_MARK_SHIFT[box.align],
             }}
-            data-below={place.below || undefined}
+            data-align={box.align}
             data-testid="trail-leader"
             data-leader={leader.marcherId}
             onPointerDown={(e) => e.stopPropagation()}
@@ -638,6 +730,8 @@ function PathEditorBar({
         const lines = drawn?.outline
             ? [
                   ...drawn.outline,
+                  // A trail's whole way, through the box it left too
+                  ...(drawn.walked ?? []),
                   ...(drawn.lanes?.flat() ?? []),
                   ...(session.target.group && !session.target.trail
                       ? [...(drawn.rings ?? []), ...drawn.spots]
@@ -683,10 +777,12 @@ function PathEditorBar({
     const { left, top } = (drawing && pinned.current) || place;
     const faded = drawing && session.dragging !== null;
     const quiet = session.phase === "closed";
-    // Step 6 (TC-7): a trail's turns that fall between counts
-    const offCount = quiet
-        ? { turns: 0, corners: 0 }
-        : offCountTally(trailCornersOf(session));
+    // Step 6 (TC-7): a trail's turns that fall between counts. Selected (closed), the bar sums
+    // them up after Edit path, and the chips wait for a hover or a click on it (owner, 2026-11-17)
+    const offCount =
+        quiet && !session.target.trail
+            ? { turns: 0, corners: 0 }
+            : offCountTally(trailCornersOf(session));
     const stored = session.target.routeId !== null;
     // The open path's selected point: Corner | Smooth for it, as its menu has (step 2)
     const shape = shapeOf(session);
@@ -712,7 +808,6 @@ function PathEditorBar({
         !session.follow &&
         (!!session.target.trail ||
             (!!session.target.group && session.target.routeId === null));
-    const trail = session.target.trail ?? null;
     return (
         <div
             ref={ref}
@@ -727,8 +822,10 @@ function PathEditorBar({
             data-phase={session.phase}
             onPointerDown={(e) => e.stopPropagation()}
         >
-            {offCount.turns > 0 && <OffCountWarning tally={offCount} />}
-            {offCount.turns > 0 && controls && <Divider />}
+            {!quiet && offCount.turns > 0 && (
+                <OffCountWarning tally={offCount} />
+            )}
+            {!quiet && offCount.turns > 0 && controls && <Divider />}
             {drawing ? (
                 <>
                     {kindChoice && (
@@ -831,6 +928,12 @@ function PathEditorBar({
             ) : (
                 <>
                     <PathSlots session={session} />
+                    {quiet && offCount.turns > 0 && (
+                        <>
+                            <Divider />
+                            <CornerSummary session={session} tally={offCount} />
+                        </>
+                    )}
                     {picked >= 0 && (
                         <>
                             <Divider />
@@ -893,24 +996,8 @@ function PathEditorBar({
                             </Tip>
                         </>
                     )}
-                    {stored && trail && (
-                        <>
-                            <Divider />
-                            <IconButton
-                                label={reverseLabel(trail.along, trail.around)}
-                                disabled={trail.along}
-                                action="reverseTrail"
-                                onClick={() => runAction("reverseTrail")}
-                                testId="path-reverse"
-                            >
-                                <ArrowsLeftRightIcon size={14} />
-                                {tolgee.t(
-                                    "actions.path.reverse",
-                                    "Reverse leader",
-                                )}
-                            </IconButton>
-                        </>
-                    )}
+                    {/* A stored trail's Reverse is the leader's mark's ⇆, selected or open: one place
+                        for it (owner, 2026-11-17) */}
                     {stored && (
                         <>
                             <Divider />
@@ -1143,6 +1230,9 @@ function PathMoreMenu({ session }: { session: PathSession }) {
                   "The path already fits where its marcher stands",
               );
     const more = tolgee.t("pathways.editor.more", "More path commands");
+    // A trail's end shape (owner, 2026-11-17): its controls, tucked away while the trail is shown
+    const endShape = useTrailEndShape();
+    const shapeControls = useTrailShapeControls();
     return (
         <DropdownMenu.Root open={open} onOpenChange={setOpen} modal={false}>
             <Tip label={more}>
@@ -1212,6 +1302,40 @@ function PathMoreMenu({ session }: { session: PathSession }) {
                                         "Re-fit path",
                                     )}
                         </MenuItemWithReason>
+                    )}
+                    {trail && endShape && (
+                        <>
+                            <DropdownMenu.CheckboxItem
+                                className={clsx(MENU_ITEM_CLASS, "items-start")}
+                                checked={shapeControls}
+                                onSelect={() => runAction("trailShapeControls")}
+                                data-testid="path-shape-controls"
+                            >
+                                <ShapesIcon
+                                    size={14}
+                                    aria-hidden
+                                    className="mt-2 shrink-0"
+                                />
+                                <span className="flex flex-col">
+                                    {tolgee.t(
+                                        "actions.path.shapeControls",
+                                        "Shape controls",
+                                    )}
+                                    <span className="text-sub text-text-subtitle">
+                                        {tolgee.t(
+                                            "pathways.editor.shapeControlsNote",
+                                            "The end shape's spacing, size, turn and flips, and its handles on the field",
+                                        )}
+                                    </span>
+                                </span>
+                                <DropdownMenu.ItemIndicator className="mt-2 ml-auto shrink-0">
+                                    <CheckIcon size={14} aria-hidden />
+                                </DropdownMenu.ItemIndicator>
+                            </DropdownMenu.CheckboxItem>
+                            <DropdownMenu.Separator
+                                className={MENU_SEPARATOR_CLASS}
+                            />
+                        </>
                     )}
                     {(rejoinHere || !trail) && (
                         <DropdownMenu.Separator

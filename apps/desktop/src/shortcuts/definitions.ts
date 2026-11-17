@@ -1145,6 +1145,16 @@ const STATIC_ACTIONS = {
         defaultBindings: ["Alt+L"],
         ignoreRepeat: true,
     },
+    // A selected trail tucks its end shape's controls away (owner, 2026-11-17); this shows them
+    // again, or tucks them back. No key: the path bar's ··· and the palette
+    trailShapeControls: {
+        labelKey: "actions.path.shapeControls",
+        keywordsKey: "actions.path.followKeywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
 
     // Pathways step 4g: a line's order on the field. Show order cycles the field display bar's
     // setting (off and while selected; Always is picked on the bar). Set order sweeps the

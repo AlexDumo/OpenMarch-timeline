@@ -229,7 +229,11 @@ describe("a click on a path's line selects its walkers (interaction system, rule
 
     it("a press on a quiet path's line is never the path's: a drag from there is the field's marquee (P-1, Q6)", () => {
         setPathObjects([groupObject(9)]);
-        const press = { reachesInside: () => false, isMac: false };
+        const press = {
+            reachesInside: () => false,
+            isMac: false,
+            onDot: () => false,
+        };
         expect(pathPenMode.claims(ON_GROUP, press)).toBe(false);
         showPath(group(9), "2");
         expect(pathPenMode.claims(ON_LANE, press)).toBe(false);

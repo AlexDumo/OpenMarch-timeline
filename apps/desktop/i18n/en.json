@@ -301,7 +301,8 @@
             "recenterLoose": "Re-center path",
             "snakeRows": "Snake row by row",
             "snakeColumns": "Snake column by column",
-            "snakeKeywords": "snake box rows columns order follow leader serpentine zigzag block"
+            "snakeKeywords": "snake box rows columns order follow leader serpentine zigzag block",
+            "shapeControls": "Shape controls"
         }
     },
     "analyticsOptIn": {
@@ -4601,7 +4602,8 @@
             "snakeRowsTip": "Snake row by row: along the corner's row, then back along the next",
             "snakeRows": "Rows",
             "snakeColumnsTip": "Snake column by column: along the corner's column, then back along the next",
-            "snakeColumns": "Columns"
+            "snakeColumns": "Columns",
+            "shapeControlsNote": "The end shape's spacing, size, turn and flips, and its handles on the field"
         },
         "menu": {
             "pointType": "Corner type",
@@ -4636,7 +4638,8 @@
             "followTwoMoves": "These marchers are in different moves at the playhead: select marchers of one move to follow a trail",
             "goAroundSelect": "Select marchers on a circle or box outline",
             "goAroundOnly": "This line can only go around: it has no ends to drag a trail out of",
-            "snakeNeedsBox": "Snake order is for a box with no order of its own: open Follow on marchers standing in a box, or ripple into one"
+            "snakeNeedsBox": "Snake order is for a box with no order of its own: open Follow on marchers standing in a box, or ripple into one",
+            "noEndShape": "Select a trail at the end of its move, where its marchers stand in a shape"
         },
         "banner": {
             "drawingPoints": "{marcher}'s path: click for a corner, drag for a smooth point · Right-click or <keys></keys> removes the last · Double-click to finish · <esc></esc> to cancel",
@@ -4718,7 +4721,8 @@
             "betweenCounts": "{count} · between {before} and {after}",
             "stopBefore": "{count, plural, one {# stops or leaves the trail before turning here} other {# stop or leave the trail before turning here}}",
             "offCountShort": "Turns between counts",
-            "offCountTip": "{turns, plural, one {# turn falls} other {# turns fall}} between counts, at {corners, plural, one {# corner} other {# corners}}. Each marcher reaches a corner at its own steady speed. Move the corner, change the spacing or the move's counts to put every turn on a count. Tap or click a corner's count to see who turns when."
+            "offCountTip": "{turns, plural, one {# turn falls} other {# turns fall}} between counts, at {corners, plural, one {# corner} other {# corners}}. Each marcher reaches a corner at its own steady speed. Move the corner, change the spacing or the move's counts to put every turn on a count. Tap or click a corner's count to see who turns when.",
+            "summary": "{corners, plural, one {# corner turns} other {# corners turn}} between counts"
         },
         "inspector": {
             "path": "Path"

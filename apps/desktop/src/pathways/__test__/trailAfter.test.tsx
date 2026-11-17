@@ -5,7 +5,12 @@ import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates
 import { fieldToElement, useFieldViewStore } from "@/field/three/fieldView";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
-import { PathEditor, leaderMarkBeats, leaderMarkPlace } from "../PathEditor";
+import {
+    PathEditor,
+    leaderMarkBeats,
+    leaderMarkBox,
+    leaderMarkPlace,
+} from "../PathEditor";
 import { clearPath, shapeOf, showPath, usePathPenStore } from "../pathPenStore";
 import type { PathSession } from "../pathPenStore";
 import { drawingOf } from "../pathPenMode";
@@ -217,7 +222,7 @@ describe("the leader's mark follows the leader (QA-SN-14)", () => {
     it("sits by the leader where it is; where it starts while the trail is drawn", () => {
         const at = { x: 30, y: 20 };
         const read = { at, back: { x: 30, y: 18 }, on: at };
-        expect(leaderMarkPlace(closed, read)).toEqual({ at, below: false });
+        expect(leaderMarkPlace(closed, read)).toEqual({ at, upDown: true });
         expect(
             leaderMarkPlace({ ...closed, phase: "drawing" }, read).at,
         ).toEqual(homes[1]);
@@ -227,21 +232,84 @@ describe("the leader's mark follows the leader (QA-SN-14)", () => {
         ).toEqual(homes[1]);
     });
 
-    it("goes below the leader when it walks up the screen, clear of the head's arrow", () => {
+    it("knows when the leader walks up or down the screen, at the move's start by the way it sets off", () => {
         const at = { x: 30, y: 20 };
         expect(
             leaderMarkPlace(closed, { at, back: { x: 30, y: 24 }, on: at })
-                .below,
+                .upDown,
         ).toBe(true);
-        // At the move's start, which way it sets off
         expect(
             leaderMarkPlace(closed, { at, back: at, on: { x: 30, y: 17 } })
-                .below,
+                .upDown,
         ).toBe(true);
         expect(
             leaderMarkPlace(closed, { at, back: { x: 26, y: 22 }, on: at })
-                .below,
+                .upDown,
         ).toBe(false);
+        // Standing still: across
+        expect(leaderMarkPlace(closed, { at, back: at, on: at }).upDown).toBe(
+            false,
+        );
+    });
+
+    it("QA-CT-6: clears the leader's dot, ring and drill label whichever way it walks (owner, 2026-11-17)", () => {
+        const at = { x: 400, y: 300 };
+        const ring = 12;
+        const label = { width: 48, height: 26, lift: 20, beside: false };
+        const chip = { w: 110, h: 24 };
+        // The mark's box on screen for an anchor and an alignment
+        const rectOf = (b: ReturnType<typeof leaderMarkBox>) => {
+            const x =
+                b.align === "above"
+                    ? b.left - chip.w / 2
+                    : b.align === "right"
+                      ? b.left
+                      : b.left - chip.w;
+            const y = b.align === "above" ? b.top - chip.h : b.top - chip.h / 2;
+            return { x, y, w: chip.w, h: chip.h };
+        };
+        const apart = (
+            a: { x: number; y: number; w: number; h: number },
+            b: { x: number; y: number; w: number; h: number },
+        ) =>
+            a.x + a.w <= b.x ||
+            b.x + b.w <= a.x ||
+            a.y + a.h <= b.y ||
+            b.y + b.h <= a.y;
+        const dot = {
+            x: at.x - ring,
+            y: at.y - ring,
+            w: 2 * ring,
+            h: 2 * ring,
+        };
+        for (const beside of [false, true]) {
+            const l = { ...label, beside };
+            const labelRect = beside
+                ? {
+                      x: at.x + 8,
+                      y: at.y - l.height / 2,
+                      w: l.width,
+                      h: l.height,
+                  }
+                : {
+                      x: at.x - l.width / 2,
+                      y: at.y - l.lift - l.height / 2,
+                      w: l.width,
+                      h: l.height,
+                  };
+            // Down the screen (the owner's case), up it, across and standing
+            for (const upDown of [true, false]) {
+                const box = leaderMarkBox(at, upDown, ring, l);
+                expect(apart(rectOf(box), dot)).toBe(true);
+                expect(apart(rectOf(box), labelRect)).toBe(true);
+                // Never on the line it walks: beside it walking up or down, above it across
+                expect(box.align).toBe(
+                    upDown ? (beside ? "left" : "right") : "above",
+                );
+            }
+        }
+        // Labels off: just clear of the ring
+        expect(leaderMarkBox(at, false, ring, null).top).toBe(at.y - ring - 6);
     });
 
     it("in the app: at the move's end it's by the head, mid-move by the leader, not where it started", () => {
@@ -259,18 +327,29 @@ describe("the leader's mark follows the leader (QA-SN-14)", () => {
         const chip = () => screen.getByTestId("trail-leader");
         const left = () => parseFloat(chip().style.left);
         const top = () => parseFloat(chip().style.top);
+        const align = () => chip().dataset.align;
+        // By `p`: centered over it, or level with it to one side, never on it
+        const by = (p: { x: number; y: number }) => {
+            if (align() === "above") {
+                expect(left()).toBeCloseTo(p.x, 6);
+                expect(top()).toBeLessThan(p.y);
+            } else {
+                expect(top()).toBeCloseTo(p.y, 6);
+                expect(Math.abs(left() - p.x)).toBeGreaterThan(0);
+            }
+        };
         const end = fieldToElement(view, head.x, head.y);
-        expect(left()).toBeCloseTo(end.x, 6);
-        expect(top()).toBeCloseTo(end.y - 40, 6);
+        by(end);
 
         act(() => {
             useTimelineSelectionStore.setState({ playheadBeat: 6 });
         });
         const [x, y] = resolver.positionAt(2, 6);
         const mid = fieldToElement(view, x, y);
-        expect(left()).toBeCloseTo(mid.x, 6);
+        by(mid);
         const start = fieldToElement(view, homes[1]!.x, homes[1]!.y);
-        expect(left()).not.toBeCloseTo(start.x, 1);
-        expect(top()).toBeCloseTo(mid.y - 40, 6);
+        expect(Math.hypot(left() - start.x, top() - start.y)).toBeGreaterThan(
+            Math.hypot(left() - mid.x, top() - mid.y),
+        );
     });
 });

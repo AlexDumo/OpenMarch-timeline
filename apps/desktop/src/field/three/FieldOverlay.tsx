@@ -1,6 +1,7 @@
 import {
     memo,
     useCallback,
+    useId,
     useMemo,
     useRef,
     useSyncExternalStore,
@@ -45,6 +46,14 @@ import { marcherShapes } from "./useMarcherShapes";
 import { DOT_RADIUS } from "@/field/editor/hitTest";
 import { resolveMarcherLook } from "@/entity-components/appearance";
 import { GUIDE_INK, GUIDE_INK_TEXT } from "./guideInk";
+import {
+    isDarkField,
+    LANE_INK_DARK,
+    LANE_INK_LIGHT,
+    laneHalfWidth,
+    WALKED_INK,
+    WALKED_WIDTH,
+} from "@/pathways/orderLane";
 import { shapeAlone, useMarchersHidden } from "@/shapes/field/marchersHidden";
 import { useShapeGuidesStore } from "@/shapes/field/shapeGuides";
 import {
@@ -945,6 +954,7 @@ const ShapeBody = memo(function ShapeBody({
     looks,
     scale,
     spotShape,
+    stoodOn = "",
 }: {
     drawing: FieldModeDrawing;
     theme: FieldTheme;
@@ -954,7 +964,13 @@ const ShapeBody = memo(function ShapeBody({
     scale: number;
     /** The marchers' shared shape, for the spots (`spotShapeOf`) */
     spotShape: MarkerShape;
+    /** The spots a marcher stands on, not drawn (`spotsClear`): their indexes, comma separated */
+    stoodOn?: string;
 }) {
+    const skipSpots = useMemo(
+        () => new Set(stoodOn ? stoodOn.split(",").map(Number) : []),
+        [stoodOn],
+    );
     const shape = rgbaToString(theme.shape);
     const quietLine = rgbaToString({ ...theme.shape, a: QUIET_LINE_ALPHA });
     const walk = rgbaToString({ ...theme.shape, a: WALK_ALPHA });
@@ -1084,22 +1100,25 @@ const ShapeBody = memo(function ShapeBody({
                     />
                 ) : null,
             )}
-            {drawing.outline && drawing.pathLine === "selected" && (
-                <polyline
-                    points={drawing.outline
-                        .map((p) => `${p.x},${p.y}`)
-                        .join(" ")}
-                    fill="none"
-                    stroke={SELECTION_COLOR}
-                    strokeOpacity={PATH_HALO_ALPHA}
-                    strokeWidth={PATH_HALO_WIDTH}
-                    strokeLinejoin="round"
-                    strokeLinecap="round"
-                    vectorEffect="non-scaling-stroke"
-                    data-testid="pathSelectedHalo"
-                />
-            )}
             {drawing.outline &&
+                !drawing.outlineHidden &&
+                drawing.pathLine === "selected" && (
+                    <polyline
+                        points={drawing.outline
+                            .map((p) => `${p.x},${p.y}`)
+                            .join(" ")}
+                        fill="none"
+                        stroke={SELECTION_COLOR}
+                        strokeOpacity={PATH_HALO_ALPHA}
+                        strokeWidth={PATH_HALO_WIDTH}
+                        strokeLinejoin="round"
+                        strokeLinecap="round"
+                        vectorEffect="non-scaling-stroke"
+                        data-testid="pathSelectedHalo"
+                    />
+                )}
+            {drawing.outline &&
+                !drawing.outlineHidden &&
                 (drawing.openOutline ? (
                     // A line has no inside to fill (#524)
                     <polyline
@@ -1219,6 +1238,8 @@ const ShapeBody = memo(function ShapeBody({
             })}
             {/* The real marchers stand on them instead (pathways step 4c) */}
             {(drawing.marchersAt ? [] : drawing.spots).map((p, i) => {
+                // A marcher standing on its end spot already shows it (owner, 2026-11-17)
+                if (skipSpots.has(i)) return null;
                 return (
                     // In the marchers' shape, so a spot under a square marcher doesn't read as a
                     // round mark on it
@@ -1240,6 +1261,141 @@ const ShapeBody = memo(function ShapeBody({
         </>
     );
 });
+
+/** How near a marcher's dot is to a spot, in field units, to count as standing on it */
+const STANDS_ON = 0.5;
+
+/**
+ * The spots of a drawing with `spotsClear` that one of its marchers (`ringIds`) stands on where
+ * the field draws them now, as a comma-separated list of indexes (a stable snapshot)
+ */
+function useSpotsStoodOn(
+    drawing: FieldModeDrawing,
+    marchers: FieldMarchers,
+): string {
+    const clear = drawing.spotsClear === true;
+    const ids = drawing.ringIds;
+    const spots = drawing.spots;
+    return useSyncExternalStore(
+        useCallback(
+            (listener: () => void) =>
+                clear ? marchers.subscribe(listener) : () => {},
+            [clear, marchers],
+        ),
+        () => {
+            if (!clear || !ids?.length || spots.length === 0) return "";
+            const at = [...marchers.drawn(ids).values()];
+            const out: number[] = [];
+            spots.forEach((p, i) => {
+                if (
+                    at.some(
+                        (m) =>
+                            Math.abs(m.x - p.x) <= STANDS_ON &&
+                            Math.abs(m.y - p.y) <= STANDS_ON,
+                    )
+                )
+                    out.push(i);
+            });
+            return out.join(",");
+        },
+    );
+}
+
+/**
+ * A trail's walked way (`walked`, owner 2026-11-17): the order band's own lane at a fraction of
+ * its strength and width, so its pale tail reads as running on back through the exit and the old
+ * form to where the line started. Cut away round the start ghosts and the line's marchers, as the
+ * band is round its dots, so neither is tinted. Field units, under the view's transform.
+ */
+function WalkedLane({
+    drawing,
+    theme,
+    marchers,
+    zoom,
+}: {
+    drawing: FieldModeDrawing;
+    theme: FieldTheme;
+    marchers: FieldMarchers;
+    zoom: number;
+}) {
+    const walked = drawing.walked!;
+    const ids = drawing.ringIds;
+    // Where the line's marchers are drawn now, as a string so an unchanged frame is unchanged
+    const standing = useSyncExternalStore(
+        useCallback(
+            (listener: () => void) => marchers.subscribe(listener),
+            [marchers],
+        ),
+        () =>
+            ids?.length
+                ? [...marchers.drawn(ids).values()]
+                      .map((p) => `${p.x},${p.y}`)
+                      .join(" ")
+                : "",
+    );
+    const id = useId().replace(/:/g, "");
+    const { scale } = dotSizes(zoom);
+    const dotPx = DOT_RADIUS * scale * zoom;
+    const reach = ringReach(zoom);
+    const widthPx = 2 * laneHalfWidth(dotPx, reach * zoom, true) * WALKED_WIDTH;
+    const ink = isDarkField(theme.background) ? LANE_INK_LIGHT : LANE_INK_DARK;
+    const xs = walked.map((p) => p.x);
+    const ys = walked.map((p) => p.y);
+    const pad = widthPx / zoom + reach;
+    const box = {
+        x: Math.min(...xs) - pad,
+        y: Math.min(...ys) - pad,
+        w: Math.max(...xs) - Math.min(...xs) + 2 * pad,
+        h: Math.max(...ys) - Math.min(...ys) + 2 * pad,
+    };
+    const holes = [
+        ...(drawing.rings ?? []).map((p) => ({
+            x: p.x,
+            y: p.y,
+            r: DOT_RADIUS * scale + 0.5 / zoom,
+        })),
+        ...(standing
+            ? standing.split(" ").map((xy) => {
+                  const [x, y] = xy.split(",").map(Number);
+                  return { x: x!, y: y!, r: reach };
+              })
+            : []),
+    ];
+    return (
+        <g data-testid="pathWalked" data-points={walked.length}>
+            <mask
+                id={id}
+                maskUnits="userSpaceOnUse"
+                x={box.x}
+                y={box.y}
+                width={box.w}
+                height={box.h}
+            >
+                <rect
+                    x={box.x}
+                    y={box.y}
+                    width={box.w}
+                    height={box.h}
+                    fill="white"
+                />
+                {holes.map((h, i) => (
+                    <circle key={i} cx={h.x} cy={h.y} r={h.r} fill="black" />
+                ))}
+            </mask>
+            <polyline
+                points={walked.map((p) => `${p.x},${p.y}`).join(" ")}
+                fill="none"
+                stroke={ink}
+                strokeOpacity={WALKED_INK}
+                strokeWidth={widthPx}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                vectorEffect="non-scaling-stroke"
+                mask={`url(#${id})`}
+            />
+        </g>
+    );
+}
 
 /** The spots on a guide and an outline's gaps, in field units over the guides (#455) */
 const ShapeOnGuides = memo(function ShapeOnGuides({
@@ -1522,9 +1678,18 @@ function ModeDrawing({
     // only when the drawing changes, not on every pan or zoom frame (#455)
     const transform = `translate(${view.panX} ${view.panY}) scale(${z})`;
     const spotShape = useSpotShape(drawing, marchers, theme);
+    const stoodOn = useSpotsStoodOn(drawing, marchers);
     return (
         <g data-testid={testId} data-stage={drawing.stage}>
             <g transform={transform}>
+                {drawing.walked && drawing.walked.length > 1 && (
+                    <WalkedLane
+                        drawing={drawing}
+                        theme={theme}
+                        marchers={marchers}
+                        zoom={z}
+                    />
+                )}
                 <ShapeBody
                     drawing={drawing}
                     theme={theme}
@@ -1532,6 +1697,7 @@ function ModeDrawing({
                     looks={marchers.appearanceVersion}
                     scale={dotSizes(z).scale}
                     spotShape={spotShape}
+                    stoodOn={stoodOn}
                 />
             </g>
             {drawing.guides?.map(({ from, to }, i) => {

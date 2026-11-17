@@ -161,6 +161,13 @@ export interface PathObject {
 
 interface PathPenState {
     session: PathSession | null;
+    /**
+     * The trail (its `pathKey`) whose end shape shows its own controls, or null (owner,
+     * 2026-11-17): a selected trail tucks away the controls of the placed shape its marchers stand
+     * in at the move's end (the shape's bars, handles, move dot and rotate knob) until the path
+     * bar's ··· turns them on (`trailShape.ts`)
+     */
+    shapeControlsFor?: string | null;
     /** A save is under way: the pen takes no new edit until it settles */
     saving: boolean;
     /**
@@ -336,11 +343,10 @@ export const pathMarcherIds = (
         (session.phase === "closed" && closedUnder)
             ? []
             : session.target.trail
-              ? // A trail shown closed keeps every member's walked path (its start flag
-                // positions' path is the trail as walked); drawn or open, they give way
-                session.phase === "closed"
-                  ? []
-                  : session.target.trail.members.map((m) => m.marcherId)
+              ? // A trail draws where its marchers start (ghosts) and the way they walk, shown
+                // closed too (owner, 2026-11-17), so their start flag dots and routes give way,
+                // as an open shape's do (#417)
+                session.target.trail.members.map((m) => m.marcherId)
               : session.target.group
                 ? groupLineIds(session, selected)
                 : [session.target.marcherId];

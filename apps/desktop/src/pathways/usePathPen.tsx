@@ -37,6 +37,7 @@ import {
     stepRoundAmount,
 } from "./followAround";
 import { followWindowNow, isTrailLineAt, openFollowTool } from "./followTool";
+import { toggleTrailShapeControls, useTrailEndShape } from "./trailShape";
 import { outlineOf } from "@/db-functions/timelineTrailAround";
 import { currentShapeField } from "@/shapes/field/shapeField";
 import {
@@ -520,6 +521,17 @@ export function usePathPenActions(): void {
                 : undefined,
         },
     );
+
+    // Shape controls (owner, 2026-11-17): the trail's end shape's own controls, tucked away
+    // while the trail is selected, shown again or tucked back
+    const endShape = useTrailEndShape();
+    useActionHandler("trailShapeControls", toggleTrailShapeControls, {
+        enabled: endShape,
+        disabledReason: tolgee.t(
+            "pathways.refusals.noEndShape",
+            "Select a trail at the end of its move, where its marchers stand in a shape",
+        ),
+    });
 
     // The selected marchers' paths always show, whatever start flag positions' paths level says:
     // that level is for the marchers not selected (interaction round 2: with Paths Off, testers

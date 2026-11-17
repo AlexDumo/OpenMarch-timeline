@@ -748,3 +748,50 @@ describe("reaching inside through the field editor", () => {
         });
     });
 });
+
+describe("a shown trail's end shape keeps only its body (pathways, owner 2026-11-17)", () => {
+    const under = (tucked: boolean) => ({
+        takeClick: vi.fn(() => false),
+        fieldMenuAt: vi.fn(() => ["editPath"]),
+        cursorAt: vi.fn(() => null),
+        tucks: vi.fn(() => tucked),
+    });
+
+    it("QA-CT-3: tucked, it draws no outline, handles, move dot or knob, and they take no press; with Shape controls on they're back", () => {
+        const big = placed(15);
+        members = membersOf(big);
+        const tucked = new LiveBoxMode(big, new QueryClient(), under(true));
+        const d = tucked.drawing()!;
+        expect(d.outline).toBeNull();
+        expect(d.handles).toEqual([]);
+        expect(d.addHandles).toEqual([]);
+        expect(d.knob).toBeUndefined();
+        expect(d.centerDot).toBeUndefined();
+        // A corner handle over marcher 1 and the center dot under 8 aren't there to press: the
+        // editor's rules have them (select or drag the marcher)
+        expect(tucked.claims(pointer(members.get(1)!), editorSays(false))).toBe(
+            false,
+        );
+        expect(tucked.claims(pointer(members.get(8)!), editorSays(false))).toBe(
+            false,
+        );
+        expect(tucked.openMenu(pointer(members.get(1)!))).toBe(false);
+        // The trail's menu where the hidden handle was
+        expect(tucked.fieldMenuAt(pointer(members.get(1)!))).toEqual([
+            "editPath",
+        ]);
+        // Its body still drags it whole
+        expect(tucked.claims(pointer(members.get(7)!), editorSays(false))).toBe(
+            true,
+        );
+
+        const shown = new LiveBoxMode(big, new QueryClient(), under(false));
+        const e = shown.drawing()!;
+        expect(e.handles.length).toBeGreaterThan(0);
+        expect(e.centerDot).toBeDefined();
+        expect(e.knob).toBeDefined();
+        expect(shown.claims(pointer(members.get(1)!), editorSays(false))).toBe(
+            true,
+        );
+    });
+});

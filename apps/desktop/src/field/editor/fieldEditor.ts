@@ -371,6 +371,24 @@ export type FieldModeDrawing = {
      */
     pathLine?: "shown" | "quiet" | "edited" | "selected" | "context";
     /**
+     * The way a trail's line walks (pathways, owner 2026-11-17, "how the marchers got there"): from
+     * the tail's start along the line-up (a box's snake, in exit order) to the leader's start, on
+     * along the trail to its head, and into a form's end spots when it ends in one. One continuous
+     * way, drawn as a faint lane in the order band's ink under everything, so it reads as the
+     * band's own pale end running back to where the line started.
+     */
+    walked?: readonly FieldPoint[];
+    /**
+     * The outline isn't drawn, only kept as the line a press hits: a selected trail's route, which
+     * `walked` and the order band already draw (pathways, owner 2026-11-17)
+     */
+    outlineHidden?: boolean;
+    /**
+     * The spots a marcher of `ringIds` stands on aren't drawn (pathways, owner 2026-11-17): a
+     * trail's end spots, where the marchers who reached them already show it
+     */
+    spotsClear?: boolean;
+    /**
      * Circles the shape is drawn on, quiet solid lines under it: an Arc's whole circle (#634)
      */
     construction?: readonly {
