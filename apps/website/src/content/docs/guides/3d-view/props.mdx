@@ -34,14 +34,10 @@ The pit's instruments, speakers and podiums aren't in the Props panel: they're s
 3. Under <Ui k="props.draw.title" plain />, choose an outline: <Ui k="props.outline.rectangle" />, <Ui k="props.outline.circle" />, <Ui k="props.outline.arc" />, <Ui k="props.outline.polygon" /> or <Ui k="props.outline.freehand" />. The panel closes and a note at the bottom of the field says how to draw that outline.
 
 4. Draw the outline on the field:
-   - <Ui k="props.outline.rectangle" plain />: drag from one corner to the
-     opposite corner.
-   - <Ui k="props.outline.circle" plain />: drag from the center out to the
-     edge.
-   - <Ui k="props.outline.arc" plain />: click both ends of the arc, then click
-     to set how far it curves.
-   - <Ui k="props.outline.polygon" plain />: click each corner, then
-     double-click to finish.
+   - <Ui k="props.outline.rectangle" plain />: drag from one corner to the opposite corner.
+   - <Ui k="props.outline.circle" plain />: drag from the center out to the edge.
+   - <Ui k="props.outline.arc" plain />: click both ends of the arc, then click to set how far it curves.
+   - <Ui k="props.outline.polygon" plain />: click each corner, then double-click to finish.
    - <Ui k="props.outline.freehand" plain />: drag along the shape you want.
 
 </Steps>
@@ -77,16 +73,10 @@ Or right-click the prop on the field (on a tablet, press and hold it) and choose
   maxWidth={480}
 />
 
-- <Ui k="props.name" />: shown on the field next to the prop when names are
-  shown. Without a name, the prop goes by its number.
-- <Ui k="props.color" />: colors the prop on the field and in the 3D View.
-  Choose <Ui k="props.colorNone" plain /> to go back to the plain look.
-- <Ui k="props.surfaceLabel" />: <Ui k="props.surface.floor" plain />,
-  <Ui k="props.surface.obstacle" plain /> or
-  <Ui k="props.surface.platform" plain />. In this version the surface doesn't
-  change how the prop is drawn, and marchers don't stand on platforms.
-- <Ui k="props.width" />, <Ui k="props.depth" /> and <Ui k="props.height" />, in
-  meters, and <Ui k="props.rotation" /> in degrees clockwise.
+- <Ui k="props.name" />: shown on the field next to the prop when names are shown. Without a name, the prop goes by its number.
+- <Ui k="props.color" />: colors the prop on the field and in the 3D View. Choose <Ui k="props.colorNone" plain /> to go back to the plain look.
+- <Ui k="props.surfaceLabel" />: <Ui k="props.surface.floor" plain />, <Ui k="props.surface.obstacle" plain /> or <Ui k="props.surface.platform" plain />. In this version the surface doesn't change how the prop is drawn, and marchers don't stand on platforms.
+- <Ui k="props.width" />, <Ui k="props.depth" /> and <Ui k="props.height" />, in meters, and <Ui k="props.rotation" /> in degrees clockwise.
 
 The size and turn are set from a count: the heading reads <Ui k="props.outlineFrom" values={{ count: "N" }} plain />, which is the count at or before the playhead. A change you make applies from that count until the prop's next change. That's how a prop grows, shrinks or turns during the show:
 
@@ -131,8 +121,7 @@ In the Props panel:
 - The eye next to a prop hides it on the field and in the 3D View, or shows it again. Hiding is a view setting on your computer; it doesn't change the show.
 - <Ui k="props.showNames" /> shows or hides every prop's name on the field.
 - Select a prop's row to select the prop on the field.
-- <Ui k="props.delete" /> (the trash can) deletes the prop. Undo (
-  <Kbd action="performUndo" />) brings it back.
+- <Ui k="props.delete" /> (the trash can) deletes the prop. Undo (<Kbd action="performUndo" />) brings it back.
 
 <Media
   id="3d-props-panel"

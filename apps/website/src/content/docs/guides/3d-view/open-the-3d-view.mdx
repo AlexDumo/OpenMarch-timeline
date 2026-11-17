@@ -48,14 +48,14 @@ The 3D View has no playback of its own: it follows the editor. Play, pause, scru
 
 The 3D View has the editor's <Ui k="view3d.playback.label" plain /> controls: previous, play and next, and the playback speed. The editor's playback keys work in the 3D View too:
 
-| Keys                                                                             | What they do                     |
-| -------------------------------------------------------------------------------- | -------------------------------- |
-| <Kbd action="playPause" />                                                       | Play or stop                     |
-| <Kbd action="playPage" />                                                        | Play from the playhead, or pause |
-| <Kbd action="previousPage" /> and <Kbd action="nextPage" />                      | Previous or next page            |
-| <Kbd action="previousBeat" /> and <Kbd action="nextBeat" />                      | Previous or next count           |
-| <Kbd action="firstPage" /> and <Kbd action="lastPage" />                         | First or last page               |
-| <Kbd action="holdFasterPlayback" /> and <Kbd action="holdSlowerPlayback" /> held | Double or half speed while held  |
+| Keys                                                     | What they do                                        |
+| -------------------------------------------------------- | --------------------------------------------------- |
+| <Kbd action="playPause" />                               | Play or stop                                        |
+| <Kbd action="playPage" />                                | Play from the playhead, or pause                    |
+| <Kbd action="previousPage" /> and <Kbd action="nextPage" /> | Previous or next page                            |
+| <Kbd action="previousBeat" /> and <Kbd action="nextBeat" /> | Previous or next count                           |
+| <Kbd action="firstPage" /> and <Kbd action="lastPage" />    | First or last page                               |
+| <Kbd action="holdFasterPlayback" /> and <Kbd action="holdSlowerPlayback" /> held | Double or half speed while held |
 
 Next to the controls, the readout shows the page, the count within the page and the show time. Past the last page it shows how many counts past the end the playhead is.
 
@@ -75,19 +75,8 @@ In the 3D View, select <Ui k="view3d.overlay.enterFullscreen" />, or press <Kbd 
 
 How detailed the 3D View is depends on your computer, so its graphics settings are kept on each computer, not in the show. In the 3D View, select <Ui k="view3d.settings.panelTitle" /> (the gear) and open the <Ui k="view3d.settings.tabs.preferences" plain /> tab:
 
-- <Ui k="settings.view3d.quality" />: <Ui k="settings.view3d.quality.auto" />
-  starts on <Ui k="settings.view3d.quality.high" /> and switches to
-  <Ui k="settings.view3d.quality.low" /> if the view stutters.
-  <Ui k="settings.view3d.quality.high" /> draws shadows and a full crowd.
-  <Ui k="settings.view3d.quality.low" /> draws no shadows and a lighter crowd,
-  for older or battery-powered computers.
-- <Ui k="settings.view3d.resolution" />:
-  <Ui k="settings.view3d.resolution.sharp" /> draws full detail on
-  high-resolution screens. <Ui k="settings.view3d.resolution.balanced" /> draws
-  three-quarters of that detail, so it's a little softer and the graphics card
-  has less to do. <Ui k="settings.view3d.resolution.fast" /> draws half the
-  detail and is softest, for older computers. On a screen that isn't
-  high-resolution, all three look the same.
+- <Ui k="settings.view3d.quality" />: <Ui k="settings.view3d.quality.auto" /> starts on <Ui k="settings.view3d.quality.high" /> and switches to <Ui k="settings.view3d.quality.low" /> if the view stutters. <Ui k="settings.view3d.quality.high" /> draws shadows and a full crowd. <Ui k="settings.view3d.quality.low" /> draws no shadows and a lighter crowd, for older or battery-powered computers.
+- <Ui k="settings.view3d.resolution" />: <Ui k="settings.view3d.resolution.sharp" /> draws full detail on high-resolution screens. <Ui k="settings.view3d.resolution.balanced" /> draws three-quarters of that detail, so it's a little softer and the graphics card has less to do. <Ui k="settings.view3d.resolution.fast" /> draws half the detail and is softest, for older computers. On a screen that isn't high-resolution, all three look the same.
 
 When the 3D View switches to Low by itself, a notice in the 3D View says so: choose <Ui k="view3d.quality.useHigh" /> to go back to High and stay there, or <Ui k="view3d.quality.keepLow" />. If your computer draws graphics in software (no graphics card, or drivers that need an update), the 3D View stays on Low and is still slow; update your graphics drivers and restart OpenMarch. In the web editor, turn on your browser's graphics acceleration and restart the browser.
 

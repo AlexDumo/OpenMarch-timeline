@@ -66,19 +66,17 @@ The first row of the editor holds the box's numbers and tools:
 - **↻** turns the box 90° clockwise (<Kbd action="shapeQuarterTurn" />), and the degrees beside it turn it to any angle. The pivot button picks the point it turns and flips around, from a 3 × 3 grid of its corners, sides and center.
 - The two flip buttons mirror it side to side (<Kbd action="flipHorizontal" />) or front to back (<Kbd action="flipVertical" />).
 - Expand and Shrink make the box bigger or smaller, keeping its proportions.
-- <Ui k="shapes.edit.recalculate.label" /> works out who goes where again (
-  <Kbd action="shapeRecalculate" />
-  ). It's greyed out when nothing would change.
+- <Ui k="shapes.edit.recalculate.label" /> works out who goes where again (<Kbd action="shapeRecalculate" />). It's greyed out when nothing would change.
 
 To change a number, click it and type, then press <Kbd keys="Enter" />; or drag it. Spacings can be typed as whole steps, halves or fractions: 2, 2.5, 2½, 1⅔ or 5/3. A dragged spacing moves in half steps.
 
 The second row says how the box is filled. Its <Ui k="shapes.edit.mode.label" /> menu has three choices:
 
-| Fill                                      | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fill                                 | What it does                                                                                                                                                         |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | <Ui k="shapes.edit.mode.files" plain />   | Rows and files. The <Ui k="shapes.edit.layout.label" plain /> menu beside it lays the block out <Ui k="shapes.distribute.layout.full" plain />, <Ui k="shapes.distribute.layout.stagger" plain />, <Ui k="shapes.distribute.layout.rounded" plain />, <Ui k="shapes.distribute.layout.shortBack" plain /> or <Ui k="shapes.distribute.layout.notched" plain />, and says how many marchers to add or remove for a layout that can't take this many. |
-| <Ui k="shapes.edit.mode.outline" plain /> | Round the edge, with a marcher on every corner and the middle empty. When the count doesn't go round evenly, the Leftover menu picks the side that has one fewer marcher, and whether it leaves a gap or spreads its marchers wider. <Ui k="shapes.edit.evenOut.label" plain /> spaces everyone as evenly as the box allows.                                                                                                                        |
-| <Ui k="shapes.edit.mode.spread" plain />  | Evenly over the whole box, in no rows. <Ui k="shapes.edit.reshuffle.label" plain /> gives another even layout in the same box; the arrow beside it shows the layout's <Ui k="shapes.edit.seed.label" plain />, which you can copy, or type back in to get that exact spread again. <Ui k="shapes.edit.edge.label" plain /> stands some marchers along the outline and spreads the rest inside.                                                      |
+| <Ui k="shapes.edit.mode.outline" plain /> | Round the edge, with a marcher on every corner and the middle empty. When the count doesn't go round evenly, the Leftover menu picks the side that has one fewer marcher, and whether it leaves a gap or spreads its marchers wider. <Ui k="shapes.edit.evenOut.label" plain /> spaces everyone as evenly as the box allows. |
+| <Ui k="shapes.edit.mode.spread" plain />  | Evenly over the whole box, in no rows. <Ui k="shapes.edit.reshuffle.label" plain /> gives another even layout in the same box; the arrow beside it shows the layout's <Ui k="shapes.edit.seed.label" plain />, which you can copy, or type back in to get that exact spread again. <Ui k="shapes.edit.edge.label" plain /> stands some marchers along the outline and spreads the rest inside. |
 
 Switching between them keeps the box where you drew it, and each fill remembers its own numbers, so switching back gives you what you had.
 

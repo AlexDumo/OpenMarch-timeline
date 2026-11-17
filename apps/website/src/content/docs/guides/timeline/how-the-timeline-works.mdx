@@ -62,10 +62,8 @@ A position you set for a marcher at a count is a keyframe. Select marchers and t
 On each page, a marcher is in one of three states:
 
 - <Ui k="timeline.terms.defined" />: you've set its position on this page.
-- <Ui k="timeline.terms.held" />: you've chosen to keep it still, where its last
-  keyframe put it.
-- <Ui k="timeline.terms.notDefined" />: nothing is decided yet, so it stays
-  where it last was, and follows any change to that earlier position.
+- <Ui k="timeline.terms.held" />: you've chosen to keep it still, where its last keyframe put it.
+- <Ui k="timeline.terms.notDefined" />: nothing is decided yet, so it stays where it last was, and follows any change to that earlier position.
 
 [Defined, Held, Not defined](/guides/timeline/defined-held-not-defined/) explains the difference and how to change a marcher's state.
 
@@ -79,12 +77,12 @@ In Expert, a move can also start or end in the middle of a page, run across seve
 
 Both modes show the same show. They differ in where Play starts and in what the timeline lets you change:
 
-|                                               | Basic                                                                                            | Expert                                                                                                                                                                                                           |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Start flag                                    | Not shown. Play starts at the start of the page the playhead is on.                              | Shown. You drag it to where Play should start; it lands on measures and page flags when it's near one, or on any count with <Kbd keys="Alt" gesture="drag" /> held. It stays there until you go to another page. |
-| Moves                                         | Each page has its move. A position in the middle of a page splits the page's move at that count. | Moves can start and end on any count, cross pages and overlap, and each has a bar.                                                                                                                               |
-| Dragging the playhead                         | Lands on every count.                                                                            | Lands on measures and page flags when it's near one.                                                                                                                                                             |
-| Loop, isolating a move, resizing the timeline | Not available.                                                                                   | Available.                                                                                                                                                                                                       |
+| | Basic | Expert |
+| --- | --- | --- |
+| Start flag | Not shown. Play starts at the start of the page the playhead is on. | Shown. You drag it to where Play should start; it lands on measures and page flags when it's near one, or on any count with <Kbd keys="Alt" gesture="drag" /> held. It stays there until you go to another page. |
+| Moves | Each page has its move. A position in the middle of a page splits the page's move at that count. | Moves can start and end on any count, cross pages and overlap, and each has a bar. |
+| Dragging the playhead | Lands on every count. | Lands on measures and page flags when it's near one. |
+| Loop, isolating a move, resizing the timeline | Not available. | Available. |
 
 The mode is a setting of the app, not of the show, so you can open any show in either mode. Basic plays everything made in Expert but locks what it can't edit. See [Basic and Expert](/guides/start/basic-and-expert/).
 

@@ -83,26 +83,10 @@ On the field, a marcher is drawn with a dashed outline only where it's Not defin
 
 In the inspector, the selected marchers' section says what decides where they are on the playhead's page:
 
-- <Ui k="inspector.marcher.timeline.movesOnThisPage" /> when they're Defined on
-  the page.
-- <Ui
-    k="inspector.marcher.timeline.notDefinedShowing"
-    values={{ notDefined: "Not defined", page: 9 }}
-  />
-  when they're Not defined, with the page they last moved on, or
-  <Ui
-    k="inspector.marcher.timeline.notDefinedFromStart"
-    values={{ notDefined: "Not defined" }}
-  />
-  when they haven't moved since the start.
-- <Ui
-    k="inspector.marcher.timeline.heldSince"
-    values={{ held: "Held", page: 3 }}
-  />
-  when they're Held, with the page where the hold starts, or
-  <Ui k="inspector.marcher.timeline.heldFromStart" values={{ held: "Held" }} />.
-- <Ui k="inspector.marcher.timeline.holdFrom" values={{ page: 9 }} /> when some
-  are Held and some Not defined.
+- <Ui k="inspector.marcher.timeline.movesOnThisPage" /> when they're Defined on the page.
+- <Ui k="inspector.marcher.timeline.notDefinedShowing" values={{ notDefined: "Not defined", page: 9 }} /> when they're Not defined, with the page they last moved on, or <Ui k="inspector.marcher.timeline.notDefinedFromStart" values={{ notDefined: "Not defined" }} /> when they haven't moved since the start.
+- <Ui k="inspector.marcher.timeline.heldSince" values={{ held: "Held", page: 3 }} /> when they're Held, with the page where the hold starts, or <Ui k="inspector.marcher.timeline.heldFromStart" values={{ held: "Held" }} />.
+- <Ui k="inspector.marcher.timeline.holdFrom" values={{ page: 9 }} /> when some are Held and some Not defined.
 
 The page or the start is a link that takes you there; point at it, or on a tablet touch and hold it, to see where it goes. When only some of the selection is Held, a line under the marcher count at the top of the section says how many, for example <Ui k="inspector.marcher.timeline.heldOfSelected" values={{ count: 1, total: 2, held: "Held" }} plain />. The line of text over the field says it too, after what a drag edits, for example "Editing Page 4's move <Ui k="timeline.windowLine.held" values={{ count: 1, total: 2, held: "Held" }} plain />". A drag then edits each marcher by its own state.
 
@@ -113,9 +97,7 @@ The page or the start is a link that takes you there; point at it, or on a table
 
 ## Define as shown
 
-<Ui k="timeline.terms.defineAsShown" /> makes Not defined marchers Defined where
-they stand now, so later changes to earlier pages no longer move them on this
-page. Held marchers stay Held.
+<Ui k="timeline.terms.defineAsShown" /> makes Not defined marchers Defined where they stand now, so later changes to earlier pages no longer move them on this page. Held marchers stay Held.
 
 1. Select the marchers.
 2. Right-click the page's box, or the dashed line on it, and select <Ui k="timeline.terms.defineAsShown" />.
@@ -124,8 +106,7 @@ Dragging a Not defined marcher on a page also makes it Defined, at the spot you 
 
 ## Hold from last keyframe
 
-<Ui k="timeline.terms.holdFromPrevious" /> keeps marchers still on this page,
-where their last keyframe put them.
+<Ui k="timeline.terms.holdFromPrevious" /> keeps marchers still on this page, where their last keyframe put them.
 
 1. Go to the page and select the marchers.
 2. Right-click the page's box, or a selected marcher on the field, and select <Ui k="timeline.terms.holdFromPrevious" />. You can also press <Kbd action="timelineHoldFromPrevious" />, or find it in the command palette (<Kbd action="openCommandPalette" />).
@@ -187,9 +168,7 @@ In Expert, the start flag decides it. A drag whose start flag is at or before th
 
 This needs Expert mode: see [Basic and Expert](/guides/start/basic-and-expert/).
 
-<Ui k="timeline.terms.holdOverWindow" /> keeps the selected marchers still over
-the counts between the start flag and the playhead, even where that's partway
-through pages.
+<Ui k="timeline.terms.holdOverWindow" /> keeps the selected marchers still over the counts between the start flag and the playhead, even where that's partway through pages.
 
 1. Put the start flag and the playhead around the counts to hold.
 2. Select the marchers.
@@ -199,9 +178,7 @@ As with Hold from last keyframe, pointing at the command shows the hold before y
 
 ## Clear this page
 
-<Ui k="timeline.terms.clearThisPage" /> takes the marchers' positions off the
-page, so they're Not defined there again and stand where the page before left
-them. It also takes away a hold on the page, so it's how you remove one.
+<Ui k="timeline.terms.clearThisPage" /> takes the marchers' positions off the page, so they're Not defined there again and stand where the page before left them. It also takes away a hold on the page, so it's how you remove one.
 
 1. Select the marchers. To clear the page for everyone, select nobody.
 2. Right-click the page's box and select <Ui k="actions.batchEdit.clearPage" values={{ page: 3 }} /> (with the page's number, and "(all marchers)" after it when nobody is selected), or press <Kbd action="setSelectedMarchersToPreviousPage" /> for the selected marchers or <Kbd action="setAllMarchersToPreviousPage" /> for everyone.
@@ -217,9 +194,7 @@ The first page has no page before it, so it can't be cleared: the command is gre
 
 ## Remove keyframe
 
-<Ui k="timeline.terms.removeKeyframe" /> takes away one position at one count,
-where Clear this page works on a whole page. Use it on a keyframe in the middle
-of a page.
+<Ui k="timeline.terms.removeKeyframe" /> takes away one position at one count, where Clear this page works on a whole page. Use it on a keyframe in the middle of a page.
 
 1. Select the marchers.
 2. Right-click the diamond at the count and select <Ui k="timeline.terms.removeKeyframe" />.

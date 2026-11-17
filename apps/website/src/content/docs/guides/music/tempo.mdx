@@ -35,10 +35,8 @@ The timeline shows four lanes in place of the moves:
 
 - <Ui k="tempoMode.lanes.marks.name" />: rehearsal marks.
 - <Ui k="tempoMode.lanes.measures.name" />: measure numbers and time signatures.
-- <Ui k="tempoMode.lanes.tempo.name" />: the tempo of each count, drawn as a
-  line. Higher is faster.
-- <Ui k="tempoMode.lanes.music.name" />: the waveform. Click it to move the
-  playhead.
+- <Ui k="tempoMode.lanes.tempo.name" />: the tempo of each count, drawn as a line. Higher is faster.
+- <Ui k="tempoMode.lanes.music.name" />: the waveform. Click it to move the playhead.
 
 While Edit music is on, the rest of the window is dimmed and only moving around the show, go to (<Kbd action="timelineGoTo" />), playback (with its speed and the metronome), undo, redo, saving, importing music and the shortcut list work. Every edit you make to the lanes is one undo step; importing an audio file can't be undone. The <Ui k="tempoMode.help.label" /> button (the question mark in the header) lists the gestures.
 
@@ -123,15 +121,9 @@ When the music has a beat the counts miss, or the counts have one the music does
 
 When you add a count:
 
-- <Ui k="tempoMode.popovers.countAsk.shift" />: the new count takes time of its
-  own, so later counts and the drill on them move later against the music. Use
-  this when the counts after it were early.
-- <Ui k="tempoMode.popovers.countAsk.keep" />: the measure gets one more count
-  in the same time, so later counts stay on the music. Use this when they
-  already are.
-- <Ui k="tempoMode.popovers.countAsk.hold" />: no count is added and the music
-  stays; a move over that spot ends one count early so the marchers hold for a
-  count. Use this for a breath in the drill.
+- <Ui k="tempoMode.popovers.countAsk.shift" />: the new count takes time of its own, so later counts and the drill on them move later against the music. Use this when the counts after it were early.
+- <Ui k="tempoMode.popovers.countAsk.keep" />: the measure gets one more count in the same time, so later counts stay on the music. Use this when they already are.
+- <Ui k="tempoMode.popovers.countAsk.hold" />: no count is added and the music stays; a move over that spot ends one count early so the marchers hold for a count. Use this for a breath in the drill.
 
 Removing works the same way: shift everything after it earlier, or keep the counts around it in the same time. Moves over the counts get shorter, or keep their counts by ending later if nothing is in the way. Press <Kbd keys="Enter" /> for the marked choice (your last one) or <Kbd keys="Escape" /> to cancel.
 
