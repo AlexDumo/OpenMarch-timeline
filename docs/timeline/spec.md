@@ -4042,7 +4042,9 @@ clip edge dragged to trim or extend it, and Figma's vector end point dragged on 
 **On the field.** While a trail dragged out of a line is selected or shown (closed), its head
 carries the Follow tool's pull arrows (step 4d), out along the trail's own way there: the handle to
 grab. A press on the arrows, or on the head itself with no dot there (a dot under the press is the
-dot's, P-1), starts the drag; the hand shows over it. Edit path (open) keeps its own point handles
+dot's, P-1), starts the drag; the hand shows over it. Right after a drag-out the end shape is selected as a placed box (DL-11): the box keeps
+its own handles (the line's end handle sits on the head), and a press it doesn't take on the
+arrows is the head's, the trail's drawing shown in place of the box's until the release. Edit path (open) keeps its own point handles
 and shows none; trails into end spots (Follow into a form, Keep end spots, Ripple in) and round an
 outline have none, since their length is set by the form. While dragging, the drawing is step 4b's
 own with the stored points already drawn: the way, the end spots, the real marchers where they will

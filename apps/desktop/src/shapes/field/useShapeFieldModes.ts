@@ -41,6 +41,7 @@ import {
     useMarcherOrderStore,
 } from "@/pathways/marcherOrderStore";
 import { OrderSweepMode } from "@/pathways/orderSweepMode";
+import { isHeadDrag } from "@/pathways/trailHead";
 import { keepOrderSweep } from "@/pathways/marcherOrderCommands";
 import {
     setFieldObjects,
@@ -66,15 +67,20 @@ export function useShapeFieldModes(
     // The path pen drawing, or a path open, takes the field's presses first (pathways step 1). A
     // path only shown (closed) takes a double-click or a right-click on it, under an open shape or
     // a selected placed box
+    // A trail's head dragged (AP-T16) stays with the mode it was pressed in: under a selected
+    // placed box, the box's, which hands the press on; else the pen's, as for a path shown
     const pathOpen = usePathPenStore(
-        (s) => s.session !== null && s.session.phase !== "closed",
+        (s) =>
+            s.session !== null &&
+            s.session.phase !== "closed" &&
+            !isHeadDrag(s.session),
     );
     // A closed path start flag positions hide (paths level off) isn't the field's mode; a selected
     // path object always is, and so are Paths All's paths, so a click selects one (step 3a)
     const pathShown = usePathPenStore(
         (s) =>
-            (s.session?.phase === "closed" &&
-                (!s.hidden || s.session.object)) ||
+            ((s.session?.phase === "closed" || isHeadDrag(s.session)) &&
+                (!s.hidden || !!s.session?.object)) ||
             s.objects.length > 0,
     );
     const box = useBoxSelectionStore((s) => s.selected);
@@ -134,6 +140,7 @@ export function useShapeFieldModes(
     useEffect(() => () => editor.setMode(null), [editor]);
     // A selected box takes the presses, but its members' closed group path is still drawn, under
     // it: the group's line and faint lanes, as when the box isn't selected (owner on #683)
+    // A trail's head dragged (AP-T16) is drawn by the box's mode, which holds its press
     const closedSession = usePathPenStore((s) =>
         s.session?.phase === "closed" && !s.hidden ? s.session : null,
     );

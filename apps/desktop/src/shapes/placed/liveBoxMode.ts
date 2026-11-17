@@ -227,6 +227,8 @@ export class LiveBoxMode implements FieldMode {
     private readDuringGesture: PlacedBox | null = null;
     /** What made the last press: a held key's rerun goes on with its reach (tablet 1.4) */
     private pressKind: PointerKind = "mouse";
+    /** The press under way is `under`'s (a trail's head, AP-T16), to its release */
+    private underPress = false;
 
     constructor(
         box: PlacedBox,
@@ -234,11 +236,26 @@ export class LiveBoxMode implements FieldMode {
         /**
          * What's drawn under the box and clickable outside it (the group path its members walk,
          * pathways AP-O3): it's asked what the box doesn't claim. Inside the box stays the box's.
+         * A press the box doesn't take that it claims is its own to the release (a dragged-out
+         * trail's head, AP-T16).
          */
         private readonly under?: Pick<
             FieldMode,
             "takeClick" | "fieldMenuAt" | "cursorAt"
-        >,
+        > &
+            Partial<
+                Pick<
+                    FieldMode,
+                    | "claims"
+                    | "press"
+                    | "move"
+                    | "release"
+                    | "cancel"
+                    | "longPress"
+                    | "drawing"
+                    | "subscribe"
+                >
+            >,
     ) {
         this.live = openLive(box);
     }
@@ -286,9 +303,22 @@ export class LiveBoxMode implements FieldMode {
     }
 
     claims(pointer: FieldPointer, press: FieldModePress): boolean {
+        return this.boxTakes(pointer, press) || this.underTakes(pointer, press);
+    }
+
+    /** Whether the box takes a press: its controls and inside it, unless it reaches inside */
+    private boxTakes(pointer: FieldPointer, press: FieldModePress): boolean {
         return (
             !this.yieldsToEditor(pointer, press) &&
             this.pressed(pointer) !== null
+        );
+    }
+
+    /** Whether what's drawn under the box takes a press the box doesn't (a trail's head) */
+    private underTakes(pointer: FieldPointer, press: FieldModePress): boolean {
+        return (
+            !!this.under?.press &&
+            (this.under.claims?.(pointer, press) ?? false)
         );
     }
 
@@ -322,7 +352,19 @@ export class LiveBoxMode implements FieldMode {
         return !target || !OWN_CONTROLS.has(target.type);
     }
 
-    press(pointer: FieldPointer, { isMac }: FieldModePress): void {
+    press(pointer: FieldPointer, modePress: FieldModePress): void {
+        const { isMac } = modePress;
+        this.underPress = false;
+        if (
+            !this.boxTakes(pointer, modePress) &&
+            this.underTakes(pointer, modePress)
+        ) {
+            this.underPress = true;
+            this.under!.press!(pointer, modePress);
+            // The trail's drawing shows where the line will stand, in place of the box's old spots
+            this.emit();
+            return;
+        }
         const field = currentShapeField();
         this.endHeld();
         if (!field) return;
@@ -360,6 +402,10 @@ export class LiveBoxMode implements FieldMode {
     }
 
     move(pointer: FieldPointer): void {
+        if (this.underPress) {
+            this.under?.move?.(pointer);
+            return;
+        }
         const field = currentShapeField();
         if (!field) return;
         this.live = moveLive(
@@ -388,6 +434,15 @@ export class LiveBoxMode implements FieldMode {
     }
 
     release(pointer: FieldPointer, click: LiveClick | null): void {
+        if (this.underPress) {
+            this.underPress = false;
+            this.under?.release?.(
+                pointer,
+                click && { double: click.double, ownFirst: !!click.ownFirst },
+            );
+            this.emit();
+            return;
+        }
         this.endHeld();
         const before = this.live;
         const out = releaseLive(
@@ -417,7 +472,9 @@ export class LiveBoxMode implements FieldMode {
      * there opens: a handle's, else the field's for the box's marchers. Cancelled, it saves
      * nothing.
      */
-    longPress(): boolean {
+    longPress(pointer?: FieldPointer): boolean {
+        if (this.underPress && pointer)
+            return this.under?.longPress?.(pointer) ?? true;
         return true;
     }
 
@@ -479,6 +536,12 @@ export class LiveBoxMode implements FieldMode {
     }
 
     cancel(): void {
+        if (this.underPress) {
+            this.underPress = false;
+            this.under?.cancel?.();
+            this.emit();
+            return;
+        }
         this.endHeld();
         this.live = openLive(this.live.box, this.live.selected);
         this.catchUp();
@@ -520,6 +583,8 @@ export class LiveBoxMode implements FieldMode {
     }
 
     drawing() {
+        // The press is the trail's (AP-T16): its drawing, the line live, in place of the box's
+        if (this.underPress) return this.under?.drawing?.() ?? null;
         const preview = usePlacedBoxPreviewStore.getState().params;
         const calm = shapeCalm(this.live.gesture !== null);
         const { pivotPreview, scrubbing, groupMenu, stepShown } =
@@ -549,10 +614,15 @@ export class LiveBoxMode implements FieldMode {
         this.listeners.add(listener);
         const unsubscribe = usePlacedBoxPreviewStore.subscribe(listener);
         const offPointer = useShapePointerStore.subscribe(listener);
+        // While a press is the trail's, its drawing changes with the drag
+        const offUnder = this.under?.subscribe?.(() => {
+            if (this.underPress) listener();
+        });
         return () => {
             this.listeners.delete(listener);
             unsubscribe();
             offPointer();
+            offUnder?.();
         };
     }
 

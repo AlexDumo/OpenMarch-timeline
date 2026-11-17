@@ -173,6 +173,44 @@ describe("the selected box's field mode and reach inside", () => {
         expect(under.cursorAt).not.toHaveBeenCalled();
     });
 
+    it("a press outside the box that the path under it claims (a trail's head, AP-T16) is the path's to its release, the path's drawing shown meanwhile", () => {
+        const drawn = { outline: null, spots: [], walks: [], handles: [] };
+        const under = {
+            takeClick: vi.fn(() => false),
+            fieldMenuAt: vi.fn(() => null),
+            cursorAt: vi.fn(() => "grab" as const),
+            claims: vi.fn(() => true),
+            press: vi.fn(),
+            move: vi.fn(),
+            release: vi.fn(),
+            cancel: vi.fn(),
+            longPress: vi.fn(() => false),
+            drawing: vi.fn(() => drawn),
+            subscribe: vi.fn(() => () => {}),
+        };
+        const withPath = new LiveBoxMode(box, new QueryClient(), under);
+        const outside = pointer({ x: member.x + 400, y: member.y + 400 });
+        expect(withPath.claims(outside, editorSays(false))).toBe(true);
+        withPath.press(outside, editorSays(false));
+        expect(under.press).toHaveBeenCalledWith(outside, expect.anything());
+        expect(withPath.drawing()).toBe(drawn);
+        withPath.move(outside);
+        expect(under.move).toHaveBeenCalledWith(outside);
+        expect(withPath.longPress(outside)).toBe(false);
+        withPath.release(outside, null);
+        expect(under.release).toHaveBeenCalledWith(outside, null);
+        expect(withPath.drawing()).not.toBe(drawn);
+        // Lost mid-press: the path's press is cancelled, not the box's
+        withPath.press(outside, editorSays(false));
+        withPath.cancel();
+        expect(under.cancel).toHaveBeenCalledTimes(1);
+        // On the box, the box's own, whatever the path says
+        under.press.mockClear();
+        withPath.press(pointer(member), editorSays(false));
+        expect(under.press).not.toHaveBeenCalled();
+        withPath.cancel();
+    });
+
     it("without anything under it, takes no click and offers no menu", () => {
         const outside = pointer({ x: member.x + 400, y: member.y + 400 });
         expect(mode().takeClick(outside, false)).toBe(false);
