@@ -695,7 +695,8 @@ const shots = [
             await wait(300);
             return { box: await around(drawer, 8) };
         },
-    },    {
+    },
+    {
         id: "start-help-window",
         kind: "still",
         // The Help window from the title bar's question mark, with a question typed in
