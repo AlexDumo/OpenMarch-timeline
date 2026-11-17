@@ -16,10 +16,11 @@ Open a show. Try each of these in the light theme and then the dark theme.
 **What to try**
 
 - In the small bar at the field's top right, open the marcher labels and the
-  shape outlines choices and point at each one. Use the arrow keys too: the
-  entry you're on highlights the same way.
-- Draw a box and point at the buttons in its bar: **Fill**, **Order**,
-  **Groups**, **Layout**, the snap button and the numbers you can drag.
+  shape outlines choices and point at each one. Press Tab to move through
+  them: the entry with keyboard focus highlights the same way.
+- Draw a box and point at the buttons in its bar: the fill, order, groups
+  and layout menus (each button shows its current choice, such as **Grid**),
+  the snap button and the numbers you can drag.
 - Open the **File** menu at the top left and point at its entries.
 - Open your show library, then the **…** button on a show's row, and point
   at the menu's entries.
