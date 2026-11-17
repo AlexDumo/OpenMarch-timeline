@@ -38,7 +38,7 @@ import {
     landCorner,
     samePoints,
     type PathPoint,
-} from "./pathEdit";
+} from "@/shapes/pen/penPath";
 import { SMOOTH } from "@/shapes/line/lineGeometry";
 import {
     shapeOf,

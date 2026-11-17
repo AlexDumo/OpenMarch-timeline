@@ -23,7 +23,7 @@ import {
 } from "../pathPenStore";
 import type { AdjustProfile } from "@openmarch/core";
 import type { PathTarget } from "../pathTarget";
-import { DRAW_KIND_STORAGE_KEY, setDrawKind } from "../drawKind";
+import { DRAW_KIND_STORAGE_KEY, setDrawKind } from "../../shapes/pen/penKind";
 
 /**
  * The path's floating editor (owner lab feedback on fork #674): the shape editor's bar, opaque,

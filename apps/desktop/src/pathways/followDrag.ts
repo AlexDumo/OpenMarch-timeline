@@ -38,7 +38,7 @@ import {
     usePathPenStore,
     type PathSession,
 } from "./pathPenStore";
-import type { PathPoint } from "./pathEdit";
+import type { PathPoint } from "@/shapes/pen/penPath";
 
 /**
  * Keep end spots (AP-T9): step 4's Follow onto the spots the line has, in the move every member

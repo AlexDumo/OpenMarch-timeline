@@ -18,12 +18,12 @@ import {
     type PathSession,
 } from "./pathPenStore";
 import {
-    curveOf,
     groupLegDistances,
     memberWalkOf,
     scheduleOf,
     type LegWhere,
 } from "./pathEdit";
+import { curveOf } from "@/shapes/pen/penPath";
 
 /**
  * Big steps for a drawn path (pathways): the verdict, its words, and its line in the marcher

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { arcPoint, validateRouteGeometry } from "@openmarch/core";
 import type { ToolEnv } from "@/shapes/tool/toolKind";
+import { PATH_MENU } from "../pathEdit";
 import {
     ARC_BULGE,
-    PATH_MENU,
     bulgeKey,
     clickPathHandle,
     curveOf,
@@ -15,7 +15,7 @@ import {
     splitLeg,
     withoutPoint,
     type PathShape,
-} from "../pathEdit";
+} from "@/shapes/pen/penPath";
 
 /**
  * Arc legs on the Path pen (pathways step 10a, spec Appendix L AP-T11, R-14″): a leg's menu has

@@ -49,7 +49,7 @@ import tolgee from "@/global/singletons/Tolgee";
 import type { XY } from "@/shapes/types";
 import { SMOOTH } from "@/shapes/line/lineGeometry";
 import { drawnAsGroup, type GroupMember, type PathTarget } from "./pathTarget";
-import { clickedPoint } from "./drawKind";
+import { clickedPoint } from "@/shapes/pen/penKind";
 import { activeFieldEditor } from "@/field/editor/activeFieldEditor";
 import { dragTrail } from "@/db-functions/timelineTrailDrag";
 import { rippleTrail } from "@/db-functions/timelineTrailRipple";
@@ -78,9 +78,9 @@ import {
     withTension,
     type PathPoint,
     type PathShape,
-} from "./pathEdit";
+} from "@/shapes/pen/penPath";
 
-export type { PathPoint } from "./pathEdit";
+export type { PathPoint } from "@/shapes/pen/penPath";
 
 /**
  * The pen's session (pathways steps 1 and 2): a path being drawn for one marcher (`drawing`), the

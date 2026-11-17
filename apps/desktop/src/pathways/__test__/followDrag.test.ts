@@ -37,7 +37,7 @@ import {
     followFootprint,
 } from "../followDrag";
 import { bigSteps, trailDistances } from "../PathEditor";
-import { curveOf } from "../pathEdit";
+import { curveOf } from "@/shapes/pen/penPath";
 import { useFollowFocus } from "../useFollowFocus";
 
 /**

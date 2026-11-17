@@ -29,7 +29,7 @@ import {
     setDrawKind,
     setOtherKindHeld,
     useDrawKindStore,
-} from "../drawKind";
+} from "../../shapes/pen/penKind";
 
 // The write itself is AP-T16's (`timelineTrailHead.test.ts`: the rows, ids kept): here, what the
 // field hands it, in one history transaction (one undo step)
@@ -128,11 +128,11 @@ describe("Straight | Curve and Alt (what a click places)", () => {
         expect(localStorage.getItem(DRAW_KIND_STORAGE_KEY)).toBe("curve");
         // The next time the app opens
         vi.resetModules();
-        const fresh = await import("../drawKind");
+        const fresh = await import("../../shapes/pen/penKind");
         expect(fresh.useDrawKindStore.getState().kind).toBe("curve");
         localStorage.setItem(DRAW_KIND_STORAGE_KEY, "nonsense");
         vi.resetModules();
-        const again = await import("../drawKind");
+        const again = await import("../../shapes/pen/penKind");
         expect(again.useDrawKindStore.getState().kind).toBe("straight");
     });
 

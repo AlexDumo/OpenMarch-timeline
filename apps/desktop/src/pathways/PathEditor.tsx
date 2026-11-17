@@ -27,7 +27,6 @@ import {
     UsersThreeIcon,
     WarningIcon,
     WaveSineIcon,
-    XIcon,
 } from "@phosphor-icons/react";
 import type { FieldProperties } from "@openmarch/core";
 import tolgee from "@/global/singletons/Tolgee";
@@ -60,13 +59,12 @@ import {
 import {
     Divider,
     EDITOR_BAR,
-    EditorButton,
     IconButton,
 } from "@/shapes/editor/EditorBarParts";
 import type { XY } from "@/shapes/types";
 import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
 import { refitNeeded } from "./pathTarget";
-import { useDrawKindStore } from "./drawKind";
+import { PenBarActions, PenClickHow } from "@/shapes/pen/PenBar";
 import { useShapeToolStore } from "@/shapes/tool/shapeToolStore";
 import { selectOnField } from "@/shapes/placed/boxSelection";
 import { setInsideBox } from "@/shapes/placed/boxSelectionStore";
@@ -129,7 +127,7 @@ import {
     isSmooth,
     pathOutline,
     pointOf,
-} from "./pathEdit";
+} from "@/shapes/pen/penPath";
 
 // Big steps lives with the inspector's line, which mustn't load the field mode (pathways round 2)
 export { bigSteps, trailDistances, type BigSteps } from "./pathBigSteps";
@@ -621,7 +619,7 @@ function PathPenBanner({ session }: { session: PathSession }) {
     const overrides = useShortcutOverridesStore((s) => s.overrides);
     const keys = getActionShortcutKeys("shapeRemoveLastPoint", { overrides });
     const esc = () => <Shortcut action="cancelAlignmentUpdates" />;
-    const how = () => <ClickHow />;
+    const how = () => <PenClickHow />;
     return (
         <div
             className="rounded-6 border-stroke bg-bg-1 bg-modal text-body text-text shadow-modal pointer-events-none absolute top-12 left-1/2 z-10 -translate-x-1/2 border px-12 py-6"
@@ -728,75 +726,6 @@ function PathPenBanner({ session }: { session: PathSession }) {
                 />
             )}
         </div>
-    );
-}
-
-/**
- * The banner's words for what a click places while drawing, by the Straight | Curve switch (owner,
- * 2026-11-17): the other kind with Alt, and a press-and-drag's smooth point
- */
-function ClickHow() {
-    const curve = useDrawKindStore((s) => s.kind === "curve");
-    const alt = () => <Shortcut binding="Alt + Click" />;
-    return curve ? (
-        <T
-            keyName="pathways.banner.clickCurve"
-            defaultValue="click for a curve point, <alt></alt> for a corner, drag to set its roundness"
-            params={{ alt }}
-        />
-    ) : (
-        <T
-            keyName="pathways.banner.clickStraight"
-            defaultValue="click for a corner, <alt></alt> for a curve point, drag for a smooth point"
-            params={{ alt }}
-        />
-    );
-}
-
-/**
- * The drawing bar's Straight | Curve (owner, 2026-11-17): what a click places in every drawing,
- * remembered between drawings. Alt places the other kind while it's held; a finger has the switch.
- * Icons, as the open path's Corner | Smooth (the same two), named in their tooltips: the bar keeps
- * to icons and one word (owner lab feedback on fork #674).
- */
-function DrawKindSwitch() {
-    const kind = useDrawKindStore((s) => s.kind);
-    return (
-        <span
-            className="flex items-center gap-2"
-            role="group"
-            aria-label={tolgee.t(
-                "pathways.editor.drawKind",
-                "What a click places",
-            )}
-        >
-            <IconButton
-                label={tolgee.t(
-                    "pathways.editor.straightTip",
-                    "Straight: a click places a corner. For one curve point:",
-                )}
-                action="pathDrawStraight"
-                shortcut="Alt + Click"
-                pressed={kind === "straight"}
-                onClick={() => runAction("pathDrawStraight")}
-                testId="path-draw-straight"
-            >
-                <LineSegmentsIcon size={14} />
-            </IconButton>
-            <IconButton
-                label={tolgee.t(
-                    "pathways.editor.curveTip",
-                    "Curve: a click places a smooth point. For one corner:",
-                )}
-                action="pathDrawCurve"
-                shortcut="Alt + Click"
-                pressed={kind === "curve"}
-                onClick={() => runAction("pathDrawCurve")}
-                testId="path-draw-curve"
-            >
-                <WaveSineIcon size={14} />
-            </IconButton>
-        </span>
     );
 }
 
@@ -987,51 +916,16 @@ function PathEditorBar({
                         !goingRound(session.follow) && (
                             <FollowEndsControls session={session} />
                         )}
-                    {/* Going around draws nothing, so no click places a point */}
-                    {!goingRound(session.follow) && (
-                        <>
-                            <DrawKindSwitch />
-                            <Divider />
-                        </>
-                    )}
-                    <span className="flex items-center gap-2">
-                        {/* Going around draws nothing, so there's no point to take back */}
-                        {!goingRound(session.follow) && (
-                            <IconButton
-                                label={tolgee.t(
-                                    "pathways.editor.removeLastPoint",
-                                    "Remove last point",
-                                )}
-                                action="shapeRemoveLastPoint"
-                                disabled={
-                                    headClicks
-                                        ? !session.follow?.head?.history?.length
-                                        : session.points.length === 0
-                                }
-                                onClick={() =>
-                                    runAction("shapeRemoveLastPoint")
-                                }
-                                testId="path-remove-last"
-                            >
-                                <BackspaceIcon size={14} />
-                            </IconButton>
-                        )}
-                        <IconButton
-                            label={tolgee.t("pathways.editor.cancel", "Cancel")}
-                            action="cancelAlignmentUpdates"
-                            onClick={() => runAction("cancelAlignmentUpdates")}
-                            testId="path-cancel"
-                        >
-                            <XIcon size={14} />
-                        </IconButton>
-                    </span>
-                    <Divider />
-                    <EditorButton
-                        onClick={() => runAction("applyShape")}
-                        testId="path-finish"
-                    >
-                        {tolgee.t("pathways.editor.finish", "Finish")}
-                    </EditorButton>
+                    {/* Going around draws nothing, so no click places a point, and there's none
+                        to take back */}
+                    <PenBarActions
+                        points={!goingRound(session.follow)}
+                        canRemoveLast={
+                            headClicks
+                                ? !!session.follow?.head?.history?.length
+                                : session.points.length > 0
+                        }
+                    />
                 </>
             ) : (
                 <>

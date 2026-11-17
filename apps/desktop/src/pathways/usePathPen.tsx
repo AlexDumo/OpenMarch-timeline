@@ -37,9 +37,8 @@ import {
     stepRoundAmount,
 } from "./followAround";
 import { followWindowNow, isTrailLineAt, openFollowTool } from "./followTool";
-import { finishHeadDrag, isHeadClicks, isHeadDrag } from "./trailHead";
-import { holdsOtherKind, setDrawKind, setOtherKindHeld } from "./drawKind";
-import { heldKeysOf } from "@/input/modifierRoles";
+import { usePenKeys, usePenKindActions } from "@/shapes/pen/usePenKeys";
+import { currentPenSubject } from "./penSubjects";
 import { toggleTrailShapeControls, useTrailEndShape } from "./trailShape";
 import { outlineOf } from "@/db-functions/timelineTrailAround";
 import { currentShapeField } from "@/shapes/field/shapeField";
@@ -468,8 +467,7 @@ export function usePathPenActions(): void {
         "Ripple in and Keep end spots follow into end spots the line already has on this page. Place them first (a shape tool, or move the marchers), then choose Follow",
     );
     // Straight | Curve (owner, 2026-11-17): a setting of the user's, so it can be set any time
-    useActionHandler("pathDrawStraight", () => setDrawKind("straight"), {});
-    useActionHandler("pathDrawCurve", () => setDrawKind("curve"), {});
+    usePenKindActions();
     useActionHandler("followEndsTrail", () => setFollowEnds("trail"), {
         enabled: followOpen && hasKeep,
         disabledReason: followOpen ? noSpots : undefined,
@@ -1047,35 +1045,15 @@ export function PathPenKeys(): null {
                     : tolgee.t("actions.path.close", "Close path"),
         },
     );
-    // While drawing, Alt shows on the next point's cue the moment it's pressed or let go, the
-    // pointer still (the Straight | Curve switch); a window that loses focus lets go of it
-    useEffect(() => {
-        if (!drawing) return;
-        const onKey = (e: KeyboardEvent) =>
-            setOtherKindHeld(holdsOtherKind(heldKeysOf(e)));
-        const onBlur = () => setOtherKindHeld(false);
-        window.addEventListener("keydown", onKey, true);
-        window.addEventListener("keyup", onKey, true);
-        window.addEventListener("blur", onBlur);
-        return () => {
-            window.removeEventListener("keydown", onKey, true);
-            window.removeEventListener("keyup", onKey, true);
-            window.removeEventListener("blur", onBlur);
-            setOtherKindHeld(false);
-        };
-    }, [drawing]);
-    useActionHandler(
-        "applyShape",
-        // A trail's head drawn on with clicks writes as its drag does (AP-T16)
-        () =>
-            void (isHeadDrag(usePathPenStore.getState().session)
-                ? finishHeadDrag()
-                : finishDrawing()),
-        {
-            label: tolgee.t("actions.path.finish", "Finish path"),
-        },
+    // The pen's keys while drawing: Enter finishes (a trail's head drawn on writes as its drag
+    // does, AP-T16), undo takes points back first, Alt shows on the next point's cue
+    usePenKeys({
         drawing,
-    );
+        subject: currentPenSubject,
+        finishElse: () => void finishDrawing(),
+        undoElse: closePath,
+        finishLabel: tolgee.t("actions.path.finish", "Finish path"),
+    });
     useActionHandler(
         "shapeRemoveLastPoint",
         () => {
@@ -1104,23 +1082,6 @@ export function PathPenKeys(): null {
                       : tolgee.t("actions.path.remove", "Remove path"),
         },
         drawing || phase === "open",
-    );
-    // While drawing, undo takes points back first, as a Line's points are; with none left it
-    // cancels
-    useActionHandler(
-        "performUndo",
-        () => {
-            const s = usePathPenStore.getState().session;
-            // Drawing on from a trail's head: its clicks go back one by one, then the trail is
-            // as it was, nothing written
-            if (isHeadClicks(s)) {
-                if (s!.follow!.head!.history?.length) removeLastPoint();
-                else cancelFollowDrawing();
-            } else if (s && s.points.length > 0) removeLastPoint();
-            else closePath();
-        },
-        {},
-        drawing,
     );
     // Corner and Smooth for the selected point of the open path (the editor bar's either/or, the
     // palette); no keys of their own, as a Line's corner type has none

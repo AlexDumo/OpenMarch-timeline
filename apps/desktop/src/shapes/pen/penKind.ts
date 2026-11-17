@@ -1,5 +1,5 @@
 /**
- * What a click places while a path is drawn (pathways, owner 2026-11-17: "while drawing these
+ * The pen's Straight | Curve switch: what a click places while a path is drawn (owner, 2026-11-17: "while drawing these
  * paths, i want to be able to switch easily between curve and straight"): the path bar's
  * **Straight | Curve** switch, for every drawing (the Path pen, the Follow tool's trail, a trail's
  * head drawn on). Straight places a corner, Curve a smooth point at the plain roundness; holding
@@ -11,7 +11,7 @@ import { create } from "zustand";
 import { SMOOTH } from "@/shapes/line/lineGeometry";
 import { isRoleKeyHeld, PEN_KEYS, type HeldKeys } from "@/input/modifierRoles";
 import type { XY } from "@/shapes/types";
-import type { PathPoint } from "./pathEdit";
+import type { PathPoint } from "./penPath";
 
 export type DrawKind = "straight" | "curve";
 

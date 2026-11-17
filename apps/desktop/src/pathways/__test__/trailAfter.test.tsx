@@ -14,7 +14,7 @@ import {
 import { clearPath, shapeOf, showPath, usePathPenStore } from "../pathPenStore";
 import type { PathSession } from "../pathPenStore";
 import { drawingOf } from "../pathPenMode";
-import { pathHandles, pathOutline } from "../pathEdit";
+import { pathHandles, pathOutline } from "@/shapes/pen/penPath";
 import type { PathTarget } from "../pathTarget";
 
 /**

@@ -15,7 +15,7 @@ import {
 } from "@openmarch/core";
 import { landPoint } from "@/shapes/line/lineGeometry";
 import { toast } from "sonner";
-import { rolesOf, type Roles } from "@/input/modifierRoles";
+import { type Roles } from "@/input/modifierRoles";
 import type { HonoredRoles } from "@/input/gestureChipStore";
 import { currentShapeField } from "@/shapes/field/shapeField";
 import { openHandleMenu } from "@/shapes/field/handleMenu";
@@ -52,7 +52,6 @@ import {
     intoEndSpots,
     lineOf,
     rippleDrawnPlanOf,
-    rippleEndAt,
     ripplesIn,
     trailLine,
     snakeByOf,
@@ -68,13 +67,14 @@ import {
     laneHitOf,
     laneKey,
     lanePlain,
-    splitLeg,
     limitDrag,
     laneOutline,
     memberWalkOf,
     scheduleOf,
+} from "./pathEdit";
+import {
+    splitLeg,
     clickPathHandle,
-    dragNewPoint,
     dragPathHandle,
     landCorner,
     legOf,
@@ -87,14 +87,13 @@ import {
     pathHandles,
     pathHonors,
     pathOutline,
-    pathPoints,
     pointOf,
     samePoints,
     tangentHandle,
     tangentOf,
     type PathPoint,
     type PathShape,
-} from "./pathEdit";
+} from "@/shapes/pen/penPath";
 import {
     addPoint,
     cancelDrag,
@@ -119,13 +118,11 @@ import {
     toggleWalker,
     walkersOf,
     dragPoints,
-    endNewPoint,
     finishDrawing,
     removeLastPoint,
     selectPoint,
     setPointSmooth,
     setPointer,
-    shapeNewPoint,
     shapeOf,
     pathShown,
     groupViewOf,
@@ -142,15 +139,11 @@ import { dotSizes } from "@/field/three/selectionRing";
 import {
     cancelHeadDrag,
     clickHead,
-    clickHeadAt,
-    endHeadPoint,
     finishHeadDrag,
     headHit,
     isHeadClicks,
     isHeadDrag,
     moveHeadDrag,
-    shapeHeadPoint,
-    showHeadPlaced,
     startHeadDrag,
     trailHeadOf,
 } from "./trailHead";
@@ -159,7 +152,10 @@ import {
     holdsOtherKind,
     setOtherKindHeld,
     useDrawKindStore,
-} from "./drawKind";
+} from "@/shapes/pen/penKind";
+import { FrameThrottle, PenDrawing } from "@/shapes/pen/penDrawing";
+import { smoothCue } from "@/shapes/pen/penCue";
+import { currentPenSubject, enterAt, onEndSpot } from "./penSubjects";
 
 /** The env for the roles held, as the shape tool's (half steps, the field's lines, the Snap toggle) */
 const envOf = (roles?: Roles): ToolEnv | null => {
@@ -305,12 +301,8 @@ const refusalKeys = {
  * The held-roles chip names what a drag reads, from the press, as it does for a shape's handles.
  */
 class PathPenMode implements FieldMode {
-    /**
-     * The corner a click while drawing just added, and how many points there were then: a
-     * double-click's second click takes it back
-     */
-    private clickAdded: PathPoint | null = null;
-    private clickAddedCount = 0;
+    /** The pen, while a path, a trail or a trail's head is drawn with points (`penSubjects.ts`) */
+    private readonly pen = new PenDrawing(currentPenSubject);
     private held: {
         start: FieldPointer;
         /** The handle pressed on the open path, or null (drawing, or a miss) */
@@ -318,12 +310,6 @@ class PathPenMode implements FieldMode {
         base: PathShape;
         before: readonly PathPoint[];
         moved: boolean;
-        /**
-         * Drawing: where the press landed a point, made smooth once the drag leaves the slop; null
-         * when the press was on the last point or the end spot, which finishes on release however
-         * far it moved (review of #680)
-         */
-        landed: XY | null;
         /** Where the pointer is, for the chip */
         screen: XY;
         keys: HeldGesture<FieldPointer>;
@@ -333,11 +319,6 @@ class PathPenMode implements FieldMode {
         firstLeg?: boolean;
         /** A stored trail's head dragged on or back (AP-T16) */
         head?: boolean;
-        /**
-         * The head drawn on with clicks: what the press placed once it became a drag (a point
-         * then shaped smooth, or a press on the head, which finishes), else not yet
-         */
-        headPlaced?: "placed" | "finish" | "none";
     } | null = null;
     private listeners = new Set<() => void>();
 
@@ -554,7 +535,6 @@ class PathPenMode implements FieldMode {
             base: shapeOf(dragged),
             before: dragged.points,
             moved: false,
-            landed: null,
             keys,
             lane: null,
             head: true,
@@ -599,18 +579,19 @@ class PathPenMode implements FieldMode {
                 base: shapeOf(grabbed),
                 before: [],
                 moved: false,
-                landed: null,
                 keys,
                 lane: null,
                 firstLeg: true,
             };
             return;
         }
+        // Drawing with points (the Path pen, a grabbed end, a head drawn on): the pen's
+        if (s.phase === "drawing") {
+            this.pen.press(pointer, isMac);
+            return;
+        }
         const base = shapeOf(s);
-        const key =
-            s.phase === "open"
-                ? (this.handleAt(s, pointer)?.key ?? null)
-                : null;
+        const key = this.handleAt(s, pointer)?.key ?? null;
         const lane = key === null ? this.laneAt(s, pointer) : null;
         const keys = holdGesture<FieldPointer>(
             pointer,
@@ -622,7 +603,6 @@ class PathPenMode implements FieldMode {
                 screen: () => this.held?.screen ?? pointer.screen,
             },
         );
-        const env = envOf(keys.roles());
         this.held = {
             start: pointer,
             screen: pointer.screen,
@@ -630,16 +610,9 @@ class PathPenMode implements FieldMode {
             base,
             before: s.points,
             moved: false,
-            landed:
-                s.phase === "drawing" &&
-                env &&
-                !onFinishSpot(s, pointer.field, env)
-                    ? landCorner(base, pointer.field, env)
-                    : null,
             keys,
             lane,
         };
-        if (s.phase === "drawing") this.preview(pointer, keys.roles());
     }
 
     private endHeld() {
@@ -647,107 +620,16 @@ class PathPenMode implements FieldMode {
         this.held = null;
     }
 
-    /** While drawing, the next corner where a click now would put it */
-    private preview(pointer: Pick<FieldPointer, "field">, roles: Roles) {
-        const s = this.session;
-        const env = envOf(roles);
-        if (!s || s.phase !== "drawing" || !env) return;
-        // The Follow tool's ends still pulse: nothing is drawn yet
-        if (s.follow && s.follow.grabbed === null) return;
-        // A trail's head drawn on with clicks: the trail to the pointer, as a head drag has it
-        if (isHeadClicks(s)) {
-            if (s.dragging === null) this.headSoon(pointer.field, roles);
-            return;
-        }
-        const at = landCorner(shapeOf(s), pointer.field, env);
-        // The Follow tool plans the line to the pointer (step 4d): once a frame at most
-        if (s.follow) this.pointerSoon(at);
-        else this.pointerNow(at);
-    }
-
-    /** The pointer the Follow tool's next frame plans to, and that frame (step 4d) */
-    private pendingPointer: XY | null = null;
-    private pointerFrame: number | null = null;
-
     /**
-     * Sets the drawing's pointer on the next animation frame, the latest of the moves before it:
-     * the Follow tool plans the whole line to it, which for a big line costs a few milliseconds
+     * The head the next frame drags to (AP-T16), with the roles held then: the whole line is
+     * planned again for it, as the Follow tool's drawing is
      */
-    private pointerSoon(at: XY) {
-        if (typeof requestAnimationFrame !== "function") {
-            this.pointerNow(at);
-            return;
-        }
-        this.pendingPointer = at;
-        // The drawing it was asked for: a frame landing on another one (a new grab) does nothing
-        const follow = this.session?.follow ?? null;
-        this.pointerFrame ??= requestAnimationFrame(() => {
-            this.pointerFrame = null;
-            const next = this.pendingPointer;
-            this.pendingPointer = null;
-            const s = this.session;
-            // Only while still drawing out a grabbed end: a cancel or finish in between wins
-            if (
-                next &&
-                s?.phase === "drawing" &&
-                s.follow === follow &&
-                s.follow?.grabbed != null
-            )
-                setPointer(next);
-        });
-    }
-
-    /** Sets the drawing's pointer now, dropping one waiting for the next frame */
-    private pointerNow(at: XY | null) {
-        this.dropPendingPointer();
-        setPointer(at);
-    }
-
-    private dropPendingPointer() {
-        if (this.pointerFrame !== null) cancelAnimationFrame(this.pointerFrame);
-        this.pointerFrame = null;
-        this.pendingPointer = null;
-    }
-
-    /** The head the next frame drags to (AP-T16), and the roles held then */
-    private pendingHead: { at: XY; roles: Roles } | null = null;
-    private headFrame: number | null = null;
-
-    /**
-     * Drags the trail's head to `at` on the next animation frame, the latest of the moves before
-     * it, as the Follow tool's drawing does: the whole line is planned again for it
-     */
-    private headSoon(at: XY, roles: Roles) {
-        const go = (next: { at: XY; roles: Roles }) => {
+    private readonly headFrame = new FrameThrottle<{ at: XY; roles: Roles }>(
+        (next) => {
             const env = envOf(next.roles);
-            // Not while a press-and-drag shapes the point just placed
-            if (env && this.session?.dragging == null)
-                moveHeadDrag(next.at, env);
-        };
-        if (typeof requestAnimationFrame !== "function") {
-            go({ at, roles });
-            return;
-        }
-        this.pendingHead = { at, roles };
-        this.headFrame ??= requestAnimationFrame(() => {
-            this.headFrame = null;
-            const next = this.pendingHead;
-            this.pendingHead = null;
-            if (next && isHeadDrag(this.session)) go(next);
-        });
-    }
-
-    /** Drops a head drag waiting for its frame; with `flush`, does it now instead */
-    private dropPendingHead(flush = false) {
-        if (this.headFrame !== null) cancelAnimationFrame(this.headFrame);
-        this.headFrame = null;
-        const next = this.pendingHead;
-        this.pendingHead = null;
-        if (flush && next && isHeadDrag(this.session)) {
-            const env = envOf(next.roles);
-            if (env) moveHeadDrag(next.at, env);
-        }
-    }
+            if (env && isHeadDrag(this.session)) moveHeadDrag(next.at, env);
+        },
+    );
 
     /** The pointer at `pointer` with `roles`: the drag, or the preview, as they are now */
     private follow(pointer: FieldPointer, roles: Roles) {
@@ -755,17 +637,13 @@ class PathPenMode implements FieldMode {
         const s = this.session;
         if (!p || !s) return;
         if (p.head) {
-            if (p.moved && isHeadDrag(s)) this.headSoon(pointer.field, roles);
+            if (p.moved && isHeadDrag(s))
+                this.headFrame.push({ at: pointer.field, roles });
             return;
         }
-        if (s.phase === "drawing" && isHeadClicks(s)) {
-            this.followHeadClicks(p, pointer, roles);
-            return;
-        }
+        // The first leg dragged out of an end (step 4b): the pen's leg to the pointer
         if (s.phase === "drawing") {
-            if (p.firstLeg) this.preview(pointer, roles);
-            else if (p.moved && p.landed) this.shapeNew(p, pointer, roles);
-            else this.preview(pointer, roles);
+            if (p.firstLeg) this.pen.pointAt(pointer.field, roles);
             return;
         }
         if (p.lane) {
@@ -801,29 +679,6 @@ class PathPenMode implements FieldMode {
                     : leg,
             arc >= 0 ? (next.toBulge ?? null) : undefined,
         );
-    }
-
-    /**
-     * The head drawn on with clicks, the button down: within the slop, the preview; past it, the
-     * press places its point where it was pressed and the drag shapes it smooth, as the pen's
-     * press-and-drag does
-     */
-    private followHeadClicks(
-        p: NonNullable<PathPenMode["held"]>,
-        pointer: FieldPointer,
-        roles: Roles,
-    ) {
-        if (!p.moved) {
-            this.preview(pointer, roles);
-            return;
-        }
-        const env = envOf(roles);
-        if (!env) return;
-        if (!p.headPlaced) {
-            this.dropPendingHead();
-            p.headPlaced = clickHeadAt(p.start.field, env, false);
-        }
-        if (p.headPlaced === "placed") shapeHeadPoint(pointer.field, env);
     }
 
     /** A lane or key being dragged: the displacement where it was grabbed follows the pointer */
@@ -887,36 +742,15 @@ class PathPenMode implements FieldMode {
         toast.error(tolgee.t(refusalKeys[reason]), { id: "path-adjust" });
     }
 
-    /**
-     * While drawing, a press-and-drag: the point lands where it was pressed, smooth, its roundness
-     * following the drag. A press on the last point or the end spot finishes instead (on release).
-     */
-    private shapeNew(
-        p: NonNullable<PathPenMode["held"]>,
-        pointer: FieldPointer,
-        roles: Roles,
-    ) {
-        const env = envOf(roles);
-        const s = this.session;
-        if (!env || !s || !p.landed) return;
-        const placed: PathShape = {
-            ...p.base,
-            points: [...p.base.points, { at: p.landed }],
-        };
-        shapeNewPoint(dragNewPoint(placed, pointer.field, env));
-        this.pointerNow(null);
-    }
-
     move(pointer: FieldPointer): void {
         const p = this.held;
-        // Alt held or let go shows on the next point's cue at once (the Straight | Curve switch)
-        if (this.session?.phase === "drawing")
-            setOtherKindHeld(holdsOtherKind(pointer));
+        // Drawing with points: the pen's, its press held or not
         if (!p) {
-            if (this.session?.phase === "drawing")
-                this.preview(pointer, rolesOf(pointer, "shape"));
+            if (this.session?.phase === "drawing") this.pen.move(pointer);
             return;
         }
+        // Alt held or let go shows on the first leg's cue at once (the Straight | Curve switch)
+        if (p.firstLeg) setOtherKindHeld(holdsOtherKind(pointer));
         p.screen = pointer.screen;
         // A head drag cancelled (Escape) while the button is still down: nothing more to drag
         if (p.head && !isHeadDrag(this.session)) return;
@@ -926,8 +760,7 @@ class PathPenMode implements FieldMode {
                 pointer.screen.y - p.start.screen.y,
             ) >= CLICK_SLOP;
         const roles = p.keys.move(pointer, p.moved ? pointer : null);
-        if (this.session?.phase === "drawing" || p.moved)
-            this.follow(pointer, roles);
+        if (p.firstLeg || p.moved) this.follow(pointer, roles);
     }
 
     release(
@@ -937,33 +770,21 @@ class PathPenMode implements FieldMode {
         const p = this.held;
         const roles = p?.keys.roles();
         this.endHeld();
+        // The pen's press (drawing with points)
+        if (!p) {
+            this.pen.release(pointer, click);
+            return;
+        }
         // What the release does is read from where it is, not a move waiting for its frame
-        this.dropPendingPointer();
+        this.pen.dropPreview();
         const s = this.session;
-        if (!p || !s) return;
+        if (!s) return;
         // A trail's head let go (AP-T16)
         if (p.head) return this.releaseHead(p.moved);
-        // A trail's head drawn on with clicks (L.15)
-        if (isHeadClicks(s))
-            return this.releaseHeadClicks(p, pointer, click, roles);
         if (s.phase === "drawing") {
             // The first leg dragged out of an end (step 4b): its end is the trail's first point;
             // a click on the end only grabs it, and clicks go on from there
-            if (p.firstLeg) {
-                this.releaseFirstLeg(s, p, pointer, roles);
-                return;
-            }
-            // A press-and-drag placed its smooth point as it went
-            if (p.moved && s.dragging !== null) {
-                endNewPoint();
-                return;
-            }
-            // Pressed on the last point or the end spot and moved a little: still a finish
-            if (p.moved && p.landed === null) {
-                void finishDrawing(enterAt(s, pointer.field, envOf(roles)));
-                return;
-            }
-            this.releaseDrawing(s, pointer, click, roles);
+            if (p.firstLeg) this.releaseFirstLeg(s, p, pointer, roles);
             return;
         }
         if (p.lane) {
@@ -1031,41 +852,10 @@ class PathPenMode implements FieldMode {
      * click, the head drawn on with clicks from there (owner, 2026-11-17), nothing written yet
      */
     private releaseHead(moved: boolean) {
-        this.dropPendingHead(moved);
+        this.headFrame.drop(moved);
         if (!isHeadDrag(this.session)) return;
         if (moved) void finishHeadDrag();
         else clickHead();
-    }
-
-    /**
-     * A release while the head is drawn on with clicks: a press-and-drag placed its point as it
-     * went; a double-click finishes (its first click placed its point); a click places the trail
-     * as the pointer has it, or on the head itself finishes, as a click on the pen's last point
-     * does
-     */
-    private releaseHeadClicks(
-        p: NonNullable<PathPenMode["held"]>,
-        pointer: FieldPointer,
-        click: { double: boolean } | null,
-        roles: Roles | undefined,
-    ) {
-        this.dropPendingHead();
-        if (p.moved && p.headPlaced) {
-            endHeadPoint();
-            if (p.headPlaced === "finish") void finishHeadDrag();
-            return;
-        }
-        if (click?.double) {
-            void finishHeadDrag();
-            return;
-        }
-        const env = envOf(roles);
-        if (!env) return;
-        if (
-            clickHeadAt(pointer.field, env, clickPlacesSmooth(pointer)) ===
-            "finish"
-        )
-            void finishHeadDrag();
     }
 
     /** A lane or key let go: saved once it moved (one undo step), otherwise a click that picks it */
@@ -1102,52 +892,6 @@ class PathPenMode implements FieldMode {
         else void commitLaneAdjust(hold.marcherId, hold.x!, hold.d);
     }
 
-    private releaseDrawing(
-        s: PathSession,
-        pointer: FieldPointer,
-        click: { double: boolean } | null,
-        roles: Roles | undefined,
-    ) {
-        const env = envOf(roles);
-        if (!env) return;
-        // The double-click's second click finishes, as a Line's does, and takes back the corner
-        // its first click added (sim round 3: "Double-click to finish" left a kink there)
-        if (click?.double) {
-            // A trail that ends at its own last point (From trail ends) keeps it: there the drawing
-            // ends where the double-click is (review of #900)
-            const last = s.points.at(-1);
-            if (
-                last &&
-                last === this.clickAdded &&
-                s.points.length === this.clickAddedCount &&
-                (!s.follow || intoEndSpots(s.follow))
-            )
-                removeLastPoint();
-            this.clickAdded = null;
-            void finishDrawing();
-            return;
-        }
-        this.clickAdded = null;
-        // On the last point (a Line's last point), or on the end spot the path goes to
-        if (onFinishSpot(s, pointer.field, env)) {
-            void finishDrawing(enterAt(s, pointer.field, env));
-            return;
-        }
-        const at = landCorner(shapeOf(s), pointer.field, env);
-        // Landed on the last point: the same as clicking it
-        const prev = s.points.at(-1)?.at;
-        if (prev && prev.x === at.x && prev.y === at.y) {
-            void finishDrawing();
-            return;
-        }
-        // A corner, or a smooth point: the Straight | Curve switch, Alt for the other
-        addPoint(at, clickPlacesSmooth(pointer));
-        const added = this.session?.points.at(-1) ?? null;
-        this.clickAdded = added;
-        this.clickAddedCount = this.session?.points.length ?? 0;
-        this.pointerNow(at);
-    }
-
     /**
      * The release of the first leg dragged out of an end (step 4b): its end is the trail's first
      * point; a click on the end only grabs it, and clicks go on from there. Into end spots, a
@@ -1175,33 +919,27 @@ class PathPenMode implements FieldMode {
         if (p.moved && env) {
             const at = landCorner(shapeOf(s), pointer.field, env);
             addPoint(at, clickPlacesSmooth(pointer));
-            this.pointerNow(at);
+            setPointer(at);
         }
     }
 
     cancel(): void {
         const p = this.held;
         this.endHeld();
-        this.dropPendingPointer();
-        if (p?.head) {
-            this.dropPendingHead();
+        // The pen's press: a press-and-drag's point is its subject's to keep or drop
+        if (!p) {
+            this.pen.cancel();
+            return;
+        }
+        this.pen.dropPreview();
+        if (p.head) {
+            this.headFrame.drop();
             cancelHeadDrag();
             return;
         }
-        if (p?.lane) setLaneEdit(null);
-        // Drawing on from a head: a point a lost press-and-drag placed stays, as shaped so far
-        if (isHeadClicks(this.session)) {
-            this.dropPendingHead();
-            endHeadPoint();
-            return;
-        }
-        if (!p?.moved) return;
-        if (this.session?.phase === "open")
+        if (p.lane) setLaneEdit(null);
+        if (p.moved && this.session?.phase === "open")
             cancelDrag(p.before, p.base.toBulge ?? null);
-        // A lost press-and-drag while drawing takes back the point it was placing
-        else if (this.session?.dragging !== null) {
-            cancelDrag(p.before);
-        }
     }
 
     /**
@@ -1231,10 +969,7 @@ class PathPenMode implements FieldMode {
             return !hover?.onDot() && this.pathAt(pointer) ? "pointer" : null;
         }
         // A trail's head drawn on with clicks: the pen's cross, the trail following the pointer
-        if (isHeadClicks(s)) {
-            if (!this.held) this.preview(pointer, rolesOf(pointer, "shape"));
-            return "crosshair";
-        }
+        if (isHeadClicks(s)) return this.pen.cursorAt(pointer);
         // A trail's head being dragged (AP-T16): the hand that holds it
         if (isHeadDrag(s)) return "grab";
         // Between clicks the next leg follows the pointer with the roles its keys hold, so it
@@ -1251,8 +986,7 @@ class PathPenMode implements FieldMode {
                 setFollowHover(hit && !hit.end ? hit.id : null);
                 return hit?.end ? "grab" : "default";
             }
-            this.preview(pointer, rolesOf(pointer, "shape"));
-            return "crosshair";
+            return this.pen.cursorAt(pointer);
         }
         const handle = this.handleAt(s, pointer);
         if (handle) {
@@ -1274,14 +1008,8 @@ class PathPenMode implements FieldMode {
     }
 
     leave(): void {
-        if (this.session?.phase === "drawing") setOtherKindHeld(false);
-        if (isHeadClicks(this.session)) {
-            this.dropPendingHead();
-            showHeadPlaced();
-            return;
-        }
         if (this.session?.phase === "drawing") {
-            this.pointerNow(null);
+            this.pen.leave();
             setFollowHover(null);
         } else if (this.session?.hoverLane) setHoverLane(null);
     }
@@ -1610,33 +1338,6 @@ function followDrawing(session: PathSession): FieldModeDrawing {
         ...realMarchers(session, starts, line, keep ? spots : null),
     };
 }
-
-/**
- * The cue for the point a click would place (owner, 2026-11-17, the Straight | Curve switch): a
- * smooth point shows a short tangent bar through where it would land, along the leg coming in, as
- * a press-and-drag's smooth point shows its own; a corner shows none. `prev` is the point before.
- */
-function smoothCue(
-    prev: XY | undefined,
-    at: XY | null,
-    step: number | undefined,
-): NonNullable<FieldModeDrawing["barHandles"]> {
-    if (!prev || !at || !step || !clickPlacesSmooth()) return [];
-    const d = Math.hypot(at.x - prev.x, at.y - prev.y);
-    if (!(d > 0)) return [];
-    const reach = Math.min(SMOOTH_CUE_STEPS * step, d / 2);
-    const u = {
-        x: ((at.x - prev.x) / d) * reach,
-        y: ((at.y - prev.y) / d) * reach,
-    };
-    return [
-        { at: { x: at.x + u.x, y: at.y + u.y }, from: at },
-        { at: { x: at.x - u.x, y: at.y - u.y }, from: at },
-    ];
-}
-
-/** Half the next point's tangent bar cue, in steps */
-const SMOOTH_CUE_STEPS = 1.5;
 
 /**
  * The Follow tool's cue for the next point (`smoothCue`): at the pointer once an end is grabbed,
@@ -2489,45 +2190,3 @@ function objectHit(o: PathObject, at: XY, radius: number): boolean {
 
 /** The one pen mode the field editor is given while a path is drawn or open. */
 export const pathPenMode = new PathPenMode();
-
-/**
- * Whether `at` is on the end spot the path goes to: with Ripple in, on either end of the next
- * form, by the same reach the drawing shows it with (`rippleEndAt`, RP-4)
- */
-function onEndSpot(s: PathSession, at: XY, env: ToolEnv): boolean {
-    if (s.follow && ripplesIn(s.follow))
-        return rippleEndAt(s.follow, landedAt(s, at, env)) !== null;
-    const points = pathPoints(shapeOf(s));
-    const end = points[points.length - 1]!;
-    return Math.hypot(end.x - at.x, end.y - at.y) <= env.hitRadius;
-}
-
-/**
- * Ripple in (step 9, RP-4): the marcher whose spot at an end of the next form is under `at`, so a
- * finish there enters there; null otherwise, and for any other drawing
- */
-function enterAt(s: PathSession, at: XY, env: ToolEnv | null): number | null {
-    return s.follow && env ? rippleEndAt(s.follow, landedAt(s, at, env)) : null;
-}
-
-/**
- * Where a press at `at` lands, as the drawing's pointer does (`landCorner`): Ripple in tests an
- * end of the form with the same point the drawing shows the deal for (step 9 review)
- */
-function landedAt(s: PathSession, at: XY, env: ToolEnv): XY {
-    return landCorner(shapeOf(s), at, env);
-}
-
-/** Whether `at` is on the drawing's last point or on the end spot the path goes to */
-function onFinishSpot(s: PathSession, at: XY, env: ToolEnv): boolean {
-    const points = pathPoints(shapeOf(s));
-    const last = points[points.length - 2]!;
-    const end = points[points.length - 1]!;
-    const near = (q: XY) => Math.hypot(q.x - at.x, q.y - at.y) <= env.hitRadius;
-    // Ripple in: on either end of the next form, by the drawing's own reach (RP-4)
-    const onEnd =
-        s.follow && ripplesIn(s.follow)
-            ? rippleEndAt(s.follow, landedAt(s, at, env)) !== null
-            : near(end);
-    return (s.points.length > 0 && near(last)) || onEnd;
-}
