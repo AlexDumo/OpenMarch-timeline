@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslate } from "@tolgee/react";
 import {
+    ArrowSquareOutIcon,
     BookOpenIcon,
     CheckIcon,
     CopyIcon,
@@ -91,6 +92,7 @@ function HelpBody() {
                     onClick={() => openPage(siteUrl("/guides/"))}
                 >
                     {t("help.guide.open")}
+                    <ArrowSquareOutIcon size={16} aria-hidden />
                 </Button>
             </section>
 
