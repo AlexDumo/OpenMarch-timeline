@@ -19,7 +19,11 @@ import Ui from "@/components/docs/Ui.astro";
 import InShort from "@/components/docs/InShort.astro";
 import { Steps } from "@astrojs/starlight/components";
 
-<InShort>Open the <Ui k="sidebar.marchers" /> panel, select <Ui k="marchers.addMarcher" />, enter how many and choose their section, then select Create.</InShort>
+<InShort>
+  Open the <Ui k="sidebar.marchers" /> panel, select{" "}
+  <Ui k="marchers.addMarcher" />, enter how many and choose their section, then
+  select Create.
+</InShort>
 
 Every marcher belongs to a section, such as Trumpet or Color Guard, and has a drill number made of the section's prefix and a number: T1 and T2 in the trumpets, G4 in the color guard. The <Ui k="sidebar.marchers" /> panel, the icon of three people in the sidebar, lists every marcher with their drill number, section and name.
 

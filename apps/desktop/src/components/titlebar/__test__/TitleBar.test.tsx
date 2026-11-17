@@ -168,4 +168,10 @@ describe("TitleBar", () => {
         await screen.findByTestId("titlebar-toolbar-tabs");
         expect(screen.queryByTestId("titlebar-help")).not.toBeInTheDocument();
     });
+
+    it("touch mode keeps Help in the title bar where there are no toolbar tabs", async () => {
+        useInputModeStore.setState({ mode: "touch" });
+        renderBar();
+        expect(await screen.findByTestId("titlebar-help")).toBeInTheDocument();
+    });
 });

@@ -22,13 +22,21 @@ import Term from "@/components/docs/Term.astro";
 import InShort from "@/components/docs/InShort.astro";
 import { Steps } from "@astrojs/starlight/components";
 
-<InShort>Open settings (<Kbd action="openSettings" />), choose <Ui k="settings.field" /> and turn on <Ui k="settings.field.stepSizeWarnings" />: moves with steps too large to march draw red. Set the limit in the Field panel's <Ui k="fieldProperties.labels.stepSizeWarningThreshold" />.</InShort>
+<InShort>
+  Open settings (<Kbd action="openSettings" />
+  ), choose <Ui k="settings.field" /> and turn on{" "}
+  <Ui k="settings.field.stepSizeWarnings" />: moves with steps too large to
+  march draw red. Set the limit in the Field panel's{" "}
+  <Ui k="fieldProperties.labels.stepSizeWarningThreshold" />.
+</InShort>
 
 A step size warning means a marcher has to take steps longer than your field allows to get through a <Term id="move">move</Term> on time. It's a warning, not an error: the show still plays and exports. Use it to find moves you'll want to give more counts or a shorter path.
 
 ## Turn on the red paths
 
-<Ui k="settings.field.stepSizeWarnings" /> is off until you turn it on, and applies to every show on this computer. The inspector and the shape tools warn whether it's on or off.
+<Ui k="settings.field.stepSizeWarnings" /> is off until you turn it on, and
+applies to every show on this computer. The inspector and the shape tools warn
+whether it's on or off.
 
 ## What a warning looks like
 

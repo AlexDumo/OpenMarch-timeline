@@ -27,14 +27,19 @@ import Kbd from "@/components/docs/Kbd.astro";
 import Ui from "@/components/docs/Ui.astro";
 import InShort from "@/components/docs/InShort.astro";
 
-<InShort>Click a marcher, <Kbd keys="Shift" gesture="click" /> to add more, or drag a box around them on empty field. Press <Kbd action="selectAllMarchers" /> for everyone.</InShort>
+<InShort>
+  Click a marcher, <Kbd keys="Shift" gesture="click" /> to add more, or drag a
+  box around them on empty field. Press <Kbd action="selectAllMarchers" /> for
+  everyone.
+</InShort>
 
 Most tools act on the selected marchers: moving, aligning, placing them in a shape, holding them on a page. The inspector lists the selected marchers' drill numbers.
 
 ## Click to select
 
 - Click a marcher to select only that marcher.
-- <Kbd keys="Shift" gesture="click" /> a marcher to add it to the selection, or to take it out if it's already selected.
+- <Kbd keys="Shift" gesture="click" /> a marcher to add it to the selection, or
+  to take it out if it's already selected.
 - Click empty field, or press <Kbd action="cancelAlignmentUpdates" />, to clear the selection.
 
 ## Drag a box
@@ -92,7 +97,11 @@ The toolbar's <Ui k="inspector.shape.selectTab" /> tab selects marchers by what 
 
 The group replaces the selection. <Kbd keys="Shift" gesture="click" /> a group to add it instead, for example the trumpets and the mellophones together.
 
-<Ui k="toolbar.select.selectBy.family" /> groups sections into Woodwind, Brass, Battery, Guard, Other and Pit. <Ui k="toolbar.select.selectBy.tag" /> lists the tags you've made; see [Change how marchers look](/guides/marchers/appearance/#make-a-tag). With many groups, a search box appears.
+<Ui k="toolbar.select.selectBy.family" /> groups sections into Woodwind, Brass,
+Battery, Guard, Other and Pit. <Ui k="toolbar.select.selectBy.tag" /> lists the
+tags you've made; see [Change how marchers
+look](/guides/marchers/appearance/#make-a-tag). With many groups, a search box
+appears.
 
 ## Select one marcher in a placed shape
 

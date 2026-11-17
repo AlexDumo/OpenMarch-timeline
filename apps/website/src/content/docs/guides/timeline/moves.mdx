@@ -32,7 +32,12 @@ import Ui from "@/components/docs/Ui.astro";
 import Term from "@/components/docs/Term.astro";
 import InShort from "@/components/docs/InShort.astro";
 
-<InShort>In Expert, drag the start flag to where the marchers should leave, then drag the marchers on the field; a bar for the new move appears under the music. In Basic, put the playhead on a count and drag the marchers to give them a position there.</InShort>
+<InShort>
+  In Expert, drag the start flag to where the marchers should leave, then drag
+  the marchers on the field; a bar for the new move appears under the music. In
+  Basic, put the playhead on a count and drag the marchers to give them a
+  position there.
+</InShort>
 
 Every page has a <Term id="move">move</Term> of its own, and that's all most drill needs. In Expert you can also make moves that start or end in the middle of a page, run past a page's flag, or cover only some of the marchers on a page, and change each one's timing on its own. [How the timeline works](/guides/timeline/how-the-timeline-works/#moves) explains how moves and pages fit together.
 
@@ -105,11 +110,15 @@ Right-click a move's bar, or select the ⋯ button on it, to open its menu.
   alt="The right-click menu of the bar named Move 1, with the playhead inside the move and two of its marchers selected: Edit move, Select marchers, Rename move, Split at playhead, Split 2 selected into new move, Merge into Page 3 fit to its counts (greyed out, with a question mark that explains why), and Delete move."
 />
 
-- <Ui k="timeline.moveMenu.edit" /> opens the move on its own; see [Work on one move alone](#work-on-one-move-alone).
+- <Ui k="timeline.moveMenu.edit" /> opens the move on its own; see [Work on one
+  move alone](#work-on-one-move-alone).
 - <Ui k="timeline.moveMenu.selectMarchers" /> selects everyone in the move.
-- <Ui k="timeline.moveMenu.rename" /> names the move. You can also press <Kbd keys="F2" /> on a selected bar.
+- <Ui k="timeline.moveMenu.rename" /> names the move. You can also press
+  <Kbd keys="F2" /> on a selected bar.
 - <Ui k="timeline.moveMenu.splitAtPlayhead" /> cuts the move in two; see below.
-- <Ui k="timeline.moveMenu.delete" /> deletes the move. Its marchers go back to what the page's move does, and a message names any page that now looks different, with <Ui k="actions.edit.undo" />.
+- <Ui k="timeline.moveMenu.delete" /> deletes the move. Its marchers go back to
+  what the page's move does, and a message names any page that now looks
+  different, with <Ui k="actions.edit.undo" />.
 
 An item that can't be used right now is greyed out; point at the question mark beside it to see why. The menu works only while the show is paused.
 

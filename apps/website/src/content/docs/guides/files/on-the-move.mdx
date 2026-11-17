@@ -22,7 +22,11 @@ import Term from "@/components/docs/Term.astro";
 import InShort from "@/components/docs/InShort.astro";
 import { Steps } from "@astrojs/starlight/components";
 
-<InShort>Select <Ui k="sidebar.mobile" /> (the phone) in the sidebar, sign in, attach the show to a production, then select <Ui k="mobileExport.revision.publishButton" />.</InShort>
+<InShort>
+  Select <Ui k="sidebar.mobile" /> (the phone) in the sidebar, sign in, attach
+  the show to a production, then select{" "}
+  <Ui k="mobileExport.revision.publishButton" />.
+</InShort>
 
 OpenMarch: On the Move is the phone app your marchers use to see their drill, coordinates and music. You send a show to it from the desktop app or the web editor. You need an OpenMarch account with an ensemble, your band's group for a season, and a production in it, one show or part of a show that the ensemble performs. [Getting started with On the Move](/otm/getting-started/) explains how to set those up.
 
@@ -68,7 +72,11 @@ The panel lists every revision under <Ui k="mobileExport.revisions.listHeading" 
 
 ## Add another recording or change the background
 
-- <Ui k="mobileExport.audio.title" plain />: the show's music is uploaded with it. <Ui k="mobileExport.audio.addAlternate" /> adds another recording, such as a slower rehearsal track, that marchers can choose in the app. <Ui k="mobileExport.audio.setActive" /> picks the one the app plays by default.
+- <Ui k="mobileExport.audio.title" plain />: the show's music is uploaded with
+  it. <Ui k="mobileExport.audio.addAlternate" /> adds another recording, such as
+  a slower rehearsal track, that marchers can choose in the app.
+  <Ui k="mobileExport.audio.setActive" /> picks the one the app plays by
+  default.
 - The field image is uploaded as the app's background with each revision. To change it, change the field image in the show's field settings and push a revision.
 
 To stop uploading from this file to the production, open <Ui k="mobileExport.settings.button" /> in the panel and select <Ui k="mobileExport.detach.button" />.
@@ -81,9 +89,17 @@ If your browser blocks pop-ups, or you opened OpenMarch from your Home Screen, t
 
 ### If sign-in doesn't work
 
-- <Ui k="mobileExport.unreachable.title" plain />: OpenMarch couldn't reach its online service or confirm your sign-in. You stay signed in. Check your internet connection and select <Ui k="mobileExport.unreachable.retry" />.
-- <Ui k="mobileExport.signInRejected.title" plain />: the online service turned your sign-in down. Select <Ui k="mobileExport.signInRejected.signOut" />, then sign in again.
-- <Ui k="exportCoordinates.webMobileUnavailable.title" plain />: you're in a test version of the web editor that can't sign in. Each version keeps its own shows, so select <Ui k="web.backUp" /> to save a `.dots` copy, then select <Ui k="exportCoordinates.webMobileUnavailable.openEditor" /> and open that file there, or open it in the desktop app.
+- <Ui k="mobileExport.unreachable.title" plain />: OpenMarch couldn't reach its
+  online service or confirm your sign-in. You stay signed in. Check your
+  internet connection and select <Ui k="mobileExport.unreachable.retry" />.
+- <Ui k="mobileExport.signInRejected.title" plain />: the online service turned
+  your sign-in down. Select <Ui k="mobileExport.signInRejected.signOut" />, then
+  sign in again.
+- <Ui k="exportCoordinates.webMobileUnavailable.title" plain />: you're in a
+  test version of the web editor that can't sign in. Each version keeps its own
+  shows, so select <Ui k="web.backUp" /> to save a `.dots` copy, then select
+  <Ui k="exportCoordinates.webMobileUnavailable.openEditor" /> and open that
+  file there, or open it in the desktop app.
 
 ## Related
 

@@ -18,7 +18,13 @@ import Term from "@/components/docs/Term.astro";
 import InShort from "@/components/docs/InShort.astro";
 import { Steps } from "@astrojs/starlight/components";
 
-<InShort>Select the marchers, select <Ui k="shapes.kinds.arc.label" /> in the toolbar's <Ui k="inspector.shape.shapesTab" /> tab, drag on the field from one end of the arc to the other, then select <Ui k="shapes.edit.place" /> (<Kbd action="applyShape" />).</InShort>
+<InShort>
+  Select the marchers, select <Ui k="shapes.kinds.arc.label" /> in the toolbar's{" "}
+  <Ui k="inspector.shape.shapesTab" /> tab, drag on the field from one end of
+  the arc to the other, then select <Ui k="shapes.edit.place" /> (
+  <Kbd action="applyShape" />
+  ).
+</InShort>
 
 **Before you start:** select the marchers who go on the arc, and put the playhead on the count where they should stand on it.
 
@@ -62,8 +68,11 @@ Dragging the ends or the middle so the arc is no longer round puts it on an elli
 The <Ui k="shapes.kinds.arc.ends.label" /> menu on the editor's second row, which also opens when you right-click one of the arc's handles, has three choices:
 
 - <Ui k="shapes.kinds.arc.ends.open" />: the arc on its own.
-- <Ui k="shapes.kinds.arc.ends.chord" />: a straight line joins the two ends, and marchers stand along both.
-- <Ui k="shapes.kinds.arc.ends.circle" />, or <Ui k="shapes.kinds.arc.ends.round" /> when the arc is on an ellipse: the arc goes all the way round, a whole circle or ellipse.
+- <Ui k="shapes.kinds.arc.ends.chord" />: a straight line joins the two ends,
+  and marchers stand along both.
+- <Ui k="shapes.kinds.arc.ends.circle" />, or
+  <Ui k="shapes.kinds.arc.ends.round" /> when the arc is on an ellipse: the arc
+  goes all the way round, a whole circle or ellipse.
 
 <Media
   id="shapes-arc-closed"

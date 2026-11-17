@@ -34,9 +34,23 @@ On every page, each marcher is <Ui k="timeline.terms.defined" />, <Ui k="timelin
 
 ## The three states
 
-- <Ui k="timeline.terms.defined" />: you've set the marcher's position on this page, with a <Term id="keyframe">keyframe</Term>: a move of its own ends on this page, at the page's flag or at a count partway through it. It reaches that spot at that count, wherever it was before. Changing an earlier page changes how it gets here, not where it ends up.
-- <Ui k="timeline.terms.notDefined" />: nothing has been decided for the marcher on this page. It stands where it last was, and when you change that earlier position, it moves here too. Every marcher on a new page is Not defined, and so is every marcher you add: they stand where the last set left them.
-- <Ui k="timeline.terms.held" />: you've chosen to keep the marcher still, with a hold. A hold grows out of whatever last put the marcher there: the keyframe where it last arrived, or its starting spot if it hasn't moved since the start of the show. Like a Not defined marcher, it follows changes to that keyframe. The difference is what a drag does: see [Drag marchers that are Held](#drag-marchers-that-are-held). A placed shape holds its marchers the same way: on the pages after it, they're Held for as long as every one of them stays on its spot, with no hold of their own.
+- <Ui k="timeline.terms.defined" />: you've set the marcher's position on this
+  page, with a <Term id="keyframe">keyframe</Term>: a move of its own ends on
+  this page, at the page's flag or at a count partway through it. It reaches
+  that spot at that count, wherever it was before. Changing an earlier page
+  changes how it gets here, not where it ends up.
+- <Ui k="timeline.terms.notDefined" />: nothing has been decided for the marcher
+  on this page. It stands where it last was, and when you change that earlier
+  position, it moves here too. Every marcher on a new page is Not defined, and
+  so is every marcher you add: they stand where the last set left them.
+- <Ui k="timeline.terms.held" />: you've chosen to keep the marcher still, with
+  a hold. A hold grows out of whatever last put the marcher there: the keyframe
+  where it last arrived, or its starting spot if it hasn't moved since the start
+  of the show. Like a Not defined marcher, it follows changes to that keyframe.
+  The difference is what a drag does: see [Drag marchers that are
+  Held](#drag-marchers-that-are-held). A placed shape holds its marchers the
+  same way: on the pages after it, they're Held for as long as every one of them
+  stays on its spot, with no hold of their own.
 
 Use Held when the marcher's standing still is part of the drill and should stay that way. Use Not defined, the default, for marchers you haven't got to yet. [Make marchers stand still](/guides/timeline/holds/) shows how to hold them, and [Reset or lock marchers on a page](/guides/timeline/reset-marchers/) how to make them Defined or Not defined by hand.
 

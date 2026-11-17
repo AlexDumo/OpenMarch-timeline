@@ -25,7 +25,14 @@ import Ui from "@/components/docs/Ui.astro";
 import Term from "@/components/docs/Term.astro";
 import InShort from "@/components/docs/InShort.astro";
 
-<InShort>Put the playhead where the new set should be, right-click it and select <Ui k="actions.timeline.createPageAtPlayhead" /> (<Kbd action="timelineCreatePageAtPlayhead" />), or <Ui k="actions.timeline.createSubsetAtPlayhead" /> (<Kbd action="timelineCreateSubsetAtPlayhead" />) to keep the numbers of the pages after it.</InShort>
+<InShort>
+  Put the playhead where the new set should be, right-click it and select{" "}
+  <Ui k="actions.timeline.createPageAtPlayhead" /> (
+  <Kbd action="timelineCreatePageAtPlayhead" />
+  ), or <Ui k="actions.timeline.createSubsetAtPlayhead" /> (
+  <Kbd action="timelineCreateSubsetAtPlayhead" />) to keep the numbers of the
+  pages after it.
+</InShort>
 
 Each page is a box on the timeline that ends at its page's flag, the count where marchers reach its set; [How the timeline works](/guides/timeline/how-the-timeline-works/#pages-and-their-flags) explains pages. Select a page's box, with no marchers selected, to see the page in the inspector: its <Ui k="inspector.page.counts" />, whether it's a <Ui k="inspector.page.subset" />, the measures it covers, and <Ui k="inspector.page.splitPage" />.
 
@@ -85,8 +92,15 @@ The first page, where the show starts, has no counts to split, so the inspector 
 
 Right-click the page's box and choose one:
 
-- <Ui k="timeline.rangeMenu.deletePage" /> removes the page's flag. Its counts join the next page, which takes its number, and the pages after it are numbered one lower. The marchers still move as they did, so every page after it looks as it did before. Deleting the last page makes the page before it the last one, and its counts leave the end of the show.
-- <Ui k="timeline.rangeMenu.deleteWithMoves" /> removes the page and the positions set on it. Marchers that are Not defined on later pages go back to where they were before the deleted page, and a message lists the pages that now look different.
+- <Ui k="timeline.rangeMenu.deletePage" /> removes the page's flag. Its counts
+  join the next page, which takes its number, and the pages after it are
+  numbered one lower. The marchers still move as they did, so every page after
+  it looks as it did before. Deleting the last page makes the page before it the
+  last one, and its counts leave the end of the show.
+- <Ui k="timeline.rangeMenu.deleteWithMoves" /> removes the page and the
+  positions set on it. Marchers that are Not defined on later pages go back to
+  where they were before the deleted page, and a message lists the pages that
+  now look different.
 
 Both can be undone with <Kbd action="performUndo" />.
 

@@ -19,7 +19,10 @@ import Ui from "@/components/docs/Ui.astro";
 import InShort from "@/components/docs/InShort.astro";
 import { Steps } from "@astrojs/starlight/components";
 
-<InShort>Press <Kbd keys="Control+M" />, or select the speaker button in the timeline's controls and then the metronome item in its menu.</InShort>
+<InShort>
+  Press <Kbd keys="Control+M" />, or select the speaker button in the timeline's
+  controls and then the metronome item in its menu.
+</InShort>
 
 The metronome clicks on every count while the show plays. Use it to hear whether the counts sit on the music, and to rehearse a page at its tempo with the music muted.
 
@@ -56,9 +59,11 @@ Select the speaker button, then the speaker icon in its menu (<Ui k="timeline.so
 2. Change any of these:
    - <Ui k="music.onOff" />: the metronome itself, as above.
    - <Ui k="music.accent" />: the first count of each measure clicks louder.
-   - <Ui k="music.onlyClickOnMeasure" />: the metronome clicks only on the first count of each measure.
+   - <Ui k="music.onlyClickOnMeasure" />: the metronome clicks only on the first
+     count of each measure.
    - <Ui k="music.volume" />: how loud the click is against the music.
-   - <Ui k="music.beatStyle" />: <Ui k="music.standard" />, <Ui k="music.sharp" /> or <Ui k="music.smooth" />.
+   - <Ui k="music.beatStyle" />: <Ui k="music.standard" />,
+     <Ui k="music.sharp" /> or <Ui k="music.smooth" />.
 
 </Steps>
 

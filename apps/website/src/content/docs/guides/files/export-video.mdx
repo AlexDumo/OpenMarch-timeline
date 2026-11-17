@@ -18,7 +18,12 @@ import Ui from "@/components/docs/Ui.astro";
 import InShort from "@/components/docs/InShort.astro";
 import { Steps } from "@astrojs/starlight/components";
 
-<InShort>In the toolbar's <Ui k="inspector.shape.fileTab" plain /> tab, select <Ui k="exportCoordinates.exportButton" />, then the <Ui k="exportCoordinates.video" /> tab, then <Ui k="exportCoordinates.export" />.</InShort>
+<InShort>
+  In the toolbar's <Ui k="inspector.shape.fileTab" plain /> tab, select{" "}
+  <Ui k="exportCoordinates.exportButton" />, then the{" "}
+  <Ui k="exportCoordinates.video" /> tab, then{" "}
+  <Ui k="exportCoordinates.export" />.
+</InShort>
 
 A video export plays the whole show on the field from above, from the first count to the end of the last page, with the music. Marchers and staff can watch the drill without OpenMarch. It works in the desktop app and in the web editor.
 
@@ -41,18 +46,25 @@ OpenMarch draws the video frame by frame, which can take several minutes for a l
   alt="The top of the Export dialog on the Video tab: the Mobile, Coordinate Sheets, Drill Charts and Video tabs, then Resolution 1080p, Frame rate 60 fps and Video background Light or Dark, and the On-screen info heading above the preview."
 />
 
-- <Ui k="exportCoordinates.videoResolution" />: 720p, 1080p or 4K. The desktop app starts on 1080p, or 720p on a tablet. The web editor offers 720p and 1080p and starts on 720p.
-- <Ui k="exportCoordinates.videoFrameRate" />: 30 or 60 frames a second. 60 makes smoother motion and takes longer to make. The desktop app starts on 60 and the web editor on 30.
+- <Ui k="exportCoordinates.videoResolution" />: 720p, 1080p or 4K. The desktop
+  app starts on 1080p, or 720p on a tablet. The web editor offers 720p and 1080p
+  and starts on 720p.
+- <Ui k="exportCoordinates.videoFrameRate" />: 30 or 60 frames a second. 60
+  makes smoother motion and takes longer to make. The desktop app starts on 60
+  and the web editor on 30.
 - <Ui k="exportCoordinates.videoBackground" />: a light or dark field.
 
 ## Choose what the video shows
 
 Under <Ui k="exportCoordinates.videoOverlay" plain />, the preview shows one frame of the video, with a box of information over the field. Choose what the box shows:
 
-- <Ui k="exportCoordinates.videoOverlaySetCounts" />: the page, or the two pages a move is between, and the count.
-- <Ui k="exportCoordinates.videoOverlayMeasures" />: the measure number and rehearsal mark. It's off when the show has no measures.
+- <Ui k="exportCoordinates.videoOverlaySetCounts" />: the page, or the two pages
+  a move is between, and the count.
+- <Ui k="exportCoordinates.videoOverlayMeasures" />: the measure number and
+  rehearsal mark. It's off when the show has no measures.
 - <Ui k="exportCoordinates.videoOverlayTempo" />: the tempo in beats per minute.
-- <Ui k="exportCoordinates.videoOverlayClock" />: the time since the start of the show.
+- <Ui k="exportCoordinates.videoOverlayClock" />: the time since the start of
+  the show.
 
 <Media
   id="files-export-video"

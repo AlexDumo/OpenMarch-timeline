@@ -21,7 +21,11 @@ import Ui from "@/components/docs/Ui.astro";
 import InShort from "@/components/docs/InShort.astro";
 import { Steps } from "@astrojs/starlight/components";
 
-<InShort>In the 3D View, drag to orbit, drag with the right mouse button to pan, and scroll to zoom. Press <Kbd keys="1" /> to <Kbd keys="9" /> to jump to a camera.</InShort>
+<InShort>
+  In the 3D View, drag to orbit, drag with the right mouse button to pan, and
+  scroll to zoom. Press <Kbd keys="1" /> to <Kbd keys="9" /> to jump to a
+  camera.
+</InShort>
 
 You can look at the show from anywhere: move the view with the mouse, jump to one of the venue's cameras, or sit in a seat in the stands. Cameras you add or change are saved with the show.
 
@@ -29,13 +33,13 @@ You can look at the show from anywhere: move the view with the mouse, jump to on
 
 These are the default controls, called <Ui k="settings.view3d.controls.orbit" plain />:
 
-| Do this                                                                       | To                                                    |
-| ----------------------------------------------------------------------------- | ----------------------------------------------------- |
-| Drag                                                                          | Orbit around the field                                |
-| Drag with the right mouse button, or hold <Kbd keys="Shift" /> while dragging | Pan across the field                                  |
-| Scroll or pinch                                                               | Zoom toward the pointer                               |
-| Hold <Kbd keys="Shift" /> or <Kbd keys="Alt" /> while scrolling               | Pan                                                   |
-| Double-click a spot on the field or a seat in the stands                      | Orbit around that spot from now on                    |
+| Do this                                                                       | To                                 |
+| ----------------------------------------------------------------------------- | ---------------------------------- |
+| Drag                                                                          | Orbit around the field             |
+| Drag with the right mouse button, or hold <Kbd keys="Shift" /> while dragging | Pan across the field               |
+| Scroll or pinch                                                               | Zoom toward the pointer            |
+| Hold <Kbd keys="Shift" /> or <Kbd keys="Alt" /> while scrolling               | Pan                                |
+| Double-click a spot on the field or a seat in the stands                      | Orbit around that spot from now on |
 
 When you pan, the spot you pressed stays under the pointer, whether it's the field, a performer or the seats. When that spot is far away or seen at a low angle, the view pans at a steady speed instead, so it doesn't jump. Zooming heads toward whatever is under the pointer.
 
@@ -121,8 +125,12 @@ The cameras are a list you can change. It's saved in the show, one list for each
 Each row starts with the camera's number key: select it to fly there. Then comes the name, which you can change in place, and these buttons:
 
 - <Ui k="view3d.cameras.setView" />: moves the camera to where the view is now.
-- <Ui k="view3d.cameras.moveUp" /> and <Ui k="view3d.cameras.moveDown" />: change the order, and with it the number keys. The camera at the top is the one the 3D View opens on.
-- <Ui k="view3d.cameras.remove" />: removes the camera. Select <Ui k="view3d.cameras.undo" /> in the panel within a few seconds to bring it back.
+- <Ui k="view3d.cameras.moveUp" /> and <Ui k="view3d.cameras.moveDown" />:
+  change the order, and with it the number keys. The camera at the top is the
+  one the 3D View opens on.
+- <Ui k="view3d.cameras.remove" />: removes the camera. Select
+  <Ui k="view3d.cameras.undo" /> in the panel within a few seconds to bring it
+  back.
 
 A venue can have up to 30 cameras. <Ui k="view3d.cameras.reset" /> replaces your list with the venue's own cameras; if you've changed the list, it asks first, because your list isn't kept anywhere else.
 
