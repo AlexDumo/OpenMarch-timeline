@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { useTranslate } from "@tolgee/react";
+import { useTolgee } from "@tolgee/react";
 import {
     ArrowSquareOutIcon,
     BookOpenIcon,
+    BugBeetleIcon,
     CheckIcon,
     CopyIcon,
     SparkleIcon,
@@ -20,7 +21,9 @@ import { SITE_URL, siteUrl } from "@/global/siteUrl";
 import { useHelpDialogStore } from "@/stores/HelpDialogStore";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
 import { isWebBuild } from "@/utilities/webBuild";
-import { helpPrompt } from "./helpPrompt";
+import { runAction } from "@/shortcuts/registry";
+import { canSendReports } from "@/feedback/openReport";
+import { helpPrompt, helpSystem, languageName } from "./helpPrompt";
 
 /** Opens a web page in the default browser (desktop) or a new tab (web editor). */
 function openPage(url: string) {
@@ -28,9 +31,17 @@ function openPage(url: string) {
     else window.open(url, "_blank", "noopener");
 }
 
+const sectionClass =
+    "rounded-6 border-stroke flex flex-col items-start gap-8 border p-16";
+/** A one-line section: its heading and text on the left, its button on the right. */
+const rowClass =
+    "rounded-6 border-stroke flex flex-wrap items-center justify-between gap-12 border px-16 py-12";
+const headingClass = "text-body text-text flex items-center gap-6 font-medium";
+
 /**
- * Help (the ? in the title bar, F1, or Help › Get Help…): read the user guide, or copy a prompt
- * that has an AI assistant read the guide and answer, with the user's question if they typed one.
+ * Help (the ? in the title bar, F1, or Help › Get Help…): read the user guide, copy a message
+ * that has an AI assistant read the guide and answer, or report a problem. Written for band
+ * directors and drill designers, most of whom aren't technical.
  */
 export default function HelpDialog() {
     const open = useHelpDialogStore((s) => s.open);
@@ -38,54 +49,62 @@ export default function HelpDialog() {
     if (!open) return null;
     return (
         <Dialog open onOpenChange={setOpen}>
-            <DialogContent className="w-[min(34rem,90vw)]">
-                <HelpBody />
+            <DialogContent className="max-h-[90vh] w-[min(38rem,90vw)] overflow-y-auto">
+                <HelpBody close={() => setOpen(false)} />
             </DialogContent>
         </Dialog>
     );
 }
 
-function HelpBody() {
-    const { t } = useTranslate();
+function HelpBody({ close }: { close: () => void }) {
+    const { t, getLanguage } = useTolgee(["language"]);
     const basic = useIsBasicMode();
     const [question, setQuestion] = useState("");
-    // "copied" for a moment after a copy; "failed" shows the prompt to copy by hand
+    // "copied" until the question changes; "failed" shows the message to copy by hand
     const [copy, setCopy] = useState<"idle" | "copied" | "failed">("idle");
+    const [showMessage, setShowMessage] = useState(false);
 
-    const prompt = helpPrompt({
+    const message = helpPrompt({
         site: SITE_URL,
         version,
         app: isWebBuild ? "web" : "desktop",
+        system: helpSystem(isWebBuild),
         mode: basic ? "Basic" : "Expert",
+        language: languageName(getLanguage()),
         question,
     });
 
-    const copyPrompt = async () => {
+    const copyMessage = async () => {
         try {
-            await navigator.clipboard.writeText(prompt);
+            await navigator.clipboard.writeText(message);
             setCopy("copied");
-            window.setTimeout(
-                () => setCopy((c) => (c === "copied" ? "idle" : c)),
-                2000,
-            );
         } catch {
             setCopy("failed");
         }
     };
 
+    const report = () => {
+        close();
+        // The report form (fork #801); web builds that can't sign in get the guide's page
+        if (canSendReports) runAction("reportFeedback");
+        else openPage(siteUrl("/guides/start/get-help/"));
+    };
+
     return (
-        <div className="flex flex-col gap-16" data-testid="help-dialog">
+        <div className="flex flex-col gap-12" data-testid="help-dialog">
             <DialogTitle>{t("help.title")}</DialogTitle>
             <DialogDescription>{t("help.description")}</DialogDescription>
 
-            <section className="rounded-6 border-stroke flex flex-col gap-8 border p-16">
-                <h3 className="text-body text-text flex items-center gap-6 font-medium">
-                    <BookOpenIcon size={18} aria-hidden />
-                    {t("help.guide.title")}
-                </h3>
-                <p className="text-sub text-text-subtitle">
-                    {t("help.guide.body")}
-                </p>
+            <section className={rowClass}>
+                <div className="flex min-w-0 flex-1 flex-col gap-2">
+                    <h3 className={headingClass}>
+                        <BookOpenIcon size={18} aria-hidden />
+                        {t("help.guide.title")}
+                    </h3>
+                    <p className="text-sub text-text-subtitle">
+                        {t("help.guide.body")}
+                    </p>
+                </div>
                 <Button
                     size="compact"
                     variant="secondary"
@@ -96,55 +115,92 @@ function HelpBody() {
                 </Button>
             </section>
 
-            <section className="rounded-6 border-stroke flex flex-col gap-8 border p-16">
-                <h3 className="text-body text-text flex items-center gap-6 font-medium">
+            <section className={sectionClass}>
+                <h3 className={headingClass}>
                     <SparkleIcon size={18} aria-hidden />
                     {t("help.ai.title")}
                 </h3>
                 <p className="text-sub text-text-subtitle">
                     {t("help.ai.body")}
                 </p>
-                <label className="text-sub text-text flex flex-col gap-4">
+                <label className="text-sub text-text flex w-full flex-col gap-4">
                     {t("help.ai.questionLabel")}
                     <TextArea
+                        autoFocus
                         value={question}
                         onChange={(e) => {
                             setQuestion(e.target.value);
                             if (copy !== "idle") setCopy("idle");
                         }}
                         placeholder={t("help.ai.questionPlaceholder")}
-                        className="min-h-[64px] px-8 py-6"
+                        className="min-h-[48px] px-8 py-6"
                         data-testid="help-question"
                     />
                 </label>
-                <Button
-                    size="compact"
-                    onClick={() => void copyPrompt()}
-                    data-testid="help-copy-prompt"
+                <div className="flex flex-wrap items-center gap-12">
+                    <Button
+                        size="compact"
+                        onClick={() => void copyMessage()}
+                        data-testid="help-copy-prompt"
+                    >
+                        {copy === "copied" ? (
+                            <CheckIcon size={16} aria-hidden />
+                        ) : (
+                            <CopyIcon size={16} aria-hidden />
+                        )}
+                        {t("help.ai.copy")}
+                    </Button>
+                    <button
+                        type="button"
+                        className="text-sub text-text-subtitle hover:text-accent cursor-pointer underline-offset-2 hover:underline"
+                        aria-expanded={showMessage}
+                        onClick={() => setShowMessage((s) => !s)}
+                    >
+                        {t("help.ai.whatIsCopied")}
+                    </button>
+                </div>
+                <p
+                    aria-live="polite"
+                    className={
+                        copy === "copied"
+                            ? "text-sub text-text"
+                            : "text-sub text-text-subtitle"
+                    }
+                    data-testid="help-copied"
                 >
-                    {copy === "copied" ? (
-                        <CheckIcon size={16} aria-hidden />
-                    ) : (
-                        <CopyIcon size={16} aria-hidden />
-                    )}
                     {copy === "copied"
                         ? t("help.ai.copied")
-                        : t("help.ai.copy")}
-                </Button>
-                <p aria-live="polite" className="sr-only">
-                    {copy === "copied" ? t("help.ai.copied") : ""}
+                        : t("help.ai.privacy")}
                 </p>
                 {copy === "failed" && (
-                    <label className="text-sub text-text flex flex-col gap-4">
+                    <p className="text-sub text-text">
                         {t("help.ai.copyFailed")}
-                        <TextArea
-                            readOnly
-                            value={prompt}
-                            onFocus={(e) => e.currentTarget.select()}
-                            className="min-h-[120px] px-8 py-6 font-mono"
-                        />
-                    </label>
+                    </p>
                 )}
+                {(showMessage || copy === "failed") && (
+                    <TextArea
+                        readOnly
+                        aria-label={t("help.ai.whatIsCopied")}
+                        value={message}
+                        onFocus={(e) => e.currentTarget.select()}
+                        className="text-sub min-h-[160px] px-8 py-6"
+                    />
+                )}
+            </section>
+
+            <section className={rowClass}>
+                <div className="flex min-w-0 flex-1 flex-col gap-2">
+                    <h3 className={headingClass}>
+                        <BugBeetleIcon size={18} aria-hidden />
+                        {t("help.report.title")}
+                    </h3>
+                    <p className="text-sub text-text-subtitle">
+                        {t("help.report.body")}
+                    </p>
+                </div>
+                <Button size="compact" variant="secondary" onClick={report}>
+                    {t("titlebar.bugReport")}
+                </Button>
             </section>
         </div>
     );

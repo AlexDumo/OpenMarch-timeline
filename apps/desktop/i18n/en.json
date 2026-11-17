@@ -4404,20 +4404,26 @@
     },
     "help": {
         "title": "Get help",
-        "description": "Look it up in the user guide, or ask an AI assistant that reads the guide for you.",
+        "description": "Look it up in the user guide, or have an AI assistant such as ChatGPT or Claude find the answer for you.",
         "guide": {
             "title": "Read the user guide",
-            "body": "Step-by-step help for every part of OpenMarch, with pictures and clips.",
+            "body": "Step-by-step help, with pictures and clips.",
             "open": "Open the guide"
         },
         "ai": {
             "title": "Ask an AI assistant",
-            "body": "Copy a prompt and paste it into ChatGPT, Claude or another assistant. It tells the assistant to read the OpenMarch guide before answering.",
-            "questionLabel": "Your question (optional)",
-            "questionPlaceholder": "For example: how do I make marchers stand still for 8 counts?",
-            "copy": "Copy prompt",
-            "copied": "Copied",
-            "copyFailed": "Couldn't copy the prompt. Select it here and copy it yourself:"
+            "body": "Paste this message into ChatGPT, Claude or any AI assistant. It has the assistant read the OpenMarch guide before it answers.",
+            "questionLabel": "What are you trying to do? (optional)",
+            "questionPlaceholder": "For example: I want the trumpets to stand still for 8 counts, but they keep moving.",
+            "copy": "Copy message",
+            "copied": "Copied. Now paste it into your assistant.",
+            "copyFailed": "Couldn't copy it. Select the text below and copy it yourself:",
+            "whatIsCopied": "See the message",
+            "privacy": "Nothing about your show is included."
+        },
+        "report": {
+            "title": "Something not working?",
+            "body": "Tell us what happened. You can record your screen and send a copy of your show."
         }
     }
 }

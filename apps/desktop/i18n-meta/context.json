@@ -3347,9 +3347,9 @@
     "timeline.clearPage.error": "Error toast shown when clearing a page fails. Clearing a page sends the selected marchers back to where they were on the page before.",
     "actions.ui.openHelp": "Name of an action in the command palette, shortcut settings and the title bar button tooltip (a question mark icon). Opens the Help window, which offers the user guide or a prompt to copy for an AI assistant.",
     "actions.ui.openHelpKeywords": "Space-separated search words for the Get help action in the command palette. Translate each word; keep brand names such as ChatGPT and Claude.",
-    "help.ai.body": "Explains the Copy prompt button: it copies a text prompt that the user pastes into an AI chat assistant. Keep the brand names ChatGPT and Claude.",
-    "help.ai.copied": "Shown on the Copy prompt button for a moment after the prompt was copied.",
-    "help.ai.copy": "Button that copies the AI assistant prompt to the clipboard.",
+    "help.ai.body": "Explains the Copy message button below it: it copies a message (a text prompt) that the user pastes into an AI chat assistant. Keep the brand names ChatGPT and Claude.",
+    "help.ai.copied": "Shown under the Copy message button after the message was copied, until the question changes. Tells the user the next step.",
+    "help.ai.copy": "Button that copies the message for an AI assistant to the clipboard. Use an everyday word, not a technical one such as \"prompt\".",
     "help.ai.copyFailed": "Shown when copying to the clipboard failed, above a box holding the prompt for the user to copy by hand.",
     "help.ai.questionLabel": "Label of an optional text box where the user types their question; it is added to the copied prompt.",
     "help.ai.questionPlaceholder": "Example question shown greyed out in the empty question box. \"Stand still for 8 counts\" is a marching band term: hold position for eight beats.",
@@ -3359,5 +3359,9 @@
     "help.guide.open": "Button that opens the online user guide in the web browser.",
     "help.guide.title": "Heading of the first part of the Help window, about the online user guide (documentation).",
     "help.title": "Title of the Help window, opened from the question mark button in the title bar.",
-    "menu.help.openHelp": "Item in the Help menu of the menu bar. Opens the Help window. The ellipsis means it opens a window."
+    "menu.help.openHelp": "Item in the Help menu of the menu bar. Opens the Help window. The ellipsis means it opens a window.",
+    "help.ai.whatIsCopied": "Link-style button that shows or hides the full text of the message that Copy message copies.",
+    "help.ai.privacy": "Small note under the Copy message section: the copied message contains nothing from the user's show file.",
+    "help.report.title": "Heading of the third part of the Help window, for a user who came to Help because something seems broken. Its button opens the bug report form.",
+    "help.report.body": "Text under \"Something not working?\" in the Help window. The report form can record the screen and attach a copy of the show."
 }
