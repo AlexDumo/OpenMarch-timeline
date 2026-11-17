@@ -52,7 +52,7 @@ While you point at the command, before you select it, the timeline shows the hol
 
 A marcher that had its own move on the page loses it and stays still for the page. When the pages before it are Not defined for the marcher, the hold reaches back over them to its last keyframe, or to the start of the show, so it's one hold over all those pages, and a message says who is now Held and on which pages. A hold that touches another hold of the same marcher joins it.
 
-Some marchers can't be held, such as marchers placed in a shape on the page or in the middle of a move that runs past a page's flag; a message names them with the reason.
+Some marchers can't be held, such as marchers placed in a shape on the page (the shape already holds them on the pages after; see [Defined, Held, Not defined](/guides/timeline/defined-held-not-defined/#the-three-states)) or in the middle of a move that runs past a page's flag; a message names them with the reason.
 
 ## Hold from the start flag to the playhead
 
@@ -93,7 +93,7 @@ Select the marchers and use <Ui k="timeline.terms.clearThisPage" /> on the page:
 
 ## Stand or mark time on a hold
 
-In the [3D View](/guides/3d-view/open-the-3d-view/), Held marchers stand still by default. Give a hold a style of its own to have its marchers mark time instead. The style changes nothing on the field or the timeline.
+In the [3D View](/guides/3d-view/open-the-3d-view/), Held marchers do what every marcher standing still does, as <Ui k="workspaceSettings.performer.holdWhileBandMoves.label" plain /> in [Show settings](/guides/field/show-settings/) says: they stand, unless it says to mark time. Give a hold a style of its own to choose for its marchers alone. The style changes nothing on the field or the timeline.
 
 1. Put the playhead on a count inside the hold and select the marchers.
 2. In the inspector, choose from <Ui k="inspector.marcher.timeline.holdStyle.label" />: <Ui k="inspector.marcher.timeline.holdStyle.stand" />, <Ui k="inspector.marcher.timeline.holdStyle.markTime" />, <Ui k="inspector.marcher.timeline.holdStyle.highMarkTime" /> or <Ui k="inspector.marcher.timeline.holdStyle.default" />. The same choices are in the menu when you right-click a selected marcher on the field, such as <Ui k="actions.batchEdit.holdStyleMarkTime" />, and in the command palette.

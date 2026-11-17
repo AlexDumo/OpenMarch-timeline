@@ -58,11 +58,11 @@ Select marchers, then press an arrow key or <Kbd keys="W" />, <Kbd keys="A" />, 
 
 | Keys                                     | Moves the selection                                              |
 | ---------------------------------------- | ---------------------------------------------------------------- |
-| <Kbd keys="Up" /> or <Kbd keys="W" />    | One step, or one grid step when [coordinate rounding](#snap-to-a-grid-of-steps) is on, snapped to the grid |
-| <Kbd keys="Alt+Up" />                    | The same distance, without snapping                              |
+| <Kbd keys="Up" /> or <Kbd keys="W" />    | One step, landing on a whole step in that direction; one grid step, landing on the grid, when [coordinate rounding](#snap-to-a-grid-of-steps) is on |
+| <Kbd keys="Alt+Up" />                    | The same distance, exactly, from where the marchers are           |
 | <Kbd keys="Shift+Up" />                  | ¼ step, without snapping                                         |
-| <Kbd keys="Mod+Up" />                    | 4 steps, snapped to the grid                                     |
-| <Kbd keys="Mod+Alt+Up" />                | 4 steps, without snapping                                        |
+| <Kbd keys="Mod+Up" />                    | 4 steps, landing on a multiple of 4 steps from the center of the field |
+| <Kbd keys="Mod+Alt+Up" />                | Exactly 4 steps                                                  |
 | <Kbd keys="Mod+Shift+Up" />              | ⅒ step, without snapping                                         |
 
 The same keys work with the other arrows. <Kbd keys="W" />, <Kbd keys="A" />, <Kbd keys="S" /> and <Kbd keys="D" /> work on their own and with <Kbd keys="Alt" /> or <Kbd keys="Shift" />, but not with <Kbd keys="Mod" />: use the arrows for 4 steps and ⅒ step.
@@ -79,7 +79,7 @@ In the tablet layout, the inspector shows a <Ui k="inspector.marcher.move.title"
 
 ## Snap to a grid of steps
 
-In a new show nothing snaps: a dragged marcher goes exactly where the pointer puts it, and the arrow keys move it in whole steps. Coordinate rounding makes dragged marchers land on a grid of steps instead, for example every half step across the field and every step front to back.
+In a new show nothing snaps: a dragged marcher goes exactly where the pointer puts it, and an arrow key lands it on a whole step. Coordinate rounding makes dragged marchers land on a grid of steps instead, for example every half step across the field and every step front to back.
 
 <Media
   id="marchers-coordinate-rounding"
@@ -98,7 +98,7 @@ To put marchers that are off the grid onto it, select them and select <Ui k="too
 
 ## Turn snapping off
 
-To drag without snapping for a moment, hold <Kbd keys="Shift" gesture="drag" />. To turn it off for a while, select <Ui k="toolbar.alignment.snapToggleCaption" /> (the magnet) in the <Ui k="inspector.shape.alignmentTab" /> tab, or press <Kbd action="toggleSnap" />. While it's off, drags ignore coordinate rounding, the arrow keys don't round to the grid, and the round handle turns a group freely instead of in 15° steps. It comes back on when you restart OpenMarch or open a show. The same switch turns off snapping for shapes; [Snapping and modifier keys](/guides/shapes/snapping-and-modifier-keys/#turn-snapping-off) says what it does there, and when it comes back on.
+To drag without snapping for a moment, hold <Kbd keys="Shift" gesture="drag" />. To turn it off for a while, select <Ui k="toolbar.alignment.snapToggleCaption" /> (the magnet) in the <Ui k="inspector.shape.alignmentTab" /> tab, or press <Kbd action="toggleSnap" />; [Snapping and modifier keys](/guides/shapes/snapping-and-modifier-keys/#turn-snapping-off) says what it turns off and when it comes back on.
 
 ## Move in one direction only
 

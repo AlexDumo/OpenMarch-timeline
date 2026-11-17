@@ -78,7 +78,7 @@
         "chapter": "3d-view",
         "kind": "clip",
         "width": 1280,
-        "height": 730,
+        "height": 982,
         "seconds": 6.3
     },
     "3d-props-edit": {
@@ -348,8 +348,8 @@
     "music-add": {
         "chapter": "music",
         "kind": "still",
-        "width": 1600,
-        "height": 50
+        "width": 964,
+        "height": 80
     },
     "music-count-ask": {
         "chapter": "music",
@@ -435,7 +435,7 @@
         "chapter": "music",
         "kind": "still",
         "width": 1600,
-        "height": 222
+        "height": 344
     },
     "reference-shortcut-settings": {
         "chapter": "reference",
@@ -578,7 +578,7 @@
         "kind": "clip",
         "width": 1280,
         "height": 800,
-        "seconds": 5.1
+        "seconds": 7.1
     },
     "start-basic-expert-mark": {
         "chapter": "start",
@@ -597,7 +597,7 @@
         "kind": "clip",
         "width": 1280,
         "height": 782,
-        "seconds": 7.2
+        "seconds": 7.6
     },
     "start-first-show-move": {
         "chapter": "start",
@@ -662,12 +662,24 @@
         "width": 916,
         "height": 236
     },
+    "timeline-clear-page-menu": {
+        "chapter": "timeline",
+        "kind": "still",
+        "width": 608,
+        "height": 616
+    },
     "timeline-cross-pages": {
         "chapter": "timeline",
         "kind": "clip",
-        "width": 1280,
-        "height": 516,
+        "width": 1032,
+        "height": 808,
         "seconds": 6.9
+    },
+    "timeline-cross-pages-message": {
+        "chapter": "timeline",
+        "kind": "still",
+        "width": 648,
+        "height": 188
     },
     "timeline-held": {
         "chapter": "timeline",
@@ -678,8 +690,8 @@
     "timeline-hold-drag": {
         "chapter": "timeline",
         "kind": "clip",
-        "width": 1184,
-        "height": 1016,
+        "width": 888,
+        "height": 716,
         "seconds": 5.7
     },
     "timeline-hold-end": {
@@ -693,7 +705,7 @@
         "chapter": "timeline",
         "kind": "clip",
         "width": 1184,
-        "height": 716,
+        "height": 876,
         "seconds": 6.4
     },
     "timeline-hold-style": {
@@ -733,7 +745,7 @@
         "chapter": "timeline",
         "kind": "clip",
         "width": 944,
-        "height": 340,
+        "height": 480,
         "seconds": 6
     },
     "timeline-move-menu": {
@@ -788,8 +800,8 @@
     "timeline-paths": {
         "chapter": "timeline",
         "kind": "still",
-        "width": 1032,
-        "height": 532
+        "width": 680,
+        "height": 400
     },
     "timeline-play-guide": {
         "chapter": "timeline",
