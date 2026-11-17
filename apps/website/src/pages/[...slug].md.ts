@@ -27,7 +27,11 @@ export const GET: APIRoute<{ entry: CollectionEntry<"docs"> }> = async (
     const { entry } = context.props;
     const parts = [`# ${entry.data.title}`];
     if (entry.data.description) parts.push(`> ${entry.data.description}`);
-    parts.push(await entryToSimpleMarkdown(entry, context, false));
+    // Root-relative links and pictures become full addresses, so a picture, clip or page link
+    // an agent passes on to someone still opens (`/docs/media/…` alone means nothing in a chat)
+    const origin = new URL(context.site ?? "https://openmarch.com").origin;
+    const body = await entryToSimpleMarkdown(entry, context, false);
+    parts.push(body.replace(/\]\(\/(?!\/)/g, `](${origin}/`));
     parts.push(`Source: ${new URL(`/${entry.id}/`, context.site).href}`);
     return new Response(`${parts.join("\n\n")}\n`, {
         headers: { "Content-Type": "text/markdown; charset=utf-8" },

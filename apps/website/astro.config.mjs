@@ -6,6 +6,7 @@ import starlight from "@astrojs/starlight";
 import yeskunallumami from "@yeskunall/astro-umami";
 import starlightImageZoom from "starlight-image-zoom";
 import starlightLlmsTxt from "starlight-llms-txt";
+import { llmsGuideFiles } from "./scripts/llms-guide-files.mjs";
 
 import tailwindcss from "@tailwindcss/vite";
 import { readFileSync, readdirSync } from "node:fs";
@@ -160,6 +161,17 @@ export default defineConfig({
         "/terms": "/legal/terms",
     },
     integrations: [
+        llmsGuideFiles({
+            site,
+            intro: "OpenMarch is free, open-source drill writing software for marching bands. This is its user guide, the same pages people read at openmarch.com/guides. Labels in **bold** are the app's own text; shortcuts are written in Windows and Linux keys, with the Mac keys after them.",
+            chapters: [
+                { label: "Welcome", pages: ["guides"] },
+                ...guideChapters.map((chapter) => ({
+                    label: chapter.label,
+                    pages: chapterPages(chapter.dir).map((page) => page.id),
+                })),
+            ],
+        }),
         react(),
         starlight({
             plugins: [
