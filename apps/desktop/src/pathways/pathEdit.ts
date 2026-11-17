@@ -288,9 +288,14 @@ export function pathHandles(
     // An arc leg's middle is its bulge handle instead (AP-T11): drawn on a bar from the chord's
     // middle, the sagitta it sets
     const all = pathPoints(shape);
-    const midpoints = Array.from(
+    // A leg with no length has no middle to grab: a dragged-out trail's last leg, which ends on
+    // its own last point (AP-T10), would put one on that point's handle
+    const legs = Array.from(
         { length: shape.points.length + 1 },
-        (_, i): ToolHandle =>
+        (_, i) => i,
+    ).filter((i) => all[i]!.x !== all[i + 1]!.x || all[i]!.y !== all[i + 1]!.y);
+    const midpoints = legs.map(
+        (i): ToolHandle =>
             isArcLeg(shape, i)
                 ? {
                       key: bulgeKey(i),

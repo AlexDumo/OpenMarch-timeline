@@ -35,6 +35,11 @@ import { runAction } from "@/shortcuts/registry";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import { getActionShortcutKeys } from "@/shortcuts/labels";
 import { fieldToElement, useFieldViewStore } from "@/field/three/fieldView";
+import {
+    fieldBeat,
+    useTimelineSelectionStore,
+} from "@/stores/TimelineSelectionStore";
+import { usePositionAt } from "@/timeline/timelineStore";
 import { stackedPlacement } from "@/shapes/editor/editorPlacement";
 import { useShapeEditorRect } from "@/shapes/editor/shapeEditorRect";
 import {
@@ -317,22 +322,92 @@ function useBarSize(
     return size;
 }
 
+/** The timeline's `[x, y]` as a field point */
+const pointOrNull = (p: readonly [number, number] | null): XY | null =>
+    p ? { x: p[0], y: p[1] } : null;
+
+/** How far the leader's mark sits from the leader's dot, screen px: above it, or below it */
+const LEADER_MARK_ABOVE_PX = 40;
+const LEADER_MARK_BELOW_PX = 22;
+
 /**
- * The leader's mark (pathways step 4): a chip by where the leader starts, naming who leads. On a
- * stored trail its button turns the line around (Reverse, one undo step), also the way for a
- * finger or a pencil. It sits above the leader's dot and takes no room in the path bar.
+ * The beats the leader's mark reads the leader at (owner, 2026-11-17): the field's beat held to the
+ * trail's move, and a beat either side within it, for which way the leader walks there
+ */
+export function leaderMarkBeats(
+    target: Pick<PathSession["target"], "start" | "end">,
+    beat: number,
+): { at: number; back: number; on: number } {
+    const at = Math.min(Math.max(beat, target.start), target.end);
+    return {
+        at,
+        back: Math.max(target.start, at - 1),
+        on: Math.min(target.end, at + 1),
+    };
+}
+
+/**
+ * Where the leader's mark goes (pathways step 4; owner, 2026-11-17): by the leader where the field
+ * shows it (`read`, at `leaderMarkBeats`), so it follows the leader as the playhead scrubs and sits
+ * by the line's head at the move's end. While the trail is drawn (the Follow tool's drag, the pen)
+ * the field shows the plan, not the move, so it stays where the leader starts. `below` when the
+ * leader walks up the screen there, so the mark stays clear of the head's arrow and the way ahead.
+ */
+export function leaderMarkPlace(
+    session: Pick<PathSession, "target" | "phase" | "follow">,
+    read: { at: XY | null; back: XY | null; on: XY | null },
+): { at: XY; below: boolean } {
+    const leader = session.target.trail!.members.at(-1)!;
+    if (session.phase === "drawing" || session.follow || !read.at)
+        return { at: leader.from, below: false };
+    const at = read.at;
+    // The way it walks: from a beat before to here, or at the move's start from here to a beat on
+    const moved = (p: XY | null): p is XY =>
+        !!p && (p.x !== at.x || p.y !== at.y);
+    const [a, b] = moved(read.back)
+        ? [read.back, at]
+        : moved(read.on)
+          ? [at, read.on]
+          : [at, at];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    // The field's y grows down the screen, as the overlay draws it
+    return { at, below: dy < 0 && Math.abs(dy) > Math.abs(dx) };
+}
+
+/**
+ * The leader's mark (pathways step 4): a chip by the leader, naming who leads: where it starts
+ * while the trail is drawn, else where it is at the playhead (`leaderMarkPlace`). On a stored
+ * trail its button turns the line around (Reverse, one undo step), also the way for a finger or a
+ * pencil. It sits above the leader's dot (below it when the leader walks up the screen) and takes
+ * no room in the path bar.
  */
 function TrailLeaderMark({ session }: { session: PathSession }) {
     const view = useFieldViewStore();
     const trail = session.target.trail!;
     const leader = trail.members.at(-1)!;
-    const at = fieldToElement(view, leader.from.x, leader.from.y);
+    const beats = leaderMarkBeats(
+        session.target,
+        useTimelineSelectionStore(fieldBeat),
+    );
+    const place = leaderMarkPlace(session, {
+        at: pointOrNull(usePositionAt(leader.marcherId, beats.at)),
+        back: pointOrNull(usePositionAt(leader.marcherId, beats.back)),
+        on: pointOrNull(usePositionAt(leader.marcherId, beats.on)),
+    });
+    const at = fieldToElement(view, place.at.x, place.at.y);
     const stored =
         session.target.routeId !== null && session.phase !== "drawing";
     return (
         <div
             className="rounded-6 border-stroke bg-modal text-sub text-text shadow-modal absolute z-10 flex -translate-x-1/2 items-center gap-4 border py-2 pr-2 pl-6 whitespace-nowrap"
-            style={{ left: at.x, top: at.y - 40 }}
+            style={{
+                left: at.x,
+                top: place.below
+                    ? at.y + LEADER_MARK_BELOW_PX
+                    : at.y - LEADER_MARK_ABOVE_PX,
+            }}
+            data-below={place.below || undefined}
             data-testid="trail-leader"
             data-leader={leader.marcherId}
             onPointerDown={(e) => e.stopPropagation()}

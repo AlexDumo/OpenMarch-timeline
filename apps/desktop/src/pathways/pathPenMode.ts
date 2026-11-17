@@ -1497,7 +1497,8 @@ function buildDrawing(
         view === "whole" && session.phase === "closed" && isLoose(session);
     const noLine = view === "selected" || view === "adjust" || looseQuiet;
     const middle = session.points.map((c) => c.at);
-    // While drawing, the next leg runs to where the next point would land, straight
+    // While drawing, the next leg runs to where the next point would land, straight, then on to
+    // the end; a dragged-out trail drawn again ends at the pointer (AP-T10: no end spot to enter)
     const outline = noLine
         ? null
         : drawingNow && pointer
@@ -1507,7 +1508,7 @@ function buildDrawing(
                     to: pointer,
                     ends: { from: shape.from, to: pointer },
                 }),
-                target.to,
+                ...(target.trail?.along ? [] : [target.to]),
             ]
           : pathOutline(shape);
     // While a press-and-drag shapes the point just placed, its tangent bar

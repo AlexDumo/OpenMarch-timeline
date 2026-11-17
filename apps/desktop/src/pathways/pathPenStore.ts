@@ -579,6 +579,19 @@ export function shapeOf(s: PathSession): PathShape {
         shapes.set(s, shape);
         return shape;
     }
+    // A stored dragged-out trail too (AP-T10): its route runs to its own last point, as the write
+    // keeps it, never on from the head to the tail's end spot (the entrance `target.to` names)
+    if (target.trail?.along) {
+        const to = points.at(-1)?.at ?? target.from;
+        shape = {
+            from: target.from,
+            to,
+            points,
+            ends: { from: target.from, to },
+        };
+        shapes.set(s, shape);
+        return shape;
+    }
     const ends = target.ends;
     const last = target.points.length - 1;
     shape = {
