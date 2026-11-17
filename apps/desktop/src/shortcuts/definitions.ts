@@ -1119,6 +1119,24 @@ const STATIC_ACTIONS = {
         defaultBindings: [],
         ignoreRepeat: true,
     },
+    // Pathways step 11 (spec L.12, SN-2): which way a box with no order of its own snakes, row by
+    // row or column by column, in the Follow tool and for Ripple in into a box. No keys
+    followSnakeRows: {
+        labelKey: "actions.path.snakeRows",
+        keywordsKey: "actions.path.snakeKeywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    followSnakeColumns: {
+        labelKey: "actions.path.snakeColumns",
+        keywordsKey: "actions.path.snakeKeywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
     reverseTrail: {
         labelKey: "actions.path.reverse",
         keywordsKey: "actions.path.followKeywords",

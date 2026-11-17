@@ -31,6 +31,7 @@ import { toolEnvFor } from "@/shapes/tool/toolEnv";
 import type { ToolEnv } from "@/shapes/tool/toolKind";
 import type { XY } from "@/shapes/types";
 import { drawnAsGroup, type PathTarget } from "./pathTarget";
+import { snakeFrom } from "@/db-functions/timelineTrailSnake";
 import {
     aroundArrows,
     aroundLine,
@@ -52,6 +53,7 @@ import {
     rippleEndAt,
     ripplesIn,
     trailLine,
+    snakeByOf,
     type FollowDrag,
 } from "./followDrag";
 import tolgee from "@/global/singletons/Tolgee";
@@ -1309,7 +1311,6 @@ function followDrawing(session: PathSession): FieldModeDrawing {
           );
     const moving = grabbed ? session.pointer : null;
     const tipText = moving ? drillTerms(moving) : null;
-    const leaderLabel = tolgee.t("pathways.rings.leader", "Leads the line");
     return {
         outline,
         openOutline: true,
@@ -1321,36 +1322,21 @@ function followDrawing(session: PathSession): FieldModeDrawing {
         addHandles: [],
         selectedHandles: [],
         rings: [],
-        lanes: [starts, ...(trail ? [spots] : [])].filter((l) => l.length > 1),
+        // A box before a corner is grabbed (step 11): no line-up yet, since its snake runs from
+        // whichever corner is grabbed; the corners' arrows say which way
+        lanes: [
+            ...(grabbed || !lineOf(follow).box ? [starts] : []),
+            ...(trail ? [spots] : []),
+        ].filter((l) => l.length > 1),
         memberRings: line.map((id, q) => {
-            const end = ends.includes(id);
+            const end = !grabbed && ends.includes(id);
+            const leads = grabbed ? id === follow.grabbed : end;
             return {
                 at: starts[q]!,
                 marcherId: id,
-                kind: grabbed
-                    ? id === follow.grabbed
-                        ? "own"
-                        : "group"
-                    : end
-                      ? "own"
-                      : "group",
-                label: grabbed
-                    ? id === follow.grabbed
-                        ? leaderLabel
-                        : tolgee.t(
-                              "pathways.rings.follower",
-                              "Follows the leader",
-                          )
-                    : end
-                      ? tolgee.t(
-                            "pathways.rings.dragEnd",
-                            "Drag a trail out of this end",
-                        )
-                      : tolgee.t(
-                            "pathways.rings.follower",
-                            "Follows the leader",
-                        ),
-                ...(!grabbed && end ? { pulse: true } : {}),
+                kind: leads ? "own" : "group",
+                label: followRingLabel(follow, grabbed, leads),
+                ...(end ? { pulse: true } : {}),
             };
         }),
         ...(grabbed ? {} : { pullArrows: pullArrowsOf(follow) }),
@@ -1359,6 +1345,26 @@ function followDrawing(session: PathSession): FieldModeDrawing {
         ...grabEndTip(follow),
         ...realMarchers(session, starts, line, keep ? spots : null),
     };
+}
+
+/**
+ * A Follow ring's label (step 4d): the leader once grabbed, else the ends to drag from (a box's
+ * corners, step 11), everyone else a follower
+ */
+function followRingLabel(
+    follow: FollowDrag,
+    grabbed: boolean,
+    leads: boolean,
+): string {
+    if (!leads)
+        return tolgee.t("pathways.rings.follower", "Follows the leader");
+    if (grabbed) return tolgee.t("pathways.rings.leader", "Leads the line");
+    return lineOf(follow).box
+        ? tolgee.t(
+              "pathways.rings.dragCorner",
+              "Drag a trail out of this corner",
+          )
+        : tolgee.t("pathways.rings.dragEnd", "Drag a trail out of this end");
 }
 
 /**
@@ -1404,29 +1410,39 @@ function grabEndTip(follow: FollowDrag): Pick<FieldModeDrawing, "tip"> {
     return {
         tip: {
             at: lineOf(follow).starts.get(follow.hover)!,
-            text: tolgee.t(
-                "pathways.rings.grabEnd",
-                "Drag from an end of the line",
-            ),
+            text: lineOf(follow).box
+                ? tolgee.t(
+                      "pathways.rings.grabCorner",
+                      "Drag from a corner of the box",
+                  )
+                : tolgee.t(
+                      "pathways.rings.grabEnd",
+                      "Drag from an end of the line",
+                  ),
         },
     };
 }
 
 /**
  * Step 4d's grab cue: on each end of the line, chevrons pointing out along the line's own way
- * there, from the marcher next to it to the end. None for a line of one, which has no way.
+ * there, from the marcher next to it to the end. None for a line of one, which has no way. A box
+ * (step 11) has them on each corner, out along its snake's first row or column (SN-2).
  */
 function pullArrowsOf(
     follow: FollowDrag,
 ): NonNullable<FieldModeDrawing["pullArrows"]> {
-    const { order, starts } = lineOf(follow);
+    const { order, starts, box } = lineOf(follow);
     if (order.length < 2) return [];
-    return (
-        [
-            [order[0]!, order[1]!],
-            [order.at(-1)!, order.at(-2)!],
-        ] as const
-    ).flatMap(([end, next]) => {
+    const pairs: (readonly [number, number])[] = box
+        ? followEnds(follow).flatMap((end) => {
+              const next = snakeFrom(box, snakeByOf(follow), end)?.[1];
+              return next === undefined ? [] : [[end, next] as const];
+          })
+        : [
+              [order[0]!, order[1]!],
+              [order.at(-1)!, order.at(-2)!],
+          ];
+    return pairs.flatMap(([end, next]) => {
         const at = starts.get(end)!;
         const from = starts.get(next)!;
         const d = Math.hypot(at.x - from.x, at.y - from.y);

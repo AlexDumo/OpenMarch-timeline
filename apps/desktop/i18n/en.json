@@ -298,7 +298,10 @@
             "roundSpots": "Go around by spots",
             "roundSteps": "Go around by steps",
             "recenter": "Re-center group path",
-            "recenterLoose": "Re-center path"
+            "recenterLoose": "Re-center path",
+            "snakeRows": "Snake row by row",
+            "snakeColumns": "Snake column by column",
+            "snakeKeywords": "snake box rows columns order follow leader serpentine zigzag block"
         }
     },
     "analyticsOptIn": {
@@ -2939,14 +2942,14 @@
                 "split": "{move} can't be split at a count while a line follows a trail. Remove the trail first, or split before choosing Follow",
                 "removeTrailFirst": "{move} follows a drawn trail: remove the trail first",
                 "noTrail": "This trail is gone",
-                "notFitted": "Select marchers standing in a line, curve or arc to drag out a trail",
+                "notFitted": "Select marchers standing in a line, curve, arc or box to drag out a trail",
                 "notAnEnd": "Drag the trail out of an end of the line",
                 "tooShort": "Draw a longer trail",
                 "evenTooWide": "Even spacing can be at most {limit} steps here, or someone would walk backward",
                 "noSpots": "Keep end spots needs every marcher in one move with spots there",
-                "notAForm": "Their end spots don't stand in a line, curve or arc, so the line can't ripple into them",
-                "formLoop": "Their end spots close into a loop (a circle or a box outline). Rippling around an outline comes in a later step",
-                "formFold": "Their end spots fold back close to themselves (a sharp V, or rows through a box), so the line would pass close by itself. Rippling along a snake comes in a later step",
+                "notAForm": "Their end spots don't stand in a line, curve, arc or box, so the line can't ripple into them",
+                "formLoop": "Their end spots close into a loop (a circle), so the line can't ripple into them yet. Rippling around a circle comes in a later step",
+                "formFold": "Their end spots fold back close to themselves (a sharp V), so the line would pass close by itself",
                 "formOverlap": "Their end spots lie on the line where it stands, so the line would walk back through itself. Move the end spots off the line first",
                 "notOneMove": "{marcher} can't join the rest of the line in one move here, so nothing was changed",
                 "noWindow": "Move the playhead past the start flag to drag out a trail",
@@ -4592,7 +4595,12 @@
             "drawPath": "Draw path",
             "rejoinCount": "Rejoin {count}",
             "more": "More path commands",
-            "looseLabel": "{count} paths"
+            "looseLabel": "{count} paths",
+            "snake": "Snake order",
+            "snakeRowsTip": "Snake row by row: along the corner's row, then back along the next",
+            "snakeRows": "Rows",
+            "snakeColumnsTip": "Snake column by column: along the corner's column, then back along the next",
+            "snakeColumns": "Columns"
         },
         "menu": {
             "pointType": "Corner type",
@@ -4625,7 +4633,8 @@
             "followTwo": "Select the marchers of a line (two or more) to follow a trail",
             "followTwoMoves": "These marchers are in different moves at the playhead: select marchers of one move to follow a trail",
             "goAroundSelect": "Select marchers on a circle or box outline",
-            "goAroundOnly": "This line can only go around: it has no ends to drag a trail out of"
+            "goAroundOnly": "This line can only go around: it has no ends to drag a trail out of",
+            "snakeNeedsBox": "Snake order is for a box with no order of its own: open Follow on marchers standing in a box, or ripple into one"
         },
         "banner": {
             "drawingPoints": "{marcher}'s path: click for a corner, drag for a smooth point · Right-click or <keys></keys> removes the last · Double-click to finish · <esc></esc> to cancel",
@@ -4636,7 +4645,8 @@
             "goRound": "Go around: {count} marchers follow {marcher} around the {shape} · <enter></enter> to finish · <esc></esc> to leave",
             "circle": "circle",
             "boxOutline": "box outline",
-            "rippleDrawing": "Ripple in, {marcher} leading: click an end of the form to go straight in, or click for corners first · Double-click to finish · <esc></esc> to cancel"
+            "rippleDrawing": "Ripple in, {marcher} leading: click an end of the form to go straight in, or click for corners first · Double-click to finish · <esc></esc> to cancel",
+            "followGrabBox": "Follow: drag a trail out of a corner of the box, and the box snakes out after it · <esc></esc> to leave"
         },
         "toolbar": {
             "path": "Path",
@@ -4670,7 +4680,9 @@
             "leader": "Leads the line",
             "follower": "Follows the leader",
             "dragEnd": "Drag a trail out of this end",
-            "grabEnd": "Drag from an end of the line"
+            "grabEnd": "Drag from an end of the line",
+            "dragCorner": "Drag a trail out of this corner",
+            "grabCorner": "Drag from a corner of the box"
         },
         "lanes": {
             "hover": "{marcher}'s line",

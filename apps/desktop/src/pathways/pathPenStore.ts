@@ -62,6 +62,7 @@ import {
     intoEndSpots,
     rippleDrawnPlanOf,
     ripplesIn,
+    snakeByOf,
     type FollowDrag,
 } from "./followDrag";
 import { goRound } from "@/db-functions/timelineTrailAround";
@@ -1384,6 +1385,7 @@ async function saveFollow(
             points,
             keepMove: follow.keep?.timelineId ?? null,
             enter,
+            snake: snakeByOf(follow),
         });
     else
         await dragTrail({
@@ -1396,6 +1398,7 @@ async function saveFollow(
             step: follow.step,
             ends: follow.ends === "keep" ? "keep" : "trail",
             keepMove: follow.keep?.timelineId ?? null,
+            snake: snakeByOf(follow),
         });
     invalidatePlacedBoxes();
 }

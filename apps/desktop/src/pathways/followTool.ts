@@ -28,6 +28,7 @@ import {
     rippleFormProblem,
     rippleRefusal,
 } from "@/db-functions/timelineTrailRipplePlan";
+import { mapCells } from "@/db-functions/timelineTrailSnake";
 import type { DbConnection } from "@/db-functions/types";
 import { isBasicMode } from "@/stores/EditorModeStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
@@ -129,6 +130,10 @@ export async function followKeepAt(
                           ]),
                       ),
                       order: tailFirstOf(along).map((i) => sorted[i]!),
+                      // A box with no remembered order there snakes from a corner (step 11)
+                      ...(along.box
+                          ? { box: mapCells(along.box, (i) => sorted[i]!) }
+                          : {}),
                   },
               }
             : {}),
@@ -206,8 +211,9 @@ export async function openFollowTool(
         sorted.map((m, i) => [m, { x: starts[i]![0], y: starts[i]![1] }]),
     );
     const step = field.fieldProperties.pixelsPerStep;
-    // On a closed outline (step 10, DO-1): Go round, refused only for its own reasons
-    const remembered = along?.leaderFirst ? tailFirst : null;
+    // On a closed outline (step 10, DO-1): Go round, refused only for its own reasons. A box's
+    // default snake (step 11) isn't a remembered order, so it doesn't set the way round
+    const remembered = along?.leaderFirst && !along.box ? tailFirst : null;
     const canDrag = dragRefusal === null;
     const base = { ids: sorted, starts: at, step, window };
     const offer = await goRoundOffer(resolver, {
@@ -241,6 +247,9 @@ export async function openFollowTool(
         formWhy,
         step,
         around,
+        // A box with no remembered order (step 11, SN-2): every corner an end, row by row first
+        box: along?.box ? mapCells(along.box, (i) => sorted[i]!) : null,
+        snakeBy: "rows",
     };
     const order = tailFirst ?? aroundLine(follow, aroundPlanOf(follow)!);
     if (!tailFirst) Object.assign(follow, { order });

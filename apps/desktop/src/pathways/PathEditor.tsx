@@ -12,6 +12,7 @@ import {
     ArrowsSplitIcon,
     BackspaceIcon,
     BezierCurveIcon,
+    ColumnsIcon,
     DotsThreeIcon,
     FlagPennantIcon,
     PlayIcon,
@@ -19,6 +20,7 @@ import {
     PathIcon,
     PencilSimpleIcon,
     PenNibIcon,
+    RowsIcon,
     TrashIcon,
     UsersThreeIcon,
     WarningIcon,
@@ -69,6 +71,9 @@ import {
     rippleDrawnPlanOf,
     ripplesIn,
     setFollowSpacing,
+    lineOf,
+    snakeByOf,
+    snakesThroughBox,
 } from "./followDrag";
 import {
     aroundPlanOf,
@@ -460,6 +465,14 @@ function PathPenBanner({ session }: { session: PathSession }) {
                         esc,
                     }}
                 />
+            ) : session.follow &&
+              session.follow.grabbed === null &&
+              lineOf(session.follow).box ? (
+                <T
+                    keyName="pathways.banner.followGrabBox"
+                    defaultValue="Follow: drag a trail out of a corner of the box, and the box snakes out after it · <esc></esc> to leave"
+                    params={{ esc }}
+                />
             ) : session.follow && session.follow.grabbed === null ? (
                 <T
                     keyName="pathways.banner.followGrab"
@@ -684,6 +697,11 @@ function PathEditorBar({
                     {goingRound(session.follow) && (
                         <GoRoundControls session={session} />
                     )}
+                    {session.follow &&
+                        !goingRound(session.follow) &&
+                        snakesThroughBox(session.follow) && (
+                            <SnakeChoice session={session} />
+                        )}
                     {session.follow && session.follow.grabbed !== null && (
                         <FollowControls session={session} />
                     )}
@@ -1525,6 +1543,53 @@ function GoRoundControls({ session }: { session: PathSession }) {
                     <Divider />
                 </>
             )}
+        </>
+    );
+}
+
+/**
+ * Snake order on the path bar (step 11, SN-2): a box with no remembered order snakes row by row
+ * (the default) or column by column from the corner dragged out of, and Ripple in deals into a
+ * box the same way (SN-4). Each a registered command. Set order (Shift+O) sets any other order.
+ */
+function SnakeChoice({ session }: { session: PathSession }) {
+    const by = snakeByOf(session.follow!);
+    return (
+        <>
+            <span
+                className="flex items-center gap-2"
+                role="group"
+                aria-label={tolgee.t("pathways.editor.snake", "Snake order")}
+                data-testid="follow-snake"
+            >
+                <IconButton
+                    label={tolgee.t(
+                        "pathways.editor.snakeRowsTip",
+                        "Snake row by row: along the corner's row, then back along the next",
+                    )}
+                    action="followSnakeRows"
+                    pressed={by === "rows"}
+                    onClick={() => runAction("followSnakeRows")}
+                    testId="follow-snake-rows"
+                >
+                    <RowsIcon size={14} />
+                    {tolgee.t("pathways.editor.snakeRows", "Rows")}
+                </IconButton>
+                <IconButton
+                    label={tolgee.t(
+                        "pathways.editor.snakeColumnsTip",
+                        "Snake column by column: along the corner's column, then back along the next",
+                    )}
+                    action="followSnakeColumns"
+                    pressed={by === "columns"}
+                    onClick={() => runAction("followSnakeColumns")}
+                    testId="follow-snake-columns"
+                >
+                    <ColumnsIcon size={14} />
+                    {tolgee.t("pathways.editor.snakeColumns", "Columns")}
+                </IconButton>
+            </span>
+            <Divider />
         </>
     );
 }

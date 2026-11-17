@@ -3958,3 +3958,62 @@ trail is dragged out of it (L.3's open item); reading a placed shape's own outli
 fitting one, and linking the move to it (O-13); a line along part of a box outline (it can't be
 fitted from the line alone); Adjust on an outline (27); corner counts on a box outline's corners
 (step 6's chips read only open trails).
+
+### L.12 Step 11: snaking through a box (as built)
+
+**Change (plan step 11; built 2026-11-16 on the owner's decisions of that day, README O-27 and
+O-29).** A box is a line too: its marchers follow each other out of it **along a snake**, row by
+row, and a line that ripples into a box is dealt along the box's snake. There is no separate
+"advance N spots" mode: the exit is step 4b's Follow drag out of an end, and the snake is only the
+line's **order**, so everything step 4b, step 4f and step 9 do with an order applies unchanged.
+Precedents: a spreadsheet's print page order ("Over, then down" or "Down, then over") and Figma's
+auto layout with wrap, which lay a grid out row first or column first; a hand-set order wins, as a
+custom sort does.
+
+| ID   | Decision |
+| ---- | -------- |
+| SN-1 | **What a box is** (`boxCellsOf`): four marchers or more in two or more rows and two or more columns, square to each other and turned any way (the turn read from each marcher's nearest neighbor, folded to a quarter turn), evenly spaced each way (within a quarter), every marcher within a quarter of the usual spacing of its row and its column, one to a cell, and no more than a quarter of the cells empty (**holes**). Rows are the box's side nearer the field's side to side; they run top to bottom and columns left to right as the field is shown. A line, an arc, a curve or a scatter isn't one; a box outline is a box with holes while those are no more than a quarter of its cells (3 × 3 and 4 × 4 outlines), and a loop beyond that. |
+| SN-2 | **The default snake.** A box with **no remembered order** (step 4f) gets a snake: along the corner's row, then back the other way along the next row, and so on (**Rows**, the default); **Columns** is the same down the columns. In the Follow tool **every corner is an end**: the corner pressed leads, and the line is the snake from it. A corner that is a hole starts at the first marcher its snake meets. The bar's **Snake order: Rows \| Columns** (and the commands Snake row by row, Snake column by column) re-runs it from the same corner. A **hand-set or remembered order always wins**: the box is then a line with two ends, like any other, and Set order (Shift+O) can set any order. Show order draws a box's guess as the Rows snake from its top left, faded and dashed like any guess. |
+| SN-3 | **Row ends cut straight across** to the first spot of the next row, as the line-up already draws: the snake is an order, and the line-up and R-13′'s destination path are the chords through it. No rounding; per-corner rounding is a later step. |
+| SN-4 | **Ripple into a box** (step 9, RP-2 to RP-4) deals the end spots **along the destination's snake**: the snake starts at the destination **corner nearest where the connector arrives** (the last point placed, or the pointer while drawing, or the leader's start with nothing drawn; a finish on a corner's spot enters there), the **tail takes that entrance spot and the leader ends at the snake's far end**, step 9's rule. Rows and Columns apply to it as to a box the line stands in. A box whose end spots have a remembered order is dealt along that order from its nearer end, as any form. Only the box refusal is lifted: a box skips RP-2's "not a form", loop and fold checks, and keeps the overlap check (spots on the line itself). Folds that aren't boxes (a sharp V) and circles keep their refusals; rippling round a circle (L.11's proposal) is still later. |
+| SN-5 | **Counts always match.** The destination is still the marchers' own end spots, so there is no "more spots than marchers" or "fewer spots" case. A hole in the end box is passed through: the destination path runs straight across it between the spots either side, and nobody stops there. A hole in the box the line stands in is the same: the gap along the snake is two spacings, kept by Keep spacing. |
+| SN-6 | **Storage: none.** No column, no migration, no file version, no resolver change. A drag out of a box writes step 4b's move (AP-T8, `ends: "along"`, the line in snake order) and Ripple in writes step 9's (AP-T12); after that the line's order is remembered from its trail as any trail's is (step 4f), so the next Follow on the same marchers reads it, box or not. |
+
+**Procedures.** `followOrderAt` (AP-T8's and AP-T12's order, and the tool's) answers a remembered
+order first; else, for a box, its snake (`snake.by`, rows by default) from the corner of the given
+leader (the top left when none), as `leaderFirst` with the box's cells; else `followSource`'s
+guess. `TrailDragInput.snake` and `RippleInput.snake` carry Rows or Columns from the bar to the
+write, so the write runs the same snake the drawing shows. `rippleFormAt` hands Ripple in a box's
+cells (`RippleForm.snake`); `rippleEntrance` then picks the nearest corner and `planRipple` deals
+along `snakeFrom` from it.
+
+**On the field.** Before a corner is pressed, each corner's ring pulses with chevrons pointing out
+along its snake's first row (or column, with Columns), and no line-up is drawn, since the snake
+runs from whichever corner is pressed; a marcher inside the box says "Drag from a corner of the
+box". The banner reads "Follow: drag a trail out of a corner of the box, and the box snakes out
+after it". Once a corner is pressed it is step 4b's drawing: the thin line-up is the snake, cut
+straight across each row end, and the line follows the pointer. The path bar shows **Snake
+order: Rows | Columns** while the line is a box with no order, or ripples into one. Pencil and
+finger: the corners are rings to drag from; Rows and Columns are buttons; nothing needs hover or a
+modifier.
+
+| ID       | Case | Expected |
+| -------- | ---- | -------- |
+| QA-SN-1  | A 3 × 4 box, listed in any order; spaced 2 by 4 steps; turned 20° | Three rows of four, top to bottom and left to right; the same cells; rows kept when turned |
+| QA-SN-2  | A 3 × 3 box, Rows, from each corner | Along the corner's row, then back along the next; every marcher once |
+| QA-SN-3  | The same, Columns | Down (or up) the corner's column, then back along the next |
+| QA-SN-4  | A hole in the middle; a hole on a corner; a line, an arc, a scatter, too many holes, uneven columns | The snake passes the hole; the corner starts at the next marcher; none of the others is a box |
+| QA-SN-5  | Eight in a 2 × 4 box, no order; drag out of the top-left corner two spots' worth (4 steps) | The top row then the bottom row, run back; everyone 4 steps on along the snake, row ends cut across; the tail's two spots empty |
+| QA-SN-6  | The same, 20 steps | Everyone out of the box on the trail, two steps apart, leader first |
+| QA-SN-7  | A middle marcher pressed; Columns out of the bottom-right corner | Refused (not an end); up its column first, everyone out in that order |
+| QA-SN-8  | A hand-set raster order (row by row the same way) on the box | The order is the hand-set one, no snake: a corner that isn't one of its ends is refused; Rows or Columns change nothing |
+| QA-SN-9  | A line of eight rippling into a 2 × 4 box: straight in; arriving past the top right; Columns | The tail on the corner nearest M8's start, the leader at the far end; the tail on the top right; down the top right's column first |
+| QA-SN-10 | The deal from each of the four sides, Rows and Columns (pure) | The entrance is the nearest corner; the tail first on it, the leader last at the far end |
+| QA-SN-11 | A finish on a corner's spot; on a middle spot | Enters at that corner; a middle spot is no entrance |
+| QA-SN-12 | Seven rippling into a 2 × 4 box with a hole | The hole is passed through (the way runs straight across it) and nobody stops there |
+| QA-SN-13 | The Follow tool on a 2 × 3 box: arrows, a middle press, a corner grabbed, Columns | Four corners pulse, arrows along the rows (along the columns with Columns), no line-up; the middle takes no press; the corner leads its snake, which Columns re-runs from the same corner; the drawing's spots are AP-T8's for that line |
+
+**Not in this step:** per-corner rounding at row ends (later, if dot books need it); mixed trails by
+steps (O-28, still open); rippling round a circle or a large box outline (L.11's proposal); a snake
+along a box's diagonals; choosing Rows or Columns from the drag's direction (the bar's choice is
+kept instead); a box outline drawn with the pen.

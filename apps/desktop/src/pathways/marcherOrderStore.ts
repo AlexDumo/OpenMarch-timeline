@@ -18,7 +18,7 @@ import {
     type OrderForm,
     type OrderInForce,
 } from "@/db-functions/rememberedOrder";
-import { followSource } from "@/db-functions/timelineTrailDrag";
+import { guessedOrder } from "@/db-functions/timelineTrailDrag";
 import { readAllMarcherIds } from "@/db-functions/marcherOrder";
 import { orderAfterSweep, type XY } from "./orderSweep";
 
@@ -113,13 +113,18 @@ export const formsCover = (
 /** A line to draw: its marchers, leader first, and whether the order is only guessed */
 export interface ShownOrder {
     readonly order: readonly number[];
-    /** Nothing remembers it: guessed from where they stand (`followSource`), drawn faded and dashed */
+    /**
+     * Nothing remembers it: guessed from where they stand (`guessedOrder`: a box's snake, else
+     * `followSource`), drawn faded and dashed
+     */
     readonly guessed: boolean;
 }
 
 /**
  * The order shown for `ids` at `beat` (DL-31): the one remembered (`rememberedOrder`), or else the
- * one guessed from where they stand (`at`, by id), or null when neither has one
+ * one guessed from where they stand (`at`, by id), or null when neither has one. A box's guess is
+ * its default snake, row by row from the top left (step 11, SN-2), which the Follow tool runs
+ * from whichever corner is dragged out of.
  */
 export function shownOrderOf(
     forms: readonly OrderForm[] | null,
@@ -137,7 +142,7 @@ export function shownOrderOf(
         return p ? [[p.x, p.y] as [number, number]] : [];
     });
     if (starts.length !== sorted.length) return null;
-    const guess = followSource(starts);
+    const guess = guessedOrder(starts);
     return guess
         ? { order: guess.order.map((i) => sorted[i]!), guessed: true }
         : null;

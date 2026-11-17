@@ -24,6 +24,8 @@ import {
     followMarchersOf,
     ripplesIn,
     setFollowEnds,
+    setFollowSnake,
+    snakesThroughBox,
     setFollowPreview,
 } from "./followDrag";
 import {
@@ -476,6 +478,25 @@ export function usePathPenActions(): void {
             : hasKeep
               ? (formWhy ?? noSpots)
               : noSpots,
+    });
+    // Snake order (step 11, SN-2): with a box that has no remembered order, or Ripple in into one
+    const snakes = usePathPenStore(
+        (s) =>
+            !!s.session?.follow &&
+            !goingRound(s.session.follow) &&
+            snakesThroughBox(s.session.follow),
+    );
+    const noBox = tolgee.t(
+        "pathways.refusals.snakeNeedsBox",
+        "Snake order is for a box with no order of its own: open Follow on marchers standing in a box, or ripple into one",
+    );
+    useActionHandler("followSnakeRows", () => setFollowSnake("rows"), {
+        enabled: snakes,
+        disabledReason: noBox,
+    });
+    useActionHandler("followSnakeColumns", () => setFollowSnake("columns"), {
+        enabled: snakes,
+        disabledReason: noBox,
     });
     useActionHandler(
         "followPreview",

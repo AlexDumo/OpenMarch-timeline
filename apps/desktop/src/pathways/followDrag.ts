@@ -13,11 +13,18 @@ import {
     type TrailWindow,
 } from "@/db-functions/timelineTrailDrag";
 import {
+    formEnds,
     planRipple,
     ripplePreview,
     type RippleForm,
     type RipplePlan,
 } from "@/db-functions/timelineTrailRipplePlan";
+import {
+    snakeEnds,
+    snakeFrom,
+    type BoxCells,
+    type SnakeBy,
+} from "@/db-functions/timelineTrailSnake";
 import type { XY } from "@/shapes/types";
 import type { PathTarget } from "./pathTarget";
 import {
@@ -51,6 +58,8 @@ export interface FollowKeep {
     readonly line?: {
         readonly starts: ReadonlyMap<number, XY>;
         readonly order: readonly number[];
+        /** A box with no remembered order there (step 11): its cells, by marcher id */
+        readonly box?: BoxCells;
     };
 }
 
@@ -60,8 +69,19 @@ export interface FollowDrag {
     readonly window: TrailWindow;
     /** The selected marchers, by id */
     readonly ids: readonly number[];
-    /** The selection in order along the shape it stands in, one end to the other (DL-6) */
+    /**
+     * The selection in order along the shape it stands in, one end to the other (DL-6). A box's
+     * default snake from its top left, tail first, until a corner is grabbed (step 11)
+     */
     readonly order: readonly number[];
+    /**
+     * Step 11 (SN-1, SN-2): the box the selection stands in when no order is remembered, its cells
+     * by marcher id. Every corner is then an end, and the line is the box's snake from the corner
+     * grabbed. Absent or null otherwise (a remembered order always wins).
+     */
+    readonly box?: BoxCells | null;
+    /** Which way a box's default snake runs (SN-2): row by row unless the bar says columns */
+    readonly snakeBy?: SnakeBy;
     /** Where each stands at the start flag */
     readonly starts: ReadonlyMap<number, XY>;
     /** The end pressed, who leads (DL-1); null while the ends pulse */
@@ -114,26 +134,45 @@ export const EVEN_FIRST = 2;
 export function lineOf(follow: FollowDrag): {
     starts: ReadonlyMap<number, XY>;
     order: readonly number[];
+    box?: BoxCells | null;
 } {
     const kept = intoEndSpots(follow) ? follow.keep?.line : undefined;
-    return kept ?? { starts: follow.starts, order: follow.order };
+    return (
+        kept ?? { starts: follow.starts, order: follow.order, box: follow.box }
+    );
 }
 
-/** The line, tail first and the leader last, once an end is grabbed */
+/** Which way a box's default snake runs now (SN-2) */
+export const snakeByOf = (follow: FollowDrag): SnakeBy =>
+    follow.snakeBy ?? "rows";
+
+/**
+ * The line, tail first and the leader last, once an end is grabbed. A box's (step 11, SN-2) is
+ * its snake from the corner grabbed, run back so the corner leads.
+ */
 export function trailLine(follow: FollowDrag): number[] {
     const { grabbed } = follow;
-    const { order } = lineOf(follow);
+    const { order, box } = lineOf(follow);
     if (grabbed === null) return [...order];
+    if (box) {
+        const snake = snakeFrom(box, snakeByOf(follow), grabbed);
+        if (snake) return snake.reverse();
+    }
     return order[0] === grabbed ? [...order].reverse() : [...order];
 }
 
-/** The two ends of the selection along its shape (DL-4) */
+/** The two ends of the selection along its shape (DL-4); a box's corners (step 11, SN-2) */
 export const followEnds = (follow: FollowDrag): number[] => {
-    const { order } = lineOf(follow);
+    const { order, box } = lineOf(follow);
+    if (box) return snakeEnds(box, snakeByOf(follow));
     return order.length > 1
         ? [order[0]!, order[order.length - 1]!]
         : [...order];
 };
+
+/** Whether the line is a box running its default snake (step 11), or ripples into one (SN-4) */
+export const snakesThroughBox = (follow: FollowDrag): boolean =>
+    !!lineOf(follow).box || (ripplesIn(follow) && !!follow.form?.snake);
 
 type Planned = { plan: TrailDragPlan; spacing: TrailSpacing } | null;
 
@@ -183,6 +222,7 @@ function followPlanned(s: PathSession): Planned {
 let drawnCache: {
     starts: FollowDrag["starts"];
     order: FollowDrag["order"];
+    snakeBy: SnakeBy;
     grabbed: number | null;
     spacing: TrailSpacing;
     step: number;
@@ -209,6 +249,7 @@ function followDrawnPlanned(s: PathSession): Planned {
         c &&
         c.starts === f.starts &&
         c.order === f.order &&
+        c.snakeBy === snakeByOf(f) &&
         c.grabbed === f.grabbed &&
         sameSpacing(c.spacing, f.spacing) &&
         c.step === f.step &&
@@ -224,6 +265,7 @@ function followDrawnPlanned(s: PathSession): Planned {
     drawnCache = {
         starts: f.starts,
         order: f.order,
+        snakeBy: snakeByOf(f),
         grabbed: f.grabbed,
         spacing: f.spacing,
         step: f.step,
@@ -343,7 +385,8 @@ export function rippleEndAt(follow: FollowDrag, at: XY): number | null {
     if (!form || !ripplesIn(follow)) return null;
     const radius = RIPPLE_END_STEPS * follow.step;
     let best: { id: number; d: number } | null = null;
-    for (const i of [0, form.ids.length - 1]) {
+    // A box's corners (step 11, SN-4), else the form's two ends
+    for (const i of formEnds(form)) {
         const p = form.spots[i]!;
         const d = Math.hypot(p[0] - at.x, p[1] - at.y);
         if (d <= radius && (!best || d < best.d))
@@ -488,6 +531,37 @@ export function setFollowEnds(ends: FollowEnds): void {
         const follow = { ...f, ends };
         // The line changes where it's read (the kept move's start, step 9 review): a grabbed
         // marcher that isn't an end of it there lets go, and the ends pulse again
+        if (f.grabbed !== null && !followEnds(follow).includes(f.grabbed))
+            return {
+                ...s,
+                follow: { ...follow, grabbed: null },
+                points: [],
+                pointer: null,
+                dragging: null,
+            };
+        return {
+            ...s,
+            follow,
+            target:
+                f.grabbed === null
+                    ? s.target
+                    : followTarget(s.target, follow, drillsOf(s)),
+        };
+    });
+}
+
+/**
+ * Which way a box's default snake runs (step 11, SN-2): row by row or column by column, for the
+ * line's box and for the box Ripple in deals into. A grabbed corner keeps leading.
+ */
+export function setFollowSnake(by: SnakeBy): void {
+    updateFollow((s, f) => {
+        if (snakeByOf(f) === by) return s;
+        const form = f.form?.snake
+            ? { ...f.form, snake: { ...f.form.snake, by } }
+            : f.form;
+        const follow = { ...f, snakeBy: by, form };
+        // A hole on the grabbed corner starts the other way's snake elsewhere: it lets go
         if (f.grabbed !== null && !followEnds(follow).includes(f.grabbed))
             return {
                 ...s,

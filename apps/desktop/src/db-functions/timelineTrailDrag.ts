@@ -5,8 +5,9 @@
  * page's spots, in one undo step.
  *
  * - `followOrderAt`: the line's order and so its two ends (DL-4, DL-6): the order the show
- *   remembers (step 4f, DL-21), or else `followSource`, the line the marchers stand in as the
- *   shape tool fits it (a line, an arc, or a curve with corners or smooth).
+ *   remembers (step 4f, DL-21); else, for a box, its snake from a corner (step 11, SN-2); else
+ *   `followSource`, the line the marchers stand in as the shape tool fits it (a line, an arc, or
+ *   a curve with corners or smooth).
  * - `planTrailDrag`: the way, each member's end on it and its spot (AP-T8's Ends), for Keep
  *   spacing or Even N steps, with Even's limit. Pure: the preview and the write both use it, and
  *   it is the resolver's own geometry (R-13″), so the preview is where the marchers will be.
@@ -37,6 +38,13 @@ import { addPageFlagInTransaction } from "./pageFlags";
 import { saveShapeRecipeInTransaction } from "./shapeRecipes";
 import { trailShapeRecipe } from "./timelineTrailShape";
 import { rememberedOrderAt } from "./rememberedOrder";
+import {
+    boxCellsOf,
+    snakeFrom,
+    snakeOrders,
+    type BoxCells,
+    type SnakeBy,
+} from "./timelineTrailSnake";
 import {
     followTrailInTransaction,
     lineOrder,
@@ -225,19 +233,55 @@ export function followSource(starts: readonly XY[]): FollowSource | null {
  *
  * `leaderFirst` says which end leads before an end is grabbed: a remembered order runs leader
  * first; a guessed one has no leader, and the Follow tool offers its last as the leader.
+ *
+ * A box with no remembered order (step 11, SN-1, SN-2) runs its default snake, `snake.by` (row by
+ * row unless asked), from the corner of `snake.leader` (an index) when that starts one, else from
+ * the top left: `leaderFirst`, with `box` its cells (indexes) so the Follow tool can offer every
+ * corner. A remembered order always wins, box or not.
  */
 export async function followOrderAt(
     db: DbConnection | DbTransaction,
     ids: readonly number[],
     beat: number,
     starts: readonly XY[],
-): Promise<{ order: number[]; leaderFirst: boolean } | null> {
+    snake?: { by?: SnakeBy; leader?: number },
+): Promise<FollowOrder | null> {
     const remembered = await rememberedOrderAt(db, ids, beat);
     if (remembered && remembered.length === ids.length)
         return {
             order: remembered.map((m) => ids.indexOf(m)),
             leaderFirst: true,
         };
+    return guessedOrder(starts, snake);
+}
+
+/** `followOrderAt`'s answer */
+export interface FollowOrder {
+    /** Indexes into the starts, from one end to the other */
+    order: number[];
+    /** Whether `order` runs leader first (remembered, or a box's snake) */
+    leaderFirst: boolean;
+    /** A box's default snake (step 11): its cells, as indexes into the starts */
+    box?: BoxCells;
+}
+
+/**
+ * The order guessed from where they stand when none is remembered (`followOrderAt`): a box's
+ * default snake (step 11, SN-2), else `followSource`'s line; null when neither fits
+ */
+export function guessedOrder(
+    starts: readonly XY[],
+    snake?: { by?: SnakeBy; leader?: number },
+): FollowOrder | null {
+    const box = boxCellsOf(starts);
+    if (box) {
+        const by = snake?.by ?? "rows";
+        const order =
+            (snake?.leader !== undefined
+                ? snakeFrom(box, by, snake.leader)
+                : null) ?? snakeOrders(box, by)[0]!;
+        return { order, leaderFirst: true, box };
+    }
     const guess = followSource(starts)?.order;
     return guess ? { order: guess, leaderFirst: false } : null;
 }
@@ -461,6 +505,8 @@ export interface TrailDragInput {
      * at the playhead). The one over exactly the window when absent.
      */
     keepMove?: number | null;
+    /** A box with no remembered order snakes row by row (the default) or column by column (SN-2) */
+    snake?: SnakeBy;
 }
 
 export interface TrailDragResult extends FollowTrailResult {
@@ -511,7 +557,10 @@ async function planDragInTransaction(
         const [x, y] = resolver.positionAt(m, from);
         return [x, y];
     });
-    const along = await followOrderAt(tx, ids, from, starts);
+    const along = await followOrderAt(tx, ids, from, starts, {
+        by: input.snake,
+        leader: ids.indexOf(leaderId),
+    });
     if (!along) refuse(trailDragRefusal.notFitted());
     const order = trailOrderFrom(along.order, ids.indexOf(leaderId));
     if (!order) refuse(trailDragRefusal.notAnEnd());
