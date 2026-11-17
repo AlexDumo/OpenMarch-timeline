@@ -22,6 +22,7 @@ Don't press any keys yet.
   **Create page at playhead**, has no shortcuts either.
 - Open the 3D View's camera menu: its number shortcuts are hidden too.
 - If you have a keyboard for the tablet, press any key, then open the menus
-  again: the shortcuts are back.
+  again: the shortcuts are back. The 3D View keeps track on its own: press a
+  key in its window before its camera menu shows them.
 - On a computer in the desktop layout, the menus show their shortcuts as
   before.
