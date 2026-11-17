@@ -109,7 +109,16 @@ interface TestHooks {
 
 const CONVERTED_AT = "2026-10-01T12:00:00.000Z";
 /** Tables the fork's migrations after the timeline-only one (0018) add, each with undo triggers. */
-const TABLES_AFTER_0018 = ["view3d_silk_artwork"] as const;
+const TABLES_AFTER_0018 = [
+    "view3d_silk_artwork",
+    "cues",
+    "cue_marchers",
+] as const;
+/** Tables they add outside the undo history, with no triggers: the show asset store (fork #997). */
+const TABLES_AFTER_0018_WITHOUT_HISTORY = [
+    "show_asset_blobs",
+    "show_assets",
+] as const;
 const fixedNow = () => new Date(CONVERTED_AT);
 
 /** The file's hash just before the convert-on-open step. */
@@ -338,7 +347,9 @@ describe.each(["in-thread", "worker"] as const)("convert on open (%s)", (m) => {
                 .map((t) => t.name)
                 .filter((name) => !tablesBefore.includes(name)),
         );
-        expect(newTables.sort()).toEqual([...TABLES_AFTER_0018].sort());
+        expect(newTables.sort()).toEqual(
+            [...TABLES_AFTER_0018, ...TABLES_AFTER_0018_WITHOUT_HISTORY].sort(),
+        );
         expect(onNewTables.sort()).toEqual(
             TABLES_AFTER_0018.flatMap((table) =>
                 ["dt", "it", "ut"].map((op) => `${table}_${op}`),

@@ -102,7 +102,7 @@ With several lines picked, the section shows both switches (<Ui k="fieldEditMode
 ## Move or delete lines
 
 - Drag a line, or slide its tab along the ruler, to move it. Lines picked on the same axis move together. The arrow keys move picked lines a step, half a step with <Kbd keys="Shift" />. <Kbd keys="Escape" /> during a drag cancels it.
-- To delete, drag lines back into their ruler, press <Kbd action="fieldEditDeleteLines" />, or select <Ui k="fieldEditMode.popover.delete" /> in the <Ui k="fieldEditMode.line.title" /> section. A field needs at least two lines each way.
+- To delete, drag lines back into their ruler, press <Kbd action="fieldEditDeleteLines" />, or select <Ui k="fieldEditMode.popover.delete" /> in the <Ui k="fieldEditMode.line.title" /> section. A field needs at least two lines each way: where deleting the picked lines would leave fewer, Delete is greyed out and says why, and <Kbd action="fieldEditDeleteLines" /> does nothing.
 
 To delete every 5-yard line on a football field, drag a box from inside one goal line to inside the other, select <Ui k="fieldEditMode.line.everyOther" />, then press <Kbd action="fieldEditDeleteLines" />.
 
