@@ -7,7 +7,7 @@
  * target, the forearm's at the wrist target, the hand's along the fingers.
  * About their own length the bones turn their thumb side toward the bend
  * plane's normal, unless the hold says where the palm faces
- * (`ArmTargets.palm`, `halfTurn`).
+ * (`ArmTargets.palm`, `upperArm`, `halfTurn`).
  * Bone lengths are the skeleton's, so a target just out of reach lands
  * short along the same line. The clavicles stay at bind. The head turns
  * about its own joint by the hold's `head` (pitched up, rolled); the neck
@@ -135,11 +135,19 @@ function poseArm(bones: THREE.Bone[], side: "L" | "R", t: ArmTargets): void {
     );
     if (normal.lengthSq() < 1e-8) normal.set(0, 0, 1);
     // a hold that says where the palm faces turns the hand to it, and the
-    // arm the way round that leaves the wrist the smaller twist
+    // arm the way round that leaves the wrist the smaller twist, unless
+    // the hold says which way round the upper arm turns
     const thumb = t.palm
         ? thumbFor(side, fingers, new THREE.Vector3(...t.palm))
         : null;
-    if (thumb ? thumb.dot(normal) < 0 : t.halfTurn) normal.negate();
+    // the body's middle is toward −X from the left arm, +X from the right
+    const turnedIn = (side === "L" ? -normal.x : normal.x) > 0;
+    const flip = !thumb
+        ? t.halfTurn
+        : t.upperArm
+          ? turnedIn !== (t.upperArm === "in")
+          : thumb.dot(normal) < 0;
+    if (flip) normal.negate();
     aimBone(upper, elbow.clone().sub(shoulder), normal);
     const along = wrist.clone().sub(head(fore));
     let foreHint = normal;

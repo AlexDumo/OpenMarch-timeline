@@ -217,9 +217,9 @@ describe("battery placement", () => {
         expect(left[0]).toBeLessThan(0);
     });
 
-    it("lands the snare's two tips as mirror images, the left stick in from the side", () => {
-        // the left hand holds in traditional grip: its stick crosses the hand
-        // and comes in at a wider angle, to the same spot on the head
+    it("lands the snare's two tips as mirror images, the left butt up behind the thumb", () => {
+        // the left hand holds in traditional grip: its stick rests on top of
+        // the hand, in the web of the thumb, and runs to the same spot on the head
         const [right, left] = tips("snare");
         // the beads' centers, a few millimeters short of the tips, within 2 mm
         expect(Math.abs(left[0] + right[0])).toBeLessThan(0.002);
@@ -231,8 +231,12 @@ describe("battery placement", () => {
             );
             return bounds([wood[0]]);
         });
-        // the shafts' far ends: the left butt sits further out than the right
-        expect(-butts[1].min[0]).toBeGreaterThan(butts[0].max[0] + 0.04);
+        // the shafts' far ends: both sticks come in from the side, about as
+        // wide as each other, and the left butt sits higher than the right
+        expect(butts[0].max[0]).toBeGreaterThan(0.2);
+        expect(-butts[1].min[0]).toBeGreaterThan(0.2);
+        expect(Math.abs(butts[0].max[0] + butts[1].min[0])).toBeLessThan(0.04);
+        expect(butts[1].max[2]).toBeGreaterThan(butts[0].max[2] + 0.02);
     });
 
     it("puts each tenor stick's tip over one of the two front drums", () => {

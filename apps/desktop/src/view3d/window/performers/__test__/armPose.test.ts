@@ -219,10 +219,10 @@ describe("the arms' turn about their length (#980)", () => {
         const h = hold("snare", "up");
         const pose = poseArms(sk, h);
         const palm = palms(pose).left;
-        // up and in toward the body, the thumb's side on top
-        expect(palm.y).toBeGreaterThan(0.5);
-        expect(palm.x).toBeLessThan(-0.3);
-        expect(handAxes(pose.handL).z.y).toBeGreaterThan(0.5);
+        // in toward the other hand and partly up, the thumb's side on top
+        expect(palm.x).toBeLessThan(-0.7);
+        expect(palm.y).toBeGreaterThan(0.25);
+        expect(handAxes(pose.handL).z.y).toBeGreaterThan(0.7);
         expect(palm.dot(new THREE.Vector3(...h.left.palm!))).toBeGreaterThan(
             0.99,
         );
@@ -247,6 +247,39 @@ describe("the arms' turn about their length (#980)", () => {
         const pose = poseArms(sk, h);
         expect(alongBend(sk, "R", pose.handR, h.right)).toBeGreaterThan(0.99);
         expect(alongBend(sk, "L", pose.handL, h.left)).toBeLessThan(-0.99);
+    });
+
+    it("turns the upper arm the way a hold says", async () => {
+        const sk = await skeleton();
+        const h = hold("snare", "up");
+        expect(h.left.upperArm).toBe("in");
+        const upperZ = (pose: ReturnType<typeof poseArms>, side: "L" | "R") => {
+            const bones = sk.bones.map((b) => b.clone(false));
+            sk.bones.forEach((b, i) => {
+                const p = b.parent
+                    ? sk.bones.indexOf(b.parent as THREE.Bone)
+                    : -1;
+                if (p >= 0) bones[p].add(bones[i]);
+            });
+            bones.forEach((b) => {
+                const q = pose.local.get(b.name);
+                if (q) b.quaternion.copy(q);
+            });
+            bones.find((b) => !b.parent)!.updateMatrixWorld(true);
+            return handAxes(
+                bones.find((b) => b.name === `DEF-upper_arm${side}`)!
+                    .matrixWorld,
+            ).z;
+        };
+        // the snare's upper arms both turn their thumb sides in toward the body
+        const pose = poseArms(sk, h);
+        expect(upperZ(pose, "R").x).toBeGreaterThan(0.8);
+        expect(upperZ(pose, "L").x).toBeLessThan(-0.8);
+        // left to the smaller twist, the left one turns out; told "out", the same
+        for (const upperArm of [undefined, "out"] as const) {
+            const out = poseArms(sk, { ...h, left: { ...h.left, upperArm } });
+            expect(upperZ(out, "L").x).toBeGreaterThan(0.8);
+        }
     });
 
     it("shares a palm's turn between the wrist and the forearm", async () => {

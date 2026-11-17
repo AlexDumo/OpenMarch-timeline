@@ -328,8 +328,9 @@ points and where the elbows go.
     hold it gives the right arm's mirror image (the cymbals).
   - `palm`: the way the palm faces. The hand turns to it, the forearm
     half as far (a real forearm twists along its length), and the upper
-    arm whichever way round leaves the wrist the smaller twist. The
-    snare, tenors and bass use it.
+    arm whichever way round leaves the wrist the smaller twist, unless
+    the hold says which (`upperArm`: its thumb side in toward the body or
+    out; the snare's left arm). The snare, tenors and bass use it.
 - **Every hold, the head (owner, 2026-11-10).** The head is up 15 degrees
   (`HEAD_UP`), and a hold may lean or turn it as well. The neck and head ride
   the Horn/Equipment channel with the arms, so the hold sets them. Lips
@@ -453,35 +454,52 @@ points and where the elbows go.
   real grip on its stacks. Carry: as the
   alto's, the hands on the bari's upper stacks so they reach at eye level.
   Trail: as the alto's, the tube a little further out for the wide bell.
-- **snare, tenors.** Elbows at the sides, a little forward, not winged
-  (photos, 2026-11-10). Drum at waist height on the carrier, its shell clear
-  of the belly plate. Matched grip: the hands just behind the back rim
-  (wider on the tenors), palms down, forearms forward and level, elbows
-  relaxed at the sides. Each stick runs through the hand a third of the way
-  up (the butt behind the fist) and angles in from each side: on the snare
-  the tips meet near the center a little above the head without crossing;
-  on the tenors each hand reaches over the shots to drum 1 or drum 2. The
-  tenors' two hands are mirror images.
-- **snare, the left hand (owner, 2026-11-16).** Traditional grip, as drum
-  corps snare lines play; the right hand stays matched. The left hand is
-  turned over, its palm up and in toward the body (about 45 degrees each
-  way) and its thumb side on top. The stick rests in the web of the thumb
-  and runs across the palm, lifting off it toward the fingers, so the hand
-  points ahead and the stick crosses it at about 30 degrees, from the
-  thumb's side to the little finger's. The stick comes in more from the
-  side than the right one (about 30 degrees in from straight ahead, the
-  right about 20) to the mirrored spot on the head, and is held 9 cm from
-  its butt, which runs back past the thumb outside the wrist. The hand sits
-  2 cm further out and forward than a matched one (`TRADITIONAL` in
-  `holds.ts`); `snareGrip.test.ts` checks both hands clear the drum on every
-  body. The drum stays level, as current lines carry it (the Crossmen photo
-  below). References: on Wikimedia Commons, "Crossmen marching band drum
-  line (3688891856).jpg" (a drum corps snare line, level drums), "Regular
-  grip left hand 01.jpg" and "02" (the stick across the open left hand) and
-  "Marching snares.jpg" (a snare line playing); and the grip pages of
-  Yamaha's educator guide and the Iowa and Kansas State snare handbooks
-  (the fulcrum in the web of the thumb about 4 in from the butt, the hand
-  held out as for a handshake and turned outward).
+- **snare, tenors.** Elbows at the sides, not winged (photos, 2026-11-10).
+  Drum at waist height on the carrier, its shell clear of the belly plate.
+  Matched grip, palms down. Each stick runs through the hand a third of
+  the way up (the butt behind the fist) and angles in from each side. On
+  the tenors the hands sit just behind the back rim, forearms forward and
+  level, each reaching over the shots to drum 1 or drum 2, and the two
+  hands are mirror images. The snare's arms follow the owner's photos of
+  drum corps snare lines (below).
+- **snare (owner, 2026-11-16).** After the owner's two photos of drum
+  corps snare lines: one in uniform seen from the front and a little to the
+  players' left, one rehearsing seen from the front. Both hands sit behind
+  the back rim, 5 to 10 cm above the head and just outside its sides (0.2 m
+  either side of the middle), and the two sticks angle in about 45 degrees
+  from straight ahead to meet over the middle of the head, a centimeter or
+  two above it, without crossing. The drum stays level.
+  - The right hand is matched grip: palm down, the hand level, the elbow a
+    little out from the ribs (9 cm outside the shoulder), the forearm
+    forward and down, the stick on along the fingers and tipped down to the
+    head.
+  - The left hand is traditional grip. The upper arm hangs close to the
+    ribs, the elbow tucked in under the shoulder (within 3 cm of it, closer
+    in than the right elbow), and the forearm runs straight forward, about
+    30 degrees down. The hand is turned thumb up, its palm in toward the
+    other hand and about 25 degrees up. The stick rests on top of the hand
+    in the web of the thumb, 11 cm from its butt, and crosses the palm at
+    about 30 degrees, from the thumb's side to the little finger's, so it
+    comes in from the side lying fairly flat (under 20 degrees down) and
+    its butt runs back up behind the thumb, outside the forearm and higher
+    than the right stick's.
+  - The left upper arm turns its thumb side in toward the body, as the
+    right one does (`upperArm: "in"`). With the thumb on top the two ways
+    round are nearly even, and the way with the smaller twist pinched the
+    shoulder.
+  - `TRADITIONAL` in `holds.ts` holds the left hand's numbers: where the
+    web of the thumb is, the way the hand and palm face, and the way the
+    elbow goes. The stick's tip is the right stick's, mirrored.
+    `snareGrip.test.ts` checks on every body that both hands clear the drum
+    and the belly plate and that the butt clears the forearm.
+  - References: the owner's photos (kept outside the repo); on Wikimedia
+    Commons, "Crossmen marching band drum line (3688891856).jpg" (a drum
+    corps snare line, level drums), "Regular grip left hand 01.jpg" and
+    "02" (the stick across the open left hand) and "Marching snares.jpg"
+    (a snare line playing); and the grip pages of Yamaha's educator guide
+    and the Iowa and Kansas State snare handbooks (the fulcrum in the web
+    of the thumb about 4 in from the butt, the hand held out as for a
+    handshake and turned outward).
 - **bass.** Drum sideways on the carrier, carried high: its center about the
   shoulders, the biggest drums' tops at the top of the head (no higher than
   1.85 m). The hands are at the lower ribs (1.12 m) with steep mallets
