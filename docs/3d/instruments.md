@@ -470,7 +470,7 @@ points and where the elbows go.
   from straight ahead to meet over the middle of the head, a centimeter or
   two above it, without crossing. The drum stays level.
   - The right hand is matched grip: palm down, the hand level, the elbow a
-    little out from the ribs (9 cm outside the shoulder), the forearm
+    little out from the ribs (12 cm outside the shoulder), the forearm
     forward and down, the stick on along the fingers and tipped down to the
     head.
   - The left hand is traditional grip. The upper arm hangs close to the

@@ -273,7 +273,7 @@ describe("the arms' turn about their length (#980)", () => {
         };
         // the snare's upper arms both turn their thumb sides in toward the body
         const pose = poseArms(sk, h);
-        expect(upperZ(pose, "R").x).toBeGreaterThan(0.8);
+        expect(upperZ(pose, "R").x).toBeGreaterThan(0.6);
         expect(upperZ(pose, "L").x).toBeLessThan(-0.8);
         // left to the smaller twist, the left one turns out; told "out", the same
         for (const upperArm of [undefined, "out"] as const) {

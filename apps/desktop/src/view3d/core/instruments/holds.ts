@@ -1785,7 +1785,7 @@ const TABLE: Record<HoldFamily, () => Record<HoldState, Hold>> = {
             SNARE,
             [-0.248, 1.078, 0.203],
             [0.68, 0, 0.73],
-            [-0.8, -1, -0.8],
+            [-1.3, -1, -0.8],
             { palm: [0, -1, 0], traditional: true },
             [0, 1.0, 0.45],
         ),

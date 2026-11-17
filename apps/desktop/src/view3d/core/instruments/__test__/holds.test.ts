@@ -544,7 +544,8 @@ describe("woodwind and battery holds", () => {
                 [h.right, -0.185],
                 [h.left, 0.185],
             ] as const)
-                expect(Math.abs(arm.elbow[0] - sx)).toBeLessThan(0.11);
+                // the snare's right elbow is a little further out (owner, 2026-11-17)
+                expect(Math.abs(arm.elbow[0] - sx)).toBeLessThan(0.13);
         }
         // the tenors' elbows closer still; the snare's right one a little out
         for (const arm of [
