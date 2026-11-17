@@ -17,14 +17,19 @@ import {
  * toolbar, its points only in edit mode.
  */
 
-/** The trail shown now, stored and not being drawn, or null */
+/**
+ * The trail shown now, stored and not being drawn, or null. While its head is dragged or drawn on
+ * (AP-T16, L.15) it's still that stored trail (`restore`): its end shape stays tucked away, so the
+ * shape's bar doesn't sit faded under the drawing.
+ */
 function trailShown(
     state: Pick<
         ReturnType<typeof usePathPenStore.getState>,
         "session" | "hidden"
     >,
 ): PathSession | null {
-    const { session, hidden } = state;
+    const { hidden } = state;
+    const session = state.session?.follow?.head?.restore ?? state.session;
     return pathShown(session, hidden) &&
         session.target.trail &&
         session.target.routeId !== null &&

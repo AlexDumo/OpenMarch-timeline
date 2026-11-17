@@ -22,6 +22,7 @@ import {
     type FollowDrag,
 } from "../followDrag";
 import { finishHeadDrag, isHeadClicks, isHeadDrag } from "../trailHead";
+import { shapeTuckedUnderTrail } from "../trailShape";
 import {
     clickPlacesSmooth,
     DRAW_KIND_STORAGE_KEY,
@@ -358,6 +359,8 @@ describe("a trail's head clicked: drawn on with clicks (AP-T16)", () => {
         expect(session().phase).toBe("drawing");
         expect(session().points).toEqual(shown.points);
         expect(writes()).toHaveLength(0);
+        // The end shape's controls stay tucked away under the drawing (CT-8)
+        expect(shapeTuckedUnderTrail([1, 2, 3, 4, 5])).toBe(true);
         // The pen's cross while drawing on
         expect(pathPenMode.cursorAt(at(head.x + 4 * S, head.y + 6 * S))).toBe(
             "crosshair",
