@@ -96,6 +96,53 @@ async function toolbar(page) {
     };
 }
 
+/** Right-clicks a marcher and opens the field menu's Equipment submenu. */
+async function openEquipmentMenu(page, point, wait) {
+    await page.mouse.click(point.x, point.y, { button: "right" });
+    await page.getByTestId("field-menu").waitFor();
+    await page.getByTestId("field-menu-equipment").hover();
+    await page.getByTestId("field-menu-equipment-content").waitFor();
+    await wait(600);
+}
+
+/** Opens a family's submenu (`guard`, `brass`, `woodwinds`, `drums`) in the Equipment submenu. */
+async function openFamily(page, family, wait) {
+    await page.getByTestId(`field-menu-equipment-${family}`).hover();
+    await page.getByTestId(`field-menu-equipment-${family}-content`).waitFor();
+    await wait(500);
+}
+
+/** Selects the named marchers and gives them `entry` from a family's submenu (not filmed). */
+async function setEquipment(page, labels, family, entry, wait) {
+    const all = await marchers(page);
+    const points = named(all, labels);
+    await page.mouse.click(points[0].x, points[0].y);
+    await shiftSelect(page, points.slice(1), wait);
+    await openEquipmentMenu(page, points[0], wait);
+    await openFamily(page, family, wait);
+    await page.getByTestId(`field-menu-${entry}`).click();
+    await wait(1200);
+}
+
+/** Waits for the Equipment lane, which appears with the show's first equipment change (not filmed). */
+async function showEquipmentLane(page, wait) {
+    await page.getByTestId("equipment-lane").waitFor();
+    await wait(600);
+}
+
+/** Hides the toasts an edit leaves, which would cover the timeline. */
+const hideToasts = (page) =>
+    page
+        .locator("[data-sonner-toast]")
+        .evaluateAll((els) =>
+            els.forEach((e) => (e.style.visibility = "hidden")),
+        )
+        .catch(() => {});
+
+const SABRES = range("G", 6, 10);
+/** Guard who stand apart at the end of Page 1, for the Tuba */
+const TUBAS = ["G14", "G19", "G22"];
+
 const shots = [
     {
         id: "marchers-panel",
@@ -596,6 +643,112 @@ const shots = [
                 await wait(800);
             }
             return { box: await sidebarPanel(page, 270) };
+        },
+    },
+    {
+        id: "marchers-equipment-menu",
+        kind: "still",
+        // G6–G10 given sabres first, so Sabre is a recent item; then G14, G19 and G22 selected
+        // and the field menu open on G14, with its Equipment submenu (their own instrument, the
+        // recent Sabre, the families, Nothing) and the Brass family open
+        async setup({ page, wait, union, around }) {
+            await toPage1(page, wait);
+            await setEquipment(page, SABRES, "guard", "equipmentSabre", wait);
+            const all = await marchers(page);
+            const picked = named(all, TUBAS);
+            await page.mouse.click(picked[0].x, picked[0].y);
+            await shiftSelect(page, picked.slice(1), wait);
+            await openEquipmentMenu(page, picked[0], wait);
+            await openFamily(page, "brass", wait);
+            await page.getByTestId("field-menu-equipmentTuba").hover();
+            await wait(400);
+            await hideToasts(page);
+            return {
+                box: union(
+                    await around(page.getByTestId("field-menu"), 12),
+                    await around(
+                        page.getByTestId("field-menu-equipment-content"),
+                        12,
+                    ),
+                    await around(
+                        page.getByTestId("field-menu-equipment-brass-content"),
+                        12,
+                    ),
+                ),
+            };
+        },
+    },
+    {
+        id: "marchers-equipment-lane",
+        kind: "still",
+        // G6–G10 given sabres and G14, G19 and G22 tubas at the end of Page 1: the S and Tu tags
+        // by their drill numbers, and the Equipment lane shown from the Lanes menu, a row each
+        async setup({ page, wait }) {
+            await toPage1(page, wait);
+            await setEquipment(page, SABRES, "guard", "equipmentSabre", wait);
+            await setEquipment(page, TUBAS, "brass", "equipmentTuba", wait);
+            await page.keyboard.press("Escape");
+            await showEquipmentLane(page, wait);
+            await page.mouse.move(800, 990);
+            await wait(800);
+            await hideToasts(page);
+            const all = await marchers(page);
+            const b = bounds(named(all, [...SABRES, ...TUBAS]));
+            // The field around those guard, down to the lane, without the inspector
+            const pane = await page.getByTestId("timeline-pane").boundingBox();
+            const lane = await page.getByTestId("equipment-lane").boundingBox();
+            const top = Math.max(0, b.top - 40);
+            return {
+                box: {
+                    x: pane.x,
+                    y: top,
+                    width: pane.width,
+                    height: Math.min(1000, lane.y + lane.height + 8) - top,
+                },
+            };
+        },
+    },
+    {
+        id: "marchers-equipment-drag",
+        kind: "clip",
+        // The Sabre cue for G6–G10 dragged four counts later in the Equipment lane: it moves in
+        // whole counts, and the S tags leave the field because the playhead is now before it
+        async setup({ page, wait }) {
+            await toPage1(page, wait);
+            await setEquipment(page, SABRES, "guard", "equipmentSabre", wait);
+            await page.keyboard.press("Escape");
+            await showEquipmentLane(page, wait);
+            await page.mouse.move(800, 990);
+            await wait(800);
+            await hideToasts(page);
+            const pane = await page.getByTestId("timeline-pane").boundingBox();
+            const all = await marchers(page);
+            const b = bounds(named(all, SABRES));
+            const top = Math.max(0, b.top - 60);
+            return {
+                box: {
+                    x: pane.x,
+                    y: top,
+                    width: pane.width,
+                    height: pane.y + pane.height - top,
+                },
+            };
+        },
+        async perform({ page, film, overlay }) {
+            await overlay.enable();
+            const bar = await page
+                .getByTestId("equipment-lane-cue")
+                .first()
+                .boundingBox();
+            const grab = { x: bar.x + 40, y: bar.y + bar.height / 2 };
+            await film.moveTo(page, { x: grab.x, y: grab.y - 120 }, grab, 0.6);
+            await film.drag(
+                page,
+                grab,
+                { x: grab.x + 4 * 24.5, y: grab.y },
+                1.2,
+            );
+            await film.hold(1.5);
         },
     },
 ];

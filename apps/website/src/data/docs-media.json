@@ -214,6 +214,25 @@
         "width": 768,
         "height": 916
     },
+    "marchers-equipment-drag": {
+        "chapter": "marchers",
+        "kind": "clip",
+        "width": 1280,
+        "height": 364,
+        "seconds": 4.5
+    },
+    "marchers-equipment-lane": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 1600,
+        "height": 660
+    },
+    "marchers-equipment-menu": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 1516,
+        "height": 1060
+    },
     "marchers-inspector": {
         "chapter": "marchers",
         "kind": "still",
@@ -467,13 +486,13 @@
         "chapter": "timeline",
         "kind": "still",
         "width": 1600,
-        "height": 216
+        "height": 252
     },
     "timeline-hold-end": {
         "chapter": "timeline",
         "kind": "clip",
         "width": 1280,
-        "height": 174,
+        "height": 202,
         "seconds": 6.1
     },
     "timeline-hold-style": {
@@ -487,6 +506,12 @@
         "kind": "still",
         "width": 1600,
         "height": 1106
+    },
+    "timeline-lanes-menu": {
+        "chapter": "timeline",
+        "kind": "still",
+        "width": 1600,
+        "height": 264
     },
     "timeline-loop": {
         "chapter": "timeline",
@@ -506,7 +531,13 @@
         "chapter": "timeline",
         "kind": "still",
         "width": 816,
-        "height": 556
+        "height": 588
+    },
+    "timeline-moves-hidden": {
+        "chapter": "timeline",
+        "kind": "still",
+        "width": 1600,
+        "height": 252
     },
     "timeline-not-defined": {
         "chapter": "timeline",
@@ -531,13 +562,13 @@
         "chapter": "timeline",
         "kind": "still",
         "width": 1600,
-        "height": 216
+        "height": 252
     },
     "timeline-paths": {
         "chapter": "timeline",
         "kind": "still",
         "width": 1600,
-        "height": 920
+        "height": 884
     },
     "timeline-play-guide": {
         "chapter": "timeline",
@@ -549,7 +580,7 @@
         "chapter": "timeline",
         "kind": "clip",
         "width": 1280,
-        "height": 174,
+        "height": 202,
         "seconds": 7.2
     },
     "timeline-scrub": {

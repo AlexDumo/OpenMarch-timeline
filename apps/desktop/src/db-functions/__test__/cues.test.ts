@@ -11,6 +11,8 @@ import {
     getCues,
     planCueCarry,
     remapCuesOntoReplacementBeatsInTransaction,
+    subscribeCueCarry,
+    type CueCarryNotice,
     updateCues,
     type CarryCue,
     type NewCueArgs,
@@ -18,6 +20,11 @@ import {
 import { deleteMarchers } from "../marcher";
 import { deleteBeats, deleteBeatsInTransaction } from "../beat";
 import { performRedo, performUndo, transactionWithHistory } from "../history";
+import {
+    editedPerformers,
+    planEquipmentCues,
+    planEquipmentSet,
+} from "@/cues/equipment";
 
 /** The show's beat ids in order, without the fixed first beat. */
 const beatIds = async (db: DbConnection) =>
@@ -413,6 +420,145 @@ describeDbTests("cues", (it) => {
                 await performRedo(db);
                 expect(await placed(db)).toEqual(after);
                 await expectNumberOfChanges.test(db, 2);
+            },
+        );
+    });
+
+    describe("an Equipment cue's performers (#992)", () => {
+        testWithHistory(
+            "adding one and removing another are one undo step each",
+            async ({ db, marchersAndPages }) => {
+                const [m1, m2, m3] = marchersAndPages.expectedMarchers;
+                const [beat] = await beatIds(db);
+                const [rifles] = await createCues({
+                    db,
+                    newCues: planEquipmentCues({
+                        choice: "rifle",
+                        marcherIds: [m1!.id, m2!.id],
+                        beatId: beat!,
+                        label: "Rifles",
+                    }),
+                });
+                expect(rifles).toMatchObject({
+                    type: "equipment",
+                    value: "builtin:equipment.rifle",
+                    length: null,
+                    label: "Rifles",
+                });
+                const withM3 = editedPerformers(rifles!, [m3!.id], "add")!;
+                await updateCues({
+                    db,
+                    modifiedCues: [{ id: rifles!.id, marcherIds: withM3 }],
+                });
+                const after = (await getCueById({ db, id: rifles!.id }))!;
+                const withoutM1 = editedPerformers(after, [m1!.id], "remove")!;
+                await updateCues({
+                    db,
+                    modifiedCues: [{ id: rifles!.id, marcherIds: withoutM1 }],
+                });
+                const ids = async () =>
+                    (await getCueById({ db, id: rifles!.id }))!.marcherIds;
+                expect(await ids()).toEqual(
+                    [m2!.id, m3!.id].sort((a, b) => a - b),
+                );
+
+                await performUndo(db);
+                expect(await ids()).toEqual(
+                    [m1!.id, m2!.id, m3!.id].sort((a, b) => a - b),
+                );
+                await performUndo(db);
+                expect(await ids()).toEqual(
+                    [m1!.id, m2!.id].sort((a, b) => a - b),
+                );
+            },
+        );
+    });
+
+    describe("setting an item a cue on that count already has (#992)", () => {
+        testWithHistory(
+            "joins that cue in one undo step, so there is still one cue",
+            async ({ db, marchersAndPages }) => {
+                const [m1, m2, m3, m4] = marchersAndPages.expectedMarchers;
+                const [beat] = await beatIds(db);
+                await createCues({
+                    db,
+                    newCues: planEquipmentCues({
+                        choice: "rifle",
+                        marcherIds: [m1!.id, m2!.id],
+                        beatId: beat!,
+                        label: "first two",
+                    }),
+                });
+                const plan = planEquipmentSet({
+                    cues: await getCues({ db }),
+                    choice: "rifle",
+                    marcherIds: [m3!.id, m4!.id],
+                    beatId: beat!,
+                    labelFor: () => "unused",
+                });
+                if (plan.kind !== "join") throw new Error("expected a join");
+                await updateCues({
+                    db,
+                    modifiedCues: [
+                        {
+                            id: plan.cue.id,
+                            marcherIds: plan.marcherIds,
+                            label: "all four",
+                        },
+                    ],
+                });
+                const after = await getCues({ db });
+                expect(after).toHaveLength(1);
+                expect(after[0]).toMatchObject({
+                    label: "all four",
+                    marcherIds: [m1!.id, m2!.id, m3!.id, m4!.id].sort(
+                        (a, b) => a - b,
+                    ),
+                });
+
+                await performUndo(db);
+                const undone = await getCues({ db });
+                expect(undone).toHaveLength(1);
+                expect(undone[0]).toMatchObject({
+                    label: "first two",
+                    marcherIds: [m1!.id, m2!.id].sort((a, b) => a - b),
+                });
+            },
+        );
+    });
+
+    describe("the notice after deleting beats (#992)", () => {
+        testWithHistory(
+            "says how many cues moved and where, once the deletion is saved",
+            async ({ db, marchersAndPages }) => {
+                const [m1, m2] = marchersAndPages.expectedMarchers;
+                const b = await beatIds(db);
+                await createCues({
+                    db,
+                    newCues: [
+                        {
+                            type: "equipment",
+                            beatId: b[2]!,
+                            value: "builtin:equipment.rifle",
+                            marcherIds: [m1!.id],
+                        },
+                        {
+                            type: "equipment",
+                            beatId: b[3]!,
+                            value: "builtin:equipment.sabre",
+                            marcherIds: [m2!.id],
+                        },
+                    ],
+                });
+                const heard: CueCarryNotice[] = [];
+                const stop = subscribeCueCarry((n) => heard.push(n));
+                try {
+                    await deleteBeats({ db, beatIds: new Set([b[2]!, b[3]!]) });
+                } finally {
+                    stop();
+                }
+                // `b` leaves out the first beat, so b[4] is spec beat 5; two beats before it went
+                expect(heard).toEqual([{ moved: 2, movedTo: [3], dropped: 0 }]);
             },
         );
     });

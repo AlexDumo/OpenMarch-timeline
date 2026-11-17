@@ -50,6 +50,15 @@ export interface UiSettings {
     timelineZoomFitted: boolean;
     /** How the timeline draws the waveform: simplified rounded bars or precise per-beat detail */
     timelineWaveformStyle: WaveformStyle;
+    /**
+     * The timeline's lanes the user showed (true) or hid (false), by lane; a lane not here takes
+     * its default (`timeline/timelineLanes.ts`: Moves shows, the cue lanes are hidden)
+     */
+    timelineLanes: Record<string, boolean>;
+    /** The cue lanes folded into their summary row (fork #991, option E), by cue type */
+    timelineFoldedCueLanes: string[];
+    /** The Equipment items last chosen, newest first, at most four (the field menu's recent) */
+    recentEquipment: string[];
     /** The current audio volume percentage for timeline playback */
     audioVolume: number;
     /** Whether all app audio is muted */
@@ -135,6 +144,9 @@ export const defaultSettings: UiSettings = {
     timelineHeight: null,
     timelineZoomFitted: false,
     timelineWaveformStyle: "simplified",
+    timelineLanes: {},
+    timelineFoldedCueLanes: [],
+    recentEquipment: [],
     audioVolume: 100,
     audioMuted: false,
     mouseSettings: {
@@ -164,6 +176,20 @@ const clampZoomSensitivity = (value: number): number =>
 
 // Helper function to parse settings from a JSON string
 // Throws on bad JSON or invalid structure
+/** A saved map of booleans, keeping only its boolean entries. */
+const booleanMap = (value: unknown): Record<string, boolean> =>
+    value !== null && typeof value === "object" && !Array.isArray(value)
+        ? Object.fromEntries(
+              Object.entries(value).filter(([, v]) => typeof v === "boolean"),
+          )
+        : {};
+
+/** A saved list of strings, or an empty one for anything else. */
+const stringList = (value: unknown): string[] =>
+    Array.isArray(value)
+        ? value.filter((v): v is string => typeof v === "string")
+        : [];
+
 const parseSettings = (raw: string): UiSettings => {
     // Dropped: `previousPaths` (Previous paths) gave way to start flag positions (#331), and
     // `focussedComponent` went with the old timeline focus (beat editor)
@@ -193,6 +219,9 @@ const parseSettings = (raw: string): UiSettings => {
         snap: defaultSettings.snap,
         timelineHeight: parseTimelineHeight(parsed.timelineHeight),
         timelineWaveformStyle: parseWaveformStyle(parsed.timelineWaveformStyle),
+        timelineLanes: booleanMap(parsed.timelineLanes),
+        timelineFoldedCueLanes: stringList(parsed.timelineFoldedCueLanes),
+        recentEquipment: stringList(parsed.recentEquipment).slice(0, 4),
         startFlagPositions: parseStartFlagPositions(parsed.startFlagPositions),
         mouseSettings: mergedMouseSettings,
         coordinateRounding: parsed.coordinateRounding

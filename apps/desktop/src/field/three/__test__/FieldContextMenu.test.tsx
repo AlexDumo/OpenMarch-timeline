@@ -203,6 +203,14 @@ describe("FieldContextMenu", () => {
                 "timelineHoldStyleMarkTime",
                 "timelineHoldStyleHighMarkTime",
             ],
+            // #992: what the selection holds, and selecting by it, as submenus; the picked cue's
+            // performers while they can change
+            [
+                "equipment",
+                "select-holding",
+                "cueAddSelected",
+                "cueRemoveSelected",
+            ],
             [
                 "alignHorizontally",
                 "alignVertically",
