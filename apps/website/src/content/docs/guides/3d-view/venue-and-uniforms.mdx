@@ -27,7 +27,7 @@ import Ui from "@/components/docs/Ui.astro";
 import InShort from "@/components/docs/InShort.astro";
 import { Steps } from "@astrojs/starlight/components";
 
-<InShort>In the 3D View, select <Ui k="view3d.settings.title" /> (the gear) and choose a <Ui k="view3d.overlay.venue" plain />, <Ui k="view3d.overlay.lighting" plain /> and uniforms under <Ui k="view3d.settings.venueSection" plain />.</InShort>
+<InShort>In the 3D View, select <Ui k="view3d.settings.panelTitle" /> (the gear): choose a <Ui k="view3d.overlay.venue" plain /> and <Ui k="view3d.overlay.lighting" plain /> on the <Ui k="view3d.settings.tabs.venue" plain /> tab, and uniforms on the <Ui k="view3d.settings.tabs.performers" plain /> tab.</InShort>
 
 The venue is where the 3D View puts your show: a high school stadium, a college stadium, a domed pro stadium, a gym or an indoor arena, with its lighting and crowd. The venue and the uniforms are saved in the show, so everyone who opens it sees the same thing.
 
@@ -35,9 +35,9 @@ The venue is where the 3D View puts your show: a high school stadium, a college 
 
 <Steps>
 
-1. In the 3D View, select <Ui k="view3d.settings.title" /> (the gear at the top right). The <Ui k="view3d.settings.title" plain /> panel opens.
+1. In the 3D View, select <Ui k="view3d.settings.panelTitle" /> (the gear at the top right). The <Ui k="view3d.settings.panelTitle" plain /> panel opens on its <Ui k="view3d.settings.tabs.venue" plain /> tab.
 
-2. Under <Ui k="view3d.settings.venueSection" plain />, choose a <Ui k="view3d.overlay.venue" plain />: <Ui k="view3d.kit.hs" />, <Ui k="view3d.kit.bighs" />, <Ui k="view3d.kit.college" />, <Ui k="view3d.kit.pro" />, <Ui k="view3d.kit.gym" />, <Ui k="view3d.kit.arena" /> or <Ui k="view3d.kit.blank" />.
+2. On the <Ui k="view3d.settings.tabs.venue" plain /> tab, choose a <Ui k="view3d.overlay.venue" plain />: <Ui k="view3d.kit.hs" />, <Ui k="view3d.kit.bighs" />, <Ui k="view3d.kit.college" />, <Ui k="view3d.kit.pro" />, <Ui k="view3d.kit.gym" />, <Ui k="view3d.kit.arena" /> or <Ui k="view3d.kit.blank" />.
 
 3. Choose the <Ui k="view3d.overlay.lighting" plain />. The outdoor stadiums have <Ui k="view3d.lighting.day" />, <Ui k="view3d.lighting.dusk" /> and <Ui k="view3d.lighting.night" />; the Pro dome has <Ui k="view3d.lighting.day" />, <Ui k="view3d.lighting.night" /> and <Ui k="view3d.lighting.roofClosed" />; the gym and the arena have <Ui k="view3d.lighting.house" /> and <Ui k="view3d.lighting.show" /> lights.
 
@@ -45,11 +45,11 @@ The venue is where the 3D View puts your show: a high school stadium, a college 
 
 <Media
   id="3d-settings"
-  alt="The top of the View settings panel: under This show, the seven venue choices with High school selected, and the Day, Dusk and Night lighting choices."
+  alt="The 3D View settings panel on its Venue tab, beside the Performers and Preferences tabs: a note that these are saved with the show, the seven venue choices with High school selected, lighting, the crowd switch with home and visitor colors, and the end-zone lettering."
   maxWidth={420}
 />
 
-Until you choose one, the venue follows the show's field: a football field gets <Ui k="view3d.kit.hs" plain />, an indoor or grid floor gets <Ui k="view3d.kit.gym" plain />, and any other field gets <Ui k="view3d.kit.blank" plain />. Each change is a step in the editor's undo history, so <Kbd action="performUndo" /> in the editor takes it back.
+Until you choose one, the venue follows the show's field: a football field gets <Ui k="view3d.kit.hs" plain />, an indoor or grid floor gets <Ui k="view3d.kit.gym" plain />, and any other field gets <Ui k="view3d.kit.blank" plain />. Everything on the <Ui k="view3d.settings.tabs.venue" plain /> and <Ui k="view3d.settings.tabs.performers" plain /> tabs is saved in the show, and each change is a step in the editor's undo history, so <Kbd action="performUndo" /> in the editor takes it back. The <Ui k="view3d.settings.tabs.preferences" plain /> tab is kept on this computer instead.
 
 <Media
   id="3d-venue-arena"
@@ -60,7 +60,7 @@ The field in every venue is your show's field, with its yard lines, hashes and f
 
 ## Turn the crowd on or off
 
-In a venue with stands, turn <Ui k="view3d.overlay.crowd" /> on or off in View settings, or press <Kbd keys="C" /> in the 3D View. With the crowd on, <Ui k="view3d.settings.crowdColors" plain /> sets the colors the <Ui k="view3d.settings.homeColor" plain /> and <Ui k="view3d.settings.awayColor" plain /> sides wear.
+In a venue with stands, turn <Ui k="view3d.overlay.crowd" /> on or off on the <Ui k="view3d.settings.tabs.venue" plain /> tab, or press <Kbd keys="C" /> in the 3D View. With the crowd on, <Ui k="view3d.settings.crowdColors" plain /> sets the colors the <Ui k="view3d.settings.homeColor" plain /> and <Ui k="view3d.settings.awayColor" plain /> sides wear.
 
 ## Letter the end zones
 
@@ -72,7 +72,7 @@ The video boards in the <Ui k="view3d.kit.bighs" plain />, <Ui k="view3d.kit.col
 
 ## Choose the uniforms
 
-<Ui k="view3d.settings.uniforms" /> dresses the band and <Ui k="view3d.settings.guardUniforms" /> dresses the color guard. Choose one of the built-in uniforms for each, such as <Ui k="view3d.uniformPreset.westPoint" /> or <Ui k="view3d.uniformPreset.sash" />. Marchers in guard sections (Color Guard, Flag, Rifle and the other guard sections) wear the guard uniform; everyone else wears the band uniform. You can't design your own uniform in this version.
+On the <Ui k="view3d.settings.tabs.performers" plain /> tab, <Ui k="view3d.settings.uniforms" /> dresses the band and <Ui k="view3d.settings.guardUniforms" /> dresses the color guard. Choose one of the built-in uniforms for each, such as <Ui k="view3d.uniformPreset.westPoint" /> or <Ui k="view3d.uniformPreset.sash" />. Marchers in guard sections (Color Guard, Flag, Rifle and the other guard sections) wear the guard uniform; everyone else wears the band uniform. You can't design your own uniform in this version.
 
 <Media
   id="3d-uniforms"
@@ -85,7 +85,7 @@ The video boards in the <Ui k="view3d.kit.bighs" plain />, <Ui k="view3d.kit.col
 
 <Media
   id="3d-silk-settings"
-  alt="The flag silk rows of View settings after a design was imported: thirteen silk shapes, each drawn as a small outline with its name, with Standard chosen; below them, the imported artwork with its picture and file name, Replace and Remove buttons, and PNG, SVG and PDF template buttons for the Standard shape."
+  alt="The flag silk rows of 3D View settings, Performers tab, after a design was imported: thirteen silk shapes, each drawn as a small outline with its name, with Standard chosen; below them, the imported artwork with its picture and file name, Replace and Remove buttons, and PNG, SVG and PDF template buttons for the Standard shape."
   maxWidth={360}
 />
 

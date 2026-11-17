@@ -9,6 +9,7 @@ covers:
   - action:openView3d
   - i18n:view3d
   - i18n:settings.view3d
+  - i18n:view3d.settings.tabs.preferences
 sidebar:
   order: 1
 ---
@@ -26,18 +27,18 @@ The 3D View opens on the first camera in its camera menu, at the same moment as 
 
 <Media
   id="3d-window"
-  alt="The 3D View window: the band on a high school field seen from the press box, with the camera menu at the top left, the fullscreen and View settings buttons at the top right, and the playback controls and page and count readout at the bottom left."
+  alt="The 3D View window: the band on a high school field seen from the press box, with the camera menu at the top left, the fullscreen and 3D View settings buttons at the top right, and the playback controls and page and count readout at the bottom left."
 />
 
 In the web editor the 3D View opens in a new browser window. If nothing opens, the browser blocked the pop-up: allow pop-ups for the site and select <Ui k="view3d.open" plain /> again.
 
 ## Open it with every show
 
-The first time the 3D View opens with a show, it asks <Ui k="view3d.autoOpenPrompt.title" plain />. Choose <Ui k="view3d.autoOpenPrompt.yes" /> to have it open whenever you open a show, or <Ui k="view3d.autoOpenPrompt.no" /> to open it yourself. To change your answer later, turn <Ui k="settings.general.openView3dWithShow" /> on or off in [Settings](/guides/reference/settings/#general). The web editor never opens it by itself, because browsers block windows that open without a click.
+The first time the 3D View opens with a show, it asks <Ui k="view3d.autoOpenPrompt.title" plain />. Choose <Ui k="view3d.autoOpenPrompt.yes" /> to have it open whenever you open a show, or <Ui k="view3d.autoOpenPrompt.no" /> to open it yourself. To change your answer later, turn <Ui k="settings.general.openView3dWithShow" /> on or off at the top of <Ui k="view3d.settings.panelTitle" plain /> › <Ui k="view3d.settings.tabs.preferences" plain /> in the 3D View, or in [Settings](/guides/reference/settings/#general). The web editor never opens it by itself, because browsers block windows that open without a click.
 
 ## Play the show in 3D
 
-The 3D View has no playback of its own: play, pause, scrub or change pages in either window and both move together. The window has the editor's play, previous and next buttons and the playback speed. The editor's keys for playing, pages, counts and speed work in it too (<Kbd action="playPause" />, <Kbd action="previousPage" /> and <Kbd action="nextPage" />, <Kbd keys="Home" /> and <Kbd keys="End" />, <Kbd action="holdSlowerPlayback" /> and <Kbd action="holdFasterPlayback" />); they're explained in [Play the show](/guides/timeline/play-the-show/). <Kbd keys="C" /> is different: in the 3D View it turns the crowd on or off, not the loop. <Ui k="view3d.settings.title" plain /> (the gear) lists every key the 3D View takes under <Ui k="view3d.settings.keysSection" plain />.
+The 3D View has no playback of its own: play, pause, scrub or change pages in either window and both move together. The window has the editor's play, previous and next buttons and the playback speed. The editor's keys for playing, pages, counts and speed work in it too (<Kbd action="playPause" />, <Kbd action="previousPage" /> and <Kbd action="nextPage" />, <Kbd keys="Home" /> and <Kbd keys="End" />, <Kbd action="holdSlowerPlayback" /> and <Kbd action="holdFasterPlayback" />); they're explained in [Play the show](/guides/timeline/play-the-show/). <Kbd keys="C" /> is different: in the 3D View it turns the crowd on or off, not the loop. <Ui k="view3d.settings.panelTitle" plain /> (the gear) lists every key the 3D View takes on its <Ui k="view3d.settings.tabs.preferences" plain /> tab, under <Ui k="view3d.settings.shortcuts" plain />.
 
 <Media
   id="3d-controls"
@@ -57,7 +58,7 @@ Select <Ui k="view3d.overlay.enterFullscreen" /> in the 3D View, or press <Kbd k
 
 ## If the 3D View is slow
 
-Lower <Ui k="settings.view3d.quality" plain /> to <Ui k="settings.view3d.quality.low" plain />, or <Ui k="settings.view3d.resolution" plain /> to <Ui k="settings.view3d.resolution.fast" plain />, in [Settings](/guides/reference/settings/#3d-view) › <Ui k="settings.view3d" plain />. These are set for each computer, not in the show.
+Lower <Ui k="settings.view3d.quality" plain /> to <Ui k="settings.view3d.quality.low" plain />, or <Ui k="settings.view3d.resolution" plain /> to <Ui k="settings.view3d.resolution.fast" plain />, on the <Ui k="view3d.settings.tabs.preferences" plain /> tab of <Ui k="view3d.settings.panelTitle" /> (the gear) in the 3D View. These are kept on this computer, not in the show. When the 3D View drops to Low by itself, a notice says so: choose <Ui k="view3d.quality.useHigh" /> to go back to High and stay there, or <Ui k="view3d.quality.keepLow" />.
 
 If it's still slow on Low, your computer is drawing without its graphics card: update the graphics drivers and restart OpenMarch. In the web editor, turn on the browser's graphics acceleration and restart the browser.
 
