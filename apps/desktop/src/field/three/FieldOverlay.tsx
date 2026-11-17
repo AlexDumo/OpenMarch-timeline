@@ -1,7 +1,26 @@
-import { memo, useCallback, useMemo, useSyncExternalStore } from "react";
+import {
+    memo,
+    useCallback,
+    useMemo,
+    useRef,
+    useSyncExternalStore,
+    type CSSProperties,
+} from "react";
+import {
+    belowLayers,
+    useFieldLayerRects,
+    type FieldLayerKind,
+    type Rect,
+} from "@/components/canvas/fieldLayers";
+import { useIsTouchMode } from "@/stores/InputModeStore";
 import { GlyphText } from "@/shapes/editor/GlyphText";
+import { useTranslate } from "@tolgee/react";
 import { rgbaToString, type FieldTheme } from "@openmarch/core";
-import type { FieldEditor, FieldModeDrawing } from "@/field/editor/fieldEditor";
+import type {
+    FieldEditor,
+    FieldModeDrawing,
+    SelectionPivot as SelectionPivotDrawing,
+} from "@/field/editor/fieldEditor";
 import type { AreaShape } from "@/field/editor/areaGestures";
 import { HANDLE_SIZE, type HandleId } from "@/field/editor/groupTransform";
 import type { FieldRect } from "@/field/editor/selectionArea";
@@ -14,7 +33,7 @@ import {
     selectionHandles,
     type DrawnSelectionBox,
 } from "./selectionFrame";
-import { dotSizes, SELECTION_COLOR } from "./selectionRing";
+import { dotSizes, ringReach, SELECTION_COLOR } from "./selectionRing";
 import MarkerSvg from "./MarkerSvg";
 import {
     markerShapeOf,
@@ -34,12 +53,25 @@ import {
     groupLabelWidth,
     placeGroupLabels,
 } from "@/shapes/field/groupDrawing";
+import { PivotHint } from "./PivotHint";
 import HeldRolesChip, { HeldRolesChipBelowTip } from "./HeldRolesChip";
 import { useFieldUnderlayStore } from "@/field/editor/fieldUnderlayStore";
+import { useSelectionCoverStore } from "@/field/editor/selectionCoverStore";
 import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
+import ClearOfFinger from "./ClearOfFinger";
 
 /** The selection border width, in CSS px. */
 const BOX_WIDTH = 2;
+/**
+ * The selection box standing clear of an order lane (pathways step 4j): a 1 CSS px hairline, 8 px
+ * corner squares and a smaller rotate knob. Presses still take a handle anywhere in its
+ * {@link HANDLE_SIZE} square.
+ */
+const CLEAR_BOX_WIDTH = 1;
+const CLEAR_HANDLE_SIZE = 8;
+const CLEAR_ROTATE_RADIUS = 4.5;
+/** The middle handles, drawn on a box clear of a lane only while pointed at */
+const MIDDLE_HANDLES: ReadonlySet<HandleId> = new Set(["n", "e", "s", "w"]);
 /** The marquee border width, in CSS px. */
 const MARQUEE_WIDTH = 2;
 /** The lasso stroke: 2 CSS px, dashed 5 on, 5 off. */
@@ -62,6 +94,8 @@ const GUIDE_REACH = 100_000;
 const SPOT_RADIUS = 4;
 const SPOT_WIDTH = 1.5;
 const WALK_WIDTH = 1;
+/** A shape's walks, the faint line from each marcher to its spot, in the shape's color this strong */
+const WALK_ALPHA = 0.4;
 const SHAPE_HANDLE_SIZE = 9;
 /** A handle that adds a point (a line's midpoint, #524): a small ring, over the center dot */
 const ADD_HANDLE_RADIUS = 3;
@@ -122,7 +156,7 @@ const CALM_CONTROLS_OPACITY = 0.25;
 const SPOT_LABEL_PX = 10;
 const TIP_PX = 12;
 const TIP_OFFSET_PX = 14;
-/** Room for the tip's pill; it lays itself out inside, from the top left */
+/** Room for a readout's pill in the overlay's SVG; it lays itself out inside, from the top left */
 const TIP_BOX = { width: 360, height: 32 };
 
 /**
@@ -162,6 +196,7 @@ export default function FieldOverlay({
                     marchers.subscribe(listener),
                     items.subscribe(listener),
                     subscribeEditor(listener),
+                    useSelectionCoverStore.subscribe(listener),
                 ];
                 return () => off.forEach((unsubscribe) => unsubscribe());
             },
@@ -171,6 +206,23 @@ export default function FieldOverlay({
     );
     const area = useSyncExternalStore(subscribeEditor, () =>
         editor.areaShape(),
+    );
+    const hoveredHandle = useSyncExternalStore(subscribeEditor, () =>
+        editor.hoveredHandle(),
+    );
+    // As a string, as the box is: it moves with the marchers
+    const pivot = useSyncExternalStore(
+        useCallback(
+            (listener: () => void) => {
+                const off = [
+                    marchers.subscribe(listener),
+                    subscribeEditor(listener),
+                ];
+                return () => off.forEach((unsubscribe) => unsubscribe());
+            },
+            [marchers, subscribeEditor],
+        ),
+        () => JSON.stringify(editor.selectionPivot()),
     );
     const drawn = useSyncExternalStore(subscribeEditor, () =>
         editor.modeDrawing(),
@@ -196,17 +248,30 @@ export default function FieldOverlay({
         () => (hideMarchers ? objects.map((d) => shapeAlone(d)) : objects),
         [objects, hideMarchers],
     );
+    // A finger's drag puts its readouts above the finger, where they aren't covered
+    const touch = useSyncExternalStore(
+        subscribeEditor,
+        () => editor.pressKind() === "touch",
+    );
 
     return (
         <>
-            <HeldRolesChip belowTip={modeDrawing?.tip !== undefined} />
+            <HeldRolesChip
+                belowTip={
+                    modeDrawing?.tip !== undefined || areaHasPreview(area)
+                }
+                touch={touch}
+            />
+            <PivotHint pivot={JSON.parse(pivot)} />
             <svg
                 className="pointer-events-none absolute inset-0 h-full w-full"
                 data-testid="fieldOverlay"
             >
                 <SelectionBox
                     frame={JSON.parse(box) as DrawnSelectionBox | null}
+                    hovered={hoveredHandle}
                 />
+                <SelectionPivot pivot={JSON.parse(pivot)} />
                 {area?.kind === "marquee" && (
                     <Marquee
                         rect={area.rect}
@@ -232,6 +297,9 @@ export default function FieldOverlay({
                         testId="fieldPathUnderBox"
                     />
                 )}
+                {area && (
+                    <AreaPreviewMarks area={area} theme={theme} touch={touch} />
+                )}
                 {modeDrawing && (
                     <ModeDrawing
                         drawing={modeDrawing}
@@ -241,6 +309,9 @@ export default function FieldOverlay({
                 )}
                 {propTool && <PropToolPreview tool={propTool} theme={theme} />}
             </svg>
+            {modeDrawing?.tip && (
+                <ModeTip tip={modeDrawing.tip} touch={touch} />
+            )}
         </>
     );
 }
@@ -250,10 +321,21 @@ export default function FieldOverlay({
  * handles (#198): squares on the corners and middles, and the rotate handle
  * above the top middle, joined to it by a line. Turned with the marchers
  * while a rotation is dragged.
+ *
+ * Standing clear of an order lane (`covers`, pathways step 4j) it's a hairline
+ * with small corner squares and the rotate handle; a middle handle shows only
+ * while it's pointed at (`hovered`), and takes presses either way.
  */
-function SelectionBox({ frame }: { frame: DrawnSelectionBox | null }) {
+function SelectionBox({
+    frame,
+    hovered,
+}: {
+    frame: DrawnSelectionBox | null;
+    hovered: HandleId | null;
+}) {
     const view = useFieldViewStore();
     if (!frame) return null;
+    const clear = !!frame.covers;
     const screen = Object.fromEntries(
         Object.entries(selectionHandles(frame, view.zoom)).map(([id, at]) => [
             id,
@@ -263,14 +345,18 @@ function SelectionBox({ frame }: { frame: DrawnSelectionBox | null }) {
     const corners = [screen.nw, screen.ne, screen.se, screen.sw]
         .map(({ x, y }) => `${x},${y}`)
         .join(" ");
-    const half = HANDLE_SIZE / 2;
+    const size = clear ? CLEAR_HANDLE_SIZE : HANDLE_SIZE;
+    const half = size / 2;
+    const shown = (Object.keys(screen) as HandleId[]).filter(
+        (id) => !clear || !MIDDLE_HANDLES.has(id) || id === hovered,
+    );
     return (
-        <g data-testid="fieldSelectionBox">
+        <g data-testid="fieldSelectionBox" data-clear={clear || undefined}>
             <polygon
                 points={corners}
                 fill="none"
                 stroke={SELECTION_COLOR}
-                strokeWidth={BOX_WIDTH}
+                strokeWidth={clear ? CLEAR_BOX_WIDTH : BOX_WIDTH}
             />
             <line
                 x1={screen.n.x}
@@ -280,13 +366,13 @@ function SelectionBox({ frame }: { frame: DrawnSelectionBox | null }) {
                 stroke={SELECTION_COLOR}
                 strokeWidth={ROTATE_LINE_WIDTH}
             />
-            {(Object.keys(screen) as HandleId[]).map((id) =>
+            {shown.map((id) =>
                 id === "rot" ? (
                     <circle
                         key={id}
                         cx={screen.rot.x}
                         cy={screen.rot.y}
-                        r={half}
+                        r={clear ? CLEAR_ROTATE_RADIUS : half}
                         fill="white"
                         stroke={SELECTION_COLOR}
                         strokeWidth={1}
@@ -296,8 +382,8 @@ function SelectionBox({ frame }: { frame: DrawnSelectionBox | null }) {
                         key={id}
                         x={-half}
                         y={-half}
-                        width={HANDLE_SIZE}
-                        height={HANDLE_SIZE}
+                        width={size}
+                        height={size}
                         transform={`translate(${screen[id].x} ${screen[id].y}) rotate(${frame.angle})`}
                         fill="white"
                         stroke={SELECTION_COLOR}
@@ -306,6 +392,125 @@ function SelectionBox({ frame }: { frame: DrawnSelectionBox | null }) {
                 ),
             )}
         </g>
+    );
+}
+
+/**
+ * A pivot's crosshair, at `at` in element px: yellow arms and ring on a dark edge, so it reads on
+ * grass and on white. A shape's once it's out of the center (#350), and a plain selection's.
+ */
+function PivotCrosshair({
+    at: p,
+    style,
+    opacity,
+    preview = false,
+    testId,
+}: {
+    at: { x: number; y: number };
+    style?: CSSProperties;
+    opacity?: number;
+    /**
+     * Where a pivot menu's cell pointed at would put it (#437): a little larger on a soft halo,
+     * at full strength
+     */
+    preview?: boolean;
+    testId: string;
+}) {
+    const grow = preview ? 1.3 : 1;
+    const r = PIVOT_MARK_ARM * grow;
+    const ring = PIVOT_MARK_RING * grow;
+    const edge = preview ? 4 : 3.5;
+    const ink = preview ? 2 : 1.5;
+    const cross = `M ${p.x - r} ${p.y} H ${p.x + r} M ${p.x} ${p.y - r} V ${p.y + r}`;
+    return (
+        <g
+            data-testid={testId}
+            style={style}
+            opacity={opacity}
+            pointerEvents="none"
+        >
+            {preview && (
+                <circle
+                    cx={p.x}
+                    cy={p.y}
+                    r={r + 4}
+                    fill={PIVOT_COLOR}
+                    fillOpacity={0.25}
+                />
+            )}
+            <path d={cross} stroke="black" strokeWidth={edge} />
+            <circle
+                cx={p.x}
+                cy={p.y}
+                r={ring}
+                fill="none"
+                stroke="black"
+                strokeWidth={edge}
+            />
+            <path d={cross} stroke={PIVOT_COLOR} strokeWidth={ink} />
+            <circle
+                cx={p.x}
+                cy={p.y}
+                r={ring}
+                fill="none"
+                stroke={PIVOT_COLOR}
+                strokeWidth={ink}
+            />
+        </g>
+    );
+}
+
+/** A plain selection's pivot on the center: a small faint dot, in CSS px */
+const CENTER_PIVOT_RADIUS = 2.5;
+const CENTER_PIVOT_OPACITY = 0.7;
+/** The dot with $mod held over it, so a drag pulls it out: larger, full strength, on a halo */
+const ARMED_PIVOT_RADIUS = 4;
+
+/**
+ * A plain selection's pivot (`selectionPivot.ts`), what the rotate knob and the inspector's
+ * rotation turn the selection around. On the center, its default, a small faint dot that takes no
+ * plain press (the marcher or the box under it does); out of it, the crosshair, which drags. A
+ * pivot grid cell pointed at shows where it would go.
+ */
+function SelectionPivot({ pivot }: { pivot: SelectionPivotDrawing | null }) {
+    const view = useFieldViewStore();
+    if (!pivot) return null;
+    const p = fieldToElement(view, pivot.at.x, pivot.at.y);
+    const armed = pivot.hover === "armed";
+    return (
+        <>
+            {pivot.own ? (
+                <PivotCrosshair at={p} testId="fieldSelectionPivot" />
+            ) : (
+                <g data-testid="fieldSelectionPivot" data-armed={armed}>
+                    {armed && (
+                        <circle
+                            cx={p.x}
+                            cy={p.y}
+                            r={ARMED_PIVOT_RADIUS + 4}
+                            fill={PIVOT_COLOR}
+                            fillOpacity={0.25}
+                        />
+                    )}
+                    <circle
+                        cx={p.x}
+                        cy={p.y}
+                        r={armed ? ARMED_PIVOT_RADIUS : CENTER_PIVOT_RADIUS}
+                        fill={PIVOT_COLOR}
+                        stroke="black"
+                        strokeWidth={1}
+                        opacity={armed ? 1 : CENTER_PIVOT_OPACITY}
+                    />
+                </g>
+            )}
+            {pivot.preview && (
+                <PivotCrosshair
+                    at={fieldToElement(view, pivot.preview.x, pivot.preview.y)}
+                    preview
+                    testId="fieldSelectionPivotPreview"
+                />
+            )}
+        </>
     );
 }
 
@@ -430,9 +635,17 @@ const LANE_HIGHLIGHT_WIDTH = 1.5;
 const PATH_LINE_WIDTH = {
     edited: 2.5,
     shown: 1.75,
+    quiet: 1.75,
     selected: 2.5,
     context: 1.25,
 } as const;
+/**
+ * A line that isn't being edited, in the faint path color (pathways interaction round 3): the
+ * selected marchers' lines while quiet, and the members' lanes round the group path being edited.
+ * The walks' color, at a shown path's weight, so only the line being edited reads deep; the
+ * lanes' fainter one lost a single selected marcher's line on the field.
+ */
+const QUIET_LINE_ALPHA = WALK_ALPHA;
 /** How far the group path's line goes to grey behind the lane being worked on (0 to 1), and its alpha */
 const PATH_CONTEXT_GREY = 0.75;
 const PATH_CONTEXT_ALPHA = 0.7;
@@ -459,6 +672,10 @@ const GROUP_RING = "rgb(59, 130, 246)";
 const OWN_RING = "rgb(249, 115, 22)";
 const MEMBER_RING_SCALE = 1.9;
 const MEMBER_RING_WIDTH = 2;
+/** A detached member's ring: dashed, off the group path (interaction system, rule 5) */
+const MEMBER_RING_DASH = "3 2";
+/** An adjusted lane, in the group ring's color: quieter than the line being edited */
+const LANE_ADJUSTED_ALPHA = 0.7;
 /** The Follow tool's pull arrows (pathways step 4d), in dot radii, and their loop in seconds */
 const PULL_ARROW = {
     /** From the end's center to the first chevron */
@@ -536,9 +753,54 @@ const StartMarks = memo(function StartMarks({
     );
 });
 
+/** The guides' names (#427), below the task's card at the field's top in the touch layout (#933) */
+function GuideLabels({
+    guides,
+    at,
+    view,
+}: {
+    guides: FieldModeDrawing["guides"];
+    at: (p: { x: number; y: number }) => { x: number; y: number };
+    view: { width: number; height: number };
+}) {
+    const ref = useRef<SVGGElement>(null);
+    const touchLayout = useIsTouchMode();
+    const field = useCallback(
+        () => ref.current?.ownerSVGElement?.parentElement ?? null,
+        [],
+    );
+    // Listened to only while a guide has a name to show
+    const named = guides?.some((g) => g.label) ?? false;
+    const overTop = useFieldLayerRects(field, TOP_LAYERS, touchLayout && named);
+    return (
+        <g ref={ref}>
+            {guides?.map(({ from, to, label }, i) => {
+                if (!label) return null;
+                const upright = Math.abs(at(from).x - at(to).x) < 1e-6;
+                const p = at(from);
+                return (
+                    <GuideLabel
+                        key={i}
+                        text={label}
+                        at={upright ? { x: p.x, y: 0 } : { x: 0, y: p.y }}
+                        upright={upright}
+                        width={view.width}
+                        height={view.height}
+                        overTop={overTop}
+                    />
+                );
+            })}
+        </g>
+    );
+}
+
+/** What a guide's name at the top keeps below: the task's cards, the toolbar panel and the pill */
+const TOP_LAYERS: readonly FieldLayerKind[] = ["task", "cover", "pill"];
+
 /**
  * A guide's name at the canvas edge (#427): at the top for a line side to side, at the left for
- * one front to back, kept inside the canvas
+ * one front to back, kept inside the canvas. At the top it goes below any of `overTop` it would be
+ * under (#933: the line tool's card)
  */
 function GuideLabel({
     text,
@@ -546,12 +808,14 @@ function GuideLabel({
     upright,
     width,
     height,
+    overTop = [],
 }: {
     text: string;
     at: { x: number; y: number };
     upright: boolean;
     width: number;
     height: number;
+    overTop?: readonly Rect[];
 }) {
     // About the width of the text in DM Sans at this size, with room either side
     const w = text.length * GUIDE_LABEL_PX * 0.55 + 16;
@@ -559,7 +823,13 @@ function GuideLabel({
     const clamp = (v: number, max: number) =>
         Math.max(GUIDE_LABEL_INSET, Math.min(max - GUIDE_LABEL_INSET, v));
     const x = upright ? clamp(at.x - w / 2, width - w) : GUIDE_LABEL_INSET;
-    const y = upright ? GUIDE_LABEL_INSET : clamp(at.y - h / 2, height - h);
+    const y = upright
+        ? belowLayers(
+              { left: x, top: GUIDE_LABEL_INSET, width: w, height: h },
+              overTop,
+              GUIDE_LABEL_INSET,
+          )
+        : clamp(at.y - h / 2, height - h);
     return (
         <g data-testid="fieldShapeGuideLabel">
             <rect
@@ -686,7 +956,8 @@ const ShapeBody = memo(function ShapeBody({
     spotShape: MarkerShape;
 }) {
     const shape = rgbaToString(theme.shape);
-    const walk = rgbaToString({ ...theme.shape, a: 0.4 });
+    const quietLine = rgbaToString({ ...theme.shape, a: QUIET_LINE_ALPHA });
+    const walk = rgbaToString({ ...theme.shape, a: WALK_ALPHA });
     const fill = rgbaToString({ ...theme.shape, a: 0.06 });
     const open = drawing.stage === "open";
     const dots = drawing.stage === "drawing";
@@ -746,26 +1017,73 @@ const ShapeBody = memo(function ShapeBody({
                     />
                 ))}
             {/* Under the path's line, which is the one being edited */}
-            {drawing.lanes?.map((lane, i) => (
-                <polyline
-                    key={`lane${i}`}
-                    points={lane.map((p) => `${p.x},${p.y}`).join(" ")}
-                    fill="none"
-                    stroke={rgbaToString({
-                        ...theme.shape,
-                        a: drawing.laneHighlights?.includes(i)
-                            ? LANE_HIGHLIGHT_ALPHA
-                            : LANE_ALPHA,
-                    })}
-                    strokeWidth={
-                        drawing.laneHighlights?.includes(i)
-                            ? LANE_HIGHLIGHT_WIDTH
-                            : LANE_WIDTH
-                    }
-                    vectorEffect="non-scaling-stroke"
-                    data-testid="pathGroupLane"
-                />
-            ))}
+            {drawing.lanes?.map((lane, i) =>
+                drawing.lanesWeight === "quiet" ? (
+                    // A marcher's own walked line, at a shown path's weight, faint unless pointed at
+                    <polyline
+                        key={`lane${i}`}
+                        points={lane.map((p) => `${p.x},${p.y}`).join(" ")}
+                        fill="none"
+                        stroke={
+                            drawing.laneHighlights?.includes(i)
+                                ? shape
+                                : quietLine
+                        }
+                        strokeWidth={
+                            drawing.laneHighlights?.includes(i)
+                                ? PATH_LINE_WIDTH.selected
+                                : PATH_LINE_WIDTH.shown
+                        }
+                        strokeLinejoin="round"
+                        strokeLinecap="round"
+                        vectorEffect="non-scaling-stroke"
+                        data-testid="pathMemberLine"
+                        data-marcher={drawing.laneIds?.[i]}
+                    />
+                ) : (
+                    <polyline
+                        key={`lane${i}`}
+                        points={lane.map((p) => `${p.x},${p.y}`).join(" ")}
+                        fill="none"
+                        stroke={rgbaToString({
+                            ...theme.shape,
+                            a: drawing.laneHighlights?.includes(i)
+                                ? LANE_HIGHLIGHT_ALPHA
+                                : LANE_ALPHA,
+                        })}
+                        strokeWidth={
+                            drawing.laneHighlights?.includes(i)
+                                ? LANE_HIGHLIGHT_WIDTH
+                                : LANE_WIDTH
+                        }
+                        vectorEffect="non-scaling-stroke"
+                        data-testid="pathGroupLane"
+                    />
+                ),
+            )}
+            {/* Adjusted lanes (pathways, interaction system rule 5), over the faint ones */}
+            {drawing.lanesAdjusted?.map((i) =>
+                drawing.lanes?.[i] ? (
+                    <polyline
+                        key={`laneAdjusted${i}`}
+                        points={drawing.lanes[i]!.map(
+                            (p) => `${p.x},${p.y}`,
+                        ).join(" ")}
+                        fill="none"
+                        stroke={GROUP_RING}
+                        strokeOpacity={LANE_ADJUSTED_ALPHA}
+                        strokeWidth={
+                            drawing.lanesWeight === "quiet"
+                                ? PATH_LINE_WIDTH.quiet
+                                : LANE_HIGHLIGHT_WIDTH
+                        }
+                        strokeLinejoin="round"
+                        strokeLinecap="round"
+                        vectorEffect="non-scaling-stroke"
+                        data-testid="pathAdjustedLane"
+                    />
+                ) : null,
+            )}
             {drawing.outline && drawing.pathLine === "selected" && (
                 <polyline
                     points={drawing.outline
@@ -794,7 +1112,9 @@ const ShapeBody = memo(function ShapeBody({
                                 ? SELECTION_COLOR
                                 : drawing.pathLine === "context"
                                   ? contextLineColor(theme.shape)
-                                  : shape
+                                  : drawing.pathLine === "quiet"
+                                    ? quietLine
+                                    : shape
                         }
                         strokeWidth={
                             drawing.pathLine
@@ -859,9 +1179,11 @@ const ShapeBody = memo(function ShapeBody({
                     fill="none"
                     stroke={ring.kind === "group" ? GROUP_RING : OWN_RING}
                     strokeWidth={MEMBER_RING_WIDTH}
+                    strokeDasharray={ring.dashed ? MEMBER_RING_DASH : undefined}
                     vectorEffect="non-scaling-stroke"
                     data-testid="pathMemberRing"
                     data-kind={ring.kind}
+                    data-dashed={ring.dashed || undefined}
                     data-pulse={ring.pulse || undefined}
                     // The pull arrows carry the motion (step 4d); the ring stays still beside them
                     className={
@@ -1134,6 +1456,49 @@ function useSpotShape(
     }, [ringKey, looks, marchers, theme]);
 }
 
+/**
+ * The note by the pointer (a drag's readout, a lane's name): a solid pill, so it reads over any
+ * part of the field (owner). Over the field's floating bars too, outside the overlay's SVG: the
+ * path bar sits beside the lines, so a note by a hovered line often lands on it (owner, MVP lab).
+ */
+function ModeTip({
+    tip,
+    touch,
+}: {
+    tip: NonNullable<FieldModeDrawing["tip"]>;
+    /** The press is a finger's: the tip sits above it, clear of the finger */
+    touch: boolean;
+}) {
+    const view = useFieldViewStore();
+    const p = fieldToElement(view, tip.at.x, tip.at.y);
+    const stack = <PointerTipStack text={tip.text} testId="fieldShapeTip" />;
+    if (touch) {
+        // Over the whole field, so the stack can center above the finger and stay inside the
+        // field's edges
+        return (
+            <div className="pointer-events-none absolute inset-0 z-20">
+                <ClearOfFinger
+                    finger={p}
+                    bounds={{ width: view.width, height: view.height }}
+                >
+                    {stack}
+                </ClearOfFinger>
+            </div>
+        );
+    }
+    return (
+        <div
+            className="pointer-events-none absolute z-20"
+            style={{
+                left: p.x + TIP_OFFSET_PX,
+                top: p.y + TIP_OFFSET_PX,
+            }}
+        >
+            {stack}
+        </div>
+    );
+}
+
 function ModeDrawing({
     drawing,
     theme,
@@ -1383,14 +1748,17 @@ function ModeDrawing({
                         />
                     );
                 })()}
+            {/* A line's bend points, squares as a path's points are; the round spots beside them
+                (addHandles) are where to grab it for a new bend (round 3) */}
             {drawing.adjustHandles?.map(({ at: point, selected }, i) => {
                 const p = at(point);
                 return (
-                    <circle
+                    <rect
                         key={`adjust${i}`}
-                        cx={p.x}
-                        cy={p.y}
-                        r={ADD_HANDLE_RADIUS}
+                        x={p.x - half}
+                        y={p.y - half}
+                        width={SHAPE_HANDLE_SIZE}
+                        height={SHAPE_HANDLE_SIZE}
                         fill={selected ? shape : "white"}
                         stroke={shape}
                         strokeWidth={SHAPE_HANDLE_WIDTH}
@@ -1416,84 +1784,20 @@ function ModeDrawing({
                     />
                 );
             })}
-            {drawing.pivotMark &&
-                (() => {
-                    const p = at(drawing.pivotMark);
-                    const r = PIVOT_MARK_ARM;
-                    const cross = `M ${p.x - r} ${p.y} H ${p.x + r} M ${p.x} ${p.y - r} V ${p.y + r}`;
-                    return (
-                        <g data-testid="fieldShapePivotMark" style={controls}>
-                            {/* A dark edge under the yellow, so it reads on grass and on white */}
-                            <path d={cross} stroke="black" strokeWidth={3.5} />
-                            <circle
-                                cx={p.x}
-                                cy={p.y}
-                                r={PIVOT_MARK_RING}
-                                fill="none"
-                                stroke="black"
-                                strokeWidth={3.5}
-                            />
-                            <path
-                                d={cross}
-                                stroke={PIVOT_COLOR}
-                                strokeWidth={1.5}
-                            />
-                            <circle
-                                cx={p.x}
-                                cy={p.y}
-                                r={PIVOT_MARK_RING}
-                                fill="none"
-                                stroke={PIVOT_COLOR}
-                                strokeWidth={1.5}
-                            />
-                        </g>
-                    );
-                })()}
-            {drawing.pivotPreview &&
-                (() => {
-                    // A cell of the editor's pivot menu pointed at (#437): the pivot mark a
-                    // little larger on a soft halo, at full strength even while the shape is calm
-                    const p = at(drawing.pivotPreview);
-                    const r = PIVOT_MARK_ARM * 1.3;
-                    const ring = PIVOT_MARK_RING * 1.3;
-                    const cross = `M ${p.x - r} ${p.y} H ${p.x + r} M ${p.x} ${p.y - r} V ${p.y + r}`;
-                    return (
-                        <g
-                            data-testid="fieldShapePivotPreview"
-                            pointerEvents="none"
-                        >
-                            <circle
-                                cx={p.x}
-                                cy={p.y}
-                                r={r + 4}
-                                fill={PIVOT_COLOR}
-                                fillOpacity={0.25}
-                            />
-                            <path d={cross} stroke="black" strokeWidth={4} />
-                            <circle
-                                cx={p.x}
-                                cy={p.y}
-                                r={ring}
-                                fill="none"
-                                stroke="black"
-                                strokeWidth={4}
-                            />
-                            <path
-                                d={cross}
-                                stroke={PIVOT_COLOR}
-                                strokeWidth={2}
-                            />
-                            <circle
-                                cx={p.x}
-                                cy={p.y}
-                                r={ring}
-                                fill="none"
-                                stroke={PIVOT_COLOR}
-                                strokeWidth={2}
-                            />
-                        </g>
-                    );
-                })()}
+            {drawing.pivotMark && (
+                <PivotCrosshair
+                    at={at(drawing.pivotMark)}
+                    style={controls}
+                    testId="fieldShapePivotMark"
+                />
+            )}
+            {drawing.pivotPreview && (
+                <PivotCrosshair
+                    at={at(drawing.pivotPreview)}
+                    preview
+                    testId="fieldShapePivotPreview"
+                />
+            )}
             {drawing.pivot &&
                 (() => {
                     const a = at(drawing.pivot.at);
@@ -1520,52 +1824,155 @@ function ModeDrawing({
                         </g>
                     );
                 })()}
-            {drawing.tip &&
-                (() => {
-                    const p = at(drawing.tip.at);
-                    // A solid pill, so the readout reads over any part of the field (owner)
-                    return (
-                        <foreignObject
-                            x={p.x + TIP_OFFSET_PX}
-                            y={p.y + TIP_OFFSET_PX}
-                            width={TIP_BOX.width}
-                            height={TIP_BOX.height}
-                            overflow="visible"
-                        >
-                            <div className="flex flex-col items-start gap-4">
-                                <div
-                                    className="rounded-6 border-stroke bg-bg-1 bg-modal text-text shadow-modal inline-flex items-center gap-2 border px-6 py-2 whitespace-nowrap tabular-nums"
-                                    style={{ fontSize: TIP_PX }}
-                                    data-testid="fieldShapeTip"
-                                >
-                                    <GlyphText
-                                        text={drawing.tip.text}
-                                        size={12}
-                                    />
-                                </div>
-                                {/* The held-roles chip stacks under the readout, never over it */}
-                                <HeldRolesChipBelowTip />
-                            </div>
-                        </foreignObject>
-                    );
-                })()}
             {/* The guides' names last, over every line, edge and spot, so nothing crosses
                 their text (owner on #427) */}
-            {drawing.guides?.map(({ from, to, label }, i) => {
-                if (!label) return null;
-                const upright = Math.abs(at(from).x - at(to).x) < 1e-6;
-                const p = at(from);
-                return (
-                    <GuideLabel
-                        key={i}
-                        text={label}
-                        at={upright ? { x: p.x, y: 0 } : { x: 0, y: p.y }}
-                        upright={upright}
-                        width={view.width}
-                        height={view.height}
-                    />
-                );
-            })}
+            <GuideLabels guides={drawing.guides} at={at} view={view} />
+        </g>
+    );
+}
+
+/** A readout's solid pill, with the held-roles chip stacked under it, never over it */
+function PointerTipStack({
+    text,
+    testId,
+    opacity,
+}: {
+    text: string;
+    testId: string;
+    opacity?: number;
+}) {
+    return (
+        <div className="flex flex-col items-start gap-4" style={{ opacity }}>
+            <div
+                className="rounded-6 border-stroke bg-bg-1 bg-modal text-text shadow-modal inline-flex items-center gap-2 border px-6 py-2 whitespace-nowrap tabular-nums"
+                style={{ fontSize: TIP_PX }}
+                data-testid={testId}
+            >
+                <GlyphText text={text} size={12} />
+            </div>
+            <HeldRolesChipBelowTip />
+        </div>
+    );
+}
+
+/**
+ * A readout by the pointer, at `p` in element px: a solid pill, so it reads over any part of the
+ * field (owner), with the held-roles chip stacked under it. Below and right of a mouse pointer;
+ * above a finger, clear of it.
+ */
+function PointerTip({
+    at: p,
+    text,
+    touch,
+    testId,
+    opacity,
+}: {
+    at: { x: number; y: number };
+    text: string;
+    touch: boolean;
+    testId: string;
+    opacity?: number;
+}) {
+    const view = useFieldViewStore();
+    const stack = (
+        <PointerTipStack text={text} testId={testId} opacity={opacity} />
+    );
+    if (touch) {
+        // Over the whole field, so the stack can center above the finger and stay inside the
+        // field's edges
+        return (
+            <foreignObject x={0} y={0} width={view.width} height={view.height}>
+                <div className="relative h-full w-full">
+                    <ClearOfFinger
+                        finger={p}
+                        bounds={{ width: view.width, height: view.height }}
+                    >
+                        {stack}
+                    </ClearOfFinger>
+                </div>
+            </foreignObject>
+        );
+    }
+    return (
+        <foreignObject
+            x={p.x + TIP_OFFSET_PX}
+            y={p.y + TIP_OFFSET_PX}
+            width={TIP_BOX.width}
+            height={TIP_BOX.height}
+            overflow="visible"
+        >
+            {stack}
+        </foreignObject>
+    );
+}
+
+/** The squares around the marchers a marquee or lasso would change: 1.5 CSS px, clear of the ring */
+const AREA_MARK_WIDTH = 1.5;
+const AREA_MARK_GAP = 1.5;
+/** A lasso that wouldn't close if released now shows what it would take this faintly */
+const AREA_OPEN_OPACITY = 0.55;
+
+/** Whether an area shape has marchers to preview (and so a count by the pointer). */
+export function areaHasPreview(area: AreaShape | null): boolean {
+    return (area?.preview.ids.length ?? 0) > 0;
+}
+
+/**
+ * While a marquee or lasso is drawn: a small square around each marcher releasing it would change
+ * (select, add, or take out), in the area's color, and how many by the pointer, so it's clear when
+ * a marcher registers. Faint while a lasso wouldn't close.
+ */
+function AreaPreviewMarks({
+    area,
+    theme,
+    touch,
+}: {
+    area: AreaShape;
+    theme: FieldTheme;
+    touch: boolean;
+}) {
+    const { t } = useTranslate();
+    const view = useFieldViewStore();
+    const { preview } = area;
+    if (preview.ids.length === 0) return null;
+    const opacity =
+        area.kind === "lasso" && !area.closes ? AREA_OPEN_OPACITY : undefined;
+    // Just outside where a selected marcher's ring would be
+    const half =
+        ringReach(view.zoom) * view.zoom + AREA_MARK_GAP + AREA_MARK_WIDTH / 2;
+    const squares: string[] = [];
+    for (let i = 0; i < preview.ids.length; i++) {
+        const p = fieldToElement(
+            view,
+            preview.positions[i * 2],
+            preview.positions[i * 2 + 1],
+        );
+        squares.push(
+            `M${p.x - half} ${p.y - half}h${half * 2}v${half * 2}h${-half * 2}z`,
+        );
+    }
+    const count = preview.ids.length;
+    const text =
+        preview.choice === "add"
+            ? t("field.areaCount.add", { count })
+            : preview.choice === "subtract"
+              ? t("field.areaCount.subtract", { count })
+              : t("field.areaCount.select", { count });
+    return (
+        <g data-testid="fieldAreaPreview" opacity={opacity}>
+            <path
+                d={squares.join("")}
+                fill="none"
+                stroke={rgbaToString(theme.shape)}
+                strokeWidth={AREA_MARK_WIDTH}
+                strokeDasharray={area.subtract ? "3 2" : undefined}
+            />
+            <PointerTip
+                at={fieldToElement(view, preview.pointer.x, preview.pointer.y)}
+                text={text}
+                touch={touch}
+                testId="fieldAreaCount"
+            />
         </g>
     );
 }

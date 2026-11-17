@@ -66,6 +66,7 @@ const at = (x: number, y: number): FieldPointer => ({
     alt: false,
     ctrl: false,
     meta: false,
+    kind: "mouse",
 });
 
 /** Keep end spots' move (AP-T9): [9, 17), everyone 20 steps right of where they start */
@@ -565,6 +566,20 @@ describe("the Follow tool, step 4d", () => {
         pathPenMode.release(to, { double: false, ownFirst: false });
         expect(session().points).toHaveLength(1);
         expect(session().points[0]!.at.x).toBeCloseTo(left.x - 8 * STEP, 6);
+    });
+
+    it("a double-click finishing a trail that ends at its own last point keeps that point (review of #900)", () => {
+        open();
+        const left = starts.get(1)!;
+        pathPenMode.press(at(left.x, left.y), press);
+        pathPenMode.release(at(left.x, left.y), { double: false, ownFirst: false }); // prettier-ignore
+        const to = at(left.x - 8 * STEP, left.y);
+        pathPenMode.move(to);
+        pathPenMode.press(to, press);
+        pathPenMode.release(to, { double: false, ownFirst: false });
+        pathPenMode.press(to, press);
+        pathPenMode.release(to, { double: true, ownFirst: true });
+        expect(session().points).toHaveLength(1);
     });
 
     it("everyone but the line fades while the tool is open, and comes back when it closes", () => {

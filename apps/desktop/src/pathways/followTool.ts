@@ -12,13 +12,22 @@ import {
     trailDragRefusal,
     type TrailWindow,
 } from "@/db-functions/timelineTrailDrag";
-import { readTrails, type MoveTrail } from "@/db-functions/timelineTrails";
+import {
+    endSpotsInMove,
+    readTrails,
+    type MoveTrail,
+} from "@/db-functions/timelineTrails";
 import {
     aroundTrailOver,
     goRoundRefusal,
     goRoundRefusalFor,
     outlineOf,
 } from "@/db-functions/timelineTrailAround";
+import { rippleFormAt } from "@/db-functions/timelineTrailRipple";
+import {
+    rippleFormProblem,
+    rippleRefusal,
+} from "@/db-functions/timelineTrailRipplePlan";
 import type { DbConnection } from "@/db-functions/types";
 import { isBasicMode } from "@/stores/EditorModeStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
@@ -37,6 +46,7 @@ import {
     initialAround,
     type FollowAround,
 } from "./followAround";
+import type { RippleForm } from "@/db-functions/timelineTrailRipplePlan";
 
 /**
  * The window a trail is dragged in now (DL-2): the edit window `[start flag, playhead)`, in Basic
@@ -77,7 +87,7 @@ export async function isTrailLineAt(
 
 /**
  * Keep end spots (AP-T9) by step 4's target rule: the one move every one of `ids` is in at `beat`
- * (the playhead), with each member's end spot there. Null when there's none.
+ * (the playhead), with each member's end spot there (its slot's stored destination). Null when there's none.
  */
 export async function followKeepAt(
     database: DbConnection,
@@ -87,17 +97,82 @@ export async function followKeepAt(
 ): Promise<FollowKeep | null> {
     const move = await groupMoveAt(database, ids, beat);
     if (move.kind !== "move") return null;
+    // The line where that move starts, which is where the trail into its spots starts (step 9
+    // review): its starts, and its order there (remembered, or else guessed), tail first
+    const sorted = [...new Set(ids)].sort((a, b) => a - b);
+    const at = sorted.map((m): [number, number] => {
+        const [x, y] = resolver.positionAt(m, move.start);
+        return [x, y];
+    });
+    const along = await followOrderAt(database, sorted, move.start, at);
+    // Each end spot from its slot's stored destination, as Ripple in's write reads it (step 9)
+    const stored = await database.transaction((tx) =>
+        endSpotsInMove(tx, move.timelineId, sorted),
+    );
     return {
         timelineId: move.timelineId,
         start: move.start,
         end: move.end,
         spots: new Map(
             ids.map((m): [number, XY] => {
-                const [x, y] = resolver.positionAt(m, move.end);
-                return [m, { x, y }];
+                const p = stored?.get(m) ?? resolver.positionAt(m, move.end);
+                return [m, { x: p[0], y: p[1] }];
             }),
         ),
+        ...(along
+            ? {
+                  line: {
+                      starts: new Map(
+                          sorted.map((m, i) => [
+                              m,
+                              { x: at[i]![0], y: at[i]![1] },
+                          ]),
+                      ),
+                      order: tailFirstOf(along).map((i) => sorted[i]!),
+                  },
+              }
+            : {}),
     };
+}
+
+/**
+ * Ripple in's next form (RP-2): `keep`'s end spots of `ids` in the form's own order, or null with
+ * the reason (translated) when there's none, it closes or folds, or it lies on the line itself
+ */
+async function followFormOf(
+    ids: readonly number[],
+    keep: FollowKeep | null,
+): Promise<{ form: RippleForm | null; formWhy: string | null }> {
+    if (!keep) return { form: null, formWhy: null };
+    const form = await rippleFormAt(
+        db,
+        ids,
+        keep.end,
+        new Map(
+            [...keep.spots].map(([m, p]): [number, [number, number]] => [
+                m,
+                [p.x, p.y],
+            ]),
+        ),
+    );
+    if (!form)
+        return {
+            form: null,
+            formWhy: translateTimelineText(rippleRefusal.notAForm()),
+        };
+    const line = keep.line;
+    const problem = rippleFormProblem(
+        form.spots,
+        line
+            ? line.order.map((m) => [
+                  line.starts.get(m)!.x,
+                  line.starts.get(m)!.y,
+              ])
+            : [],
+    );
+    return problem
+        ? { form: null, formWhy: translateTimelineText(problem) }
+        : { form, formWhy: null };
 }
 
 /**
@@ -149,6 +224,8 @@ export async function openFollowTool(
           : dragRefusal && (offer.refusal ?? dragRefusal);
     if (refusal) return translateTimelineText(refusal);
     const keep = await followKeepAt(db, resolver, sorted, beat);
+    // Ripple in (step 9, RP-2): the form those end spots make, in its own order, and why not
+    const { form, formWhy } = await followFormOf(sorted, keep);
     const follow: FollowDrag = {
         window,
         ids: sorted,
@@ -160,6 +237,8 @@ export async function openFollowTool(
         spacing: { kind: "keep" },
         ends: "trail",
         keep,
+        form,
+        formWhy,
         step,
         around,
     };
