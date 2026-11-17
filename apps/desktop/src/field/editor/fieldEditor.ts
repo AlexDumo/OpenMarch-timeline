@@ -1617,11 +1617,14 @@ export class FieldEditor {
      */
     selectionChanged(): void {
         // Something other than the last click changed the selection: the next press starts
-        // afresh (#628). A mode's clicks keep their own double-clicks
+        // afresh (#628). The app trimming the click's own selection (members dimmed by an
+        // isolated move, or hidden at this beat) is still that click's; Escape empties it.
+        // A mode's clicks keep their own double-clicks
         const last = this.lastClick;
         if (
             last?.selection &&
-            !sameIds(last.selection, this.ports.selection.get())
+            !sameIds(last.selection, this.ports.selection.get()) &&
+            !trimmedFrom(this.ports.selection.get(), last.selection)
         )
             this.lastClick = null;
         // A pivot is the selection's: a new one starts on its center
@@ -2249,6 +2252,13 @@ export const isPastSlop = (start: FieldPointer, pointer: FieldPointer) =>
     ) >= thresholdsFor(start.kind).moveThreshold;
 
 /** The same ids, in any order. */
+/** Whether `ids` is some, but not none, of `from`: what's left after the app drops a few. */
+const trimmedFrom = (ids: readonly number[], from: readonly number[]) => {
+    if (ids.length === 0) return false;
+    const set = new Set(from);
+    return ids.every((id) => set.has(id));
+};
+
 const sameIds = (a: readonly number[], b: readonly number[]) => {
     if (a.length !== b.length) return false;
     const set = new Set(b);

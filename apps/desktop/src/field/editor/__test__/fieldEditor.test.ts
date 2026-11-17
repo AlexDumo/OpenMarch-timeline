@@ -3006,6 +3006,22 @@ describe("FieldEditor groups a press selects (#204)", () => {
         expect(doubleClickMarcher).toHaveBeenCalledWith(1);
     });
 
+    it("still counts a double-click when the app trims the first click's selection", () => {
+        // A box member outside an isolated move is dimmed and dropped from the selection
+        const doubleClickMarcher = vi.fn();
+        const { editor, state, clock } = setup({
+            pressSelection: group,
+            doubleClickMarcher,
+        });
+        click(editor, 100, 100);
+        expect(state.selected).toEqual([1, 2]);
+        state.selected = [1];
+        editor.selectionChanged();
+        clock.now += 100;
+        click(editor, 101, 100);
+        expect(doubleClickMarcher).toHaveBeenCalledWith(1);
+    });
+
     it("takes a click after Escape as a click of its own, not a double-click (#628)", () => {
         const doubleClickMarcher = vi.fn();
         const { editor, state, clock } = setup({
