@@ -13,7 +13,12 @@ import {
 } from "@openmarch/core";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import { PathEditor } from "../PathEditor";
-import { chipPlaces } from "../TrailCornerCounts";
+import {
+    chipObstaclesOf,
+    chipPlaces,
+    chipSize,
+    type ChipObstacle,
+} from "../TrailCornerCounts";
 import { subscribeHistoryChanges } from "@/db-functions/history";
 import { clearPath, showPath, usePathPenStore } from "../pathPenStore";
 import type { PathTarget } from "../pathTarget";
@@ -424,8 +429,118 @@ describe("chips in a dense block or zoomed out (TC-5)", () => {
             stopBefore: 0,
             offCount: false,
         });
-        const corners = [corner(1, 0), corner(2, 30), corner(3, 100)];
+        // 10 px apart: the second chip, on the same side, would sit on the first
+        const corners = [corner(1, 0), corner(2, 10), corner(3, 100)];
         const places = chipPlaces(corners, (x, y) => ({ x, y }));
         expect(places.map((p) => p.corner.d)).toEqual([1, 3]);
+    });
+});
+
+describe("a chip never covers a point, handle, dot or label (owner, 2026-11-17)", () => {
+    /** The owner's case: a corner point dragged out to the right, the legs in and out of it */
+    const pulledRight = (
+        x: number,
+        y: number,
+        offCount = true,
+    ): CornerCount => ({
+        d: 1,
+        at: [x, y],
+        turn: 1.8,
+        dirIn: [0.8, 0.6],
+        dirOut: [-0.8, 0.6],
+        turns: [
+            { q: 0, count: 4.6, onCount: false },
+            { q: 1, count: 10.2, onCount: false },
+        ],
+        stopBefore: 0,
+        offCount,
+    });
+    const id = (x: number, y: number) => ({ x, y });
+    /** The chip's box on screen, as it hangs from its anchor */
+    const boxOf = (
+        place: ReturnType<typeof chipPlaces>[number],
+        size: { w: number; h: number },
+    ) => ({
+        x: place.left + (place.sx * size.w) / 2,
+        y: place.top + (place.sy * size.h) / 2,
+        w: size.w,
+        h: size.h,
+    });
+    /** How far a point is from a box (0 inside it) */
+    const gap = (box: ReturnType<typeof boxOf>, x: number, y: number) =>
+        Math.hypot(
+            Math.max(0, Math.abs(x - box.x) - box.w / 2),
+            Math.max(0, Math.abs(y - box.y) - box.h / 2),
+        );
+
+    it("QA-TC-15: outside the corner, its edge a fixed gap from the point however wide it is (a corner pulled out right: the chip right of it)", () => {
+        const corner = pulledRight(500, 500);
+        for (const w of [40, 80, 200]) {
+            const size = { w, h: 18 };
+            const [place] = chipPlaces([corner], id, [], () => size);
+            expect(place!.sx).toBe(1);
+            expect(place!.sy).toBeCloseTo(0, 9);
+            const box = boxOf(place!, size);
+            // Its near edge 18 px right of the point, whatever its width
+            expect(box.x - w / 2).toBeCloseTo(518, 9);
+            expect(gap(box, 500, 500)).toBeGreaterThanOrEqual(12);
+        }
+        // Every way a corner can point: the chip clears it
+        for (let a = 0; a < 2 * Math.PI; a += Math.PI / 12) {
+            const c: CornerCount = {
+                ...pulledRight(500, 500),
+                dirIn: [Math.cos(a), Math.sin(a)],
+                dirOut: [Math.cos(a + 2), Math.sin(a + 2)],
+            };
+            const size = chipSize(c, false);
+            const [place] = chipPlaces([c], id, [], () => size);
+            expect(gap(boxOf(place!, size), 500, 500)).toBeGreaterThan(12);
+        }
+    });
+
+    it("QA-TC-16: the side outside the turn taken (a point, a dot's label): the next free side; every side taken: farther out", () => {
+        const corner = pulledRight(500, 500);
+        const size = chipSize(corner, false);
+        const point: ChipObstacle = { kind: "circle", x: 540, y: 500, r: 8 };
+        const [aside] = chipPlaces([corner], id, [point], () => size);
+        const box = boxOf(aside!, size);
+        expect(gap(box, 540, 500)).toBeGreaterThan(8);
+        expect(gap(box, 500, 500)).toBeGreaterThan(12);
+        // Square to the way out of the turn: below it
+        expect(aside!.sy).toBe(1);
+        // A label on every side near the corner: the chip goes farther out, still clear of them
+        const near: ChipObstacle[] = [
+            { kind: "box", x: 530, y: 500, w: 20, h: 14 },
+            { kind: "box", x: 470, y: 500, w: 20, h: 14 },
+            { kind: "box", x: 500, y: 525, w: 20, h: 14 },
+            { kind: "box", x: 500, y: 475, w: 20, h: 14 },
+        ];
+        const [far] = chipPlaces([corner], id, near, () => size);
+        const farBox = boxOf(far!, size);
+        for (const o of near)
+            expect(
+                Math.abs(farBox.x - o.x) >= (farBox.w + o.w) / 2 ||
+                    Math.abs(farBox.y - o.y) >= (farBox.h + o.h) / 2,
+            ).toBe(true);
+    });
+
+    it("what a chip keeps off: the open trail's points and leg handles, and the line's starts and spots", () => {
+        const s = sessionOf(alongTarget());
+        act(() =>
+            usePathPenStore.setState({ session: { ...s, phase: "open" } }),
+        );
+        const view = { panX: 0, panY: 0, zoom: 1, width: 800, height: 600 };
+        const obstacles = chipObstaclesOf(
+            usePathPenStore.getState().session!,
+            view as never,
+        );
+        const has = (x: number, y: number) =>
+            obstacles.some(
+                (o) => o.kind === "circle" && o.x === x && o.y === y,
+            );
+        // the corner point (6, 8) in steps, and the first leg's middle handle
+        expect(has(6 * S, 8 * S)).toBe(true);
+        expect(has(6 * S, 4 * S)).toBe(true);
+        for (const p of [...homes, ...spots]) expect(has(p.x, p.y)).toBe(true);
     });
 });

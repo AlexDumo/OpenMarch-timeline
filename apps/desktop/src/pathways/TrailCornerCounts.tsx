@@ -5,7 +5,16 @@ import { FlagPennantIcon, WarningIcon } from "@phosphor-icons/react";
 import type { CornerCount } from "@openmarch/core";
 import tolgee from "@/global/singletons/Tolgee";
 import { Tip } from "@/components/ui/Tip";
-import { fieldToElement, useFieldViewStore } from "@/field/three/fieldView";
+import {
+    fieldToElement,
+    useFieldViewStore,
+    type FieldView,
+} from "@/field/three/fieldView";
+import { DOT_RADIUS } from "@/field/editor/hitTest";
+import { dotSizes } from "@/field/three/selectionRing";
+import { isTouchLayout } from "@/components/timeline/touchTargets";
+import { currentShapeField } from "@/shapes/field/shapeField";
+import { drawingOf } from "./pathPenMode";
 import { POPOVER_CLASS } from "@/components/ui/popupClasses";
 import type { PathSession } from "./pathPenStore";
 import {
@@ -15,41 +24,238 @@ import {
     type TrailCornersView,
 } from "./trailCorners";
 
-/** How far outside its corner a chip's middle sits, in screen pixels (clear of the point handle) */
-const CHIP_OFFSET_PX = 26;
-/** A chip's room, in screen pixels: a chip whose middle is closer than this to one shown is left out */
-const CHIP_ROOM_X = 48;
-const CHIP_ROOM_Y = 22;
+/**
+ * How far a chip's nearest edge sits from its corner, in screen pixels, along the side it takes.
+ * The chip is anchored by that edge (`chipAnchor`), so however wide its text is, it never covers
+ * the corner's point or the dot standing there (owner, 2026-11-17: a warning sat on the point).
+ */
+const CHIP_GAP_PX = 18;
+/** How much farther out a chip tries when every side at `CHIP_GAP_PX` is taken */
+const CHIP_FAR_GAP_PX = 34;
+/** Room kept around what a chip mustn't cover, in screen pixels */
+const CHIP_CLEARANCE_PX = 2;
+/** A chip's size as drawn, in screen pixels: text-sub digits, the warning icon, its padding */
+const CHIP_HEIGHT_PX = 18;
+const CHIP_HEIGHT_TOUCH_PX = 32;
+const CHIP_CHAR_PX = 6.5;
+const CHIP_PADDING_PX = 10;
+const CHIP_PADDING_TOUCH_PX = 18;
+const CHIP_ICON_PX = 14;
+
+/** What a chip mustn't cover, in screen pixels: a point or dot (a circle), a label (a box) */
+export type ChipObstacle =
+    | { kind: "circle"; x: number; y: number; r: number }
+    | { kind: "box"; x: number; y: number; w: number; h: number };
+
+/** A chip's box on screen: its middle and size */
+interface ChipBox {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+}
+
+/** A chip's size on screen for its text (`cornerRange`), estimated as the chip draws it */
+export function chipSize(
+    corner: CornerCount,
+    touch = isTouchLayout(),
+): { w: number; h: number } {
+    const text = cornerRange(corner).length * CHIP_CHAR_PX;
+    return {
+        w:
+            text +
+            (touch ? CHIP_PADDING_TOUCH_PX : CHIP_PADDING_PX) +
+            (corner.offCount ? CHIP_ICON_PX : 0),
+        h: touch ? CHIP_HEIGHT_TOUCH_PX : CHIP_HEIGHT_PX,
+    };
+}
 
 /**
- * Where each corner's chip goes, in screen pixels, in order along the way; a chip that would sit
- * on one already placed (a dense block, or zoomed out) is left out (TC-5): zoom in to see it.
- * Exported for tests.
+ * How a chip on side `u` (a unit direction from its corner) hangs from its anchor, as fractions of
+ * its size: the side scaled so its larger part is 1. The anchor is `gap` out along `u`, and the
+ * chip's edge facing the corner sits on it: straight right of the corner its left edge, straight
+ * above it its bottom edge, diagonally a corner of the chip. So the corner is at least
+ * `gap·cos 45°` clear of the chip, whatever its size.
+ */
+export function chipAnchor(u: { x: number; y: number }): {
+    sx: number;
+    sy: number;
+} {
+    const m = Math.max(Math.abs(u.x), Math.abs(u.y)) || 1;
+    return { sx: u.x / m, sy: u.y / m };
+}
+
+/** The chip's box on side `u` of `at`, `gap` out (`chipAnchor`) */
+function boxOn(
+    at: { x: number; y: number },
+    u: { x: number; y: number },
+    gap: number,
+    size: { w: number; h: number },
+): ChipBox {
+    const { sx, sy } = chipAnchor(u);
+    return {
+        x: at.x + u.x * gap + (sx * size.w) / 2,
+        y: at.y + u.y * gap + (sy * size.h) / 2,
+        w: size.w,
+        h: size.h,
+    };
+}
+
+const covers = (box: ChipBox, o: ChipObstacle): boolean => {
+    const c = CHIP_CLEARANCE_PX;
+    if (o.kind === "box")
+        return (
+            Math.abs(box.x - o.x) < (box.w + o.w) / 2 + c &&
+            Math.abs(box.y - o.y) < (box.h + o.h) / 2 + c
+        );
+    // The nearest point of the box to the circle's middle
+    const nx = Math.max(box.x - box.w / 2, Math.min(o.x, box.x + box.w / 2));
+    const ny = Math.max(box.y - box.h / 2, Math.min(o.y, box.y + box.h / 2));
+    return Math.hypot(nx - o.x, ny - o.y) < o.r + c;
+};
+
+const overlaps = (a: ChipBox, b: ChipBox): boolean =>
+    Math.abs(a.x - b.x) < (a.w + b.w) / 2 &&
+    Math.abs(a.y - b.y) < (a.h + b.h) / 2;
+
+/**
+ * The sides a corner's chip tries, in order: outside the turn, along the bisector of its two legs
+ * (away from where the way bends to), then square to that either way, then inside the turn. A
+ * corner that turns right round (no outside) starts square to the way in.
+ */
+function chipSides(corner: CornerCount): { x: number; y: number }[] {
+    const ix = corner.dirOut[0] - corner.dirIn[0];
+    const iy = corner.dirOut[1] - corner.dirIn[1];
+    const il = Math.hypot(ix, iy);
+    const u =
+        il > 1e-9
+            ? { x: -ix / il, y: -iy / il }
+            : { x: -corner.dirIn[1], y: corner.dirIn[0] };
+    return [u, { x: -u.y, y: u.x }, { x: u.y, y: -u.x }, { x: -u.x, y: -u.y }];
+}
+
+/**
+ * Where each corner's chip goes, in screen pixels, in order along the way (TC-5; owner,
+ * 2026-11-17). Its side is the first of `chipSides` where it covers nothing in `obstacles` (the
+ * path's points and handles, the marchers' dots and their drill labels), at `CHIP_GAP_PX`, then
+ * farther out; when every side is taken it keeps the first (outside the turn), which never covers
+ * its own corner. A chip that would sit on one already placed (a dense block, or zoomed out) is
+ * left out (TC-5): zoom in to see it. `left`/`top` is its anchor and `sx`/`sy` how it hangs from
+ * it (`chipAnchor`). Exported for tests.
  */
 export function chipPlaces(
     corners: readonly CornerCount[],
     toScreen: (x: number, y: number) => { x: number; y: number },
-): { corner: CornerCount; left: number; top: number }[] {
-    const placed: { corner: CornerCount; left: number; top: number }[] = [];
+    obstacles: readonly ChipObstacle[] = [],
+    sizeOf: (corner: CornerCount) => { w: number; h: number } = (c) =>
+        chipSize(c),
+): {
+    corner: CornerCount;
+    left: number;
+    top: number;
+    sx: number;
+    sy: number;
+}[] {
+    const placed: {
+        corner: CornerCount;
+        left: number;
+        top: number;
+        sx: number;
+        sy: number;
+        box: ChipBox;
+    }[] = [];
     for (const corner of corners) {
         const at = toScreen(corner.at[0], corner.at[1]);
-        // outside the turn: away from where the way bends to
-        const ix = corner.dirOut[0] - corner.dirIn[0];
-        const iy = corner.dirOut[1] - corner.dirIn[1];
-        const il = Math.hypot(ix, iy) || 1;
-        const left = at.x - (ix / il) * CHIP_OFFSET_PX;
-        const top = at.y - (iy / il) * CHIP_OFFSET_PX;
-        if (
-            placed.some(
-                (p) =>
-                    Math.abs(p.left - left) < CHIP_ROOM_X &&
-                    Math.abs(p.top - top) < CHIP_ROOM_Y,
-            )
-        )
-            continue;
-        placed.push({ corner, left, top });
+        const size = sizeOf(corner);
+        const sides = chipSides(corner);
+        const tries = [CHIP_GAP_PX, CHIP_FAR_GAP_PX].flatMap((gap) =>
+            sides.map((u) => ({ u, gap })),
+        );
+        const free =
+            tries.find(
+                ({ u, gap }) =>
+                    !obstacles.some((o) => covers(boxOn(at, u, gap, size), o)),
+            ) ?? tries[0]!;
+        const box = boxOn(at, free.u, free.gap, size);
+        if (placed.some((p) => overlaps(p.box, box))) continue;
+        const { sx, sy } = chipAnchor(free.u);
+        placed.push({
+            corner,
+            left: at.x + free.u.x * free.gap,
+            top: at.y + free.u.y * free.gap,
+            sx,
+            sy,
+            box,
+        });
     }
-    return placed;
+    return placed.map(({ box: _box, ...p }) => p);
+}
+
+/** How far from a point's or handle's middle a chip keeps, in screen pixels */
+const HANDLE_ROOM_PX = 8;
+/** A drill label above a dot: its middle 2.2 dot radii up, 14 field units high (`LabelsLayer`) */
+const LABEL_LIFT_DOTS = 2.2;
+const LABEL_HEIGHT = 14;
+/** A label's width per character, in em (Courier) */
+const LABEL_EM_PER_CHAR = 0.62;
+
+/**
+ * What the chips keep off, on screen: the session's drawn points, handles, starts and spots, and
+ * every marcher drawn on the field near the trail with its drill label above it
+ */
+export function chipObstaclesOf(
+    session: PathSession,
+    view: FieldView,
+): ChipObstacle[] {
+    const out: ChipObstacle[] = [];
+    const toScreen = (p: { x: number; y: number }) =>
+        fieldToElement(view, p.x, p.y);
+    const zoom = view.zoom || 1;
+    const dot = DOT_RADIUS * dotSizes(zoom).scale;
+    const dotPx = dot * zoom + 4;
+    const drawing = drawingOf(session);
+    const handles = [
+        ...session.points.map((p) => p.at),
+        ...(drawing?.handles ?? []),
+        ...(drawing?.addHandles ?? []),
+        ...(drawing?.selectedHandles ?? []),
+    ];
+    for (const p of handles) {
+        const s = toScreen(p);
+        out.push({ kind: "circle", x: s.x, y: s.y, r: HANDLE_ROOM_PX });
+    }
+    for (const p of [...(drawing?.rings ?? []), ...(drawing?.spots ?? [])]) {
+        const s = toScreen(p);
+        out.push({ kind: "circle", x: s.x, y: s.y, r: dotPx });
+    }
+    // The marchers drawn now, the line's real ones while it's drawn (step 4c) too, with labels
+    const field = currentShapeField();
+    const marchers = field?.marchers() ?? [];
+    const drills = new Map(marchers.map((m) => [m.id, m.drill_number]));
+    const dots: { id: number; at: { x: number; y: number } }[] = [];
+    if (field)
+        for (const [id, at] of field.drawn(marchers.map((m) => m.id)))
+            dots.push({ id, at: { x: at.x, y: at.y } });
+    const real = drawing?.marchersAt;
+    if (real)
+        real.ids.forEach((id, i) => {
+            const at = real.spots[i];
+            if (at) dots.push({ id, at });
+        });
+    const scale = dotSizes(zoom).scale;
+    for (const { id, at } of dots) {
+        const s = toScreen(at);
+        out.push({ kind: "circle", x: s.x, y: s.y, r: dotPx });
+        const chars = (drills.get(id) ?? "").length || 3;
+        out.push({
+            kind: "box",
+            x: s.x,
+            y: s.y - LABEL_LIFT_DOTS * DOT_RADIUS * scale * zoom,
+            w: chars * LABEL_EM_PER_CHAR * LABEL_HEIGHT * scale * zoom,
+            h: LABEL_HEIGHT * scale * zoom,
+        });
+    }
+    return out;
 }
 
 /**
@@ -66,9 +272,11 @@ export function TrailCornerCounts({ session }: { session: PathSession }) {
     const drawing = session.phase === "drawing";
     return (
         <>
-            {chipPlaces(view.corners, (x, y) =>
-                fieldToElement(field, x, y),
-            ).map(({ corner, left, top }) => (
+            {chipPlaces(
+                view.corners,
+                (x, y) => fieldToElement(field, x, y),
+                chipObstaclesOf(session, field),
+            ).map(({ corner, left, top, sx, sy }) => (
                 <CornerChip
                     // by where it is along the way, so an open list stays on its corner when
                     // another corner comes or goes
@@ -77,6 +285,8 @@ export function TrailCornerCounts({ session }: { session: PathSession }) {
                     corner={corner}
                     left={left}
                     top={top}
+                    sx={sx}
+                    sy={sy}
                     inert={drawing}
                 />
             ))}
@@ -89,12 +299,17 @@ function CornerChip({
     corner,
     left,
     top,
+    sx,
+    sy,
     inert,
 }: {
     view: TrailCornersView;
     corner: CornerCount;
     left: number;
     top: number;
+    /** How it hangs from its anchor (`chipAnchor`): its edge facing the corner on the anchor */
+    sx: number;
+    sy: number;
     inert: boolean;
 }) {
     const [open, setOpen] = useState(false);
@@ -114,7 +329,7 @@ function CornerChip({
         <button
             type="button"
             className={clsx(
-                "rounded-6 bg-modal text-sub shadow-modal absolute z-10 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 border px-4 leading-none whitespace-nowrap tabular-nums",
+                "rounded-6 bg-modal text-sub shadow-modal absolute z-10 flex items-center gap-2 border px-4 leading-none whitespace-nowrap tabular-nums",
                 "focus-visible:outline-accent py-2 focus-visible:outline-2",
                 // a finger gets a target it can hit (touch layout), desktop stays compact
                 "touch:min-h-32 touch:px-8",
@@ -123,7 +338,11 @@ function CornerChip({
                     : "border-stroke text-text",
                 inert && "pointer-events-none",
             )}
-            style={{ left, top }}
+            style={{
+                left,
+                top,
+                transform: `translate(${-50 + 50 * sx}%, ${-50 + 50 * sy}%)`,
+            }}
             aria-label={label}
             tabIndex={inert ? -1 : undefined}
             data-testid="trail-corner-count"
