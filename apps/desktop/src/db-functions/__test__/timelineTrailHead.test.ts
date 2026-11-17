@@ -14,6 +14,7 @@ import { readAllShapeRecipes } from "../shapeRecipes";
 import { updateTimelineSlotDestinationInTransaction } from "../timelineTransitionsInTransaction";
 import type { RoutePointInput } from "../timelineRoutes";
 import {
+    detachTrailSpot,
     dragTrail,
     dragTrailHead,
     planTrailDrag,
@@ -351,5 +352,85 @@ describeDbTests("Drag a trail's head (AP-T16)", (it) => {
                 }),
             /dragged out of a line/i,
         );
+    });
+
+    it("QA-FD-6 (write): a form's tail slid, its gaps scaled, writes those spots in one undo step; slid back past the start, refused", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const first = await dragged(db, 10);
+        const { step, lead, lineUp } = first;
+        const points: RoutePointInput[] = [
+            { at: [lead[0] + 10 * step, lead[1]] },
+        ];
+        const before = await dataOf(db);
+        const spacing: TrailSpacing = {
+            kind: "gaps",
+            back: [10, 8, 6, 4, 2, 0].map((b) => b * step),
+        };
+        await dragTrailHead({
+            db,
+            routeId: first.routeId,
+            points,
+            spacing,
+            step,
+        });
+        const spots = await spotsOf(db, first.transitionId);
+        expect(spots).toEqual(
+            planTrailDrag(lineUp, points, spacing, step).spots,
+        );
+        spots.forEach((s, q) =>
+            expect(
+                near(s, [lead[0] + (10 - (5 - q) * 2) * step, lead[1]]),
+            ).toBe(true),
+        );
+        expect((await performUndo(db)).success).toBe(true);
+        expect(await dataOf(db)).toEqual(before);
+        // So far back the tail would walk backward past its start
+        await expectRefused(
+            db,
+            () =>
+                dragTrailHead({
+                    db,
+                    routeId: first.routeId,
+                    points,
+                    spacing: {
+                        kind: "gaps",
+                        back: [40, 30, 20, 10, 5, 0].map((b) => b * step),
+                    },
+                    step,
+                }),
+            /walk back past where it started/,
+        );
+    });
+
+    it("QA-FD-8 (write): one marcher detached: only its spot leaves the trail, the trail and the others stay, one undo step", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const first = await dragged(db, 10);
+        const { step, lead } = first;
+        const before = await dataOf(db);
+        const spotsBefore = await spotsOf(db, first.transitionId);
+        const routeBefore = await routeOf(db, first.routeId);
+        await detachTrailSpot({
+            db,
+            routeId: first.routeId,
+            marcherId: 3,
+            point: [lead[0] + 6 * step, lead[1] - 4 * step],
+        });
+        const spots = await spotsOf(db, first.transitionId);
+        expect(await routeOf(db, first.routeId)).toEqual(routeBefore);
+        const changed = spots.flatMap((s, q) =>
+            near(s, spotsBefore[q]!) ? [] : [q],
+        );
+        expect(changed).toHaveLength(1);
+        expect(
+            spots.some((s) =>
+                near(s, [lead[0] + 6 * step, lead[1] - 4 * step]),
+            ),
+        ).toBe(true);
+        expect((await performUndo(db)).success).toBe(true);
+        expect(await dataOf(db)).toEqual(before);
     });
 });

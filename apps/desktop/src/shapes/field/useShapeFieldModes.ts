@@ -29,6 +29,7 @@ import {
     objectsDrawn,
     ownLinesDrawn,
     usePathPenStore,
+    type PathSession,
 } from "@/pathways/pathPenStore";
 import {
     drawingOf,
@@ -46,6 +47,10 @@ import {
     setFieldObjects,
     setFieldUnderlay,
 } from "@/field/editor/fieldUnderlayStore";
+
+/** A drag on a trail that began with its Edit path off (a marcher of its form, `trailForm.ts`) */
+const fromClosed = (s: PathSession | null): boolean =>
+    s?.phase === "drawing" && s.follow?.head?.restore.phase === "closed";
 
 /**
  * Puts the shapes on the field's editor (#204): the open Shape tool takes every edit press
@@ -69,14 +74,19 @@ export function useShapeFieldModes(
     // A trail's head is dragged or drawn on with Edit path on (AP-T16, L.15; owner 2026-11-17),
     // so it's the pen's mode throughout, as the open path's was: the leg to the pointer shows and
     // the end shape's controls stay away
+    // A trail's marcher dragged with Edit path off (owner, 2026-11-17) stays with the mode it was
+    // pressed in, as the selected trail's: under a selected end shape, the box's, which hands it on
     const pathOpen = usePathPenStore(
-        (s) => s.session !== null && s.session.phase !== "closed",
+        (s) =>
+            s.session !== null &&
+            s.session.phase !== "closed" &&
+            !fromClosed(s.session),
     );
     // A closed path start flag positions hide (paths level off) isn't the field's mode; a selected
     // path object always is, and so are Paths All's paths, so a click selects one (step 3a)
     const pathShown = usePathPenStore(
         (s) =>
-            (s.session?.phase === "closed" &&
+            ((s.session?.phase === "closed" || fromClosed(s.session)) &&
                 (!s.hidden || !!s.session?.object)) ||
             s.objects.length > 0,
     );

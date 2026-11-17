@@ -339,7 +339,19 @@ export class LiveBoxMode implements FieldMode {
     }
 
     claims(pointer: FieldPointer, press: FieldModePress): boolean {
-        return this.boxTakes(pointer, press) || this.underTakes(pointer, press);
+        return this.underFirst(pointer, press) || this.boxTakes(pointer, press);
+    }
+
+    /**
+     * Whether what's drawn under the box takes this press before the box: where the box doesn't
+     * take it, or, tucked away under a shown trail, on a marcher's dot (owner, 2026-11-17: a drag
+     * on a trail's marcher reshapes the trail's form; the box's body between them moves it whole)
+     */
+    private underFirst(pointer: FieldPointer, press: FieldModePress): boolean {
+        if (!this.underTakes(pointer, press)) return false;
+        return (
+            !this.boxTakes(pointer, press) || (this.tucked() && press.onDot())
+        );
     }
 
     /** Whether the box takes a press: its controls and inside it, unless it reaches inside */
@@ -422,10 +434,7 @@ export class LiveBoxMode implements FieldMode {
     press(pointer: FieldPointer, modePress: FieldModePress): void {
         const { isMac } = modePress;
         this.underPress = false;
-        if (
-            !this.boxTakes(pointer, modePress) &&
-            this.underTakes(pointer, modePress)
-        ) {
+        if (this.underFirst(pointer, modePress)) {
             this.underPress = true;
             this.under!.press!(pointer, modePress);
             // The trail's drawing shows where the line will stand, in place of the box's old spots

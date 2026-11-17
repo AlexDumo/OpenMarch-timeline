@@ -2963,7 +2963,8 @@
                 "tooFar": "A move can go around at most {laps} times",
                 "aroundPoints": "This line goes around the outline it stands on, which has no points to edit. Use Reverse leader to go the other way around, or Follow again to change how far",
                 "reverseNobody": "Reverse leader needs someone who starts this move on the outline",
-                "headNotAlong": "Only a trail dragged out of a line can be made longer or shorter by its head"
+                "headNotAlong": "Only a trail dragged out of a line can be made longer or shorter by its head",
+                "formPastStart": "A marcher would walk back past where it started. Slide the tail less far"
             }
         },
         "expertHolds": {
@@ -4634,7 +4635,8 @@
             "refit": "Couldn't re-fit the path",
             "reverse": "Couldn't reverse the trail",
             "goRound": "Couldn't go around",
-            "headDrag": "Couldn't change the trail"
+            "headDrag": "Couldn't change the trail",
+            "detachFormMarcher": "Couldn't move the marcher off the trail"
         },
         "refusals": {
             "noMove": "{marcher} has no move at the playhead to draw a path on",
@@ -4646,7 +4648,8 @@
             "goAroundSelect": "Select marchers on a circle or box outline",
             "goAroundOnly": "This line can only go around: it has no ends to drag a trail out of",
             "snakeNeedsBox": "Snake order is for a box with no order of its own: open Follow on marchers standing in a box, or ripple into one",
-            "noEndShape": "Select a trail at the end of its move, where its marchers stand in a shape"
+            "noEndShape": "Select a trail at the end of its move, where its marchers stand in a shape",
+            "formLineUp": "This marcher is still in the line-up. Lengthen the trail to bend here."
         },
         "banner": {
             "drawingPoints": "{marcher}'s path: <how></how> · Right-click or <keys></keys> removes the last · Double-click to finish · <esc></esc> to cancel",

@@ -15,10 +15,26 @@ questions:
   - "Ripple a line into a box on the next page (Ends: Ripple in). The tail takes the corner nearest the way in and the leader goes to the far end. Is that the order you'd write?"
   - "Ripple into a box with an empty spot in it. The snake goes through the hole and nobody stops there. Does that read right?"
   - "On a 2-row box, Go around opens first, with Drag out beside it. Should a 2-row box open on the snake instead?"
+  - "With a trail selected and Edit path off, clicks on the trail, its head or a marcher only select. Turn Edit path on to drag points or click the head to keep drawing. Was it clear when the trail was safe from clicks, and when it was editable?"
+  - "At the end of the move, drag a middle marcher to bend the line, drag the leader, then the tail. Did each do what you expected, and did the marchers stay where you'd want them?"
+  - "Alt + drag one marcher to take it off the line. Is Alt the right way to do that, and was moving the whole form (drag between the marchers) easy to find?"
   - "Anything else about snaking through a box you'd change?"
 ---
 
-**What's new**
+**What's new (2026-11-17): Edit path and dragging marchers**
+
+- **Edit path is a toggle.** Select a trail and the bar's **Edit path** button shows whether it's
+  on. Off (the default), clicking the trail, its head or a marcher only selects; nothing changes.
+  On, the trail's points show and drag, a click on its head keeps drawing it, and a quick drag on
+  the head makes it longer or shorter. **Escape** or a click on empty field turns it off.
+- **Drag a marcher to reshape the form.** At the end of the move, with Edit path on or off:
+  drag a middle marcher to bend the line there (it stays under your pointer and the spacing
+  holds); drag the leader to move the head; drag the tail to slide it along the trail, spreading
+  or tightening the form. With Edit path off, the trail before the form doesn't move. **Alt** +
+  drag takes one marcher off the line. To move the whole form, drag between the marchers.
+  Every drag is one undo; **Escape** mid-drag cancels.
+
+**What's new (step 11)**
 
 - **Drag a box out by a corner.** Select the marchers in a filled box and press **Shift+L**
   (or the Follow button by the Path pen). Every corner of the box is a grab point. Drag a trail

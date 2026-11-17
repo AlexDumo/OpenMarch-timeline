@@ -577,12 +577,16 @@ export type FieldModePress = {
     readonly isMac: boolean;
     /** Whether a marcher's dot (or an item) is under the press, so it is the dot's (P-1) */
     onDot(): boolean;
+    /** The marcher (or item) whose dot is under the press, or null */
+    marcher?(): number | null;
 };
 
 /** What the editor knows of the pointer when it asks a mode for its cursor. */
 export type FieldModeHover = {
     /** Whether a marcher's dot (or an item) is under the pointer, so a press there is the marcher's */
     onDot(): boolean;
+    /** The marcher (or item) whose dot is under the pointer, or null */
+    marcher?(): number | null;
 };
 
 /**
@@ -909,6 +913,7 @@ export class FieldEditor {
             const modeCursor =
                 this.mode?.cursorAt(pointer, {
                     onDot: () => this.marcherAt(pointer) !== null,
+                    marcher: () => this.marcherAt(pointer),
                 }) ?? null;
             if (modeCursor) {
                 this.setHoverHandle(null);
@@ -1148,6 +1153,7 @@ export class FieldEditor {
                 this.reachInside(pointer, this.marcherAt(pointer)) !== null,
             isMac: this.options.isMac ?? false,
             onDot: () => this.marcherAt(pointer) !== null,
+            marcher: () => this.marcherAt(pointer),
         };
     }
 

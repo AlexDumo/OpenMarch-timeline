@@ -64,7 +64,7 @@ const HEAD_WIDTH_DOTS = 1.6;
 const tuple = (p: XY): CoreXY => [p.x, p.y];
 
 /** R-13″'s projection: the distance along `way` of its point nearest `p` (ties to the larger) */
-const nearestAlong = (way: FtlTrail, p: CoreXY): number =>
+export const nearestAlong = (way: FtlTrail, p: CoreXY): number =>
     alongEnds(way, [p], [0]).endDist[0]!;
 const xy = (p: readonly number[]): XY => ({ x: p[0]!, y: p[1]! });
 
@@ -72,7 +72,7 @@ const xy = (p: readonly number[]): XY => ({ x: p[0]!, y: p[1]! });
  * The way the trail's points make from the leader's start `from` (R-13″'s drawn part, the
  * resolver's own, as AP-T8 plans on it), or null with no length
  */
-function wayOf(
+export function wayOf(
     from: XY,
     points: readonly PathPoint[],
 ): { way: FtlTrail; L: number } | null {
@@ -252,7 +252,7 @@ function pieceAt(D: readonly number[], d: number): number {
  * before it, ids kept, then a corner at the cut. An arc leg cut keeps its circle: the new last
  * leg's bulge is its share of the sweep.
  */
-function cutAt(
+export function cutAt(
     prefix: readonly PathPoint[],
     way: FtlTrail,
     d: number,
@@ -314,13 +314,30 @@ export function headSpacingOf(s: PathSession, step: number): TrailSpacing {
     const even = e.every(
         (x, q) => q === 0 || Math.abs(x - e[q - 1]! - gap) <= tol,
     );
-    if (!even || !(gap > 0)) return { kind: "keep" };
     const steps = Math.round(gap / step / EVEN_STEP) * EVEN_STEP;
-    if (!(steps >= EVEN_STEP)) return { kind: "keep" };
-    const spacing: TrailSpacing = { kind: "even", steps };
-    return matches(planTrailDrag(starts, points, spacing, step))
-        ? spacing
-        : { kind: "keep" };
+    if (even && gap > 0 && steps >= EVEN_STEP) {
+        const spacing: TrailSpacing = { kind: "even", steps };
+        if (matches(planTrailDrag(starts, points, spacing, step)))
+            return spacing;
+    }
+    // A form whose tail was slid along the trail (owner, 2026-11-17): every spot on the way, in
+    // order, the leader's at the head; its gaps back from the head are its spacing. Spots moved
+    // off the way by hand are Keep spacing's, planned again
+    const total = keep.way.destOffset;
+    const onWay = members.every((m, q) => {
+        const at = keep.way.at(e[q]!);
+        return Math.hypot(at[0] - m.to.x, at[1] - m.to.y) <= tol;
+    });
+    const ordered = e.every((x, q) => q === 0 || x > e[q - 1]! + tol);
+    if (onWay && ordered && Math.abs(e.at(-1)! - total) <= tol) {
+        const spacing: TrailSpacing = {
+            kind: "gaps",
+            back: e.map((x, q) => (q === e.length - 1 ? 0 : total - x)),
+        };
+        if (matches(planTrailDrag(starts, points, spacing, step)))
+            return spacing;
+    }
+    return { kind: "keep" };
 }
 
 // ---------------------------------------------------------------------------
@@ -334,6 +351,21 @@ export function headSpacingOf(s: PathSession, step: number): TrailSpacing {
 export function startHeadDrag(step: number): boolean {
     const { session, saving } = usePathPenStore.getState();
     if (saving || !canDragHead(session) || !trailHeadOf(session)) return false;
+    beginTrailDrag(session, step, headSpacingOf(session, step));
+    return true;
+}
+
+/**
+ * The session becomes step 4b's drawing, grabbed at the leader, its stored points already drawn
+ * (the head drag, AP-T16, and a marcher of the form dragged, `trailForm.ts`), with `spacing` and,
+ * for a marcher's drag, `form`
+ */
+export function beginTrailDrag(
+    session: PathSession,
+    step: number,
+    spacing: TrailSpacing,
+    form?: NonNullable<FollowDrag["head"]>["form"],
+): void {
     const trail = session.target.trail!;
     const line = trail.members.map((m) => m.marcherId);
     const leader = line.at(-1)!;
@@ -344,12 +376,16 @@ export function startHeadDrag(step: number): boolean {
         starts: new Map(trail.members.map((m) => [m.marcherId, m.from])),
         box: null,
         grabbed: leader,
-        spacing: headSpacingOf(session, step),
+        spacing,
         ends: "trail",
         keep: null,
         form: null,
         step,
-        head: { prefix: session.points, restore: session },
+        head: {
+            prefix: session.points,
+            restore: session,
+            ...(form ? { form } : {}),
+        },
     };
     const drills = new Map(trail.members.map((m) => [m.marcherId, m.drill]));
     usePathPenStore.setState({
@@ -365,7 +401,6 @@ export function startHeadDrag(step: number): boolean {
             hoverLane: null,
         },
     });
-    return true;
 }
 
 /** The head drag under way, or null */
@@ -530,7 +565,9 @@ export async function finishHeadDrag(): Promise<void> {
     const { restore } = f.head;
     // Drawn on with clicks, Enter writes what's placed, not the leg to the pointer (the pen's rule)
     const points = f.head.clicks ? f.head.prefix : session.points;
-    if (samePoints(points, restore.points)) {
+    // A form's tail slid changes only the spacing (owner, 2026-11-17, `trailForm.ts`)
+    const respaced = !!f.head.form && f.spacing !== f.head.form.spacing;
+    if (samePoints(points, restore.points) && !respaced) {
         usePathPenStore.setState({ session: restore });
         return;
     }

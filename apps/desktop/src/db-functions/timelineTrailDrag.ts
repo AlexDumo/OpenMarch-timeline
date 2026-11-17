@@ -76,6 +76,8 @@ export const trailDragRefusal = {
     noWindow: () => text.t("timeline.refusals.trail.noWindow"),
     /** AP-T16: the trail's head is dragged on a trail that wasn't dragged out of a line */
     headNotAlong: () => text.t("timeline.refusals.trail.headNotAlong"),
+    /** A trail's form slid so far back that a marcher would walk back past its start */
+    formPastStart: () => text.t("timeline.refusals.trail.formPastStart"),
 };
 
 // ---------------------------------------------------------------------------
@@ -319,7 +321,16 @@ export function trailOrderFrom(
 // ---------------------------------------------------------------------------
 
 /** Spacing on the path bar (DL-7): keep each member's distance along the way, or even steps */
-export type TrailSpacing = { kind: "keep" } | { kind: "even"; steps: number };
+/**
+ * How a dragged trail spaces its line (DL-7): Keep (the line-up's own gaps), Even N steps, or
+ * gaps given as each member's distance back along the way from the head (`back`, tail first, field
+ * units, the leader's 0): a form whose tail was slid along the trail (owner, 2026-11-17), each gap
+ * scaled, so an uneven line stays uneven.
+ */
+export type TrailSpacing =
+    | { kind: "keep" }
+    | { kind: "even"; steps: number }
+    | { kind: "gaps"; back: readonly number[] };
 
 /** What a dragged trail does (AP-T8), worked out before anything is written */
 export interface TrailDragPlan {
@@ -374,9 +385,11 @@ export function planTrailDrag(
     const ends =
         spacing.kind === "keep"
             ? startDist.map((s) => s + drawn)
-            : startDist.map(
-                  (_, q) => total - (m - 1 - q) * spacing.steps * step,
-              );
+            : spacing.kind === "gaps"
+              ? startDist.map((_, q) => total - (spacing.back[q] ?? 0))
+              : startDist.map(
+                    (_, q) => total - (m - 1 - q) * spacing.steps * step,
+                );
     // N ≤ (total − startDist[q]) / ((m − 1 − q)·step) for every member behind the leader
     let evenLimit: number | null = null;
     for (let q = 0; q < m - 1; q++) {
@@ -826,6 +839,8 @@ export async function dragTrailHeadInTransaction(
                 Math.floor((plan.evenLimit ?? 0) * 4) / 4,
             ),
         );
+    if (spacing.kind === "gaps" && !plan.forward)
+        refuse(trailDragRefusal.formPastStart());
     // The trail: AP-T2's writer, which keeps it running to its own last point (AP-T10)
     await editTrailPointsInTransaction({ tx, routeId, points });
     // Each member's spot, on its own slot
@@ -870,5 +885,68 @@ export async function dragTrailHead(
     const { db, ...input } = args;
     return await transactionWithHistory(db, "dragTrailHead", (tx) =>
         dragTrailHeadInTransaction(tx, input),
+    );
+}
+
+// ---------------------------------------------------------------------------
+// A trail's form: one marcher detached (owner, 2026-11-17)
+// ---------------------------------------------------------------------------
+
+export interface TrailDetachInput {
+    /** The trail's route */
+    routeId: number;
+    marcherId: number;
+    /** Its new end spot, off the trail */
+    point: XY;
+}
+
+/**
+ * One member of a trail's form detached (Alt + drag, owner 2026-11-17), inside one write-wrapper
+ * transaction: its end spot leaves the trail for `point`, everyone else's and the trail stay. It
+ * then walks the trail to its projection and on straight to its spot (R-13″'s off-trail rule).
+ * Refused for a trail that isn't along the way, or a marcher not on it.
+ */
+export async function detachTrailSpotInTransaction(
+    tx: DbTransaction,
+    { routeId, marcherId, point }: TrailDetachInput,
+): Promise<void> {
+    const T = schema.timeline_transitions;
+    const A = schema.timeline_assignments;
+    const transition = await tx
+        .select()
+        .from(T)
+        .where(
+            and(eq(T.route_id, routeId), eq(T.path_style, "follow_the_leader")),
+        )
+        .get();
+    if (!transition) refuse(trailRefusal.noTrail());
+    if (!isAlong(transition) || isAround(transition))
+        refuse(trailDragRefusal.headNotAlong());
+    const row = await tx
+        .select({ slot: A.slot_index })
+        .from(A)
+        .where(
+            and(
+                eq(A.transition_id, transition.id),
+                eq(A.marcher_id, marcherId),
+            ),
+        )
+        .get();
+    if (!row) refuse(trailRefusal.noTrail());
+    await updateTimelineSlotDestinationInTransaction({
+        tx,
+        transitionId: transition.id,
+        slotIndex: row.slot,
+        point,
+    });
+}
+
+/** One member of a trail's form detached, as one undoable edit. */
+export async function detachTrailSpot(
+    args: { db: DbConnection } & TrailDetachInput,
+): Promise<void> {
+    const { db, ...input } = args;
+    await transactionWithHistory(db, "detachTrailSpot", (tx) =>
+        detachTrailSpotInTransaction(tx, input),
     );
 }

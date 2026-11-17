@@ -65,6 +65,23 @@ export interface FollowKeep {
 }
 
 /** The Follow tool's drag in progress (a session's `follow`) */
+/** A trail's marcher grabbed to reshape its form (`trailForm.ts`) */
+export interface TrailFormGrab {
+    readonly marcherId: number;
+    /** Its place in the line, tail first */
+    readonly q: number;
+    /** What its drag does: bend the line there, move the head, or slide along the trail */
+    readonly kind: "middle" | "leader" | "tail";
+    /** Edit path off: the route in, before the form, is kept as it is */
+    readonly protect: boolean;
+    /** Each member's distance back from the head along the way when grabbed, tail first */
+    readonly back: readonly number[];
+    /** Where the leader started, along the way (the line-up's length) */
+    readonly lineLen: number;
+    /** The spacing when grabbed: a tail slide that changes it writes, though no point moved */
+    readonly spacing: TrailSpacing;
+}
+
 export interface FollowDrag {
     /** The edit window `[start flag, end flag)` the move fills (DL-2) */
     readonly window: TrailWindow;
@@ -134,6 +151,11 @@ export interface FollowDrag {
         readonly restore: PathSession;
         readonly clicks?: boolean;
         readonly history?: readonly (readonly PathPoint[])[];
+        /**
+         * One of its marchers dragged (owner, 2026-11-17, `trailForm.ts`): the form reshaped
+         * from that marcher, the points and spacing planned as the head drag plans them
+         */
+        readonly form?: TrailFormGrab;
     } | null;
 }
 
@@ -295,8 +317,11 @@ function followDrawnPlanned(s: PathSession): Planned {
 }
 
 const sameSpacing = (a: TrailSpacing, b: TrailSpacing) =>
-    a.kind === b.kind &&
-    (a.kind !== "even" || (b.kind === "even" && a.steps === b.steps));
+    a.kind === "even"
+        ? b.kind === "even" && a.steps === b.steps
+        : a.kind === "gaps"
+          ? b.kind === "gaps" && a.back === b.back
+          : a.kind === b.kind;
 
 /**
  * What the drawing shows while a trail is drawn (step 4d): `followPlanOf` with the pointer's
