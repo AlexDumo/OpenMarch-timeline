@@ -77,6 +77,22 @@ export const TIMELINE_KEYS = {
     range: "$mod",
 } as const satisfies Record<string, RoleKey>;
 
+/**
+ * The Path pen keeps one key of its own while it draws (pathways, owner 2026-11-17): held, the
+ * point a click places is the other kind than the Straight | Curve switch says. The pen honors no
+ * from-center role, so the key means nothing else there.
+ */
+export const PEN_KEYS = {
+    otherKind: "Alt",
+} as const satisfies Record<string, RoleKey>;
+
+/** Whether `key` is down in `keys`; $mod is Cmd on a Mac and Ctrl elsewhere */
+export const isRoleKeyHeld = (
+    key: RoleKey,
+    keys: HeldKeys,
+    isMac: boolean = isMacPlatform(),
+): boolean => isHeld(key, keys, isMac);
+
 export interface RoleMapConflict {
     readonly context: GestureContext;
     readonly key: RoleKey;

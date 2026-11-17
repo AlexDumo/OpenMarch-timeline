@@ -66,6 +66,7 @@ import {
 import type { XY } from "@/shapes/types";
 import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
 import { refitNeeded } from "./pathTarget";
+import { useDrawKindStore } from "./drawKind";
 import { useShapeToolStore } from "@/shapes/tool/shapeToolStore";
 import { selectOnField } from "@/shapes/placed/boxSelection";
 import { setInsideBox } from "@/shapes/placed/boxSelectionStore";
@@ -218,8 +219,9 @@ export function PathEditor({
             </RichTips>
         );
     // A trail's head dragged on or back (AP-T16): the hand is busy, so no banner or bar; the
-    // leader's mark and the corners' counts follow the drag, as they do the Follow tool's
-    if (session.follow?.head)
+    // leader's mark and the corners' counts follow the drag, as they do the Follow tool's. Drawn
+    // on with clicks, the pen's banner and bar show, Finish for a finger (owner, 2026-11-17)
+    if (session.follow?.head && !session.follow.head.clicks)
         return (
             <RichTips>
                 <TrailLeaderMark session={session} />
@@ -619,13 +621,26 @@ function PathPenBanner({ session }: { session: PathSession }) {
     const overrides = useShortcutOverridesStore((s) => s.overrides);
     const keys = getActionShortcutKeys("shapeRemoveLastPoint", { overrides });
     const esc = () => <Shortcut action="cancelAlignmentUpdates" />;
+    const how = () => <ClickHow />;
     return (
         <div
             className="rounded-6 border-stroke bg-bg-1 bg-modal text-body text-text shadow-modal pointer-events-none absolute top-12 left-1/2 z-10 -translate-x-1/2 border px-12 py-6"
             data-testid="path-pen-banner"
         >
             {/* With the key unbound, only the right-click is said */}
-            {goingRound(session.follow) ? (
+            {session.follow?.head?.clicks ? (
+                <T
+                    keyName="pathways.banner.headDrawing"
+                    defaultValue="Drawing on the trail, {marcher} leading: <how></how> · Back along it to shorten · <enter></enter> or double-click to finish · <esc></esc> to cancel"
+                    params={{
+                        marcher:
+                            session.target.trail?.members.at(-1)?.drill ?? "",
+                        how,
+                        enter: () => <Shortcut action="applyShape" />,
+                        esc,
+                    }}
+                />
+            ) : goingRound(session.follow) ? (
                 <T
                     keyName="pathways.banner.goRound"
                     defaultValue="Go around: {count} marchers follow {marcher} around the {shape} · <enter></enter> to finish · <esc></esc> to leave"
@@ -671,11 +686,12 @@ function PathPenBanner({ session }: { session: PathSession }) {
             ) : session.target.trail ? (
                 <T
                     keyName="pathways.banner.trailDrawing"
-                    defaultValue="Trail for {count} marchers, {marcher} leading: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
+                    defaultValue="Trail for {count} marchers, {marcher} leading: <how></how> · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
                     params={{
                         count: session.target.trail.members.length,
                         marcher:
                             session.target.trail.members.at(-1)?.drill ?? "",
+                        how,
                         esc,
                     }}
                 />
@@ -686,30 +702,101 @@ function PathPenBanner({ session }: { session: PathSession }) {
               ) ? (
                 <T
                     keyName="pathways.banner.groupDrawing"
-                    defaultValue="Group path for {count} marchers: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
+                    defaultValue="Group path for {count} marchers: <how></how> · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
                     params={{
                         count: session.target.group.members.length,
+                        how,
                         esc,
                     }}
                 />
             ) : keys ? (
                 <T
                     keyName="pathways.banner.drawingPoints"
-                    defaultValue="{marcher}'s path: click for a corner, drag for a smooth point · Right-click or <keys></keys> removes the last · Double-click to finish · <esc></esc> to cancel"
+                    defaultValue="{marcher}'s path: <how></how> · Right-click or <keys></keys> removes the last · Double-click to finish · <esc></esc> to cancel"
                     params={{
                         marcher: session.drill,
                         keys: () => <Shortcut action="shapeRemoveLastPoint" />,
+                        how,
                         esc,
                     }}
                 />
             ) : (
                 <T
                     keyName="pathways.banner.drawingPointsClick"
-                    defaultValue="{marcher}'s path: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
-                    params={{ marcher: session.drill, esc }}
+                    defaultValue="{marcher}'s path: <how></how> · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
+                    params={{ marcher: session.drill, how, esc }}
                 />
             )}
         </div>
+    );
+}
+
+/**
+ * The banner's words for what a click places while drawing, by the Straight | Curve switch (owner,
+ * 2026-11-17): the other kind with Alt, and a press-and-drag's smooth point
+ */
+function ClickHow() {
+    const curve = useDrawKindStore((s) => s.kind === "curve");
+    const alt = () => <Shortcut binding="Alt + Click" />;
+    return curve ? (
+        <T
+            keyName="pathways.banner.clickCurve"
+            defaultValue="click for a curve point, <alt></alt> for a corner, drag to set its roundness"
+            params={{ alt }}
+        />
+    ) : (
+        <T
+            keyName="pathways.banner.clickStraight"
+            defaultValue="click for a corner, <alt></alt> for a curve point, drag for a smooth point"
+            params={{ alt }}
+        />
+    );
+}
+
+/**
+ * The drawing bar's Straight | Curve (owner, 2026-11-17): what a click places in every drawing,
+ * remembered between drawings. Alt places the other kind while it's held; a finger has the switch.
+ * Icons, as the open path's Corner | Smooth (the same two), named in their tooltips: the bar keeps
+ * to icons and one word (owner lab feedback on fork #674).
+ */
+function DrawKindSwitch() {
+    const kind = useDrawKindStore((s) => s.kind);
+    return (
+        <span
+            className="flex items-center gap-2"
+            role="group"
+            aria-label={tolgee.t(
+                "pathways.editor.drawKind",
+                "What a click places",
+            )}
+        >
+            <IconButton
+                label={tolgee.t(
+                    "pathways.editor.straightTip",
+                    "Straight: a click places a corner. For one curve point:",
+                )}
+                action="pathDrawStraight"
+                shortcut="Alt + Click"
+                pressed={kind === "straight"}
+                onClick={() => runAction("pathDrawStraight")}
+                testId="path-draw-straight"
+            >
+                <LineSegmentsIcon size={14} />
+            </IconButton>
+            <IconButton
+                label={tolgee.t(
+                    "pathways.editor.curveTip",
+                    "Curve: a click places a smooth point. For one corner:",
+                )}
+                action="pathDrawCurve"
+                shortcut="Alt + Click"
+                pressed={kind === "curve"}
+                onClick={() => runAction("pathDrawCurve")}
+                testId="path-draw-curve"
+            >
+                <WaveSineIcon size={14} />
+            </IconButton>
+        </span>
     );
 }
 
@@ -805,6 +892,8 @@ function PathEditorBar({
     const controls = drawing || stored;
     // While a new path is drawn for two or more marchers: Together (a group path) or Follow (a
     // trail), switched without losing the points placed (pathways step 4)
+    // Drawing on from a trail's head (AP-T16): its spacing and ends are the trail's own
+    const headClicks = drawing && !!session.follow?.head?.clicks;
     const kindChoice =
         drawing &&
         !session.byRoute &&
@@ -882,16 +971,28 @@ function PathEditorBar({
                         <GoRoundControls session={session} />
                     )}
                     {session.follow &&
+                        !headClicks &&
                         !goingRound(session.follow) &&
                         snakesThroughBox(session.follow) && (
                             <SnakeChoice session={session} />
                         )}
-                    {session.follow && session.follow.grabbed !== null && (
-                        <FollowControls session={session} />
-                    )}
+                    {session.follow &&
+                        !headClicks &&
+                        session.follow.grabbed !== null && (
+                            <FollowControls session={session} />
+                        )}
                     {/* Going around ends where the outline takes them, so Ends has no say */}
-                    {session.follow && !goingRound(session.follow) && (
-                        <FollowEndsControls session={session} />
+                    {session.follow &&
+                        !headClicks &&
+                        !goingRound(session.follow) && (
+                            <FollowEndsControls session={session} />
+                        )}
+                    {/* Going around draws nothing, so no click places a point */}
+                    {!goingRound(session.follow) && (
+                        <>
+                            <DrawKindSwitch />
+                            <Divider />
+                        </>
                     )}
                     <span className="flex items-center gap-2">
                         {/* Going around draws nothing, so there's no point to take back */}
@@ -902,7 +1003,11 @@ function PathEditorBar({
                                     "Remove last point",
                                 )}
                                 action="shapeRemoveLastPoint"
-                                disabled={session.points.length === 0}
+                                disabled={
+                                    headClicks
+                                        ? !session.follow?.head?.history?.length
+                                        : session.points.length === 0
+                                }
                                 onClick={() =>
                                     runAction("shapeRemoveLastPoint")
                                 }

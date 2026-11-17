@@ -124,10 +124,16 @@ export interface FollowDrag {
      * from where it stopped. `prefix` is the trail's points as stored, which the drag cuts back or
      * runs on; `restore` the session to go back to, shown, once let go or cancelled. Absent for
      * every other drawing.
+     *
+     * `clicks` (owner, 2026-11-17): the head was clicked rather than dragged, so it's drawn on
+     * with clicks, the button up, as the pen draws: `prefix` is then the points placed so far (each
+     * click's), `history` the prefixes before each click, for Backspace, and Enter writes `prefix`.
      */
     readonly head?: {
         readonly prefix: readonly PathPoint[];
         readonly restore: PathSession;
+        readonly clicks?: boolean;
+        readonly history?: readonly (readonly PathPoint[])[];
     } | null;
 }
 

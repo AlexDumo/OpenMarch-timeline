@@ -20,6 +20,7 @@ import {
     canDragHead,
     headDragPoints,
     headSpacingOf,
+    isHeadClicks,
     isHeadDrag,
     trailHeadOf,
 } from "../trailHead";
@@ -242,7 +243,7 @@ describe("the head of a trail dragged out of a line (AP-T16)", () => {
         ]);
     });
 
-    it("QA-HD-9: Escape cancels with nothing written, the trail as it was; a press let go where it was changes nothing", () => {
+    it("QA-HD-9: Escape cancels with nothing written, the trail as it was; a press let go where it was draws on with clicks, nothing written", () => {
         const shown = show();
         pathPenMode.press(onArrows(), pressOn(false));
         dragTo(at(head.x + 6 * S, head.y));
@@ -253,9 +254,13 @@ describe("the head of a trail dragged out of a line (AP-T16)", () => {
         pathPenMode.release(at(head.x + 9 * S, head.y), null);
         expect(session()).toBe(shown);
         expect(usePathPenStore.getState().saving).toBe(false);
-        // A click on the arrows
+        // A click on the arrows draws on from the head with clicks (owner, 2026-11-17), nothing
+        // written; Escape puts the trail back
         pathPenMode.press(onArrows(), pressOn(false));
         pathPenMode.release(onArrows(), { double: false, ownFirst: true });
+        expect(isHeadClicks(session())).toBe(true);
+        expect(usePathPenStore.getState().saving).toBe(false);
+        expect(cancelFollowDrawing()).toBe(true);
         expect(session()).toBe(shown);
         // A lost press puts it back too
         pathPenMode.press(onArrows(), pressOn(false));

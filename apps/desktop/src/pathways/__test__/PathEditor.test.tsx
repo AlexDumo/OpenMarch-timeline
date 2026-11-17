@@ -23,6 +23,7 @@ import {
 } from "../pathPenStore";
 import type { AdjustProfile } from "@openmarch/core";
 import type { PathTarget } from "../pathTarget";
+import { DRAW_KIND_STORAGE_KEY, setDrawKind } from "../drawKind";
 
 /**
  * The path's floating editor (owner lab feedback on fork #674): the shape editor's bar, opaque,
@@ -111,6 +112,27 @@ describe("the path's floating editor", () => {
         expect(
             screen.getByTestId("path-cancel").getAttribute("aria-label"),
         ).toBe("Cancel");
+        // Straight | Curve (owner, 2026-11-17): icons named in their tooltips, Straight first
+        // time; a press switches and is remembered
+        const straight = screen.getByTestId("path-draw-straight");
+        const curve = screen.getByTestId("path-draw-curve");
+        expect(straight.getAttribute("aria-pressed")).toBe("true");
+        expect(curve.getAttribute("aria-pressed")).toBe("false");
+        expect(curve.getAttribute("aria-label")).toMatch(/^Curve: /);
+        act(() => setDrawKind("curve"));
+        expect(curve.getAttribute("aria-pressed")).toBe("true");
+        expect(localStorage.getItem(DRAW_KIND_STORAGE_KEY)).toBe("curve");
+        // The hint names what a click places now, and Alt for the other kind
+        expect(screen.getByTestId("path-pen-banner").textContent).toContain(
+            "click for a curve point",
+        );
+        act(() => setDrawKind("straight"));
+        expect(screen.getByTestId("path-pen-banner").textContent).toContain(
+            "click for a corner",
+        );
+        expect(screen.getByTestId("path-pen-banner").textContent).toMatch(
+            /Alt/,
+        );
         // No outline round each icon button, as the shape bar's; Finish is the primary pill, as
         // the shape bar's Place
         for (const b of el.querySelectorAll("button"))

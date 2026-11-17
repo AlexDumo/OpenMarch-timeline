@@ -54,6 +54,7 @@ export function EditorButton({
 export function IconButton({
     label,
     action,
+    shortcut,
     className,
     onClick,
     disabled,
@@ -65,6 +66,8 @@ export function IconButton({
     label: string;
     /** The action it runs, whose shortcut the tooltip shows */
     action?: ActionId;
+    /** Keys or a gesture the tooltip shows instead ("Alt + Click"), for what isn't an action's key */
+    shortcut?: string;
     className?: string;
     onClick: () => void;
     disabled?: boolean;
@@ -78,7 +81,7 @@ export function IconButton({
     onDisabledClick?: () => void;
 }) {
     return (
-        <Tip label={label} action={action}>
+        <Tip label={label} action={action} shortcut={shortcut}>
             <button
                 type="button"
                 aria-label={label}

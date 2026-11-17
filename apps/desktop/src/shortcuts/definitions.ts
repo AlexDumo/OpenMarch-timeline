@@ -1193,6 +1193,28 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
     },
 
+    // While a path is drawn (the Path pen, the Follow tool, a trail's head drawn on): the path
+    // bar's Straight | Curve switch, what a click places, remembered between drawings (owner,
+    // 2026-11-17). Holding Alt places the other kind (`PEN_KEYS`). No keys: the Line's corner
+    // type has none, Alt is the keyboard's way, and every free letter is a tool's; the bar and
+    // the palette
+    pathDrawStraight: {
+        labelKey: "actions.path.drawStraight",
+        keywordsKey: "actions.path.drawKindKeywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    pathDrawCurve: {
+        labelKey: "actions.path.drawCurve",
+        keywordsKey: "actions.path.drawKindKeywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+
     // Pathways step 2: the selected point of an open path made a corner, or smooth, as a Line's
     // Corner | Smooth (the point's menu, a double-click, the path's floating editor). No keys,
     // as a Line's corner type has none

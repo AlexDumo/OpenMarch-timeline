@@ -49,6 +49,7 @@ import tolgee from "@/global/singletons/Tolgee";
 import type { XY } from "@/shapes/types";
 import { SMOOTH } from "@/shapes/line/lineGeometry";
 import { drawnAsGroup, type GroupMember, type PathTarget } from "./pathTarget";
+import { clickedPoint } from "./drawKind";
 import { activeFieldEditor } from "@/field/editor/activeFieldEditor";
 import { dragTrail } from "@/db-functions/timelineTrailDrag";
 import { rippleTrail } from "@/db-functions/timelineTrailRipple";
@@ -1241,9 +1242,12 @@ export function clearPath(): void {
 export const isDrawing = () =>
     usePathPenStore.getState().session?.phase === "drawing";
 
-/** While drawing, a corner placed at `at` */
-export function addPoint(at: XY): void {
-    update((s) => ({ ...s, points: [...s.points, { at }] }));
+/**
+ * While drawing, a point placed at `at`: a corner, or with `smooth` a smooth point at the plain
+ * roundness (the Straight | Curve switch, `drawKind.ts`)
+ */
+export function addPoint(at: XY, smooth = false): void {
+    update((s) => ({ ...s, points: [...s.points, clickedPoint(at, smooth)] }));
 }
 
 /**
@@ -1263,6 +1267,28 @@ export function endNewPoint(): void {
 export function removeLastPoint(): boolean {
     const { session } = usePathPenStore.getState();
     if (!session || session.phase !== "drawing") return false;
+    // A trail's head drawn on with clicks (AP-T16): the last click is taken back, its cut too;
+    // the stored points stay
+    const f = session.follow;
+    if (f?.head?.clicks) {
+        const before = f.head.history?.at(-1);
+        if (before)
+            update((s) => ({
+                ...s,
+                follow: {
+                    ...f,
+                    head: {
+                        ...f.head!,
+                        prefix: before,
+                        history: f.head!.history!.slice(0, -1),
+                    },
+                },
+                points: before,
+                pointer: before.at(-1)?.at ?? null,
+                dragging: null,
+            }));
+        return true;
+    }
     if (session.points.length > 0)
         update((s) => ({
             ...s,

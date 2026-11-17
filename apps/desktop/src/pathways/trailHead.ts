@@ -33,7 +33,13 @@ import {
     followTarget,
     type FollowDrag,
 } from "./followDrag";
-import { landCorner, samePoints, type PathPoint } from "./pathEdit";
+import {
+    dragNewPoint,
+    landCorner,
+    samePoints,
+    type PathPoint,
+} from "./pathEdit";
+import { SMOOTH } from "@/shapes/line/lineGeometry";
 import {
     shapeOf,
     storedPoints,
@@ -382,6 +388,127 @@ export function moveHeadDrag(at: XY, env: ToolEnv): void {
     });
 }
 
+/** Whether a trail's head is being drawn on with clicks, the button up (AP-T16, owner 2026-11-17) */
+export const isHeadClicks = (s: PathSession | null): boolean =>
+    !!headDragOf(s)?.head?.clicks;
+
+/**
+ * A click on the head, the button let go where it was pressed (owner, 2026-11-17: "a way for me
+ * to just click and then drag like i would before"): the drag becomes a drawing, as the pen's,
+ * carried on from the head. The next leg follows the pointer with the button up, a click places
+ * a point (`clickHeadAt`), and Enter writes what's placed (`finishHeadDrag`). False when no head
+ * is dragged.
+ */
+export function clickHead(): boolean {
+    const { session } = usePathPenStore.getState();
+    const f = headDragOf(session);
+    if (!session || !f?.head) return false;
+    const prefix = f.head.restore.points;
+    usePathPenStore.setState({
+        session: {
+            ...session,
+            follow: {
+                ...f,
+                head: { ...f.head, prefix, clicks: true, history: [] },
+            },
+            points: prefix,
+            pointer: prefix.at(-1)!.at,
+        },
+    });
+    return true;
+}
+
+/**
+ * A click at `at` while the head is drawn on with clicks: the trail as the pointer has it there
+ * (`headDragPoints`: cut back along it, the head slid along a straight last leg, or a point
+ * added) becomes what's placed, the point added a smooth one with `smooth` (the Straight | Curve
+ * switch, Alt). On the head itself, nothing changes: `"finish"`, as a click on the pen's last
+ * point finishes. `"none"` when no head is drawn on with clicks.
+ */
+export function clickHeadAt(
+    at: XY,
+    env: ToolEnv,
+    smooth: boolean,
+): "placed" | "finish" | "none" {
+    const { session } = usePathPenStore.getState();
+    const f = headDragOf(session);
+    if (!session || !f?.head?.clicks) return "none";
+    const { prefix } = f.head;
+    const from = f.head.restore.target.trail!.members.at(-1)!.from;
+    let points = headDragPoints(prefix, from, at, env);
+    if (samePoints(points, prefix)) return "finish";
+    // A point added (not a cut or a slide): the kind the click places
+    if (points.length === prefix.length + 1 && smooth)
+        points = [
+            ...points.slice(0, -1),
+            { ...points.at(-1)!, tension: SMOOTH },
+        ];
+    usePathPenStore.setState({
+        session: {
+            ...session,
+            follow: {
+                ...f,
+                head: {
+                    ...f.head,
+                    prefix: points,
+                    history: [...(f.head.history ?? []), prefix],
+                },
+            },
+            points,
+            pointer: points.at(-1)!.at,
+        },
+    });
+    return "placed";
+}
+
+/**
+ * While the head is drawn on with clicks, a press-and-drag on from the point it just added: that
+ * point turns smooth, its roundness how far the drag went (the pen's `dragNewPoint`). Nothing
+ * when the press didn't add a point (a cut, or the head slid on).
+ */
+export function shapeHeadPoint(to: XY, env: ToolEnv): void {
+    const { session } = usePathPenStore.getState();
+    const f = headDragOf(session);
+    const head = f?.head;
+    const before = head?.history?.at(-1);
+    if (!session || !f || !head?.clicks || !before) return;
+    if (head.prefix.length !== before.length + 1) return;
+    const from = head.restore.target.trail!.members.at(-1)!.from;
+    const points = dragNewPoint(shapeOfPrefix(from, head.prefix), to, env);
+    if (samePoints(points, head.prefix)) return;
+    usePathPenStore.setState({
+        session: {
+            ...session,
+            follow: { ...f, head: { ...head, prefix: points } },
+            points,
+            pointer: points.at(-1)!.at,
+            dragging: points.length - 1,
+        },
+    });
+}
+
+/** The press-and-drag that shaped the head's new point let go */
+export function endHeadPoint(): void {
+    const { session } = usePathPenStore.getState();
+    if (session && isHeadClicks(session) && session.dragging !== null)
+        usePathPenStore.setState({ session: { ...session, dragging: null } });
+}
+
+/** The pointer left the field while drawing on with clicks: only what's placed is shown */
+export function showHeadPlaced(): void {
+    const { session } = usePathPenStore.getState();
+    const f = headDragOf(session);
+    if (!session || !f?.head?.clicks || session.points === f.head.prefix)
+        return;
+    usePathPenStore.setState({
+        session: {
+            ...session,
+            points: f.head.prefix,
+            pointer: f.head.prefix.at(-1)!.at,
+        },
+    });
+}
+
 /** Escape, or a lost press: the trail as it was, nothing written. False when no head is dragged. */
 export function cancelHeadDrag(): boolean {
     const { session } = usePathPenStore.getState();
@@ -400,8 +527,10 @@ export async function finishHeadDrag(): Promise<void> {
     const { session, saving } = usePathPenStore.getState();
     const f = headDragOf(session);
     if (!session || !f?.head || saving) return;
-    const { restore, prefix } = f.head;
-    if (samePoints(session.points, prefix)) {
+    const { restore } = f.head;
+    // Drawn on with clicks, Enter writes what's placed, not the leg to the pointer (the pen's rule)
+    const points = f.head.clicks ? f.head.prefix : session.points;
+    if (samePoints(points, restore.points)) {
         usePathPenStore.setState({ session: restore });
         return;
     }
@@ -410,13 +539,13 @@ export async function finishHeadDrag(): Promise<void> {
         await dragTrailHead({
             db,
             routeId: restore.target.routeId!,
-            points: storedPoints(session.points),
+            points: storedPoints(points),
             spacing: followSpacingOf(session),
             step: f.step,
         });
         invalidatePlacedBoxes();
         usePathPenStore.setState((state) => ({
-            session: { ...restore, points: session.points },
+            session: { ...restore, points },
             saved: state.saved + 1,
         }));
     } catch (error) {
