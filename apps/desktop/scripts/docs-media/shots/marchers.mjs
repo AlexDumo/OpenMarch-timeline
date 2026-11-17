@@ -1,4 +1,5 @@
 // The Marchers chapter (guides/marchers/*).
+import { ensureSelected } from "../select.mjs";
 
 /** Waits for the show's field, then goes to the end of Page 1 (two pages after home). */
 async function toPage1(page, wait) {
@@ -57,6 +58,11 @@ async function shiftSelect(page, points, wait) {
     await page.keyboard.down("Shift");
     for (const p of points) await page.mouse.click(p.x, p.y);
     await page.keyboard.up("Shift");
+    await ensureSelected(
+        page,
+        points.map((p) => p.label),
+        wait,
+    );
     await page.mouse.move(800, 950);
     await wait(500);
 }

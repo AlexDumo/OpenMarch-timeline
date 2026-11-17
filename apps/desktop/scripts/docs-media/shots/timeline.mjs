@@ -3,6 +3,7 @@
 // The demo show's page boxes, by page id (data-timeline-range-page) and beats:
 // 9 = Page 1 (11–19), 10 = Page 2 (19–27), 11 = Page 3 (27–37), 12 = Page 4 (37–41),
 // 13 = Page 5 (41–53), 14 = Page 5A (53–61). The window opens on the first page.
+import { ensureSelected } from "../select.mjs";
 
 /** Waits for the field, closes the low-quality notice and hides toasts. */
 async function ready(page, wait) {
@@ -57,6 +58,7 @@ async function select(page, labels, wait) {
     await page.keyboard.down("Shift");
     for (const p of points.slice(1)) await page.mouse.click(p.x, p.y);
     await page.keyboard.up("Shift");
+    await ensureSelected(page, labels, wait);
     await page.mouse.move(800, 990);
     await wait(600);
     return points;

@@ -3,6 +3,7 @@
 // field beside it, so no other marcher stands in or next to the shape. The shape tool times its
 // presses (a double-click, a hold), so clips that draw go back to real time first
 // (`film.release()`); their drags are still filmed one even step per frame.
+import { ensureSelected } from "../select.mjs";
 
 /** The nth page box on the timeline ruler, in order. */
 const pageBox = (page, n) => page.locator("[data-timeline-range-page]").nth(n);
@@ -83,6 +84,10 @@ async function selectSection(page, prefix) {
         await page.mouse.click(m.x, m.y);
         await page.keyboard.up("Shift");
     }
+    await ensureSelected(
+        page,
+        ms.map((m) => m.label),
+    );
     await page.waitForTimeout(300);
     return ms;
 }
