@@ -4586,6 +4586,7 @@
             "previewRoundTip": "Preview: the marchers go around from start to end, again and again",
             "roundOffOutline": "{count, plural, one {# marcher stands off the outline and steps onto it first} other {# marchers stand off the outline and step onto it first}}",
             "editTip": "Show this path's points to drag. A click on its line does it too",
+            "editTrailTip": "Edit path: show the trail's points to drag and its head to draw on or drag longer. Escape or a click on empty field turns it off",
             "editGroupTip": "Show the group path's points to drag. Every marcher on it follows",
             "editLineTip": "Bend only {marcher}'s line, by its handles. It keeps following the group path's edits. A click on the line does it too",
             "detachFromGroupCount": "Detach {count} from group path",

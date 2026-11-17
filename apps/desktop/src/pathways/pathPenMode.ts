@@ -100,6 +100,7 @@ import {
     commitAdjustKey,
     commitLaneAdjust,
     commitPoints,
+    closePath,
     commitShape,
     deleteAdjustKey,
     memberNow,
@@ -282,7 +283,8 @@ const refusalKeys = {
  *   drag went (in tenths, fine for any), its tangent bar shown while dragging. A
  *   double-click, a click on the last point or on the end spot, or Enter finishes; a right-click,
  *   Backspace or undo takes the last point back; Escape cancels.
- * - Quiet (closed: the selected marchers' path, shown): the path takes no press, so drags and
+ * - Quiet (closed: the selected marchers' path, shown; Edit path off): the path takes no press,
+ *   not even a trail's head (owner, 2026-11-17: with Edit path off clicks only select), so drags and
  *   marquees around it are the field's, and a dot under the press is the dot's (P-1). A click or
  *   tap on its line, or on one of Paths All's paths (AP-O2), selects the marchers who walk it (on
  *   a member's lane, that marcher) and makes it active at once (interaction system, rules 1 and
@@ -363,7 +365,13 @@ class PathPenMode implements FieldMode {
         const env = envOf();
         // With a lane in focus the group path's handles aren't drawn, so nothing can grab them
         return env && laneInFocus(s) === null
-            ? pathHandleAt(shapeOf(s), pointer.field, env, s.selected)
+            ? pathHandleAt(
+                  shapeOf(s),
+                  pointer.field,
+                  env,
+                  s.selected,
+                  trailHeadOf(s) !== null,
+              )
             : null;
     }
 
@@ -501,14 +509,12 @@ class PathPenMode implements FieldMode {
     claims(pointer: FieldPointer, press: FieldModePress): boolean {
         const s = this.session;
         if (!s || pointer.button !== 0) return false;
-        // A stored trail's head takes the press (AP-T16); the rest of a quiet path takes none
-        if (s.phase === "closed")
-            return (
-                !usePathPenStore.getState().saving &&
-                this.onHead(pointer, press.onDot())
-            );
+        // A quiet path takes no press: with Edit path off a click only selects (owner, 2026-11-17)
+        if (s.phase === "closed") return false;
         if (s.phase === "drawing") return true;
         if (usePathPenStore.getState().saving) return false;
+        // With Edit path on, a stored trail's head (AP-T16): its arrows, or the head with no dot
+        if (trailHeadOf(s) && this.onHead(pointer, press.onDot())) return true;
         if (this.handleAt(s, pointer) !== null) return true;
         return !press.onDot() && this.laneAt(s, pointer) !== null;
     }
@@ -541,12 +547,20 @@ class PathPenMode implements FieldMode {
         };
     }
 
-    press(pointer: FieldPointer, { isMac }: { isMac: boolean }): void {
+    press(
+        pointer: FieldPointer,
+        {
+            isMac,
+            onDot,
+        }: Pick<FieldModePress, "isMac"> & Partial<FieldModePress>,
+    ): void {
         const s = this.session;
         if (!s) return;
         this.endHeld();
-        // A stored trail's head (AP-T16): step 4b's drag carried on from where it stopped
-        if (s.phase === "closed") {
+        if (s.phase === "closed") return;
+        // A stored trail's head with Edit path on (AP-T16): step 4b's drag carried on from where
+        // it stopped, or a click that draws on from it
+        if (s.phase === "open" && this.onHead(pointer, onDot?.() ?? false)) {
             this.pressHead(pointer, isMac);
             return;
         }
@@ -962,12 +976,8 @@ class PathPenMode implements FieldMode {
         const s = this.session;
         // A path's line, shown or one of Paths All's, is something to click (AP-O3); not under a
         // marcher's dot, which a press there selects instead
-        if (!s || s.phase === "closed") {
-            // A stored trail's head (AP-T16): the hand, as on the Follow tool's ends
-            if (s && this.onHead(pointer, hover?.onDot() ?? false))
-                return "grab";
+        if (!s || s.phase === "closed")
             return !hover?.onDot() && this.pathAt(pointer) ? "pointer" : null;
-        }
         // A trail's head drawn on with clicks: the pen's cross, the trail following the pointer
         if (isHeadClicks(s)) return this.pen.cursorAt(pointer);
         // A trail's head being dragged (AP-T16): the hand that holds it
@@ -988,6 +998,8 @@ class PathPenMode implements FieldMode {
             }
             return this.pen.cursorAt(pointer);
         }
+        // A stored trail's head with Edit path on (AP-T16): the hand, as on the Follow tool's ends
+        if (this.onHead(pointer, hover?.onDot() ?? false)) return "grab";
         const handle = this.handleAt(s, pointer);
         if (handle) {
             setHoverLane(null);
@@ -1163,7 +1175,17 @@ class PathPenMode implements FieldMode {
      */
     takeClick(pointer: FieldPointer, _double: boolean): boolean {
         const hit = this.lineHit(pointer);
-        if (!hit) return false;
+        if (!hit) {
+            // A trail open in Edit path: a click on empty field turns Edit path off and keeps the
+            // selection, as leaving a design tool's vector edit does (owner, 2026-11-17); the
+            // next click there is the field's, which deselects
+            const s = this.session;
+            if (s?.phase === "open" && s.target.trail) {
+                closePath();
+                return true;
+            }
+            return false;
+        }
         // A selected marcher's line off the group path (its own path, or a Detached copy): that
         // marcher alone is selected, and its own path opens once it's read for it
         if (hit.outside && hit.lane !== null) {
@@ -1559,7 +1581,14 @@ function buildDrawing(
           ? { handles: [], addHandles: [], selectedHandles: [] }
           : handleDrawing(
                 {
-                    handles: (_p, _n, sel) => pathHandles(shape, sel ?? null),
+                    // A trail's head is its pull arrows' with Edit path on (AP-T16), not a point
+                    // handle on top of them
+                    handles: (_p, _n, sel) =>
+                        pathHandles(
+                            shape,
+                            sel ?? null,
+                            trailHeadOf(session) !== null,
+                        ),
                 },
                 shape,
                 1,

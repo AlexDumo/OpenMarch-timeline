@@ -9,6 +9,7 @@ import { planTrailDrag } from "@/db-functions/timelineTrailDrag";
 import { drawingOf, pathPenMode } from "../pathPenMode";
 import {
     clearPath,
+    openPath,
     showPath,
     storedPoints,
     usePathPenStore,
@@ -101,8 +102,10 @@ const pressOn = (onDot: boolean) => ({
     onDot: () => onDot,
 });
 const session = (): PathSession => usePathPenStore.getState().session!;
-const show = (target = storedTarget()) => {
+/** The trail shown, with Edit path on unless `editing` is false (owner, 2026-11-17) */
+const show = (target = storedTarget(), editing = true) => {
     act(() => showPath(target, "5"));
+    if (editing) act(() => void openPath());
     return session();
 };
 /** The pointer dragged to `p`, and the frame the head follows it on */
@@ -143,19 +146,36 @@ afterEach(() => {
 });
 
 describe("the head of a trail dragged out of a line (AP-T16)", () => {
-    it("QA-HD-6: shown or selected, it has a handle at its head: the Follow tool's pull arrows, out along its way; open for point edits, none", () => {
+    it("QA-HD-6: with Edit path on it has a handle at its head, the Follow tool's pull arrows out along its way, in place of the last point's handle; with Edit path off, none", () => {
         const s = show();
+        expect(s.phase).toBe("open");
         expect(canDragHead(s)).toBe(true);
         expect(trailHeadOf(s)).toEqual({ at: head, dir: { x: 1, y: 0 } });
         expect(drawingOf(s)!.pullArrows).toEqual([
             { at: head, dir: { x: 1, y: 0 } },
         ]);
-        // Edit path keeps its own point handles
-        act(() =>
-            usePathPenStore.setState({ session: { ...s, phase: "open" } }),
+        // The arrows are the head's handle: no point handle on top of them
+        expect(drawingOf(s)!.handles).not.toContainEqual(head);
+        // Edit path off (selected): clicks only select, so no head handle and no press on it
+        act(() => clearPath());
+        const quiet = show(storedTarget(), false);
+        expect(quiet.phase).toBe("closed");
+        expect(trailHeadOf(quiet)).toBeNull();
+        expect(drawingOf(quiet)!.pullArrows).toBeUndefined();
+        expect(pathPenMode.claims(onArrows(), pressOn(false))).toBe(false);
+        expect(pathPenMode.claims(at(head.x, head.y), pressOn(false))).toBe(
+            false,
         );
-        expect(trailHeadOf(session())).toBeNull();
-        expect(drawingOf(session())!.pullArrows).toBeUndefined();
+        expect(pathPenMode.cursorAt(onArrows())).not.toBe("grab");
+    });
+
+    it("Edit path on: a click on empty field turns it off and keeps the trail shown (its walkers stay selected); off, the click is the field's", () => {
+        show();
+        expect(session().phase).toBe("open");
+        const empty = at(head.x + 20 * S, head.y + 20 * S);
+        expect(pathPenMode.takeClick!(empty, false)).toBe(true);
+        expect(session().phase).toBe("closed");
+        expect(pathPenMode.takeClick!(empty, false)).toBe(false);
     });
 
     it("QA-HD-6: trails that lead into end spots (Follow into a form, Ripple in) or go around an outline have none", () => {

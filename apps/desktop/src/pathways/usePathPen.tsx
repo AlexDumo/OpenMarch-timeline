@@ -572,10 +572,18 @@ export function usePathPenActions(): void {
         slots.shown && why !== null ? why : undefined;
     // On a group path it's named for what it edits: the line every member follows (round 3)
     const editLabel = slots.group ? editGroupPathLabel() : undefined;
-    useActionHandler("editPath", () => void openPath(), {
-        enabled: phase === "closed" || lineEdited,
-        label: editLabel,
-    });
+    // A toggle (owner, 2026-11-17): on shows the points to drag and a trail's head to draw on; off
+    // (as Escape or a click on empty field turns it) a click only selects
+    const editing = phase === "open" && !lineEdited;
+    useActionHandler(
+        "editPath",
+        () => (editing ? closePath() : void openPath()),
+        {
+            enabled: phase === "closed" || phase === "open",
+            checked: editing,
+            label: editLabel,
+        },
+    );
     // Edit <name>'s line (interaction round 3, was Adjust): the one selected member's line alone,
     // its handles shown at once
     const lineId = slots.lineId;

@@ -1043,10 +1043,15 @@ function PathSlots({ session }: { session: PathSession }) {
                               "pathways.editor.editGroupTip",
                               "Show the group path's points to drag. Every marcher on it follows",
                           )
-                        : tolgee.t(
-                              "pathways.editor.editTip",
-                              "Show this path's points to drag. A click on its line does it too",
-                          )
+                        : session.target.trail
+                          ? tolgee.t(
+                                "pathways.editor.editTrailTip",
+                                "Edit path: show the trail's points to drag and its head to draw on or drag longer. Escape or a click on empty field turns it off",
+                            )
+                          : tolgee.t(
+                                "pathways.editor.editTip",
+                                "Show this path's points to drag. A click on its line does it too",
+                            )
                 }
                 action="editPath"
                 pressed={editing}

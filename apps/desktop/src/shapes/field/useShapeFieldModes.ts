@@ -41,7 +41,6 @@ import {
     useMarcherOrderStore,
 } from "@/pathways/marcherOrderStore";
 import { OrderSweepMode } from "@/pathways/orderSweepMode";
-import { isHeadClicks, isHeadDrag } from "@/pathways/trailHead";
 import { keepOrderSweep } from "@/pathways/marcherOrderCommands";
 import {
     setFieldObjects,
@@ -67,22 +66,17 @@ export function useShapeFieldModes(
     // The path pen drawing, or a path open, takes the field's presses first (pathways step 1). A
     // path only shown (closed) takes a double-click or a right-click on it, under an open shape or
     // a selected placed box
-    // A trail's head dragged (AP-T16) stays with the mode it was pressed in: under a selected
-    // placed box, the box's, which hands the press on; else the pen's, as for a path shown
-    // Drawn on from the head with clicks (L.15), the button up, it's the pen's drawing: the pen's
-    // mode, so the leg to the pointer shows and the box's controls stay away
+    // A trail's head is dragged or drawn on with Edit path on (AP-T16, L.15; owner 2026-11-17),
+    // so it's the pen's mode throughout, as the open path's was: the leg to the pointer shows and
+    // the end shape's controls stay away
     const pathOpen = usePathPenStore(
-        (s) =>
-            s.session !== null &&
-            s.session.phase !== "closed" &&
-            (!isHeadDrag(s.session) || isHeadClicks(s.session)),
+        (s) => s.session !== null && s.session.phase !== "closed",
     );
     // A closed path start flag positions hide (paths level off) isn't the field's mode; a selected
     // path object always is, and so are Paths All's paths, so a click selects one (step 3a)
     const pathShown = usePathPenStore(
         (s) =>
-            ((s.session?.phase === "closed" ||
-                (isHeadDrag(s.session) && !isHeadClicks(s.session))) &&
+            (s.session?.phase === "closed" &&
                 (!s.hidden || !!s.session?.object)) ||
             s.objects.length > 0,
     );

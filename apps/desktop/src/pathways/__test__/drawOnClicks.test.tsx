@@ -10,6 +10,7 @@ import { drawingOf, pathPenMode } from "../pathPenMode";
 import {
     clearPath,
     removeLastPoint,
+    openPath,
     showPath,
     startDrawing,
     usePathPenStore,
@@ -339,8 +340,10 @@ function storedTrail(): PathTarget {
     };
 }
 
+/** The trail shown with Edit path on: its head takes clicks and drags (owner, 2026-11-17) */
 const show = () => {
     act(() => showPath(storedTrail(), "5"));
+    act(() => void openPath());
     return session();
 };
 const onHead = () => at(head.x + 1.5 * S, head.y);
@@ -385,8 +388,8 @@ describe("a trail's head clicked: drawn on with clicks (AP-T16)", () => {
         expect(followDrawnPlanOf(session())!.spots).toHaveLength(5);
         await act(() => finishHeadDrag());
         expect(writes()).toHaveLength(1);
-        // Shown again, closed, with what was placed and written
-        expect(session().phase).toBe("closed");
+        // Shown again, Edit path still on, with what was placed and written
+        expect(session().phase).toBe("open");
         expect(session().points).toEqual(placed);
         expect(isHeadDrag(session())).toBe(false);
     });
@@ -435,7 +438,7 @@ describe("a trail's head clicked: drawn on with clicks (AP-T16)", () => {
         pathPenMode.press(p, pressOn());
         pathPenMode.release(p, { double: true, ownFirst: true });
         await vi.waitFor(() => expect(writes()).toHaveLength(1));
-        await vi.waitFor(() => expect(session().phase).toBe("closed"));
+        await vi.waitFor(() => expect(session().phase).toBe("open"));
         expect(session().points).toEqual([
             { id: "h", at: head },
             { at: { x: head.x + 4 * S, y: head.y + 6 * S } },
@@ -451,7 +454,7 @@ describe("a trail's head clicked: drawn on with clicks (AP-T16)", () => {
         vi.advanceTimersToNextFrame();
         pathPenMode.release(at(head.x + 6 * S, head.y), null);
         await vi.waitFor(() => expect(writes()).toHaveLength(1));
-        await vi.waitFor(() => expect(session().phase).toBe("closed"));
+        await vi.waitFor(() => expect(session().phase).toBe("open"));
         expect(session().points).toEqual([
             { id: "h", at: { x: head.x + 6 * S, y: head.y } },
         ]);

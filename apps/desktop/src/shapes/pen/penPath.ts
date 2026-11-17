@@ -264,13 +264,24 @@ export function tangentHandle(
 export function pathHandles(
     shape: PathShape,
     selected: string | null = null,
+    /**
+     * The last point is a free end the caller grabs its own way (a trail's head and its pull
+     * arrows): no handle of the pen's on it
+     */
+    freeEnd = false,
 ): ToolHandle[] {
-    const points: ToolHandle[] = shape.points.map((c, i) => ({
-        key: pointKey(i),
-        at: c.at,
-        cursor: "move",
-        selects: true,
-    }));
+    const points: ToolHandle[] = shape.points.flatMap((c, i) =>
+        freeEnd && i === shape.points.length - 1
+            ? []
+            : [
+                  {
+                      key: pointKey(i),
+                      at: c.at,
+                      cursor: "move" as const,
+                      selects: true,
+                  },
+              ],
+    );
     // An arc leg's middle is its bulge handle instead (AP-T11): drawn on a bar from the chord's
     // middle, the sagitta it sets
     const all = pathPoints(shape);
@@ -322,9 +333,10 @@ export function pathHandleAt(
     at: XY,
     env: Pick<ToolEnv, "hitRadius">,
     selected: string | null = null,
+    freeEnd = false,
 ): ToolHandle | null {
     let best: { handle: ToolHandle; d: number } | null = null;
-    for (const handle of pathHandles(shape, selected)) {
+    for (const handle of pathHandles(shape, selected, freeEnd)) {
         const d = Math.hypot(handle.at.x - at.x, handle.at.y - at.y);
         if (d <= env.hitRadius && (!best || d < best.d)) best = { handle, d };
     }

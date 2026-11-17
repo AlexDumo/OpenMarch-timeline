@@ -92,8 +92,8 @@ function wayOf(
 
 /**
  * Whether the session's trail takes a head drag (AP-T16): a stored trail dragged out of a line
- * (its ends along the way), selected or shown and not open for point edits (Edit path keeps its
- * own point handles) or drawn. A trail into end spots (Follow into a form, Ripple in) or round an
+ * (its ends along the way), with Edit path on (owner, 2026-11-17: with it off, clicks on the trail
+ * and its head only select), not drawn. A trail into end spots (Follow into a form, Ripple in) or round an
  * outline has its length from those spots, so it has none.
  */
 export function canDragHead(s: PathSession | null): s is PathSession {
@@ -101,7 +101,7 @@ export function canDragHead(s: PathSession | null): s is PathSession {
     return (
         !!s &&
         !!trail &&
-        s.phase === "closed" &&
+        s.phase === "open" &&
         !s.follow &&
         !!trail.along &&
         !trail.around &&
