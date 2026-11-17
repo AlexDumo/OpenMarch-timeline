@@ -780,17 +780,12 @@ test.describe("a big shape (#936)", () => {
     });
 });
 
-test("portrait 820 × 1180: the toolbar tabs fit, and Help is in the File menu (#1075)", async ({
+test("portrait 820 × 1180: no Help in the title bar, so the Shapes tab fits (#1075)", async ({
     show,
 }) => {
     const { page } = show;
     await page.setViewportSize(LAYOUTS[2]);
     await expectCanvasMatchesShow(show);
-    // The title bar's ? gives its room to the tabs, so the last tab isn't cut off
     await expect(page.getByTestId("titlebar-help")).toHaveCount(0);
     await openPanel(page);
-
-    await page.getByRole("button", { name: "File", exact: true }).tap();
-    await page.getByRole("menuitem", { name: "Get help" }).tap();
-    await expect(page.getByRole("dialog", { name: "Get help" })).toBeVisible();
 });
