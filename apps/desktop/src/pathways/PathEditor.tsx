@@ -204,6 +204,15 @@ export function PathEditor({
                 )}
             </RichTips>
         );
+    // A trail's head dragged on or back (AP-T16): the hand is busy, so no banner or bar; the
+    // leader's mark and the corners' counts follow the drag, as they do the Follow tool's
+    if (session.follow?.head)
+        return (
+            <RichTips>
+                <TrailLeaderMark session={session} />
+                <TrailCornerCounts session={session} />
+            </RichTips>
+        );
     return (
         <>
             {groupLabel}

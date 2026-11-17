@@ -38,6 +38,7 @@ import {
     usePathPenStore,
     type PathSession,
 } from "./pathPenStore";
+import type { PathPoint } from "./pathEdit";
 
 /**
  * Keep end spots (AP-T9): step 4's Follow onto the spots the line has, in the move every member
@@ -118,6 +119,16 @@ export interface FollowDrag {
      * round it. Absent or null when it doesn't.
      */
     readonly around?: FollowAround | null;
+    /**
+     * AP-T16 (`trailHead.ts`): a stored trail's head dragged on or back, step 4b's drag carried on
+     * from where it stopped. `prefix` is the trail's points as stored, which the drag cuts back or
+     * runs on; `restore` the session to go back to, shown, once let go or cancelled. Absent for
+     * every other drawing.
+     */
+    readonly head?: {
+        readonly prefix: readonly PathPoint[];
+        readonly restore: PathSession;
+    } | null;
 }
 
 /** The path bar's Ends (DL-8, AP-T9, RP-1) */
@@ -497,6 +508,11 @@ export function cancelFollowDrawing(): boolean {
     const { session } = usePathPenStore.getState();
     const f = session?.follow;
     if (!session || !f || f.grabbed === null) return false;
+    // A trail's head dragged (AP-T16): the trail as it was, shown, nothing written
+    if (f.head) {
+        usePathPenStore.setState({ session: f.head.restore });
+        return true;
+    }
     usePathPenStore.setState({
         session: {
             ...session,

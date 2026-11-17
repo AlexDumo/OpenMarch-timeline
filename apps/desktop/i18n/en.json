@@ -2958,7 +2958,8 @@
                 "noDistance": "Choose how far to go around: at least one spot or step",
                 "tooFar": "A move can go around at most {laps} times",
                 "aroundPoints": "This line goes around the outline it stands on, which has no points to edit. Use Reverse leader to go the other way around, or Follow again to change how far",
-                "reverseNobody": "Reverse leader needs someone who starts this move on the outline"
+                "reverseNobody": "Reverse leader needs someone who starts this move on the outline",
+                "headNotAlong": "Only a trail dragged out of a line can be made longer or shorter by its head"
             }
         },
         "expertHolds": {
@@ -4623,7 +4624,8 @@
             "adjust": "Couldn't bend this line",
             "refit": "Couldn't re-fit the path",
             "reverse": "Couldn't reverse the trail",
-            "goRound": "Couldn't go around"
+            "goRound": "Couldn't go around",
+            "headDrag": "Couldn't change the trail"
         },
         "refusals": {
             "noMove": "{marcher} has no move at the playhead to draw a path on",

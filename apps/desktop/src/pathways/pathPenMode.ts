@@ -135,6 +135,17 @@ import {
     type PathSession,
 } from "./pathPenStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
+import { DOT_RADIUS } from "@/field/editor/hitTest";
+import { dotSizes } from "@/field/three/selectionRing";
+import {
+    cancelHeadDrag,
+    finishHeadDrag,
+    headHit,
+    isHeadDrag,
+    moveHeadDrag,
+    startHeadDrag,
+    trailHeadOf,
+} from "./trailHead";
 
 /** The env for the roles held, as the shape tool's (half steps, the field's lines, the Snap toggle) */
 const envOf = (roles?: Roles): ToolEnv | null => {
@@ -306,6 +317,8 @@ class PathPenMode implements FieldMode {
         lane: LaneHold | null;
         /** The Follow tool (step 4b): the press on an end that draws the trail's first leg */
         firstLeg?: boolean;
+        /** A stored trail's head dragged on or back (AP-T16) */
+        head?: boolean;
     } | null = null;
     private listeners = new Set<() => void>();
 
@@ -467,19 +480,72 @@ class PathPenMode implements FieldMode {
         };
     }
 
+    /**
+     * Whether `pointer` is on the head of the shown trail (AP-T16): its arrows, or the head itself
+     * with no dot on it
+     */
+    private onHead(pointer: Pick<FieldPointer, "field">, onDot: boolean) {
+        const head = trailHeadOf(this.shownSession);
+        const field = currentShapeField();
+        const env = envOf();
+        if (!head || !env) return false;
+        const unit = DOT_RADIUS * dotSizes(field?.zoom() || 1).scale;
+        return headHit(head, pointer.field, env.hitRadius, unit, onDot);
+    }
+
     claims(pointer: FieldPointer, press: FieldModePress): boolean {
         const s = this.session;
-        if (!s || pointer.button !== 0 || s.phase === "closed") return false;
+        if (!s || pointer.button !== 0) return false;
+        // A stored trail's head takes the press (AP-T16); the rest of a quiet path takes none
+        if (s.phase === "closed")
+            return (
+                !usePathPenStore.getState().saving &&
+                this.onHead(pointer, press.onDot())
+            );
         if (s.phase === "drawing") return true;
         if (usePathPenStore.getState().saving) return false;
         if (this.handleAt(s, pointer) !== null) return true;
         return !press.onDot() && this.laneAt(s, pointer) !== null;
     }
 
+    /** A press on a stored trail's head (AP-T16): the drag starts, the stored points drawn */
+    private pressHead(pointer: FieldPointer, isMac: boolean): void {
+        const step = currentShapeField()?.fieldProperties.pixelsPerStep;
+        if (!step || !startHeadDrag(step)) return;
+        const dragged = this.session!;
+        const keys = holdGesture<FieldPointer>(
+            pointer,
+            (at, roles) => this.follow(at, roles),
+            [],
+            isMac,
+            {
+                honored: honored(shapeOf(dragged), null),
+                screen: () => this.held?.screen ?? pointer.screen,
+            },
+        );
+        this.held = {
+            start: pointer,
+            screen: pointer.screen,
+            key: null,
+            base: shapeOf(dragged),
+            before: dragged.points,
+            moved: false,
+            landed: null,
+            keys,
+            lane: null,
+            head: true,
+        };
+    }
+
     press(pointer: FieldPointer, { isMac }: { isMac: boolean }): void {
         const s = this.session;
         if (!s) return;
         this.endHeld();
+        // A stored trail's head (AP-T16): step 4b's drag carried on from where it stopped
+        if (s.phase === "closed") {
+            this.pressHead(pointer, isMac);
+            return;
+        }
         // The Follow tool, its ends pulsing: a press on an end grabs it and drags out the first
         // leg; a marcher in the middle of the line, or the empty field, takes no press (DL-4)
         if (s.phase === "drawing" && s.follow && s.follow.grabbed === null) {
@@ -614,11 +680,53 @@ class PathPenMode implements FieldMode {
         this.pendingPointer = null;
     }
 
+    /** The head the next frame drags to (AP-T16), and the roles held then */
+    private pendingHead: { at: XY; roles: Roles } | null = null;
+    private headFrame: number | null = null;
+
+    /**
+     * Drags the trail's head to `at` on the next animation frame, the latest of the moves before
+     * it, as the Follow tool's drawing does: the whole line is planned again for it
+     */
+    private headSoon(at: XY, roles: Roles) {
+        const go = (next: { at: XY; roles: Roles }) => {
+            const env = envOf(next.roles);
+            if (env) moveHeadDrag(next.at, env);
+        };
+        if (typeof requestAnimationFrame !== "function") {
+            go({ at, roles });
+            return;
+        }
+        this.pendingHead = { at, roles };
+        this.headFrame ??= requestAnimationFrame(() => {
+            this.headFrame = null;
+            const next = this.pendingHead;
+            this.pendingHead = null;
+            if (next && isHeadDrag(this.session)) go(next);
+        });
+    }
+
+    /** Drops a head drag waiting for its frame; with `flush`, does it now instead */
+    private dropPendingHead(flush = false) {
+        if (this.headFrame !== null) cancelAnimationFrame(this.headFrame);
+        this.headFrame = null;
+        const next = this.pendingHead;
+        this.pendingHead = null;
+        if (flush && next && isHeadDrag(this.session)) {
+            const env = envOf(next.roles);
+            if (env) moveHeadDrag(next.at, env);
+        }
+    }
+
     /** The pointer at `pointer` with `roles`: the drag, or the preview, as they are now */
     private follow(pointer: FieldPointer, roles: Roles) {
         const p = this.held;
         const s = this.session;
         if (!p || !s) return;
+        if (p.head) {
+            if (p.moved && isHeadDrag(s)) this.headSoon(pointer.field, roles);
+            return;
+        }
         if (s.phase === "drawing") {
             if (p.firstLeg) this.preview(pointer, roles);
             else if (p.moved && p.landed) this.shapeNew(p, pointer, roles);
@@ -749,6 +857,8 @@ class PathPenMode implements FieldMode {
             return;
         }
         p.screen = pointer.screen;
+        // A head drag cancelled (Escape) while the button is still down: nothing more to drag
+        if (p.head && !isHeadDrag(this.session)) return;
         p.moved ||=
             Math.hypot(
                 pointer.screen.x - p.start.screen.x,
@@ -770,6 +880,8 @@ class PathPenMode implements FieldMode {
         this.dropPendingPointer();
         const s = this.session;
         if (!p || !s) return;
+        // A trail's head let go (AP-T16)
+        if (p.head) return this.releaseHead(p.moved);
         if (s.phase === "drawing") {
             // The first leg dragged out of an end (step 4b): its end is the trail's first point;
             // a click on the end only grabs it, and clicks go on from there
@@ -848,6 +960,14 @@ class PathPenMode implements FieldMode {
             return;
         }
         if (point >= 0) selectPoint(p.key);
+    }
+
+    /** A trail's head let go (AP-T16): where it was last dragged to, then the write; a click, none */
+    private releaseHead(moved: boolean) {
+        this.dropPendingHead(moved);
+        if (!isHeadDrag(this.session)) return;
+        if (moved) void finishHeadDrag();
+        else cancelHeadDrag();
     }
 
     /** A lane or key let go: saved once it moved (one undo step), otherwise a click that picks it */
@@ -964,6 +1084,11 @@ class PathPenMode implements FieldMode {
         const p = this.held;
         this.endHeld();
         this.dropPendingPointer();
+        if (p?.head) {
+            this.dropPendingHead();
+            cancelHeadDrag();
+            return;
+        }
         if (p?.lane) setLaneEdit(null);
         if (!p?.moved) return;
         if (this.session?.phase === "open")
@@ -984,7 +1109,7 @@ class PathPenMode implements FieldMode {
      * grabbed one of the Follow tool's ends is kept: lifted, it's the click that grabs it.
      */
     longPress(): boolean {
-        return !this.held?.firstLeg;
+        return !this.held?.firstLeg && !this.held?.head;
     }
 
     cursorAt(
@@ -994,8 +1119,14 @@ class PathPenMode implements FieldMode {
         const s = this.session;
         // A path's line, shown or one of Paths All's, is something to click (AP-O3); not under a
         // marcher's dot, which a press there selects instead
-        if (!s || s.phase === "closed")
+        if (!s || s.phase === "closed") {
+            // A stored trail's head (AP-T16): the hand, as on the Follow tool's ends
+            if (s && this.onHead(pointer, hover?.onDot() ?? false))
+                return "grab";
             return !hover?.onDot() && this.pathAt(pointer) ? "pointer" : null;
+        }
+        // A trail's head being dragged (AP-T16): the hand that holds it
+        if (isHeadDrag(s)) return "grab";
         // Between clicks the next leg follows the pointer with the roles its keys hold, so it
         // lands where a click would, as a Line's does
         if (s.phase === "drawing") {
@@ -1609,7 +1740,18 @@ function buildDrawing(
         ...guidesFor(moving ? [moving] : [], outline ?? []),
         ...(tipText && moving ? { tip: { at: moving, text: tipText } } : {}),
         ...(laneTip ? { tip: laneTip } : {}),
+        // AP-T16: the head of a trail dragged out of a line, to drag on or back (step 4d's arrows)
+        ...headArrows(session, asObject),
     };
+}
+
+/** A stored trail's head handle (AP-T16): the Follow tool's pull arrows, out along its way */
+function headArrows(
+    session: PathSession,
+    asObject: boolean,
+): Pick<FieldModeDrawing, "pullArrows"> {
+    const head = asObject ? null : trailHeadOf(session);
+    return head ? { pullArrows: [{ at: head.at, dir: head.dir }] } : {};
 }
 
 /** The note by the pointer over a lane: whose line it is, and how many lanes lie there */

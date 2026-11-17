@@ -46,11 +46,15 @@ import {
     type SnakeBy,
 } from "./timelineTrailSnake";
 import {
+    editTrailPointsInTransaction,
     followTrailInTransaction,
+    isAlong,
+    isAround,
     lineOrder,
     trailRefusal,
     type FollowTrailResult,
 } from "./timelineTrails";
+import { updateTimelineSlotDestinationInTransaction } from "./timelineTransitionsInTransaction";
 
 /** The refusals' texts of step 4b, translated where they are shown. */
 export const trailDragRefusal = {
@@ -70,6 +74,8 @@ export const trailDragRefusal = {
         text.t("timeline.refusals.trail.notOneMove", { marcher }),
     /** The edit window is at home, or not a range */
     noWindow: () => text.t("timeline.refusals.trail.noWindow"),
+    /** AP-T16: the trail's head is dragged on a trail that wasn't dragged out of a line */
+    headNotAlong: () => text.t("timeline.refusals.trail.headNotAlong"),
 };
 
 // ---------------------------------------------------------------------------
@@ -746,5 +752,123 @@ export async function dragTrail(
     const { db, ...input } = args;
     return await transactionWithHistory(db, "dragTrail", (tx) =>
         dragTrailInTransaction(tx, input),
+    );
+}
+
+// ---------------------------------------------------------------------------
+// AP-T16: drag a dragged-out trail's head
+// ---------------------------------------------------------------------------
+
+export interface TrailHeadInput {
+    /** The trail's route */
+    routeId: number;
+    /**
+     * The trail's points now, in walking order from the leader, the last one its head: the stored
+     * points cut back (shorter) or run on (longer), kept ids staying
+     */
+    points: readonly RoutePointInput[];
+    /** The spacing the trail was dragged out with, or Keep spacing */
+    spacing: TrailSpacing;
+    /** One step, in field units */
+    step: number;
+}
+
+export interface TrailHeadResult {
+    routeId: number;
+    transitionId: number;
+    /** The line, tail first */
+    marcherIds: number[];
+    /** The spots written, `P(e_q)`, tail first */
+    spots: XY[];
+}
+
+/**
+ * AP-T16 (owner, 2026-11-17), inside one write-wrapper transaction: the trail of a move dragged out
+ * of a line (AP-T8, `ends: "along"`) gets `points` as its trail, and everyone's end spot is planned
+ * again exactly as AP-T8 plans it for that trail (`planTrailDrag`, the line where it starts, in its
+ * order, the leader last), hand-moved spots too. The route is rewritten through AP-T2's writer
+ * (kept ids staying, its `to` the new last point); each member's slot gets its spot; and step 4c's
+ * shape recipe for the spots is saved again (DL-11), the old one left empty and deleted. The
+ * transition, its route and its rows keep their ids. Refused: a trail that isn't along the way
+ * (into end spots, round an outline), fewer than two founders, a trail shorter than `ε_geom`, Even
+ * past its limit.
+ */
+export async function dragTrailHeadInTransaction(
+    tx: DbTransaction,
+    input: TrailHeadInput,
+): Promise<TrailHeadResult> {
+    const { routeId, points, spacing, step } = input;
+    const T = schema.timeline_transitions;
+    const A = schema.timeline_assignments;
+    const transition = await tx
+        .select()
+        .from(T)
+        .where(
+            and(eq(T.route_id, routeId), eq(T.path_style, "follow_the_leader")),
+        )
+        .get();
+    if (!transition) refuse(trailRefusal.noTrail());
+    if (!isAlong(transition) || isAround(transition))
+        refuse(trailDragRefusal.headNotAlong());
+    const resolver = createResolver((await readTimelineTables(tx)).snapshot);
+    // The line as it follows now, tail first and the leader last (R-12′), where AP-T8 read it
+    const line = resolver.ftlEntry(transition.id).members;
+    if (line.length < 2) refuse(trailRefusal.tooFew());
+    const starts = line.map((m): XY => {
+        const [x, y] = resolver.positionAt(m, transition.start_beat);
+        return [x, y];
+    });
+    const plan = planTrailDrag(starts, points, spacing, step);
+    if (!(plan.drawn >= EPS_GEOM)) refuse(trailDragRefusal.tooShort());
+    if (spacing.kind === "even" && !plan.forward)
+        refuse(
+            trailDragRefusal.evenTooWide(
+                Math.floor((plan.evenLimit ?? 0) * 4) / 4,
+            ),
+        );
+    // The trail: AP-T2's writer, which keeps it running to its own last point (AP-T10)
+    await editTrailPointsInTransaction({ tx, routeId, points });
+    // Each member's spot, on its own slot
+    const rows = await tx
+        .select({ marcherId: A.marcher_id, slot: A.slot_index })
+        .from(A)
+        .where(
+            and(
+                eq(A.transition_id, transition.id),
+                inArray(A.marcher_id, line),
+            ),
+        )
+        .all();
+    const slotOf = new Map(rows.map((r) => [r.marcherId, r.slot]));
+    for (const [q, m] of line.entries())
+        await updateTimelineSlotDestinationInTransaction({
+            tx,
+            transitionId: transition.id,
+            slotIndex: slotOf.get(m)!,
+            point: plan.spots[q]!,
+        });
+    // Step 4c (DL-11): the spots as a shape again, each member where it's written
+    const { recipe, members } = trailShapeRecipe(plan, line);
+    await saveShapeRecipeInTransaction({
+        tx,
+        timelineId: transition.timeline_id,
+        recipe,
+        members,
+    });
+    return {
+        routeId,
+        transitionId: transition.id,
+        marcherIds: [...line],
+        spots: plan.spots,
+    };
+}
+
+/** AP-T16 as one undoable edit. */
+export async function dragTrailHead(
+    args: { db: DbConnection } & TrailHeadInput,
+): Promise<TrailHeadResult> {
+    const { db, ...input } = args;
+    return await transactionWithHistory(db, "dragTrailHead", (tx) =>
+        dragTrailHeadInTransaction(tx, input),
     );
 }
