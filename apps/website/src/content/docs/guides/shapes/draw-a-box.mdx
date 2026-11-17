@@ -23,12 +23,7 @@ import Term from "@/components/docs/Term.astro";
 import InShort from "@/components/docs/InShort.astro";
 import { Steps } from "@astrojs/starlight/components";
 
-<InShort>
-  Select the marchers, press <Kbd action="shapeBlock" />, drag on the field from
-  one corner of the box to the other, then select <Ui k="shapes.edit.place" /> (
-  <Kbd action="applyShape" />
-  ).
-</InShort>
+<InShort>Select the marchers, press <Kbd action="shapeBlock" />, drag on the field from one corner of the box to the other, then select <Ui k="shapes.edit.place" /> (<Kbd action="applyShape" />).</InShort>
 
 **Before you start:** select the marchers who go in the box, and put the <Term id="playhead">playhead</Term> on the count where they should stand in it, usually the end of a move.
 
@@ -75,10 +70,7 @@ From left to right, the first row has:
 - ↻ turns the box 90° clockwise (<Kbd action="shapeQuarterTurn" />), and the degrees beside it turn it to any angle. The pivot menu picks the point it turns and flips around: a corner, the middle of a side or the center.
 - The two flip buttons mirror it side to side (<Kbd action="flipHorizontal" />) or front to back (<Kbd action="flipVertical" />).
 - Shrink and Expand make the box smaller or bigger a half step at a time, keeping its proportions. Hold either to repeat it.
-- <Ui k="shapes.edit.recalculate.label" /> works out [who goes
-  where](/guides/shapes/#who-goes-where) again (
-  <Kbd action="shapeRecalculate" />
-  ).
+- <Ui k="shapes.edit.recalculate.label" /> works out [who goes where](/guides/shapes/#who-goes-where) again (<Kbd action="shapeRecalculate" />).
 - The eye hides the marchers and spots, so you see the outline (<Kbd action="shapeHideMarchers" />). The magnet turns [snapping](/guides/shapes/snapping-and-modifier-keys/#turn-snapping-off) off. The last button shows each marcher's path to their spot.
 
 ## Choose how the box is filled
@@ -90,11 +82,11 @@ The <Ui k="shapes.edit.mode.label" /> menu on the editor's second row has three 
   alt="An open 4 × 3 box of twelve trumpets in Grid. The Fill menu is opened and Outline chosen: the marchers move to the box's edge, a marcher on every corner and the middle empty. Then Spread is chosen, and they scatter evenly over the whole box in no rows."
 />
 
-| Fill                                      | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fill                                 | What it does                                                                                                                                                         |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | <Ui k="shapes.edit.mode.files" plain />   | In rows, across and deep. The <Ui k="shapes.edit.layout.label" plain /> menu beside it lays the block out <Ui k="shapes.distribute.layout.full" plain />, <Ui k="shapes.distribute.layout.stagger" plain />, <Ui k="shapes.distribute.layout.rounded" plain />, <Ui k="shapes.distribute.layout.shortBack" plain /> or <Ui k="shapes.distribute.layout.notched" plain />, and says how many marchers to add or remove for a layout that can't take this many. |
-| <Ui k="shapes.edit.mode.outline" plain /> | Round the edge, with a marcher on every corner and the middle empty. When the count doesn't go round evenly, the Leftover menu picks the side that has one fewer marcher, and whether it leaves a gap or spreads its marchers wider. <Ui k="shapes.edit.evenOut.label" plain /> spaces everyone as evenly as the box allows.                                                                                                                                  |
-| <Ui k="shapes.edit.mode.spread" plain />  | Evenly over the whole box, in no rows. <Ui k="shapes.edit.reshuffle.label" plain /> gives another even layout in the same box; the arrow beside it shows the layout's <Ui k="shapes.edit.seed.label" plain />, which you can copy, or type back in to get that exact spread again. <Ui k="shapes.edit.edge.label" plain /> stands some marchers along the outline and spreads the rest inside.                                                                |
+| <Ui k="shapes.edit.mode.outline" plain /> | Round the edge, with a marcher on every corner and the middle empty. When the count doesn't go round evenly, the Leftover menu picks the side that has one fewer marcher, and whether it leaves a gap or spreads its marchers wider. <Ui k="shapes.edit.evenOut.label" plain /> spaces everyone as evenly as the box allows. |
+| <Ui k="shapes.edit.mode.spread" plain />  | Evenly over the whole box, in no rows. <Ui k="shapes.edit.reshuffle.label" plain /> gives another even layout in the same box; the arrow beside it shows the layout's <Ui k="shapes.edit.seed.label" plain />, which you can copy, or type back in to get that exact spread again. <Ui k="shapes.edit.edge.label" plain /> stands some marchers along the outline and spreads the rest inside. |
 
 In <Ui k="shapes.edit.mode.files" plain />, the <Ui k="shapes.edit.layout.label" plain /> menu shows a small picture of each layout, and beside it the sizes that layout can make for your marchers:
 

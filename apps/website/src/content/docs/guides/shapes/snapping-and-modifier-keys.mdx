@@ -21,14 +21,7 @@ import Ui from "@/components/docs/Ui.astro";
 import Term from "@/components/docs/Term.astro";
 import InShort from "@/components/docs/InShort.astro";
 
-<InShort>
-  Shapes snap to half steps, and boxes, lines and arcs also catch yard lines and
-  hashes. Select <Ui k="toolbar.alignment.snapToggleCaption" /> in the{" "}
-  <Ui k="inspector.shape.alignmentTab" /> tab or press{" "}
-  <Kbd action="toggleSnap" /> to turn snapping off. While you drag, hold{" "}
-  <Kbd keys="Shift" /> for fine, <Kbd keys="Mod" /> to constrain,{" "}
-  <Kbd keys="Alt" /> to work from the center.
-</InShort>
+<InShort>Shapes snap to half steps, and boxes, lines and arcs also catch yard lines and hashes. Select <Ui k="toolbar.alignment.snapToggleCaption" /> in the <Ui k="inspector.shape.alignmentTab" /> tab or press <Kbd action="toggleSnap" /> to turn snapping off. While you drag, hold <Kbd keys="Shift" /> for fine, <Kbd keys="Mod" /> to constrain, <Kbd keys="Alt" /> to work from the center.</InShort>
 
 ## Land on yard lines, hashes and sidelines
 
@@ -65,24 +58,19 @@ While snapping is off:
 
 The button looks pressed while snapping is off, and a drag shows <Ui k="field.gestureChip.snapOff" /> by the pointer, so you can't forget it's off. Snapping comes back on when you restart OpenMarch or open a show. The timeline has its own snapping, which this doesn't change.
 
-<Ui k="toolbar.alignment.snapCaption" />, beside it, is a different thing: it
-moves the selected marchers onto the nearest grid points, once (
-<Kbd action="snapToNearestCustomFraction" />
-).
+<Ui k="toolbar.alignment.snapCaption" />, beside it, is a different thing: it moves the selected marchers onto the nearest grid points, once (<Kbd action="snapToNearestCustomFraction" />).
 
 ## Hold a key to change a drag
 
 Hold these keys during a drag on a shape. They take effect as soon as you press them, mid-drag, and stop when you let go. Holding two gives you both.
 
-| Hold                                | Role        | What it does                                                                                                                                                                                                                                                                                |
-| ----------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| <Kbd keys="Shift" gesture="drag" /> | Fine        | Off the half steps, in hundredths of a step, still catching yard lines and hashes. Turning goes by whole degrees. A dragged number in the floating editor changes in hundredths.                                                                                                            |
-| <Kbd keys="Mod" gesture="drag" />   | Constrain   | Drawing a box or dragging its corner makes the two spacings equal. Lines, curves and arcs draw at 45° steps. Moving keeps the shape on one axis. On a box's side handle or an arc's handles, it switches the proportion lock for that drag; on a line's end, it keeps the line's direction. |
-| <Kbd keys="Alt" gesture="drag" />   | From center | A box draws from its center: the press is its middle and the pointer a corner. Handles resize the shape about its center instead of holding the opposite side; a line's end moves both ends about the middle.                                                                               |
+| Hold                                    | Role         | What it does                                                                                                                                                                 |
+| --------------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <Kbd keys="Shift" gesture="drag" />     | Fine         | Off the half steps, in hundredths of a step, still catching yard lines and hashes. Turning goes by whole degrees. A dragged number in the floating editor changes in hundredths. |
+| <Kbd keys="Mod" gesture="drag" />       | Constrain    | Drawing a box or dragging its corner makes the two spacings equal. Lines, curves and arcs draw at 45° steps. Moving keeps the shape on one axis. On a box's side handle or an arc's handles, it switches the proportion lock for that drag; on a line's end, it keeps the line's direction. |
+| <Kbd keys="Alt" gesture="drag" />       | From center  | A box draws from its center: the press is its middle and the pointer a corner. Handles resize the shape about its center instead of holding the opposite side; a line's end moves both ends about the middle. |
 
-<Kbd keys="Mod" /> is Command on a Mac and Ctrl elsewhere; <Kbd keys="Alt" /> is
-Option on a Mac. Ctrl on a Mac doesn't constrain: Control-click is a right-click
-there.
+<Kbd keys="Mod" /> is Command on a Mac and Ctrl elsewhere; <Kbd keys="Alt" /> is Option on a Mac. Ctrl on a Mac doesn't constrain: Control-click is a right-click there.
 
 <Media
   id="shapes-modifier-keys"
@@ -91,12 +79,7 @@ there.
 
 While you drag, a small label by the pointer names each key that does something there and what it does, such as "⌥ from center" or "⇧ fine". A key that does nothing for that drag isn't listed.
 
-<Kbd keys="Mod" gesture="drag" /> from a shape's center dot moves its
-<Term id="pivot">pivot</Term>, as it does for a group of marchers ([Turn a group
-around another
-point](/guides/marchers/align-and-space/#turn-a-group-around-another-point)).
-Choose <Ui k="shapes.edit.pivot.backToCenter" /> in the floating editor's pivot
-menu to put it back.
+<Kbd keys="Mod" gesture="drag" /> from a shape's center dot moves its <Term id="pivot">pivot</Term>, as it does for a group of marchers ([Turn a group around another point](/guides/marchers/align-and-space/#turn-a-group-around-another-point)). Choose <Ui k="shapes.edit.pivot.backToCenter" /> in the floating editor's pivot menu to put it back.
 
 ## On a tablet
 

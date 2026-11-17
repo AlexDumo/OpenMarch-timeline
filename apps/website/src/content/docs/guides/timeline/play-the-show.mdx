@@ -48,11 +48,7 @@ import Ui from "@/components/docs/Ui.astro";
 import Term from "@/components/docs/Term.astro";
 import InShort from "@/components/docs/InShort.astro";
 
-<InShort>
-  Select <Ui k="actions.playback.play" /> on the timeline, or press{" "}
-  <Kbd action="playPause" />. Press it again to stop; the playhead goes back to
-  where it was when you pressed Play.
-</InShort>
+<InShort>Select <Ui k="actions.playback.play" /> on the timeline, or press <Kbd action="playPause" />. Press it again to stop; the playhead goes back to where it was when you pressed Play.</InShort>
 
 ## Where Play starts
 
@@ -84,10 +80,10 @@ Point at Play to see each way of pressing it, with its keys. Holding <Kbd keys="
 
 While stopped:
 
-| To                                                                 | Press                     | Or                                        |
-| ------------------------------------------------------------------ | ------------------------- | ----------------------------------------- |
-| Play from the start flag and keep going past the playhead (Expert) | <Kbd action="playOn" />   | <Kbd keys="Alt" gesture="click" /> Play   |
-| Play from the playhead and keep going                              | <Kbd action="playPage" /> | <Kbd keys="Shift" gesture="click" /> Play |
+| To | Press | Or |
+| --- | --- | --- |
+| Play from the start flag and keep going past the playhead (Expert) | <Kbd action="playOn" /> | <Kbd keys="Alt" gesture="click" /> Play |
+| Play from the playhead and keep going | <Kbd action="playPage" /> | <Kbd keys="Shift" gesture="click" /> Play |
 
 While playing, <Kbd action="playPage" /> or <Kbd keys="Shift" gesture="click" /> on Stop pauses instead of going back: the playhead stays on the last whole count played. Press <Kbd action="playPage" /> to play on from there; <Kbd action="playPause" /> plays from the start flag again (in Basic, from the start of the page).
 
@@ -136,13 +132,13 @@ A page puts the playhead on that page's set; a measure or rehearsal mark puts it
 
 ## Move the playhead with the keyboard
 
-| Keys                                              | Moves the playhead to        |
-| ------------------------------------------------- | ---------------------------- |
-| <Kbd action="nextPage" />                         | The next page                |
-| <Kbd action="previousPage" />                     | The previous page            |
-| <Kbd action="nextBeat" />                         | The next count               |
-| <Kbd action="previousBeat" />                     | The previous count           |
-| <Kbd action="lastPage" /> or <Kbd keys="End" />   | The end of the show          |
+| Keys | Moves the playhead to |
+| --- | --- |
+| <Kbd action="nextPage" /> | The next page |
+| <Kbd action="previousPage" /> | The previous page |
+| <Kbd action="nextBeat" /> | The next count |
+| <Kbd action="previousBeat" /> | The previous count |
+| <Kbd action="lastPage" /> or <Kbd keys="End" /> | The end of the show |
 | <Kbd action="firstPage" /> or <Kbd keys="Home" /> | The start of the show (home) |
 
 The previous and next buttons beside Play do the same: on their own they step a page, with <Kbd keys="Shift" /> held a count, and with <Kbd keys="Alt" /> held they go to the start or end of the show. In Expert, what each of these does to the start flag is in [The playhead and the start flag](/guides/timeline/how-the-timeline-works/#the-playhead-and-the-start-flag).

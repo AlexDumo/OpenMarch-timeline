@@ -32,17 +32,13 @@ import Ui from "@/components/docs/Ui.astro";
 import Term from "@/components/docs/Term.astro";
 import InShort from "@/components/docs/InShort.astro";
 
-<InShort>
-  Select the marchers, right-click the page's box and select{" "}
-  <Ui k="timeline.terms.holdFromPrevious" />, or press <Kbd keys="Control+H" />.
-</InShort>
+<InShort>Select the marchers, right-click the page's box and select <Ui k="timeline.terms.holdFromPrevious" />, or press <Kbd keys="Control+H" />.</InShort>
 
 A hold keeps marchers still on purpose, so they're <Term id="held">Held</Term> on those pages. Marchers you haven't moved yet stand still too, but they're Not defined: [Defined, Held, Not defined](/guides/timeline/defined-held-not-defined/) explains the difference, and what a drag inside a hold does.
 
 ## Hold marchers on a page
 
-<Ui k="timeline.terms.holdFromPrevious" /> keeps marchers still on this page,
-where their last <Term id="keyframe">keyframe</Term> put them.
+<Ui k="timeline.terms.holdFromPrevious" /> keeps marchers still on this page, where their last <Term id="keyframe">keyframe</Term> put them.
 
 1. Go to the page and select the marchers.
 2. Right-click the page's box, or a selected marcher on the field, and select <Ui k="timeline.terms.holdFromPrevious" />. You can also press <Kbd keys="Control+H" />, or find it in the command palette (<Kbd action="openCommandPalette" />).
@@ -62,9 +58,7 @@ Some marchers can't be held, such as marchers placed in a shape on the page (the
 
 This needs Expert mode: see [Basic and Expert](/guides/start/basic-and-expert/).
 
-<Ui k="timeline.terms.holdOverWindow" /> keeps the selected marchers still over
-the counts between the start flag and the playhead, even where that's partway
-through pages.
+<Ui k="timeline.terms.holdOverWindow" /> keeps the selected marchers still over the counts between the start flag and the playhead, even where that's partway through pages.
 
 1. Put the start flag and the playhead around the counts to hold.
 2. Select the marchers.
@@ -112,11 +106,7 @@ In the [3D View](/guides/3d-view/open-the-3d-view/), Held marchers do what every
 
 The marchers keep the style for the whole hold, on every page it covers, whether or not anyone else is moving. <Ui k="inspector.marcher.timeline.holdStyle.default" plain /> gives the hold no style of its own, so it follows <Ui k="workspaceSettings.performer.holdWhileBandMoves.label" plain /> in [Show settings](/guides/field/show-settings/). <Ui k="inspector.marcher.timeline.holdStyle.highMarkTime" plain /> looks the same as <Ui k="inspector.marcher.timeline.holdStyle.markTime" plain /> in this version.
 
-<Ui k="inspector.marcher.timeline.holdStyle.label" plain /> shows only while a
-selected marcher is Held at the playhead, so to give a Not defined marcher a
-style, hold it first. A hold keeps its style when it grows, shrinks or joins
-another; one hold has one style, so marking time for part of a hold and standing
-for the rest isn't possible yet.
+<Ui k="inspector.marcher.timeline.holdStyle.label" plain /> shows only while a selected marcher is Held at the playhead, so to give a Not defined marcher a style, hold it first. A hold keeps its style when it grows, shrinks or joins another; one hold has one style, so marking time for part of a hold and standing for the rest isn't possible yet.
 
 ## Related
 

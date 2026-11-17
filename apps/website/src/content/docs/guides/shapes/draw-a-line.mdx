@@ -23,12 +23,7 @@ import Term from "@/components/docs/Term.astro";
 import InShort from "@/components/docs/InShort.astro";
 import { Steps } from "@astrojs/starlight/components";
 
-<InShort>
-  Select the marchers, press <Kbd action="shapeLine" />, drag on the field from
-  one end of the line to the other (or click each point and double-click the
-  last), then select <Ui k="shapes.edit.place" /> (<Kbd action="applyShape" />
-  ).
-</InShort>
+<InShort>Select the marchers, press <Kbd action="shapeLine" />, drag on the field from one end of the line to the other (or click each point and double-click the last), then select <Ui k="shapes.edit.place" /> (<Kbd action="applyShape" />).</InShort>
 
 A line stands the selected marchers along a path: a straight line from one end to the other, or a line through points you click, with corners where it turns. A curve is the same line with smooth points, so it bends round instead of turning sharply.
 
@@ -110,10 +105,10 @@ A new line is drawn to fit: you choose where its ends go, and the floating edito
 
 To keep the interval while you drag the ends, select the lock beside it. The <Ui k="shapes.kinds.line.spacing.label" /> menu has these choices:
 
-| Spacing                                                                                                                                                         | What stays fixed                                                                                                                                                  |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| <Ui k="shapes.kinds.line.spacing.fit" plain />                                                                                                                  | The line as drawn. The interval is whatever spaces the marchers along it.                                                                                         |
-| <Ui k="shapes.kinds.line.spacing.keep" plain />                                                                                                                 | The interval, and so the line's length. Dragging an end swings the line round its other end.                                                                      |
+| Spacing                                              | What stays fixed                                                                                            |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| <Ui k="shapes.kinds.line.spacing.fit" plain />           | The line as drawn. The interval is whatever spaces the marchers along it.                                    |
+| <Ui k="shapes.kinds.line.spacing.keep" plain />          | The interval, and so the line's length. Dragging an end swings the line round its other end.               |
 | <Ui k="shapes.kinds.line.spacing.pathStart" plain />, <Ui k="shapes.kinds.line.spacing.pathCenter" plain />, <Ui k="shapes.kinds.line.spacing.pathEnd" plain /> | Both the line and the interval. The marchers run from the start of the line, from its center out, or from its end, and whatever line they don't need stays empty. |
 
 The <Ui k="shapes.kinds.line.measured.label" /> menu says what the interval measures. <Ui k="shapes.kinds.line.measured.along" /> is the length of line between neighbors. <Ui k="shapes.kinds.line.measured.straight" /> is the straight distance from marcher to marcher. <Ui k="shapes.kinds.line.measured.x" /> and <Ui k="shapes.kinds.line.measured.y" /> measure only across or only up and down the field. <Ui k="shapes.kinds.line.measured.offset" />, on a line with no corners, sets both: how far each marcher is across and up the field from the one before.

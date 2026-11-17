@@ -29,11 +29,7 @@ import Term from "@/components/docs/Term.astro";
 import InShort from "@/components/docs/InShort.astro";
 import { Steps, Aside } from "@astrojs/starlight/components";
 
-<InShort>
-  Select <Ui k="sidebar.field" /> in the sidebar, or press{" "}
-  <Kbd action="fieldEditMode" />, change the field in the panel's tabs, then
-  select <Ui k="fieldEditMode.panel.done" />.
-</InShort>
+<InShort>Select <Ui k="sidebar.field" /> in the sidebar, or press <Kbd action="fieldEditMode" />, change the field in the panel's tabs, then select <Ui k="fieldEditMode.panel.done" />.</InShort>
 
 Every show has its own field: its size, its <Term id="step-size">step size</Term>, the lines coordinates count from, and how it looks. Start from the template closest to where you perform, then change what's different about your field or floor.
 
@@ -57,15 +53,9 @@ Select <Ui k="fieldEditMode.panel.done" /> or press <Kbd action="fieldEditDone" 
 
 On the <Ui k="fieldEditMode.panel.tabs.setup" /> tab:
 
-- <Ui k="fieldEditMode.size.width" /> and <Ui k="fieldEditMode.size.depth" />
-  follow the outermost lines. To change them, move those lines on the
-  <Ui k="fieldEditMode.panel.tabs.lines" /> tab, or choose another template.
-- <Ui k="fieldProperties.labels.stepSize" /> is the length of one step, with the
-  drill writers' "8 to 5" under it. It sets the grid and how step sizes are
-  worked out.
-- <Ui k="fieldProperties.labels.stepSizeWarningThreshold" /> is the longest step
-  before a move is marked as too big; see [Step size
-  warnings](/guides/field/step-size-warnings/).
+- <Ui k="fieldEditMode.size.width" /> and <Ui k="fieldEditMode.size.depth" /> follow the outermost lines. To change them, move those lines on the <Ui k="fieldEditMode.panel.tabs.lines" /> tab, or choose another template.
+- <Ui k="fieldProperties.labels.stepSize" /> is the length of one step, with the drill writers' "8 to 5" under it. It sets the grid and how step sizes are worked out.
+- <Ui k="fieldProperties.labels.stepSizeWarningThreshold" /> is the longest step before a move is marked as too big; see [Step size warnings](/guides/field/step-size-warnings/).
 - In <Ui k="fieldProperties.labels.measurementSystem" />, choose <Ui k="fieldProperties.options.imperial" /> for inches or <Ui k="fieldProperties.options.metric" /> for centimeters.
 
 <Aside type="caution">
@@ -92,14 +82,8 @@ On the <Ui k="fieldEditMode.panel.tabs.setup" /> tab:
 
 The templates are:
 
-- <Ui k="fieldProperties.fieldTemplate.football" />: High school football field,
-  College football field and Pro football field, each with or without end zones,
-  at 8 to 5 (22.5-inch steps). Each puts the hashes where that level of football
-  does: high school, college (NCAA) or pro (NFL) hashes. For college hashes,
-  choose College football field.
-- <Ui k="fieldProperties.fieldTemplate.grid" />: indoor floors of 40 × 60, 50 ×
-  70, 50 × 80 and 50 × 90 feet, with 24-inch steps or 6 to 5 steps, and
-  SoundSport fields at 8 to 5 or 6 to 5.
+- <Ui k="fieldProperties.fieldTemplate.football" />: High school football field, College football field and Pro football field, each with or without end zones, at 8 to 5 (22.5-inch steps). Each puts the hashes where that level of football does: high school, college (NCAA) or pro (NFL) hashes. For college hashes, choose College football field.
+- <Ui k="fieldProperties.fieldTemplate.grid" />: indoor floors of 40 × 60, 50 × 70, 50 × 80 and 50 × 90 feet, with 24-inch steps or 6 to 5 steps, and SoundSport fields at 8 to 5 or 6 to 5.
 
 Beside the <Ui k="fieldEditMode.panel.sections.template" /> heading, the panel says how many changes you've made to the template. To go back to the template's lines, select <Ui k="fieldEditMode.template.resetShort" />, then <Ui k="fieldEditMode.template.resetApply" />.
 
@@ -109,13 +93,8 @@ Select <Ui k="field.general.exportField" /> and save the `.fieldots` file. In th
 
 ## Name the field and its sides
 
-- <Ui k="fieldProperties.labels.fieldName" />: the field's name. Until you
-  choose a venue in the 3D View, the 3D View guesses one from the field's name
-  and lines (see [Change the venue and
-  uniforms](/guides/3d-view/venue-and-uniforms/)).
-- <Ui k="fieldProperties.sections.sideDescriptions" />: the names of the two
-  sides and their short forms, used in coordinates, such as Side 1 and Side 2,
-  or Stage Right and Stage Left.
+- <Ui k="fieldProperties.labels.fieldName" />: the field's name. Until you choose a venue in the 3D View, the 3D View guesses one from the field's name and lines (see [Change the venue and uniforms](/guides/3d-view/venue-and-uniforms/)).
+- <Ui k="fieldProperties.sections.sideDescriptions" />: the names of the two sides and their short forms, used in coordinates, such as Side 1 and Side 2, or Stage Right and Stage Left.
 
 ## Change the markings and labels
 
@@ -127,14 +106,9 @@ Select <Ui k="field.general.exportField" /> and save the `.fieldots` file. In th
 
 On the <Ui k="fieldEditMode.panel.tabs.appearance" /> tab, under <Ui k="fieldEditMode.panel.sections.markings" />:
 
-- <Ui k="fieldProperties.labels.halfLineXInterval" /> and
-  <Ui k="fieldProperties.labels.halfLineYInterval" />: draw a half line every so
-  many steps from the center or the front. Leave one empty for none that way.
-  Half lines don't change coordinates.
-- <Ui k="fieldEditMode.markings.edgeLabels" />: whether the line names outside
-  the field show on each edge.
-- <Ui k="fieldEditMode.markings.yardNumbers" />: how many steps from the front
-  the painted numbers' edges are. Clear the home numbers to paint none.
+- <Ui k="fieldProperties.labels.halfLineXInterval" /> and <Ui k="fieldProperties.labels.halfLineYInterval" />: draw a half line every so many steps from the center or the front. Leave one empty for none that way. Half lines don't change coordinates.
+- <Ui k="fieldEditMode.markings.edgeLabels" />: whether the line names outside the field show on each edge.
+- <Ui k="fieldEditMode.markings.yardNumbers" />: how many steps from the front the painted numbers' edges are. Clear the home numbers to paint none.
 
 ## Put a picture under the field
 

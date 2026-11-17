@@ -21,11 +21,7 @@ import Term from "@/components/docs/Term.astro";
 import InShort from "@/components/docs/InShort.astro";
 import { Steps } from "@astrojs/starlight/components";
 
-<InShort>
-  Put the playhead where the prop first appears, select <Ui k="props.title" />{" "}
-  (the cube) in the sidebar, choose an outline such as{" "}
-  <Ui k="props.outline.rectangle" plain />, and draw it on the field.
-</InShort>
+<InShort>Put the playhead where the prop first appears, select <Ui k="props.title" /> (the cube) in the sidebar, choose an outline such as <Ui k="props.outline.rectangle" plain />, and draw it on the field.</InShort>
 
 A prop is a set piece on the field: a riser, a platform, a floor tarp, a wall or a backdrop. You draw its outline on the field, give it a height, and move it during the show the way you move marchers. The 3D View draws each prop as a plain block.
 
@@ -42,14 +38,10 @@ The pit's instruments, speakers and podiums aren't props: see [Set up the front 
 3. Under <Ui k="props.draw.title" plain />, choose an outline: <Ui k="props.outline.rectangle" />, <Ui k="props.outline.circle" />, <Ui k="props.outline.arc" />, <Ui k="props.outline.polygon" /> or <Ui k="props.outline.freehand" />. The panel closes and a note at the bottom of the field says how to draw that outline.
 
 4. Draw the outline on the field:
-   - <Ui k="props.outline.rectangle" plain />: drag from one corner to the
-     opposite corner.
-   - <Ui k="props.outline.circle" plain />: drag from the center out to the
-     edge.
-   - <Ui k="props.outline.arc" plain />: click both ends of the arc, then click
-     to set how far it curves.
-   - <Ui k="props.outline.polygon" plain />: click each corner, then
-     double-click the last one to finish.
+   - <Ui k="props.outline.rectangle" plain />: drag from one corner to the opposite corner.
+   - <Ui k="props.outline.circle" plain />: drag from the center out to the edge.
+   - <Ui k="props.outline.arc" plain />: click both ends of the arc, then click to set how far it curves.
+   - <Ui k="props.outline.polygon" plain />: click each corner, then double-click the last one to finish.
    - <Ui k="props.outline.freehand" plain />: drag along the shape you want.
 
 </Steps>
@@ -88,24 +80,12 @@ On a tablet, tap the corners of an arc or a polygon. The note's <Ui k="props.dra
   maxWidth={480}
 />
 
-- <Ui k="props.name" />: shown on the field next to the prop when names are
-  shown. Without a name, the prop goes by its number.
-- <Ui k="props.lockLabel" />: on, the prop has one position for the whole show,
-  and dragging it on any page moves it on every page. Off, the default for a
-  prop you draw, it can move from page to page (below).
-- <Ui k="props.color" />: colors the prop on the field and in the 3D View.
-  <Ui k="props.colorNone" plain /> goes back to the plain look. To color several
-  props at once, select them on the field: the Props panel shows one color for
-  all of them.
-- <Ui k="props.surfaceLabel" />: <Ui k="props.surface.floor" plain />,
-  <Ui k="props.surface.obstacle" plain /> or
-  <Ui k="props.surface.platform" plain />. In this version the surface doesn't
-  change how the prop is drawn, and marchers don't stand on platforms.
-- <Ui k="props.width" />, <Ui k="props.depth" /> and <Ui k="props.height" />, in
-  meters, and <Ui k="props.rotation" /> in degrees clockwise.
-- <Ui k="props.rollOut.label" /> (floor props only): which edge a tarp rolls out
-  from. It's saved with the prop, but in this version it doesn't change how the
-  prop is drawn.
+- <Ui k="props.name" />: shown on the field next to the prop when names are shown. Without a name, the prop goes by its number.
+- <Ui k="props.lockLabel" />: on, the prop has one position for the whole show, and dragging it on any page moves it on every page. Off, the default for a prop you draw, it can move from page to page (below).
+- <Ui k="props.color" />: colors the prop on the field and in the 3D View. <Ui k="props.colorNone" plain /> goes back to the plain look. To color several props at once, select them on the field: the Props panel shows one color for all of them.
+- <Ui k="props.surfaceLabel" />: <Ui k="props.surface.floor" plain />, <Ui k="props.surface.obstacle" plain /> or <Ui k="props.surface.platform" plain />. In this version the surface doesn't change how the prop is drawn, and marchers don't stand on platforms.
+- <Ui k="props.width" />, <Ui k="props.depth" /> and <Ui k="props.height" />, in meters, and <Ui k="props.rotation" /> in degrees clockwise.
+- <Ui k="props.rollOut.label" /> (floor props only): which edge a tarp rolls out from. It's saved with the prop, but in this version it doesn't change how the prop is drawn.
 
 ### Grow, shrink or turn a prop during the show
 
@@ -143,8 +123,7 @@ The Props panel lists every prop:
 - The eye next to a prop hides it on the field and in the 3D View, or shows it again. Hiding is a view setting on your computer; it doesn't change the show.
 - <Ui k="props.showNames" /> shows or hides every prop's name on the field.
 - Select a prop's row to select the prop on the field.
-- <Ui k="props.delete" /> (the trash can) deletes the prop. Undo (
-  <Kbd action="performUndo" />) brings it back.
+- <Ui k="props.delete" /> (the trash can) deletes the prop. Undo (<Kbd action="performUndo" />) brings it back.
 
 <Media
   id="3d-props-panel"

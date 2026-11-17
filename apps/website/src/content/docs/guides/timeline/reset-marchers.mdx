@@ -22,13 +22,7 @@ import Ui from "@/components/docs/Ui.astro";
 import Term from "@/components/docs/Term.astro";
 import InShort from "@/components/docs/InShort.astro";
 
-<InShort>
-  Select the marchers, right-click the page's box and select{" "}
-  <Ui k="actions.batchEdit.clearPage" values={{ page: "N" }} /> (
-  <Kbd action="setSelectedMarchersToPreviousPage" />) to put them back where the
-  page before left them, or <Ui k="timeline.terms.defineAsShown" /> to lock them
-  where they stand.
-</InShort>
+<InShort>Select the marchers, right-click the page's box and select <Ui k="actions.batchEdit.clearPage" values={{ page: "N" }} /> (<Kbd action="setSelectedMarchersToPreviousPage" />) to put them back where the page before left them, or <Ui k="timeline.terms.defineAsShown" /> to lock them where they stand.</InShort>
 
 These commands change a marcher's state on a page, <Term id="defined">Defined</Term> or Not defined. [Defined, Held, Not defined](/guides/timeline/defined-held-not-defined/) explains the states and what they do to later pages.
 
@@ -39,9 +33,7 @@ These commands change a marcher's state on a page, <Term id="defined">Defined</T
 
 ## Clear a page's positions
 
-<Ui k="timeline.terms.clearThisPage" /> takes the marchers' positions off the
-page, so they're Not defined there again and stand where the page before left
-them. It also takes away a hold on the page, so it's how you remove one.
+<Ui k="timeline.terms.clearThisPage" /> takes the marchers' positions off the page, so they're Not defined there again and stand where the page before left them. It also takes away a hold on the page, so it's how you remove one.
 
 1. Select the marchers. To clear the page for everyone, select nobody.
 2. Right-click the page's box and select <Ui k="actions.batchEdit.clearPage" values={{ page: 3 }} /> (with the page's number, and "(all marchers)" after it when nobody is selected), or press <Kbd action="setSelectedMarchersToPreviousPage" /> for the selected marchers or <Kbd action="setAllMarchersToPreviousPage" /> for everyone.
@@ -54,9 +46,7 @@ A hold that grew out of the cleared page's keyframe goes too, and a message says
 
 ## Remove one position
 
-<Ui k="timeline.terms.removeKeyframe" /> takes away one position at one count,
-where Clear this page works on a whole page. Use it on a
-<Term id="keyframe">keyframe</Term> in the middle of a page.
+<Ui k="timeline.terms.removeKeyframe" /> takes away one position at one count, where Clear this page works on a whole page. Use it on a <Term id="keyframe">keyframe</Term> in the middle of a page.
 
 1. Select the marchers.
 2. Right-click the diamond at the count and select <Ui k="timeline.terms.removeKeyframe" />.
@@ -65,9 +55,7 @@ The marchers no longer stop at that spot: they walk from the keyframe before it 
 
 ## Lock marchers where they stand
 
-<Ui k="timeline.terms.defineAsShown" /> makes Not defined marchers Defined where
-they stand now, so later changes to earlier pages no longer move them on this
-page. Held marchers stay Held.
+<Ui k="timeline.terms.defineAsShown" /> makes Not defined marchers Defined where they stand now, so later changes to earlier pages no longer move them on this page. Held marchers stay Held.
 
 1. Select the marchers.
 2. Right-click the page's box, or the dashed line on it, and select <Ui k="timeline.terms.defineAsShown" />.

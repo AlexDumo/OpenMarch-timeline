@@ -28,10 +28,7 @@ import Ui from "@/components/docs/Ui.astro";
 import Term from "@/components/docs/Term.astro";
 import InShort from "@/components/docs/InShort.astro";
 
-<InShort>
-  Drag the selected marchers on the field, or nudge them a step at a time with
-  the arrow keys.
-</InShort>
+<InShort>Drag the selected marchers on the field, or nudge them a step at a time with the arrow keys.</InShort>
 
 Dragging or nudging changes where the marchers stand on the page you're editing, which the <Term id="editing-line">editing line</Term> names, for example "Editing Page 1's move". [How the timeline works](/guides/timeline/how-the-timeline-works/) explains pages and moves.
 
@@ -59,14 +56,14 @@ Drag the marchers with one finger. The buttons over the field, such as <Ui k="to
 
 Select marchers, then press an arrow key or <Kbd keys="W" />, <Kbd keys="A" />, <Kbd keys="S" />, <Kbd keys="D" />. Up moves them toward the back sideline, down toward the front.
 
-| Keys                                  | Moves the selection                                                                                                                                 |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| <Kbd keys="Up" /> or <Kbd keys="W" /> | One step, landing on a whole step in that direction; one grid step, landing on the grid, when [coordinate rounding](#snap-to-a-grid-of-steps) is on |
-| <Kbd keys="Alt+Up" />                 | The same distance, exactly, from where the marchers are                                                                                             |
-| <Kbd keys="Shift+Up" />               | ¼ step, without snapping                                                                                                                            |
-| <Kbd keys="Mod+Up" />                 | 4 steps, landing on a multiple of 4 steps from the center of the field                                                                              |
-| <Kbd keys="Mod+Alt+Up" />             | Exactly 4 steps                                                                                                                                     |
-| <Kbd keys="Mod+Shift+Up" />           | ⅒ step, without snapping                                                                                                                            |
+| Keys                                     | Moves the selection                                              |
+| ---------------------------------------- | ---------------------------------------------------------------- |
+| <Kbd keys="Up" /> or <Kbd keys="W" />    | One step, landing on a whole step in that direction; one grid step, landing on the grid, when [coordinate rounding](#snap-to-a-grid-of-steps) is on |
+| <Kbd keys="Alt+Up" />                    | The same distance, exactly, from where the marchers are           |
+| <Kbd keys="Shift+Up" />                  | ¼ step, without snapping                                         |
+| <Kbd keys="Mod+Up" />                    | 4 steps, landing on a multiple of 4 steps from the center of the field |
+| <Kbd keys="Mod+Alt+Up" />                | Exactly 4 steps                                                  |
+| <Kbd keys="Mod+Shift+Up" />              | ⅒ step, without snapping                                         |
 
 The same keys work with the other arrows. <Kbd keys="W" />, <Kbd keys="A" />, <Kbd keys="S" /> and <Kbd keys="D" /> work on their own and with <Kbd keys="Alt" /> or <Kbd keys="Shift" />, but not with <Kbd keys="Mod" />: use the arrows for 4 steps and ⅒ step.
 
@@ -107,12 +104,9 @@ To drag without snapping for a moment, hold <Kbd keys="Shift" gesture="drag" />.
 
 The two lock buttons in the <Ui k="inspector.shape.alignmentTab" /> tab, next to <Ui k="coordinateRoundingSettings.title" />, keep marchers from moving along one axis until you turn the lock off:
 
-- <Ui k="toolbar.alignment.lockXCaption" /> (the up-and-down arrows,
-  <Kbd action="lockX" />) keeps every marcher's side-to-side position, so drags
-  move them only front to back.
-- <Ui k="toolbar.alignment.lockYCaption" /> (the side-to-side arrows,
-  <Kbd action="lockY" />) keeps their front-to-back position, so drags move them
-  only across the field.
+
+- <Ui k="toolbar.alignment.lockXCaption" /> (the up-and-down arrows, <Kbd action="lockX" />) keeps every marcher's side-to-side position, so drags move them only front to back.
+- <Ui k="toolbar.alignment.lockYCaption" /> (the side-to-side arrows, <Kbd action="lockY" />) keeps their front-to-back position, so drags move them only across the field.
 
 Each key is the letter of the axis the marchers can still move along. A lock button is highlighted while it's on. The locks apply to dragging marchers and to <Ui k="toolbar.alignment.snapCaption" />, not to the handles that turn and resize a selection. For a single straight drag, holding <Kbd keys="Mod" gesture="drag" /> is quicker than a lock.
 
