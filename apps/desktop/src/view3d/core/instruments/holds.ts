@@ -1779,14 +1779,21 @@ const TABLE: Record<HoldFamily, () => Record<HoldState, Hold>> = {
     // in toward the heads on the bass mallets. The snare's hands sit behind
     // the back rim, just outside the head's sides, the right elbow a
     // little out and the left one tucked in, its hand in traditional grip
-    // (owner, 2026-11-16).
+    // (owner, 2026-11-16). The right wrist is straight: the hand carries on
+    // from the forearm, its top sloped a little down, and the stick crosses
+    // the palm 25 degrees in from it toward the middle of the head (owner,
+    // 2026-11-17, after Bluecoats and grip close-ups).
     snare: () =>
         battery(
             SNARE,
-            [-0.248, 1.078, 0.203],
-            [0.68, 0, 0.73],
+            [-0.23, 1.098, 0.198],
+            [0.325, -0.313, 0.892],
             [-1.3, -1, -0.8],
-            { palm: [0, -1, 0], traditional: true },
+            {
+                palm: [0, -1, 0],
+                traditional: true,
+                stick: [0.692, -0.208, 0.692],
+            },
             [0, 1.0, 0.45],
         ),
     tenors: () =>
@@ -2002,6 +2009,14 @@ interface BatteryGrip {
     palm?: Vec3;
     /** The left hand holds its stick in traditional grip rather than as the right hand's mirror image. */
     traditional?: boolean;
+    /**
+     * The way from the right hand's fulcrum to its stick's tip, when the
+     * stick crosses the palm rather than running along the fingers: in
+     * matched grip it leaves the hand between the thumb and the first
+     * finger, turned in from the forearm, so the wrist stays straight
+     * while the tip reaches the middle of the head (grip photos, 2026-11-17).
+     */
+    stick?: Vec3;
 }
 
 /**
@@ -2024,6 +2039,12 @@ function battery(
     const right: ArmTargets = {
         ...armTo("right", wrist, f, out),
         ...(palm && { palm }),
+        ...(grip.stick && {
+            stick: {
+                fulcrum: round3(add(wrist, mul(f, STICK_FULCRUM))),
+                along: unit(grip.stick),
+            },
+        }),
     };
     const mirrored: ArmTargets = {
         ...armTo("left", mirror(wrist), mirror(f), mirror(out)),

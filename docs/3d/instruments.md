@@ -469,10 +469,16 @@ points and where the elbows go.
   either side of the middle), and the two sticks angle in about 45 degrees
   from straight ahead to meet over the middle of the head, a centimeter or
   two above it, without crossing. The drum stays level.
-  - The right hand is matched grip: palm down, the hand level, the elbow a
-    little out from the ribs (12 cm outside the shoulder), the forearm
-    forward and down, the stick on along the fingers and tipped down to the
-    head.
+  - The right hand is matched grip: palm down, the elbow a little out from
+    the ribs (12 cm outside the shoulder), the forearm forward, turned in
+    about 20 degrees and 30 degrees down. The wrist is straight (owner,
+    2026-11-17): the hand carries on from the forearm, its top sloped a
+    little down. The stick doesn't run along the fingers: it leaves the
+    hand between the thumb and first finger, turned about 25 degrees in
+    from them (45 degrees in from straight ahead) and tipped down to the
+    head. Pointing the hand along the stick instead bent the wrist about
+    40 degrees, in and up. The hold gives the stick's way as the `stick`
+    of its grip in `battery()`.
   - The left hand is traditional grip. The upper arm hangs close to the
     ribs, the elbow tucked in under the shoulder (within 3 cm of it, closer
     in than the right elbow), and the forearm runs straight forward, about
@@ -496,7 +502,10 @@ points and where the elbows go.
     Commons, "Crossmen marching band drum line (3688891856).jpg" (a drum
     corps snare line, level drums), "Regular grip left hand 01.jpg" and
     "02" (the stick across the open left hand) and "Marching snares.jpg"
-    (a snare line playing); and the grip pages of Yamaha's educator guide
+    (a snare line playing), the matched grip photo by the author of the left hand photos and "German grip
+    right hand 01.jpg" (the stick across the right palm, the wrist
+    straight); a Bluecoats snare line rehearsing (the owner's photo); and
+    the grip pages of Yamaha's educator guide
     and the Iowa and Kansas State snare handbooks (the fulcrum in the web
     of the thumb about 4 in from the butt, the hand held out as for a
     handshake and turned outward).

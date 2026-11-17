@@ -204,8 +204,11 @@ describe("the arms' turn about their length (#980)", () => {
         const tenors = palms(poseArms(sk, hold("tenors", "up")));
         expect(tenors.right.dot(down)).toBeGreaterThan(0.98);
         expect(tenors.left.dot(down)).toBeGreaterThan(0.98);
+        // the snare's right hand slopes a little down with its forearm
+        // (straight wrist, owner 2026-11-17), so its palm faces down and a
+        // little back
         const snare = palms(poseArms(sk, hold("snare", "up")));
-        expect(snare.right.dot(down)).toBeGreaterThan(0.98);
+        expect(snare.right.dot(down)).toBeGreaterThan(0.93);
         // bass mallets: the palms face in, toward the heads, thumbs on top
         const bass = poseArms(sk, hold("bass", "up"));
         expect(palms(bass).right.x).toBeGreaterThan(0.98);
