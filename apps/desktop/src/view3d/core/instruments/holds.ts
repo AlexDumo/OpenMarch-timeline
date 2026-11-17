@@ -1783,19 +1783,7 @@ const TABLE: Record<HoldFamily, () => Record<HoldState, Hold>> = {
     // from the forearm, its top sloped a little down, and the stick crosses
     // the palm 25 degrees in from it toward the middle of the head (owner,
     // 2026-11-17, after Bluecoats and grip close-ups).
-    snare: () =>
-        battery(
-            SNARE,
-            [-0.23, 1.098, 0.198],
-            [0.325, -0.313, 0.892],
-            [-1.3, -1, -0.8],
-            {
-                palm: [0, -1, 0],
-                traditional: true,
-                stick: [0.692, -0.208, 0.692],
-            },
-            [0, 1.0, 0.45],
-        ),
+    snare: () => snareHolds("traditional"),
     tenors: () =>
         battery(
             TENORS,
@@ -2049,6 +2037,12 @@ function battery(
     const mirrored: ArmTargets = {
         ...armTo("left", mirror(wrist), mirror(f), mirror(out)),
         ...(palm ? { palm: mirror(palm) } : { halfTurn: true }),
+        ...(right.stick && {
+            stick: {
+                fulcrum: mirror(right.stick.fulcrum),
+                along: mirror(right.stick.along),
+            },
+        }),
     };
     const up: Hold = {
         ...r.up,
@@ -2063,6 +2057,32 @@ function battery(
         carry: { ...up, state: "carry" },
         trail: { ...up, state: "trail" },
     };
+}
+
+/**
+ * How a snare player holds the left stick: traditional grip (the default),
+ * or matched grip, the left arm the right one's mirror image.
+ */
+export type SnareGrip = "traditional" | "matched";
+
+/**
+ * The snare's holds in either grip. `hold("snare", …)` is traditional
+ * grip; matched grip is here for a later setting (owner, 2026-11-17) and
+ * nothing draws it yet.
+ */
+export function snareHolds(grip: SnareGrip): Record<HoldState, Hold> {
+    return battery(
+        SNARE,
+        [-0.23, 1.098, 0.198],
+        [0.325, -0.313, 0.892],
+        [-1.3, -1, -0.8],
+        {
+            palm: [0, -1, 0],
+            traditional: grip === "traditional",
+            stick: [0.692, -0.208, 0.692],
+        },
+        [0, 1.0, 0.45],
+    );
 }
 
 export function hold(family: HoldFamily, state: HoldState): Hold {

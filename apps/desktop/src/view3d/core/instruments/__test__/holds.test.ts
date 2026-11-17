@@ -8,6 +8,7 @@ import {
     hold,
     holdId,
     playingLips,
+    snareHolds,
     stickOf,
     STICK_REACH,
     type Hold,
@@ -584,6 +585,32 @@ describe("woodwind and battery holds", () => {
         expect(across).toBeLessThan(32);
         expect(stick.along[0]).toBeGreaterThan(right.fingers[0]);
         expect(stick.along[1]).toBeLessThan(0);
+    });
+
+    it("the snare in matched grip: the left arm the right one's mirror image", () => {
+        const mirror = (v: readonly number[]) => [-v[0], v[1], v[2]];
+        const traditional = snareHolds("traditional").up;
+        const { right, left } = snareHolds("matched").up;
+        // the right arm is the traditional hold's
+        expect(right).toEqual(traditional.right);
+        expect(hold("snare", "up")).toEqual(traditional);
+        for (const k of ["wrist", "elbow", "fingers", "palm"] as const)
+            for (let i = 0; i < 3; i++)
+                expect(left[k]![i]).toBeCloseTo(mirror(right[k]!)[i], 9);
+        // the stick crosses the left palm as the right one does, so the tips
+        // meet over the middle of the head
+        for (let i = 0; i < 3; i++) {
+            expect(left.stick!.fulcrum[i]).toBeCloseTo(
+                mirror(right.stick!.fulcrum)[i],
+                9,
+            );
+            expect(left.stick!.along[i]).toBeCloseTo(
+                mirror(right.stick!.along)[i],
+                9,
+            );
+        }
+        for (const state of HOLD_STATES)
+            expect(snareHolds("matched")[state].left).toEqual(left);
     });
 
     it("the snare's left hand holds its stick in traditional grip", () => {
