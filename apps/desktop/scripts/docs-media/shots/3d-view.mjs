@@ -404,7 +404,7 @@ const shots = [
     {
         id: "3d-move-view",
         kind: "clip",
-        // The default (Map) controls, one gesture: a plain drag pans across the field
+        // The default (Orbit) controls, one gesture: a plain drag orbits the camera
         ...viewClip(async (view, film, c) => {
             const a = { x: c.x + 130, y: c.y + 150 };
             const b = { x: c.x - 130, y: c.y + 150 };
@@ -417,7 +417,7 @@ const shots = [
     {
         id: "3d-orbit-view",
         kind: "clip",
-        // The default (Map) controls, one gesture: a right-drag orbits the camera
+        // The default (Orbit) controls, one gesture: a right-drag pans across the field
         ...viewClip(async (view, film, c) => {
             const a = { x: c.x + 120, y: c.y + 120 };
             const b = { x: c.x - 120, y: c.y + 110 };

@@ -1,9 +1,12 @@
 ---
 title: Get help and send feedback
-description: Report a bug or send feedback from inside OpenMarch, or ask for help on Discord, GitHub or by email.
+description: Get help in the app, from the user guide or an AI assistant such as ChatGPT or Claude; report a bug or send feedback; or ask on Discord, GitHub or by email.
 type: how-to
 covers:
+  - apps/desktop/src/components/help
   - apps/desktop/src/components/titlebar/BugReport.tsx
+  - action:openHelp
+  - i18n:help
   - apps/desktop/src/feedback
   - apps/desktop/src/ErrorBoundary.tsx
   - action:reportFeedback
@@ -17,12 +20,24 @@ sidebar:
 
 import Media from "@/components/docs/Media.astro";
 import Ui from "@/components/docs/Ui.astro";
+import Kbd from "@/components/docs/Kbd.astro";
 import InShort from "@/components/docs/InShort.astro";
 import { Steps } from "@astrojs/starlight/components";
 
-<InShort>Select <Ui k="titlebar.bugReport" /> in the title bar to send a report from the app, or ask on [Discord](https://discord.openmarch.com).</InShort>
+<InShort>Select the question mark in the title bar, or press <Kbd action="openHelp" />, to open the guide or ask an AI assistant. To report a problem, select <Ui k="titlebar.bugReport" />.</InShort>
 
 OpenMarch is free and built by volunteers, so hearing what goes wrong and what you need is how it gets better. The quickest way to tell us is from inside the app: a report goes straight to the team, with the details we need to find the problem.
+
+## Ask the guide or an AI assistant
+
+Select the question mark in the title bar, press <Kbd action="openHelp" />, or choose Help › <Ui k="menu.help.openHelp" plain /> in the menu bar. The <Ui k="help.title" plain /> window offers two ways to find an answer:
+
+<Media id="start-help-window" alt="The Get help window: Read the user guide, with an Open the guide button, and Ask an AI assistant, with a box for your question and a Copy prompt button." maxWidth={440} />
+
+- <Ui k="help.guide.open" /> opens this guide in your web browser.
+- <Ui k="help.ai.copy" /> copies a prompt to paste into ChatGPT, Claude or any other AI assistant. Type your question in the box first, or leave it empty and the assistant asks what you need. The prompt tells the assistant which version of OpenMarch you have and whether you're in Basic or Expert, and has it read this guide before it answers, so its steps name the real buttons and shortcuts.
+
+An assistant can still get things wrong. If its answer doesn't match what you see, check the guide page it links, or ask us below.
 
 ## Send a report from the app
 

@@ -96,7 +96,7 @@ const shots = [
     {
         id: "window-toolbar-end",
         kind: "still",
-        // The right end of the title bar and toolbar: search, Submit bug or feedback, Open 3D
+        // The right end of the title bar and toolbar: search, Help, Submit bug or feedback, Open 3D
         // View and the Editor and Preview switch
         async setup({ page, wait }) {
             await toPage1(page, wait);

@@ -695,6 +695,23 @@ const shots = [
             await wait(300);
             return { box: await around(drawer, 8) };
         },
+    },    {
+        id: "start-help-window",
+        kind: "still",
+        // The Help window from the title bar's question mark, with a question typed in
+        async setup({ page, around, wait }) {
+            await wait(2000);
+            await tidy(page);
+            await page.getByTestId("titlebar-help").click();
+            const dialog = page.getByTestId("help-dialog");
+            await dialog.waitFor({ timeout: 10000 });
+            await page
+                .getByTestId("help-question")
+                .fill("How do I make marchers stand still for 8 counts?");
+            await page.mouse.move(5, 500);
+            await wait(500);
+            return { box: await around(dialog, 24) };
+        },
     },
 ];
 

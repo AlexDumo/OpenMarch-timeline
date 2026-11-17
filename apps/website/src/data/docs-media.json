@@ -613,6 +613,12 @@
         "height": 1162,
         "seconds": 5.9
     },
+    "start-help-window": {
+        "chapter": "start",
+        "kind": "still",
+        "width": 1100,
+        "height": 1028
+    },
     "start-new-show": {
         "chapter": "start",
         "kind": "still",
@@ -846,7 +852,7 @@
         "chapter": "workspace",
         "kind": "still",
         "width": 1320,
-        "height": 436
+        "height": 352
     },
     "window-inspector": {
         "chapter": "workspace",
