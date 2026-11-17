@@ -244,6 +244,19 @@ async function frontAndTimeline(page, { inspector = false } = {}) {
     return { x: 0, y: 440, width, height: 560 };
 }
 
+/** Zooms the field by `factor` about `at` (Ctrl + wheel), off camera. */
+async function zoomAt(page, at, factor) {
+    await page.mouse.move(at.x, at.y);
+    await page.keyboard.down("Control");
+    const total = (2 * Math.log(factor)) / Math.log(0.99);
+    for (let i = 0; i < 10; i++) {
+        await page.mouse.wheel(0, total / 10);
+        await page.waitForTimeout(30);
+    }
+    await page.keyboard.up("Control");
+    await page.waitForTimeout(600);
+}
+
 /** Where timeline-basic-point right-clicked the tick, for its pointer (a still's perform). */
 let basicTickPoint = { x: 0, y: 0 };
 
@@ -571,22 +584,16 @@ const shots = [
         async setup({ page, wait, union }) {
             await ready(page, wait);
             await selectPage(page, 13, wait);
+            // Zoomed in on the three marchers, so they read as marchers, not specks
+            await zoomAt(page, (await marchers(page)).get("S2"), 2);
             await select(page, range("S", 1, 3), wait);
             await tidy(page);
-            // The three marchers, Pages 4 to 5A and the window's bottom-right corner, where the
-            // message shows; not the upper field or the rest of the inspector
+            // The three marchers and Pages 4 to 5A under them: not the inspector, the message
+            // (timeline-cross-pages-message) or the editing line at the field's far corner
             const near = await marchersBox(page, range("S", 1, 3), 90);
-            const toast = {
-                x: 1600 - 350,
-                y: 1000 - 130,
-                width: 350,
-                height: 130,
-            };
-            return {
-                box: union(near, await rowsSpan(page, 12, 14, 24), toast),
-            };
+            return { box: union(near, await rowsSpan(page, 12, 14, 24)) };
         },
-        async perform({ page, film, overlay }) {
+        async perform({ page, film, overlay, box }) {
             await overlay.enable();
             const b = await pageBox(page, 14).boundingBox();
             const target = { x: b.x + 10, y: b.y + 13 };
@@ -602,9 +609,35 @@ const shots = [
             const s1 = (await marchers(page)).get("S1");
             await film.moveTo(page, target, s1, 0.8);
             await film.drag(page, s1, { x: s1.x + 60, y: s1.y - 50 }, 1);
-            await page.mouse.move(800, 990);
+            // Off the marchers, on the field inside the crop, so the pointer isn't cut off
+            await page.mouse.move(box.x + box.width - 60, s1.y + 110);
             // Long enough to read the message, short enough that it's still up on the last frame
             await film.hold(2);
+        },
+    },
+    {
+        id: "timeline-cross-pages-message",
+        kind: "still",
+        // After Pages 5 and 5A are selected together and three marchers dragged: the message that
+        // they now walk straight through the end of Page 5, with its button to stop there
+        async setup({ page, wait, around }) {
+            await ready(page, wait);
+            await selectPage(page, 13, wait);
+            await select(page, range("S", 1, 3), wait);
+            await page.keyboard.down("Shift");
+            await pageBox(page, 14).click({ position: { x: 10, y: 13 } });
+            await page.keyboard.up("Shift");
+            await wait(800);
+            const s1 = (await marchers(page)).get("S1");
+            await dragMarchers(page, s1, 60, -50, wait);
+            await page.mouse.move(800, 990);
+            const toast = page
+                .locator("[data-sonner-toast]")
+                .filter({ hasText: "walks straight through" })
+                .first();
+            await toast.waitFor({ timeout: 5000 });
+            await wait(400);
+            return { box: await around(toast, 2) };
         },
     },
     {
@@ -751,6 +784,18 @@ const shots = [
             await wait(600);
             await page.keyboard.press("Escape");
             await wait(600);
+            // The timeline pane made taller, so there's room under the Move 1 bar for the pointer
+            // and the key cap instead of them covering the bar
+            const sp = await page.getByTestId("timeline-splitter").boundingBox();
+            const grip = { x: sp.x + sp.width / 2, y: sp.y + sp.height / 2 };
+            await page.mouse.move(grip.x, grip.y);
+            await page.mouse.down();
+            for (let i = 1; i <= 10; i++) {
+                await page.mouse.move(grip.x, grip.y - 7 * i);
+                await wait(25);
+            }
+            await page.mouse.up();
+            await wait(800);
             await page.mouse.move(800, 990);
             await tidy(page);
             return { box: await pagesSpan(page, 10, 12, 60) };
@@ -851,6 +896,33 @@ const shots = [
                     await belowControls(
                         page,
                         await around(pageBox(page, last.id), 40),
+                    ),
+                    await around(menu, 8),
+                ),
+            };
+        },
+    },
+    {
+        id: "timeline-clear-page-menu",
+        kind: "still",
+        // A page box's menu with marchers selected who are Defined there (T1 to T4 on Page 4), so
+        // Clear Page 4 can be used
+        async setup({ page, wait, around, union }) {
+            await ready(page, wait);
+            await selectPage(page, 12, wait);
+            await select(page, range("T", 1, 4), wait);
+            await pageBox(page, 12).click({
+                button: "right",
+                position: { x: 8, y: 13 },
+            });
+            await wait(800);
+            await tidy(page);
+            const menu = page.getByRole("menu").first();
+            return {
+                box: union(
+                    await belowControls(
+                        page,
+                        await around(pageBox(page, 12), 40),
                     ),
                     await around(menu, 8),
                 ),
@@ -1025,13 +1097,27 @@ const shots = [
             await selectPage(page, 13, wait);
             await page.keyboard.press("Control+KeyH");
             await wait(1500);
+            // Zoomed in on the trumpets, and cropped to them and Pages 4 to 5A, so the lines under
+            // the pages are what the picture is about
+            await zoomAt(page, (await marchers(page)).get("T2"), 2);
+            // The field panned down (right-drag) so the trumpets sit near its bottom edge, just
+            // over the timeline, and little field is left between them
+            const from = await emptyFieldPoint(page, { x: 300, y: 300 });
+            await page.mouse.move(from.x, from.y);
+            await page.mouse.down({ button: "right" });
+            for (let i = 1; i <= 10; i++) {
+                await page.mouse.move(from.x, from.y + 12 * i);
+                await wait(25);
+            }
+            await page.mouse.up({ button: "right" });
+            await wait(800);
             await tidy(page);
             await page.mouse.move(800, 990);
             await wait(500);
             return {
                 box: union(
-                    await marchersBox(page, range("T", 1, 4), 120),
-                    await rowsSpan(page, 11, 14, 24),
+                    await marchersBox(page, range("T", 1, 4), 70),
+                    await rowsSpan(page, 12, 14, 30),
                 ),
             };
         },
@@ -1095,10 +1181,21 @@ const shots = [
             // and no selection frame covers the others
             await selectPage(page, 13, wait);
             await select(page, ["B3"], wait);
+            // Zoomed in on B3, so the square at its keyframe can be seen at page width
+            const b3now = (await marchers(page)).get("B3");
+            await zoomAt(page, b3now, 2.5);
             await page.mouse.move(800, 990);
             await tidy(page);
-            // The brass block, not the whole field, with whole labels at the edges
-            return { box: await marchersBox(page, range("B", 1, 8), 110) };
+            // Tight on B3, its path and the square, shown wider than life on the page (maxWidth)
+            const c = (await marchers(page)).get("B3");
+            return {
+                box: {
+                    x: Math.round(c.x - 140),
+                    y: Math.round(c.y - 110),
+                    width: 340,
+                    height: 200,
+                },
+            };
         },
     },
     {
@@ -1192,13 +1289,21 @@ const shots = [
             await page.keyboard.press("Escape");
             await wait(600);
             await page.mouse.move(800, 990);
-            return { box: union(await rowsSpan(page, 11, 14, 24), menu) };
+            // The selected trumpets whole over the menu, not cut by the crop's top edge
+            return {
+                box: union(
+                    await rowsSpan(page, 11, 14, 24),
+                    menu,
+                    await marchersBox(page, range("T", 1, 4), 80),
+                ),
+            };
         },
         async perform({ page, film, overlay, box }) {
             await overlay.enable();
             const p4 = await pageBox(page, 12).boundingBox();
             const at = { x: p4.x + 10, y: p4.y + 13 };
-            const rest = { x: at.x + 90, y: box.y + box.height - 20 };
+            // Inside the crop, so the pointer isn't cut off at its bottom edge
+            const rest = { x: at.x + 90, y: box.y + box.height - 45 };
             await page.mouse.move(rest.x, rest.y);
             await film.moveTo(page, rest, at, 0.6);
             await film.hold(0.2);

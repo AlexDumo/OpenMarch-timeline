@@ -34,7 +34,8 @@ const shots = [
                 hasText: "Play from playhead / pause",
             });
             const r = await row.boundingBox();
-            await settings.mouse.move(r.x + r.width - 140, r.y + r.height / 2);
+            const at = { x: r.x + r.width - 140, y: r.y + r.height / 2 };
+            await settings.mouse.move(at.x, at.y);
             await ctx.wait(500);
             // The list and its search box, without the settings sidebar
             const list = await row.evaluate((li) => {
@@ -53,6 +54,16 @@ const shots = [
             const pad = 12;
             const x = Math.max(0, Math.floor(list.x - pad));
             const y = Math.max(0, Math.floor(list.y - pad));
+            // The pointer drawn on that row, so the reader sees why it shows × and +
+            await settings.evaluate(
+                ([frame, p]) => {
+                    window.__docsOverlay.setFrame(frame);
+                    window.__docsOverlay.enable();
+                    window.__docsOverlay.place(p.x, p.y);
+                },
+                [framed.box, at],
+            );
+            await ctx.wait(300);
             return {
                 target: settings,
                 box: {

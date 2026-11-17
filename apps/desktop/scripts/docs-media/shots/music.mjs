@@ -101,13 +101,13 @@ const shots = [
         id: "music-timeline-waveform",
         kind: "still",
         show: TEMPO_SHOW,
-        // The ordinary timeline across its whole width, so Edit music at the right end of the
-        // controls is in it: pages, counts, measures and the music's waveform
+        // The ordinary timeline's left part, so its labels read at page width: the controls,
+        // pages, counts, measures and the music's waveform
         async setup({ page, wait, around }) {
             await wait(3000);
             await tidy(page);
             await page.mouse.move(800, 200);
-            const b = await around(pane(page), 4);
+            const b = await leftOfPane(page, around, 820);
             // From the controls row down: the panel above the timeline stays out
             const controls = await box(page.getByTestId("timeline-tempo-mode"));
             const top = controls.y - 10;
@@ -347,7 +347,8 @@ const shots = [
         id: "music-add",
         kind: "still",
         show: TEMPO_SHOW,
-        // Edit music in a show with no music yet: the whole header, from Add music… to Done
+        // Edit music in a show with no music yet: the left end of the header, from Editing music
+        // to Metronome, near full size (Import and Done are in music-import-menu)
         async setup({ page, wait, union }) {
             await wait(3000);
             await editMusic(page, wait);
@@ -359,11 +360,17 @@ const shots = [
             await tidy(page);
             await wait(800);
             const header = await box(page.getByTestId("tempo-mode-header"));
+            const metronome = await box(
+                page
+                    .getByTestId("tempo-mode-header")
+                    .getByRole("button", { name: /Metronome/ })
+                    .first(),
+            );
             return {
                 box: {
                     x: header.x - 4,
                     y: header.y - 4,
-                    width: header.width + 8,
+                    width: metronome.x + metronome.width + 12 - header.x,
                     height: header.height + 8,
                 },
             };

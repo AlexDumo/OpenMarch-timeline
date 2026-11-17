@@ -598,8 +598,10 @@ const shots = [
             await film.moveTo(page, rest, c, 0.5);
             await page.keyboard.down("Alt");
             await film.hold(0.5);
-            const far = { x: c.x + 125, y: c.y + 55 };
-            const farther = { x: c.x + 135, y: c.y + 80 };
+            // Up and to the left, so the label to the right of the pointer, which names both
+            // keys, stays in the frame
+            const far = { x: c.x - 125, y: c.y - 55 };
+            const farther = { x: c.x - 135, y: c.y - 80 };
             await filmPath(
                 page,
                 film,
@@ -750,7 +752,8 @@ const shots = [
                 { x: area.x, y: area.y + area.height },
                 { x: area.x + area.width, y: area.y + area.height },
             ];
-            return { box: await cropArea(page, area) };
+            // Wide enough for the whole floating editor, its degrees box at the left end
+            return { box: await cropArea(page, area, 130, 40, 880) };
         },
         async perform({ page, film, overlay }) {
             await film.release();
@@ -896,7 +899,29 @@ const shots = [
         // A placed box with one marcher dragged out of it: the box is selected and Close up
         // spaces again the marchers left
         async setup({ page }) {
-            const { area, prefix } = await startInArea(page, 260, 150);
+            const found = await startInArea(page, 260, 150);
+            const { prefix } = found;
+            // The field panned left with a right-drag, so the crop isn't held at the field's
+            // right edge and Close up's tooltip, which runs right of the editor's end, fits
+            const ref = (await marchers(page))[0];
+            const from = {
+                x: found.area.x + found.area.width / 2,
+                y: found.area.y + found.area.height / 2,
+            };
+            await page.mouse.move(from.x, from.y);
+            await page.mouse.down({ button: "right" });
+            for (let i = 1; i <= 15; i++) {
+                await page.mouse.move(from.x - (160 * i) / 15, from.y);
+                await page.waitForTimeout(20);
+            }
+            await page.mouse.up({ button: "right" });
+            await page.waitForTimeout(600);
+            const moved = (await marchers(page)).find((m) => m.id === ref.id);
+            const area = {
+                ...found.area,
+                x: found.area.x + (moved ? moved.x - ref.x : 0),
+                y: found.area.y + (moved ? moved.y - ref.y : 0),
+            };
             const [a, b] = await openBoxIn(page, area);
             await page.keyboard.press("Enter");
             await page.waitForTimeout(1200);
@@ -924,7 +949,8 @@ const shots = [
             await page.mouse.click(out.x, out.y);
             await page.keyboard.up("Control");
             await page.waitForTimeout(500);
-            await quickDrag(page, out, { x: out.x + 40, y: b.y + 70 });
+            // Beside the box, not below it, where the floating editor won't cover them
+            await quickDrag(page, out, { x: b.x + 70, y: (a.y + b.y) / 2 });
             await page.keyboard.press("Escape");
             await page.waitForTimeout(400);
             await page.keyboard.press("Escape");
@@ -933,7 +959,10 @@ const shots = [
             this.member = (await inBox()).sort(
                 (m, n) => m.y - n.y || m.x - n.x,
             )[0];
-            return { box: await cropArea(page, area, 130) };
+            this.a = a;
+            this.b = b;
+            // Wide enough for Close up's tooltip, which runs right of the editor's end
+            return { box: await cropArea(page, area, 130, 40, 900) };
         },
         async perform({ page, film, overlay }) {
             await film.release();
@@ -949,10 +978,16 @@ const shots = [
             const close = await centerOf(
                 page.getByTestId("shape-editor-close-up"),
             );
+            // Rests on Close up until its tooltip names it, then clicks it
             await film.moveTo(page, m, close, 0.6);
+            await page.waitForTimeout(900);
+            await film.hold(1.2);
             await page.mouse.click(close.x, close.y);
-            await page.waitForTimeout(600);
-            await film.hold(1.6);
+            await film.hold(0.6);
+            // Off the editor, so the pointer doesn't end on the button that slides under it
+            const away = { x: this.b.x + 90, y: this.a.y + 10 };
+            await film.moveTo(page, close, away, 0.6);
+            await film.hold(1.2);
         },
     },
     {

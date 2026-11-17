@@ -303,12 +303,15 @@ const shots = [
         id: "field-step-inspector",
         kind: "still",
         uiSettings: { stepSizeWarnings: true },
-        // Guard marchers selected: the inspector's step sizes, the largest with its red warning icon
+        // The same move and limit as field-step-warnings, with G1 to G5 selected: the inspector's
+        // step sizes, the largest (one of the red paths there) with its red warning icon. The
+        // field draws the selected page's move into the next page, the inspector the move into
+        // the selected page (useTimelineStepSizes), so this is one page on: page 12
         async setup({ page, wait }) {
-            await stepWarningsPage(page, wait);
+            await stepWarningsPage(page, wait, "25", 12);
             const guard = (
                 await page.evaluate(() => window.fieldTest.marchers())
-            ).filter((m) => /^G(19|2[0-5])$/.test(m.label));
+            ).filter((m) => /^G[1-5]$/.test(m.label));
             await page.mouse.click(guard[0].screen.x, guard[0].screen.y);
             await page.keyboard.down("Shift");
             for (const m of guard.slice(1))
@@ -329,7 +332,7 @@ const shots = [
             // From the marcher heading with the selection count down to the two rows, inside the
             // scrollbar
             const heading = await page
-                .getByText(/^7 marchers/)
+                .getByText(/^5 marchers/)
                 .first()
                 .boundingBox({ timeout: 2000 })
                 .catch(() => null);

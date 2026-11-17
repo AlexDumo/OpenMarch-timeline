@@ -537,8 +537,11 @@ const shots = [
             const rest = { x: a.x - 60, y: a.y + 60 };
             await page.mouse.move(rest.x, rest.y);
             await film.hold(0.4);
-            await page.keyboard.press("KeyB");
-            await film.hold(0.5);
+            // B held for a moment, so its key cap shows before the drag starts
+            await page.keyboard.down("KeyB");
+            await film.hold(0.6);
+            await page.keyboard.up("KeyB");
+            await film.hold(0.3);
             await film.moveTo(page, rest, a, 0.5);
             await film.drag(page, a, b, 1.2);
             await film.hold(0.8);

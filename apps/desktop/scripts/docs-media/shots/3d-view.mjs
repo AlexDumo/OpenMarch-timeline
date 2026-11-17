@@ -737,15 +737,34 @@ const shots = [
                 y: center.y + 3 * pps,
             });
             const panel = await sidebarPanelBox(page);
-            const field = await page.locator("canvas").first().boundingBox();
-            // The panel and the whole field below the toolbar: the note that says how to draw
-            // sits at the field's bottom edge
+            // Where the note that says how to draw shows: choose Rectangle off camera, measure
+            // the note, cancel, and open the panel again
+            await page.getByRole("button", { name: "Rectangle" }).click();
+            const note = page.getByText("Drag on the field to draw the prop", {
+                exact: false,
+            });
+            await note.waitFor();
+            await page.waitForTimeout(400);
+            const n = await ctx.around(
+                page.getByRole("button", { name: "Cancel" }).last(),
+                0,
+            );
+            const t = await note.boundingBox();
+            await page.getByRole("button", { name: "Cancel" }).last().click();
+            await page.waitForTimeout(400);
+            await propsPanel(page);
+            await page.mouse.move(800, 990);
+            await page.waitForTimeout(600);
+            // The panel, the rectangle and the note, and no more, so the panel's buttons and the
+            // note read at page width
+            const right = Math.max(t.x + t.width + 40, this.to.x + 80);
+            const bottom = n.y + n.height + 32;
             return {
                 box: {
                     x: panel.x,
-                    y: field.y,
-                    width: field.x + field.width - panel.x,
-                    height: field.height,
+                    y: panel.y,
+                    width: right - panel.x,
+                    height: bottom - panel.y,
                 },
             };
         },

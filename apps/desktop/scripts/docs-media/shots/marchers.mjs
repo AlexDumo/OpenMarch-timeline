@@ -427,6 +427,19 @@ const shots = [
             await wait(300);
             const now = named(await marchers(page), labels);
             await shiftSelect(page, now, wait);
+            // A Shift-click on a marcher still selected from its drag takes it out again: add back
+            // any of the twelve left out, so the whole line is selected
+            for (let i = 0; i < 3; i++) {
+                const missing = await page.evaluate((want) => {
+                    const sel = new Set(window.fieldTest.selection());
+                    return window.fieldTest
+                        .marchers()
+                        .filter((m) => want.includes(m.label) && !sel.has(m.id))
+                        .map((m) => ({ x: m.screen.x, y: m.screen.y }));
+                }, labels);
+                if (missing.length === 0) break;
+                await shiftSelect(page, missing, wait);
+            }
             const b = bounds(now);
             return {
                 box: boxAround(
