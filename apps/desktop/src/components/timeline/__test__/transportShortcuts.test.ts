@@ -145,6 +145,21 @@ describe("the shortcuts list (UI-17 follow-up)", () => {
         expect(playback.rows.map((row) => row.keys)).toContain("Space");
     });
 
+    it("leaves out the timeline's Expert-only keys in Basic", () => {
+        const timeline = (basic: boolean) =>
+            shortcutGroups((key) => key, {}, false, basic)
+                .find((g) => g.title === "Timeline")!
+                .rows.map((row) => row.label);
+        expect(timeline(false)).toEqual(
+            expect.arrayContaining([
+                "Leave an isolated move",
+                "Draw a range (drag)",
+            ]),
+        );
+        expect(timeline(true)).not.toContain("Leave an isolated move");
+        expect(timeline(true)).not.toContain("Draw a range (drag)");
+    });
+
     it("groups every shortcut, playback first, with the timeline's own keys", () => {
         const groups = shortcutGroups((key) => key, {}, false);
         expect(groups[0]?.title).toBe("Playback");

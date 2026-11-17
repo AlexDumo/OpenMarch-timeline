@@ -1979,42 +1979,6 @@
                     ]
                 },
                 {
-                    "label": "Leave an isolated move",
-                    "other": [
-                        {
-                            "keys": [
-                                "Esc"
-                            ]
-                        }
-                    ],
-                    "mac": [
-                        {
-                            "keys": [
-                                "Esc"
-                            ]
-                        }
-                    ]
-                },
-                {
-                    "label": "Draw a range (drag)",
-                    "other": [
-                        {
-                            "keys": [
-                                "Ctrl"
-                            ],
-                            "gesture": "drag"
-                        }
-                    ],
-                    "mac": [
-                        {
-                            "keys": [
-                                "⌘"
-                            ],
-                            "gesture": "drag"
-                        }
-                    ]
-                },
-                {
                     "label": "Zoom the timeline",
                     "other": [
                         {
