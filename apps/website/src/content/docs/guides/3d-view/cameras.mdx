@@ -1,6 +1,6 @@
 ---
 title: Move the camera
-description: Pan, orbit and zoom the 3D View, jump to a camera, sit in a seat in the stands, and save your own camera positions.
+description: Pan, orbit and zoom the 3D View, jump to a camera, sit in a seat in the stands, follow a performer or see through their eyes, and save your own camera positions.
 type: how-to
 covers:
   - apps/desktop/src/view3d/window/camera
@@ -95,6 +95,24 @@ In a venue with stands, you can watch from any seat.
 />
 
 Press <Kbd keys="Escape" /> to stop picking without moving. Spectators around your seat step aside so they don't block the view.
+
+## Follow a performer
+
+Watch one performer through the show, from behind them or through their own eyes.
+
+<Steps>
+
+1. Select <Ui k="view3d.overlay.followPerformer" /> (the walking figure next to the camera menu), or press <Kbd keys="P" />.
+
+2. Click a performer on the field. The view flies behind them and the camera menu reads <Ui k="view3d.overlay.following" plain />. As they march, the camera moves with them.
+
+3. To see what they see, select <Ui k="view3d.overlay.pointOfView" /> (the eye), or press <Kbd keys="V" />. The view moves into their eyes and turns as they turn.
+
+</Steps>
+
+While you follow someone from behind, drag to orbit around them and scroll to zoom in or out; they stay in the middle of the view. Through their eyes, drag to look around and scroll to zoom.
+
+To stop, select <Ui k="view3d.overlay.stopFollowing" /> (the cross) or press <Kbd keys="Escape" />: from their eyes, the first <Kbd keys="Escape" /> goes back behind them and the second stops following. Panning, double-clicking, sitting in a seat or choosing a camera also stops following.
 
 ## Save your own cameras
 

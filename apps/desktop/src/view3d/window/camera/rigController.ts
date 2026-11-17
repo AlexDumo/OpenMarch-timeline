@@ -252,6 +252,35 @@ export class RigController {
         return true;
     }
 
+    /**
+     * Moves the whole view by (dx, dy, dz): the orbit target and the camera,
+     * and a fly-to's start and end, so the view keeps up with a performer it
+     * follows, in flight too. Places the camera now.
+     */
+    shift(dx: number, dy: number, dz: number) {
+        if (dx === 0 && dy === 0 && dz === 0) return;
+        const add = (v: Vector3Tuple) => {
+            v[0] += dx;
+            v[1] += dy;
+            v[2] += dz;
+        };
+        add(this.target);
+        const a = this.active;
+        if (a) {
+            add(a.tween.fromPosition);
+            add(a.tween.toPosition);
+            add(a.tween.fromTarget);
+            add(a.tween.toTarget);
+            add(a.currentTarget);
+            this.camera.position.x += dx;
+            this.camera.position.y += dy;
+            this.camera.position.z += dz;
+            this.camera.updateMatrixWorld();
+            return;
+        }
+        this.apply();
+    }
+
     /** Moves the camera for this frame: the tween, or the orbit pose. */
     update(nowMs: number) {
         const dt =

@@ -27,6 +27,7 @@ import {
 } from "@openmarch/ui";
 import clsx from "clsx";
 import Shortcut from "@/components/ui/Shortcut";
+import { FOLLOW_KEY, POV_KEY } from "../camera/followStore";
 import { useView3dSceneStore } from "../sceneStore";
 import { setAutoOpen, useAutoOpenSetting } from "./autoOpenSetting";
 import { QUALITY_MODES } from "../qualityPreference";
@@ -549,6 +550,8 @@ const SHORTCUTS: ShortcutRows = [
     ["previousNext", { pair: ["Q", "E"] }],
     ["firstLast", { pair: ["Alt+Q", "Alt+E"] }],
     ["cameras", { keys: ["1–9"] }],
+    ["followPerformer", { binding: FOLLOW_KEY }],
+    ["pointOfView", { binding: POV_KEY }],
     ["fullscreen", { binding: "F" }],
     ["crowd", { binding: "C" }],
     ["pausedPose", { binding: "S" }],
