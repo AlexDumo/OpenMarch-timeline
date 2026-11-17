@@ -3014,7 +3014,6 @@
     },
     "view3d": {
         "autoOpenPrompt": {
-            "description": "Anda boleh mengubah ini kemudian dalam Tetapan › Umum.",
             "no": "Tidak",
             "title": "Buka Paparan 3D setiap kali persembahan dibuka?",
             "yes": "Ya"
@@ -3096,7 +3095,6 @@
             "label": "Main balik"
         },
         "settings": {
-            "title": "Tetapan paparan",
             "close": "Tutup",
             "crowdColors": "Warna penonton",
             "homeColor": "Tuan rumah",

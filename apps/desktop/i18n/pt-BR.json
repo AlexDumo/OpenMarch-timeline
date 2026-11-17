@@ -3014,7 +3014,6 @@
     },
     "view3d": {
         "autoOpenPrompt": {
-            "description": "Você pode alterar isso depois em Configurações › Geral.",
             "no": "Não",
             "title": "Abrir a Visualização 3D ao iniciar?",
             "yes": "Sim"
@@ -3096,7 +3095,6 @@
             "label": "Reprodução"
         },
         "settings": {
-            "title": "Configurações de visualização",
             "close": "Fechar",
             "crowdColors": "Cores do público",
             "homeColor": "Casa",

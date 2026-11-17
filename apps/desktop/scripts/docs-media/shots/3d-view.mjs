@@ -461,6 +461,7 @@ const shots = [
             await view.getByTestId("view3d-settings-button").click();
             const panel = view.getByTestId("view3d-settings");
             await panel.waitFor();
+            await view.getByTestId("view3d-settings-tab-venue").click();
             await view.mouse.move(4, ctx.window.height / 2);
             await ctx.wait(800);
             return {

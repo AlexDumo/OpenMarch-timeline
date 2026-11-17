@@ -28,6 +28,7 @@ import {
 import clsx from "clsx";
 import Shortcut from "@/components/ui/Shortcut";
 import { useView3dSceneStore } from "../sceneStore";
+import { setAutoOpen, useAutoOpenSetting } from "./autoOpenSetting";
 import { QUALITY_MODES } from "../qualityPreference";
 import { RESOLUTIONS } from "../renderPrefs";
 import { type ControlScheme } from "../camera/controlScheme";
@@ -91,7 +92,7 @@ export function SettingsPanel({
     return (
         <section
             role="dialog"
-            aria-label={t("view3d.settings.title")}
+            aria-label={t("view3d.settings.panelTitle")}
             data-testid="view3d-settings"
             className={clsx(
                 "border-stroke bg-modal backdrop-blur-32 rounded-6 shadow-modal text-text pointer-events-auto flex w-[22rem] max-w-full flex-col overflow-hidden border",
@@ -100,7 +101,7 @@ export function SettingsPanel({
         >
             <header className="border-stroke flex items-center justify-between border-b py-6 pr-6 pl-12">
                 <h2 className="text-body font-medium">
-                    {t("view3d.settings.title")}
+                    {t("view3d.settings.panelTitle")}
                 </h2>
                 <button
                     type="button"
@@ -132,7 +133,8 @@ export function SettingsPanel({
                     >
                         {t("view3d.settings.tabs.performers")}
                     </TabItem>
-                    {/* The show's tabs on the left, this computer's on the right */}
+                    {/* A rule splits the show's tabs from this computer's. Hidden
+                        from screen readers, and arrow keys skip it. */}
                     <span className="bg-stroke mx-4 my-8 w-px" aria-hidden />
                     <TabItem
                         value="preferences"
@@ -227,49 +229,14 @@ function SavedNote({ icon: NoteIcon, text }: { icon: Icon; text: string }) {
  */
 function AutoOpenRow() {
     const { t } = useTranslate();
-    // Never answered reads as on, since the 3D View opens with a show then
-    const [setting, setSetting] = useState<boolean | null | "loading">(
-        "loading",
-    );
-    useEffect(() => {
-        let cancelled = false;
-        window.view3d.autoOpen
-            .get()
-            .then((value) => {
-                if (cancelled) return;
-                setSetting(
-                    value === null
-                        ? null
-                        : typeof value === "boolean"
-                          ? value
-                          : true,
-                );
-            })
-            .catch((error: unknown) => {
-                console.warn("3D View: couldn't read auto-open", error);
-                if (!cancelled) setSetting(null);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, []);
+    const setting = useAutoOpenSetting();
     if (setting === null || setting === "loading") return null;
     return (
         <Row label={t("settings.general.openView3dWithShow")}>
             <Switch
-                checked={setting}
-                onCheckedChange={(checked) => {
-                    setSetting(checked);
-                    window.view3d.autoOpen
-                        .set(checked)
-                        .catch((error: unknown) => {
-                            console.warn(
-                                "3D View: couldn't save auto-open",
-                                error,
-                            );
-                            setSetting(!checked);
-                        });
-                }}
+                // Never answered reads as on, since the 3D View opens with a show then
+                checked={setting ?? true}
+                onCheckedChange={setAutoOpen}
                 aria-label={t("settings.general.openView3dWithShow")}
                 data-testid="view3d-auto-open-toggle"
             />

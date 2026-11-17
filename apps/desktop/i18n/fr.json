@@ -3014,7 +3014,6 @@
     },
     "view3d": {
         "autoOpenPrompt": {
-            "description": "Vous pourrez modifier ce choix plus tard dans Paramètres › Général.",
             "no": "Non",
             "title": "Ouvrir la vue 3D au démarrage ?",
             "yes": "Oui"
@@ -3096,7 +3095,6 @@
             "label": "Lecture"
         },
         "settings": {
-            "title": "Paramètres d'affichage",
             "close": "Fermer",
             "crowdColors": "Couleurs du public",
             "homeColor": "Locaux",

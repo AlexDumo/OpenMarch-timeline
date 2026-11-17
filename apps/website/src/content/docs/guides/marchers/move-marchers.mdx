@@ -56,14 +56,14 @@ The handles that resize and turn a selection can be grabbed with a finger from a
 
 Select marchers, then press an arrow key or <Kbd keys="W" />, <Kbd keys="A" />, <Kbd keys="S" />, <Kbd keys="D" />. Up moves them toward the back sideline, down toward the front.
 
-| Keys                                     | Moves the selection                                              |
-| ---------------------------------------- | ---------------------------------------------------------------- |
-| <Kbd keys="Up" /> or <Kbd keys="W" />    | One step, or one grid step when coordinate rounding is on, snapped to the grid |
-| <Kbd keys="Alt+Up" />                    | The same distance, without snapping                              |
-| <Kbd keys="Shift+Up" />                  | ¼ step, without snapping                                         |
-| <Kbd keys="Mod+Up" />                    | 4 steps, snapped to the grid                                     |
-| <Kbd keys="Mod+Alt+Up" />                | 4 steps, without snapping                                        |
-| <Kbd keys="Mod+Shift+Up" />              | ⅒ step, without snapping                                         |
+| Keys                                  | Moves the selection                                                            |
+| ------------------------------------- | ------------------------------------------------------------------------------ |
+| <Kbd keys="Up" /> or <Kbd keys="W" /> | One step, or one grid step when coordinate rounding is on, snapped to the grid |
+| <Kbd keys="Alt+Up" />                 | The same distance, without snapping                                            |
+| <Kbd keys="Shift+Up" />               | ¼ step, without snapping                                                       |
+| <Kbd keys="Mod+Up" />                 | 4 steps, snapped to the grid                                                   |
+| <Kbd keys="Mod+Alt+Up" />             | 4 steps, without snapping                                                      |
+| <Kbd keys="Mod+Shift+Up" />           | ⅒ step, without snapping                                                       |
 
 The same keys work with the other arrows. <Kbd keys="W" />, <Kbd keys="A" />, <Kbd keys="S" /> and <Kbd keys="D" /> work on their own and with <Kbd keys="Alt" /> or <Kbd keys="Shift" />, but not with <Kbd keys="Mod" />: use the arrows for 4 steps and ⅒ step.
 
@@ -101,8 +101,12 @@ The two lock buttons in the <Ui k="inspector.shape.alignmentTab" /> tab keep mar
   alt="The Alignment tab: Coordinate Rounding with the X and Y sizes, then four buttons (up-and-down arrows, side-to-side arrows, a magnet and four arrows pointing inward), then Place all marchers."
 />
 
-- <Ui k="toolbar.alignment.lockXCaption" /> (the up-and-down arrows, <Kbd action="lockX" />) keeps every marcher's side-to-side position, so drags move them only front to back.
-- <Ui k="toolbar.alignment.lockYCaption" /> (the side-to-side arrows, <Kbd action="lockY" />) keeps their front-to-back position, so drags move them only across the field.
+- <Ui k="toolbar.alignment.lockXCaption" /> (the up-and-down arrows,
+  <Kbd action="lockX" />) keeps every marcher's side-to-side position, so drags
+  move them only front to back.
+- <Ui k="toolbar.alignment.lockYCaption" /> (the side-to-side arrows,
+  <Kbd action="lockY" />) keeps their front-to-back position, so drags move them
+  only across the field.
 
 A lock button is highlighted while it's on. The locks apply to dragging marchers and to <Ui k="toolbar.alignment.snapCaption" />, not to the handles that turn and resize a selection. For a single straight drag, holding <Kbd keys="Mod" gesture="drag" /> is quicker than a lock.
 

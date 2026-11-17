@@ -52,19 +52,24 @@ Select <Ui k="toolbar.alignment.snapToggleCaption" /> in the toolbar's <Ui k="in
 
 The button looks pressed while snapping is off, and a drag shows <Ui k="field.gestureChip.snapOff" /> by the pointer, so you can't forget it's off. Snapping comes back on when you restart OpenMarch or open a show. The timeline has its own snapping, which this doesn't change.
 
-<Ui k="toolbar.alignment.snapCaption" />, beside it, is a different thing: it moves the selected marchers onto the nearest grid points, once (<Kbd action="snapToNearestCustomFraction" />).
+<Ui k="toolbar.alignment.snapCaption" />, beside it, is a different thing: it
+moves the selected marchers onto the nearest grid points, once (
+<Kbd action="snapToNearestCustomFraction" />
+).
 
 ## Modifier keys
 
 Hold these keys during a drag on a shape. They take effect as soon as you press them, mid-drag, and stop when you let go. Holding two gives you both.
 
-| Hold                                    | Role         | What it does                                                                                                                                                                 |
-| --------------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| <Kbd keys="Shift" gesture="drag" />     | Fine         | Off the half steps, in hundredths of a step, still catching yard lines and hashes. Turning goes by whole degrees.                                                            |
-| <Kbd keys="Mod" gesture="drag" />       | Constrain    | Drawing a box or dragging its corner makes the two spacings equal. Lines, curves and arcs draw at 45° steps. Moving keeps the shape on one axis. On a side handle, it switches the spacing lock for that drag. |
-| <Kbd keys="Alt" gesture="drag" />       | From center  | A box draws from its center: the press is its middle and the pointer a corner. Handles resize the shape about its center instead of holding the opposite side.               |
+| Hold                                | Role        | What it does                                                                                                                                                                                                   |
+| ----------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <Kbd keys="Shift" gesture="drag" /> | Fine        | Off the half steps, in hundredths of a step, still catching yard lines and hashes. Turning goes by whole degrees.                                                                                              |
+| <Kbd keys="Mod" gesture="drag" />   | Constrain   | Drawing a box or dragging its corner makes the two spacings equal. Lines, curves and arcs draw at 45° steps. Moving keeps the shape on one axis. On a side handle, it switches the spacing lock for that drag. |
+| <Kbd keys="Alt" gesture="drag" />   | From center | A box draws from its center: the press is its middle and the pointer a corner. Handles resize the shape about its center instead of holding the opposite side.                                                 |
 
-<Kbd keys="Mod" /> is Command on a Mac and Ctrl elsewhere; <Kbd keys="Alt" /> is Option on a Mac. Ctrl on a Mac doesn't constrain: Control-click is a right-click there.
+<Kbd keys="Mod" /> is Command on a Mac and Ctrl elsewhere; <Kbd keys="Alt" /> is
+Option on a Mac. Ctrl on a Mac doesn't constrain: Control-click is a right-click
+there.
 
 <Media
   id="shapes-modifier-keys"
@@ -79,7 +84,13 @@ A few more things the keys do:
 - Dragging the end of a line, <Kbd keys="Mod" /> keeps the line's direction so only its length changes, and <Kbd keys="Alt" /> moves both ends about the middle.
 - Dragging an arc's handles, <Kbd keys="Mod" /> switches the lock that keeps its width and depth in proportion, and <Kbd keys="Alt" /> stretches it about its circle's center.
 - Turning a shape with its knob goes in 15° steps; <Kbd keys="Shift" /> turns it by whole degrees, and with snapping off it turns freely.
-- <Kbd keys="Mod" gesture="drag" /> from a shape's center dot pulls its pivot out, so the shape turns and flips around that point instead. Double-click the pivot to send it back to the center, or open the pivot menu in the floating editor and choose <Ui k="shapes.edit.pivot.backToCenter" />. The same drag from the middle of a group of selected marchers pulls out the group's pivot ([Turn and resize a group](/guides/marchers/align-and-space/#turn-and-resize-a-group)).
+- <Kbd keys="Mod" gesture="drag" /> from a shape's center dot pulls its pivot
+  out, so the shape turns and flips around that point instead. Double-click the
+  pivot to send it back to the center, or open the pivot menu in the floating
+  editor and choose <Ui k="shapes.edit.pivot.backToCenter" />. The same drag
+  from the middle of a group of selected marchers pulls out the group's pivot
+  ([Turn and resize a
+  group](/guides/marchers/align-and-space/#turn-and-resize-a-group)).
 
 The Shortcuts dialog (<Kbd action="showShortcuts" />) lists these keys in its Shapes group.
 

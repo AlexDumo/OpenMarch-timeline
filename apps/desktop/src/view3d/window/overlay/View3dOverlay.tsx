@@ -213,7 +213,7 @@ export default function View3dOverlay() {
             ? "view3d.overlay.exitFullscreen"
             : "view3d.overlay.enterFullscreen",
     );
-    const settingsLabel = t("view3d.settings.title");
+    const settingsLabel = t("view3d.settings.panelTitle");
 
     return (
         <div
@@ -263,8 +263,6 @@ export default function View3dOverlay() {
                             onClick={() => setSettingsOpen((open) => !open)}
                             icon={<GearSixIcon size={16} />}
                             label={settingsLabel}
-                            tooltip={settingsLabel}
-                            tooltipSide="left"
                             testId="view3d-settings-button"
                         />
                     </Panel>

@@ -24,22 +24,26 @@ In the 3D View you can look at the show from anywhere: move the view with the mo
 
 ## Move the view
 
-| Do this                                                                           | To                                 |
-| --------------------------------------------------------------------------------- | ---------------------------------- |
-| Drag                                                                              | Orbit around the field             |
-| Drag with the right mouse button, or hold <Kbd keys="Shift" /> while dragging     | Pan across the field               |
-| Scroll or pinch                                                                   | Zoom toward the pointer            |
-| Hold <Kbd keys="Shift" /> or <Kbd keys="Alt" /> while scrolling                   | Pan                                |
-| Double-click a spot on the field or a seat in the stands                          | Orbit around that spot from now on |
+| Do this                                                                       | To                                 |
+| ----------------------------------------------------------------------------- | ---------------------------------- |
+| Drag                                                                          | Orbit around the field             |
+| Drag with the right mouse button, or hold <Kbd keys="Shift" /> while dragging | Pan across the field               |
+| Scroll or pinch                                                               | Zoom toward the pointer            |
+| Hold <Kbd keys="Shift" /> or <Kbd keys="Alt" /> while scrolling               | Pan                                |
+| Double-click a spot on the field or a seat in the stands                      | Orbit around that spot from now on |
 
 The camera never goes below the ground.
 
 When you pan, the spot you pressed stays under the pointer, whether it's the field, a performer or the seats in the stands. When that spot is far away, or you see it at a low angle (near the horizon, or level with your eye in the stands), the view pans at a steady speed instead, so it doesn't jump. Zooming heads toward whatever is under the pointer, the seats included.
 
-To change what dragging and scrolling do, open <Ui k="view3d.settings.title" /> in the 3D View, go to the <Ui k="view3d.settings.tabs.preferences" plain /> tab and pick another <Ui k="settings.view3d.controls" /> choice. It's kept on this computer, not in the show.
+To change what dragging and scrolling do, open <Ui k="view3d.settings.panelTitle" /> in the 3D View, go to the <Ui k="view3d.settings.tabs.preferences" plain /> tab and pick another <Ui k="settings.view3d.controls" /> choice. It's kept on this computer, not in the show.
 
-- <Ui k="settings.view3d.controls.map" />: dragging pans across the field, and the right mouse button, or holding <Kbd keys="Alt" />, <Kbd keys="Ctrl" /> or <Kbd keys="Shift" /> while dragging, orbits. Scrolling still zooms.
-- <Ui k="settings.view3d.controls.trackpad" />: scrolling and dragging orbit, a pinch zooms, and <Kbd keys="Shift" gesture="drag" /> or the right mouse button pans.
+- <Ui k="settings.view3d.controls.map" />: dragging pans across the field, and
+  the right mouse button, or holding <Kbd keys="Alt" />, <Kbd keys="Ctrl" /> or
+  <Kbd keys="Shift" /> while dragging, orbits. Scrolling still zooms.
+- <Ui k="settings.view3d.controls.trackpad" />: scrolling and dragging orbit, a
+  pinch zooms, and <Kbd keys="Shift" gesture="drag" /> or the right mouse button
+  pans.
 
 On a touch screen, one finger orbits and two fingers pan and zoom, whichever you choose.
 
@@ -109,12 +113,18 @@ The cameras are a list you can change. Your list is saved in the show, one list 
 Each row in the panel has the camera's number key, then its name, which you can change in place. Its buttons:
 
 - <Ui k="view3d.cameras.setView" />: moves the camera to where the view is now.
-- <Ui k="view3d.cameras.moveUp" /> and <Ui k="view3d.cameras.moveDown" />: change the order, and with it the number keys. The camera at the top is the one the 3D View opens on.
-- <Ui k="view3d.cameras.remove" />: removes the camera. Select <Ui k="view3d.cameras.undo" /> in the panel within a few seconds to bring it back.
+- <Ui k="view3d.cameras.moveUp" /> and <Ui k="view3d.cameras.moveDown" />:
+  change the order, and with it the number keys. The camera at the top is the
+  one the 3D View opens on.
+- <Ui k="view3d.cameras.remove" />: removes the camera. Select
+  <Ui k="view3d.cameras.undo" /> in the panel within a few seconds to bring it
+  back.
 
 Select the number at the start of a row to fly to that camera. A venue can have up to 30 cameras.
 
-<Ui k="view3d.cameras.reset" /> replaces your list with the venue's own cameras. If you've changed the list, it asks first, because your list isn't kept anywhere else.
+<Ui k="view3d.cameras.reset" /> replaces your list with the venue's own cameras.
+If you've changed the list, it asks first, because your list isn't kept anywhere
+else.
 
 Changes to cameras are saved in the show straight away, but undo in the editor doesn't undo them.
 

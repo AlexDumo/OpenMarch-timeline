@@ -3014,7 +3014,6 @@
     },
     "view3d": {
         "autoOpenPrompt": {
-            "description": "你可以稍後在「設定 › 一般」中變更。",
             "no": "否",
             "title": "開啟表演時自動開啟 3D 檢視？",
             "yes": "是"
@@ -3096,7 +3095,6 @@
             "label": "播放"
         },
         "settings": {
-            "title": "檢視設定",
             "close": "關閉",
             "crowdColors": "觀眾顏色",
             "homeColor": "主場",

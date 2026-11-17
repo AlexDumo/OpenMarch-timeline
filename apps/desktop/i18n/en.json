@@ -3014,7 +3014,7 @@
     },
     "view3d": {
         "autoOpenPrompt": {
-            "description": "You can change this later in 3D View settings or in Settings › General.",
+            "changeLater": "You can change this later in 3D View settings or in Settings › General.",
             "no": "No",
             "title": "Open the 3D View on launch?",
             "yes": "Yes"
@@ -3099,7 +3099,7 @@
             "label": "Playback"
         },
         "settings": {
-            "title": "3D View settings",
+            "panelTitle": "3D View settings",
             "close": "Close",
             "crowdColors": "Crowd colors",
             "homeColor": "Home",
