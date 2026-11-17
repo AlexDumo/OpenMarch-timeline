@@ -308,6 +308,10 @@ describe("the leader's mark follows the leader (QA-SN-14)", () => {
                 );
             }
         }
+        // Walking down by the field's right edge: beside it on the left, still clear of the label
+        const edge = leaderMarkBox(at, true, ring, label, at.x + 60);
+        expect(edge.align).toBe("left");
+        expect(edge.left).toBeLessThanOrEqual(at.x - label.width / 2);
         // Labels off: just clear of the ring
         expect(leaderMarkBox(at, false, ring, null).top).toBe(at.y - ring - 6);
     });

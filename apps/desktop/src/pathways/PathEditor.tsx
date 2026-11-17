@@ -350,6 +350,8 @@ const pointOrNull = (p: readonly [number, number] | null): XY | null =>
 
 /** How far the leader's mark stands clear of the leader's ring and label, screen px */
 const LEADER_MARK_GAP_PX = 6;
+/** The leader's mark's width on screen, about, for whether it fits beside the leader */
+const LEADER_MARK_WIDTH_PX = 120;
 /** A marcher label's em width per character (Courier), as the chips estimate it */
 const LABEL_EM_PER_CHAR = 0.62;
 
@@ -403,9 +405,9 @@ export function leaderMarkPlace(
  * label as the leader walked down the screen): clear of the leader's dot and selection ring
  * (`ring`, px from its middle) and its drill label (`label`: above the dot, or beside it to the
  * right), whichever way it walks. Walking across (or standing), above the label; walking up or
- * down, beside the dot, to the right of a label above it, or to the left of a label beside it.
- * `left`/`top` is the mark's anchor in the field element's px, `align` which of its edges sits
- * there. Exported for tests.
+ * down, beside the dot, to the right of a label above it, or to the left of a label beside it or
+ * when the field's edge (`fieldWidth`) leaves no room on the right. `left`/`top` is the mark's
+ * anchor in the field element's px, `align` which of its edges sits there. Exported for tests.
  */
 export function leaderMarkBox(
     at: XY,
@@ -417,6 +419,7 @@ export function leaderMarkBox(
         lift: number;
         beside: boolean;
     } | null,
+    fieldWidth = Infinity,
 ): { left: number; top: number; align: "above" | "right" | "left" } {
     const gap = LEADER_MARK_GAP_PX;
     if (!upDown) {
@@ -432,11 +435,10 @@ export function leaderMarkBox(
     }
     if (label?.beside)
         return { left: at.x - ring - gap, top: at.y, align: "left" };
-    return {
-        left: at.x + Math.max(ring, label ? label.width / 2 : 0) + gap,
-        top: at.y,
-        align: "right",
-    };
+    const reach = Math.max(ring, label ? label.width / 2 : 0) + gap;
+    return at.x + reach + LEADER_MARK_WIDTH_PX > fieldWidth
+        ? { left: at.x - reach, top: at.y, align: "left" }
+        : { left: at.x + reach, top: at.y, align: "right" };
 }
 
 /** How each alignment hangs the mark from its anchor */
@@ -497,6 +499,7 @@ function TrailLeaderMark({ session }: { session: PathSession }) {
                   lift: LABEL_LIFT_DOTS * DOT_RADIUS * dotScale * zoom,
                   beside: labels.position === "beside",
               },
+        view.width || Infinity,
     );
     const stored =
         session.target.routeId !== null && session.phase !== "drawing";
