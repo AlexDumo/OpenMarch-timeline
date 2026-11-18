@@ -7,7 +7,7 @@ import { app, ipcMain, session, type BrowserWindow } from "electron";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { getDbPath } from "../database/database.services";
+import { getConnectionPath, getDbPath } from "../database/database.services";
 import { MAX_SHOW_FILE_BYTES } from "../../src/feedback/reportDraft";
 import { Worker } from "node:worker_threads";
 import { getValidAccessToken } from "./auth/token-manager";
@@ -123,7 +123,12 @@ async function gatherReportFiles(
                 SHOW_CHANGED_STATUS,
             );
         const copy = path.join(dir, "show.dots");
-        await writeReportCopyInWorker(source, copy, !!request.includeAudio);
+        // A working copy (ADR 0018) holds edits the show file may not have yet.
+        await writeReportCopyInWorker(
+            getConnectionPath() || source,
+            copy,
+            !!request.includeAudio,
+        );
         if (fs.statSync(copy).size > MAX_SHOW_FILE_BYTES)
             showFileTooLarge = true;
         else
