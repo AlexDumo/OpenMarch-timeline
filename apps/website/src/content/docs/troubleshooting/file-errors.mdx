@@ -82,7 +82,7 @@ If you didn't open it from the recent files, [report it](/guides/start/get-help/
 Select <Ui k="fileAccessDialogError.leftoverJournal.recover" />. OpenMarch finishes recovering the show on a copy, checks the result, and opens the show. The `-journal` file is moved to OpenMarch's backups folder, not deleted.
 
 - <Ui k="fileDialog.leftoverJournal.damagedTitle" />: the show didn't come out undamaged, with or without the `-journal` file. Nothing was changed. [Report it](/guides/start/get-help/) and include the show and its `-journal` file if you can.
-- <Ui k="fileDialog.leftoverJournal.moveFailedTitle" />: OpenMarch couldn't move the `-journal` file out of the show's folder, so nothing was changed. Check the folder's permissions (see [Invalid file permissions error](#invalid-file-permissions-error)), or report it.
+- <Ui k="fileDialog.leftoverJournal.failedTitle" />: OpenMarch couldn't finish. The message says why. Most often the folder isn't writable or the disk is full (see [Invalid file permissions error](#invalid-file-permissions-error)), or another program, such as antivirus or a sync app, has the show open: close it and open the show again.
 
 Older versions of OpenMarch show "Error Loading Database" with "unable to open database file" instead. Don't delete the `-journal` file: if the save it belongs to had started writing, the show needs it. Copy the show and the `-journal` file together into a folder of your own, such as Documents, and open the show from there.
 

@@ -61,8 +61,9 @@ import {
     LEFTOVER_JOURNAL_STATUS,
 } from "../database/leftoverJournal";
 import {
+    JournalRecoveryError,
     recoverFromLeftoverJournal,
-    SET_ASIDE_JOURNAL_SUFFIX,
+    SET_ASIDE_MARK,
 } from "./leftoverJournalRecovery";
 import {
     NEEDS_CONVERSION_STATUS,
@@ -464,9 +465,17 @@ async function recoverAndOpenLeftoverJournalFile(): Promise<number> {
     } catch (error) {
         console.error("Couldn't recover from the leftover journal:", error);
         captureException(error);
+        const step =
+            error instanceof JournalRecoveryError ? error.step : "stage";
         dialog.showErrorBox(
-            t("fileDialog.leftoverJournal.moveFailedTitle"),
-            t("fileDialog.leftoverJournal.moveFailedMessage", { name }),
+            t("fileDialog.leftoverJournal.failedTitle"),
+            step === "move-journal"
+                ? t("fileDialog.leftoverJournal.journalMoveFailedMessage", {
+                      name,
+                  })
+                : step === "replace"
+                  ? t("fileDialog.leftoverJournal.replaceFailedMessage")
+                  : t("fileDialog.leftoverJournal.stageFailedMessage"),
         );
         return -1;
     }
@@ -1725,7 +1734,7 @@ function backupBeforeMigrations(path: string) {
     files.forEach((file) => {
         // A journal set aside keeps its original date when moved, so age says nothing; the
         // recovery dialog promised it isn't deleted.
-        if (file.endsWith(SET_ASIDE_JOURNAL_SUFFIX)) return;
+        if (file.includes(SET_ASIDE_MARK)) return;
         const filePath = join(backupDir, file);
         const stats = fs.statSync(filePath);
         if (stats.birthtime < thirtyDaysAgo) {
@@ -1795,7 +1804,7 @@ async function setActiveDbNow(
         );
         result.db?.close();
         const token = result.sqlSuspension;
-        // The renderer offers to open it without the journal (`load-file:openWithoutJournal`).
+        // The renderer offers to open it without the journal (`load-file:recoverFromJournal`).
         if (result.status === LEFTOVER_JOURNAL_STATUS)
             leftoverJournalFile = path;
 

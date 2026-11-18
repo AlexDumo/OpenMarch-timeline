@@ -13,8 +13,13 @@
  *    the show alone. If it passes, the show is fine as it is.
  * 3. If neither passes, change nothing.
  *
- * On success the journal is moved into the backups folder (never deleted) and, when the journal
- * was played back, the recovered copy replaces the show. Main process only.
+ * When the journal was played back, a copy of the show as it was goes into the backups and the
+ * recovered copy replaces the show. Then the journal moves into the backups (never deleted).
+ *
+ * The order is what keeps a crash safe. The show is replaced while its journal is still next to
+ * it: playing the journal back over the recovered show writes the pages it already has, so a
+ * crash before the journal moves only means the next open recovers again, to the same result.
+ * Moving the journal first would leave a torn show with nothing to undo it. Main process only.
  */
 import * as fs from "fs";
 import * as os from "os";
@@ -41,8 +46,56 @@ export type JournalRecovery =
     /** Neither the played-back copy nor the show alone passes the check. Nothing changed. */
     | { outcome: "damaged" };
 
-/** Suffix of a journal set aside in the backups. Backup pruning keeps these. */
-export const SET_ASIDE_JOURNAL_SUFFIX = "-set-aside-journal";
+/**
+ * Marks the files recovery keeps in the backups: the show as it was (`…-set-aside`) and its
+ * journal (`…-set-aside-journal`). Backup pruning keeps these: a moved journal keeps its old
+ * creation date, and the dialog promised it isn't deleted.
+ */
+export const SET_ASIDE_MARK = "-set-aside";
+
+/** The step of a recovery that failed, for the message the person sees. */
+export type RecoveryStep =
+    /** Writing the recovered show into the show's folder. Nothing changed. */
+    | "stage"
+    /** Replacing the show with the recovered copy. Nothing changed. */
+    | "replace"
+    /** Moving the journal out of the show's folder. The show itself is recovered. */
+    | "move-journal";
+
+export class JournalRecoveryError extends Error {
+    constructor(
+        readonly step: RecoveryStep,
+        cause: unknown,
+    ) {
+        super(
+            `Leftover journal recovery failed at "${step}": ${String(cause)}`,
+            {
+                cause,
+            },
+        );
+    }
+}
+
+/** Runs `fn`, turning any error into a `JournalRecoveryError` for `step`. */
+function atStep<T>(step: RecoveryStep, fn: () => T): T {
+    try {
+        return fn();
+    } catch (error) {
+        throw new JournalRecoveryError(step, error);
+    }
+}
+
+/** Copies `from` to `to` and flushes the copy to disk before anyone renames it into place. */
+function copyDurably(from: string, to: string, mode: number) {
+    fs.copyFileSync(from, to);
+    fs.chmodSync(to, mode);
+    const fd = fs.openSync(to, "r+");
+    try {
+        fs.fsyncSync(fd);
+    } finally {
+        fs.closeSync(fd);
+    }
+}
 
 /** True when `file` opens and `PRAGMA quick_check` says "ok". Opening plays a journal back. */
 function passesQuickCheck(file: string): boolean {
@@ -110,9 +163,7 @@ function findSoundCopy(
 
 /**
  * Recovers `dbPath` from its leftover journal (see the module comment). Call it with no
- * connection open on `dbPath`. Throws when the journal can't be moved out of the show's
- * folder or the recovered copy can't be written; the show and journal are unchanged then,
- * except that a failed final rename leaves the journal in the backups.
+ * connection open on `dbPath`. Throws a `JournalRecoveryError` naming the step that failed.
  */
 export function recoverFromLeftoverJournal(
     dbPath: string,
@@ -122,36 +173,33 @@ export function recoverFromLeftoverJournal(
     if (!hasLeftoverJournal(dbPath)) return { outcome: "no-journal" };
 
     const workDir = fs.mkdtempSync(path.join(tempDir, "openmarch-recover-"));
+    const staged = `${dbPath}.recovering`;
     try {
         const sound = findSoundCopy(dbPath, workDir);
         if (!sound) return { outcome: "damaged" };
 
-        // Stage the recovered show next to the original first, so a full disk or a folder we
-        // can't write fails before anything changes.
-        const staged = `${dbPath}.recovering`;
-        if (sound.from === "journal") {
-            fs.copyFileSync(sound.file, staged);
-            // Keep the show's own permissions, not the scratch copy's.
-            fs.chmodSync(staged, fs.statSync(dbPath).mode & 0o777);
-        }
-
-        // The journal must be gone before the show changes, or SQLite would play it back
-        // again over the recovered show.
+        const keptName = `${backupNameFor(dbPath, now)}${SET_ASIDE_MARK}`;
         fs.mkdirSync(backupDir, { recursive: true });
-        const journalKeptAt = path.join(
-            backupDir,
-            `${backupNameFor(dbPath, now)}${SET_ASIDE_JOURNAL_SUFFIX}`,
-        );
-        try {
-            moveFile(journalPathFor(dbPath), journalKeptAt);
-        } catch (error) {
-            fs.rmSync(staged, { force: true });
-            throw error;
-        }
-        if (sound.from === "journal") fs.renameSync(staged, dbPath);
 
+        if (sound.from === "journal") {
+            // Stage next to the show first, so a full disk or a folder we can't write fails
+            // before anything changes. Keep the show's own permissions.
+            const mode = fs.statSync(dbPath).mode & 0o777;
+            atStep("stage", () => {
+                copyDurably(sound.file, staged, mode);
+                fs.copyFileSync(dbPath, path.join(backupDir, keptName));
+            });
+            // The journal stays next to the show until this is done (see the module comment).
+            atStep("replace", () => fs.renameSync(staged, dbPath));
+        }
+
+        const journalKeptAt = path.join(backupDir, `${keptName}-journal`);
+        atStep("move-journal", () =>
+            moveFile(journalPathFor(dbPath), journalKeptAt),
+        );
         return { outcome: "recovered", from: sound.from, journalKeptAt };
     } finally {
+        fs.rmSync(staged, { force: true });
         fs.rmSync(workDir, { recursive: true, force: true });
     }
 }

@@ -12,7 +12,8 @@ import * as path from "path";
 import { journalPathFor } from "../../database/leftoverJournal";
 import {
     recoverFromLeftoverJournal,
-    SET_ASIDE_JOURNAL_SUFFIX,
+    JournalRecoveryError,
+    SET_ASIDE_MARK,
 } from "../leftoverJournalRecovery";
 
 const ROWS = 2000;
@@ -123,7 +124,10 @@ describe("recoverFromLeftoverJournal", () => {
         expect(fs.existsSync(journalPathFor(showPath))).toBe(false);
         const keptAt = (result as { journalKeptAt: string }).journalKeptAt;
         expect(path.dirname(keptAt)).toBe(backupDir);
-        expect(keptAt.endsWith(SET_ASIDE_JOURNAL_SUFFIX)).toBe(true);
+        expect(keptAt.endsWith(`${SET_ASIDE_MARK}-journal`)).toBe(true);
+        // So is the show as it was, before the recovered copy replaced it.
+        const keptShow = keptAt.replace(/-journal$/, "");
+        expect(fs.existsSync(keptShow)).toBe(true);
         expect(sha256(keptAt)).toBe(journalHash);
         // Nothing is left behind.
         expect(fs.readdirSync(workDir)).toEqual([]);
@@ -173,21 +177,43 @@ describe("recoverFromLeftoverJournal", () => {
     );
 
     it.skipIf(isRoot)(
-        "changes nothing when the journal can't leave the show's folder",
+        "changes nothing when it can't write in the show's folder",
         () => {
             tearMidSave(showPath);
             const showHash = sha256(showPath);
             fs.chmodSync(path.dirname(showPath), 0o555);
+            let error: unknown;
             try {
-                expect(() => recover()).toThrow();
+                recover();
+            } catch (e) {
+                error = e;
             } finally {
                 fs.chmodSync(path.dirname(showPath), 0o755);
             }
+
+            expect(error).toBeInstanceOf(JournalRecoveryError);
+            expect((error as JournalRecoveryError).step).toBe("stage");
 
             expect(sha256(showPath)).toBe(showHash);
             expect(fs.existsSync(journalPathFor(showPath))).toBe(true);
         },
     );
+
+    it("stays safe if it stops after replacing the show, before the journal moves", () => {
+        tearMidSave(showPath);
+        const journal = fs.readFileSync(journalPathFor(showPath));
+
+        expect(recover()).toMatchObject({ from: "journal" });
+        // As if the journal move never happened: the journal is back next to the recovered show.
+        fs.writeFileSync(journalPathFor(showPath), journal);
+
+        // SQLite plays it back over the recovered show on the next open, to the same result.
+        const db = new DatabaseSync(showPath);
+        db.prepare("SELECT 1").get();
+        db.close();
+        expect(fs.existsSync(journalPathFor(showPath))).toBe(false);
+        expect(inspect(showPath)).toEqual({ integrity: "ok", rows: ROWS });
+    });
 
     it("does nothing when the journal is gone", () => {
         expect(recover()).toEqual({ outcome: "no-journal" });
