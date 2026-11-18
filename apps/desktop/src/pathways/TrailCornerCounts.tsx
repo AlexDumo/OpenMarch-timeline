@@ -614,9 +614,24 @@ function CornerList({
     );
 }
 
+/** The turns-between-counts tooltip's name: how many turns, at how many corners */
+const offCountTitle = (tally: { turns: number; corners: number }): string =>
+    tolgee.t(
+        "pathways.corners.offCountTitle",
+        "{turns, plural, one {# turn falls} other {# turns fall}} between counts",
+        { turns: tally.turns },
+    );
+
+/** Its one line of help: how to put every turn on a count */
+const offCountHint = (): string =>
+    tolgee.t(
+        "pathways.corners.offCountHint",
+        "Move a corner, or change the spacing or counts",
+    );
+
 /**
- * TC-7: the path bar's warning when turns fall between counts. Hovering shows the detail as a tip;
- * a click or tap (a finger or pencil has no hover) opens the same detail in a popover.
+ * TC-7: the path bar's warning when turns fall between counts. Hovering shows a short tip; a click
+ * or tap (a finger or pencil has no hover) opens the whole detail in a popover.
  */
 export function OffCountWarning({
     tally,
@@ -630,7 +645,8 @@ export function OffCountWarning({
     );
     return (
         <Popover.Root>
-            <Tip label={detail}>
+            {/* Short, as every tooltip (owner, 2026-11-17); the popover has the whole detail */}
+            <Tip label={offCountTitle(tally)} hint={offCountHint()}>
                 <Popover.Trigger asChild>
                     <button
                         type="button"
@@ -669,7 +685,7 @@ export function OffCountWarning({
 /**
  * A selected trail's path bar summary of its turns between counts (owner, 2026-11-17): "2 corners
  * turn between counts", after Edit path. A click or tap pins the corners' chips on the field (a
- * finger or pencil has no hover), again to unpin them; hovering shows the detail as a tip.
+ * finger or pencil has no hover), again to unpin them; hovering shows a short tip (the detail is its accessible name).
  */
 export function CornerSummary({
     session,
@@ -687,7 +703,20 @@ export function CornerSummary({
         { turns: tally.turns, corners: tally.corners },
     );
     return (
-        <Tip label={detail}>
+        <Tip
+            label={
+                pinned
+                    ? tolgee.t(
+                          "pathways.corners.hideChips",
+                          "Hide the corners' counts",
+                      )
+                    : tolgee.t(
+                          "pathways.corners.showChips",
+                          "Show the corners' counts",
+                      )
+            }
+            hint={offCountHint()}
+        >
             <button
                 type="button"
                 className={clsx(

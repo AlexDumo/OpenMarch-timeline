@@ -4537,7 +4537,6 @@
             "legOff": "leaving the path",
             "legAlong": "on the path",
             "legStraight": "straight to the spot",
-            "rejoinTip": "Put the selected marchers back on the group path. A detached marcher's copy goes, and so do any bends on its line",
             "refitTip": "Move this path's ends to where its marchers stand now and stretch its corners to match",
             "rehomedBadge": "Bend moved",
             "rehomedTip": "A point a bend was attached to changed, so the bend moved to the nearest points left. Check it still does what you meant.",
@@ -4555,7 +4554,6 @@
             "evenOff": "Even: the trail is too short for even steps, or someone would walk backward. Draw it longer",
             "evenCloser": "Closer together",
             "evenFarther": "Farther apart",
-            "evenSteps": "{steps} steps",
             "evenLimit": "up to {limit}",
             "ends": "Ends",
             "endsFromTrail": "From trail",
@@ -4589,15 +4587,10 @@
             "roundCounter": "Counterclockwise around",
             "previewRoundTip": "Preview: the marchers go around from start to end, again and again",
             "roundOffOutline": "{count, plural, one {# marcher stands off the outline and steps onto it first} other {# marchers stand off the outline and step onto it first}}",
-            "editTip": "Show this path's points to drag. A click on its line does it too",
-            "editTrailTip": "Edit path: show the trail's points to drag and its head to draw on or drag longer. Escape or a click on empty field turns it off",
-            "editGroupTip": "Show the group path's points to drag. Every marcher on it follows",
-            "editLineTip": "Bend only {marcher}'s line, by its handles. It keeps following the group path's edits. A click on the line does it too",
             "detachFromGroupCount": "Detach {count} from group path",
             "detachNote": "Stops following group path changes",
             "detachAllCount": "Detach all {count} marchers",
             "detachAllNote": "Ends the group path; each marcher gets their own copy",
-            "resetTip": "Take this marcher's bends off, so it walks the group path like the others again",
             "groupLabel": "Group path · {count}",
             "groupLabelTip": "Select everyone on this group path",
             "ownPaths": "{count} own paths",
@@ -4607,14 +4600,22 @@
             "more": "More path commands",
             "looseLabel": "{count} paths",
             "snake": "Snake order",
-            "snakeRowsTip": "Snake row by row: along the corner's row, then back along the next",
             "snakeRows": "Rows",
-            "snakeColumnsTip": "Snake column by column: along the corner's column, then back along the next",
             "snakeColumns": "Columns",
-            "shapeControlsNote": "The end shape's spacing, size, turn and flips, and its handles on the field",
+            "shapeControlsNote": "The end shape's spacing, size, turn and handles",
             "drawKind": "What a click places",
             "straightTip": "Straight: a click places a corner. For one curve point:",
-            "curveTip": "Curve: a click places a smooth point. For one corner:"
+            "curveTip": "Curve: a click places a smooth point. For one corner:",
+            "editHint": "A click on its line does it too",
+            "editTrailHint": "Drag its points, or its head to draw on",
+            "editGroupHint": "Every marcher on it follows",
+            "editLineHint": "Bend this line only. It still follows the group path",
+            "rejoinHint": "Back on the group path. Copies and bends go",
+            "resetHint": "Takes this marcher's bends off",
+            "snakeRowsHint": "Along the corner's row, then back along the next",
+            "snakeColumnsHint": "Along the corner's column, then back along the next",
+            "evenSpacing": "Even spacing, in steps",
+            "evenStepsUnit": "{steps, plural, one {step} other {steps}}"
         },
         "menu": {
             "pointType": "Corner type",
@@ -4712,8 +4713,9 @@
         },
         "trail": {
             "leader": "Leader · {marcher}",
-            "reverseTip": "Make the other end of the line lead. Everyone keeps their end spot.",
-            "reverseAroundTip": "Go the other way around the outline, as far. The one at the back leads."
+            "reverseHint": "The other end leads. End spots stay",
+            "reverseAroundHint": "Go the other way around, as far",
+            "reverseAlongHint": "Off for a trail dragged out of a line: drag from the other end"
         },
         "order": {
             "error": "Error saving the line's order",
@@ -4740,7 +4742,11 @@
             "stopBefore": "{count, plural, one {# stops or leaves the trail before turning here} other {# stop or leave the trail before turning here}}",
             "offCountShort": "Turns between counts",
             "offCountTip": "{turns, plural, one {# turn falls} other {# turns fall}} between counts, at {corners, plural, one {# corner} other {# corners}}. Each marcher reaches a corner at its own steady speed. Move the corner, change the spacing or the move's counts to put every turn on a count. Tap or click a corner's count to see who turns when.",
-            "summary": "{corners, plural, one {# corner turns} other {# corners turn}} between counts"
+            "summary": "{corners, plural, one {# corner turns} other {# corners turn}} between counts",
+            "offCountTitle": "{turns, plural, one {# turn falls} other {# turns fall}} between counts",
+            "offCountHint": "Move a corner, or change the spacing or counts",
+            "showChips": "Show the corners' counts",
+            "hideChips": "Hide the corners' counts"
         },
         "inspector": {
             "path": "Path"

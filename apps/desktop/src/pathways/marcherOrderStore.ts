@@ -130,19 +130,52 @@ export interface ShownOrder {
     readonly guessed: boolean;
 }
 
+/** A stored trail shown on the field (selected, or in Edit path): its move and its line */
+export interface ShownTrail {
+    /** The move's start and end beats */
+    readonly start: number;
+    readonly end: number;
+    /** Its marchers, leader first */
+    readonly order: readonly number[];
+}
+
 /**
- * The order shown for `ids` at `beat` (DL-31): the one remembered (`rememberedOrder`), or else the
- * one guessed from where they stand (`at`, by id), or null when neither has one. A box's guess is
- * its default snake, row by row from the top left (step 11, SN-2), which the Follow tool runs
- * from whichever corner is dragged out of.
+ * The shown trail's own order for exactly its marchers at `beat` inside its move, or null. A
+ * trail's order is remembered from its move's end (`rememberedOrder`), but while the trail is shown
+ * its line walks in that order the whole move, so the band keeps its dark leader end and its tip
+ * from the start flag on (owner, 2026-11-17: the band lost its direction mid-move).
+ */
+export function shownTrailOrder(
+    trail: ShownTrail | null | undefined,
+    ids: readonly number[],
+    beat: number,
+): ShownOrder | null {
+    if (!trail || trail.order.length !== ids.length || ids.length < 2)
+        return null;
+    if (beat < trail.start - 1e-9 || beat >= trail.end - 1e-9) return null;
+    const want = new Set(ids);
+    return trail.order.every((m) => want.has(m))
+        ? { order: trail.order, guessed: false }
+        : null;
+}
+
+/**
+ * The order shown for `ids` at `beat` (DL-31): the shown trail's inside its move
+ * (`shownTrailOrder`), else the one remembered (`rememberedOrder`), or else the one guessed from
+ * where they stand (`at`, by id), or null when neither has one. A box's guess is its default
+ * snake, row by row from the top left (step 11, SN-2), which the Follow tool runs from whichever
+ * corner is dragged out of.
  */
 export function shownOrderOf(
     forms: readonly OrderForm[] | null,
     ids: readonly number[],
     beat: number,
     at: ReadonlyMap<number, XY>,
+    trail?: ShownTrail | null,
 ): ShownOrder | null {
     if (ids.length < 2) return null;
+    const ofTrail = shownTrailOrder(trail, ids, beat);
+    if (ofTrail) return ofTrail;
     const remembered = forms ? rememberedOrder(forms, ids, beat) : null;
     if (remembered && remembered.length === ids.length)
         return { order: remembered, guessed: false };

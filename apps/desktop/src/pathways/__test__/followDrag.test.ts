@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, renderHook } from "@testing-library/react";
+import { createElement } from "react";
+import {
+    act,
+    cleanup,
+    fireEvent,
+    render,
+    renderHook,
+    screen,
+} from "@testing-library/react";
 import { FieldDimming } from "@/field/three/fieldDimming";
 import { useShapeFocus } from "@/shapes/field/useShapeFocus";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
@@ -35,8 +43,9 @@ import {
     type FollowDrag,
     type FollowKeep,
     followFootprint,
+    evenStepsWithin,
 } from "../followDrag";
-import { bigSteps, trailDistances } from "../PathEditor";
+import { bigSteps, PathEditor, trailDistances } from "../PathEditor";
 import { curveOf } from "@/shapes/pen/penPath";
 import { useFollowFocus } from "../useFollowFocus";
 
@@ -405,6 +414,58 @@ describe("the Follow tool (pathways step 4b)", () => {
         expect(limit).toBeLessThan(0.5);
         setFollowSpacing({ kind: "even", steps: 2 });
         expect(followSpacingOf(session())).toEqual({ kind: "keep" });
+    });
+
+    it("the bar's Even steps type like the shape tool's step numbers, writing what −/+ write (owner, 2026-11-17)", () => {
+        open();
+        const right = starts.get(5)!;
+        drag(right, { x: right.x + 10 * STEP, y: right.y });
+        render(createElement(PathEditor, { fieldProperties }));
+        fireEvent.click(screen.getByTestId("follow-even"));
+        expect(followSpacingOf(session())).toEqual({ kind: "even", steps: 2 });
+        // −/+ step by half a step
+        fireEvent.click(screen.getByTestId("follow-even-more"));
+        fireEvent.click(screen.getByTestId("follow-even-more"));
+        const byButtons = followSpacingOf(session());
+        expect(byButtons).toEqual({ kind: "even", steps: 3 });
+        expect(screen.getByTestId("follow-even-steps").textContent).toBe("3");
+        fireEvent.click(screen.getByTestId("follow-even-less"));
+        expect(screen.getByTestId("follow-even-steps").textContent).toBe("2½");
+        // A click types over it; Enter applies: the same spacing the buttons wrote
+        const type = (text: string, key: string) => {
+            fireEvent.click(screen.getByTestId("follow-even-steps"));
+            const input = screen.getByTestId("follow-even-steps-input");
+            fireEvent.change(input, { target: { value: text } });
+            fireEvent.keyDown(input, { key });
+        };
+        type("3", "Enter");
+        expect(followSpacingOf(session())).toEqual(byButtons);
+        // Fractions as drill writers type them
+        type("3½ steps", "Enter");
+        expect(followSpacingOf(session())).toEqual({
+            kind: "even",
+            steps: 3.5,
+        });
+        // Esc leaves it as it was; nonsense stays open to fix
+        type("4", "Escape");
+        expect(followSpacingOf(session())).toEqual({
+            kind: "even",
+            steps: 3.5,
+        });
+        type("lots", "Enter");
+        expect(screen.getByTestId("follow-even-steps-input")).toBeTruthy();
+        fireEvent.keyDown(screen.getByTestId("follow-even-steps-input"), {
+            key: "Escape",
+        });
+        // Past the limit it's held there, as + is (up to 4.5 here)
+        type("9", "Enter");
+        expect(followSpacingOf(session())).toEqual({
+            kind: "even",
+            steps: 4.5,
+        });
+        expect(evenStepsWithin(9, 4.5)).toBe(4.5);
+        expect(evenStepsWithin(0.1, null)).toBe(0.5);
+        cleanup();
     });
 
     it("Escape cancels the drawing and the ends pulse again; then it leaves the tool", () => {
