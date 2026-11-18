@@ -21,6 +21,8 @@ import { removeMarchersFromTimeline } from "../timelineMembership";
 import { resizeTimeline } from "../timelineResize";
 import { drawRoute } from "../timelineRoutes";
 import { moveMarchersInTarget } from "../timelineMoves";
+import { dragTrail } from "../timelineTrailDrag";
+import { saveShapeRecipeInTransaction } from "../shapeRecipes";
 import { drawGroupRoute } from "../timelineGroupRoutes";
 import { createTimelinesInTransaction } from "../timelines";
 import { createTimelineTransitionsInTransaction } from "../timelineTransitionsInTransaction";
@@ -1054,6 +1056,70 @@ describeDbTests("Clear Page N on a trail", (it) => {
         expect(
             (await resolverOf(db)).ftlEntry(f.result.transitionId).members,
         ).toEqual(f.result.marcherIds);
+    });
+
+    it("a dragged-out trail: its shape of end spots goes with it; everyone Not defined; undo gives back trail and shape", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await convertPagesToTimeline(db);
+        const r0 = await resolverOf(db);
+        const ids = [1, 2, 3, 4, 5, 6];
+        const step = ((r0.positionAt(2, 9) as XY)[0] - (r0.positionAt(1, 9) as XY)[0]) / 2; // prettier-ignore
+        const leader = r0.positionAt(6, 9) as XY;
+        const corner: XY = [leader[0] + 10 * step, leader[1]];
+        const end: XY = [corner[0], corner[1] - 10 * step];
+        const dragged = await dragTrail({ db, window: PAGE2, marcherIds: ids, leaderId: 6, points: [{ at: corner }, { at: end }], spacing: { kind: "keep" }, step, ends: "trail" }); // prettier-ignore
+        expect(dragged.recipeId).toBeDefined();
+        const before = await allOf(db);
+
+        const result = await clear(db, ids);
+
+        expect(result.skipped).toBeUndefined();
+        expect(result.cleared).toEqual(ids);
+        expect(await readTrails(db)).toEqual([]);
+        expect(
+            (await db.select().from(schema.timeline_shape_recipes).all()).map(
+                (r) => r.id,
+            ),
+        ).not.toContain(dragged.recipeId);
+        expect(await rowsOver(db, ids, PAGE2)).toEqual([]);
+        expect(await violations(db)).toEqual([]);
+        await expectOneClearStep(db, before);
+    });
+
+    it("a placed shape in the trail's move holds cleared members: the trail stays and they're named", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const f = await follow(db);
+        await transactionWithHistory(db, "place a shape", (tx) =>
+            saveShapeRecipeInTransaction({
+                tx,
+                timelineId: f.timeline.id,
+                recipe: {
+                    kind: "box",
+                    kindVersion: 1,
+                    params: {},
+                    orderMode: "slot",
+                    reverse: false,
+                },
+                members: f.ids.map((marcherId, slot) => ({
+                    marcherId,
+                    slot,
+                    x: f.ends[slot]![0],
+                    y: f.ends[slot]![1],
+                })),
+            }),
+        );
+
+        const result = await clear(db, f.ids);
+
+        expect(result.skipped?.marcherIds).toEqual(
+            [...f.ids].sort((a, b) => a - b),
+        );
+        expect((await readTrails(db))[0]!.routeId).toBe(f.result.routeId);
+        expect(await rowsOver(db, f.ids, PAGE2)).toHaveLength(f.ids.length);
     });
 
     it("own paths and group paths go with the cleared marchers' moves; a group path keeps the members who stay", async ({
