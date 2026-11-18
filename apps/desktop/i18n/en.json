@@ -301,6 +301,13 @@
             "reverseOrder": "Reverse order",
             "clearOrder": "Clear order",
             "orderKeywords": "order sequence leader tail first last line follow reverse numbers",
+            "goRound": "Go around",
+            "goRoundKeywords": "go around round circle box outline rotate follow leader loop lap turn",
+            "roundMore": "Go around farther",
+            "roundLess": "Go around less far",
+            "dragOut": "Drag a trail out instead",
+            "roundSpots": "Go around by spots",
+            "roundSteps": "Go around by steps",
             "recenter": "Re-center group path",
             "recenterLoose": "Re-center path"
         }
@@ -3120,7 +3127,12 @@
                 "formOverlap": "Their end spots lie on the line where it stands, so the line would walk back through itself. Move the end spots off the line first",
                 "notOneMove": "{marcher} can't join the rest of the line in one move here, so nothing was changed",
                 "noWindow": "Move the playhead past the start flag to drag out a trail",
-                "reverseAlong": "Reverse leader is off for a trail dragged out of a line. Drag the trail out of the other end instead."
+                "reverseAlong": "Reverse leader is off for a trail dragged out of a line. Drag the trail out of the other end instead.",
+                "notOutline": "Select marchers standing on a circle or a box outline to go around it",
+                "noDistance": "Choose how far to go around: at least one spot or step",
+                "tooFar": "A move can go around at most {laps} times",
+                "aroundPoints": "This line goes around the outline it stands on, which has no points to edit. Use Reverse leader to go the other way around, or Follow again to change how far",
+                "reverseNobody": "Reverse leader needs someone who starts this move on the outline"
             }
         },
         "expertHolds": {
@@ -4747,6 +4759,23 @@
             "previewTip": "Preview: the marchers walk the trail from start to end, again and again",
             "previewReduced": "Preview is off while your system asks for less motion",
             "previewNothing": "Preview: place a point first",
+            "followMode": "How the line follows",
+            "goRoundTip": "Go around: everyone follows the one ahead around the outline they stand on",
+            "dragOutTip": "Drag out: drag a trail out of an end of the line, and the line follows it",
+            "dragOut": "Drag out",
+            "roundHowFar": "How far around",
+            "roundAmount": "How many spots or steps around",
+            "roundSpotsTip": "Spots: each marcher moves on this many places around the outline",
+            "roundSpots": "spots",
+            "roundStepsTip": "Steps: each marcher goes this many steps around the outline, ending between spots if it must",
+            "roundSteps": "steps",
+            "roundTurns": "{turns} × around",
+            "roundClockwiseTip": "Going clockwise around. Reverse leader goes the other way around",
+            "roundCounterTip": "Going counterclockwise around. Reverse leader goes the other way around",
+            "roundClockwise": "Clockwise around",
+            "roundCounter": "Counterclockwise around",
+            "previewRoundTip": "Preview: the marchers go around from start to end, again and again",
+            "roundOffOutline": "{count, plural, one {# marcher stands off the outline and steps onto it first} other {# marchers stand off the outline and step onto it first}}",
             "editTip": "Show this path's points to drag. A click on its line does it too",
             "editGroupTip": "Show the group path's points to drag. Every marcher on it follows",
             "editLineTip": "Bend only {marcher}'s line, by its handles. It keeps following the group path's edits. A click on the line does it too",
@@ -4784,7 +4813,8 @@
             "remove": "Couldn't remove the path",
             "adjust": "Couldn't bend this line",
             "refit": "Couldn't re-fit the path",
-            "reverse": "Couldn't reverse the trail"
+            "reverse": "Couldn't reverse the trail",
+            "goRound": "Couldn't go around"
         },
         "refusals": {
             "noMove": "{marcher} has no move at the playhead to draw a path on",
@@ -4792,15 +4822,20 @@
             "selectOne": "Select a marcher to draw a path for",
             "twoMoves": "These marchers are in different moves at the playhead: select marchers of one move to draw a group path",
             "followTwo": "Select the marchers of a line (two or more) to follow a trail",
-            "followTwoMoves": "These marchers are in different moves at the playhead: select marchers of one move to follow a trail"
+            "followTwoMoves": "These marchers are in different moves at the playhead: select marchers of one move to follow a trail",
+            "goAroundSelect": "Select marchers on a circle or box outline",
+            "goAroundOnly": "This line can only go around: it has no ends to drag a trail out of"
         },
         "banner": {
             "drawingPoints": "{marcher}'s path: click for a corner, drag for a smooth point · Right-click or <keys></keys> removes the last · Double-click to finish · <esc></esc> to cancel",
             "drawingPointsClick": "{marcher}'s path: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel",
             "groupDrawing": "Group path for {count} marchers: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel",
             "trailDrawing": "Trail for {count} marchers, {marcher} leading: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel",
-            "rippleDrawing": "Ripple in, {marcher} leading: click an end of the form to go straight in, or click for corners first · Double-click to finish · <esc></esc> to cancel",
-            "followGrab": "Follow: drag a trail out of either end of the line · <esc></esc> to leave"
+            "followGrab": "Follow: drag a trail out of either end of the line · <esc></esc> to leave",
+            "goRound": "Go around: {count} marchers follow {marcher} around the {shape} · <enter></enter> to finish · <esc></esc> to leave",
+            "circle": "circle",
+            "boxOutline": "box outline",
+            "rippleDrawing": "Ripple in, {marcher} leading: click an end of the form to go straight in, or click for corners first · Double-click to finish · <esc></esc> to cancel"
         },
         "toolbar": {
             "path": "Path",
@@ -4843,7 +4878,8 @@
         },
         "trail": {
             "leader": "Leader · {marcher}",
-            "reverseTip": "Make the other end of the line lead. Everyone keeps their end spot."
+            "reverseTip": "Make the other end of the line lead. Everyone keeps their end spot.",
+            "reverseAroundTip": "Go the other way around the outline, as far. The one at the back leads."
         },
         "order": {
             "error": "Error saving the line's order",

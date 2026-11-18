@@ -58,6 +58,37 @@ export function randArcRoute(R, { pt, n, targets = [], from, to, arcShare = 0.5,
   return g;
 }
 
+/**
+ * R-13‴ (pathways step 10): a random closed outline: `from` and `to` the same point, one to five points (repeats and
+ * points on the seam included), each leg straight or an arc leg (the closing one by `toBulge`), never smooth. Sometimes a
+ * true circle (four quarter arcs) or a box, the outlines the Follow tool writes.
+ */
+export function randLoop(R, { pt }) {
+  const u = R();
+  if (u < 0.25) {   // a circle: four quarter arcs, either way round
+    const c = pt(), r = 1 + Math.floor(R() * 6), k = (R() < 0.5 ? 1 : -1) * Math.tan(Math.PI / 8) / 2;
+    const at = (a) => [c[0] + r * Math.cos(a), c[1] + r * Math.sin(a)], top = at(-Math.PI / 2);
+    return { v: 1, closed: true, from: top, to: top, toBulge: k, points: [0, Math.PI / 2, Math.PI].map((a, i) => ({ id: `p${i}`, at: at(a), bulge: k })) };
+  }
+  if (u < 0.5) {    // a box, either way round
+    const o = pt(), w = 1 + Math.floor(R() * 8), h = 1 + Math.floor(R() * 8);
+    const pts = [[o[0] + w, o[1]], [o[0] + w, o[1] + h], [o[0], o[1] + h]];
+    if (R() < 0.5) pts.reverse();
+    return { v: 1, closed: true, from: o, to: o.slice(), points: pts.map((at, i) => ({ id: `p${i}`, at })) };
+  }
+  const from = pt(), n = 1 + Math.floor(R() * 5), points = [];
+  for (let i = 0; i < n; i++) {
+    const prev = points[i - 1]?.at, v = R();
+    const at = prev && v < 0.08 ? prev.slice() : v < 0.14 ? from.slice() : pt();
+    const q = { id: `p${i}`, at };
+    if (R() < 0.4) q.bulge = randBulge(R);
+    points.push(q);
+  }
+  const g = { v: 1, closed: true, from, to: from.slice(), points };
+  if (R() < 0.4) g.toBulge = randBulge(R);
+  return g;
+}
+
 /** Set or clear one leg's bulge (leg n is `toBulge`), making the points at its ends corners. Returns the new geometry. */
 export function toggleLeg(R, g) {
   const out = structuredClone(g), n = out.points.length, leg = Math.floor(R() * (n + 1));

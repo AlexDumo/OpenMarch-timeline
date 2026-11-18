@@ -33,6 +33,10 @@ import {
     makeAlongTrail,
     alongEnds,
     alongPoint,
+    aroundEnds,
+    aroundPoint,
+    loopPoint,
+    makeLoop,
     paramT,
     adjustDiagnostics,
     groupSchedule,
@@ -88,6 +92,14 @@ interface Entry {
     target: Map<number, XY>;
     /** R-13″: set when the ends are along the way */
     along?: { turn: XY[]; straight: number[] };
+    /** R-13‴: set when the members go round a closed outline (`trail.loop` is it, or absent) */
+    around?: {
+        origin: XY[];
+        enter: XY[];
+        inStraight: number[];
+        turn: XY[];
+        straight: number[];
+    };
 }
 
 /** A node of the dependency graph (9.3): an origin or an FTL entry. */
@@ -429,6 +441,7 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
                     ...(r.geometry.toBulge === undefined
                         ? {}
                         : { toBulge: r.geometry.toBulge }),
+                    ...(r.geometry.closed === true ? { closed: true } : {}),
                 },
                 schedule: null,
             });
@@ -602,6 +615,24 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
             const p = clamp01((b - t.start) / (t.end - t.start));
             if (p <= 0) return origin(s); // endpoints exact (8.10)
             if (p >= 1) return e.target.get(s.m)!;
+            if (e.around) {
+                const a = e.around;
+                // R-13‴: round the outline; with no outline, straight to its spot (T-17)
+                if (!e.trail.loop)
+                    return lerp(a.origin[q]!, e.target.get(s.m)!, p);
+                return aroundPoint(
+                    e.trail.loop,
+                    a.origin[q]!,
+                    a.enter[q]!,
+                    a.inStraight[q]!,
+                    e.startDist[q]!,
+                    e.endDist[q]!,
+                    a.turn[q]!,
+                    a.straight[q]!,
+                    e.target.get(s.m)!,
+                    p,
+                );
+            }
             if (e.along)
                 // R-13″: along the way to its end, then straight to its spot
                 return alongPoint(
@@ -708,6 +739,11 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         // R-9′: the trail route's drawn part, from the cached route geometry (T-15: none when
         // the route is missing)
         const route = t.route == null ? null : routeGeo.get(t.route)?.walk;
+        // R-13‴: round a closed outline, each member from where it stands to its own spot
+        if (t.dest == null && t.params?.ends === "around") {
+            computeAroundEntry(t, keyed, members, os, route, dest);
+            return;
+        }
         // R-13″: with its ends along the way, there is no destination path
         const along = t.dest == null && t.params?.ends === "along";
         const trail = along
@@ -747,6 +783,77 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
             ...(ends
                 ? { along: { turn: ends.turn, straight: ends.straight } }
                 : {}),
+        });
+        C.ftlEntriesComputed++;
+    }
+
+    /**
+     * R-13‴ (pathways step 10): the entry of a follow move round a closed outline. Members are in
+     * slot order (R-13′, reversed by R-12′); each starts at its origin's projection onto the
+     * outline and ends at its own slot's destination's place on it, past its start the way the
+     * outline runs, plus `laps` times round. With no closed outline of any length (T-17), each
+     * walks straight to its spot.
+     */
+    function computeAroundEntry(
+        t: TransitionRow,
+        keyed: Array<[number, RSpan]>,
+        members: number[],
+        os: XY[],
+        route: RouteWalk | null | undefined,
+        dest: ReturnType<typeof ftlDestination>,
+    ) {
+        const pts = dests.get(t.id)!;
+        const m = members.length;
+        const pointOf = keyed.map(([, s], q) => dest.member(q, m, s.row!.slot));
+        const spots = pointOf.map((j) => pts[j]!);
+        const target = new Map<number, XY>(
+            members.map((mm, q) => [mm, spots[q]!]),
+        );
+        rowsOfTransition(t.id)
+            .filter((r) => !target.has(r.marcher))
+            .sort((a, b) => a.slot - b.slot || a.marcher - b.marcher)
+            .forEach((r, k) =>
+                target.set(r.marcher, pts[dest.other(k, m, r.slot)]!),
+            );
+        const loop = makeLoop(route);
+        const laps = t.params?.laps ?? 0;
+        const ends = loop
+            ? aroundEnds(loop, os, spots, laps)
+            : {
+                  startDist: os.map(() => 0),
+                  endDist: os.map(() => 0),
+                  enter: [...os],
+                  inStraight: os.map(() => 0),
+                  turn: [...spots],
+                  straight: os.map(() => 0),
+              };
+        const trail: FtlTrail = loop
+            ? {
+                  cum: [...ends.startDist],
+                  destOffset: loop.L,
+                  at: (d) => loopPoint(loop, d),
+                  loop,
+              }
+            : {
+                  cum: os.map(() => 0),
+                  destOffset: 0,
+                  at: () => os[0] ?? [0, 0],
+              };
+        entries.set(t.id, {
+            members,
+            source: { kind: "slot", fallback: false },
+            trail,
+            qOf: new Map(members.map((mm, q) => [mm, q])),
+            startDist: ends.startDist,
+            endDist: ends.endDist,
+            target,
+            around: {
+                origin: os,
+                enter: ends.enter,
+                inStraight: ends.inStraight,
+                turn: ends.turn,
+                straight: ends.straight,
+            },
         });
         C.ftlEntriesComputed++;
     }
@@ -976,6 +1083,17 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
                   along: {
                       turn: [...e.along.turn],
                       straight: [...e.along.straight],
+                  },
+              }
+            : {}),
+        ...(e.around
+            ? {
+                  around: {
+                      enter: [...e.around.enter],
+                      inStraight: [...e.around.inStraight],
+                      turn: [...e.around.turn],
+                      straight: [...e.around.straight],
+                      length: e.trail.loop?.L ?? 0,
                   },
               }
             : {}),

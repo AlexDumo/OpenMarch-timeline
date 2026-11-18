@@ -21,6 +21,12 @@ import {
 import type { XY } from "@/shapes/types";
 import type { PathTarget } from "./pathTarget";
 import {
+    aroundMarchersOf,
+    aroundPlanOf,
+    goingRound,
+    type FollowAround,
+} from "./followAround";
+import {
     storedPoints,
     usePathPenStore,
     type PathSession,
@@ -87,6 +93,11 @@ export interface FollowDrag {
      * 4d): it takes no press, and the note by it says to grab an end. Absent or null elsewhere.
      */
     readonly hover?: number | null;
+    /**
+     * Go round (step 10, DO-1): the line stands on a closed outline, so it can follow its leader
+     * round it. Absent or null when it doesn't.
+     */
+    readonly around?: FollowAround | null;
 }
 
 /** The path bar's Ends (DL-8, AP-T9, RP-1) */
@@ -549,6 +560,8 @@ export interface FollowMarchers {
 export function followMarchersOf(s: PathSession | null): FollowMarchers | null {
     if (!s) return null;
     const f = s.follow;
+    // Going round (step 10): where they stop round the outline, or walking round it
+    if (f && goingRound(f)) return aroundMarchersOf(f);
     if (!f || !followHasTrail(s) || keepsEndSpots(f)) return null;
     // Ripple in (step 9): the marchers on their dealt spots, and the walk into the next form
     if (ripplesIn(f)) {
@@ -597,6 +610,10 @@ export function followFootprint(s: PathSession): XY[] {
     const f = s.follow;
     if (!f || s.phase !== "drawing") return [];
     const at: XY[] = [...lineOf(f).starts.values()];
+    if (goingRound(f)) {
+        for (const [x, y] of aroundPlanOf(f)?.spots ?? []) at.push({ x, y });
+        return at;
+    }
     const plan = ripplesIn(f) ? rippleDrawnPlanOf(s) : followDrawnPlanOf(s);
     if (plan) for (const [x, y] of plan.spots) at.push({ x, y });
     if (s.pointer) at.push(s.pointer);

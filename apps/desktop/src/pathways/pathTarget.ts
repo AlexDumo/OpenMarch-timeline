@@ -124,6 +124,12 @@ export interface TrailTarget {
      */
     along?: boolean;
     /**
+     * Whether the line goes round a closed outline (R-13‴, step 10): the target's `from`, `points`,
+     * `to` and `toBulge` are then the outline in walking order, drawn closed; it isn't opened for
+     * point edits (AP-T15), and Reverse goes the other way round (AP-T14)
+     */
+    around?: boolean;
+    /**
      * The end line every slot's destination makes, in the order the line enters it (slot order,
      * or reversed with R-12′), vacant slots included (R-13′): what corner counts read for a trail
      * that isn't along the way (step 6, TC-1). Absent while a new trail is drawn: then it is the
@@ -695,14 +701,16 @@ function targetOfTrail(
         };
     });
     const leader = members.at(-1)!;
+    // Round an outline (step 10): the outline itself, from its seam round and back
+    const seam = trail.around ? xy(trail.geometry.from) : null;
     return {
         timelineId: trail.timelineId,
         transitionId: trail.transitionId,
         marcherId: leader.marcherId,
         start: trail.start,
         end: trail.end,
-        from: leader.from,
-        to: entrance ?? members[0]!.to,
+        from: seam ?? leader.from,
+        to: seam ?? entrance ?? members[0]!.to,
         routeId: trail.routeId,
         points: trail.geometry.points,
         ...toBulgeOf(trail.geometry),
@@ -713,6 +721,7 @@ function targetOfTrail(
             leaderId: leader.marcherId,
             reverse: trail.reverse,
             along: trail.along,
+            ...(trail.around ? { around: true } : {}),
             endLine,
             ...(entry.members.length === 0 ? { unfounded: true } : {}),
         },
