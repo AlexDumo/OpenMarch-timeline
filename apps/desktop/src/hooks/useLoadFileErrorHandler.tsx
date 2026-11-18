@@ -9,7 +9,6 @@ import {
 } from "@om-electron/database/convertOnOpenGate";
 import { LEFTOVER_JOURNAL_STATUS } from "@om-electron/database/leftoverJournalStatus";
 import { siteUrl } from "@/global/siteUrl";
-import { SYNC_FOLDER_GUIDE_URL } from "@/hooks/useCloudSyncFolderNotice";
 
 const FILE_ERROR_GUIDE_URLS = {
     forbidden: siteUrl(
@@ -19,6 +18,9 @@ const FILE_ERROR_GUIDE_URLS = {
     server: siteUrl("/troubleshooting/file-errors/#server-error"),
     default: siteUrl(
         "/troubleshooting/file-errors/#unable-to-open-file-error-or-render-failure",
+    ),
+    syncFolder: siteUrl(
+        "/troubleshooting/file-errors/#shows-in-a-synced-folder",
     ),
 } as const;
 
@@ -78,7 +80,7 @@ function LeftoverJournalDescription() {
                         keyName="fileAccessDialogError.leftoverJournal.syncFolder"
                         params={{ service: syncService }}
                     />{" "}
-                    <ReferToGuide guideUrl={SYNC_FOLDER_GUIDE_URL} />
+                    <ReferToGuide guideUrl={FILE_ERROR_GUIDE_URLS.syncFolder} />
                 </span>
             )}
         </>
