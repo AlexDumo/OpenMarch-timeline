@@ -52,7 +52,7 @@ before. Recovery of existing working copies works whatever the setting.
    the folder is flushed. No `-journal` ever appears in the show's folder.
 4. **When.** About 15 s after the last edit, at most 30 s while edits keep coming, when the window
    loses focus, before exports and repair, before switching shows, on close and quit, and on
-   Ctrl/Cmd+S. Commits from any connection are noticed through `PRAGMA data_version`, checked
+   File ▸ Save Now (no default key: Ctrl/Cmd+S already swaps marchers). Commits from any connection are noticed through `PRAGMA data_version`, checked
    after each database IPC handler.
    - 15 s rather than the prototype's 1.5 s: every publish re-uploads the whole file, audio
      included, so a sync app should see one upload per burst of editing, not one per edit. A

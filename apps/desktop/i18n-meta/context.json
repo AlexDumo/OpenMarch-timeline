@@ -3386,7 +3386,7 @@
     "view3d.keys.pointOfView": "Explains what the matching key or gesture in the 'Keyboard shortcuts' list of the 3D View settings panel does. Sits to the right of the key; keep it short. While the camera follows a performer, the key switches between watching them from behind and seeing through their eyes (first person), and back.",
     "view3d.settings.followTurns": "Switch in the Preferences tab of 3D View settings. On: while the camera follows a performer from behind, it swings round to stay behind them as they turn, like a video game's camera. Off: it keeps facing the same way on the field. 'Following' matches the camera bar's 'Following {name}'.",
     "view3d.settings.povShowsBody": "Switch in the Preferences tab of 3D View settings. On: when seeing through a performer's eyes (point of view), their own arms and the instrument they hold show in front of the view. Off: their body is hidden. 'Point of view' matches the camera bar's Point of view button.",
-    "menu.file.saveNow": "Item in the app's File menu (shortcut Ctrl+S or Cmd+S) that writes the open show to its file in the person's folder right away. With the working-copy saving option on, OpenMarch otherwise writes it a few seconds after editing stops.",
+    "menu.file.saveNow": "Item in the app's File menu that writes the open show to its file in the person's folder right away. With the working-copy saving option on, OpenMarch otherwise writes it a few seconds after editing stops.",
     "fileDialog.recoverOnOpen.message": "Main line of a system dialog shown when opening a show (named in quotes) whose last edits never reached the show file, because OpenMarch quit or crashed first. The edits are kept in OpenMarch's own folder.",
     "fileDialog.recoverOnOpen.detail": "Second paragraph of that dialog. {time} is the date and time of the last edit. Recovering opens the show with those edits; discarding deletes them for good and opens the show file as it is.",
     "fileDialog.recoverOnOpen.recover": "Button in that dialog: open the show with the edits that weren't saved.",
@@ -3434,5 +3434,6 @@
     "workingCopy.recovery.missing": "Shown after a show in that box when its file no longer exists.",
     "workingCopy.recovery.recover": "Button for a show in that box: open it with the edits.",
     "workingCopy.recovery.discard": "Button for a show in that box: delete the edits for good.",
-    "workingCopy.recovery.error": "Error message when recovering failed. {error} is a code or technical message."
+    "workingCopy.recovery.error": "Error message when recovering failed. {error} is a code or technical message.",
+    "actions.file.saveNow": "Name of an action in the command palette and shortcut settings. With the working-copy saving option on, it writes the open show to its file right away instead of a few seconds after editing stops. It does nothing otherwise, since every change is already in the file."
 }

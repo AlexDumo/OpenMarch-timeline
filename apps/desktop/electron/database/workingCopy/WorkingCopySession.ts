@@ -746,6 +746,8 @@ export class WorkingCopySession {
         try {
             if (await isReadOnly(target, platform)) {
                 const message = `${name} is read-only. Use Save As to keep your changes.`;
+                // Check again later: the person may make it writable again.
+                this.scheduleRetry();
                 this.setState("readOnly", { message });
                 this.options.onPublish?.({
                     ok: false,
@@ -879,6 +881,24 @@ export class WorkingCopySession {
         }
     }
 
+    /** The next wait in the retry schedule (2, 4, 8, 15, then 30 s by default). */
+    private nextRetryDelay(): number {
+        const delays = this.options.retryDelaysMs;
+        const delay = delays[Math.min(this.retryIndex, delays.length - 1)];
+        this.retryIndex++;
+        return delay;
+    }
+
+    /** Publishes again after `delay` (the next one in the schedule by default). */
+    private scheduleRetry(delay = this.nextRetryDelay()) {
+        this.clearRetryTimer();
+        this.retryTimer = setTimeout(() => {
+            this.retryTimer = null;
+            void this.flush("retry");
+        }, delay);
+        this.retryTimer.unref?.();
+    }
+
     private async copyMetadata(from: string, to: string) {
         try {
             const { failedAttributes } = await copyFileMetadata(from, to, {
@@ -900,9 +920,7 @@ export class WorkingCopySession {
      * working copy keeps the changes; try again soon.
      */
     private deferSave(error: unknown, reason: string): SaveOutcome {
-        const delays = this.options.retryDelaysMs;
-        const delay = delays[Math.min(this.retryIndex, delays.length - 1)];
-        this.retryIndex++;
+        const delay = this.nextRetryDelay();
         const retryAt = Date.now() + delay;
         const errorCode =
             error instanceof RenameRetriesExhaustedError
@@ -915,12 +933,7 @@ export class WorkingCopySession {
                 : ((error as Error)?.message ?? String(error));
         const message = `Couldn't save ${basename(this.targetPath)}: ${why}. Your changes are kept and OpenMarch will try again.`;
         console.error("Publish deferred:", error);
-        this.clearRetryTimer();
-        this.retryTimer = setTimeout(() => {
-            this.retryTimer = null;
-            void this.flush("retry");
-        }, delay);
-        this.retryTimer.unref?.();
+        this.scheduleRetry(delay);
         this.setState("deferred", { message, retryAt, errorCode });
         this.options.onPublish?.({
             ok: false,

@@ -115,7 +115,8 @@
             "loadDialogue": "Open file…",
             "newDialogue": "New file…",
             "openExport": "Export…",
-            "saveDialogue": "Save a copy…"
+            "saveDialogue": "Save a copy…",
+            "saveNow": "Save now"
         },
         "labelWithVariant": "{label} ({variant})",
         "movement": {
