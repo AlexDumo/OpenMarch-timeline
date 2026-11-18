@@ -4262,9 +4262,12 @@ member's distance back from the leader's spot on the route `before`; `planOnBack
 `editTrailPointsInTransaction` calls `deriveTrailSpotsInTransaction` after the route write for a
 trail along the way (AP-T16's head drag writes its own plan, `writeTrailPlanInTransaction`); both
 unlink an old end shape (`unlinkTrailShapesInTransaction`) and put a slot nobody holds on the path
-between its neighbors. `updateTimelineSlotDestinationInTransaction` is every spot editor's writer:
-it peels a dragged-out trail's member whose spot really moves (`leaveTrailInTransaction`) unless
-the trail's own write says `trail: "keep"`. `convertTrailToShapeInTransaction` is Convert to shape.
+between its neighbors. `moveSlotDestinationInTransaction` is every spot editor's writer (the page and
+range writers, point moves, Set as shown, the next page's stays, Alt + drag): it peels a dragged-out
+trail's member whose spot really moves (`leaveTrailInTransaction`), then writes. The plain
+`updateTimelineSlotDestinationInTransaction` stays free of trails: it is bundled in the web build's
+backend worker (file conversion), which must not import the trail and shape modules
+(`web/worker/__test__/workerImports.test.ts` guards that). `convertTrailToShapeInTransaction` is Convert to shape.
 
 | ID      | Case | Expected |
 | ------- | ---- | -------- |

@@ -16,7 +16,7 @@ import { isPageBox } from "./timelineMoves";
 import { addMarchersToTimelineInTransaction } from "./timelineMembership";
 import { readHeldMarks } from "./timelineHeldMarks";
 import { overlapsBox } from "@/timeline/basicSimple";
-import { updateTimelineSlotDestinationInTransaction } from "./timelineTransitionsInTransaction";
+import { moveSlotDestinationInTransaction } from "./timelineTrailDerive";
 
 /**
  * **Set as shown** on a page box, in timeline mode (holds, fork #466; holds README decisions 1
@@ -177,7 +177,7 @@ export async function setAsShownOnPageInTransaction({
     for (const own of added) {
         const point = at?.get(own.marcherId);
         if (point)
-            await updateTimelineSlotDestinationInTransaction({
+            await moveSlotDestinationInTransaction({
                 tx,
                 transitionId: own.transitionId,
                 slotIndex: 0,

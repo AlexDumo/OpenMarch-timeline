@@ -41,6 +41,11 @@ import { trailShapeRecipe } from "./timelineTrailShape";
 import { removeAssignmentRowsInTransaction } from "./timelineMembership";
 import { createTimelineAssignmentsInTransaction } from "./timelineAssignments";
 import { writeRouteGeometryInTransaction } from "./timelineRouteGeometry";
+import { removeTrailInTransaction } from "./timelineTrails";
+import {
+    createTimelineTransitionsInTransaction,
+    updateTimelineSlotDestinationInTransaction,
+} from "./timelineTransitionsInTransaction";
 
 type TransitionDbRow = typeof schema.timeline_transitions.$inferSelect;
 
@@ -377,7 +382,6 @@ export async function leaveTrailInTransaction(
     const leaving = new Set(rows.map((r) => r.marcher_id));
     if (everyone.filter((m) => !leaving.has(m.id)).length < 2) {
         // One left: the trail goes (AP-T4) and everyone keeps a plain move to the spot they have
-        const { removeTrailInTransaction } = await import("./timelineTrails");
         await removeTrailInTransaction({
             tx,
             routeId: transition.route_id!,
@@ -404,8 +408,6 @@ async function peelIntoOwnMove(
         compact: true,
         deleteEmptied: true,
     });
-    const { createTimelineTransitionsInTransaction } =
-        await import("./timelineTransitionsInTransaction");
     const [own] = await createTimelineTransitionsInTransaction({
         tx,
         newTransitions: [
@@ -436,6 +438,42 @@ async function peelIntoOwnMove(
             .from(d)
             .where(and(eq(d.transition_id, own!.id), eq(d.slot_index, 0)))
             .get()) ?? null
+    );
+}
+
+/**
+ * Moves one slot's destination for an edit of the spots, not the path (a field drag, Alt + drag,
+ * typed coordinates, a shape tool): every spot editor writes through this, never the plain
+ * `updateTimelineSlotDestinationInTransaction`, so a trail's marcher whose spot really moves
+ * leaves the trail (L.18, TM-3, `leaveTrailInTransaction`) and the destination it then has is
+ * returned. The plain writer stays free of trails on purpose: it sits in the web backend worker's
+ * bundle (file conversion), which must not pull in the trail and shape modules.
+ */
+export async function moveSlotDestinationInTransaction({
+    tx,
+    transitionId,
+    slotIndex,
+    point,
+}: {
+    tx: DbTransaction;
+    transitionId: number;
+    slotIndex: number;
+    point: XY;
+}): Promise<typeof schema.timeline_slot_destinations.$inferSelect> {
+    const left = await leaveTrailInTransaction(
+        tx,
+        transitionId,
+        slotIndex,
+        point,
+    );
+    return (
+        left ??
+        (await updateTimelineSlotDestinationInTransaction({
+            tx,
+            transitionId,
+            slotIndex,
+            point,
+        }))
     );
 }
 

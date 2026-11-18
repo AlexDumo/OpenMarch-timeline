@@ -15,7 +15,6 @@ import {
 import { createRangeTimelineInTransaction } from "./timelineMoveNames";
 import { createTimelinesInTransaction, findTimelineByRange } from "./timelines";
 import { readPageGrid } from "./timelineRipple";
-import { updateTimelineSlotDestinationInTransaction } from "./timelineTransitions";
 import { clearOwnPageMoves } from "./timelineMoveHelpers";
 import { hasHeldMarksTable, readHeldMarks } from "./timelineHeldArrival";
 import {
@@ -27,6 +26,7 @@ import {
     type TimelineMoveResult,
 } from "./timelineMoves";
 import { text } from "@/timeline/timelineText";
+import { moveSlotDestinationInTransaction } from "./timelineTrailDerive";
 
 /**
  * Basic mode's writes (docs/timeline/research/basic-mode/README.md, "How Basic writes"): every
@@ -432,7 +432,7 @@ const writePlan = async (
     };
     for (const { row, point } of plan.setDestinations) {
         // A trail's marcher moved by hand leaves it (pathways L.18, TM-3)
-        const written = await updateTimelineSlotDestinationInTransaction({
+        const written = await moveSlotDestinationInTransaction({
             tx,
             transitionId: row.transitionId,
             slotIndex: row.slotIndex,

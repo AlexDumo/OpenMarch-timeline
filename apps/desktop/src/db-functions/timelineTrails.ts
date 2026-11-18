@@ -61,6 +61,8 @@ import { pointsToStore } from "./timelineGroupRoutes";
 import { memberRows, type MemberRow } from "./timelineMemberRows";
 import { removeAssignmentRowsInTransaction } from "./timelineMembership";
 import { dropOrderMarksInTransaction } from "./shapeRecipes";
+import { deriveTrailSpotsInTransaction } from "./timelineTrailDerive";
+import { setMarcherOrderInTransaction } from "./marcherOrder";
 
 type TransitionDbRow = typeof schema.timeline_transitions.$inferSelect;
 
@@ -863,8 +865,6 @@ export async function editTrailPointsInTransaction({
     );
     // L.18 (TM-1): the path is the only truth, so its end spots follow it, in this undo step
     if (along && planSpots) {
-        const { deriveTrailSpotsInTransaction } =
-            await import("./timelineTrailDerive");
         await deriveTrailSpotsInTransaction(
             tx,
             transition,
@@ -1004,8 +1004,6 @@ export async function removeTrailInTransaction({
         );
         const line = resolver.ftlEntry(transition.id).members;
         if (line.length >= 2) {
-            const { setMarcherOrderInTransaction } =
-                await import("./marcherOrder");
             await setMarcherOrderInTransaction(tx, {
                 beat: transition.end_beat,
                 order: [...line].reverse(),

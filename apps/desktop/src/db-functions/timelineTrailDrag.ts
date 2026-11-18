@@ -52,7 +52,8 @@ import {
     trailRefusal,
     type FollowTrailResult,
 } from "./timelineTrails";
-import { updateTimelineSlotDestinationInTransaction } from "./timelineTransitionsInTransaction";
+import { writeTrailPlanInTransaction } from "./timelineTrailDerive";
+import { moveSlotDestinationInTransaction } from "./timelineTrailDerive";
 
 /** The refusals' texts of step 4b, translated where they are shown. */
 export const trailDragRefusal = {
@@ -839,8 +840,6 @@ export async function dragTrailHeadInTransaction(
         planSpots: false,
     });
     // Each member's spot, on its own slot; an old end shape of step 4c goes (L.18, TM-4)
-    const { writeTrailPlanInTransaction } =
-        await import("./timelineTrailDerive");
     await writeTrailPlanInTransaction(tx, transition, plan);
     return {
         routeId,
@@ -906,7 +905,7 @@ export async function detachTrailSpotInTransaction(
         )
         .get();
     if (!row) refuse(trailRefusal.noTrail());
-    await updateTimelineSlotDestinationInTransaction({
+    await moveSlotDestinationInTransaction({
         tx,
         transitionId: transition.id,
         slotIndex: row.slot,

@@ -183,7 +183,6 @@ describeDbTests("Drag a trail's head (AP-T16)", (it) => {
                 transitionId: first.transitionId,
                 slotIndex: 2,
                 point: moved,
-                trail: "keep",
             }),
         );
         const before = await dataOf(db);
