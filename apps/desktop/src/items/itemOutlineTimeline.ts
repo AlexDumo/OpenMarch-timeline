@@ -3,7 +3,11 @@
  * and counted by beat index, the same beat numbers the timeline resolver and playhead use.
  */
 import { endlessIdOf } from "@/timeline/endlessTimeline";
-import { type GeometryChange, type ItemGeometry } from "@openmarch/core";
+import {
+    shortTurn,
+    type GeometryChange,
+    type ItemGeometry,
+} from "@openmarch/core";
 import type { DatabaseItem, DatabaseItemGeometry } from "@/db-functions/items";
 import type { SetItemGeometryArgs } from "@/hooks/queries/useItems";
 import {
@@ -56,6 +60,9 @@ export function itemOutlineChanges({
             depth: row.depth,
             height: row.height,
             rotation: row.rotation,
+            elevation: row.elevation,
+            pitch: row.pitch,
+            roll: row.roll,
             customOutline: parseStoredJson(row.custom_outline),
             transitionLength: row.transition_length,
             rollsOut: row.rolls_out === 1,
@@ -128,7 +135,12 @@ export function fieldOutlineWrite({
                 heightScalesFrom && heightScalesFrom > 0
                     ? shown.height * (drawn.width / heightScalesFrom)
                     : shown.height,
-            rotation: drawn.rotation,
+            // The way the handle turned it: 350° dragged to 10° is 370°, not a turn back
+            rotation:
+                shown.rotation + shortTurn(shown.rotation, drawn.rotation),
+            elevation: shown.elevation,
+            pitch: shown.pitch,
+            roll: shown.roll,
             transitionLength: existing?.transition_length ?? 1,
             rollsOutFrom: shown.rollsOut ? shown.leadingEdge : null,
         },

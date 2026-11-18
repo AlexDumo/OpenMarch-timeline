@@ -849,6 +849,12 @@ export const item_geometry = sqliteTable(
         height: real().notNull().default(0),
         /** Yaw on the field plane, in degrees */
         rotation: real().notNull().default(0),
+        /** How far the item is lifted off the ground, in meters (fork #1087) */
+        elevation: real().notNull().default(0),
+        /** Tilt about the left-right axis, in degrees: positive brings the top toward the audience */
+        pitch: real().notNull().default(0),
+        /** Tilt about the front-back axis, in degrees: positive lays the top to the audience's right */
+        roll: real().notNull().default(0),
         /** JSON points backing a polygon, freehand or arc Outline */
         custom_outline: text(),
         /** In counts, at least 1; 1 is instant */

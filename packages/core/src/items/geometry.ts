@@ -16,7 +16,10 @@ export type OutlineType =
     | "freehand";
 export type LeadingEdge = "front" | "back" | "left" | "right";
 
-/** One row of `item_geometry`, with its beat as a position. Sizes in meters, rotation in degrees. */
+/**
+ * One row of `item_geometry`, with its beat as a position. Sizes and elevation in meters, angles
+ * in degrees.
+ */
 export interface GeometryChange {
     /** The position of the beat the change is on */
     beat: number;
@@ -24,7 +27,14 @@ export interface GeometryChange {
     width: number;
     depth: number;
     height: number;
+    /** Yaw on the field plane */
     rotation: number;
+    /** Lifted off the ground; 0 when not stored */
+    elevation?: number;
+    /** Tilt about the left-right axis: positive brings the top toward the audience */
+    pitch?: number;
+    /** Tilt about the front-back axis: positive lays the top to the audience's right */
+    roll?: number;
     customOutline: unknown;
     /** In counts, at least 1 */
     transitionLength: number;
@@ -38,6 +48,9 @@ export interface ItemGeometry {
     depth: number;
     height: number;
     rotation: number;
+    elevation: number;
+    pitch: number;
+    roll: number;
     customOutline: unknown;
     rollsOut: boolean;
     leadingEdge: LeadingEdge | null;
@@ -50,12 +63,26 @@ const transitionStart = (c: GeometryChange) => c.beat - c.transitionLength + 1;
 /** Symmetric ease in and out: slow at both ends, halfway at half time. */
 const ease = (p: number) => p * p * (3 - 2 * p);
 
+/**
+ * The turn from angle `a` to `b` the short way round, in degrees: -180 to 180. Exactly half a
+ * turn goes the positive way. Stored angles blend as raw numbers, so 0 to 360 is a full spin;
+ * a handle that drags an angle writes `a + shortTurn(a, b)` instead of `b`, so it turns the way
+ * it was dragged (fork #1087).
+ */
+export const shortTurn = (a: number, b: number): number => {
+    const d = (((b - a) % 360) + 360) % 360;
+    return d > 180 ? d - 360 : d;
+};
+
 const settled = (c: GeometryChange): ItemGeometry => ({
     outlineType: c.outlineType,
     width: c.width,
     depth: c.depth,
     height: c.height,
     rotation: c.rotation,
+    elevation: c.elevation ?? 0,
+    pitch: c.pitch ?? 0,
+    roll: c.roll ?? 0,
     customOutline: c.customOutline,
     rollsOut: c.rollsOut,
     leadingEdge: c.leadingEdge,
@@ -86,13 +113,17 @@ function geometryAt(
     const progress = (position - start) / (current.beat - start);
     const k = ease(progress);
     const blend = (a: number, b: number) => a + (b - a) * k;
+    const settledNow = settled(current);
     // Outline type, custom outline and roll-out switch when the transition starts
     return {
-        ...settled(current),
+        ...settledNow,
         width: blend(from.width, current.width),
         depth: blend(from.depth, current.depth),
         height: blend(from.height, current.height),
         rotation: blend(from.rotation, current.rotation),
+        elevation: blend(from.elevation, settledNow.elevation),
+        pitch: blend(from.pitch, settledNow.pitch),
+        roll: blend(from.roll, settledNow.roll),
         progress,
     };
 }

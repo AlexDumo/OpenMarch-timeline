@@ -24,7 +24,7 @@ export type SurfaceType = (typeof schema.SURFACE_TYPES)[number];
 export type OutlineType = (typeof schema.OUTLINE_TYPES)[number];
 export type LeadingEdge = (typeof schema.LEADING_EDGES)[number];
 
-/** One Outline change. Sizes in meters, rotation in degrees. */
+/** One Outline change. Sizes and elevation in meters, angles in degrees. */
 export interface ItemGeometryArgs {
     outlineType: OutlineType;
     width: number;
@@ -32,6 +32,12 @@ export interface ItemGeometryArgs {
     /** 0 by default: a flat Floor prop */
     height?: number;
     rotation?: number;
+    /** Off the ground; 0 by default */
+    elevation?: number;
+    /** Tilt forward (top toward the audience); 0 by default */
+    pitch?: number;
+    /** Tilt sideways (top to the audience's right); 0 by default */
+    roll?: number;
     /** JSON points backing a polygon, freehand or arc Outline */
     customOutline?: unknown;
     /** In counts; 1 (instant) by default */
@@ -70,6 +76,9 @@ const geometryValues = (geometry: ItemGeometryArgs) => ({
     depth: geometry.depth,
     height: geometry.height ?? 0,
     rotation: geometry.rotation ?? 0,
+    elevation: geometry.elevation ?? 0,
+    pitch: geometry.pitch ?? 0,
+    roll: geometry.roll ?? 0,
     custom_outline:
         geometry.customOutline === undefined || geometry.customOutline === null
             ? null

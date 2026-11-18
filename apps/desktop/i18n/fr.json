@@ -1460,7 +1460,8 @@
             "none": "Ne se déroule pas",
             "right": "Se déroule depuis la droite"
         },
-        "rotation": "Rotation",
+        "elevation": "Hauteur au-dessus du sol",
+        "rotateAxis": "Pivoter sur {axis}",
         "selectedCount": "{count, plural, one {# accessoire sélectionné} other {# accessoires sélectionnés}}",
         "show": "Afficher sur le terrain",
         "showNames": "Afficher tous les noms",

@@ -12,6 +12,7 @@
  *
  * Plain TypeScript only, and the per-frame path allocates nothing.
  */
+import { isLevel } from "./propPose";
 import type { PropSolid } from "./propLayout";
 import { podiumHeading } from "../pit/pitModels";
 
@@ -47,8 +48,9 @@ export const PODIUM_CLIP = "second";
 
 const isPodium = (s: PropSolid) => s.facesAcross === true;
 
+// A tilted platform isn't stood on (fork #1087)
 const standsOnIt = (s: PropSolid) =>
-    s.surface === "platform" && s.closed && s.height > 0;
+    s.surface === "platform" && s.closed && s.height > 0 && isLevel(s.geometry);
 
 /** The ramped platforms performers can stand on, lowest top first. Podiums aren't among them. */
 export function liftPlatforms(solids: readonly PropSolid[]): LiftPlatform[] {

@@ -160,7 +160,7 @@ Every model you import is stored in the show file, whether or not a prop uses it
 
 <Media
   id="3d-props-edit"
-  alt="The Edit Prop panel: Name Riser, Locked off, Color None, Surface Floor, and under Outline from count 20, Width 6 m, Depth 2 m, Height 1.2 m, Rotation 0°, Transition 1 counts, and Roll-out set to Doesn't roll out."
+  alt="The Edit Prop panel: Name Riser, Locked off, Color None, Surface Floor, and under Outline from count 20, Width 6 m, Depth 2 m, Height 1.2 m, Off the ground 0 m, Rotate X 0°, Rotate Y 0°, Rotate Z 0°, Transition 1 counts, and Roll-out set to Doesn't roll out."
   maxWidth={480}
 />
 
@@ -168,7 +168,9 @@ Every model you import is stored in the show file, whether or not a prop uses it
 - <Ui k="props.lockLabel" />: on, the prop has one position for the whole show, and dragging it on any page moves it on every page. Off, the default for a prop you draw, it can move from page to page (below).
 - <Ui k="props.color" />: colors the prop on the field and in the 3D View. <Ui k="props.colorNone" plain /> goes back to the plain look. To color several props at once, select them on the field: the Props panel shows one color for all of them.
 - <Ui k="props.surfaceLabel" />: <Ui k="props.surface.floor" plain />, <Ui k="props.surface.obstacle" plain /> or <Ui k="props.surface.platform" plain />. In the 3D View, marchers and props over a <Ui k="props.surface.platform" plain /> prop stand on it. On an imported model they stand on the top surface the import found over its middle, when it found one, rather than at its full height.
-- <Ui k="props.width" />, <Ui k="props.depth" /> and <Ui k="props.height" />, in meters, and <Ui k="props.rotation" /> in degrees clockwise.
+- <Ui k="props.width" />, <Ui k="props.depth" /> and <Ui k="props.height" />, in meters.
+- <Ui k="props.elevation" />: how high the prop is lifted, in meters. Props and marchers standing on a lifted platform rise with it.
+- <Ui k="props.rotateAxis" values={{ axis: "Y" }} /> turns the prop on the field, in degrees clockwise. <Ui k="props.rotateAxis" values={{ axis: "X" }} /> tips its top toward its front, and <Ui k="props.rotateAxis" values={{ axis: "Z" }} /> tips its top toward its right. A tipped prop turns about the middle of its height, so it doesn't sink into the ground. Marchers and props don't stand on a tipped platform. The field shows the prop from above as if it were level: see a lift or a tip in the 3D View.
 - <Ui k="props.rollOut.label" /> (floor props only): which edge a tarp rolls out from. It's saved with the prop, but in this version it doesn't change how the prop is drawn.
 
 ### Grow, shrink or turn a prop during the show
@@ -179,11 +181,19 @@ The size and turn are set at a count. The heading <Ui k="props.outlineFrom" valu
 
 1. With the prop's <Ui k="props.editTitle" plain /> panel open, move the playhead to the count where the change should be complete.
 
-2. Change <Ui k="props.width" plain />, <Ui k="props.depth" plain />, <Ui k="props.height" plain /> or <Ui k="props.rotation" plain />.
+2. Change <Ui k="props.width" plain />, <Ui k="props.depth" plain />, <Ui k="props.height" plain />, <Ui k="props.elevation" plain /> or one of the Rotate fields.
 
-3. Set <Ui k="props.transition" /> to the number of counts the change takes. With 8, the prop turns or resizes over the 8 counts up to that count; with 1, it changes on the count.
+3. Set <Ui k="props.transition" /> to the number of counts the change takes. With 8, the prop turns, lifts or resizes over the 8 counts up to that count; with 1, it changes on the count.
 
 </Steps>
+
+A turn goes through every angle between the two counts, so going from 0° to 360° spins the prop a whole turn. To turn a little the other way, type a smaller number rather than wrapping around: from 350°, type 370° to turn 20° clockwise, or 330° to turn 20° back.
+
+<Media
+  id="3d-props-lifted"
+  alt="Three imported red chairs in the 3D View: the left one lifted 1.2 m off the ground, the middle one tipped onto its back, and the right one tipped to the side and lifted a little."
+  maxWidth={720}
+/>
 
 Before the prop's first count, the panel says the prop is off the field, and you can't change its size there.
 

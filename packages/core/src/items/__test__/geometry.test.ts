@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { itemGeometryAt, type GeometryChange } from "../geometry";
+import { itemGeometryAt, shortTurn, type GeometryChange } from "../geometry";
 
 const change = (
     beat: number,
@@ -131,5 +131,57 @@ describe("itemGeometryAt", () => {
         const changes = [change(10, { width: 6 }), change(0)];
         expect(itemGeometryAt(changes, 4)?.width).toBe(2);
         expect(itemGeometryAt(changes, 12)?.width).toBe(6);
+    });
+});
+
+describe("lifting, tilting and turning over time (fork #1087)", () => {
+    it("eases elevation, pitch and roll over the transition", () => {
+        const changes = [
+            change(0),
+            change(8, {
+                elevation: 2,
+                pitch: 90,
+                roll: -40,
+                transitionLength: 4,
+            }),
+        ];
+        // Halfway through the transition (it starts on the click of 5)
+        const mid = itemGeometryAt(changes, 6.5)!;
+        expect(mid.elevation).toBeCloseTo(1);
+        expect(mid.pitch).toBeCloseTo(45);
+        expect(mid.roll).toBeCloseTo(-20);
+        expect(itemGeometryAt(changes, 8)).toMatchObject({
+            elevation: 2,
+            pitch: 90,
+            roll: -40,
+        });
+    });
+
+    it("reads a change without them as on the ground and level", () => {
+        expect(itemGeometryAt([change(0)], 0)).toMatchObject({
+            elevation: 0,
+            pitch: 0,
+            roll: 0,
+        });
+    });
+
+    it("tilts through the raw angle, like rotation, so a flip is drawn", () => {
+        const changes = [
+            change(0),
+            change(4, { pitch: 360, transitionLength: 5 }),
+        ];
+        expect(itemGeometryAt(changes, 2)?.pitch).toBe(180);
+    });
+});
+
+describe("shortTurn", () => {
+    it("takes the short way round, half a turn the positive way", () => {
+        expect(shortTurn(350, 10)).toBe(20);
+        expect(shortTurn(10, 350)).toBe(-20);
+        expect(shortTurn(0, 180)).toBe(180);
+        expect(shortTurn(180, 0)).toBe(180);
+        expect(shortTurn(0, 720)).toBe(0);
+        expect(shortTurn(-90, 90)).toBe(180);
+        expect(shortTurn(45, 45)).toBe(0);
     });
 });

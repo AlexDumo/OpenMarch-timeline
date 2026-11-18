@@ -1460,7 +1460,8 @@
             "none": "Tidak terbentang",
             "right": "Terbentang dari kanan"
         },
-        "rotation": "Putaran",
+        "elevation": "Tinggi dari tanah",
+        "rotateAxis": "Putar paksi {axis}",
         "selectedCount": "{count, plural, one {# prop dipilih} other {# prop dipilih}}",
         "show": "Tunjukkan di padang",
         "showNames": "Tunjukkan semua nama",

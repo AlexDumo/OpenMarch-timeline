@@ -1460,7 +1460,8 @@
             "none": "Não desenrola",
             "right": "Desenrola a partir da direita"
         },
-        "rotation": "Rotação",
+        "elevation": "Altura do chão",
+        "rotateAxis": "Girar em {axis}",
         "selectedCount": "{count, plural, one {# adereço selecionado} other {# adereços selecionados}}",
         "show": "Mostrar no campo",
         "showNames": "Mostrar todos os nomes",

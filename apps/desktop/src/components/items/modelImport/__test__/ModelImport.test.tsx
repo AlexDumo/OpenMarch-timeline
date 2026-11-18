@@ -268,6 +268,28 @@ describeDbTests("Model import", (it) => {
         const resized = (await getItemGeometry({ db })).at(-1)!;
         expect(resized.depth).toBeCloseTo(sizeM.depth * 2);
         expect(resized.height).toBeCloseTo(sizeM.height * 2);
+
+        // Lifted and tipped from this count on, keeping its size (#1087)
+        const commit = async (label: string, value: number) => {
+            const field = screen.getByLabelText(label);
+            fireEvent.change(field, { target: { value: String(value) } });
+            fireEvent.keyDown(field, { key: "Enter" });
+        };
+        await commit("Off the ground", 1.5);
+        await waitFor(async () =>
+            expect((await getItemGeometry({ db })).at(-1)!.elevation).toBe(1.5),
+        );
+        await commit("Rotate X", 30);
+        await waitFor(async () =>
+            expect((await getItemGeometry({ db })).at(-1)).toMatchObject({
+                elevation: 1.5,
+                pitch: 30,
+                roll: 0,
+                width: resized.width,
+            }),
+        );
+        await performUndo(db);
+        await performUndo(db);
         await performUndo(db);
 
         // One undo removes the prop and keeps the model

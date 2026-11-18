@@ -1460,7 +1460,8 @@
             "none": "Hindi lumaladlad",
             "right": "Lumaladlad mula sa kanan"
         },
-        "rotation": "Pag-ikot",
+        "elevation": "Taas mula sa lupa",
+        "rotateAxis": "Iikot sa {axis}",
         "selectedCount": "{count, plural, one {# prop ang napili} other {# prop ang napili}}",
         "show": "Ipakita sa field",
         "showNames": "Ipakita ang lahat ng pangalan",

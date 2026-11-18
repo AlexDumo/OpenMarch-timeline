@@ -1113,6 +1113,67 @@ const shots = [
         },
     },
     {
+        id: "3d-props-lifted",
+        kind: "still",
+        // Three imported chairs where 3d-props-imported puts them: the left one lifted 1.2 m, the
+        // middle one tipped forward onto its back (Rotate X 90°), the right one tipped 30° to the
+        // side and lifted 0.5 m
+        async setup(ctx) {
+            const { page } = ctx;
+            await seekInPage(page, 2, 0.02);
+            const toScreen = await fieldToScreen(page);
+            const { pps, center } = await riserSpot(page);
+            await importChair(page, { add: true });
+            for (const feet of [-5, 0, 5]) {
+                await propsPanel(page);
+                await page.getByRole("button", { name: "Place Chair" }).click();
+                await page.waitForTimeout(300);
+                const at = toScreen({ x: center.x + feet * pps, y: center.y });
+                await page.mouse.click(at.x, at.y);
+                await page.waitForTimeout(800);
+            }
+            await page.keyboard.press("Escape");
+            const poses = [
+                { "Off the ground": 1.2 },
+                { "Rotate X": 90 },
+                { "Rotate Z": 30, "Off the ground": 0.5 },
+            ];
+            for (const [index, fields] of poses.entries()) {
+                await propsPanel(page);
+                await page
+                    .getByRole("button", { name: "Edit prop" })
+                    .nth(index)
+                    .click();
+                await page.waitForTimeout(500);
+                for (const [label, value] of Object.entries(fields))
+                    await setPropField(page, label, value);
+                await page.keyboard.press("Escape");
+                await page.waitForTimeout(300);
+            }
+            await seekInPage(page, 2, 0.5);
+            const { view } = await open3d(ctx);
+            const chairs = { x: 633, y: 649 };
+            await view.mouse.move(chairs.x, chairs.y);
+            for (let i = 0; i < 7; i++) {
+                await view.mouse.wheel(0, -120);
+                await ctx.wait(150);
+            }
+            await view.mouse.move(ctx.window.width - 4, ctx.window.height / 2);
+            // The model loads from the show, then draws in place of the blocks
+            await ctx.wait(4000);
+            return {
+                // Closer than 3d-props-imported, around the three chairs
+                box: {
+                    x: chairs.x - 230,
+                    y: chairs.y - 150,
+                    width: 460,
+                    height: 260,
+                },
+                target: view,
+            };
+        },
+    },
+    {
         id: "3d-front-ensemble-add",
         kind: "still",
         // The front ensemble's Add view: every model as a picture, by group, with search

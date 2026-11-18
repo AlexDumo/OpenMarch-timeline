@@ -14,6 +14,7 @@
  *   toward the audience) is +Z, so the 2D turn (clockwise on screen) turns
  *   +X toward +Z.
  */
+import { writePosedMatrix } from "./propPose";
 import { itemGeometryAt, type GeometryChange } from "@openmarch/core";
 import type { ItemGeometry, WorldPoint } from "@openmarch/core";
 import { outlineShape, type Pt } from "@/items/itemOutlines";
@@ -129,33 +130,24 @@ export function propShapes(tracks: readonly PropTrack[]): PropShape[] {
 export function writePropMatrix(
     out: Float32Array,
     index: number,
-    geometry: Pick<ItemGeometry, "width" | "depth" | "height" | "rotation">,
+    geometry: Pick<ItemGeometry, "width" | "depth" | "height" | "rotation"> &
+        Partial<Pick<ItemGeometry, "pitch" | "roll">>,
     center: WorldPoint,
     baseY = 0,
 ): void {
-    const radians = (geometry.rotation * Math.PI) / 180;
-    const cos = Math.cos(radians);
-    const sin = Math.sin(radians);
     const height = Math.max(geometry.height, MIN_PROP_HEIGHT);
-    const o = index * 16;
-    // Unit x goes to (cos, 0, sin) × width
-    out[o] = geometry.width * cos;
-    out[o + 1] = 0;
-    out[o + 2] = geometry.width * sin;
-    out[o + 3] = 0;
-    out[o + 4] = 0;
-    out[o + 5] = height;
-    out[o + 6] = 0;
-    out[o + 7] = 0;
-    // Unit z (field y) goes to (-sin, 0, cos) × depth
-    out[o + 8] = -geometry.depth * sin;
-    out[o + 9] = 0;
-    out[o + 10] = geometry.depth * cos;
-    out[o + 11] = 0;
-    out[o + 12] = center.x;
-    out[o + 13] = baseY;
-    out[o + 14] = center.z;
-    out[o + 15] = 1;
+    writePosedMatrix(
+        out,
+        index,
+        {
+            rotation: geometry.rotation,
+            pitch: geometry.pitch ?? 0,
+            roll: geometry.roll ?? 0,
+        },
+        { x: geometry.width, y: height, z: geometry.depth },
+        { x: center.x, y: baseY, z: center.z },
+        height / 2,
+    );
 }
 
 /** Where each footprint's instances go, filled by {@link placePropBlocks}. */
@@ -212,7 +204,9 @@ export function placePropBlocks(
         const k = frame.keys.indexOf(keyOf(geometry));
         if (k < 0) continue;
         const index = frame.counts[k]++;
-        const y = baseY + (liftOf?.(track.marcherId) ?? 0);
+        // Stacked: the layout's base, which counts the prop's own lift; else its own lift
+        const y =
+            baseY + (liftOf ? liftOf(track.marcherId) : geometry.elevation);
         writePropMatrix(frame.matrices[k], index, geometry, scratch, y);
         const color = track.color ?? frame.defaultColor;
         frame.colors[k].set(color, index * 3);
