@@ -16,7 +16,7 @@
  *
  * Each is one undoable edit, and every refusal is decided before the first write.
  */
-import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNotNull, lt } from "drizzle-orm";
 import {
     createResolver,
     validateRouteGeometry,
@@ -1042,4 +1042,53 @@ export async function removeTrail(args: {
     return await transactionWithHistory(db, "removeTrail", (tx) =>
         removeTrailInTransaction({ tx, ...rest }),
     );
+}
+
+/**
+ * Clear Page N on a trail (owner, 2026-11-18): every trail with one of `marcherIds` in it over
+ * `range` goes whole, as Remove trail takes it (AP-T4), so the clear then takes those marchers out
+ * of the page like anyone else. A trail can't lose members quietly, so a member who isn't cleared
+ * stays in the move, now direct, walking straight to the end spot it had. Returns the trails'
+ * members outside `marcherIds`, ascending, with their names for the note.
+ */
+export async function removeTrailsOverRangeInTransaction({
+    tx,
+    marcherIds,
+    range,
+}: {
+    tx: DbTransaction;
+    marcherIds: readonly number[];
+    range: { start: number; end: number };
+}): Promise<{ stayed: number[]; names: string[] }> {
+    if (marcherIds.length === 0) return { stayed: [], names: [] };
+    const T = schema.timeline_transitions;
+    const A = schema.timeline_assignments;
+    const rows = await tx
+        .selectDistinct({ routeId: T.route_id })
+        .from(A)
+        .innerJoin(T, eq(T.id, A.transition_id))
+        .where(
+            and(
+                eq(T.path_style, FTL),
+                isNotNull(T.route_id),
+                inArray(A.marcher_id, [...new Set(marcherIds)]),
+                lt(A.start_beat, range.end),
+                gt(A.end_beat, range.start),
+            ),
+        )
+        .orderBy(asc(T.route_id))
+        .all();
+    const cleared = new Set(marcherIds);
+    const stayed = new Set<number>();
+    for (const { routeId } of rows) {
+        const { marcherIds: line } = await removeTrailInTransaction({
+            tx,
+            routeId: routeId!,
+        });
+        for (const m of line) if (!cleared.has(m)) stayed.add(m);
+    }
+    const ids = [...stayed].sort((a, b) => a - b);
+    const names: string[] = [];
+    for (const m of ids) names.push(await marcherName(tx, m));
+    return { stayed: ids, names };
 }

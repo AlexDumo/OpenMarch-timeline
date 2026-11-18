@@ -20,6 +20,7 @@ import { deleteTimeline, setMovePath } from "../timelineCommands";
 import { removeMarchersFromTimeline } from "../timelineMembership";
 import { resizeTimeline } from "../timelineResize";
 import { drawRoute } from "../timelineRoutes";
+import { moveMarchersInTarget } from "../timelineMoves";
 import { drawGroupRoute } from "../timelineGroupRoutes";
 import { createTimelinesInTransaction } from "../timelines";
 import { createTimelineTransitionsInTransaction } from "../timelineTransitionsInTransaction";
@@ -855,5 +856,241 @@ describeDbTests("Follow a drawn trail (AP-T1 to AP-T6)", (it) => {
         await removeTrail({ db, routeId: f.result.routeId });
         expect(await readTrails(db)).toEqual([]);
         expect(await violations(db)).toEqual([]);
+    });
+});
+
+/**
+ * Clear Page N on a trail (owner, 2026-11-18: "just remove the path transition and everything and
+ * just make all of the marchers undefined"): a trail with a cleared member on the page goes whole
+ * (its route, its follow move, its order), the cleared marchers are Not defined there, and a
+ * member who wasn't cleared walks straight to the end spot it had. One undo step.
+ */
+describeDbTests("Clear Page N on a trail", (it) => {
+    const PAGE2 = { start: 9, end: 17 };
+    const CLEAR_TABLES = [
+        ...TABLES,
+        schema.timeline_shape_recipes,
+        schema.timeline_shape_recipe_marchers,
+    ];
+    const allOf = async (db: DbConnection) => {
+        const out: Record<string, unknown[]> = {};
+        for (const table of CLEAR_TABLES)
+            out[getTableName(table)] = await db.select().from(table).all();
+        return out;
+    };
+    const expectOneClearStep = async (
+        db: DbConnection,
+        before: Awaited<ReturnType<typeof allOf>>,
+    ) => {
+        const after = await allOf(db);
+        expect((await performUndo(db)).success).toBe(true);
+        expect(await allOf(db)).toEqual(before);
+        expect((await performRedo(db)).success).toBe(true);
+        expect(await allOf(db)).toEqual(after);
+    };
+    /** Each of `ids`' rows over `range` */
+    const rowsOver = async (
+        db: DbConnection,
+        ids: readonly number[],
+        range: { start: number; end: number },
+    ) =>
+        (await db.select().from(schema.timeline_assignments).all()).filter(
+            (a) =>
+                ids.includes(a.marcher_id) &&
+                a.start_beat < range.end &&
+                a.end_beat > range.start,
+        );
+    const clear = (
+        db: DbConnection,
+        ids: readonly number[],
+        target: Parameters<typeof moveMarchersInTarget>[0]["target"] = {
+            kind: "range",
+            ...PAGE2,
+        },
+    ) =>
+        moveMarchersInTarget({
+            db,
+            target,
+            // Clear Page N sends the marchers' spots; only who they are counts
+            moves: ids.map((marcherId) => ({ marcherId, x: 0, y: 0 })),
+            clearPage: true,
+            keepLaterPages: true,
+        });
+
+    it("every member selected: the trail goes whole and the line is Not defined on the page; later pages keep their spots; one undo step restores the trail exactly", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const f = await follow(db);
+        const before = await allOf(db);
+        const r0 = await resolverOf(db);
+        const atLaterFlag = f.ids.map((m) => r0.positionAt(m, 25));
+
+        const result = await clear(db, f.ids);
+
+        expect(result.skipped).toBeUndefined();
+        expect(result.cleared).toEqual([...f.ids].sort((a, b) => a - b));
+        expect(await readTrails(db)).toEqual([]);
+        expect(await db.select().from(schema.timeline_routes).all()).toEqual(
+            [],
+        );
+        expect(await rowsOver(db, f.ids, PAGE2)).toEqual([]);
+        const r = await resolverOf(db);
+        // Not defined on page 2: standing where page 1 left them, then page 3 as it was
+        for (const [i, m] of f.ids.entries()) {
+            expect(r.positionAt(m, 13)).toEqual(f.starts[i]);
+            expect(r.positionAt(m, 25)).toEqual(atLaterFlag[i]);
+        }
+        expect(walk(r, f.others)).toEqual(f.othersBefore);
+        expect(await violations(db)).toEqual([]);
+        await expectOneClearStep(db, before);
+        // Undo gives back the very trail: route, order and spots
+        await performUndo(db);
+        const [back] = await readTrails(db);
+        expect(back!.routeId).toBe(f.result.routeId);
+        expect(back!.marcherIds).toEqual(f.result.marcherIds);
+        expect(
+            (await resolverOf(db)).ftlEntry(f.result.transitionId).members,
+        ).toEqual(f.result.marcherIds);
+    });
+
+    it("some members selected: the whole trail goes; the selected are Not defined, the others walk straight to the end spots they had", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const f = await follow(db);
+        const before = await allOf(db);
+        const line = f.result.marcherIds;
+        const chosen = [line[0]!, line.at(-1)!];
+        const kept = line.filter((m) => !chosen.includes(m));
+
+        const result = await clear(db, chosen);
+
+        expect(result.skipped).toBeUndefined();
+        expect(result.cleared).toEqual([...chosen].sort((a, b) => a - b));
+        expect(result.trailsCleared?.stayed).toEqual(
+            [...kept].sort((a, b) => a - b),
+        );
+        expect(result.trailsCleared?.names).toHaveLength(kept.length);
+        expect(await readTrails(db)).toEqual([]);
+        expect(await db.select().from(schema.timeline_routes).all()).toEqual(
+            [],
+        );
+        expect(await rowsOver(db, chosen, PAGE2)).toEqual([]);
+        const r = await resolverOf(db);
+        for (const m of chosen) {
+            const i = f.ids.indexOf(m);
+            expect(r.positionAt(m, 13)).toEqual(f.starts[i]);
+        }
+        for (const m of kept) {
+            const i = f.ids.indexOf(m);
+            expect(r.positionAt(m, 17)).toEqual(f.ends[i]);
+            const mid = r.positionAt(m, 13) as XY;
+            const half = along(f.starts[i]!, f.ends[i]!, 0.5);
+            expect(mid[0]).toBeCloseTo(half[0]);
+            expect(mid[1]).toBeCloseTo(half[1]);
+        }
+        const kept0 = (await rowsOver(db, kept, PAGE2))[0]!;
+        expect(
+            (await db
+                .select()
+                .from(schema.timeline_transitions)
+                .where(eq(schema.timeline_transitions.id, kept0.transition_id))
+                .get())!,
+        ).toMatchObject({ path_style: "direct", route_id: null });
+        expect(walk(r, f.others)).toEqual(f.othersBefore);
+        expect(await violations(db)).toEqual([]);
+        await expectOneClearStep(db, before);
+    });
+
+    it("all marchers: the trail goes and everyone is Not defined on the page", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const f = await follow(db);
+        const before = await allOf(db);
+        const everyone = [...f.ids, ...f.others];
+
+        const result = await clear(db, everyone);
+
+        expect(result.skipped).toBeUndefined();
+        expect(result.trailsCleared).toBeUndefined();
+        expect(result.cleared).toEqual([...everyone].sort((a, b) => a - b));
+        expect(await readTrails(db)).toEqual([]);
+        expect(await rowsOver(db, everyone, PAGE2)).toEqual([]);
+        expect(await violations(db)).toEqual([]);
+        await expectOneClearStep(db, before);
+    });
+
+    it("Basic's clear on the page's flag takes the trail too", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const f = await follow(db);
+        const before = await allOf(db);
+
+        const result = await clear(db, f.ids, {
+            kind: "point",
+            beat: 17,
+            box: PAGE2,
+        });
+
+        expect(result.skipped).toBeUndefined();
+        expect(await readTrails(db)).toEqual([]);
+        expect(await rowsOver(db, f.ids, PAGE2)).toEqual([]);
+        expect(await violations(db)).toEqual([]);
+        await expectOneClearStep(db, before);
+    });
+
+    it("a trail on another page stays", async ({ db, marchersAndPages: _ }) => {
+        const f = await follow(db);
+        const result = await clear(db, f.ids, {
+            kind: "range",
+            start: 17,
+            end: 25,
+        });
+        expect(result.skipped).toBeUndefined();
+        expect((await readTrails(db))[0]!.routeId).toBe(f.result.routeId);
+        expect(
+            (await resolverOf(db)).ftlEntry(f.result.transitionId).members,
+        ).toEqual(f.result.marcherIds);
+    });
+
+    it("own paths and group paths go with the cleared marchers' moves; a group path keeps the members who stay", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await convertPagesToTimeline(db);
+        const tl = (await page2(db)).id;
+        const [p, q, s] = (await resolverOf(db)).marcherIds();
+        const own = await drawRoute({
+            db,
+            timelineId: tl,
+            marcherId: p!,
+            points: [{ at: [50, 50] }],
+        });
+        await drawGroupRoute({
+            db,
+            timelineId: tl,
+            marcherIds: [q!, s!],
+            points: [{ at: [60, 20] }],
+        });
+        const before = await allOf(db);
+        const sBefore = walk(await resolverOf(db), [s!]);
+
+        const result = await clear(db, [p!, q!]);
+
+        expect(result.skipped).toBeUndefined();
+        expect(result.cleared).toEqual([p!, q!].sort((a, b) => a - b));
+        expect(await rowsOver(db, [p!, q!], PAGE2)).toEqual([]);
+        const routes = await db.select().from(schema.timeline_routes).all();
+        expect(routes.map((x) => x.id)).not.toContain(own.routeId);
+        const lanes = await db.select().from(schema.timeline_lanes).all();
+        // The group path's lane on s stays; p's and q's lanes went with their rows
+        expect(lanes).toHaveLength(1);
+        expect(routes).toHaveLength(1);
+        expect(walk(await resolverOf(db), [s!])).toEqual(sBefore);
+        expect(await violations(db)).toEqual([]);
+        await expectOneClearStep(db, before);
     });
 });
