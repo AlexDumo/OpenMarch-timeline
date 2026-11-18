@@ -88,13 +88,12 @@ const SOUSAPHONE = {
     // the neck: on from the hoop's end, up behind the left shoulder and
     // forward into the bell. Its players wear a beret, not a plumed shako
     // (owner, 2026-11-10), so the bell rides low over the beret, as side-on
-    // photos of players show (2026-11-10). Its lower rim sits about 8 cm
-    // above the eyes (owner, 2026-11-18: at the brow it hid too much of a
-    // player's view), so looking ahead the player sees under it.
+    // photos of players show (2026-11-10). `reach` is how far the neck runs
+    // on from `top` along the bell's way to the collar.
     neck: {
         rise: 0.2,
-        top: [0.15, 2.1, -0.21] as Vec3,
-        tail: [0.15, 2.1, -0.12] as Vec3,
+        top: [0.15, 1.96, -0.21] as Vec3,
+        reach: 0.09,
         bends: [0.22, 0.14] as [number, number],
         radii: [
             [0, 0.064],
@@ -102,8 +101,11 @@ const SOUSAPHONE = {
         ] as [number, number][],
     },
     // the bell from its collar: a wide throat off the neck that opens into
-    // an almost flat pancake, 26 in across
-    bell: { length: 0.41, throat: 0.075, rim: 0.33, gamma: 0.8 },
+    // an almost flat pancake, 26 in across. Its mouth is raised `tilt`
+    // degrees above level: in photos of players the rim leans back at the
+    // top, its lower edge above the eyes, so the face shows under it and the
+    // player sees ahead (owner, 2026-11-18: level, it hid the view)
+    bell: { length: 0.41, throat: 0.075, rim: 0.33, gamma: 0.8, tilt: 20 },
     // the mouthpiece at the lips with the head up 15 degrees (`HEAD_UP`
     // and `LIPS` in holds.ts), pointing forward and a little down
     lips: [0, 1.611, 0.079] as Vec3,
@@ -243,13 +245,19 @@ export function sousaphone(detail: Detail): Horn {
     };
 
     // the neck and the bell
+    const bellAxis: Vec3 = [
+        0,
+        Math.sin(rad(h.bell.tilt)),
+        Math.cos(rad(h.bell.tilt)),
+    ];
+    const tail = add(h.neck.top, mul(bellAxis, h.neck.reach));
     const end = wound[wound.length - 1];
     const endDir = unit(sub(end, wound[wound.length - 2]));
     const neckCorners: Corner[] = [
         [end],
         [add(end, mul(endDir, h.neck.rise)), h.neck.bends[0]],
         [h.neck.top, h.neck.bends[1]],
-        [h.neck.tail],
+        [tail],
     ];
     pieces.push(k.pipe(neckCorners, h.neck.radii));
     const flare = bellFlare(
@@ -257,12 +265,12 @@ export function sousaphone(detail: Detail): Horn {
         [h.bell.length, h.bell.rim],
         h.bell.gamma,
     );
-    pieces.push(k.bell(flare, h.neck.tail, [0, 0, 1]));
+    pieces.push(k.bell(flare, tail, bellAxis));
     // the collar the bell lifts off at, and the joint where the neck leaves the hoop
     pieces.push(
         ...k.ferrule(
-            add(h.neck.tail, [0, 0, 0.02]),
-            [0, 0, 1],
+            add(tail, mul(bellAxis, 0.02)),
+            bellAxis,
             h.bell.throat * 1.02,
             0.03,
         ),
