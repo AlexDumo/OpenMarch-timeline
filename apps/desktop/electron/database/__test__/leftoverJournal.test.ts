@@ -1,8 +1,8 @@
 /**
  * A leftover rollback journal next to a show file (`leftoverJournal.ts`): a journal SQLite
  * can't use refuses the open with `LEFTOVER_JOURNAL_STATUS` instead of a raw "unable to open
- * database file"; the file and journal can be backed up before SQLite plays it back; and
- * setting the journal aside lets the file open.
+ * database file", and the file and journal can be backed up before SQLite plays it back.
+ * Recovery is in `electron/main/__test__/leftoverJournalRecovery.test.ts`.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DatabaseSync } from "node:sqlite";
@@ -17,7 +17,6 @@ import {
     isCantOpenError,
     journalPathFor,
     LEFTOVER_JOURNAL_STATUS,
-    setLeftoverJournalAside,
 } from "../leftoverJournal";
 
 const sha256 = (filePath: string) =>
@@ -126,24 +125,6 @@ describe("leftover journals", () => {
 
             expect(sha256(showPath)).toBe(hashBefore);
             expect(fs.existsSync(journalPathFor(showPath))).toBe(true);
-        },
-    );
-
-    it.skipIf(isRoot)(
-        "opens the file once its journal is set aside, and keeps the journal",
-        () => {
-            leaveHotJournal(showPath);
-            fs.chmodSync(journalPathFor(showPath), 0o444);
-            expect(setDbPath(showPath)).toBe(LEFTOVER_JOURNAL_STATUS);
-
-            const movedTo = setLeftoverJournalAside(showPath, backupDir);
-
-            expect(fs.existsSync(journalPathFor(showPath))).toBe(false);
-            expect(path.dirname(movedTo)).toBe(backupDir);
-            expect(hasLeftoverJournal(movedTo.replace(/-journal$/, ""))).toBe(
-                true,
-            );
-            expect(setDbPath(showPath)).toBe(200);
         },
     );
 

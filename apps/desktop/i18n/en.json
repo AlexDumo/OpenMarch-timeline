@@ -741,8 +741,8 @@
         "guideLinkText": "OpenMarch File Error Guide",
         "leftoverJournal": {
             "cancel": "Cancel",
-            "description": "There's a leftover file, “{name}”, next to this show. It's from a save that didn't finish, and OpenMarch can't use it. You can open the show as it was last fully saved. The leftover file is moved to OpenMarch's backups, not deleted.",
-            "openWithout": "Open without it",
+            "description": "There's a leftover file, “{name}”, next to this show, from a save that didn't finish. OpenMarch can't use it where it is, but it can finish recovering the show from a copy. The leftover file is moved to OpenMarch's backups, not deleted.",
+            "recover": "Recover and open",
             "title": "A leftover file is stopping this show from opening"
         },
         "notFound": {
@@ -3700,7 +3700,9 @@
             "video": "Video"
         },
         "leftoverJournal": {
-            "moveFailedMessage": "OpenMarch couldn't move “{name}” out of the way. Copy the show into another folder and open the copy.",
+            "damagedMessage": "OpenMarch couldn't recover this show, with or without “{name}”. Nothing was changed. Report the problem and include the show and “{name}” if you can.",
+            "damagedTitle": "Couldn't recover the show",
+            "moveFailedMessage": "OpenMarch couldn't move “{name}” out of the show's folder, so nothing was changed. Report the problem and include the show and “{name}” if you can.",
             "moveFailedTitle": "Couldn't open the show"
         },
         "newShow": {

@@ -63,7 +63,7 @@ function LeftoverJournalDescription() {
     );
 }
 
-/** Cancel, or open the show without the leftover journal (it goes to the backups). */
+/** Cancel, or recover the show from the leftover journal (it goes to the backups). */
 function LeftoverJournalActions({ close }: { close: () => void }) {
     return (
         <div className="flex justify-end gap-8">
@@ -77,10 +77,10 @@ function LeftoverJournalActions({ close }: { close: () => void }) {
                     variant="primary"
                     onClick={() => {
                         close();
-                        void window.electron.openWithoutLeftoverJournal?.();
+                        void window.electron.recoverLeftoverJournal?.();
                     }}
                 >
-                    <T keyName="fileAccessDialogError.leftoverJournal.openWithout" />
+                    <T keyName="fileAccessDialogError.leftoverJournal.recover" />
                 </Button>
             </AlertDialogAction>
         </div>
@@ -90,7 +90,7 @@ function LeftoverJournalActions({ close }: { close: () => void }) {
 /**
  * Registers a listener for load file responses and shows an alert dialog
  * when file loading fails (403, 404, 500, or other errors). A leftover journal
- * (`LEFTOVER_JOURNAL_STATUS`) also offers to open the show without it.
+ * (`LEFTOVER_JOURNAL_STATUS`) also offers to recover the show from it.
  */
 export function useLoadFileErrorHandler() {
     const { setTitle, setContent, setActions, setOpen } = useAlertModalStore();

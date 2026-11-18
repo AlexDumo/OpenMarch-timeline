@@ -25,7 +25,7 @@ describe("useLoadFileErrorHandler", () => {
             }),
             takeLoadFileRefusal: vi.fn(async () => refusal),
             getLeftoverJournal: vi.fn(async () => "show.dots-journal"),
-            openWithoutLeftoverJournal: vi.fn(async () => 200),
+            recoverLeftoverJournal: vi.fn(async () => 200),
         } as typeof window.electron;
     });
 
@@ -63,18 +63,18 @@ describe("useLoadFileErrorHandler", () => {
         expect(useAlertModalStore.getState().isOpen).toBe(false);
     });
 
-    it("offers to open the show without a leftover journal", async () => {
+    it("offers to recover the show from a leftover journal", async () => {
         renderHook(() => useLoadFileErrorHandler());
         act(() => send(LEFTOVER_JOURNAL_STATUS));
         expect(useAlertModalStore.getState().actions).toBeTruthy();
 
         render(<AlertModal />);
-        const openWithout = await screen.findByRole("button", {
-            name: /open without it|leftoverJournal\.openWithout/i,
+        const recover = await screen.findByRole("button", {
+            name: /recover and open|leftoverJournal\.recover/i,
         });
-        act(() => openWithout.click());
+        act(() => recover.click());
 
-        expect(window.electron.openWithoutLeftoverJournal).toHaveBeenCalled();
+        expect(window.electron.recoverLeftoverJournal).toHaveBeenCalled();
         expect(useAlertModalStore.getState().isOpen).toBe(false);
     });
 

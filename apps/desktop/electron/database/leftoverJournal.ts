@@ -14,11 +14,11 @@
  *
  * So before a show with a journal opens, the file and its journal are copied into the backups
  * folder (`backupBeforeJournalRecovery`), which makes any playback undoable. When the journal
- * can't be used, the open is refused with `LEFTOVER_JOURNAL_STATUS` and the person may open the
- * show without it: `setLeftoverJournalAside` moves the journal into the backups folder (never
- * deletes it), and the file opens as it was last fully saved.
+ * can't be used, the open is refused with `LEFTOVER_JOURNAL_STATUS` and the person may recover
+ * the show from copies (`electron/main/leftoverJournalRecovery.ts`).
  *
- * Runs in the main process only; no translated text here.
+ * `setDbPath` uses the detection here, so the web build's worker loads this module too (its
+ * `fs` shim has no files to find). No translated text here.
  */
 import * as fs from "fs";
 import * as path from "path";
@@ -90,20 +90,9 @@ export function isFolderAccessError(error: unknown): boolean {
 }
 
 /** `backup_<time>_<name>` in `backupDir`, the naming `backupBeforeMigrations` uses. */
-function backupNameFor(dbPath: string, now: Date): string {
+export function backupNameFor(dbPath: string, now: Date): string {
     const timestamp = now.toISOString().replace(/[:.]/g, "-");
     return `backup_${timestamp}_${path.basename(dbPath)}`;
-}
-
-/** Moves `from` to `to`, copying when they're on different drives. */
-function moveFile(from: string, to: string) {
-    try {
-        fs.renameSync(from, to);
-    } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error;
-        fs.copyFileSync(from, to);
-        fs.unlinkSync(from);
-    }
 }
 
 export interface JournalBackup {
@@ -132,26 +121,8 @@ export function backupBeforeJournalRecovery(
     try {
         fs.copyFileSync(journalPathFor(dbPath), journalCopy);
     } catch {
-        // Unreadable: SQLite can't use it either, and the open will offer to set it aside.
+        // Unreadable: SQLite can't use it either, and the open offers to recover without it.
         journalCopy = null;
     }
     return { showCopy, journalCopy };
-}
-
-/**
- * Moves `dbPath`'s journal into `backupDir`, so the file opens as it was last fully saved.
- * Never deletes it. Returns where it went. Throws when it can't be moved (the folder may not
- * be writable); the file is unchanged then.
- */
-export function setLeftoverJournalAside(
-    dbPath: string,
-    backupDir: string,
-    now = new Date(),
-): string {
-    fs.mkdirSync(backupDir, { recursive: true });
-    const destination = journalPathFor(
-        path.join(backupDir, `${backupNameFor(dbPath, now)}-set-aside`),
-    );
-    moveFile(journalPathFor(dbPath), destination);
-    return destination;
 }

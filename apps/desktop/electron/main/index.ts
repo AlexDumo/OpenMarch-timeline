@@ -59,8 +59,11 @@ import {
     backupBeforeJournalRecovery,
     journalPathFor,
     LEFTOVER_JOURNAL_STATUS,
-    setLeftoverJournalAside,
 } from "../database/leftoverJournal";
+import {
+    recoverFromLeftoverJournal,
+    SET_ASIDE_JOURNAL_SUFFIX,
+} from "./leftoverJournalRecovery";
 import {
     NEEDS_CONVERSION_STATUS,
     OPEN_STOPPED_STATUS,
@@ -416,8 +419,8 @@ let refusalAfterReload: number | null = null;
 
 /**
  * The file whose last open was refused for a leftover journal SQLite can't use
- * (`LEFTOVER_JOURNAL_STATUS`). The renderer offers to open it without the journal
- * (`load-file:openWithoutJournal`); any other open forgets it.
+ * (`LEFTOVER_JOURNAL_STATUS`). The renderer offers to recover it
+ * (`load-file:recoverFromJournal`); any other open forgets it.
  */
 let leftoverJournalFile: string | null = null;
 
@@ -428,26 +431,42 @@ function initLeftoverJournalIpcHandlers() {
             ? basename(journalPathFor(leftoverJournalFile))
             : null,
     );
-    ipcMain.handle("load-file:openWithoutJournal", async () =>
-        openWithoutLeftoverJournal(),
+    ipcMain.handle("load-file:recoverFromJournal", async () =>
+        recoverAndOpenLeftoverJournalFile(),
     );
 }
 
-/** Moves the refused file's journal into the backups, then opens the file. */
-async function openWithoutLeftoverJournal(): Promise<number> {
+/**
+ * Recovers the refused file from its leftover journal on copies (`leftoverJournalRecovery.ts`),
+ * then opens it. Explains in a dialog when it can't.
+ */
+async function recoverAndOpenLeftoverJournalFile(): Promise<number> {
     const filePath = leftoverJournalFile;
     leftoverJournalFile = null;
     if (!filePath) return -1;
+    const name = basename(journalPathFor(filePath));
     try {
-        const movedTo = setLeftoverJournalAside(filePath, backupDir());
-        console.log(`Moved the leftover journal of ${filePath} to ${movedTo}`);
+        // Nothing may open the file while its journal moves and the recovered show replaces it.
+        const result = await withOpenLock(async () =>
+            recoverFromLeftoverJournal(filePath, backupDir()),
+        );
+        if (result.outcome === "damaged") {
+            dialog.showErrorBox(
+                t("fileDialog.leftoverJournal.damagedTitle"),
+                t("fileDialog.leftoverJournal.damagedMessage", { name }),
+            );
+            return -1;
+        }
+        if (result.outcome === "recovered")
+            console.log(
+                `Recovered ${filePath} (${result.from}); its journal is now ${result.journalKeptAt}`,
+            );
     } catch (error) {
-        console.error("Couldn't move the leftover journal:", error);
+        console.error("Couldn't recover from the leftover journal:", error);
+        captureException(error);
         dialog.showErrorBox(
             t("fileDialog.leftoverJournal.moveFailedTitle"),
-            t("fileDialog.leftoverJournal.moveFailedMessage", {
-                name: basename(journalPathFor(filePath)),
-            }),
+            t("fileDialog.leftoverJournal.moveFailedMessage", { name }),
         );
         return -1;
     }
@@ -1662,7 +1681,6 @@ export async function insertAudioFile(): Promise<DatabaseServices.AudioInsertRes
 const migrationsFolderPath = () =>
     join(app.getAppPath(), "electron", "database", "migrations");
 
-/** Backs a file up to userData/backups before migrations, and prunes backups older than 30 days. */
 /** The folder the app keeps backups of show files in. */
 const backupDir = () => join(app.getPath("userData"), "backups");
 
@@ -1687,6 +1705,7 @@ function backupLeftoverJournal(path: string) {
     }
 }
 
+/** Backs a file up to userData/backups before migrations, and prunes backups older than 30 days. */
 function backupBeforeMigrations(path: string) {
     const backupDir = join(app.getPath("userData"), "backups");
     if (!fs.existsSync(backupDir)) {
@@ -1704,6 +1723,9 @@ function backupBeforeMigrations(path: string) {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     files.forEach((file) => {
+        // A journal set aside keeps its original date when moved, so age says nothing; the
+        // recovery dialog promised it isn't deleted.
+        if (file.endsWith(SET_ASIDE_JOURNAL_SUFFIX)) return;
         const filePath = join(backupDir, file);
         const stats = fs.statSync(filePath);
         if (stats.birthtime < thirtyDaysAgo) {

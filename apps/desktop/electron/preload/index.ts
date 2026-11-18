@@ -332,11 +332,12 @@ const APP_API = {
             string | null
         >,
     /**
-     * Moves that leftover journal into the backups (never deletes it) and opens the show as it
-     * was last fully saved. Resolves the open's status; the main process explains failures.
+     * Recovers the show from that leftover journal on copies, moves the journal into the
+     * backups (never deletes it) and opens the show. Resolves the open's status; the main
+     * process explains failures.
      */
-    openWithoutLeftoverJournal: () =>
-        ipcRenderer.invoke("load-file:openWithoutJournal") as Promise<number>,
+    recoverLeftoverJournal: () =>
+        ipcRenderer.invoke("load-file:recoverFromJournal") as Promise<number>,
 
     // Converting a page-era show to timelines when it opens (ADR 0012 §6)
     /** The page-era file waiting for the person to agree to convert it, or null. */
