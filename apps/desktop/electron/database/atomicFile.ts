@@ -185,6 +185,43 @@ export type PublishOptions = RenameRetryOptions & {
 };
 
 /**
+ * Copies `source` to the new file `to` and flushes it, through the one handle that created it.
+ * A sync app opens a new file as soon as it appears, often without delete sharing on Windows;
+ * opening the file again to flush it would then fail with EBUSY, so it is never reopened.
+ */
+async function writeDurableCopy(source: string, to: string): Promise<void> {
+    const out = await fs.promises.open(to, "wx");
+    try {
+        const input = await fs.promises.open(source, "r");
+        try {
+            const buffer = Buffer.allocUnsafe(1024 * 1024);
+            for (;;) {
+                const { bytesRead } = await input.read(
+                    buffer,
+                    0,
+                    buffer.length,
+                );
+                if (bytesRead === 0) break;
+                let written = 0;
+                while (written < bytesRead) {
+                    const { bytesWritten } = await out.write(
+                        buffer,
+                        written,
+                        bytesRead - written,
+                    );
+                    written += bytesWritten;
+                }
+            }
+        } finally {
+            await input.close();
+        }
+        await out.sync();
+    } finally {
+        await out.close();
+    }
+}
+
+/**
  * Puts a copy of the finished file `source` at `target`, all at once.
  *
  * `source` is built somewhere private (the app's user data); only the finished bytes go beside
@@ -198,12 +235,7 @@ export async function publishFile(
 ): Promise<{ attempts: number; tempPath: string }> {
     const tempPath = tempPathBeside(target);
     try {
-        await fs.promises.copyFile(
-            source,
-            tempPath,
-            fs.constants.COPYFILE_EXCL,
-        );
-        await fsyncFile(tempPath);
+        await writeDurableCopy(source, tempPath);
         await options.beforeRename?.(tempPath);
         const result = await renameWithRetry(tempPath, target, options);
         await fsyncDirectory(dirname(target), options.platform);
