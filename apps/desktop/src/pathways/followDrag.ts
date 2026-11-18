@@ -132,6 +132,11 @@ export interface FollowDrag {
      */
     readonly hover?: number | null;
     /**
+     * The end under the pointer while the ends wait to be grabbed (owner, 2026-11-17): the order
+     * a drag from it would use is previewed (`followOrderPreview`). Absent or null elsewhere.
+     */
+    readonly hoverEnd?: number | null;
+    /**
      * Go round (step 10, DO-1): the line stands on a closed outline, so it can follow its leader
      * round it. Absent or null when it doesn't.
      */
@@ -557,12 +562,33 @@ export function cancelFollowDrawing(): boolean {
 }
 
 /** The middle marcher under the pointer before an end is grabbed (step 4d), or null */
-export function setFollowHover(id: number | null): void {
+export function setFollowHover(
+    id: number | null,
+    end: number | null = null,
+): void {
     updateFollow((s, f) =>
-        (f.hover ?? null) === id || (f.grabbed !== null && id !== null)
+        ((f.hover ?? null) === id && (f.hoverEnd ?? null) === end) ||
+        (f.grabbed !== null && (id !== null || end !== null))
             ? s
-            : { ...s, follow: { ...f, hover: id } },
+            : { ...s, follow: { ...f, hover: id, hoverEnd: end } },
     );
+}
+
+/**
+ * The order a drag from the hovered end would use (owner, 2026-11-17), leader first: the line
+ * `trailLine` gives with that end grabbed, the same one the drag and the write use, so the
+ * preview can't disagree with the drag (a box's snake from that corner with Rows or Columns, a
+ * hand-set order from either end). Null with nothing hovered, once an end is grabbed, or going
+ * round.
+ */
+export function followOrderPreview(
+    follow: FollowDrag,
+): readonly number[] | null {
+    const end = follow.hoverEnd ?? null;
+    if (end === null || follow.grabbed !== null || goingRound(follow))
+        return null;
+    if (!followEnds(follow).includes(end)) return null;
+    return trailLine({ ...follow, grabbed: end }).reverse();
 }
 
 /** The path bar's Spacing (DL-7): Keep spacing, or Even N steps */

@@ -885,15 +885,21 @@ export const controlsStyle = (
  * a loop apart, so they read as a steady pull, evenly spaced. SVG's own animation runs it: no React render or field
  * frame per step. With the system's reduced motion on, they stand still, fading outward.
  */
+/** How far an end's pull arrows fade while another end's order is previewed */
+const PULL_ARROW_DIM = 0.4;
+
 const PullArrows = memo(function PullArrows({
     at,
     dir,
     unit,
+    dim,
 }: {
     at: { x: number; y: number };
     dir: { x: number; y: number };
     /** A dot's radius in field units */
     unit: number;
+    /** Another end's order is previewed: this end's arrows fade back */
+    dim?: boolean;
 }) {
     const still = prefersReducedMotion();
     const angle = (Math.atan2(dir.y, dir.x) * 180) / Math.PI;
@@ -902,7 +908,10 @@ const PullArrows = memo(function PullArrows({
     return (
         <g
             transform={`translate(${at.x} ${at.y}) rotate(${angle})`}
+            opacity={dim ? PULL_ARROW_DIM : 1}
+            style={still ? undefined : { transition: "opacity 120ms" }}
             data-testid="followPullArrows"
+            data-dim={dim || undefined}
             data-still={still || undefined}
             pointerEvents="none"
         >
@@ -1221,6 +1230,7 @@ const ShapeBody = memo(function ShapeBody({
                     at={arrow.at}
                     dir={arrow.dir}
                     unit={DOT_RADIUS * scale}
+                    dim={arrow.dim}
                 />
             ))}
             {drawing.walks.map(({ from: a, to: b }, i) => {

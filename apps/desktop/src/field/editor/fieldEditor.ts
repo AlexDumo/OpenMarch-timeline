@@ -465,7 +465,12 @@ export type FieldModeDrawing = {
      * out along `dir` (a unit vector, the line's own way at that end) that slide outward and fade
      * on a loop, until an end is grabbed
      */
-    pullArrows?: readonly { at: FieldPoint; dir: FieldPoint }[];
+    pullArrows?: readonly {
+        at: FieldPoint;
+        dir: FieldPoint;
+        /** Faded: another end is hovered, its order previewed (owner, 2026-11-17) */
+        dim?: boolean;
+    }[];
     /**
      * Spots the shape leaves empty on purpose, drawn as dashed rings: an odd-count outline's gap
      * (#390), which a click on another spot between corners moves

@@ -34,8 +34,18 @@ export interface OrderSweep {
     readonly before: readonly number[] | null;
     /** Picked so far, leader first */
     readonly picked: readonly number[];
-    /** The pointer while a drag is held: the line grows behind it */
+    /** The pointer while a drag is held, or while it follows with the button up: the line grows behind it */
     readonly pointer: XY | null;
+    /**
+     * Clicked, then moved (owner, 2026-11-17): the sweep follows the pointer with the button up,
+     * picking whoever it passes, until a click or Enter keeps the order. False until a click.
+     */
+    readonly following: boolean;
+    /**
+     * Taken back by Backspace, newest last: not picked again until the pointer has left them, so
+     * the one under a still pointer doesn't come straight back
+     */
+    readonly takenBack: readonly number[];
 }
 
 /** Whose forms are read: every marcher's (`all`, for Always), or these marchers' */
@@ -199,19 +209,47 @@ export function withOwnOrder(
 }
 
 /** Opens Set order on `ids` (two or more), standing at `at` at `beat` */
-export function openOrderSweep(sweep: Omit<OrderSweep, "picked" | "pointer">) {
+export function openOrderSweep(
+    sweep: Omit<OrderSweep, "picked" | "pointer" | "following" | "takenBack">,
+) {
     useMarcherOrderStore.setState({
-        sweep: { ...sweep, picked: [], pointer: null },
+        sweep: {
+            ...sweep,
+            picked: [],
+            pointer: null,
+            following: false,
+            takenBack: [],
+        },
     });
 }
 
 /** Picks and the pointer, as the sweep goes */
 export function updateOrderSweep(
-    change: Partial<Pick<OrderSweep, "picked" | "pointer">>,
+    change: Partial<
+        Pick<OrderSweep, "picked" | "pointer" | "following" | "takenBack">
+    >,
 ) {
     const { sweep } = useMarcherOrderStore.getState();
     if (!sweep) return;
     useMarcherOrderStore.setState({ sweep: { ...sweep, ...change } });
+}
+
+/**
+ * Backspace while Set order is on (owner, 2026-11-17): the marcher picked last is taken back, and
+ * can be swept again once the pointer has left it. False when nobody is picked.
+ */
+export function takeBackLastPick(): boolean {
+    const { sweep } = useMarcherOrderStore.getState();
+    const last = sweep?.picked.at(-1);
+    if (!sweep || last === undefined) return false;
+    useMarcherOrderStore.setState({
+        sweep: {
+            ...sweep,
+            picked: sweep.picked.slice(0, -1),
+            takenBack: [...sweep.takenBack.filter((id) => id !== last), last],
+        },
+    });
+    return true;
 }
 
 /** Leaves Set order with nothing kept (Escape, Cancel). True when it was on */
