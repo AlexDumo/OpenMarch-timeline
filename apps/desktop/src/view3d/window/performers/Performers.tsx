@@ -744,6 +744,11 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             ) ?? -1;
         const hiddenChanged = hidden !== frame.hidden;
         frame.hidden = hidden;
+        // and with their body shown, their head isn't, near their eyes
+        const headless = indexById.get(
+            useFollowStore.getState().headlessMarcherId ?? Number.NaN,
+        );
+        marcherBodies?.setHeadless(headless ?? null);
         /** Runs `draw` with the hidden performer unplaced, then puts them back. */
         const withoutHidden = (draw: () => void) => {
             const wasPlaced = hidden >= 0 ? meshes.placed[hidden] : 0;

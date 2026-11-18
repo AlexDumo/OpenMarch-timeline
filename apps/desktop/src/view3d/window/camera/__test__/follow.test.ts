@@ -229,7 +229,11 @@ describe("FollowController", () => {
         const camera = new PerspectiveCamera(SEAT_FOV_DEG, 16 / 9, 0.3, 2000);
         const rig = new RigController(camera);
         rig.jumpTo([0, 40, 80], [0, 0, 0]);
-        const state = { performer: start, hidden: null as number | null };
+        const state = {
+            performer: start,
+            hidden: null as number | null,
+            headless: null as number | null,
+        };
         const follow = new FollowController(rig, camera, {
             poseInto: (_id, out) => {
                 if (!state.performer) return false;
@@ -238,6 +242,9 @@ describe("FollowController", () => {
             },
             setHidden: (id) => {
                 state.hidden = id;
+            },
+            setHeadless: (id) => {
+                state.headless = id;
             },
             instant: () => false,
             turnWithPerformer: () => prefs.turn,
@@ -456,6 +463,44 @@ describe("FollowController", () => {
         rig.jumpTo([0, 1.2, 10], [0, 1, 0]);
         rig.shift(0, -1, 0);
         expect(camera.position.y).toBeGreaterThanOrEqual(MIN_EYE_Y - 1e-6);
+    });
+
+    it("leaves out their head near the eyes when their body shows, and brings it back once clear", () => {
+        const { follow, state, run } = setup(pose(), {
+            turn: false,
+            body: true,
+        });
+        follow.change({ marcherId: 4, mode: "pov" }, 0);
+        run(0, 16);
+        // still far off: the head shows as the camera flies in
+        expect(state.headless).toBeNull();
+        run(32, FLY_MS + 32);
+        expect(state.headless).toBe(4);
+        follow.change({ marcherId: 4, mode: "third" }, 2000);
+        run(2000, 2016);
+        expect(state.headless).toBe(4);
+        run(2032, 2000 + FLY_MS + 32);
+        expect(state.headless).toBeNull();
+    });
+
+    it("leaves the head alone when the whole body is left out", () => {
+        const { follow, state, run } = setup();
+        follow.change({ marcherId: 4, mode: "pov" }, 0);
+        run(0, FLY_MS + 32);
+        expect(state.hidden).toBe(4);
+        expect(state.headless).toBeNull();
+    });
+
+    it("brings the head back when something else takes the camera", () => {
+        const { follow, state, run } = setup(pose(), {
+            turn: false,
+            body: true,
+        });
+        follow.change({ marcherId: 4, mode: "pov" }, 0);
+        run(0, FLY_MS + 32);
+        expect(state.headless).toBe(4);
+        follow.release();
+        expect(state.headless).toBeNull();
     });
 
     it("refuses a performer who isn't drawn", () => {

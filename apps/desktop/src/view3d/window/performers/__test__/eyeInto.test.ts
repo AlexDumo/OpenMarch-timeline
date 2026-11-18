@@ -14,6 +14,7 @@ import {
     EYE_AT_REST,
     MarcherBodies,
     bakeForBodies,
+    headBase,
 } from "../marchers/marcherBodies";
 import { STAND_Y } from "../performerData";
 
@@ -78,5 +79,39 @@ describe("MarcherBodies.eyeInto", () => {
         expect(eye[2]).toBeCloseTo(4, 1);
         expect(eye[1]).toBeCloseTo(STAND_Y + 1.5 + EYE_AT_REST[1], 1);
         bodies.dispose();
+    });
+});
+
+describe("MarcherBodies.setHeadless", () => {
+    it("folds one slot's head to its base, below the eyes", async () => {
+        const bodies = await band();
+        const uniforms: Record<string, THREE.IUniform> = {};
+        bodies.composer.bindUniforms(uniforms);
+        expect(uniforms.uHeadlessSlot.value).toBe(-1);
+        bodies.setHeadless(1);
+        expect(uniforms.uHeadlessSlot.value).toBe(1);
+        expect(uniforms.uHeadlessBone.value).toBe(
+            bodies.bake.boneNames.indexOf("DEF-spine006"),
+        );
+        const at = uniforms.uHeadlessAt.value as THREE.Vector3;
+        // the head bone's origin: at the top of the neck, under the eyes
+        expect(at.y).toBeGreaterThan(1.4);
+        expect(at.y).toBeLessThan(EYE_AT_REST[1]);
+        expect(Math.abs(at.x)).toBeLessThan(0.02);
+        bodies.setHeadless(null);
+        expect(uniforms.uHeadlessSlot.value).toBe(-1);
+        bodies.dispose();
+    });
+
+    it("finds the head's base on the skeleton", async () => {
+        const gltf = await parse("bodies/neutral-average.glb");
+        let mesh: THREE.SkinnedMesh | null = null;
+        gltf.scene.traverse((o) => {
+            if ((o as THREE.SkinnedMesh).isSkinnedMesh)
+                mesh = o as THREE.SkinnedMesh;
+        });
+        const at = headBase((mesh as unknown as THREE.SkinnedMesh).skeleton);
+        expect(at).not.toBeNull();
+        expect(headBase(new THREE.Skeleton([new THREE.Bone()]))).toBeNull();
     });
 });

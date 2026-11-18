@@ -28,6 +28,8 @@
  *
  * `hiddenMarcherId` (rig only) is the performer whose body the scene leaves
  * out, so the point of view doesn't look out through their head.
+ * `headlessMarcherId` (rig only) is the performer drawn without their head,
+ * hat and plume, while the camera is in their eyes with their body shown.
  */
 import { create } from "zustand";
 
@@ -76,6 +78,9 @@ export interface FollowState {
     hiddenMarcherId: number | null;
     /** Rig only. */
     _setHidden: (marcherId: number | null) => void;
+    headlessMarcherId: number | null;
+    /** Rig only. */
+    _setHeadless: (marcherId: number | null) => void;
 }
 
 export const useFollowStore = create<FollowState>()((set, get) => ({
@@ -118,6 +123,11 @@ export const useFollowStore = create<FollowState>()((set, get) => ({
     _setHidden: (marcherId) => {
         if (get().hiddenMarcherId !== marcherId)
             set({ hiddenMarcherId: marcherId });
+    },
+    headlessMarcherId: null,
+    _setHeadless: (marcherId) => {
+        if (get().headlessMarcherId !== marcherId)
+            set({ headlessMarcherId: marcherId });
     },
 }));
 

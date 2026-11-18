@@ -180,6 +180,7 @@ export default function CameraRig() {
             new FollowController(rig, camera, {
                 poseInto: performerPoseInto,
                 setHidden: (id) => useFollowStore.getState()._setHidden(id),
+                setHeadless: (id) => useFollowStore.getState()._setHeadless(id),
                 instant: prefersReducedMotion,
                 turnWithPerformer: () =>
                     useFollowStore.getState().turnWithPerformer,
@@ -813,6 +814,7 @@ export default function CameraRig() {
             followStore.setPicking(false);
             followStore.stop();
             followStore._setHidden(null);
+            followStore._setHeadless(null);
         },
         [],
     );

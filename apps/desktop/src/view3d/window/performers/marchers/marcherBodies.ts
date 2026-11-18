@@ -84,6 +84,23 @@ const HEAD_BONE = "DEF-spine006";
  */
 export const EYE_AT_REST: readonly [number, number, number] = [0, 1.678, 0.06];
 
+/**
+ * The head's base at bind, metres: the head bone's origin in `skeleton`, or
+ * null when it has no head bone. A head drawn without itself folds to here.
+ */
+export function headBase(
+    skeleton: THREE.Skeleton,
+): [number, number, number] | null {
+    const i = skeleton.bones.findIndex(
+        (b) => b.name.replace(/\./g, "") === HEAD_BONE,
+    );
+    if (i < 0) return null;
+    const at = new THREE.Vector3().setFromMatrixPosition(
+        skeleton.boneInverses[i].clone().invert(),
+    );
+    return [at.x, at.y, at.z];
+}
+
 export const CONTACT_RADIUS = 0.38;
 export const CONTACT_OPACITY = 0.35;
 const CONTACT_Y = FIELD_SURFACE_Y + 0.005;
@@ -349,6 +366,8 @@ export class MarcherBodies {
         return this.bake.boneNames.indexOf(HEAD_BONE);
     }
     private eyeScratch: Float32Array | null = null;
+    /** The head's base at bind (`headBase`), for `setHeadless`. */
+    private readonly headAt: [number, number, number] | null;
 
     constructor(
         bodies: ReadonlyMap<BodyType, LoadedBody>,
@@ -357,6 +376,8 @@ export class MarcherBodies {
         quality: MarcherQuality,
     ) {
         this.bake = bake;
+        const anyBody = bodies.values().next().value!;
+        this.headAt = headBase(anyBody.mesh.skeleton);
         this.composer = new Composer(bake, looks.length);
         const firstRow = this.firstRow();
         for (let i = 0; i < looks.length; i++)
@@ -370,10 +391,8 @@ export class MarcherBodies {
         this.contact = createContactMesh(looks.length);
         this.group.add(this.contact);
 
-        if (quality === "low") {
-            const anyBody = bodies.values().next().value!;
+        if (quality === "low")
             this.blockSource = blockGeometry(THREE, anyBody.mesh.skeleton);
-        }
         // Group the slots by mesh: (body type, body look) at high, body look
         // at low. Looks that differ only in what they carry share a mesh.
         const groups = new Map<
@@ -542,6 +561,17 @@ export class MarcherBodies {
     /** Composes this frame's bones (after `setClip`, `setHorn` and `writeFrame`). */
     compose(gl: THREE.WebGLRenderer, force = false): void {
         this.composer.update(gl, this.count, force);
+    }
+
+    /**
+     * Draws slot `slot` without its head, hat and plume, for a camera
+     * looking out of their eyes; null draws every head. Their arms, body
+     * and instrument still draw.
+     */
+    setHeadless(slot: number | null): void {
+        const head = this.headBone;
+        if (head < 0 || !this.headAt) return;
+        this.composer.setHeadless(slot, head, this.headAt);
     }
 
     /**

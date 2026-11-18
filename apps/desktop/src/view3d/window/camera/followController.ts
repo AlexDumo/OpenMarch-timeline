@@ -11,8 +11,9 @@
  * - Point of view: the camera flies into their eyes, then looks where they
  *   face, turning with them, offset by where the viewer has looked (drag) and
  *   zoomed (field of view). With `showOwnBody` the eye sits inside their head
- *   and their arms and instrument show in front; without, their body is left
- *   out of the picture.
+ *   and their arms and instrument show in front, their head, hat and plume
+ *   left out while the camera is near their eyes; without, their whole body
+ *   is left out of the picture.
  * - Back out of the point of view: the camera flies out behind them and a
  *   left-out body comes back once it has.
  */
@@ -45,12 +46,19 @@ export const CHASE_TURN_HALF_LIFE_MS = 300;
 export const MAX_EASE_STEP_MS = 100;
 /** A turn this close to the performer's heading (radians) has finished. */
 const TURN_DONE = 1e-3;
+/**
+ * Within this many metres of a performer's eyes, the camera is inside their
+ * head or hat, so the head, hat and plume are left out of the picture.
+ */
+export const HEAD_CLEAR_M = 0.6;
 
 export interface FollowHooks {
     /** Where the performer stands now; false when they aren't drawn. */
     poseInto: (marcherId: number, out: PerformerPose) => boolean;
     /** Whose body to leave out of the picture, or null. */
     setHidden: (marcherId: number | null) => void;
+    /** Whose head, hat and plume to leave out of the picture, or null. */
+    setHeadless: (marcherId: number | null) => void;
     /** True when the viewer prefers reduced motion: jump instead of flying. */
     instant: () => boolean;
     /** Whether the third-person camera swings round as the performer turns. */
@@ -74,6 +82,17 @@ export class FollowController {
     private lastMs: number | null = null;
     /** Changes with every move, so a stale landing does nothing. */
     private generation = 0;
+    /** The performer whose eyes the camera is in, going to, or leaving; null for none. */
+    private headOf: number | null = null;
+    private readonly headPose: PerformerPose = {
+        x: 0,
+        y: 0,
+        z: 0,
+        heading: 0,
+        height: 0,
+        eye: [0, 0, 0],
+        hasEye: false,
+    };
     private readonly pose: PerformerPose = {
         x: 0,
         y: 0,
@@ -129,7 +148,9 @@ export class FollowController {
         this.following = null;
         this.anchor = null;
         this.inEyes = false;
+        this.headOf = null;
         this.hooks.setHidden(null);
+        this.hooks.setHeadless(null);
     }
 
     /**
@@ -141,6 +162,10 @@ export class FollowController {
         if (prev?.marcherId === next?.marcherId && prev?.mode === next?.mode)
             return true;
         const generation = ++this.generation;
+        // Into someone's eyes, their head goes as the camera gets there;
+        // out of them, it comes back once the camera is clear.
+        if (next?.mode === "pov") this.headOf = next.marcherId;
+        else if (prev?.mode !== "pov") this.headOf = null;
         const pose = this.pose;
         const found =
             next !== null && this.hooks.poseInto(next.marcherId, pose);
@@ -209,6 +234,32 @@ export class FollowController {
      * before the rig's own update, and again after the performers move.
      */
     apply(nowMs: number) {
+        this.follow(nowMs);
+        this.updateHead();
+    }
+
+    /** Leaves out the head the camera is in, while it is near enough to be inside it. */
+    private updateHead() {
+        const id = this.headOf;
+        if (id === null) {
+            this.hooks.setHeadless(null);
+            return;
+        }
+        const p = this.headPose;
+        let near = false;
+        if (this.hooks.showOwnBody() && this.hooks.poseInto(id, p)) {
+            const eye = povPose(p, { yaw: 0, pitch: 0 }, true).position;
+            const c = this.camera.position;
+            near =
+                Math.hypot(c.x - eye[0], c.y - eye[1], c.z - eye[2]) <
+                HEAD_CLEAR_M;
+        }
+        this.hooks.setHeadless(near ? id : null);
+        // Clear of the eyes it was leaving: done with this head.
+        if (!near && this.following?.mode !== "pov") this.headOf = null;
+    }
+
+    private follow(nowMs: number) {
         const following = this.following;
         if (!following) return;
         const pose = this.pose;
