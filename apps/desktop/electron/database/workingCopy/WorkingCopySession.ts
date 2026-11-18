@@ -757,6 +757,8 @@ export class WorkingCopySession {
                 return { ok: false, state: "readOnly", message };
             }
             await this.expectedHash;
+            // Temp files an earlier publish couldn't delete (a sync app held them) go first.
+            await removeStaleTempFiles(target);
 
             const worker = await this.ensureWorker();
             for (let attempt = 0; ; attempt++) {
