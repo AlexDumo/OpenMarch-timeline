@@ -3115,7 +3115,9 @@
             "brassFinish": "Kemasan brass",
             "tuba": "Tuba",
             "silkShape": "Bentuk kain bendera",
-            "silkArtwork": "Gambar kain bendera"
+            "silkArtwork": "Gambar kain bendera",
+            "followTurns": "Semasa mengikut: berpusing bersama pemain",
+            "povShowsBody": "Sudut pandangan: tunjuk lengan dan alat muziknya"
         },
         "keys": {
             "playPause": "Main atau jeda",

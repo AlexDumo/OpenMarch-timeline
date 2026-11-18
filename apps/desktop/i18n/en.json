@@ -3130,7 +3130,9 @@
             },
             "showNote": "Saved with this show. Undo in the editor reverts a change.",
             "computerNote": "Saved on this computer only. Not part of the show.",
-            "shortcuts": "Keyboard shortcuts"
+            "shortcuts": "Keyboard shortcuts",
+            "followTurns": "Following: turn with the performer",
+            "povShowsBody": "Point of view: show their arms and instrument"
         },
         "keys": {
             "playPause": "Play or pause",

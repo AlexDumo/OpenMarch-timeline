@@ -605,6 +605,8 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         [slots.ids],
     );
     const heightsRef = useRef<Float32Array | null>(null);
+    const bodiesRef = useRef(marcherBodies);
+    bodiesRef.current = marcherBodies;
     heightsRef.current = useMemo(() => {
         if (!marcherBodies || !marcherLooks) return null;
         return Float32Array.from(
@@ -642,6 +644,15 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 out.y = meshes.lift[i];
                 out.heading = headings[i];
                 out.height = heightsRef.current?.[i] ?? PERFORMER_HEIGHT;
+                out.hasEye =
+                    bodiesRef.current?.eyeInto(
+                        i,
+                        out.x,
+                        out.z,
+                        out.heading,
+                        out.y,
+                        out.eye,
+                    ) ?? false;
                 return true;
             },
         });

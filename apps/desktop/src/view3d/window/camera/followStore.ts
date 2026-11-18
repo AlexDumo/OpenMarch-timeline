@@ -18,6 +18,14 @@
  * picks a seat, chooses a camera, turns on the Director or changes venue, and
  * when the performer is gone from the show.
  *
+ * Two viewing choices, saved on this computer (like the paused pose):
+ *
+ * - `turnWithPerformer` (default on): the third-person camera swings round
+ *   behind the performer as they turn, as a game's camera does, keeping any
+ *   angle the viewer orbited to. Off, it keeps its compass direction.
+ * - `showOwnBody` (default on): the point of view draws the performer's own
+ *   arms and instrument in front of the eyes. Off, their body is left out.
+ *
  * `hiddenMarcherId` (rig only) is the performer whose body the scene leaves
  * out, so the point of view doesn't look out through their head.
  */
@@ -30,6 +38,27 @@ export interface Follow {
     mode: FollowMode;
 }
 
+export const TURN_WITH_PERFORMER_STORAGE_KEY = "view3d.followTurns";
+export const SHOW_OWN_BODY_STORAGE_KEY = "view3d.povShowsBody";
+
+/** A saved on/off choice, `fallback` when there is none or storage is unavailable. */
+export function loadFlag(key: string, fallback: boolean, storage?: Storage) {
+    try {
+        const value = (storage ?? window.localStorage).getItem(key);
+        return value === null ? fallback : value === "1";
+    } catch {
+        return fallback;
+    }
+}
+
+function saveFlag(key: string, on: boolean) {
+    try {
+        window.localStorage.setItem(key, on ? "1" : "0");
+    } catch {
+        // Private or blocked storage: the choice lasts for this session only.
+    }
+}
+
 export interface FollowState {
     picking: boolean;
     setPicking: (on: boolean) => void;
@@ -40,6 +69,10 @@ export interface FollowState {
     stop: () => void;
     /** Esc: the point of view backs out to the third-person view, which stops. True when it did something. */
     backOut: () => boolean;
+    turnWithPerformer: boolean;
+    setTurnWithPerformer: (on: boolean) => void;
+    showOwnBody: boolean;
+    setShowOwnBody: (on: boolean) => void;
     hiddenMarcherId: number | null;
     /** Rig only. */
     _setHidden: (marcherId: number | null) => void;
@@ -70,6 +103,16 @@ export const useFollowStore = create<FollowState>()((set, get) => ({
         if (follow.mode === "pov") get().setMode("third");
         else get().stop();
         return true;
+    },
+    turnWithPerformer: loadFlag(TURN_WITH_PERFORMER_STORAGE_KEY, true),
+    setTurnWithPerformer: (on) => {
+        saveFlag(TURN_WITH_PERFORMER_STORAGE_KEY, on);
+        set({ turnWithPerformer: on });
+    },
+    showOwnBody: loadFlag(SHOW_OWN_BODY_STORAGE_KEY, true),
+    setShowOwnBody: (on) => {
+        saveFlag(SHOW_OWN_BODY_STORAGE_KEY, on);
+        set({ showOwnBody: on });
     },
     hiddenMarcherId: null,
     _setHidden: (marcherId) => {

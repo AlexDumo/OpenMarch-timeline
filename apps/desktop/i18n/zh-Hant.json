@@ -3115,7 +3115,9 @@
             "brassFinish": "銅管表面處理",
             "tuba": "低音號",
             "silkShape": "旗面形狀",
-            "silkArtwork": "旗面圖案"
+            "silkArtwork": "旗面圖案",
+            "followTurns": "跟隨時：隨隊員轉向",
+            "povShowsBody": "第一人稱視角：顯示其手臂和樂器"
         },
         "keys": {
             "playPause": "播放或暫停",

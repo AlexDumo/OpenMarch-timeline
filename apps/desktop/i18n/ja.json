@@ -3115,7 +3115,9 @@
             "brassFinish": "金管の仕上げ",
             "tuba": "チューバ",
             "silkShape": "フラッグのシルクの形",
-            "silkArtwork": "フラッグのシルクの絵柄"
+            "silkArtwork": "フラッグのシルクの絵柄",
+            "followTurns": "追跡中：メンバーと一緒に向きを変える",
+            "povShowsBody": "一人称視点：腕と楽器を表示"
         },
         "keys": {
             "playPause": "再生/一時停止",

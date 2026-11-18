@@ -8,6 +8,7 @@ import {
     clampPitch,
     easeAngle,
     EYE_FORWARD,
+    EYE_IN_HEAD,
     EYE_SHARE,
     followTarget,
     pickPerformerIndex,
@@ -29,6 +30,8 @@ const pose = (over: Partial<PerformerPose> = {}): PerformerPose => ({
     z: 0,
     heading: 0,
     height: 1.8,
+    eye: [0, 0, 0],
+    hasEye: false,
     ...over,
 });
 
@@ -137,6 +140,26 @@ describe("third person and point of view", () => {
         close(dir.toArray(), [1, 0, 0]);
     });
 
+    it("sits in the animated eyes when the pose knows them", () => {
+        const p = pose({
+            x: 5,
+            z: 2,
+            eye: [5.1, 1.7, 2.3],
+            hasEye: true,
+        });
+        close(povPose(p, { yaw: 0, pitch: 0 }, true).position, [5.1, 1.7, 2.3]);
+        // left out, the view clears the face, ahead of the eyes
+        expect(povPose(p, { yaw: 0, pitch: 0 }).position[2]).toBeGreaterThan(
+            2.3,
+        );
+        // without the eyes, a guess from the height
+        close(povPose(pose(), { yaw: 0, pitch: 0 }, true).position, [
+            0,
+            1.8 * EYE_SHARE,
+            EYE_IN_HEAD,
+        ]);
+    });
+
     it("turns the look by the viewer's yaw and pitch, never past straight up", () => {
         const view = povPose(pose(), { yaw: Math.PI / 2, pitch: Math.PI / 4 });
         const dir = new Vector3(...view.target)
@@ -199,7 +222,10 @@ describe("useFollowStore", () => {
 });
 
 describe("FollowController", () => {
-    const setup = (start: PerformerPose | null = pose()) => {
+    const setup = (
+        start: PerformerPose | null = pose(),
+        prefs = { turn: false, body: false },
+    ) => {
         const camera = new PerspectiveCamera(SEAT_FOV_DEG, 16 / 9, 0.3, 2000);
         const rig = new RigController(camera);
         rig.jumpTo([0, 40, 80], [0, 0, 0]);
@@ -214,6 +240,8 @@ describe("FollowController", () => {
                 state.hidden = id;
             },
             instant: () => false,
+            turnWithPerformer: () => prefs.turn,
+            showOwnBody: () => prefs.body,
         });
         /** Runs frames as the rig does: follow, then the rig's update. */
         const run = (fromMs: number, toMs: number) => {
@@ -324,6 +352,54 @@ describe("FollowController", () => {
         expect(follow.change(null, 2000)).toBe(true);
         run(2000, 2100);
         close(camera.position.toArray(), at);
+    });
+
+    it("swings round behind a performer who turns, keeping the viewer's orbit", () => {
+        const { camera, rig, follow, state, run } = setup(pose(), {
+            turn: true,
+            body: false,
+        });
+        follow.change({ marcherId: 1, mode: "third" }, 0);
+        run(0, FLY_MS + 32);
+        // the viewer orbits a little to one side
+        rig.orbit(-40, 0);
+        const side = rig.spherical.theta;
+        // the performer turns to face +x: the camera ends up behind them (-x)
+        state.performer = pose({ heading: Math.PI / 2 });
+        run(FLY_MS + 48, FLY_MS + 48 + 3000);
+        expect(rig.spherical.theta).toBeCloseTo(side + Math.PI / 2, 2);
+        rig.orbit(40, 0);
+        rig.sync();
+        expect(camera.position.x).toBeLessThan(-1);
+        expect(camera.position.z).toBeCloseTo(0, 1);
+    });
+
+    it("keeps its compass direction when turning with the performer is off", () => {
+        const { rig, follow, state, run } = setup();
+        follow.change({ marcherId: 1, mode: "third" }, 0);
+        run(0, FLY_MS + 32);
+        const theta = rig.spherical.theta;
+        state.performer = pose({ heading: Math.PI / 2 });
+        run(FLY_MS + 48, FLY_MS + 48 + 3000);
+        expect(rig.spherical.theta).toBeCloseTo(theta);
+    });
+
+    it("shows their own arms and instrument from inside the head when asked", () => {
+        const { camera, follow, state, run } = setup(pose(), {
+            turn: false,
+            body: true,
+        });
+        follow.change({ marcherId: 4, mode: "pov" }, 0);
+        expect(state.hidden).toBeNull();
+        run(0, FLY_MS + 32);
+        close(
+            camera.position.toArray(),
+            povPose(pose(), { yaw: 0, pitch: POV_DEFAULT_PITCH }, true)
+                .position,
+            4,
+        );
+        // near enough to draw a horn held at the face
+        expect(camera.near).toBeLessThanOrEqual(0.06);
     });
 
     it("refuses a performer who isn't drawn", () => {

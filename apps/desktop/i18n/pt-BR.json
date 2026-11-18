@@ -3115,7 +3115,9 @@
             "brassFinish": "Acabamento dos metais",
             "tuba": "Tubas",
             "silkShape": "Formato da bandeira",
-            "silkArtwork": "Arte da bandeira"
+            "silkArtwork": "Arte da bandeira",
+            "followTurns": "Seguindo: girar junto com o integrante",
+            "povShowsBody": "Ponto de vista: mostrar os braços e o instrumento"
         },
         "keys": {
             "playPause": "Reproduzir ou pausar",

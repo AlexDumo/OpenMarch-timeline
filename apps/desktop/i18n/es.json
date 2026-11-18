@@ -3115,7 +3115,9 @@
             "brassFinish": "Acabado de los metales",
             "tuba": "Tubas",
             "silkShape": "Forma de la seda",
-            "silkArtwork": "Diseño de la seda"
+            "silkArtwork": "Diseño de la seda",
+            "followTurns": "Al seguir: girar con el integrante",
+            "povShowsBody": "Punto de vista: mostrar sus brazos y su instrumento"
         },
         "keys": {
             "playPause": "Reproducir o pausar",

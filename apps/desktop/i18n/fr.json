@@ -3115,7 +3115,9 @@
             "brassFinish": "Finition des cuivres",
             "tuba": "Tubas",
             "silkShape": "Forme de la voile du drapeau",
-            "silkArtwork": "Motif de la voile du drapeau"
+            "silkArtwork": "Motif de la voile du drapeau",
+            "followTurns": "En suivi : tourner avec le marcheur",
+            "povShowsBody": "Point de vue : afficher ses bras et son instrument"
         },
         "keys": {
             "playPause": "Lecture ou pause",

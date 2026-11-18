@@ -25,7 +25,9 @@
  * - in pick-a-performer mode (`followStore.ts`, key P), follows the clicked
  *   performer: from behind (third person), or out of their eyes (point of
  *   view, key V) where drag looks around and scroll zooms
- *   (`followController.ts`). Panning, a double-click, a seat, a camera, the
+ *   (`followController.ts`); the third-person camera swings round as they
+ *   turn, and the point of view shows their arms and instrument, unless the
+ *   viewer turned those off. Panning, a double-click, a seat, a camera, the
  *   Director or a new venue ends it;
  * - while the Director is on (`cinema/directorStore.ts`, key D), puts the
  *   camera where its shot track says for the show time, on every drawn frame.
@@ -75,6 +77,7 @@ import {
 import { useCinemaContext } from "../cinema/subjectPoints";
 import { FOLLOW_KEY, POV_KEY, useFollowStore } from "./followStore";
 import { FollowController } from "./followController";
+import { installFollowTestApi } from "./followTestApi";
 import {
     onPerformersMoved,
     performerPoseInto,
@@ -178,6 +181,9 @@ export default function CameraRig() {
                 poseInto: performerPoseInto,
                 setHidden: (id) => useFollowStore.getState()._setHidden(id),
                 instant: prefersReducedMotion,
+                turnWithPerformer: () =>
+                    useFollowStore.getState().turnWithPerformer,
+                showOwnBody: () => useFollowStore.getState().showOwnBody,
             }),
         [rig, camera],
     );
@@ -321,6 +327,7 @@ export default function CameraRig() {
             }),
             // Keep up with the performer in the frame they moved.
             onPerformersMoved(() => follow.apply(performance.now())),
+            installFollowTestApi(),
         ];
         return () => unsubscribe.forEach((u) => u());
     }, [follow]);

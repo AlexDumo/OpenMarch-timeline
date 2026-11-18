@@ -3115,7 +3115,9 @@
             "brassFinish": "Finish ng brass",
             "tuba": "Mga tuba",
             "silkShape": "Hugis ng flag silk",
-            "silkArtwork": "Artwork ng flag silk"
+            "silkArtwork": "Artwork ng flag silk",
+            "followTurns": "Habang sumusunod: umikot kasama ng miyembro",
+            "povShowsBody": "Point of view: ipakita ang kanyang mga braso at instrumento"
         },
         "keys": {
             "playPause": "I-play o i-pause",

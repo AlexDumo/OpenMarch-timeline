@@ -19,6 +19,13 @@ export interface PerformerPose {
     heading: number;
     /** Top of the head above `y` (m). */
     height: number;
+    /**
+     * Where their eyes are as drawn, in world meters, when `hasEye`: the
+     * animated head, which leans and bobs away from the axis above `x`, `z`.
+     * Without it the eyes are guessed from `height`.
+     */
+    eye: [number, number, number];
+    hasEye: boolean;
 }
 
 /** A click picks the performer nearest the ray, up to this angle off it (radians). */
@@ -113,8 +120,19 @@ export function thirdPersonPose(pose: PerformerPose): {
 
 /** Eyes sit this share of the way up to the top of the head. */
 export const EYE_SHARE = 0.93;
-/** The point of view sits this far in front of the eyes (m), clear of the face and hat brim. */
+/**
+ * With the performer's body left out, the point of view sits this far in
+ * front of their axis (m), clear of where the face and hat brim would be.
+ */
 export const EYE_FORWARD = 0.15;
+/**
+ * With the body drawn but no animated eye known, it sits this far forward
+ * (m): about at the eyes, inside the head, whose faces point outward and so
+ * aren't drawn from inside. The arms and instrument are in front.
+ */
+export const EYE_IN_HEAD = 0.06;
+/** With the animated eye known and the body left out, the view sits this far in front of it (m). */
+export const EYE_CLEAR = 0.06;
 /** Vertical field of view for the point of view (degrees): about what a person takes in. */
 export const POV_FOV_DEG = 60;
 /** How far the point of view can zoom in and out (degrees of field of view). */
@@ -124,8 +142,12 @@ export const POV_FOV_MAX = 90;
 export const POV_MAX_PITCH = (80 * Math.PI) / 180;
 /** The point of view looks a little down, at the field ahead (radians). */
 export const POV_DEFAULT_PITCH = (-8 * Math.PI) / 180;
-/** The look-at point sits this far ahead of the eye (m). */
-const LOOK_DISTANCE = 10;
+/**
+ * The look-at point sits this far ahead of the eye (m). Short, so the rig's
+ * near plane (a share of the distance to the look-at point) comes in close
+ * enough to draw the performer's own instrument.
+ */
+export const LOOK_DISTANCE = 0.2;
 
 /** The point-of-view look direction's offset from the performer's heading. */
 export interface PovLook {
@@ -140,19 +162,34 @@ export function clampPitch(pitch: number): number {
     return Math.max(-POV_MAX_PITCH, Math.min(POV_MAX_PITCH, pitch));
 }
 
-/** Looking out of the performer's eyes, `look` off where they face. */
+/**
+ * Looking out of the performer's eyes, `look` off where they face. With
+ * `inHead` (their body drawn) the view sits in the eyes, inside the head;
+ * without, a little in front, clear of the face and hat brim. At the
+ * animated eye when the pose has one, else guessed from the axis and height.
+ */
 export function povPose(
     pose: PerformerPose,
     look: PovLook,
+    inHead = false,
 ): { position: Vector3Tuple; target: Vector3Tuple } {
     const facing = pose.heading + look.yaw;
     const fx = Math.sin(pose.heading);
     const fz = Math.cos(pose.heading);
-    const position: Vector3Tuple = [
-        pose.x + fx * EYE_FORWARD,
-        pose.y + pose.height * EYE_SHARE,
-        pose.z + fz * EYE_FORWARD,
-    ];
+    const forward = pose.hasEye
+        ? inHead
+            ? 0
+            : EYE_CLEAR
+        : inHead
+          ? EYE_IN_HEAD
+          : EYE_FORWARD;
+    const position: Vector3Tuple = pose.hasEye
+        ? [pose.eye[0] + fx * forward, pose.eye[1], pose.eye[2] + fz * forward]
+        : [
+              pose.x + fx * forward,
+              pose.y + pose.height * EYE_SHARE,
+              pose.z + fz * forward,
+          ];
     const pitch = clampPitch(look.pitch);
     const flat = Math.cos(pitch) * LOOK_DISTANCE;
     return {

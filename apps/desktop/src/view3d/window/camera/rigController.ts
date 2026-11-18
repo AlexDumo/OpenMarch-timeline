@@ -281,6 +281,17 @@ export class RigController {
         this.apply();
     }
 
+    /**
+     * Turns the orbit about its target by `radians` (positive toward +X from
+     * +Z), as a chase camera follows its subject round. Not while flying.
+     */
+    turn(radians: number): boolean {
+        if (this.active || radians === 0) return false;
+        this.spherical.theta += radians;
+        this.apply();
+        return true;
+    }
+
     /** Moves the camera for this frame: the tween, or the orbit pose. */
     update(nowMs: number) {
         const dt =

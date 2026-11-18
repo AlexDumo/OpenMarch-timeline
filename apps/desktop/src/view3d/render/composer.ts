@@ -316,17 +316,31 @@ export class Composer {
         }
     }
 
-    /** Every slot composed on the CPU into `out`, laid out as the texture is. */
-    composeCpu(count: number, out: Float32Array): void {
+    /** The bake's matrices, for composing on the CPU. */
+    private anim() {
         const img = this.bake.texture.image as {
             data: Float32Array;
             width: number;
         };
-        const anim = {
+        return {
             data: img.data,
             width: img.width,
             rowsPerColumn: this.bake.rowsPerColumn,
         };
+    }
+
+    /**
+     * One slot's bones composed on the CPU into `out` (`setup.bones`
+     * column-major matrices from 0), whatever the mode: for reading where a
+     * performer's body is, such as their eyes for the camera.
+     */
+    composeSlotCpu(slot: number, count: number, out: Float32Array): void {
+        composeSlot(this.anim(), this.setup, this.state, slot, count, out, 0);
+    }
+
+    /** Every slot composed on the CPU into `out`, laid out as the texture is. */
+    composeCpu(count: number, out: Float32Array): void {
+        const anim = this.anim();
         for (let slot = 0; slot < this.n; slot++)
             composeSlot(
                 anim,

@@ -3115,7 +3115,9 @@
             "brassFinish": "铜管外观",
             "tuba": "大号",
             "silkShape": "旗面形状",
-            "silkArtwork": "旗面图案"
+            "silkArtwork": "旗面图案",
+            "followTurns": "跟随时：随队员转向",
+            "povShowsBody": "第一人称视角：显示其手臂和乐器"
         },
         "keys": {
             "playPause": "播放或暂停",
