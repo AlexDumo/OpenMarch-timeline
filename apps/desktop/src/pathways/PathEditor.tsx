@@ -6,7 +6,6 @@ import { T } from "@tolgee/react";
 import {
     ArrowClockwiseIcon,
     ArrowCounterClockwiseIcon,
-    ArrowsLeftRightIcon,
     ArrowsMergeIcon,
     ArrowsOutLineHorizontalIcon,
     ArrowsSplitIcon,
@@ -15,7 +14,6 @@ import {
     CheckIcon,
     ColumnsIcon,
     DotsThreeIcon,
-    FlagPennantIcon,
     PlayIcon,
     LineSegmentsIcon,
     PathIcon,
@@ -39,15 +37,6 @@ import { runAction } from "@/shortcuts/registry";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import { getActionShortcutKeys } from "@/shortcuts/labels";
 import { fieldToElement, useFieldViewStore } from "@/field/three/fieldView";
-import {
-    fieldBeat,
-    useTimelineSelectionStore,
-} from "@/stores/TimelineSelectionStore";
-import { usePositionAt } from "@/timeline/timelineStore";
-import { useShallow } from "zustand/react/shallow";
-import { LABEL_SIZE_SCALE, useUiSettingsStore } from "@/stores/UiSettingsStore";
-import { DOT_RADIUS } from "@/field/editor/hitTest";
-import { dotSizes, ringReach } from "@/field/three/selectionRing";
 import { stackedPlacement } from "@/shapes/editor/editorPlacement";
 import { useShapeEditorRect } from "@/shapes/editor/shapeEditorRect";
 import {
@@ -73,8 +62,6 @@ import { selectOnField } from "@/shapes/placed/boxSelection";
 import { setInsideBox } from "@/shapes/placed/boxSelectionStore";
 import {
     CornerSummary,
-    LABEL_HEIGHT,
-    LABEL_LIFT_DOTS,
     OffCountWarning,
     TrailCornerCounts,
 } from "./TrailCornerCounts";
@@ -140,27 +127,6 @@ export { bigSteps, trailDistances, type BigSteps } from "./pathBigSteps";
 /** Under a marcher: the field's note there (offset and pill), which the path bar leaves room for */
 const FIELD_NOTE_ROOM_PX = 40;
 /**
- * Reverse leader's tooltip line under its name, or why it's off: a dragged-out line ends along its
- * trail, so the other end can't lead (owner, 2026-11-10)
- */
-function reverseHint(along: boolean | undefined, around?: boolean): string {
-    if (around)
-        return tolgee.t(
-            "pathways.trail.reverseAroundHint",
-            "Go the other way around, as far",
-        );
-    return along
-        ? tolgee.t(
-              "pathways.trail.reverseAlongHint",
-              "Off for a trail dragged out of a line: drag from the other end",
-          )
-        : tolgee.t(
-              "pathways.trail.reverseHint",
-              "The other end leads. End spots stay",
-          );
-}
-
-/**
  * The path pen's hint and floating editor (pathways steps 1 and 2). While drawing, a hint over the field
  * says how the pen works, as the shape tool's hint does while a Line's points are clicked. Beside
  * the path, while drawing or with it open (not while it's only shown, closed), the editor: the shape editor's bar and controls
@@ -201,17 +167,15 @@ export function PathEditor({
             />
         ) : null;
     // A quiet path (closed, interaction system rule 4) has the compact bar: Edit path, the member
-    // commands and Remove path, so they're found without its menu. A trail keeps its leader's
-    // mark, which says who leads and turns the line around (step 4). Not drawn, nothing shows
+    // commands and Remove path, so they're found without its menu. A trail's band says who leads
+    // (it darkens toward the leader, with an arrow at the head), so no mark names the leader
+    // (owner, 2026-11-18). Not drawn, nothing shows
     if (session.phase === "closed")
         return hidden || shapeToolOpen ? null : (
             <RichTips>
                 {groupLabel}
                 {session.target.trail && (
-                    <>
-                        <TrailLeaderMark session={session} />
-                        <TrailCornerCounts session={session} />
-                    </>
+                    <TrailCornerCounts session={session} />
                 )}
                 {session.target.routeId !== null && (
                     <PathEditorBar
@@ -222,12 +186,11 @@ export function PathEditor({
             </RichTips>
         );
     // A trail's head dragged on or back (AP-T16): the hand is busy, so no banner or bar; the
-    // leader's mark and the corners' counts follow the drag, as they do the Follow tool's. Drawn
-    // on with clicks, the pen's banner and bar show, Finish for a finger (owner, 2026-11-17)
+    // corners' counts follow the drag, as they do the Follow tool's. Drawn on with clicks, the
+    // pen's banner and bar show, Finish for a finger (owner, 2026-11-17)
     if (session.follow?.head && !session.follow.head.clicks)
         return (
             <RichTips>
-                <TrailLeaderMark session={session} />
                 <TrailCornerCounts session={session} />
             </RichTips>
         );
@@ -235,13 +198,6 @@ export function PathEditor({
         <>
             {groupLabel}
             {session.phase === "drawing" && <PathPenBanner session={session} />}
-            {session.target.trail &&
-                (session.follow?.grabbed !== null ||
-                    goingRound(session.follow)) && (
-                    <RichTips>
-                        <TrailLeaderMark session={session} />
-                    </RichTips>
-                )}
             {session.target.trail && <TrailCornerCounts session={session} />}
             <RichTips>
                 <PathEditorBar
@@ -347,205 +303,6 @@ function useBarSize(
         return () => observer.disconnect();
     }, [ref, phase]);
     return size;
-}
-
-/** The timeline's `[x, y]` as a field point */
-const pointOrNull = (p: readonly [number, number] | null): XY | null =>
-    p ? { x: p[0], y: p[1] } : null;
-
-/** How far the leader's mark stands clear of the leader's ring and label, screen px */
-const LEADER_MARK_GAP_PX = 6;
-/** The leader's mark's width on screen, about, for whether it fits beside the leader */
-const LEADER_MARK_WIDTH_PX = 120;
-/** A marcher label's em width per character (Courier), as the chips estimate it */
-const LABEL_EM_PER_CHAR = 0.62;
-
-/**
- * The beats the leader's mark reads the leader at (owner, 2026-11-17): the field's beat held to the
- * trail's move, and a beat either side within it, for which way the leader walks there
- */
-export function leaderMarkBeats(
-    target: Pick<PathSession["target"], "start" | "end">,
-    beat: number,
-): { at: number; back: number; on: number } {
-    const at = Math.min(Math.max(beat, target.start), target.end);
-    return {
-        at,
-        back: Math.max(target.start, at - 1),
-        on: Math.min(target.end, at + 1),
-    };
-}
-
-/**
- * Where the leader's mark goes (pathways step 4; owner, 2026-11-17): by the leader where the field
- * shows it (`read`, at `leaderMarkBeats`), so it follows the leader as the playhead scrubs and sits
- * by the line's head at the move's end. While the trail is drawn (the Follow tool's drag, the pen)
- * the field shows the plan, not the move, so it stays where the leader starts. `upDown` when the
- * leader walks up or down the screen there: the line and the head's arrow then run up and down
- * through it, so the mark goes beside it; else (across, or standing) above it.
- */
-export function leaderMarkPlace(
-    session: Pick<PathSession, "target" | "phase" | "follow">,
-    read: { at: XY | null; back: XY | null; on: XY | null },
-): { at: XY; upDown: boolean } {
-    const leader = session.target.trail!.members.at(-1)!;
-    if (session.phase === "drawing" || session.follow || !read.at)
-        return { at: leader.from, upDown: false };
-    const at = read.at;
-    // The way it walks: from a beat before to here, or at the move's start from here to a beat on
-    const moved = (p: XY | null): p is XY =>
-        !!p && (p.x !== at.x || p.y !== at.y);
-    const [a, b] = moved(read.back)
-        ? [read.back, at]
-        : moved(read.on)
-          ? [at, read.on]
-          : [at, at];
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    return { at, upDown: Math.abs(dy) > Math.abs(dx) };
-}
-
-/**
- * Where the leader's mark sits on screen (owner, 2026-11-17: it covered the leader's own drill
- * label as the leader walked down the screen): clear of the leader's dot and selection ring
- * (`ring`, px from its middle) and its drill label (`label`: above the dot, or beside it to the
- * right), whichever way it walks. Walking across (or standing), above the label; walking up or
- * down, beside the dot, to the right of a label above it, or to the left of a label beside it or
- * when the field's edge (`fieldWidth`) leaves no room on the right. `left`/`top` is the mark's
- * anchor in the field element's px, `align` which of its edges sits there. Exported for tests.
- */
-export function leaderMarkBox(
-    at: XY,
-    upDown: boolean,
-    ring: number,
-    label: {
-        width: number;
-        height: number;
-        lift: number;
-        beside: boolean;
-    } | null,
-    fieldWidth = Infinity,
-): { left: number; top: number; align: "above" | "right" | "left" } {
-    const gap = LEADER_MARK_GAP_PX;
-    if (!upDown) {
-        // Above whatever is highest: the ring, or a label's top
-        const labelTop = label
-            ? at.y - (label.beside ? 0 : label.lift) - label.height / 2
-            : Infinity;
-        return {
-            left: at.x,
-            top: Math.min(at.y - ring, labelTop) - gap,
-            align: "above",
-        };
-    }
-    if (label?.beside)
-        return { left: at.x - ring - gap, top: at.y, align: "left" };
-    const reach = Math.max(ring, label ? label.width / 2 : 0) + gap;
-    return at.x + reach + LEADER_MARK_WIDTH_PX > fieldWidth
-        ? { left: at.x - reach, top: at.y, align: "left" }
-        : { left: at.x + reach, top: at.y, align: "right" };
-}
-
-/** How each alignment hangs the mark from its anchor */
-const LEADER_MARK_SHIFT = {
-    above: "translate(-50%, -100%)",
-    right: "translate(0, -50%)",
-    left: "translate(-100%, -50%)",
-} as const;
-
-/**
- * The leader's mark (pathways step 4): a chip by the leader, naming who leads: where it starts
- * while the trail is drawn, else where it is at the playhead (`leaderMarkPlace`). On a stored
- * trail its button turns the line around (Reverse, one undo step), also the way for a finger or a
- * pencil; it's the trail's one leader indicator and its one Reverse (owner, 2026-11-17). It stands
- * clear of the leader's dot, ring and drill label whichever way the leader walks
- * (`leaderMarkBox`) and takes no room in the path bar.
- */
-function TrailLeaderMark({ session }: { session: PathSession }) {
-    const view = useFieldViewStore();
-    const trail = session.target.trail!;
-    const leader = trail.members.at(-1)!;
-    const beats = leaderMarkBeats(
-        session.target,
-        useTimelineSelectionStore(fieldBeat),
-    );
-    const place = leaderMarkPlace(session, {
-        at: pointOrNull(usePositionAt(leader.marcherId, beats.at)),
-        back: pointOrNull(usePositionAt(leader.marcherId, beats.back)),
-        on: pointOrNull(usePositionAt(leader.marcherId, beats.on)),
-    });
-    const labels = useUiSettingsStore(
-        useShallow((s) => ({
-            form: s.uiSettings.marcherLabels,
-            size: s.uiSettings.marcherLabelSize,
-            position: s.uiSettings.marcherLabelPosition,
-        })),
-    );
-    const at = fieldToElement(view, place.at.x, place.at.y);
-    const zoom = view.zoom || 1;
-    const dotScale = dotSizes(zoom).scale;
-    const labelPx =
-        LABEL_HEIGHT *
-        LABEL_SIZE_SCALE[labels.size ?? "normal"] *
-        dotScale *
-        zoom;
-    const box = leaderMarkBox(
-        at,
-        place.upDown,
-        ringReach(zoom) * zoom,
-        labels.form === "off"
-            ? null
-            : {
-                  width:
-                      Math.max(3, leader.drill.length) *
-                      LABEL_EM_PER_CHAR *
-                      labelPx,
-                  height: labelPx,
-                  lift: LABEL_LIFT_DOTS * DOT_RADIUS * dotScale * zoom,
-                  beside: labels.position === "beside",
-              },
-        view.width || Infinity,
-    );
-    const stored =
-        session.target.routeId !== null && session.phase !== "drawing";
-    return (
-        <div
-            className="rounded-6 border-stroke bg-modal text-sub text-text shadow-modal absolute z-10 flex items-center gap-4 border py-2 pr-2 pl-6 whitespace-nowrap"
-            style={{
-                left: box.left,
-                top: box.top,
-                transform: LEADER_MARK_SHIFT[box.align],
-            }}
-            data-align={box.align}
-            data-testid="trail-leader"
-            data-leader={leader.marcherId}
-            onPointerDown={(e) => e.stopPropagation()}
-        >
-            <FlagPennantIcon
-                size={12}
-                weight="fill"
-                className="text-accent"
-                aria-hidden
-            />
-            <span className={stored ? undefined : "pr-4"}>
-                {tolgee.t("pathways.trail.leader", "Leader · {marcher}", {
-                    marcher: leader.drill,
-                })}
-            </span>
-            {stored && (
-                <IconButton
-                    label={tolgee.t("actions.path.reverse", "Reverse leader")}
-                    hint={reverseHint(trail.along, trail.around)}
-                    disabled={trail.along}
-                    action="reverseTrail"
-                    onClick={() => runAction("reverseTrail")}
-                    testId="trail-reverse"
-                >
-                    <ArrowsLeftRightIcon size={14} />
-                </IconButton>
-            )}
-        </div>
-    );
 }
 
 /**

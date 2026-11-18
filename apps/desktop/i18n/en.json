@@ -4716,12 +4716,6 @@
             "hoverAdjusted": "{marcher}'s line · bent",
             "stacked": "click for the next of {count}"
         },
-        "trail": {
-            "leader": "Leader · {marcher}",
-            "reverseHint": "The other end leads. End spots stay",
-            "reverseAroundHint": "Go the other way around, as far",
-            "reverseAlongHint": "Off for a trail dragged out of a line: drag from the other end"
-        },
         "order": {
             "error": "Error saving the line's order",
             "noneToReverse": "These marchers have no order to reverse: set one first",
