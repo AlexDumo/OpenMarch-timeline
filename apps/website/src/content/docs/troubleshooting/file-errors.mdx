@@ -5,9 +5,11 @@ type: how-to
 covers:
   - apps/desktop/src/hooks/useLoadFileErrorHandler.tsx
   - apps/desktop/electron/database/fileVersion.ts
+  - apps/desktop/electron/database/leftoverJournal.ts
   - i18n:fileAccessDialogError
   - i18n:convertShow.openFailed
   - i18n:convertShow.backupError
+  - i18n:fileDialog.leftoverJournal
 sidebar:
   order: 1
 ---
@@ -71,6 +73,16 @@ If you didn't open it from the recent files, [report it](/guides/start/get-help/
 ## Update OpenMarch to open this file
 
 <Ui k="fileAccessDialogError.tooNew.title" /> means the show was saved by a newer version of OpenMarch than the one you're using. The file hasn't been changed. Update OpenMarch, or [download the latest version](/download/), and open it again.
+
+## A leftover file is stopping this show from opening
+
+<Ui k="fileAccessDialogError.leftoverJournal.title" /> means there's a file next to the show with the same name plus `-journal` (for example `My show.dots-journal`). OpenMarch makes one while it saves and removes it when the save is done. One that's still there is from a save that didn't finish, or it was copied or downloaded along with the show. OpenMarch can't use this one.
+
+Select <Ui k="fileAccessDialogError.leftoverJournal.openWithout" /> to open the show as it was last fully saved. The `-journal` file is moved to OpenMarch's backups folder, not deleted. If OpenMarch can't move it, copy the show into a folder of your own, such as Documents, and open the copy.
+
+Older versions of OpenMarch show "Error Loading Database" with "unable to open database file" instead. Do the same thing by hand: copy the show into another folder and open the copy there.
+
+When there's a `-journal` file OpenMarch *can* use, it finishes or undoes the interrupted save by itself, as it always has. Before it does, it puts a copy of the show and the `-journal` file in its backups folder ([Open a show in an older version](/troubleshooting/open-in-an-older-version/) says where that is).
 
 ## Couldn't back up or convert your file
 

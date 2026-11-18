@@ -739,6 +739,12 @@
             "title": "Invalid file permissions"
         },
         "guideLinkText": "OpenMarch File Error Guide",
+        "leftoverJournal": {
+            "cancel": "Cancel",
+            "description": "There's a leftover file, “{name}”, next to this show. It's from a save that didn't finish, and OpenMarch can't use it. You can open the show as it was last fully saved. The leftover file is moved to OpenMarch's backups, not deleted.",
+            "openWithout": "Open without it",
+            "title": "A leftover file is stopping this show from opening"
+        },
         "notFound": {
             "description": "This file does not exist at this location. Was it moved or renamed?",
             "title": "File not found"
@@ -3692,6 +3698,10 @@
             "allFiles": "All Files",
             "audioFile": "Audio File",
             "video": "Video"
+        },
+        "leftoverJournal": {
+            "moveFailedMessage": "OpenMarch couldn't move “{name}” out of the way. Copy the show into another folder and open the copy.",
+            "moveFailedTitle": "Couldn't open the show"
         },
         "newShow": {
             "button": "Create New"

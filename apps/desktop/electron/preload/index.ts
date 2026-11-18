@@ -323,6 +323,20 @@ const APP_API = {
      */
     takeLoadFileRefusal: () =>
         ipcRenderer.invoke("load-file:takeRefusal") as Promise<number | null>,
+    /**
+     * The file name of the leftover journal that stopped the last open (`LEFTOVER_JOURNAL_STATUS`),
+     * or null.
+     */
+    getLeftoverJournal: () =>
+        ipcRenderer.invoke("load-file:leftoverJournal") as Promise<
+            string | null
+        >,
+    /**
+     * Moves that leftover journal into the backups (never deletes it) and opens the show as it
+     * was last fully saved. Resolves the open's status; the main process explains failures.
+     */
+    openWithoutLeftoverJournal: () =>
+        ipcRenderer.invoke("load-file:openWithoutJournal") as Promise<number>,
 
     // Converting a page-era show to timelines when it opens (ADR 0012 §6)
     /** The page-era file waiting for the person to agree to convert it, or null. */
