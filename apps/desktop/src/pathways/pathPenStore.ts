@@ -31,7 +31,7 @@ import {
     setAdjustKey,
 } from "@/db-functions/timelinePathAdjust";
 import type { RehomeReport } from "@/db-functions/timelineRouteGeometry";
-import type { AdjustProfile } from "@openmarch/core";
+import { EPS_GEOM, type AdjustProfile } from "@openmarch/core";
 import {
     drawGroupRouteInTransaction,
     detachFromGroupPath,
@@ -52,6 +52,10 @@ import { drawnAsGroup, type GroupMember, type PathTarget } from "./pathTarget";
 import { clickedPoint } from "@/shapes/pen/penKind";
 import { activeFieldEditor } from "@/field/editor/activeFieldEditor";
 import { dragTrail } from "@/db-functions/timelineTrailDrag";
+import {
+    convertTrailToShape,
+    planTrailEdit,
+} from "@/db-functions/timelineTrailDerive";
 import { rippleTrail } from "@/db-functions/timelineTrailRipple";
 import {
     invalidatePlacedBoxes,
@@ -1388,6 +1392,33 @@ export function dragPoints(
     update((s) => withToBulge({ ...s, dragging: index, points }, toBulge));
 }
 
+let dragAborts = 0;
+
+/** How many point drags Escape has called off (L.18, TM-2): a press held from before is dead */
+export const pointDragAborts = (): number => dragAborts;
+
+/**
+ * Escape while a point of the open path is dragged (L.18, TM-2): the points and the last leg's
+ * bulge as stored, nothing written, and the press that dragged it drags no more. False when no
+ * point is dragged.
+ */
+export function abortPointDrag(): boolean {
+    const { session } = usePathPenStore.getState();
+    if (!session || session.phase !== "open" || session.dragging === null)
+        return false;
+    dragAborts++;
+    update((s) => {
+        const { toBulge: _was, ...rest } = s;
+        return {
+            ...rest,
+            ...toBulgeOf(s.target),
+            dragging: null,
+            points: pointsOf(s.target),
+        };
+    });
+    return true;
+}
+
 /** A drag that was lost puts the points back. */
 export function cancelDrag(
     before: readonly PathPoint[],
@@ -2206,6 +2237,80 @@ export async function reverseShownTrail(): Promise<void> {
         toastTimelineError(
             error,
             tolgee.t("pathways.errors.reverse", "Couldn't reverse the trail"),
+        );
+    } finally {
+        usePathPenStore.setState({ saving: false });
+    }
+}
+
+/**
+ * Why Convert to shape can't run on the shown trail (L.18, TM-4), or null: it isn't a trail
+ * dragged out of a line, or its tail is still in the line it stands in (the trail is shorter than
+ * the line), the write's own check on what the field has
+ */
+export function convertTrailBlocker(
+    session: PathSession | null,
+): string | null {
+    const trail = session?.target.trail;
+    if (
+        !session ||
+        !trail?.along ||
+        trail.around ||
+        trail.unfounded ||
+        trail.members.length < 2 ||
+        session.target.routeId === null
+    )
+        return tolgee.t(
+            "timeline.refusals.trail.convertNotAlong",
+            "Only a trail dragged out of a line can be converted to a shape",
+        );
+    const plan = planTrailEdit(
+        trail.members.map((m): [number, number] => [m.from.x, m.from.y]),
+        session.target.points,
+        trail.members.map((m): [number, number] => [m.to.x, m.to.y]),
+        session.target.points,
+    );
+    const lineLen = plan.startDist.at(-1) ?? 0;
+    return plan.ends[0]! < lineLen - EPS_GEOM
+        ? tolgee.t(
+              "timeline.refusals.trail.convertInLineUp",
+              "Some of the line is still standing where it started. Make the trail longer, then convert it",
+          )
+        : null;
+}
+
+/**
+ * **Convert to shape** (L.18, TM-4): a Line through the shown trail's end spots, which the shape
+ * tools then own; the trail leads into it and stops planning the spots. One undo step. The trail
+ * is read again and stays as it was shown.
+ */
+export async function convertShownTrail(): Promise<void> {
+    const { session, saving } = usePathPenStore.getState();
+    if (
+        !session?.target.trail ||
+        session.phase === "drawing" ||
+        saving ||
+        session.target.routeId === null
+    )
+        return;
+    usePathPenStore.setState({ saving: true });
+    try {
+        await convertTrailToShape({ db, routeId: session.target.routeId });
+        invalidatePlacedBoxes();
+        usePathPenStore.setState((state) => ({ saved: state.saved + 1 }));
+        toastWithUndo(
+            tolgee.t(
+                "pathways.toasts.converted",
+                "Placed a Line through the end spots. Edit it with the shape tools",
+            ),
+        );
+    } catch (error) {
+        toastTimelineError(
+            error,
+            tolgee.t(
+                "pathways.errors.convert",
+                "Couldn't convert the trail to a shape",
+            ),
         );
     } finally {
         usePathPenStore.setState({ saving: false });

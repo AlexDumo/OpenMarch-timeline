@@ -1153,6 +1153,16 @@ const STATIC_ACTIONS = {
         defaultBindings: ["Alt+L"],
         ignoreRepeat: true,
     },
+    // A trail's path is the only truth (L.18): a Line placed through its end spots, which the
+    // shape tools then own. No key: the path bar's ··· and the palette
+    convertTrailToShape: {
+        labelKey: "actions.path.convertToShape",
+        keywordsKey: "actions.path.followKeywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
     // A selected trail tucks its end shape's controls away (owner, 2026-11-17); this shows them
     // again, or tucks them back. No key: the path bar's ··· and the palette
     trailShapeControls: {

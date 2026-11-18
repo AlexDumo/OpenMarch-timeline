@@ -385,6 +385,17 @@ export async function leaveTrailInTransaction(
         });
         return null;
     }
+    return await peelIntoOwnMove(tx, transition, rows, point);
+}
+
+/** `rows` (one slot of trail `transition`) peeled into a one-slot direct move to `point` (AP-T6) */
+async function peelIntoOwnMove(
+    tx: DbTransaction,
+    transition: TransitionDbRow,
+    rows: (typeof schema.timeline_assignments.$inferSelect)[],
+    point: XY,
+): Promise<typeof schema.timeline_slot_destinations.$inferSelect | null> {
+    const d = schema.timeline_slot_destinations;
     // Old rows first, so the new ones don't overlap them at the same layer (I-A3); a trail's line
     // keeps a gap (AP-T6)
     await removeAssignmentRowsInTransaction({
