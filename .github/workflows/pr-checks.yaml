@@ -205,8 +205,9 @@ jobs:
     needs: check-changes
     if: needs.check-changes.outputs.desktop == 'true'
     runs-on: ubuntu-latest
-    # The scenarios take 5 to 8 minutes, but installing system packages from apt (FFmpeg,
-    # Chromium's libraries) has taken up to 15 on a slow mirror (#1115); 20 cancelled them
+    # The scenarios take about 13 minutes, and installing system packages from apt (FFmpeg,
+    # Chromium's libraries) anywhere from under a minute to 15 on a slow mirror (#1115); 20
+    # cancelled them
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
