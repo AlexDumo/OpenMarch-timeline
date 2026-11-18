@@ -60,7 +60,11 @@ import {
 import { pointsToStore } from "./timelineGroupRoutes";
 import { memberRows, type MemberRow } from "./timelineMemberRows";
 import { removeAssignmentRowsInTransaction } from "./timelineMembership";
-import { dropOrderMarksInTransaction } from "./shapeRecipes";
+import {
+    dropOrderMarksInTransaction,
+    hasShapeRecipes,
+    shapeRecipesOnly,
+} from "./shapeRecipes";
 import { deriveTrailSpotsInTransaction } from "./timelineTrailDerive";
 import { setMarcherOrderInTransaction } from "./marcherOrder";
 
@@ -1047,9 +1051,17 @@ export async function removeTrail(args: {
 /**
  * Clear Page N on a trail (owner, 2026-11-18): every trail with one of `marcherIds` in it over
  * `range` goes whole, as Remove trail takes it (AP-T4), so the clear then takes those marchers out
- * of the page like anyone else. A trail can't lose members quietly, so a member who isn't cleared
- * stays in the move, now direct, walking straight to the end spot it had. Returns the trails'
- * members outside `marcherIds`, ascending, with their names for the note.
+ * of the page like anyone else. A dragged-out trail's shape of end spots (DL-11, a Line, Arc or
+ * Curve of its members alone, saved in its move) is the trail's own, so it goes too. A trail can't
+ * lose members quietly, so a member who isn't cleared stays in the move, now direct, walking
+ * straight to the end spot it had.
+ *
+ * A trail whose cleared members are also in another shape in its move (one placed there, which
+ * Clear leaves alone) stays as it is: the clear would keep them in their move anyway, and names
+ * them.
+ *
+ * Returns the removed trails' members outside `marcherIds`, ascending, with their names for the
+ * note.
  */
 export async function removeTrailsOverRangeInTransaction({
     tx,
@@ -1063,8 +1075,8 @@ export async function removeTrailsOverRangeInTransaction({
     if (marcherIds.length === 0) return { stayed: [], names: [] };
     const T = schema.timeline_transitions;
     const A = schema.timeline_assignments;
-    const rows = await tx
-        .selectDistinct({ routeId: T.route_id })
+    const trails = await tx
+        .selectDistinct({ transition: T })
         .from(A)
         .innerJoin(T, eq(T.id, A.transition_id))
         .where(
@@ -1076,19 +1088,93 @@ export async function removeTrailsOverRangeInTransaction({
                 gt(A.end_beat, range.start),
             ),
         )
-        .orderBy(asc(T.route_id))
+        .orderBy(asc(T.id))
         .all();
     const cleared = new Set(marcherIds);
     const stayed = new Set<number>();
-    for (const { routeId } of rows) {
-        const { marcherIds: line } = await removeTrailInTransaction({
+    const withRecipes = trails.length > 0 && (await hasShapeRecipes(tx));
+    for (const { transition } of trails) {
+        const line = new Set(
+            (
+                await tx
+                    .selectDistinct({ id: A.marcher_id })
+                    .from(A)
+                    .where(eq(A.transition_id, transition.id))
+                    .all()
+            ).map((m) => m.id),
+        );
+        const recipes = withRecipes
+            ? await trailMoveRecipes(tx, transition.timeline_id, line)
+            : [];
+        const own = recipes.filter(
+            (r) =>
+                isAlong(transition) &&
+                TRAIL_SHAPE_KINDS.has(r.kind) &&
+                r.members.every((m) => line.has(m)),
+        );
+        // A placed shape in the move holds cleared members: Clear leaves them, so the trail stays
+        if (
+            recipes.some(
+                (r) =>
+                    !own.includes(r) &&
+                    r.members.some((m) => line.has(m) && cleared.has(m)),
+            )
+        )
+            continue;
+        // Its order goes with it: no order mark kept for a line that's cleared (TM-4)
+        const { marcherIds: members } = await removeTrailInTransaction({
             tx,
-            routeId: routeId!,
+            routeId: transition.route_id!,
+            keepOrder: false,
         });
-        for (const m of line) if (!cleared.has(m)) stayed.add(m);
+        if (own.length > 0)
+            await tx
+                .delete(schema.timeline_shape_recipes)
+                .where(
+                    inArray(
+                        schema.timeline_shape_recipes.id,
+                        own.map((r) => r.id),
+                    ),
+                )
+                .run();
+        for (const m of members) if (!cleared.has(m)) stayed.add(m);
     }
     const ids = [...stayed].sort((a, b) => a - b);
     const names: string[] = [];
     for (const m of ids) names.push(await marcherName(tx, m));
     return { stayed: ids, names };
+}
+
+/** The kinds a dragged-out trail's shape is saved as (DL-11: a Curve is stored as a Line) */
+const TRAIL_SHAPE_KINDS: ReadonlySet<string> = new Set(["line", "arc"]);
+
+/** Move `timelineId`'s shape recipes (no order marks) any of `line` is in, with their members */
+async function trailMoveRecipes(
+    tx: DbTransaction,
+    timelineId: number,
+    line: ReadonlySet<number>,
+): Promise<{ id: number; kind: string; members: number[] }[]> {
+    const R = schema.timeline_shape_recipes;
+    const M = schema.timeline_shape_recipe_marchers;
+    const rows = await tx
+        .select({ id: R.id, kind: R.kind, marcherId: M.marcher_id })
+        .from(R)
+        .innerJoin(M, eq(M.recipe_id, R.id))
+        .where(and(eq(R.timeline_id, timelineId), shapeRecipesOnly()))
+        .orderBy(asc(R.id))
+        .all();
+    const byId = new Map<
+        number,
+        { id: number; kind: string; members: number[] }
+    >();
+    for (const r of rows) {
+        const recipe = byId.get(r.id) ?? {
+            id: r.id,
+            kind: r.kind,
+            members: [],
+        };
+        recipe.members.push(r.marcherId);
+        byId.set(r.id, recipe);
+    }
+    return [...byId.values()].filter((r) => r.members.some((m) => line.has(m)));
 }
