@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import clsx from "clsx";
 import { create } from "zustand";
 import * as Popover from "@radix-ui/react-popover";
@@ -11,13 +11,14 @@ import {
     useFieldViewStore,
     type FieldView,
 } from "@/field/three/fieldView";
+import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { DOT_RADIUS } from "@/field/editor/hitTest";
 import { dotSizes } from "@/field/three/selectionRing";
 import { isTouchLayout } from "@/components/timeline/touchTargets";
 import { currentShapeField } from "@/shapes/field/shapeField";
 import { drawingOf } from "./pathPenMode";
 import { POPOVER_CLASS } from "@/components/ui/popupClasses";
-import { pathKey, type PathSession } from "./pathPenStore";
+import { pathKey, usePathPenStore, type PathSession } from "./pathPenStore";
 import {
     cornerRange,
     formatCount,
@@ -260,9 +261,10 @@ export function chipObstaclesOf(
 }
 
 /**
- * Whether a selected trail's corner chips show without a hover (owner, 2026-11-17): pinned by a
- * click on the path bar's summary ("2 corners turn between counts") for that trail (its
- * `pathKey`), and kept while a corner's list is open
+ * Whether a selected trail's corner chips show (owner, 2026-11-18: "I don't want to see all of the
+ * warnings appear unless I click on that turns between count warning"): pinned by a click on the
+ * path bar's summary ("2 corners turn between counts") for that trail (its `pathKey`), and kept
+ * while a corner's list is open. Nothing else shows them on a selected trail, a hover included
  */
 export const useCornerChipsStore = create<{
     pinnedFor: string | null;
@@ -277,101 +279,19 @@ export function toggleCornerChips(session: PathSession): void {
     }));
 }
 
-/** How near the pointer must come to a selected trail's way to show its corner chips, screen px */
-const HOVER_REACH_PX = 16;
-/** How long the chips stay once the pointer leaves the trail, ms, so one can be reached */
-const HOVER_LINGER_MS = 350;
-
-/** The distance from `p` to the segment `a`–`b` */
-function toSegment(
-    p: { x: number; y: number },
-    a: { x: number; y: number },
-    b: { x: number; y: number },
-): number {
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const len = dx * dx + dy * dy;
-    const t =
-        len > 0
-            ? Math.max(
-                  0,
-                  Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len),
-              )
-            : 0;
-    return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+/** Hides the pinned chips (Escape, or the trail let go) */
+export function hideCornerChips(): void {
+    if (useCornerChipsStore.getState().pinnedFor !== null)
+        useCornerChipsStore.setState({ pinnedFor: null });
 }
 
-/**
- * Whether `p` (screen px in the field element) is on the trail: within `HOVER_REACH_PX` of the way
- * it walks (or its drawn line) or of a corner. Exported for tests.
- */
-export function onTrail(
-    p: { x: number; y: number },
-    way: readonly { x: number; y: number }[],
-    corners: readonly { x: number; y: number }[] = [],
-): boolean {
-    for (let i = 0; i + 1 < way.length; i++)
-        if (toSegment(p, way[i]!, way[i + 1]!) <= HOVER_REACH_PX) return true;
-    return corners.some(
-        (c) => Math.hypot(p.x - c.x, p.y - c.y) <= HOVER_REACH_PX * 1.5,
-    );
-}
-
-/**
- * Whether the pointer is over the trail `session` shows, a corner, or one of its chips or lists
- * (`data-trail-corner`), lingering a moment after it leaves. Off while `enabled` is false; a finger
- * never hovers. `anchor` is an element in the field's layer, which places the pointer.
- */
-function useTrailHover(
-    session: PathSession,
-    enabled: boolean,
-    anchor: React.RefObject<HTMLElement | null>,
-): boolean {
-    const [hovered, setHovered] = useState(false);
-    useEffect(() => {
-        if (!enabled) {
-            setHovered(false);
-            return;
-        }
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        const onMove = (e: PointerEvent) => {
-            if (e.pointerType === "touch") return;
-            const fieldEl = anchor.current?.offsetParent;
-            if (!fieldEl) return;
-            const box = fieldEl.getBoundingClientRect();
-            const p = { x: e.clientX - box.left, y: e.clientY - box.top };
-            const target = e.target instanceof Element ? e.target : null;
-            const view = useFieldViewStore.getState();
-            const drawn = drawingOf(session);
-            const toScreen = (q: { x: number; y: number }) =>
-                fieldToElement(view, q.x, q.y);
-            const near =
-                !!target?.closest("[data-trail-corner]") ||
-                onTrail(
-                    p,
-                    (drawn?.walked ?? drawn?.outline ?? []).map(toScreen),
-                    (trailCornersOf(session)?.corners ?? []).map((c) =>
-                        fieldToElement(view, c.at[0], c.at[1]),
-                    ),
-                );
-            if (near) {
-                clearTimeout(timer);
-                timer = undefined;
-                setHovered(true);
-            } else if (timer === undefined)
-                timer = setTimeout(() => {
-                    timer = undefined;
-                    setHovered(false);
-                }, HOVER_LINGER_MS);
-        };
-        window.addEventListener("pointermove", onMove);
-        return () => {
-            window.removeEventListener("pointermove", onMove);
-            clearTimeout(timer);
-        };
-    }, [session, enabled, anchor]);
-    return hovered;
-}
+// The pin is the trail's only while it stays shown: deselected, or another trail selected, the
+// chips go, so the next selection starts without them
+usePathPenStore.subscribe((s) => {
+    const pinned = useCornerChipsStore.getState().pinnedFor;
+    if (pinned !== null && (!s.session || pathKey(s.session.target) !== pinned))
+        hideCornerChips();
+});
 
 /**
  * Corner counts on the field, pathways step 6 (spec L.9, TC-5 and TC-6): a chip just outside each
@@ -379,36 +299,21 @@ function useTrailHover(
  * warning color when a member turns between counts. A click or tap opens the corner's list: who
  * turns there, leader first, and on which count. While a trail is drawn the chips only show (a
  * click on the field places the next point), so the list opens once it's finished. A trail only
- * selected (closed) shows them while the pointer is on it, a corner or a chip, or once the path
- * bar's summary pins them; open (Edit path) or drawn, always (owner, 2026-11-17).
+ * selected (closed) shows them once the path bar's summary pins them (owner, 2026-11-18); open
+ * (Edit path) or drawn, always.
  */
 export function TrailCornerCounts({ session }: { session: PathSession }) {
     const view = trailCornersOf(session);
     const field = useFieldViewStore();
-    const anchor = useRef<HTMLSpanElement>(null);
     const quiet = session.phase === "closed";
     const pinned = useCornerChipsStore(
         (s) => s.pinnedFor === pathKey(session.target) || s.listOpen,
     );
-    const hovered = useTrailHover(
-        session,
-        quiet && !!view && view.corners.length > 0,
-        anchor,
-    );
     if (!view || view.corners.length === 0) return null;
+    if (quiet && !pinned) return null;
     const drawing = session.phase === "drawing";
-    // Where the pointer is read from: the field's layer, which the chips sit in
-    const anchorEl = (
-        <span
-            ref={anchor}
-            aria-hidden
-            className="pointer-events-none absolute top-0 left-0 h-0 w-0"
-        />
-    );
-    if (quiet && !hovered && !pinned) return anchorEl;
     return (
         <>
-            {anchorEl}
             {chipPlaces(
                 view.corners,
                 (x, y) => fieldToElement(field, x, y),
@@ -684,8 +589,9 @@ export function OffCountWarning({
 
 /**
  * A selected trail's path bar summary of its turns between counts (owner, 2026-11-17): "2 corners
- * turn between counts", after Edit path. A click or tap pins the corners' chips on the field (a
- * finger or pencil has no hover), again to unpin them; hovering shows a short tip (the detail is its accessible name).
+ * turn between counts", after Edit path. It's a toggle (owner, 2026-11-18): a click or tap shows
+ * the corners' chips on the field and stays pressed, again (or Escape) hides them; hovering shows
+ * a short tip (the detail is its accessible name).
  */
 export function CornerSummary({
     session,
@@ -697,6 +603,18 @@ export function CornerSummary({
     const pinned = useCornerChipsStore(
         (s) => s.pinnedFor === pathKey(session.target),
     );
+    const hideLabel = tolgee.t(
+        "pathways.corners.hideChips",
+        "Hide the corners' counts",
+    );
+    // Escape hides the chips first; the next one lets the trail go, as the field's Escape does.
+    // Registered as the chips show, so it sits above the field's own Escape
+    useActionHandler(
+        "cancelAlignmentUpdates",
+        hideCornerChips,
+        { label: hideLabel },
+        pinned,
+    );
     const detail = tolgee.t(
         "pathways.corners.offCountTip",
         "{turns, plural, one {# turn falls} other {# turns fall}} between counts, at {corners, plural, one {# corner} other {# corners}}. Each marcher reaches a corner at its own steady speed. Move the corner, change the spacing or the move's counts to put every turn on a count. Tap or click a corner's count to see who turns when.",
@@ -706,10 +624,7 @@ export function CornerSummary({
         <Tip
             label={
                 pinned
-                    ? tolgee.t(
-                          "pathways.corners.hideChips",
-                          "Hide the corners' counts",
-                      )
+                    ? hideLabel
                     : tolgee.t(
                           "pathways.corners.showChips",
                           "Show the corners' counts",
@@ -721,7 +636,7 @@ export function CornerSummary({
                 type="button"
                 className={clsx(
                     "text-yellow focus-visible:outline-accent flex items-center gap-4 rounded-full px-4 focus-visible:outline-2",
-                    pinned && "bg-yellow/15",
+                    pinned && "bg-yellow/20 ring-yellow/60 ring-1",
                 )}
                 data-testid="path-corner-summary"
                 data-shape-ui=""
