@@ -16,6 +16,7 @@ import type { TimelineMoveResult } from "@/db-functions/timelineMoves";
 import type { HeldConflict } from "@/db-functions/timelineHeldMarks";
 import { joinList } from "@/timeline/translateTimelineText";
 import { holdTerms } from "@/timeline/holdTerms";
+import { marcherNamesText } from "@/timeline/timelineKeepLater";
 
 /**
  * "Set all or selected marchers to the previous or next page", the four batch-edit actions in
@@ -148,7 +149,11 @@ export async function setMarchersToNeighborPage({
                 ? [
                       t("actions.batchEdit.clearThisPageTrailToo", {
                           count: trails.names.length,
-                          names: joinList(trails.names),
+                          // "B1, B2 and 12 others", as the keep words name them
+                          names:
+                              marcherNamesText(trails.stayed, (id) =>
+                                  trails.names.at(trails.stayed.indexOf(id)),
+                              ) ?? joinList(trails.names),
                       }),
                   ]
                 : []),
