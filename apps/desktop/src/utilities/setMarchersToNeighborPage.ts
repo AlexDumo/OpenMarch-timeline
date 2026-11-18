@@ -32,16 +32,20 @@ import { holdTerms } from "@/timeline/holdTerms";
  *   edits before it carry through). A move shared with others, or longer than the page, is cut in
  *   time at the page's flags first (`takeMarchersOutOfRangeInTransaction`); where others share a
  *   move whose path a cut would change, only a move of the marcher's own is cut, so they keep
- *   their motion. Shape and follow-the-leader members, and marchers split by marcher can't take
- *   into a move of their own (an inheriting follow-the-leader order), are left as they are; the
- *   write names them, and they aren't counted. On the first page of a Held hold that runs on, the
+ *   their motion. A drawn trail with a cleared marcher on the page goes whole (owner,
+ *   2026-11-18): its cleared members are Not defined like anyone else, and the others walk
+ *   straight to their end spots, which the note says. Shape and follow-the-leader-into-a-shape
+ *   members, and marchers split by marcher can't take into a move of their own (an inheriting
+ *   follow-the-leader order), are left as they are; the write names them, and they aren't
+ *   counted. On the first page of a Held hold that runs on, the
  *   later pages' hold goes too (its arrival is gone).
  *   - **Clear Page N** (#573) keeps the next page where it was: a marcher that would follow back
  *     there gets a move of its own to its old spot, as Remove keyframe does. With `followBack`
  *     (**Clear Page N, Pages N–M follow back**) the later pages follow back instead.
  *   - It shows **no message** when it cleared everyone: the field and timeline show it, and Undo
  *     is the safety net (owner, #573). Only a partial result says something, quietly
- *     (`notify.note`): who was skipped and why, and whose later hold went too.
+ *     (`notify.note`): who was skipped and why, whose later hold went too, and who walks
+ *     straight now that their trail went.
  *
  * Next page's success message shows only once the edit is written; a refused edit writes nothing
  * and the write's own error handler shows why.
@@ -136,9 +140,18 @@ export async function setMarchersToNeighborPage({
     const notePartial = (
         skipped: TimelineMoveResult["skipped"],
         laterHolds: HeldConflict | undefined,
+        trails: TimelineMoveResult["trailsCleared"],
     ) => {
         const parts = [
             ...(skipped ? [timelineErrorMessage(skipped)] : []),
+            ...(trails && trails.names.length > 0
+                ? [
+                      t("actions.batchEdit.clearThisPageTrailToo", {
+                          count: trails.names.length,
+                          names: joinList(trails.names),
+                      }),
+                  ]
+                : []),
             ...(laterHolds && laterHolds.names.length > 0
                 ? [
                       t("actions.batchEdit.clearThisPageHoldsToo", {
@@ -189,7 +202,11 @@ export async function setMarchersToNeighborPage({
             });
             skipped = written.skipped?.marcherIds.length ?? 0;
             if (clearPage)
-                notePartial(written.skipped, written.clearedLaterHolds);
+                notePartial(
+                    written.skipped,
+                    written.clearedLaterHolds,
+                    written.trailsCleared,
+                );
         } catch {
             // Refused or failed: nothing was written, and the write's error handler said why
             return null;

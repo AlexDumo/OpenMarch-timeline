@@ -27,6 +27,7 @@
             "clearThisPageAll": "{clearThisPage} (all marchers)",
             "clearThisPageAllAndFollowing": "{clearThisPage} (all marchers), later pages move back too",
             "clearThisPageHoldsToo": "{count, plural, one {{names}'s hold on {pages} was cleared too} other {{names}'s holds on {pages} were cleared too}}.",
+            "clearThisPageTrailToo": "The trail was removed too, so {names} now {count, plural, one {walks} other {walk}} straight.",
             "clearThisPageSelected": "{clearThisPage} (selected)",
             "clearThisPageSelectedAndFollowing": "{clearThisPage} (selected), later pages move back too",
             "defineAsShown": "{defineAsShown}",
