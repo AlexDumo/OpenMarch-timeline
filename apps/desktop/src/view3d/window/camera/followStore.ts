@@ -131,7 +131,7 @@ export const useFollowStore = create<FollowState>()((set, get) => ({
     },
 }));
 
-/** The key that starts picking a performer to follow, and stops following. */
+/** The key that turns picking a performer to follow on and off. */
 export const FOLLOW_KEY = "P";
 /** The key that switches between the third-person view and the point of view. */
 export const POV_KEY = "V";

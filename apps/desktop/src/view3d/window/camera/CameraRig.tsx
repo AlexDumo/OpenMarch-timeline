@@ -569,8 +569,12 @@ export default function CameraRig() {
                 if (!follow.active)
                     changed = rig.pan(dx * 0.5, dy * 0.5, focus()) || changed;
             } else if (dragAction(scheme(), e) === "pan") {
-                // Panning away from the performer stops following them.
-                if (follow.active) endFollowRef.current();
+                // Panning away from the performer stops following them,
+                // once it is a drag and not a click with a little jitter.
+                if (follow.active) {
+                    if (moved < CLICK_SLOP_PX) return;
+                    endFollowRef.current();
+                }
                 const now = grab ? heldAt(e.clientX, e.clientY, grab) : null;
                 // Once the held point can't follow the pointer, finish the
                 // press without it, or coming back would snap to it.

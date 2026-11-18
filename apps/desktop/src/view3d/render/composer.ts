@@ -436,10 +436,11 @@ mat4 composedBone(int slot, int bone) {
   int x = (slot % ${COMPOSED_PER_ROW}) * ${COMPOSED_STRIDE} + bone * 4, y = slot / ${COMPOSED_PER_ROW};
   mat4 m = mat4(texelFetch(uComposed, ivec2(x, y), 0), texelFetch(uComposed, ivec2(x + 1, y), 0),
                 texelFetch(uComposed, ivec2(x + 2, y), 0), texelFetch(uComposed, ivec2(x + 3, y), 0));
-  // the headless slot's head folds to a point at its base, taking whatever
-  // rides it (hat, plume, beret) along and tapering the neck into it
+  // the headless slot's head folds to (almost) a point at its base, taking
+  // whatever rides it (hat, plume, beret) along and tapering the neck into
+  // it; not quite zero, so its normals still normalize instead of going NaN
   if (slot == uHeadlessSlot && bone == uHeadlessBone)
-    return mat4(vec4(0.0), vec4(0.0), vec4(0.0), m * vec4(uHeadlessAt, 1.0));
+    return mat4(m[0] * 1e-4, m[1] * 1e-4, m[2] * 1e-4, m * vec4(uHeadlessAt, 1.0));
   return m;
 }
 `;

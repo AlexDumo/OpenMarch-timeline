@@ -361,9 +361,10 @@ export class MarcherBodies {
     private readonly holdIds: string[];
     /** The count clock of the last `writeFrame`. */
     private count = 0;
+    private headIndex: number | null = null;
     /** The head bone's index in the composed bones, or -1. */
     private get headBone(): number {
-        return this.bake.boneNames.indexOf(HEAD_BONE);
+        return (this.headIndex ??= this.bake.boneNames.indexOf(HEAD_BONE));
     }
     private eyeScratch: Float32Array | null = null;
     /** The head's base at bind (`headBase`), for `setHeadless`. */
