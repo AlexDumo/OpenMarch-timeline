@@ -173,3 +173,33 @@ describe("lifting, tilting and turning over time (fork #1087)", () => {
         expect(itemGeometryAt(changes, 2)?.pitch).toBe(180);
     });
 });
+
+describe("a transition longer than the gap since the last change (fork #1087)", () => {
+    it("eases over the gap instead of jumping to the end", () => {
+        // On field from 20; set to lift 1.5 m on 28 over 16 counts, which would start on 13
+        const changes = [
+            change(20),
+            change(28, { elevation: 1.5, rotation: 180, transitionLength: 16 }),
+        ];
+        expect(itemGeometryAt(changes, 20)).toMatchObject({
+            elevation: 0,
+            rotation: 0,
+        });
+        const mid = itemGeometryAt(changes, 24)!;
+        expect(mid.elevation).toBeCloseTo(0.75);
+        expect(mid.rotation).toBeCloseTo(90);
+        expect(itemGeometryAt(changes, 28)).toMatchObject({ elevation: 1.5 });
+    });
+
+    it("doesn't start the next change before the one it eases from", () => {
+        const changes = [
+            change(0),
+            change(10, { width: 4 }),
+            change(12, { width: 6, transitionLength: 8 }),
+        ];
+        // Before 10 the second change is still ahead: the first holds
+        expect(itemGeometryAt(changes, 6)!.width).toBe(2);
+        // Between 10 and 12 the third eases from the second
+        expect(itemGeometryAt(changes, 11)!.width).toBeCloseTo(5);
+    });
+});

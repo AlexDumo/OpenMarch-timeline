@@ -86,17 +86,24 @@ function geometryAt(
 ): ItemGeometry | null {
     const first = sorted[0];
     if (count === 0 || !first || position < first.beat) return null;
+    /**
+     * When change `j` starts easing in: its transition's first count, but never before the change
+     * it eases from. A transition longer than the gap eases over the gap (fork #1087: it used to
+     * find nothing to ease from and jump to the end).
+     */
+    const startOf = (j: number) =>
+        Math.max(transitionStart(sorted[j]!), sorted[j - 1]!.beat);
     // The latest change whose transition has started takes over
     let i = count - 1;
     let current = sorted[i];
-    while (i > 0 && current && transitionStart(current) > position) {
+    while (i > 0 && current && startOf(i) > position) {
         current = sorted[--i];
     }
     if (!current) return null;
     // The first change has nothing to ease from: it is in place on its count
     if (i === 0 || position >= current.beat) return settled(current);
 
-    const start = transitionStart(current);
+    const start = startOf(i);
     const from = geometryAt(sorted, i, start);
     if (!from) return settled(current);
     const progress = (position - start) / (current.beat - start);

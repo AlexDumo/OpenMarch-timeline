@@ -118,6 +118,13 @@
         "width": 920,
         "height": 520
     },
+    "3d-props-over-time": {
+        "chapter": "3d-view",
+        "kind": "clip",
+        "width": 920,
+        "height": 560,
+        "seconds": 6.87
+    },
     "3d-props-panel": {
         "chapter": "3d-view",
         "kind": "still",
