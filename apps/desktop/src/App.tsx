@@ -24,6 +24,7 @@ import clsx from "clsx";
 import { useTempoModeStore } from "@/tempo/tempoModeStore";
 import { SelectedAudioFileProvider } from "@/context/SelectedAudioFileContext";
 import { TooltipProvider } from "@radix-ui/react-tooltip";
+import WorkingCopyConflictDialog from "@/components/workingCopy/WorkingCopyConflictDialog";
 import TitleBar from "@/components/titlebar/TitleBar";
 import { useUiSettingsStore } from "./stores/UiSettingsStore";
 import { useSnapOnWhenFileOpens } from "./hooks/useSnapOnWhenFileOpens";
@@ -315,6 +316,7 @@ function App() {
                                             <SvgPreviewHandler />
                                             <PreviewModeHost />
                                             <TitleBar showControls />
+                                            <WorkingCopyConflictDialog />
                                             <>
                                                 <div
                                                     id="app"

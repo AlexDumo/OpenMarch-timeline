@@ -195,6 +195,18 @@ export function createWorkingCopyHost(deps: WorkingCopyHostDeps) {
         },
 
         /**
+         * Drops the open show's working copy without publishing it ("Use the version on
+         * disk"). `closeConnections` closes the app's connections to it first.
+         */
+        async discardCurrent(closeConnections: () => void): Promise<void> {
+            const session = current;
+            if (!session) return;
+            setCurrent(null);
+            closeConnections();
+            await session.close({ discard: true });
+        },
+
+        /**
          * Publishes the open show for the last time and releases its working copy. When that
          * publish fails, asks (if it can); returns false if the person cancels. Concurrent calls
          * share one run. `closeConnections` closes the app's connections to the working copy.

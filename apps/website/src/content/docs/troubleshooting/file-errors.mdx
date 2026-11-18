@@ -12,6 +12,7 @@ covers:
   - i18n:fileDialog.leftoverJournal
   - apps/desktop/electron/main/leftoverJournalRecovery.ts
   - apps/desktop/electron/main/cloudSyncFolder.ts
+  - apps/desktop/electron/database/workingCopy
 sidebar:
   order: 1
 ---
@@ -121,6 +122,7 @@ If it keeps happening with one show:
 - Let the sync app finish (its icon shows when it's up to date) before you open the show, and close OpenMarch before you shut the computer.
 - Don't open the same show on two computers at once. Each sync app keeps one copy and may save the other as a conflict copy, such as `My show (1).dots`.
 - Work on the show in a folder on this computer that isn't synced, and copy it into the synced folder when you're done.
+- Or turn on <Ui k="settings.general.workingCopySaves" /> in Settings › General (beta). OpenMarch then edits a private copy and replaces the show file in one step a few seconds after you stop editing, so no `-journal` file is ever left in the synced folder. If a sync app is using the show when OpenMarch wants to update it, the title bar says <Ui k="workingCopy.status.problem" plain /> and OpenMarch tries again by itself; your changes are kept safe meanwhile. See [Save through a working copy](/guides/files/save-and-open/#save-through-a-working-copy-beta).
 
 ## Couldn't back up or convert your file
 

@@ -32,8 +32,12 @@ import {
 } from "./workingCopyHost";
 import type {
     RecoverableWorkingCopy,
+    SaveOutcome,
+    WorkingCopyConflictChoice,
+    WorkingCopySession,
     WorkingCopyStatus,
 } from "../database/workingCopy/WorkingCopySession";
+import { createWorkingCopyTelemetry } from "./workingCopyTelemetry";
 import { DatabaseSync } from "node:sqlite";
 import {
     decideFileVersion,
@@ -147,6 +151,8 @@ import {
 //
 
 let isQuitting = false;
+/** Set while the window's close handler runs, so a second close request waits for it. */
+let windowIsClosing = false;
 const store = new Store();
 /** No settings yet: a new install, or a test's fresh profile, with no old storage to move */
 const isNewProfile = store.size === 0;
@@ -195,6 +201,12 @@ ipcMain.on("settings:set", (event, settings) => {
         Object.prototype.hasOwnProperty.call(settings, WORKING_COPY_SETTING)
     )
         showApplicationMenu();
+
+    // Turning working-copy saves off publishes the open show now. It keeps its working copy
+    // until it closes; the next open edits in place. Unpublished changes from earlier sessions
+    // are still offered (ADR 0018).
+    if (settings[WORKING_COPY_SETTING] === false)
+        void workingCopies.current?.flush("setting-off");
 
     if (Object.prototype.hasOwnProperty.call(settings, "automaticUpdates"))
         updates?.setAutomaticDownload(
@@ -368,6 +380,20 @@ async function createWindow(title?: string) {
         if (isQuitting) return;
 
         event.preventDefault();
+        if (windowIsClosing) return;
+        windowIsClosing = true;
+        // A working copy publishes while the window is still visible, so a failed publish can
+        // ask the person and they can cancel quitting (ADR 0018).
+        if (workingCopies.current) {
+            const proceed = await endWorkingCopy("quit").catch((error) => {
+                console.error("Error saving before quit:", error);
+                return true;
+            });
+            if (!proceed) {
+                windowIsClosing = false;
+                return;
+            }
+        }
         win!.hide(); // use non-null assertion now that we're inside the if-block
         closeView3dWindow();
 
@@ -695,6 +721,7 @@ function initRecentFilesIpcHandlers() {
 
 function initIpcHandlers() {
     initDatabaseIpcHandlers();
+    initWorkingCopyIpcHandlers();
     initLeftoverJournalIpcHandlers();
     initRecentFilesIpcHandlers();
 }
@@ -1850,9 +1877,20 @@ function backupBeforeMigrations(path: string) {
 
 const workingCopyRoot = () => join(app.getPath("userData"), "working-copies");
 
+/** The sync app whose folder holds a show, cached per path (it only reads folder names). */
+const syncServiceCache = new Map<string, string | null>();
+function syncServiceOf(showPath: string): string | null {
+    if (!syncServiceCache.has(showPath))
+        syncServiceCache.set(showPath, cloudSyncServiceFor(showPath));
+    return syncServiceCache.get(showPath) ?? null;
+}
+
 function reportWorkingCopyStatus(status: WorkingCopyStatus) {
     if (!win || win.isDestroyed()) return;
-    win.webContents.send("working-copy:status", status);
+    win.webContents.send("working-copy:status", {
+        ...status,
+        syncService: syncServiceOf(status.showPath),
+    } satisfies WorkingCopyStatus);
     if (isMacOS)
         win.setDocumentEdited(
             status.state !== "saved" && status.state !== "closed",
@@ -1882,6 +1920,8 @@ async function askRecoverOnOpen(
         cancelId: 2,
         noLink: true,
     };
+    // Chosen on the launch page already
+    if (approvedRecoveryId === entry.id) return "recover";
     // A Playwright run can't answer a native dialog: recover, as the safe choice.
     if (process.env.PLAYWRIGHT_SESSION) return "recover";
     const { response } =
@@ -1897,9 +1937,210 @@ const workingCopies = createWorkingCopyHost({
         appVersion: app.getVersion(),
         platform: process.platform,
         onStatus: reportWorkingCopyStatus,
+        onPublish: (event) => workingCopyTelemetry.publish(event),
     }),
-    askRecover: askRecoverOnOpen,
+    askRecover: async (entry) => {
+        workingCopyTelemetry.recoveryOffered();
+        const choice = await askRecoverOnOpen(entry);
+        if (choice === "recover") workingCopyTelemetry.recoveryTaken();
+        return choice;
+    },
+    askUnpublished: askAboutUnpublishedChanges,
+    onSessionChange: (session) => {
+        if (session)
+            workingCopyTelemetry.sessionStarted(
+                syncServiceOf(session.showPath),
+            );
+        else workingCopyTelemetry.sessionEnded();
+    },
 });
+
+/** Non-identifying publish numbers for Sentry, respecting the analytics opt-out (ADR 0018). */
+const workingCopyTelemetry = createWorkingCopyTelemetry({
+    enabled: () =>
+        enableSentry &&
+        !store.get("optOutAnalytics") &&
+        !process.env.PLAYWRIGHT_SESSION,
+    platform: process.platform,
+    appVersion: app.getVersion(),
+});
+
+type UnpublishedAnswer = "retry" | "overwrite" | "saveAs" | "close" | "cancel";
+
+/** Asks what to do when the publish before closing or quitting failed (ADR 0018). */
+async function askAboutUnpublishedChanges(
+    session: WorkingCopySession,
+    outcome: Extract<SaveOutcome, { ok: false }>,
+): Promise<"close" | "cancel" | "retried"> {
+    const name = basename(session.showPath);
+    const choices: { label: string; answer: UnpublishedAnswer }[] =
+        outcome.state === "conflict"
+            ? [
+                  {
+                      label: t("fileDialog.unpublished.keepMine"),
+                      answer: "overwrite",
+                  },
+                  {
+                      label: t("fileDialog.unpublished.saveAs"),
+                      answer: "saveAs",
+                  },
+              ]
+            : outcome.state === "readOnly"
+              ? [
+                    {
+                        label: t("fileDialog.unpublished.saveAs"),
+                        answer: "saveAs",
+                    },
+                ]
+              : [
+                    {
+                        label: t("fileDialog.unpublished.retry"),
+                        answer: "retry",
+                    },
+                    {
+                        label: t("fileDialog.unpublished.saveAs"),
+                        answer: "saveAs",
+                    },
+                ];
+    choices.push(
+        { label: t("fileDialog.unpublished.closeAnyway"), answer: "close" },
+        { label: t("fileDialog.unpublished.cancel"), answer: "cancel" },
+    );
+    const service = syncServiceOf(session.showPath);
+    const options: Electron.MessageBoxOptions = {
+        type: "warning",
+        message: t("fileDialog.unpublished.message", { name }),
+        detail: [
+            outcome.state === "conflict"
+                ? t("fileDialog.unpublished.conflictDetail", { name })
+                : outcome.state === "readOnly"
+                  ? t("fileDialog.unpublished.readOnlyDetail", { name })
+                  : service
+                    ? t("fileDialog.unpublished.busySyncDetail", {
+                          name,
+                          service,
+                      })
+                    : t("fileDialog.unpublished.busyDetail", { name }),
+            t("fileDialog.unpublished.keptDetail"),
+        ].join("\n\n"),
+        buttons: choices.map((choice) => choice.label),
+        defaultId: 0,
+        cancelId: choices.length - 1,
+        noLink: true,
+    };
+    // A Playwright run can't answer: close and keep the changes for recovery.
+    if (process.env.PLAYWRIGHT_SESSION) return "close";
+    const { response } =
+        win && !win.isDestroyed()
+            ? await dialog.showMessageBox(win, options)
+            : await dialog.showMessageBox(options);
+    const answer = choices[response]?.answer ?? "cancel";
+    if (answer === "cancel" || answer === "close") return answer;
+    if (answer === "overwrite") await session.overwriteShow();
+    else if (answer === "saveAs") {
+        const target = await chooseWorkingCopyTarget(session.showPath);
+        if (target) await saveWorkingCopyAs(session, target);
+    }
+    return "retried";
+}
+
+/** Asks where to save the open show as a new file. */
+async function chooseWorkingCopyTarget(
+    showPath: string,
+): Promise<string | null> {
+    const name = basename(showPath).replace(/\.dots$/i, "");
+    const result = await showSaveDialogHandler({
+        buttonLabel: t("fileDialog.saveAs.button"),
+        defaultPath: join(dirname(showPath), `${name} (2).dots`),
+        filters: [
+            {
+                name: t("fileDialog.filters.openMarchFile"),
+                extensions: ["dots"],
+            },
+        ],
+    });
+    if (result.canceled || !result.filePath) return null;
+    return result.filePath.endsWith(".dots")
+        ? result.filePath
+        : `${result.filePath}.dots`;
+}
+
+/** Makes `newShowPath` the open show's file and publishes to it (Save As). */
+async function saveWorkingCopyAs(
+    session: WorkingCopySession,
+    newShowPath: string,
+): Promise<SaveOutcome> {
+    const outcome = await session.retarget(newShowPath);
+    DatabaseServices.setWorkingCopyShowPath(session.showPath);
+    store.set("databasePath", session.showPath);
+    addRecentFile(session.showPath);
+    win?.setTitle("OpenMarch - " + session.showPath); // i18n-ignore: product name and path
+    if (isMacOS) win?.setRepresentedFilename(session.showPath);
+    reportWorkingCopyStatus(session.status());
+    return outcome;
+}
+
+/** Recovery the person already chose on the launch page, so opening doesn't ask again. */
+let approvedRecoveryId: string | null = null;
+
+function initWorkingCopyIpcHandlers() {
+    ipcMain.handle("working-copy:save-now", () => publishNow());
+    ipcMain.handle("working-copy:save-as", async () => {
+        const session = workingCopies.current;
+        if (!session)
+            return { ok: false, state: "closed", message: "No show is open" };
+        const target = await chooseWorkingCopyTarget(session.showPath);
+        if (!target) return { ok: false, cancelled: true };
+        return saveWorkingCopyAs(session, target);
+    });
+    ipcMain.handle(
+        "working-copy:resolve-conflict",
+        async (_, choice: WorkingCopyConflictChoice) => {
+            const session = workingCopies.current;
+            if (!session)
+                return {
+                    ok: false,
+                    state: "closed",
+                    message: "No show is open",
+                };
+            if (choice === "keepMine") return session.overwriteShow();
+            if (choice === "keepTheirs") {
+                // Drop the working copy and reopen the show as it is on disk.
+                const showPath = session.showPath;
+                await workingCopies.discardCurrent(() =>
+                    DatabaseServices.closeDatabase(),
+                );
+                const resCode = await setActiveDb(showPath);
+                return resCode === 200
+                    ? { ok: true }
+                    : { ok: false, state: "closed", message: String(resCode) };
+            }
+            const target = await chooseWorkingCopyTarget(session.showPath);
+            if (!target) return { ok: false, cancelled: true };
+            return saveWorkingCopyAs(session, target);
+        },
+    );
+    ipcMain.handle("working-copy:list-recoverable", () =>
+        workingCopies.listRecoverable(),
+    );
+    ipcMain.handle("working-copy:recover", async (_, id: string) => {
+        const entry = workingCopies.findRecoverable(id);
+        if (!entry) return 404;
+        approvedRecoveryId = id;
+        workingCopyTelemetry.recoveryOffered();
+        workingCopyTelemetry.recoveryTaken();
+        try {
+            const resCode = await setActiveDb(entry.manifest.showPath);
+            if (resCode === 200) addRecentFile(entry.manifest.showPath);
+            return resCode;
+        } finally {
+            approvedRecoveryId = null;
+        }
+    });
+    ipcMain.handle("working-copy:discard", (_, id: string) => {
+        workingCopies.discard(id);
+    });
+}
 
 /** Publishes and releases the open working copy; false if the person cancelled. */
 function endWorkingCopy(reason: string): Promise<boolean> {
@@ -2039,6 +2280,8 @@ async function openShowWithSaveMode(
                 onActivity: () => session.noteActivity(),
             }),
     });
+    if (opened.session)
+        workingCopyTelemetry.tempFilesFound(opened.staleTempFiles);
     if (opened.session)
         console.log(
             `Editing ${opened.session.showPath} through working copy ${opened.session.workingPath}` +

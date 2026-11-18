@@ -76,6 +76,8 @@ export type WorkingCopyStatus = {
     conflict?: { reason: "modified" | "missing"; changed: string[] };
     /** When a deferred publish will be tried again (ms since the epoch). */
     retryAt?: number;
+    /** The sync app whose folder holds the show ("OneDrive"…), added by the app. */
+    syncService?: string | null;
 };
 
 /** How the person resolves a show that changed on disk. */
