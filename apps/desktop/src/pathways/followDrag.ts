@@ -172,6 +172,13 @@ export const EVEN_STEP = 0.5;
 export const EVEN_FIRST = 2;
 
 /**
+ * Even's steps as the path bar writes them, from −/+, typing or a drag on the number alike: at
+ * least half a step, and at most `limit` (DL-7), so nobody walks backward
+ */
+export const evenStepsWithin = (steps: number, limit: number | null): number =>
+    Math.max(EVEN_STEP, limit === null ? steps : Math.min(steps, limit));
+
+/**
  * The line the tool works on: where it stands at the start flag, or with Keep end spots and
  * Ripple in, where it stands at the start of the move it follows into (`FollowKeep.line`)
  */

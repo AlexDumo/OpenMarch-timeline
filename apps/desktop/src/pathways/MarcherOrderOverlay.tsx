@@ -70,6 +70,7 @@ import {
     followOrderForms,
     formsCover,
     shownOrderOf,
+    type ShownTrail,
     useMarcherOrderStore,
     withOwnOrder,
     type ShownOrder,
@@ -125,7 +126,7 @@ interface OrderInk {
     readonly guessTip: string;
 }
 
-function orderInk(dark: boolean): OrderInk {
+export function orderInk(dark: boolean): OrderInk {
     return dark
         ? {
               thread: "rgba(255,255,255,0.85)",
@@ -256,7 +257,7 @@ export interface OrderLabels {
 }
 
 /** A line as drawn, on screen, and how it looks */
-interface DrawnLine {
+export interface DrawnLine {
     readonly kind: OrderLaneKind;
     readonly guessed: boolean;
     /** Leader first; Set order's pointer last while it grows the line */
@@ -291,7 +292,7 @@ interface DrawnLine {
  * `numbered` or when the lane can't tell the order (doubling back, crossing). Numbers keep clear of
  * the tip, the marchers' name labels (`busy`), every dot (`dots`) and the other lines' lanes.
  */
-function drawLine({
+export function drawLine({
     points,
     marchers,
     guessed,
@@ -597,13 +598,36 @@ export default function MarcherOrderOverlay({
     );
     // Where the selection stands: the same map until one of them moves
     const ownAt = useDrawnAt(marchers, ids, version);
+    // A stored trail shown (selected or in Edit path): its line walks in its order the whole move
+    const trailTarget = usePathPenStore((s) =>
+        s.session &&
+        s.session.phase !== "drawing" &&
+        s.session.target.trail &&
+        s.session.target.routeId !== null
+            ? s.session.target
+            : null,
+    );
+    const shownTrail = useMemo(
+        (): ShownTrail | null =>
+            trailTarget?.trail
+                ? {
+                      start: trailTarget.start,
+                      end: trailTarget.end,
+                      // Stored tail first, the leader last (the leader's mark reads the last)
+                      order: trailTarget.trail.members
+                          .map((m) => m.marcherId)
+                          .reverse(),
+                  }
+                : null,
+        [trailTarget],
+    );
     // The selection's own line
     const own = useMemo(
         (): ShownOrder | null =>
             !ordersShowing || sweep || !ready
                 ? null
-                : shownOrderOf(forms, ids, beat, ownAt),
-        [ordersShowing, sweep, ready, forms, ids, beat, ownAt],
+                : shownOrderOf(forms, ids, beat, ownAt, shownTrail),
+        [ordersShowing, sweep, ready, forms, ids, beat, ownAt, shownTrail],
     );
     const lines = useMemo((): ShownOrder[] => {
         if (!ordersShowing || sweep || !ready) return [];
@@ -1241,7 +1265,7 @@ const inkGrey = (alpha: number): string => {
  * the tail along a plain lane, one leg at a time so each leg carries its own part of the fade; flat
  * on an order that doubles back (a fade would lie); a fading thread on one whose legs cross
  */
-const LaneInk = memo(function LaneInk({
+export const LaneInk = memo(function LaneInk({
     id,
     line,
     holes,
@@ -1312,7 +1336,7 @@ const LaneInk = memo(function LaneInk({
 });
 
 /** A lane's marks over everything: the solid tip past the leader, and a crossed order's darts */
-const LaneMarks = memo(function LaneMarks({
+export const LaneMarks = memo(function LaneMarks({
     line,
     ink,
 }: {

@@ -32,6 +32,9 @@ import type { FieldProperties } from "@openmarch/core";
 import tolgee from "@/global/singletons/Tolgee";
 import Shortcut from "@/components/ui/Shortcut";
 import { RichTips, Tip } from "@/components/ui/Tip";
+import { ScrubNumber } from "@/shapes/editor/ScrubNumber";
+import { scrubValue, spacingRate } from "@/shapes/editor/scrub";
+import { formatSteps, parseSteps } from "@/shapes/editor/format";
 import { runAction } from "@/shortcuts/registry";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import { getActionShortcutKeys } from "@/shortcuts/labels";
@@ -81,6 +84,7 @@ import {
     EVEN_FIRST,
     EVEN_STEP,
     evenLimitOf,
+    evenStepsWithin,
     followFootprint,
     followMarchersOf,
     followPlanOf,
@@ -136,23 +140,23 @@ export { bigSteps, trailDistances, type BigSteps } from "./pathBigSteps";
 /** Under a marcher: the field's note there (offset and pill), which the path bar leaves room for */
 const FIELD_NOTE_ROOM_PX = 40;
 /**
- * Reverse leader's tooltip, or why it's off: a dragged-out line ends along its trail, so the
- * other end can't lead (owner, 2026-11-10)
+ * Reverse leader's tooltip line under its name, or why it's off: a dragged-out line ends along its
+ * trail, so the other end can't lead (owner, 2026-11-10)
  */
-function reverseLabel(along: boolean | undefined, around?: boolean): string {
+function reverseHint(along: boolean | undefined, around?: boolean): string {
     if (around)
         return tolgee.t(
-            "pathways.trail.reverseAroundTip",
-            "Go the other way around the outline, as far. The one at the back leads.",
+            "pathways.trail.reverseAroundHint",
+            "Go the other way around, as far",
         );
     return along
         ? tolgee.t(
-              "timeline.refusals.trail.reverseAlong",
-              "Reverse leader is off for a trail dragged out of a line. Drag the trail out of the other end instead.",
+              "pathways.trail.reverseAlongHint",
+              "Off for a trail dragged out of a line: drag from the other end",
           )
         : tolgee.t(
-              "pathways.trail.reverseTip",
-              "Make the other end of the line lead. Everyone keeps their end spot.",
+              "pathways.trail.reverseHint",
+              "The other end leads. End spots stay",
           );
 }
 
@@ -530,7 +534,8 @@ function TrailLeaderMark({ session }: { session: PathSession }) {
             </span>
             {stored && (
                 <IconButton
-                    label={reverseLabel(trail.along, trail.around)}
+                    label={tolgee.t("actions.path.reverse", "Reverse leader")}
+                    hint={reverseHint(trail.along, trail.around)}
                     disabled={trail.along}
                     action="reverseTrail"
                     onClick={() => runAction("reverseTrail")}
@@ -1037,21 +1042,28 @@ function PathSlots({ session }: { session: PathSession }) {
         !!session.target.group && !session.target.lane && !isLoose(session);
     return (
         <>
+            {/* The tooltip is the command's name, its shortcut and one short line (owner,
+                2026-11-17: a sentence across the field was too much) */}
             <IconButton
                 label={
                     group
+                        ? editGroupPathLabel()
+                        : tolgee.t("actions.path.edit", "Edit path")
+                }
+                hint={
+                    group
                         ? tolgee.t(
-                              "pathways.editor.editGroupTip",
-                              "Show the group path's points to drag. Every marcher on it follows",
+                              "pathways.editor.editGroupHint",
+                              "Every marcher on it follows",
                           )
                         : session.target.trail
                           ? tolgee.t(
-                                "pathways.editor.editTrailTip",
-                                "Edit path: show the trail's points to drag and its head to draw on or drag longer. Escape or a click on empty field turns it off",
+                                "pathways.editor.editTrailHint",
+                                "Drag its points, or its head to draw on",
                             )
                           : tolgee.t(
-                                "pathways.editor.editTip",
-                                "Show this path's points to drag. A click on its line does it too",
+                                "pathways.editor.editHint",
+                                "A click on its line does it too",
                             )
                 }
                 action="editPath"
@@ -1069,12 +1081,12 @@ function PathSlots({ session }: { session: PathSession }) {
                 <>
                     <Divider />
                     <IconButton
-                        label={
+                        label={editLineLabel(lineDrill)}
+                        hint={
                             lineReason ??
                             tolgee.t(
-                                "pathways.editor.editLineTip",
-                                "Bend only {marcher}'s line, by its handles. It keeps following the group path's edits. A click on the line does it too",
-                                { marcher: lineDrill ?? "" },
+                                "pathways.editor.editLineHint",
+                                "Bend this line only. It still follows the group path",
                             )
                         }
                         action="editLine"
@@ -1093,9 +1105,10 @@ function PathSlots({ session }: { session: PathSession }) {
                         holds its place (rounds 7 and sim 3) */}
                     {slots.backIsRejoin ? (
                         <IconButton
-                            label={tolgee.t(
-                                "pathways.editor.rejoinTip",
-                                "Put the selected marchers back on the group path. A detached marcher's copy goes, and so do any bends on its line",
+                            label={tolgee.t("actions.path.rejoin", "Rejoin")}
+                            hint={tolgee.t(
+                                "pathways.editor.rejoinHint",
+                                "Back on the group path. Copies and bends go",
                             )}
                             action="rejoinPath"
                             onClick={() => runAction("rejoinPath")}
@@ -1119,11 +1132,15 @@ function PathSlots({ session }: { session: PathSession }) {
                         />
                     ) : (
                         <IconButton
-                            label={
+                            label={tolgee.t(
+                                "actions.path.adjustResetSpot",
+                                "Match group",
+                            )}
+                            hint={
                                 slots.matchReason ??
                                 tolgee.t(
-                                    "pathways.editor.resetTip",
-                                    "Take this marcher's bends off, so it walks the group path like the others again",
+                                    "pathways.editor.resetHint",
+                                    "Takes this marcher's bends off",
                                 )
                             }
                             action="adjustResetSpot"
@@ -1356,7 +1373,7 @@ function PathMoreMenu({ session }: { session: PathSession }) {
                                     <span className="text-sub text-text-subtitle">
                                         {tolgee.t(
                                             "pathways.editor.shapeControlsNote",
-                                            "The end shape's spacing, size, turn and flips, and its handles on the field",
+                                            "The end shape's spacing, size, turn and handles",
                                         )}
                                     </span>
                                 </span>
@@ -1804,8 +1821,12 @@ function SnakeChoice({ session }: { session: PathSession }) {
             >
                 <IconButton
                     label={tolgee.t(
-                        "pathways.editor.snakeRowsTip",
-                        "Snake row by row: along the corner's row, then back along the next",
+                        "actions.path.snakeRows",
+                        "Snake row by row",
+                    )}
+                    hint={tolgee.t(
+                        "pathways.editor.snakeRowsHint",
+                        "Along the corner's row, then back along the next",
                     )}
                     action="followSnakeRows"
                     pressed={by === "rows"}
@@ -1817,8 +1838,12 @@ function SnakeChoice({ session }: { session: PathSession }) {
                 </IconButton>
                 <IconButton
                     label={tolgee.t(
-                        "pathways.editor.snakeColumnsTip",
-                        "Snake column by column: along the corner's column, then back along the next",
+                        "actions.path.snakeColumns",
+                        "Snake column by column",
+                    )}
+                    hint={tolgee.t(
+                        "pathways.editor.snakeColumnsHint",
+                        "Along the corner's column, then back along the next",
                     )}
                     action="followSnakeColumns"
                     pressed={by === "columns"}
@@ -1863,14 +1888,15 @@ function FollowControls({ session }: { session: PathSession }) {
           )
         : null;
     const reducedMotion = prefersReducedMotion();
+    // −/+, typing and a drag on the number all write the same spacing (owner, 2026-11-17: "could I
+    // not type it like I can with the step size input")
     const setEven = (steps: number) =>
         setFollowSpacing({
             kind: "even",
-            steps: Math.max(
-                EVEN_STEP,
-                limit === null ? steps : Math.min(steps, limit),
-            ),
+            steps: evenStepsWithin(steps, limit),
         });
+    // Where a drag on the number started, so letting go off it puts it back
+    const scrubFrom = useRef<number | null>(null);
     return (
         <>
             {fromTrail && (
@@ -1938,10 +1964,48 @@ function FollowControls({ session }: { session: PathSession }) {
                                 >
                                     −
                                 </IconButton>
-                                <span data-testid="follow-even-steps">
+                                {/* The shape tool's step number: click to type (Enter or
+                                    clicking away applies, Esc cancels), drag to change */}
+                                <ScrubNumber
+                                    display={formatSteps(even)}
+                                    axis="x"
+                                    label={tolgee.t(
+                                        "pathways.editor.evenSpacing",
+                                        "Even spacing, in steps",
+                                    )}
+                                    testId="follow-even-steps"
+                                    onScrubStart={() => {
+                                        scrubFrom.current = even;
+                                    }}
+                                    onScrub={(move) =>
+                                        setEven(
+                                            scrubValue(
+                                                scrubFrom.current ?? even,
+                                                move.dx,
+                                                move.dy,
+                                                spacingRate(
+                                                    !move.roles.fine,
+                                                    "x",
+                                                ),
+                                            ),
+                                        )
+                                    }
+                                    onScrubEnd={(keep) => {
+                                        if (!keep && scrubFrom.current !== null)
+                                            setEven(scrubFrom.current);
+                                        scrubFrom.current = null;
+                                    }}
+                                    onType={(text) => {
+                                        const steps = parseSteps(text);
+                                        if (steps === null) return false;
+                                        setEven(steps);
+                                        return true;
+                                    }}
+                                />
+                                <span className="text-text-subtitle">
                                     {tolgee.t(
-                                        "pathways.editor.evenSteps",
-                                        "{steps} steps",
+                                        "pathways.editor.evenStepsUnit",
+                                        "{steps, plural, one {step} other {steps}}",
                                         { steps: even },
                                     )}
                                 </span>

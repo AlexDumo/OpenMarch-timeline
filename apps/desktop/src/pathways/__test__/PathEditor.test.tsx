@@ -231,16 +231,16 @@ describe("the path's floating editor", () => {
         );
         // Detach left the bar for ···
         expect(screen.queryByTestId("path-detach")).toBeNull();
-        // Two selected: Edit <name>'s line and Match group greyed out, saying why
+        // Two selected: Edit <name>'s line and Match group greyed out, saying why: the tooltip's
+        // line under the command's name (a screen reader hears it with the tooltip, on focus)
         const line = screen.getByTestId("path-edit-line");
         expect(line.getAttribute("aria-disabled")).toBe("true");
-        expect(line.getAttribute("aria-label")).toBe(
+        expect(line.getAttribute("aria-label")).toBe("Edit marcher's line");
+        expect(line.dataset.tipHint).toBe(
             "Click one of them again to pick just that marcher, then edit their line",
         );
         expect(line.textContent).toBe("Edit marcher's line");
-        expect(
-            screen.getByTestId("path-adjust-reset").getAttribute("aria-label"),
-        ).toBe(
+        expect(screen.getByTestId("path-adjust-reset").dataset.tipHint).toBe(
             "Click one of them again to pick just that marcher, then match it to the group path",
         );
         // One bent member selected: every slot acts, in the same places
@@ -259,9 +259,7 @@ describe("the path's floating editor", () => {
         // A plain member: Match group greyed out, still in its place
         act(() => setGroupCommands([10], null));
         expect(order()).toEqual(slots);
-        expect(
-            screen.getByTestId("path-adjust-reset").getAttribute("aria-label"),
-        ).toBe(
+        expect(screen.getByTestId("path-adjust-reset").dataset.tipHint).toBe(
             "This marcher already walks the group path exactly: nothing to match",
         );
         // Only detached marchers selected: Rejoin takes the third slot, at Match group's width

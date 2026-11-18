@@ -55,6 +55,7 @@ export function IconButton({
     label,
     action,
     shortcut,
+    hint,
     className,
     onClick,
     disabled,
@@ -68,6 +69,8 @@ export function IconButton({
     action?: ActionId;
     /** Keys or a gesture the tooltip shows instead ("Alt + Click"), for what isn't an action's key */
     shortcut?: string;
+    /** The tooltip's one short line of help (or why it's off) under the name and its shortcut */
+    hint?: string;
     className?: string;
     onClick: () => void;
     disabled?: boolean;
@@ -81,7 +84,7 @@ export function IconButton({
     onDisabledClick?: () => void;
 }) {
     return (
-        <Tip label={label} action={action} shortcut={shortcut}>
+        <Tip label={label} action={action} shortcut={shortcut} hint={hint}>
             <button
                 type="button"
                 aria-label={label}

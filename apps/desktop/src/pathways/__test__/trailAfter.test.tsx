@@ -356,4 +356,25 @@ describe("the leader's mark follows the leader (QA-SN-14)", () => {
             Math.hypot(left() - mid.x, top() - mid.y),
         );
     });
+
+    it("its bar's tooltips are a command's name, its shortcut and one short line, never a sentence (owner, 2026-11-17)", () => {
+        sessionOf(alongTarget());
+        render(<PathEditor fieldProperties={fieldProperties} />);
+        const edit = screen.getByTestId("path-edit");
+        expect(edit.getAttribute("aria-label")).toBe("Edit path");
+        expect(edit.dataset.tipLabel).toBe("Edit path");
+        expect(edit.dataset.tipAction).toBe("editPath");
+        expect(edit.dataset.tipHint).toBe(
+            "Drag its points, or its head to draw on",
+        );
+        const reverse = screen.getByTestId("trail-reverse");
+        expect(reverse.getAttribute("aria-label")).toBe("Reverse leader");
+        // Every tooltip line on the bar and the leader's mark fits in a line or two
+        for (const el of document.querySelectorAll<HTMLElement>(
+            "[data-tip-label]",
+        )) {
+            expect(el.dataset.tipLabel!.length).toBeLessThanOrEqual(40);
+            expect((el.dataset.tipHint ?? "").length).toBeLessThanOrEqual(64);
+        }
+    });
 });
