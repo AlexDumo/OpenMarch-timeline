@@ -316,13 +316,15 @@ describe("holds", () => {
     });
 
     it("sousaphone up: the player sees ahead under the bell", () => {
-        // the eyes between the pupils (EYE_AT_REST) with the head up; no
-        // tubing ahead of the face from level to 12 degrees up, across the
-        // middle of the view (owner, 2026-11-18: the bell hid too much)
+        // the eyes between the pupils with the head up (the body's eye at
+        // rest, `EYE_AT_REST` in window/performers/marchers/marcherBodies.ts);
+        // across the middle of the view, the lowest tubing ahead of the face
+        // above the leadpipe sits at least 12 degrees up (owner, 2026-11-18:
+        // the bell hid too much)
         const h = hold("sousaphone", "up");
         const eye = onTurnedHead(h.head, [0, 1.678, 0.06]);
-        let blocking = 0;
-        for (const piece of brassHorn("sousaphone", "low").pieces)
+        let lowest = Infinity;
+        for (const piece of brassHorn("sousaphone", "high").pieces)
             for (let i = 0; i < piece.positions.length; i += 3) {
                 const [x, y, z] = sub(
                     inBody(h, [
@@ -335,9 +337,11 @@ describe("holds", () => {
                 if (z < 0.1) continue;
                 const up = (Math.atan2(y, z) * 180) / Math.PI;
                 const across = (Math.atan2(x, z) * 180) / Math.PI;
-                if (up > 0 && up < 12 && Math.abs(across) < 30) blocking++;
+                // the leadpipe runs forward and down from the lips, far below
+                if (up > -10 && Math.abs(across) < 30)
+                    lowest = Math.min(lowest, up);
             }
-        expect(blocking).toBe(0);
+        expect(lowest).toBeGreaterThan(12);
     });
 
     it("contra up: valves high in front of the face, the left hand on the front bow", () => {

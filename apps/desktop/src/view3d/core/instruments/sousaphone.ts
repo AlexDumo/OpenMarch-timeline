@@ -10,8 +10,8 @@
  * It is laid out as it is worn, in the standing player's frame (meters, +X
  * the performer's left, +Y up, +Z forward, feet at the origin), and then
  * moved so the right hand's grip on the valve caps is the origin: that is
- * the instrument frame, +Z the way the bell faces, +Y up, +X the
- * performer's left. The pistons lean with the hoop, their caps toward the
+ * the instrument frame, +Z forward (the bell faces forward, its mouth
+ * raised `bell.tilt`), +Y up, +X the performer's left. The pistons lean with the hoop, their caps toward the
  * right hand (up and to the performer's right), as on the real horn.
  * Pure: no three.js.
  */
@@ -89,7 +89,7 @@ const SOUSAPHONE = {
     // forward into the bell. Its players wear a beret, not a plumed shako
     // (owner, 2026-11-10), so the bell rides low over the beret, as side-on
     // photos of players show (2026-11-10). `reach` is how far the neck runs
-    // on from `top` along the bell's way to the collar.
+    // on from `top` along the bell's axis, to the bell's tail.
     neck: {
         rise: 0.2,
         top: [0.15, 1.96, -0.21] as Vec3,
