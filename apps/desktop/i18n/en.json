@@ -2964,7 +2964,9 @@
                 "aroundPoints": "This line goes around the outline it stands on, which has no points to edit. Use Reverse leader to go the other way around, or Follow again to change how far",
                 "reverseNobody": "Reverse leader needs someone who starts this move on the outline",
                 "headNotAlong": "Only a trail dragged out of a line can be made longer or shorter by its head",
-                "formPastStart": "A marcher would walk back past where it started. Slide the tail less far"
+                "formPastStart": "A marcher would walk back past where it started. Slide the tail less far",
+                "convertInLineUp": "Some of the line is still standing where it started. Make the trail longer, then convert it",
+                "convertNotAlong": "Only a trail dragged out of a line can be converted to a shape"
             }
         },
         "expertHolds": {

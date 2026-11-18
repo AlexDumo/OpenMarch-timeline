@@ -572,19 +572,38 @@ export const setTimelineSlotDestinationsInTransaction = async ({
     return await getTimelineSlotDestinations({ tx, transitionId });
 };
 
-/** Moves one slot's individual destination. */
+/**
+ * Moves one slot's individual destination. A trail's path is its only truth (pathways L.18,
+ * TM-3): when the slot is a marcher's in a trail that derives its spots (dragged out of a line)
+ * and the spot really moves, that marcher leaves the trail into a plain move of its own to `point`
+ * (`leaveTrailInTransaction`), whose destination is returned. `trail: "keep"` is the trail's own
+ * writes, which keep it.
+ */
 export const updateTimelineSlotDestinationInTransaction = async ({
     transitionId,
     slotIndex,
     point,
     tx,
+    trail = "leave",
 }: {
     transitionId: number;
     slotIndex: number;
     point: XY;
     tx: DbTransaction;
+    trail?: "leave" | "keep";
 }): Promise<DatabaseTimelineSlotDestination> => {
     assertValid(validateDestination(point), "destination");
+    if (trail === "leave") {
+        const { leaveTrailInTransaction } =
+            await import("./timelineTrailDerive");
+        const left = await leaveTrailInTransaction(
+            tx,
+            transitionId,
+            slotIndex,
+            point,
+        );
+        if (left) return left;
+    }
     const d = schema.timeline_slot_destinations;
     const row = await mapDbErrors(() =>
         tx

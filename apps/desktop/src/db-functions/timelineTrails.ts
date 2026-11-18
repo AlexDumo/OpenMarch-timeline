@@ -821,12 +821,18 @@ export async function editTrailPointsInTransaction({
     routeId,
     points,
     toBulge,
+    planSpots = true,
 }: {
     tx: DbTransaction;
     routeId: number;
     points: readonly RoutePointInput[];
     /** The last leg's bulge (R-14″, AP-T11): a number sets it, null clears it, undefined keeps it */
     toBulge?: number | null;
+    /**
+     * A trail dragged out of a line plans its end spots again on the new route (L.18, TM-1);
+     * false when the caller writes them itself (AP-T16's head drag, with its own spacing)
+     */
+    planSpots?: boolean;
 }): Promise<void> {
     const transition = await trailTransition(tx, routeId);
     const row = await tx
@@ -855,6 +861,17 @@ export async function editTrailPointsInTransaction({
     await mapDbErrors(() =>
         writeRouteGeometryInTransaction(tx, routeId, geometry),
     );
+    // L.18 (TM-1): the path is the only truth, so its end spots follow it, in this undo step
+    if (along && planSpots) {
+        const { deriveTrailSpotsInTransaction } =
+            await import("./timelineTrailDerive");
+        await deriveTrailSpotsInTransaction(
+            tx,
+            transition,
+            current.points,
+            geometry.points,
+        );
+    }
     await trailEditedInTransaction(tx, transition);
 }
 
@@ -969,11 +986,32 @@ export async function reverseTrail(args: {
 export async function removeTrailInTransaction({
     tx,
     routeId,
+    keepOrder = true,
 }: {
     tx: DbTransaction;
     routeId: number;
+    /**
+     * A line dragged out of a line keeps its order once the trail goes (QA-DL-35): an order mark
+     * at the move's end, leader first, as the end shape it used to save held it (L.18, TM-4).
+     * False when the trail goes because its last marchers left it (TM-3).
+     */
+    keepOrder?: boolean;
 }): Promise<{ marcherIds: number[] }> {
     const transition = await trailTransition(tx, routeId);
+    if (keepOrder && isAlong(transition) && !isAround(transition)) {
+        const resolver = createResolver(
+            (await readTimelineTables(tx)).snapshot,
+        );
+        const line = resolver.ftlEntry(transition.id).members;
+        if (line.length >= 2) {
+            const { setMarcherOrderInTransaction } =
+                await import("./marcherOrder");
+            await setMarcherOrderInTransaction(tx, {
+                beat: transition.end_beat,
+                order: [...line].reverse(),
+            });
+        }
+    }
     const T = schema.timeline_transitions;
     const A = schema.timeline_assignments;
     const members = await tx

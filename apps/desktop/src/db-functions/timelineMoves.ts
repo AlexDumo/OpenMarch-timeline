@@ -382,7 +382,8 @@ const writeSlotMoves = async ({
     }
 
     for (const { move, row } of plans) {
-        await updateTimelineSlotDestinationInTransaction({
+        // A trail's marcher moved by hand leaves it (pathways L.18, TM-3): its slot is then its own
+        const written = await updateTimelineSlotDestinationInTransaction({
             tx,
             transitionId: row.transitionId,
             slotIndex: row.slotIndex,
@@ -390,8 +391,8 @@ const writeSlotMoves = async ({
         });
         result.slots.push({
             marcherId: move.marcherId,
-            transitionId: row.transitionId,
-            slotIndex: row.slotIndex,
+            transitionId: written.transition_id,
+            slotIndex: written.slot_index,
         });
     }
 };

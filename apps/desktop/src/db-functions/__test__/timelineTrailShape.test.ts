@@ -14,6 +14,7 @@ import { performRedo, performUndo } from "../history";
 import { readAllShapeRecipes } from "../shapeRecipes";
 import { moveMarchersInTarget } from "../timelineMoves";
 import { dragTrail, planTrailDrag } from "../timelineTrailDrag";
+import { convertTrailToShape } from "../timelineTrailDerive";
 import {
     reversedLineParams,
     trailShapeOf,
@@ -253,7 +254,7 @@ describeDbTests("The dragged-out result as a shape (step 4c)", (it) => {
         expect(back.points[inner]!.tension).toBe(0);
     });
 
-    it("QA-DL-10: a straight result saves a Line recipe with the spots as written, read back as a Line; one undo step removes it with the move", async ({
+    it("QA-DL-10, QA-TM-4: a drag-out saves no shape; Convert to shape places a Line with the spots as written, read back as a Line, nobody moving; one undo step takes it back", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -263,9 +264,15 @@ describeDbTests("The dragged-out result as a shape (step 4c)", (it) => {
         const end: XY = [leader[0] + 10 * step, leader[1]];
         const recipesBefore = await readAllShapeRecipes(db);
         const result = await dragTrail({ db, window: WINDOW, marcherIds: ids, leaderId: 6, points: [{ at: end }], spacing: { kind: "keep" }, step, ends: "trail" }); // prettier-ignore
-        expect(result.recipeId).toBeDefined();
+        // No end shape: the path is the only copy of the line (L.18, TM-4)
+        expect(await readAllShapeRecipes(db)).toEqual(recipesBefore);
+        const walking = await resolverOf(db);
+        const { recipeId } = await convertTrailToShape({
+            db,
+            routeId: result.routeId,
+        });
         const recipe = (await readAllShapeRecipes(db)).find(
-            (r) => r.id === result.recipeId,
+            (r) => r.id === recipeId,
         )!;
         expect(recipe).toMatchObject({
             kind: "line",
@@ -291,20 +298,31 @@ describeDbTests("The dragged-out result as a shape (step 4c)", (it) => {
         });
         // Opening it moves nobody: the shape tools read it back with every member on its spot
         const placed = await placedAtEnd(db);
-        const box = placed.find((b) => b.recipe.id === result.recipeId);
+        const box = placed.find((b) => b.recipe.id === recipeId);
         expect(box?.kind).toBe(lineTool);
-        // One undo step takes the recipe with the move
+        // The trail now leads into the Line's spots (R-13′) and walks exactly as before
+        const t = (await db
+            .select()
+            .from(schema.timeline_transitions)
+            .where(eq(schema.timeline_transitions.id, result.transitionId))
+            .get())!;
+        expect(JSON.parse(t.path_params!)).toEqual({ waypoints: [] });
+        for (const m of ids)
+            for (let b = 9; b <= 17; b += 0.25) {
+                const [x, y] = r.positionAt(m, b);
+                const [x0, y0] = walking.positionAt(m, b);
+                expect(Math.hypot(x - x0, y - y0), `M${m}@${b}`).toBeLessThan(1e-6); // prettier-ignore
+            }
+        // One undo step takes the shape back and the trail derives its spots again
         expect((await performUndo(db)).success).toBe(true);
         expect(await readAllShapeRecipes(db)).toEqual(recipesBefore);
         expect((await performRedo(db)).success).toBe(true);
         expect(
-            (await readAllShapeRecipes(db)).some(
-                (x) => x.id === result.recipeId,
-            ),
+            (await readAllShapeRecipes(db)).some((x) => x.id === recipeId),
         ).toBe(true);
     });
 
-    it("QA-DL-12, QA-DL-14 (DL-14, DL-15): uneven Keep spacing round a corner is a Curve kept as written; a change lays it out evenly and the follow move goes to the new spots", async ({
+    it("QA-DL-12, QA-DL-14 (DL-14, DL-15), QA-TM-4: converted, uneven Keep spacing round a corner is a Curve kept as written; a change lays it out evenly and the follow move goes to the new spots, nobody leaving the trail", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -314,14 +332,18 @@ describeDbTests("The dragged-out result as a shape (step 4c)", (it) => {
         const corner: XY = [leader[0] + 10 * step, leader[1]];
         const end: XY = [corner[0], corner[1] - 4 * step];
         const result = await dragTrail({ db, window: WINDOW, marcherIds: ids, leaderId: 6, points: [{ at: corner }, { at: end }], spacing: { kind: "keep" }, step, ends: "trail" }); // prettier-ignore
+        const { recipeId } = await convertTrailToShape({
+            db,
+            routeId: result.routeId,
+        });
         const recipe = (await readAllShapeRecipes(db)).find(
-            (x) => x.id === result.recipeId,
+            (x) => x.id === recipeId,
         )!;
         expect(recipe.kind).toBe("line");
         const params = recipe.params as LineParams & { spots: number };
         expect(params.spots).toBe(6);
         const placed = (await placedAtEnd(db)).find(
-            (b) => b.recipe.id === result.recipeId,
+            (b) => b.recipe.id === recipeId,
         );
         expect(placed?.kind).toBe(lineTool);
         const r = await resolverOf(db);
@@ -352,6 +374,7 @@ describeDbTests("The dragged-out result as a shape (step 4c)", (it) => {
             .where(eq(schema.timeline_transitions.id, result.transitionId))
             .get())!;
         expect(t.path_style).toBe("follow_the_leader");
+        expect(after.ftlEntry(result.transitionId).members).toEqual(ids);
         ids.forEach((m, q) => {
             const [x, y] = after.positionAt(m, 17);
             expect(Math.hypot(x - laidOut[q]!.x, y - laidOut[q]!.y)).toBeLessThan(1e-6); // prettier-ignore
@@ -360,7 +383,7 @@ describeDbTests("The dragged-out result as a shape (step 4c)", (it) => {
         });
     });
 
-    it("QA-DL-11: a line on a trail of one arc leg ends on an Arc recipe; Keep end spots saves none", async ({
+    it("QA-DL-11, QA-TM-4: a line on a trail of one arc leg converts to an Arc", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -369,12 +392,16 @@ describeDbTests("The dragged-out result as a shape (step 4c)", (it) => {
         const leader = starts.get(3)!;
         const end: XY = [leader[0] + 14 * step, leader[1]];
         const result = await dragTrail({ db, window: WINDOW, marcherIds: ids, leaderId: 3, points: [{ at: end, bulge: 0.35 }], spacing: { kind: "keep" }, step, ends: "trail" }); // prettier-ignore
+        const { recipeId } = await convertTrailToShape({
+            db,
+            routeId: result.routeId,
+        });
         const recipe = (await readAllShapeRecipes(db)).find(
-            (x) => x.id === result.recipeId,
+            (x) => x.id === recipeId,
         )!;
         expect(recipe).toMatchObject({ kind: "arc", kindVersion: 2 });
         const placed = (await placedAtEnd(db)).find(
-            (b) => b.recipe.id === result.recipeId,
+            (b) => b.recipe.id === recipeId,
         );
         expect(placed?.kind).toBe(arcTool);
         recipe.members.forEach((m) =>

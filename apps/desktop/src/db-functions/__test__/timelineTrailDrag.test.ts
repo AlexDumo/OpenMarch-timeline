@@ -1,6 +1,12 @@
 import { expect } from "vitest";
 import { eq, getTableName, sql } from "drizzle-orm";
-import { createResolver, type Resolver, type XY } from "@openmarch/core";
+import {
+    alongEnds,
+    createResolver,
+    type FtlTrail,
+    type Resolver,
+    type XY,
+} from "@openmarch/core";
 import { refusalText } from "@/test/refusalText";
 import { translateTimelineText } from "@/timeline/translateTimelineText";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
@@ -24,6 +30,7 @@ import { followPlanOf, type FollowDrag } from "@/pathways/followDrag";
 import { followKeepAt, isTrailLineAt } from "@/pathways/followTool";
 import { storedPoints, type PathSession } from "@/pathways/pathPenStore";
 import { rememberedOrderAt } from "../rememberedOrder";
+import { convertTrailToShape } from "../timelineTrailDerive";
 import {
     dragTrail,
     followOrderAt,
@@ -125,6 +132,10 @@ function alongPolyline(pts: readonly XY[], d: number): XY {
     }
     return pts[pts.length - 1]!;
 }
+
+/** The distance along `way` of its point nearest `p` (R-13″'s projection) */
+const nearestOn = (way: FtlTrail, p: XY): number =>
+    alongEnds(way, [p], [0]).endDist[0]!;
 
 const spotsOf = async (db: DbConnection, transitionId: number) =>
     (
@@ -366,25 +377,30 @@ describeDbTests("Follow by dragging out a trail (AP-T8, AP-T9)", (it) => {
         });
     });
 
-    it("QA-DL-6: after a drag, a trail point moved changes only the walk; a spot moved changes only its member (AP-T10)", async ({
+    it("QA-TM-1 (L.18): after a drag, a trail point moved plans every spot again on the new path, in one undo step; a spot moved by hand takes its marcher out of the trail", async ({
         db,
         marchersAndPages: _,
     }) => {
         const { starts, step } = await line(db);
         const ids = [1, 2, 3, 4, 5, 6];
+        const lineUp = ids.map((m) => starts.get(m)!);
         const leader = starts.get(6)!;
         const corner: XY = [leader[0] + 10 * step, leader[1]];
         const end: XY = [corner[0], corner[1] - 10 * step];
         const result = await dragTrail({ db, window: WINDOW, marcherIds: ids, leaderId: 6, points: [{ at: corner }, { at: end }], spacing: { kind: "keep" }, step, ends: "trail" }); // prettier-ignore
-        const spots = await spotsOf(db, result.transitionId);
-        // The corner dragged out by 4 steps
+        // The corner dragged out by 4 steps: everyone stands on the new path, spaced as before
         const moved: XY = [corner[0], corner[1] + 4 * step];
-        await editTrailPoints({
-            db,
-            routeId: result.routeId,
-            points: [{ at: moved }, { at: end }],
-        });
-        expect(await spotsOf(db, result.transitionId)).toEqual(spots);
+        const points = [{ at: moved }, { at: end }];
+        const before = await dataOf(db);
+        await editTrailPoints({ db, routeId: result.routeId, points });
+        const want = planTrailDrag(lineUp, points, { kind: "keep" }, step);
+        const spots = await spotsOf(db, result.transitionId);
+        spots.forEach((p, q) =>
+            expect(near(p, want.spots[q]!, 1e-6), `slot ${q}`).toBe(true),
+        );
+        // Spacing held: two steps apart along the way, the leader at the head
+        expect(near(spots[5]!, end, 1e-6)).toBe(true);
+        await expectOneUndoStep(db, before);
         const t = (await db
             .select()
             .from(schema.timeline_transitions)
@@ -392,8 +408,11 @@ describeDbTests("Follow by dragging out a trail (AP-T8, AP-T9)", (it) => {
             .get())!;
         expect(JSON.parse(t.path_params!).ends).toBe("along");
         const r = await resolverOf(db);
-        ids.forEach((m, q) => expect(r.positionAt(m, 17)).toEqual(spots[q]));
-        // The leader's way now runs through the moved corner
+        ids.forEach((m, q) =>
+            expect(near(r.positionAt(m, 17), spots[q]!, 1e-6)).toBe(true),
+        );
+        // The leader's way runs through the moved corner, and nobody fans out at the end: every
+        // marcher is on the path at every quarter beat
         const halfway = r.positionAt(6, 13);
         const corners = [leader, moved, end];
         const leaderHalf = alongPolyline(
@@ -401,45 +420,61 @@ describeDbTests("Follow by dragging out a trail (AP-T8, AP-T9)", (it) => {
             (Math.hypot(10, 4) * step + 14 * step) / 2,
         );
         expect(near(halfway, leaderHalf, 1e-6)).toBe(true);
+        for (const m of ids)
+            for (let b = 9; b <= 17; b += 0.25) {
+                const x = r.positionAt(m, b);
+                const on = want.way.at(nearestOn(want.way, x as XY)) as XY;
+                expect(near(x, on, 1e-6), `M${m}@${b}`).toBe(true);
+            }
         // Reverse is off for a dragged-out line (owner, 2026-11-10): refused, nothing written
-        const before = (await db
-            .select()
-            .from(schema.timeline_transitions)
-            .where(eq(schema.timeline_transitions.id, result.transitionId))
-            .get())!;
         await expect(
             reverseTrail({ db, routeId: result.routeId }),
         ).rejects.toThrow(/reverseAlong|other end/);
-        const after = (await db
-            .select()
-            .from(schema.timeline_transitions)
-            .where(eq(schema.timeline_transitions.id, result.transitionId))
-            .get())!;
-        expect(after.path_params).toBe(before.path_params);
-        expect(JSON.parse(after.path_params!)).toEqual({
-            waypoints: [],
-            ends: "along",
-        });
-        // One spot moved: only its member changes
+        // One spot moved by hand: that marcher leaves the trail for a plain move to its new spot
+        // (TM-3); the trail goes on with the other five, nobody else moves
         const r0 = await resolverOf(db);
+        const handMoved: XY = [spots[2]![0] + 3 * step, spots[2]![1]];
+        const beforeHand = await dataOf(db);
         await moveMarchersInTarget({
             db,
             target: { kind: "range", ...WINDOW },
-            moves: [
-                { marcherId: 3, x: spots[2]![0] + 3 * step, y: spots[2]![1] },
-            ],
+            moves: [{ marcherId: 3, x: handMoved[0], y: handMoved[1] }],
         });
         const r1 = await resolverOf(db);
         for (const m of [1, 2, 4, 5, 6])
             for (let b = 9; b <= 17; b += 0.25)
-                expect(r1.positionAt(m, b)).toEqual(r0.positionAt(m, b));
-        expect(r1.positionAt(3, 17)).toEqual([
-            spots[2]![0] + 3 * step,
-            spots[2]![1],
+                expect(near(r1.positionAt(m, b), r0.positionAt(m, b))).toBe(true); // prettier-ignore
+        expect(near(r1.positionAt(3, 17), handMoved)).toBe(true);
+        expect(r1.ftlEntry(result.transitionId).members).toEqual([
+            1, 2, 4, 5, 6,
         ]);
+        const own = (
+            await db
+                .select()
+                .from(schema.timeline_assignments)
+                .innerJoin(
+                    schema.timeline_transitions,
+                    eq(
+                        schema.timeline_transitions.id,
+                        schema.timeline_assignments.transition_id,
+                    ),
+                )
+                .where(eq(schema.timeline_assignments.marcher_id, 3))
+                .all()
+        ).filter((r) => r.timeline_transitions.start_beat === 9);
+        expect(own).toHaveLength(1);
+        expect(own[0]!.timeline_transitions.path_style).toBe("direct");
+        expect(own[0]!.timeline_transitions.slot_count).toBe(1);
+        // M3 walks straight from where it starts: no stored offset inside the trail
+        const mid = r1.positionAt(3, 13);
+        const from = r1.positionAt(3, 9);
+        expect(
+            near(mid, [(from[0] + handMoved[0]) / 2, (from[1] + handMoved[1]) / 2], 1e-6),
+        ).toBe(true); // prettier-ignore
+        await expectOneUndoStep(db, beforeHand);
     });
 
-    it("R-14″ on a dragged-out trail: a leg made an arc after (AP-T11) resolves, the spots stay, and the members walk the arc", async ({
+    it("R-14″ on a dragged-out trail: a leg made an arc after (AP-T11) resolves, the spots follow it onto the arc (L.18), and the members walk the arc", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -476,7 +511,14 @@ describeDbTests("Follow by dragging out a trail (AP-T8, AP-T9)", (it) => {
         expect(geometry.points.map((p) => p.bulge)).toEqual([undefined, 0.25]);
         expect(geometry.toBulge).toBeUndefined();
         expect(geometry.to).toEqual(end);
-        expect(await spotsOf(db, result.transitionId)).toEqual(spots);
+        // The spots are on the arc now, spaced back from the head as before (L.18, TM-1)
+        const lineUp = ids.map((m) => starts.get(m)!);
+        const want = planTrailDrag(lineUp, points, { kind: "keep" }, step);
+        const onArc = await spotsOf(db, result.transitionId);
+        onArc.forEach((p, q) =>
+            expect(near(p, want.spots[q]!, 1e-6), `slot ${q}`).toBe(true),
+        );
+        expect(near(onArc[5]!, spots[5]!, 1e-6)).toBe(true);
         const r = await resolverOf(db);
         for (let b = 9; b <= 17; b += 0.25)
             for (const m of ids) {
@@ -486,7 +528,9 @@ describeDbTests("Follow by dragging out a trail (AP-T8, AP-T9)", (it) => {
                     `M${m}@${b}`,
                 ).toBe(true);
             }
-        ids.forEach((m, q) => expect(r.positionAt(m, 17)).toEqual(spots[q]));
+        ids.forEach((m, q) =>
+            expect(near(r.positionAt(m, 17), onArc[q]!, 1e-6)).toBe(true),
+        );
         // The arc: chord 10 steps down, bulge 1/4, so radius 6.25 steps, its centre 3.75 steps
         // left of the chord's middle. The leader walks 10 steps to the corner, then the whole
         // arc (r·θ) to its spot at the end, at one speed: on the circle once past the corner
@@ -494,7 +538,7 @@ describeDbTests("Follow by dragging out a trail (AP-T8, AP-T9)", (it) => {
         const center: XY = [corner[0] - 3.75 * step, corner[1] - 5 * step];
         const arcLen = radius * 4 * Math.atan(0.5);
         const onArcFrom = 9 + (8 * 10 * step) / (10 * step + arcLen);
-        let onArc = 0;
+        let arcBeats = 0;
         for (let b = 9; b <= 17; b += 0.25) {
             if (b <= onArcFrom + 1e-9) continue;
             const x = r.positionAt(6, b);
@@ -502,9 +546,9 @@ describeDbTests("Follow by dragging out a trail (AP-T8, AP-T9)", (it) => {
                 Math.hypot(x[0] - center[0], x[1] - center[1]),
                 `leader@${b}`,
             ).toBeCloseTo(radius, 6);
-            onArc++;
+            arcBeats++;
         }
-        expect(onArc).toBeGreaterThan(10);
+        expect(arcBeats).toBeGreaterThan(10);
         // halfway along the arc, the leader is at its apex, 2.5 steps right of the chord
         const apexAt =
             9 + (8 * (10 * step + arcLen / 2)) / (10 * step + arcLen);
@@ -810,7 +854,7 @@ describeDbTests("Follow by dragging out a trail (AP-T8, AP-T9)", (it) => {
         expect((await followOrderAt(db, ids, 9, at))!.order.map((i) => ids[i])).toEqual([1, 2, 3, 4]); // prettier-ignore
     });
 
-    it("step 4g: a dragged-out Line is saved leader first, so removing the trail keeps its order", async ({
+    it("step 4g, QA-TM-6: no Line is saved for a dragged-out trail; removing the trail keeps its order (an order mark, leader first); Convert to shape saves the Line leader first", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -818,11 +862,24 @@ describeDbTests("Follow by dragging out a trail (AP-T8, AP-T9)", (it) => {
         const ids = [1, 2, 3, 4];
         const leader = starts.get(4)!;
         const corner: XY = [leader[0], leader[1] - 10 * step];
+        const shapes = async () =>
+            (await readAllShapeRecipes(db)).filter((r) => r.kind !== "order");
         const result = await dragTrail({ db, window: WINDOW, marcherIds: ids, leaderId: 4, points: [{ at: corner }], spacing: { kind: "keep" }, step, ends: "trail" }); // prettier-ignore
+        expect(await shapes()).toHaveLength(0);
         expect(await rememberedOrderAt(db, ids, 17)).toEqual([4, 3, 2, 1]);
-        // The Line's slots run leader first, from its first point, which is the leader's spot
+        // Without the trail, the line keeps the order it walked in
+        await removeTrail({ db, routeId: result.routeId });
+        expect(await rememberedOrderAt(db, ids, 17)).toEqual([4, 3, 2, 1]);
+        expect((await performUndo(db)).success).toBe(true);
+        expect(await rememberedOrderAt(db, ids, 17)).toEqual([4, 3, 2, 1]);
+
+        // Convert to shape: a Line through the spots, its slots leader first from its first point
+        const { recipeId } = await convertTrailToShape({
+            db,
+            routeId: result.routeId,
+        });
         const recipe = (await readAllShapeRecipes(db)).find(
-            (r) => r.id === result.recipeId,
+            (r) => r.id === recipeId,
         )!;
         const bySlot = [...recipe.members].sort((a, b) => a.slot - b.slot);
         expect(bySlot.map((m) => m.marcherId)).toEqual([4, 3, 2, 1]);
@@ -833,9 +890,6 @@ describeDbTests("Follow by dragging out a trail (AP-T8, AP-T9)", (it) => {
         );
         const first = (recipe.params as LineParams).points[0]!;
         expect(near([first.x, first.y], [bySlot[0]!.x, bySlot[0]!.y])).toBe(true); // prettier-ignore
-
-        // Without the trail, the Line it left holds the same order
-        await removeTrail({ db, routeId: result.routeId });
         expect(await rememberedOrderAt(db, ids, 17)).toEqual([4, 3, 2, 1]);
     });
 

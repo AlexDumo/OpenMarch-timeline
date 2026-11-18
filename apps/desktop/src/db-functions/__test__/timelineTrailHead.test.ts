@@ -119,7 +119,7 @@ const expectRefused = async (
 };
 
 describeDbTests("Drag a trail's head (AP-T16)", (it) => {
-    it("QA-HD-1: run on with a corner: everyone's spot is AP-T8's for the longer trail, the ids stay, the shape is saved again, one undo step", async ({
+    it("QA-HD-1: run on with a corner: everyone's spot is AP-T8's for the longer trail, the ids stay, no end shape is saved (L.18), one undo step", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -155,15 +155,11 @@ describeDbTests("Drag a trail's head (AP-T16)", (it) => {
         [1, 2, 3, 4, 5, 6].forEach((m, q) =>
             expect(near(r.positionAt(m, 17), plan.spots[q]!)).toBe(true),
         );
-        // Step 4c's shape for the spots, saved again: one recipe, everyone where it's written
+        // No end shape (L.18, TM-4): the trail's path is the only copy of the line
         const recipes = (await readAllShapeRecipes(db)).filter(
             (x) => x.kind !== "order",
         );
-        expect(recipes).toHaveLength(1);
-        for (const m of recipes[0]!.members) {
-            const q = result.marcherIds.indexOf(m.marcherId);
-            expect(near([m.x, m.y], plan.spots[q]!)).toBe(true);
-        }
+        expect(recipes).toHaveLength(0);
         // One undo step, and redo brings it back with the same ids
         const after = await dataOf(db);
         expect((await performUndo(db)).success).toBe(true);
@@ -178,7 +174,8 @@ describeDbTests("Drag a trail's head (AP-T16)", (it) => {
     }) => {
         const first = await dragged(db, 20);
         const { step, lead, lineUp } = first;
-        // M3's spot moved off the way by hand (AP-T7)
+        // M3's spot off the way, as a file from before L.18 can have it (a spot moved by hand then
+        // stayed in the trail; now it would leave it)
         const moved: XY = [lead[0] + 3 * step, lead[1] + 6 * step];
         await db.transaction((tx) =>
             updateTimelineSlotDestinationInTransaction({
@@ -186,6 +183,7 @@ describeDbTests("Drag a trail's head (AP-T16)", (it) => {
                 transitionId: first.transitionId,
                 slotIndex: 2,
                 point: moved,
+                trail: "keep",
             }),
         );
         const before = await dataOf(db);
@@ -404,7 +402,7 @@ describeDbTests("Drag a trail's head (AP-T16)", (it) => {
         );
     });
 
-    it("QA-FD-8 (write): one marcher detached: only its spot leaves the trail, the trail and the others stay, one undo step", async ({
+    it("QA-FD-8, QA-TM-3 (write): Alt + drag takes one marcher out of the trail into a plain move to its new spot; the trail and the others stay; one undo step; the last two leaving remove the trail", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -413,24 +411,56 @@ describeDbTests("Drag a trail's head (AP-T16)", (it) => {
         const before = await dataOf(db);
         const spotsBefore = await spotsOf(db, first.transitionId);
         const routeBefore = await routeOf(db, first.routeId);
+        const off: XY = [lead[0] + 6 * step, lead[1] - 4 * step];
         await detachTrailSpot({
             db,
             routeId: first.routeId,
             marcherId: 3,
-            point: [lead[0] + 6 * step, lead[1] - 4 * step],
+            point: off,
         });
-        const spots = await spotsOf(db, first.transitionId);
         expect(await routeOf(db, first.routeId)).toEqual(routeBefore);
-        const changed = spots.flatMap((s, q) =>
-            near(s, spotsBefore[q]!) ? [] : [q],
-        );
-        expect(changed).toHaveLength(1);
+        // Everyone else's spot as it was; M3's slot is a gap (AP-T6)
+        expect(await spotsOf(db, first.transitionId)).toEqual(spotsBefore);
+        const r = await resolverOf(db);
+        expect(r.ftlEntry(first.transitionId).members).toEqual([1, 2, 4, 5, 6]);
+        expect(near(r.positionAt(3, 17), off)).toBe(true);
+        // A plain move: straight from where M3 starts, no offset stored in the trail
+        const from = r.positionAt(3, 9);
         expect(
-            spots.some((s) =>
-                near(s, [lead[0] + 6 * step, lead[1] - 4 * step]),
-            ),
-        ).toBe(true);
+            near(r.positionAt(3, 13), [(from[0] + off[0]) / 2, (from[1] + off[1]) / 2]),
+        ).toBe(true); // prettier-ignore
+        const after = await dataOf(db);
         expect((await performUndo(db)).success).toBe(true);
         expect(await dataOf(db)).toEqual(before);
+        expect((await performRedo(db)).success).toBe(true);
+        expect(await dataOf(db)).toEqual(after);
+
+        // Down to two, then one more leaves: the trail is removed and the last keeps a plain move
+        for (const m of [1, 2, 4])
+            await detachTrailSpot({
+                db,
+                routeId: first.routeId,
+                marcherId: m,
+                point: [lead[0] + m * step, lead[1] + 8 * step],
+            });
+        const left = await resolverOf(db);
+        expect(left.ftlEntry(first.transitionId).members).toEqual([5, 6]);
+        const sixAt = left.positionAt(6, 17);
+        await detachTrailSpot({
+            db,
+            routeId: first.routeId,
+            marcherId: 5,
+            point: [lead[0], lead[1] + 8 * step],
+        });
+        const t = await db
+            .select()
+            .from(schema.timeline_transitions)
+            .where(eq(schema.timeline_transitions.id, first.transitionId))
+            .get();
+        expect(t?.path_style).toBe("direct");
+        expect(t?.route_id).toBeNull();
+        const gone = await resolverOf(db);
+        expect(near(gone.positionAt(6, 17), sixAt)).toBe(true);
+        expect(near(gone.positionAt(5, 17), [lead[0], lead[1] + 8 * step])).toBe(true); // prettier-ignore
     });
 });

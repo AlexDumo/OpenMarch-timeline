@@ -431,7 +431,8 @@ const writePlan = async (
         convertedTransitionIds: [],
     };
     for (const { row, point } of plan.setDestinations) {
-        await updateTimelineSlotDestinationInTransaction({
+        // A trail's marcher moved by hand leaves it (pathways L.18, TM-3)
+        const written = await updateTimelineSlotDestinationInTransaction({
             tx,
             transitionId: row.transitionId,
             slotIndex: row.slotIndex,
@@ -439,8 +440,8 @@ const writePlan = async (
         });
         result.slots.push({
             marcherId: row.marcherId,
-            transitionId: row.transitionId,
-            slotIndex: row.slotIndex,
+            transitionId: written.transition_id,
+            slotIndex: written.slot_index,
         });
     }
     if (plan.removed.length > 0) {
