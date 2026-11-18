@@ -8,10 +8,7 @@ import { transactionWithHistory } from "./history";
 import { ensureCountsInTransaction } from "./endlessCounts";
 import { splitLockedItemMovesInTransaction } from "./lockedItems";
 import { updateMarcherHomesInTransaction } from "./marcherHome";
-import {
-    setTimelineTransitionDestinationInTransaction,
-    updateTimelineSlotDestinationInTransaction,
-} from "./timelineTransitions";
+import { setTimelineTransitionDestinationInTransaction } from "./timelineTransitions";
 import { assertValid, refuse, TimelineWriteError } from "./timelineErrors";
 import {
     addMarchersToTimelineInTransaction,
@@ -64,6 +61,7 @@ import {
     keepNextPageInTransaction,
     readNextPageSpots,
 } from "./timelineNextPageStays";
+import { moveSlotDestinationInTransaction } from "./timelineTrailDerive";
 
 /** A move result that wrote nothing. */
 const emptyMoveResult = (): TimelineMoveResult => ({
@@ -389,7 +387,8 @@ const writeSlotMoves = async ({
     }
 
     for (const { move, row } of plans) {
-        await updateTimelineSlotDestinationInTransaction({
+        // A trail's marcher moved by hand leaves it (pathways L.18, TM-3): its slot is then its own
+        const written = await moveSlotDestinationInTransaction({
             tx,
             transitionId: row.transitionId,
             slotIndex: row.slotIndex,
@@ -397,8 +396,8 @@ const writeSlotMoves = async ({
         });
         result.slots.push({
             marcherId: move.marcherId,
-            transitionId: row.transitionId,
-            slotIndex: row.slotIndex,
+            transitionId: written.transition_id,
+            slotIndex: written.slot_index,
         });
     }
 };
@@ -1683,7 +1682,7 @@ export const shiftSlotDestinations = async ({
                         )
                         .get();
                     if (!point) continue;
-                    await updateTimelineSlotDestinationInTransaction({
+                    await moveSlotDestinationInTransaction({
                         tx,
                         transitionId: shift.transitionId,
                         slotIndex: shift.slotIndex,

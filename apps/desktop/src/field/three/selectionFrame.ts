@@ -39,6 +39,8 @@ export function drawnSelectionBox(
     items?: FieldItems,
 ): DrawnSelectionBox | null {
     if (editor.modeOwnsSelectionBox() || editor.propToolShape()) return null;
+    // Nothing to edit while the show plays: no frame lagging the marchers (pathways L.18, TM-7)
+    if (editor.isPlaying()) return null;
     const rotating = editor.rotationFrame();
     if (rotating) return rotating;
     const { selected, positions, hidden } = marchers;

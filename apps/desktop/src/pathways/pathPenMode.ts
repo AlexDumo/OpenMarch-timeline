@@ -32,6 +32,7 @@ import type { ToolEnv } from "@/shapes/tool/toolKind";
 import type { XY } from "@/shapes/types";
 import { drawnAsGroup, type PathTarget } from "./pathTarget";
 import { walkedRoute } from "./walkedRoute";
+import { liveTrailOf } from "./trailLive";
 import { shapeTuckedUnderTrail } from "./trailShape";
 import { snakeFrom } from "@/db-functions/timelineTrailSnake";
 import {
@@ -98,6 +99,7 @@ import {
 import {
     addPoint,
     cancelDrag,
+    pointDragAborts,
     commitAdjustKey,
     commitLaneAdjust,
     commitPoints,
@@ -341,8 +343,18 @@ class PathPenMode implements FieldMode {
     private detachShown: { id: number; at: XY } | null = null;
     private listeners = new Set<() => void>();
 
+    /** Point drags called off by Escape so far (`abortPointDrag`) */
+    private aborts = pointDragAborts();
+
     constructor() {
         usePathPenStore.subscribe(() => {
+            // Escape called off a point's drag (L.18, TM-2): its press drags no more
+            if (pointDragAborts() !== this.aborts) {
+                this.aborts = pointDragAborts();
+                const p = this.held;
+                if (p && p.key !== null && !p.head && p.member === undefined)
+                    this.endHeld();
+            }
             for (const l of this.listeners) l();
         });
         // The Straight | Curve switch and Alt change the drawing's cue for the next point
@@ -363,7 +375,12 @@ class PathPenMode implements FieldMode {
     }
 
     get ownsSelectionBox() {
-        return this.session?.phase === "drawing";
+        const s = this.session;
+        // Edit path on a trail (L.18, TM-7): the path is what's edited, so no selection frame or
+        // transform handles that would read as a second object (a drag inside it moves nothing)
+        return (
+            s?.phase === "drawing" || (s?.phase === "open" && !!s.target.trail)
+        );
     }
     get locksSelection() {
         return this.session?.phase === "drawing";
@@ -1873,6 +1890,8 @@ function buildDrawing(
         ...(laneTip ? { tip: laneTip } : {}),
         // AP-T16: the head of a trail dragged out of a line, to drag on or back (step 4d's arrows)
         ...headArrows(session, asObject),
+        // L.18 (TM-2): a point dragged, the form and the marchers follow the path live
+        ...(asObject ? {} : liveTrailOf(session)),
     };
 }
 

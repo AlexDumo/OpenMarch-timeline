@@ -12,7 +12,7 @@ import {
     takeMarchersIntoOwnMoveInTransaction,
 } from "./timelineMoveCuts";
 import { splitRefusal } from "./timelineSplitMoves";
-import { updateTimelineSlotDestinationInTransaction } from "./timelineTransitionsInTransaction";
+import { moveSlotDestinationInTransaction } from "./timelineTrailDerive";
 
 /**
  * Keeps the page after an edit where it was, for an edit that takes a spot back: **Remove
@@ -175,7 +175,7 @@ async function keepThroughMovesAcrossInTransaction(
         for (const r of ending) {
             const point = at.get(r.row.marcher_id);
             if (!point || r.shapeId !== null) continue;
-            await updateTimelineSlotDestinationInTransaction({
+            await moveSlotDestinationInTransaction({
                 tx,
                 transitionId: r.row.transition_id,
                 slotIndex: r.row.slot_index,

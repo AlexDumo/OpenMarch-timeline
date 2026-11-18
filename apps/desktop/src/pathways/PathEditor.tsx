@@ -92,6 +92,7 @@ import {
 } from "./followAround";
 import { rippleArrivalCount } from "@/db-functions/timelineTrailRipplePlan";
 import {
+    convertTrailBlocker,
     detachAllIdsOf,
     detachAllLabel,
     detachAllNote,
@@ -1011,6 +1012,9 @@ function PathMoreMenu({ session }: { session: PathSession }) {
                   "The path already fits where its marcher stands",
               );
     const more = tolgee.t("pathways.editor.more", "More path commands");
+    // Convert to shape (L.18, TM-4): a trail dragged out of a line, its spots placed as a Line
+    const along = !!session.target.trail?.along && !session.target.trail.around;
+    const convertReason = along ? convertTrailBlocker(session) : null;
     // A trail's end shape (owner, 2026-11-17): its controls, tucked away while the trail is shown
     const endShape = useTrailEndShape();
     const shapeControls = useTrailShapeControls();
@@ -1083,6 +1087,27 @@ function PathMoreMenu({ session }: { session: PathSession }) {
                                         "Re-fit path",
                                     )}
                         </MenuItemWithReason>
+                    )}
+                    {along && session.phase !== "drawing" && (
+                        <>
+                            <MenuItemWithReason
+                                testId="path-convert-shape"
+                                reason={convertReason}
+                                reasonTestId="path-convert-shape-reason"
+                                onSelect={() =>
+                                    runAction("convertTrailToShape")
+                                }
+                            >
+                                <ShapesIcon size={14} aria-hidden />
+                                {tolgee.t(
+                                    "actions.path.convertToShape",
+                                    "Convert to shape",
+                                )}
+                            </MenuItemWithReason>
+                            <DropdownMenu.Separator
+                                className={MENU_SEPARATOR_CLASS}
+                            />
+                        </>
                     )}
                     {trail && endShape && (
                         <>

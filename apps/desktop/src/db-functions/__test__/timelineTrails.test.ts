@@ -1058,7 +1058,7 @@ describeDbTests("Clear Page N on a trail", (it) => {
         ).toEqual(f.result.marcherIds);
     });
 
-    it("a dragged-out trail: its shape of end spots goes with it; everyone Not defined; undo gives back trail and shape", async ({
+    it("a dragged-out trail goes with its order (no order mark left); everyone Not defined; undo gives it back", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -1070,7 +1070,6 @@ describeDbTests("Clear Page N on a trail", (it) => {
         const corner: XY = [leader[0] + 10 * step, leader[1]];
         const end: XY = [corner[0], corner[1] - 10 * step];
         const dragged = await dragTrail({ db, window: PAGE2, marcherIds: ids, leaderId: 6, points: [{ at: corner }, { at: end }], spacing: { kind: "keep" }, step, ends: "trail" }); // prettier-ignore
-        expect(dragged.recipeId).toBeDefined();
         const before = await allOf(db);
 
         const result = await clear(db, ids);
@@ -1078,11 +1077,12 @@ describeDbTests("Clear Page N on a trail", (it) => {
         expect(result.skipped).toBeUndefined();
         expect(result.cleared).toEqual(ids);
         expect(await readTrails(db)).toEqual([]);
+        expect(dragged.marcherIds).toHaveLength(ids.length);
         expect(
-            (await db.select().from(schema.timeline_shape_recipes).all()).map(
-                (r) => r.id,
-            ),
-        ).not.toContain(dragged.recipeId);
+            (
+                await db.select().from(schema.timeline_shape_recipes).all()
+            ).filter((r) => r.kind === "order"),
+        ).toEqual([]);
         expect(await rowsOver(db, ids, PAGE2)).toEqual([]);
         expect(await violations(db)).toEqual([]);
         await expectOneClearStep(db, before);

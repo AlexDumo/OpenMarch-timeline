@@ -309,7 +309,8 @@
             "shapeControls": "Shape controls",
             "drawStraight": "Draw straight",
             "drawCurve": "Draw curves",
-            "drawKindKeywords": "straight curve curved corner smooth round pen trail point kind"
+            "drawKindKeywords": "straight curve curved corner smooth round pen trail point kind",
+            "convertToShape": "Convert to shape"
         }
     },
     "analyticsOptIn": {
@@ -2965,7 +2966,9 @@
                 "aroundPoints": "This line goes around the outline it stands on, which has no points to edit. Use Reverse leader to go the other way around, or Follow again to change how far",
                 "reverseNobody": "Reverse leader needs someone who starts this move on the outline",
                 "headNotAlong": "Only a trail dragged out of a line can be made longer or shorter by its head",
-                "formPastStart": "A marcher would walk back past where it started. Slide the tail less far"
+                "formPastStart": "A marcher would walk back past where it started. Slide the tail less far",
+                "convertInLineUp": "Some of the line is still standing where it started. Make the trail longer, then convert it",
+                "convertNotAlong": "Only a trail dragged out of a line can be converted to a shape"
             }
         },
         "expertHolds": {
@@ -4641,7 +4644,8 @@
             "reverse": "Couldn't reverse the trail",
             "goRound": "Couldn't go around",
             "headDrag": "Couldn't change the trail",
-            "detachFormMarcher": "Couldn't move the marcher off the trail"
+            "detachFormMarcher": "Couldn't move the marcher off the trail",
+            "convert": "Couldn't convert the trail to a shape"
         },
         "refusals": {
             "noMove": "{marcher} has no move at the playhead to draw a path on",
@@ -4692,7 +4696,8 @@
             "reversed": "{marcher} leads now",
             "detached": "{count, plural, one {# marcher detached} other {# marchers detached}}",
             "groupEnded": "{count, plural, one {Group path ended: # marcher has their own path} other {Group path ended: # marchers have their own paths}}",
-            "keptLive": "Kept as one group path: {names} share a spot, so they can't each have their own"
+            "keptLive": "Kept as one group path: {names} share a spot, so they can't each have their own",
+            "converted": "Placed a Line through the end spots. Edit it with the shape tools"
         },
         "rings": {
             "group": "Follows the group path",

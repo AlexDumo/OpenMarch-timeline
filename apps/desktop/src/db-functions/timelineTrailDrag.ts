@@ -35,8 +35,6 @@ import { marcherName, type RoutePointInput } from "./timelineRoutes";
 import { moveMarchersInRangeInTransaction } from "./timelineMoves";
 import { readPageGrid } from "./timelinePageGrid";
 import { addPageFlagInTransaction } from "./pageFlags";
-import { saveShapeRecipeInTransaction } from "./shapeRecipes";
-import { trailShapeRecipe } from "./timelineTrailShape";
 import {
     rememberedOrderAt,
     rememberedOrderInWindowAt,
@@ -57,7 +55,8 @@ import {
     trailRefusal,
     type FollowTrailResult,
 } from "./timelineTrails";
-import { updateTimelineSlotDestinationInTransaction } from "./timelineTransitionsInTransaction";
+import { writeTrailPlanInTransaction } from "./timelineTrailDerive";
+import { moveSlotDestinationInTransaction } from "./timelineTrailDerive";
 
 /** The refusals' texts of step 4b, translated where they are shown. */
 export const trailDragRefusal = {
@@ -542,8 +541,6 @@ export interface TrailDragInput {
 export interface TrailDragResult extends FollowTrailResult {
     /** The page added at the end flag (the window was past the last page), or null */
     addedPage: { startBeat: number; endBeat: number } | null;
-    /** From trail (step 4c, DL-11): the shape recipe saved for the end spots; absent otherwise */
-    recipeId?: number;
 }
 
 /**
@@ -705,8 +702,8 @@ export async function trailDragRefusalFor(
  * leading), with those spots as its placed destinations, a trail route for the drawn points
  * (`from` the leader's start, `to` the last point) and `path_params.ends = "along"`.
  *
- * Step 4c (DL-11): From trail also saves the end spots as a shape recipe (a Line, an Arc or a
- * Curve, `trailShapeRecipe`), each member where it was written, in the same transaction.
+ * No end shape is saved (L.18, TM-4, superseding step 4c's DL-11): the trail's path is the only
+ * copy of the line, and its spots follow every edit of it.
  *
  * Keep end spots: AP-T1 onto the spots the members have in the window's move, in the same trail
  * order, the drawn points kept.
@@ -765,15 +762,9 @@ export async function dragTrailInTransaction(
         line,
         along: true,
     });
-    // Step 4c (DL-11): the spots as a shape the shape tools open, each member where it was written
-    const { recipe, members } = trailShapeRecipe(plan, line);
-    const recipeId = await saveShapeRecipeInTransaction({
-        tx,
-        timelineId: move,
-        recipe,
-        members,
-    });
-    return { ...followed, addedPage, recipeId };
+    // No end shape is saved (L.18, TM-4): the path is the only copy of the line; Convert to shape
+    // places one when it's wanted
+    return { ...followed, addedPage };
 }
 
 /** AP-T8 or AP-T9 as one undoable edit. */
@@ -818,8 +809,8 @@ export interface TrailHeadResult {
  * of a line (AP-T8, `ends: "along"`) gets `points` as its trail, and everyone's end spot is planned
  * again exactly as AP-T8 plans it for that trail (`planTrailDrag`, the line where it starts, in its
  * order, the leader last), hand-moved spots too. The route is rewritten through AP-T2's writer
- * (kept ids staying, its `to` the new last point); each member's slot gets its spot; and step 4c's
- * shape recipe for the spots is saved again (DL-11), the old one left empty and deleted. The
+ * (kept ids staying, its `to` the new last point); each member's slot gets its spot; and an end
+ * shape left from step 4c is unlinked (L.18, TM-4). The
  * transition, its route and its rows keep their ids. Refused: a trail that isn't along the way
  * (into end spots, round an outline), fewer than two founders, a trail shorter than `ε_geom`, Even
  * past its limit.
@@ -830,7 +821,6 @@ export async function dragTrailHeadInTransaction(
 ): Promise<TrailHeadResult> {
     const { routeId, points, spacing, step } = input;
     const T = schema.timeline_transitions;
-    const A = schema.timeline_assignments;
     const transition = await tx
         .select()
         .from(T)
@@ -859,35 +849,16 @@ export async function dragTrailHeadInTransaction(
         );
     if (spacing.kind === "gaps" && !plan.forward)
         refuse(trailDragRefusal.formPastStart());
-    // The trail: AP-T2's writer, which keeps it running to its own last point (AP-T10)
-    await editTrailPointsInTransaction({ tx, routeId, points });
-    // Each member's spot, on its own slot
-    const rows = await tx
-        .select({ marcherId: A.marcher_id, slot: A.slot_index })
-        .from(A)
-        .where(
-            and(
-                eq(A.transition_id, transition.id),
-                inArray(A.marcher_id, line),
-            ),
-        )
-        .all();
-    const slotOf = new Map(rows.map((r) => [r.marcherId, r.slot]));
-    for (const [q, m] of line.entries())
-        await updateTimelineSlotDestinationInTransaction({
-            tx,
-            transitionId: transition.id,
-            slotIndex: slotOf.get(m)!,
-            point: plan.spots[q]!,
-        });
-    // Step 4c (DL-11): the spots as a shape again, each member where it's written
-    const { recipe, members } = trailShapeRecipe(plan, line);
-    await saveShapeRecipeInTransaction({
+    // The trail: AP-T2's writer, which keeps it running to its own last point (AP-T10); the spots
+    // are this drag's, with its own spacing
+    await editTrailPointsInTransaction({
         tx,
-        timelineId: transition.timeline_id,
-        recipe,
-        members,
+        routeId,
+        points,
+        planSpots: false,
     });
+    // Each member's spot, on its own slot; an old end shape of step 4c goes (L.18, TM-4)
+    await writeTrailPlanInTransaction(tx, transition, plan);
     return {
         routeId,
         transitionId: transition.id,
@@ -907,7 +878,7 @@ export async function dragTrailHead(
 }
 
 // ---------------------------------------------------------------------------
-// A trail's form: one marcher detached (owner, 2026-11-17)
+// A trail's form: one marcher leaves the trail (owner, 2026-11-17; L.18, TM-3)
 // ---------------------------------------------------------------------------
 
 export interface TrailDetachInput {
@@ -919,10 +890,11 @@ export interface TrailDetachInput {
 }
 
 /**
- * One member of a trail's form detached (Alt + drag, owner 2026-11-17), inside one write-wrapper
- * transaction: its end spot leaves the trail for `point`, everyone else's and the trail stay. It
- * then walks the trail to its projection and on straight to its spot (R-13″'s off-trail rule).
- * Refused for a trail that isn't along the way, or a marcher not on it.
+ * One member of a trail's form moved off it (Alt + drag), inside one write-wrapper transaction:
+ * the marcher leaves the trail (L.18, TM-3: no offset is stored inside a trail) into a plain move
+ * of its own to `point`, as any end spot moved by hand does (`leaveTrailInTransaction`). The trail
+ * goes on with the others, or is removed when fewer than two are left. Refused for a trail that
+ * isn't along the way, or a marcher not on it.
  */
 export async function detachTrailSpotInTransaction(
     tx: DbTransaction,
@@ -951,7 +923,7 @@ export async function detachTrailSpotInTransaction(
         )
         .get();
     if (!row) refuse(trailRefusal.noTrail());
-    await updateTimelineSlotDestinationInTransaction({
+    await moveSlotDestinationInTransaction({
         tx,
         transitionId: transition.id,
         slotIndex: row.slot,
@@ -959,7 +931,7 @@ export async function detachTrailSpotInTransaction(
     });
 }
 
-/** One member of a trail's form detached, as one undoable edit. */
+/** One member of a trail's form moved off it, as one undoable edit. */
 export async function detachTrailSpot(
     args: { db: DbConnection } & TrailDetachInput,
 ): Promise<void> {

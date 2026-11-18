@@ -24,7 +24,7 @@ import {
     type ChipObstacle,
 } from "../TrailCornerCounts";
 import { subscribeHistoryChanges } from "@/db-functions/history";
-import { clearPath, showPath, usePathPenStore } from "../pathPenStore";
+import { clearPath, pathKey, showPath, usePathPenStore } from "../pathPenStore";
 import type { PathTarget } from "../pathTarget";
 import { followTarget, type FollowDrag } from "../followDrag";
 import {
@@ -399,6 +399,8 @@ describe("the corner chips and their lists (TC-5 to TC-7)", () => {
         act(() => {
             const s = usePathPenStore.getState().session!;
             usePathPenStore.setState({ session: { ...s, phase: "open" } });
+            // Open, a dragged-out trail's chips show when the summary pins them (L.18, TM-7)
+            useCornerChipsStore.setState({ pinnedFor: pathKey(s.target) });
         });
         render(<PathEditor fieldProperties={fieldProperties} />);
         const chips = screen.getAllByTestId("trail-corner-count");
@@ -592,13 +594,25 @@ describe("a selected trail's chips wait for a click on the bar's summary (owner,
         expect(screen.queryAllByTestId("trail-corner-count")).toHaveLength(0);
     });
 
-    it("QA-CT-5: open (Edit path) the chips always show; Reverse is on the field's menu and Alt+L, not the bar or a mark", () => {
+    it("QA-CT-5, QA-TM-7: open (Edit path), a dragged-out trail shows only the dragged corner's chip, or all when the summary pins them; Reverse is on the field's menu and Alt+L, not the bar or a mark", () => {
         act(() => showPath(alongTarget(), "T4"));
         act(() => {
             const s = usePathPenStore.getState().session!;
             usePathPenStore.setState({ session: { ...s, phase: "open" } });
         });
         render(<PathEditor fieldProperties={fieldProperties} />);
+        expect(screen.queryAllByTestId("trail-corner-count")).toHaveLength(0);
+        // The first corner's point dragged: its chip only
+        act(() => {
+            const s = usePathPenStore.getState().session!;
+            usePathPenStore.setState({ session: { ...s, dragging: 0 } });
+        });
+        expect(screen.getAllByTestId("trail-corner-count")).toHaveLength(1);
+        act(() => {
+            const s = usePathPenStore.getState().session!;
+            usePathPenStore.setState({ session: { ...s, dragging: null } });
+            useCornerChipsStore.setState({ pinnedFor: pathKey(s.target) });
+        });
         expect(screen.getAllByTestId("trail-corner-count")).toHaveLength(2);
         expect(screen.queryByTestId("path-reverse")).toBeNull();
         expect(screen.queryByTestId("trail-reverse")).toBeNull();
