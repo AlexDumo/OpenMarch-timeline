@@ -93,6 +93,7 @@ export class RigController {
     jumpTo(position: Vector3Tuple, target: Vector3Tuple, fovDeg?: number) {
         this.active = null;
         this.stopMotion();
+        this.dropZoom();
         this.setPose(position, target);
         if (fovDeg !== undefined) this.setFov(fovDeg);
         this.apply();
@@ -101,6 +102,7 @@ export class RigController {
     /** Starts a fly-to from wherever the camera is now. */
     flyTo(position: Vector3Tuple, target: Vector3Tuple, options: FlyOptions) {
         this.stopMotion();
+        this.dropZoom();
         const p = this.camera.position;
         const fromFov = this.fov();
         this.active = {
@@ -229,6 +231,12 @@ export class RigController {
         this.samples = [];
     }
 
+    /** Drops a scroll zoom still easing in, so it can't pull a placed pose away. */
+    private dropZoom() {
+        this.pendingZoom = 0;
+        this.zoomAnchor = null;
+    }
+
     /**
      * Grab pan: the ground point that was under the pointer (`from`) moves
      * to where the pointer is now (`to`) by moving the target the other way.
@@ -278,6 +286,12 @@ export class RigController {
             this.camera.updateMatrixWorld();
             return;
         }
+        // Stepping down off a platform can take a low orbit under the ground.
+        if (this.eyeY() < MIN_EYE_Y)
+            this.spherical.phi = Math.min(
+                this.spherical.phi,
+                maxPhiAboveGround(this.spherical.radius, this.target[1]),
+            );
         this.apply();
     }
 

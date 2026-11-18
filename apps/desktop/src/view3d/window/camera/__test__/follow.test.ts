@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { PerspectiveCamera, Vector3 } from "three";
 import { RigController } from "../rigController";
-import { FLY_MS, SEAT_FOV_DEG } from "../rigMath";
+import { FLY_MS, MIN_EYE_Y, SEAT_FOV_DEG } from "../rigMath";
 import {
     angleDelta,
     clampPitch,
@@ -400,6 +400,62 @@ describe("FollowController", () => {
         );
         // near enough to draw a horn held at the face
         expect(camera.near).toBeLessThanOrEqual(0.06);
+    });
+
+    it("carries on a turn after a pause instead of jumping, and says when it has finished", () => {
+        const { rig, follow, state, run } = setup(pose(), {
+            turn: true,
+            body: false,
+        });
+        follow.change({ marcherId: 1, mode: "third" }, 0);
+        run(0, FLY_MS + 32);
+        expect(follow.easing).toBe(false);
+        const theta = rig.spherical.theta;
+        // the performer about-faces while nothing is drawing
+        state.performer = pose({ heading: Math.PI });
+        run(FLY_MS + 5000, FLY_MS + 5000);
+        expect(Math.abs(rig.spherical.theta - theta)).toBeLessThan(Math.PI / 3);
+        expect(follow.easing).toBe(true);
+        run(FLY_MS + 5016, FLY_MS + 9000);
+        expect(follow.easing).toBe(false);
+    });
+
+    it("flies into the eyes at the heading it set out for, then turns", () => {
+        const { camera, follow, state, run } = setup();
+        follow.change({ marcherId: 4, mode: "pov" }, 0);
+        run(0, FLY_MS / 2);
+        state.performer = pose({ heading: Math.PI / 2 });
+        run(FLY_MS / 2 + 16, FLY_MS + 32);
+        // landed still facing +z rather than snapping a quarter turn
+        expect(camera.getWorldDirection(new Vector3()).z).toBeGreaterThan(0.6);
+        expect(follow.easing).toBe(true);
+        run(FLY_MS + 48, FLY_MS + 3000);
+        expect(camera.getWorldDirection(new Vector3()).x).toBeGreaterThan(0.95);
+    });
+
+    it("keeps the first body out until the camera has left their head for someone else", () => {
+        const { follow, state, run } = setup();
+        follow.change({ marcherId: 4, mode: "pov" }, 0);
+        run(0, FLY_MS + 32);
+        follow.change({ marcherId: 5, mode: "third" }, 2000);
+        expect(state.hidden).toBe(4);
+        run(2000, 2000 + FLY_MS + 32);
+        expect(state.hidden).toBeNull();
+    });
+
+    it("drops a scroll zoom still easing in when the camera is placed", () => {
+        const { camera, rig, run } = setup();
+        rig.zoomWheel(-400);
+        rig.jumpTo([0, 2, 10], [0, 1.5, 9.8]);
+        run(0, 500);
+        close(camera.position.toArray(), [0, 2, 10], 4);
+    });
+
+    it("never takes the camera under the ground when the performer steps down", () => {
+        const { camera, rig } = setup();
+        rig.jumpTo([0, 1.2, 10], [0, 1, 0]);
+        rig.shift(0, -1, 0);
+        expect(camera.position.y).toBeGreaterThanOrEqual(MIN_EYE_Y - 1e-6);
     });
 
     it("refuses a performer who isn't drawn", () => {

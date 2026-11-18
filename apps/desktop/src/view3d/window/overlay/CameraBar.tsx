@@ -256,7 +256,8 @@ export function CameraBar({
                         icon={<XIcon size={16} />}
                         label={t("view3d.overlay.stopFollowing")}
                         tooltip={t("view3d.overlay.stopFollowing")}
-                        shortcut="Esc"
+                        // From their eyes, Esc only backs out behind them.
+                        shortcut={follow.mode === "third" ? "Esc" : undefined}
                         iconOnly
                         testId="view3d-follow-stop"
                     />

@@ -799,7 +799,7 @@ export default function CameraRig() {
         }
         follow.apply(now);
         rig.update(now);
-        if (rig.moving) requestDraw(100);
+        if (rig.moving || follow.easing) requestDraw(100);
     }, -1);
 
     // Leave the store clean when the window's scene goes away.

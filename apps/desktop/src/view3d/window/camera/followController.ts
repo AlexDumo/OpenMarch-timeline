@@ -38,6 +38,13 @@ import type { Follow } from "./followStore";
 export const POV_TURN_HALF_LIFE_MS = 150;
 /** The third-person camera swings round behind a turning performer with this half-life (ms). */
 export const CHASE_TURN_HALF_LIFE_MS = 300;
+/**
+ * The longest step a turn eases by in one frame (ms), so a frame drawn after
+ * a pause carries on the turn instead of finishing it in one jump.
+ */
+export const MAX_EASE_STEP_MS = 100;
+/** A turn this close to the performer's heading (radians) has finished. */
+const TURN_DONE = 1e-3;
 
 export interface FollowHooks {
     /** Where the performer stands now; false when they aren't drawn. */
@@ -91,6 +98,26 @@ export class FollowController {
     /** True while looking out of a performer's eyes, landed or on the way. */
     get pov(): boolean {
         return this.following?.mode === "pov";
+    }
+
+    /**
+     * True while the view is still turning toward where the performer faces,
+     * so the window keeps drawing until the turn finishes.
+     */
+    get easing(): boolean {
+        const following = this.following;
+        if (!following) return false;
+        const facing = this.pose.heading;
+        if (following.mode === "pov")
+            return (
+                this.inEyes &&
+                Math.abs(angleDelta(this.heading, facing)) > TURN_DONE
+            );
+        return (
+            this.hooks.turnWithPerformer() &&
+            !this.rig.flying &&
+            Math.abs(angleDelta(this.chase, facing)) > TURN_DONE
+        );
     }
 
     /**
@@ -160,8 +187,9 @@ export class FollowController {
             return true;
         }
         this.chase = pose.heading;
-        const leavingEyes =
-            prev?.mode === "pov" && prev.marcherId === next.marcherId;
+        // Out of anyone's eyes, a body left out comes back once the camera
+        // is out of their head.
+        const leavingEyes = prev?.mode === "pov";
         if (!leavingEyes) this.hooks.setHidden(null);
         const view = thirdPersonPose(pose);
         this.rig.flyTo(view.position, view.target, {
@@ -185,7 +213,10 @@ export class FollowController {
         if (!following) return;
         const pose = this.pose;
         if (!this.hooks.poseInto(following.marcherId, pose)) return;
-        const dt = this.lastMs === null ? 0 : Math.max(0, nowMs - this.lastMs);
+        const dt =
+            this.lastMs === null
+                ? 0
+                : Math.min(MAX_EASE_STEP_MS, Math.max(0, nowMs - this.lastMs));
         this.lastMs = nowMs;
         if (following.mode === "pov") this.hideForEyes(following.marcherId);
         if (this.inEyes) {
@@ -209,7 +240,8 @@ export class FollowController {
             anchor[1] = pose.y;
             anchor[2] = pose.z;
         }
-        this.heading = pose.heading;
+        // On the way into the eyes, the view keeps the heading it set out
+        // for; after landing it turns to where they face now.
         if (following.mode !== "third") return;
         if (!this.hooks.turnWithPerformer()) {
             this.chase = pose.heading;
