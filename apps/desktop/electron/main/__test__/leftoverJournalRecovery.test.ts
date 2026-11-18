@@ -172,7 +172,11 @@ describe("recoverFromLeftoverJournal", () => {
 
             expect(sha256(showPath)).toBe(showHash);
             expect(fs.existsSync(journalPathFor(showPath))).toBe(true);
-            expect(fs.existsSync(backupDir)).toBe(false);
+            expect(fs.readdirSync(backupDir)).toEqual([]);
+            expect(fs.readdirSync(path.dirname(showPath))).toEqual([
+                path.basename(showPath),
+                path.basename(journalPathFor(showPath)),
+            ]);
         },
     );
 

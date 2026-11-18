@@ -55,11 +55,11 @@ export const SET_ASIDE_MARK = "-set-aside";
 
 /** The step of a recovery that failed, for the message the person sees. */
 export type RecoveryStep =
-    /** Writing the recovered show into the show's folder. Nothing changed. */
+    /** Making the copies recovery needs (scratch, backups, the staged show). Nothing changed. */
     | "stage"
     /** Replacing the show with the recovered copy. Nothing changed. */
     | "replace"
-    /** Moving the journal out of the show's folder. The show itself is recovered. */
+    /** Moving the journal out of the show's folder. The show itself is sound. */
     | "move-journal";
 
 export class JournalRecoveryError extends Error {
@@ -85,9 +85,12 @@ function atStep<T>(step: RecoveryStep, fn: () => T): T {
     }
 }
 
-/** Copies `from` to `to` and flushes the copy to disk before anyone renames it into place. */
+/**
+ * Copies `from` to a new file `to` (never over an existing one) and flushes it to disk before
+ * anyone renames it into place.
+ */
 function copyDurably(from: string, to: string, mode: number) {
-    fs.copyFileSync(from, to);
+    fs.copyFileSync(from, to, fs.constants.COPYFILE_EXCL);
     fs.chmodSync(to, mode);
     const fd = fs.openSync(to, "r+");
     try {
@@ -115,6 +118,41 @@ function passesQuickCheck(file: string): boolean {
 function copyWritable(from: string, to: string) {
     fs.copyFileSync(from, to);
     fs.chmodSync(to, 0o600);
+}
+
+/**
+ * Flushes `dir`'s entries, so a rename in it survives a power cut before later steps do.
+ * Windows can't open a folder this way; it's best effort there.
+ */
+function syncFolder(dir: string) {
+    let fd: number | undefined;
+    try {
+        fd = fs.openSync(dir, "r");
+        fs.fsyncSync(fd);
+    } catch {
+        // Not supported on this platform.
+    } finally {
+        if (fd !== undefined) fs.closeSync(fd);
+    }
+}
+
+/**
+ * Makes a journal SQLite judged bad harmless where it is: a zeroed header isn't hot, so SQLite
+ * won't play it back once it can open it. Best effort; a copy is kept in the backups first.
+ */
+function neutralizeJournal(journal: string, keepAt: string) {
+    try {
+        fs.copyFileSync(journal, keepAt);
+        const fd = fs.openSync(journal, "r+");
+        try {
+            fs.writeSync(fd, Buffer.alloc(28), 0, 28, 0);
+            fs.fsyncSync(fd);
+        } finally {
+            fs.closeSync(fd);
+        }
+    } catch {
+        // It stays as it is; SQLite still can't use it, so the next open asks again.
+    }
 }
 
 /** Moves `from` to `to`, copying when they're on different drives. */
@@ -172,14 +210,20 @@ export function recoverFromLeftoverJournal(
 ): JournalRecovery {
     if (!hasLeftoverJournal(dbPath)) return { outcome: "no-journal" };
 
-    const workDir = fs.mkdtempSync(path.join(tempDir, "openmarch-recover-"));
-    const staged = `${dbPath}.recovering`;
+    // A name of our own, so nothing the person keeps next to the show is overwritten or removed.
+    const staged = `${dbPath}.${process.pid}-${now.getTime()}.recovering`;
+    let createdStaged = false;
+    let workDir: string | undefined;
     try {
-        const sound = findSoundCopy(dbPath, workDir);
+        const sound = atStep("stage", () => {
+            workDir = fs.mkdtempSync(path.join(tempDir, "openmarch-recover-"));
+            fs.mkdirSync(backupDir, { recursive: true });
+            return findSoundCopy(dbPath, workDir);
+        });
         if (!sound) return { outcome: "damaged" };
 
         const keptName = `${backupNameFor(dbPath, now)}${SET_ASIDE_MARK}`;
-        fs.mkdirSync(backupDir, { recursive: true });
+        const journalKeptAt = path.join(backupDir, `${keptName}-journal`);
 
         if (sound.from === "journal") {
             // Stage next to the show first, so a full disk or a folder we can't write fails
@@ -187,19 +231,30 @@ export function recoverFromLeftoverJournal(
             const mode = fs.statSync(dbPath).mode & 0o777;
             atStep("stage", () => {
                 copyDurably(sound.file, staged, mode);
+                createdStaged = true;
                 fs.copyFileSync(dbPath, path.join(backupDir, keptName));
             });
             // The journal stays next to the show until this is done (see the module comment).
-            atStep("replace", () => fs.renameSync(staged, dbPath));
+            atStep("replace", () => {
+                fs.renameSync(staged, dbPath);
+                createdStaged = false;
+                syncFolder(path.dirname(dbPath));
+            });
         }
 
-        const journalKeptAt = path.join(backupDir, `${keptName}-journal`);
-        atStep("move-journal", () =>
-            moveFile(journalPathFor(dbPath), journalKeptAt),
-        );
+        try {
+            moveFile(journalPathFor(dbPath), journalKeptAt);
+        } catch (error) {
+            // Left next to the show, a journal that was played back is harmless (it rewrites the
+            // pages the show has). One judged bad must not be played back later, when SQLite
+            // can open it.
+            if (sound.from === "show-alone")
+                neutralizeJournal(journalPathFor(dbPath), journalKeptAt);
+            throw new JournalRecoveryError("move-journal", error);
+        }
         return { outcome: "recovered", from: sound.from, journalKeptAt };
     } finally {
-        fs.rmSync(staged, { force: true });
-        fs.rmSync(workDir, { recursive: true, force: true });
+        if (createdStaged) fs.rmSync(staged, { force: true });
+        if (workDir) fs.rmSync(workDir, { recursive: true, force: true });
     }
 }

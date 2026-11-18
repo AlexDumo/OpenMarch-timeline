@@ -3703,9 +3703,9 @@
             "damagedMessage": "OpenMarch couldn't recover this show, with or without “{name}”. Nothing was changed. Report the problem and include the show and “{name}” if you can.",
             "damagedTitle": "Couldn't recover the show",
             "failedTitle": "Couldn't open the show",
-            "journalMoveFailedMessage": "The show was recovered, but OpenMarch couldn't move “{name}” out of the show's folder, so it will ask again next time. Report the problem and include the show and “{name}” if you can.",
+            "journalMoveFailedMessage": "OpenMarch couldn't move “{name}” out of the show's folder, so the show didn't open. The show itself is sound. Report the problem and include the show and “{name}” if you can.",
             "replaceFailedMessage": "OpenMarch couldn't replace the show with the recovered copy. Another program may be using the file. Nothing was changed: close other programs that might have the show open, then open it again.",
-            "stageFailedMessage": "OpenMarch couldn't write the recovered show into the show's folder. The disk may be full, or OpenMarch may not be allowed to write there. Nothing was changed."
+            "stageFailedMessage": "OpenMarch couldn't make the copies it needs to recover the show. The disk may be full, or OpenMarch may not be allowed to write in the show's folder or its own folder. Nothing was changed."
         },
         "newShow": {
             "button": "Create New"

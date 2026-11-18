@@ -1734,7 +1734,11 @@ function backupBeforeMigrations(path: string) {
     files.forEach((file) => {
         // A journal set aside keeps its original date when moved, so age says nothing; the
         // recovery dialog promised it isn't deleted.
-        if (file.includes(SET_ASIDE_MARK)) return;
+        if (
+            file.endsWith(SET_ASIDE_MARK) ||
+            file.endsWith(`${SET_ASIDE_MARK}-journal`)
+        )
+            return;
         const filePath = join(backupDir, file);
         const stats = fs.statSync(filePath);
         if (stats.birthtime < thirtyDaysAgo) {
