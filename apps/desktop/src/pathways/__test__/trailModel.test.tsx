@@ -19,7 +19,7 @@ import {
 } from "../pathPenStore";
 import type { PathTarget } from "../pathTarget";
 import { liveTrailOf } from "../trailLive";
-import { drawingOf } from "../pathPenMode";
+import { drawingOf, pathPenMode } from "../pathPenMode";
 
 /**
  * A trail's path is the only truth (owner, 2026-11-17, spec L.18) on the field: while a point of a
@@ -127,6 +127,13 @@ describe("A trail's path is the only truth on the field (L.18)", () => {
         expect(near(mid.marchersAt!.spots[3]!, want[3]!)).toBe(false);
         // Nothing written while dragging: the stored trail is as it was
         expect(usePathPenStore.getState().saved).toBe(0);
+    });
+
+    it("QA-TM-7: Edit path on a trail owns the selection box: no frame or transform handles; closed, the field's", () => {
+        act(() => showPath(alongTarget(), "T4"));
+        expect(pathPenMode.ownsSelectionBox).toBe(false);
+        open(alongTarget());
+        expect(pathPenMode.ownsSelectionBox).toBe(true);
     });
 
     it("QA-TM-2: Escape calls a point's drag off: the points as stored, nothing written", () => {

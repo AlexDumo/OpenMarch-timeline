@@ -374,7 +374,12 @@ class PathPenMode implements FieldMode {
     }
 
     get ownsSelectionBox() {
-        return this.session?.phase === "drawing";
+        const s = this.session;
+        // Edit path on a trail (L.18, TM-7): the path is what's edited, so no selection frame or
+        // transform handles that would read as a second object (a drag inside it moves nothing)
+        return (
+            s?.phase === "drawing" || (s?.phase === "open" && !!s.target.trail)
+        );
     }
     get locksSelection() {
         return this.session?.phase === "drawing";
