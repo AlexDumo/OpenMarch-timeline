@@ -65,6 +65,7 @@ import {
     recoverFromLeftoverJournal,
     SET_ASIDE_MARK,
 } from "./leftoverJournalRecovery";
+import { cloudSyncServiceFor } from "./cloudSyncFolder";
 import {
     NEEDS_CONVERSION_STATUS,
     OPEN_STOPPED_STATUS,
@@ -435,6 +436,12 @@ function initLeftoverJournalIpcHandlers() {
     ipcMain.handle("load-file:recoverFromJournal", async () =>
         recoverAndOpenLeftoverJournalFile(),
     );
+    // The show a leftover journal stopped, else the open show.
+    ipcMain.handle("show:cloudSyncFolder", () => {
+        const filePath = leftoverJournalFile ?? DatabaseServices.getDbPath();
+        const service = cloudSyncServiceFor(filePath);
+        return service ? { service, filePath } : null;
+    });
 }
 
 /**

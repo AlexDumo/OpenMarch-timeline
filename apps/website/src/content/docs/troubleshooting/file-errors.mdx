@@ -11,6 +11,9 @@ covers:
   - i18n:convertShow.backupError
   - i18n:fileDialog.leftoverJournal
   - apps/desktop/electron/main/leftoverJournalRecovery.ts
+  - apps/desktop/electron/main/cloudSyncFolder.ts
+  - apps/desktop/src/hooks/useCloudSyncFolderNotice.ts
+  - i18n:syncFolderNotice
 sidebar:
   order: 1
 ---
@@ -18,7 +21,7 @@ sidebar:
 import Ui from "@/components/docs/Ui.astro";
 import InShort from "@/components/docs/InShort.astro";
 
-<InShort>Find the message's title below. Most file errors go away when you move the show to a folder of your own, such as Documents, and open it from there.</InShort>
+<InShort>Find the message's title below. Most file errors go away when you move the show to a folder of your own on this computer, one that OneDrive, iCloud or Dropbox doesn't sync, and open it from there.</InShort>
 
 When OpenMarch can't open or save a show, it says why in a message, and the message's link opens this page at its section.
 
@@ -30,7 +33,7 @@ OpenMarch isn't allowed to read or write the file. You might see:
 - A spinner that never stops.
 - An error such as <Ui k="pages.updateFailed" /> when you change something, or changes that are gone the next time you open the show.
 
-Give your user account permission to read and write the file, or move the file to a folder of your own, such as Documents, and open it from there.
+Give your user account permission to read and write the file, or move the file to a folder of your own that isn't synced (see [A show in a synced folder](#a-show-in-a-synced-folder)), and open it from there.
 
 ### Windows
 
@@ -84,9 +87,29 @@ Select <Ui k="fileAccessDialogError.leftoverJournal.recover" />. OpenMarch finis
 - <Ui k="fileDialog.leftoverJournal.damagedTitle" />: the show didn't come out undamaged, with or without the `-journal` file. Nothing was changed. [Report it](/guides/start/get-help/) and include the show and its `-journal` file if you can.
 - <Ui k="fileDialog.leftoverJournal.failedTitle" />: OpenMarch couldn't finish. The message says why. Most often the folder isn't writable or the disk is full (see [Invalid file permissions error](#invalid-file-permissions-error)), or another program, such as antivirus or a sync app, has the show open: close it and open the show again.
 
-Older versions of OpenMarch show "Error Loading Database" with "unable to open database file" instead. Don't delete the `-journal` file: if the save it belongs to had started writing, the show needs it. Copy the show and the `-journal` file together into a folder of your own, such as Documents, and open the show from there.
+If the show is in a folder a sync app keeps, the dialog says so. The `-journal` file is likely to come back until you move the show: see [A show in a synced folder](#a-show-in-a-synced-folder).
+
+Older versions of OpenMarch show "Error Loading Database" with "unable to open database file" instead. Don't delete the `-journal` file: if the save it belongs to had started writing, the show needs it. Copy the show and the `-journal` file together into a folder of your own that isn't synced, and open the show from there.
 
 When there's a `-journal` file OpenMarch *can* use, it finishes or undoes the interrupted save by itself, as it always has. Before it does, it puts a copy of the show and the `-journal` file in its backups folder ([Open a show in an older version](/troubleshooting/open-in-an-older-version/) says where that is).
+
+## A show in a synced folder
+
+<Ui k="syncFolderNotice.title" values={{ service: "OneDrive" }} /> appears when a show opens from a folder that a sync app such as OneDrive, iCloud Drive, Dropbox, Google Drive or Box keeps in step with the cloud. While OpenMarch saves, it makes a `-journal` file next to the show and removes it when the save is done. Sync apps can upload, lock or put back that file in the middle of a save, which can leave it behind and stop the show from opening ([A leftover file is stopping this show from opening](#a-leftover-file-is-stopping-this-show-from-opening)). They can also put an older copy of the show back over your changes.
+
+Folders that are often synced without anyone choosing it:
+
+- On Windows, **Documents** and **Desktop** when OneDrive backs them up. The path then has `OneDrive` in it.
+- On a Mac, **Documents** and **Desktop** when iCloud's **Desktop & Documents Folders** is turned on.
+
+To move the show:
+
+1. Close OpenMarch.
+2. Make a folder that isn't synced. On Windows, for example `C:\OpenMarch`. On a Mac, a folder in your home folder (in Finder, **Go** > **Home**).
+3. Move the show into it. If there's a file with the same name plus `-journal` next to the show, move it along with the show.
+4. Open the show from the new folder.
+
+To keep a copy in the cloud, copy the show into the synced folder when you're done working, and don't open it from there. Select <Ui k="syncFolderNotice.stopWarning" /> if you want to keep a show where it is anyway.
 
 ## Couldn't back up or convert your file
 

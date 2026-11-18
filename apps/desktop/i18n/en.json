@@ -743,6 +743,7 @@
             "cancel": "Cancel",
             "description": "There's a leftover file, “{name}”, next to this show, from a save that didn't finish. OpenMarch can't use it where it is, but it can finish recovering the show from a copy. The leftover file is moved to OpenMarch's backups, not deleted.",
             "recover": "Recover and open",
+            "syncFolder": "This show is in a folder synced by {service}. Sync apps can leave this file behind while OpenMarch saves, so it may happen again until the show is in a folder that isn't synced.",
             "title": "A leftover file is stopping this show from opening"
         },
         "notFound": {
@@ -2267,6 +2268,12 @@
             "list": "All groups as a list: count * steps, + between groups",
             "countAt": "{count} at {interval}"
         }
+    },
+    "syncFolderNotice": {
+        "description": "Sync apps can get in the way while OpenMarch saves, and the show may not open next time. Keep it in a folder on this computer that isn't synced.",
+        "stopWarning": "Don't warn for this show",
+        "learnMore": "How to move it",
+        "title": "This show is in a folder synced by {service}"
     },
     "tags": {
         "title": "Tags",

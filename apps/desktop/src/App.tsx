@@ -64,6 +64,7 @@ import WebHomeScreenPrompt from "./components/web/WebHomeScreenPrompt";
 import WebVersionsDialog from "./components/web/WebVersionsDialog";
 import { isWebBuild } from "./utilities/webBuild";
 import { useLoadFileErrorHandler } from "./hooks/useLoadFileErrorHandler";
+import { useCloudSyncFolderNotice } from "./hooks/useCloudSyncFolderNotice";
 import { toast } from "sonner";
 import { version as currentVersion } from "../package.json";
 import CheckForUpdatesHandler from "@/updates/CheckForUpdatesHandler";
@@ -188,6 +189,9 @@ function App() {
 
     // A forgotten Snap toggle doesn't carry into the file just opened or made
     useSnapOnWhenFileOpens(databaseIsReady);
+
+    // A show in a OneDrive, iCloud Drive or Dropbox folder may not save cleanly
+    useCloudSyncFolderNotice(databaseIsReady);
 
     /**
      * Invalidate history queries when a mutation is added.
