@@ -5,8 +5,9 @@
  * page's spots, in one undo step.
  *
  * - `followOrderAt`: the line's order and so its two ends (DL-4, DL-6): the order the show
- *   remembers (step 4f, DL-21), or else `followSource`, the line the marchers stand in as the
- *   shape tool fits it (a line, an arc, or a curve with corners or smooth).
+ *   remembers (step 4f, DL-21); else, for a box, its snake from a corner (step 11, SN-2); else
+ *   `followSource`, the line the marchers stand in as the shape tool fits it (a line, an arc, or
+ *   a curve with corners or smooth).
  * - `planTrailDrag`: the way, each member's end on it and its spot (AP-T8's Ends), for Keep
  *   spacing or Even N steps, with Even's limit. Pure: the preview and the write both use it, and
  *   it is the resolver's own geometry (R-13″), so the preview is where the marchers will be.
@@ -36,13 +37,27 @@ import { readPageGrid } from "./timelinePageGrid";
 import { addPageFlagInTransaction } from "./pageFlags";
 import { saveShapeRecipeInTransaction } from "./shapeRecipes";
 import { trailShapeRecipe } from "./timelineTrailShape";
-import { rememberedOrderAt } from "./rememberedOrder";
 import {
+    rememberedOrderAt,
+    rememberedOrderInWindowAt,
+} from "./rememberedOrder";
+import {
+    boxCellsOf,
+    snakeFrom,
+    snakeOrders,
+    type BoxCells,
+    type SnakeBy,
+} from "./timelineTrailSnake";
+import {
+    editTrailPointsInTransaction,
     followTrailInTransaction,
+    isAlong,
+    isAround,
     lineOrder,
     trailRefusal,
     type FollowTrailResult,
 } from "./timelineTrails";
+import { updateTimelineSlotDestinationInTransaction } from "./timelineTransitionsInTransaction";
 
 /** The refusals' texts of step 4b, translated where they are shown. */
 export const trailDragRefusal = {
@@ -62,6 +77,10 @@ export const trailDragRefusal = {
         text.t("timeline.refusals.trail.notOneMove", { marcher }),
     /** The edit window is at home, or not a range */
     noWindow: () => text.t("timeline.refusals.trail.noWindow"),
+    /** AP-T16: the trail's head is dragged on a trail that wasn't dragged out of a line */
+    headNotAlong: () => text.t("timeline.refusals.trail.headNotAlong"),
+    /** A trail's form slid so far back that a marcher would walk back past its start */
+    formPastStart: () => text.t("timeline.refusals.trail.formPastStart"),
 };
 
 // ---------------------------------------------------------------------------
@@ -223,21 +242,65 @@ export function followSource(starts: readonly XY[]): FollowSource | null {
  * or else the one `followSource` guesses from where they stand (`starts`). Null when neither has
  * one. The Follow tool opening and the write both ask this, so they agree on the line's ends.
  *
+ * Given the Follow tool's `window` instead of a beat, the line is the one at its start flag, and
+ * an order set or cleared by hand inside the window counts too (`rememberedOrderInWindow`): Set
+ * order at the playhead, then Follow, uses that order over a guess or a box's snake (owner,
+ * 2026-11-17).
+ *
  * `leaderFirst` says which end leads before an end is grabbed: a remembered order runs leader
  * first; a guessed one has no leader, and the Follow tool offers its last as the leader.
+ *
+ * A box with no remembered order (step 11, SN-1, SN-2) runs its default snake, `snake.by` (row by
+ * row unless asked), from the corner of `snake.leader` (an index) when that starts one, else from
+ * the top left: `leaderFirst`, with `box` its cells (indexes) so the Follow tool can offer every
+ * corner. A remembered order always wins, box or not.
  */
 export async function followOrderAt(
     db: DbConnection | DbTransaction,
     ids: readonly number[],
-    beat: number,
+    beat: number | TrailWindow,
     starts: readonly XY[],
-): Promise<{ order: number[]; leaderFirst: boolean } | null> {
-    const remembered = await rememberedOrderAt(db, ids, beat);
+    snake?: { by?: SnakeBy; leader?: number },
+): Promise<FollowOrder | null> {
+    const remembered =
+        typeof beat === "number"
+            ? await rememberedOrderAt(db, ids, beat)
+            : await rememberedOrderInWindowAt(db, ids, beat);
     if (remembered && remembered.length === ids.length)
         return {
             order: remembered.map((m) => ids.indexOf(m)),
             leaderFirst: true,
         };
+    return guessedOrder(starts, snake);
+}
+
+/** `followOrderAt`'s answer */
+export interface FollowOrder {
+    /** Indexes into the starts, from one end to the other */
+    order: number[];
+    /** Whether `order` runs leader first (remembered, or a box's snake) */
+    leaderFirst: boolean;
+    /** A box's default snake (step 11): its cells, as indexes into the starts */
+    box?: BoxCells;
+}
+
+/**
+ * The order guessed from where they stand when none is remembered (`followOrderAt`): a box's
+ * default snake (step 11, SN-2), else `followSource`'s line; null when neither fits
+ */
+export function guessedOrder(
+    starts: readonly XY[],
+    snake?: { by?: SnakeBy; leader?: number },
+): FollowOrder | null {
+    const box = boxCellsOf(starts);
+    if (box) {
+        const by = snake?.by ?? "rows";
+        const order =
+            (snake?.leader !== undefined
+                ? snakeFrom(box, by, snake.leader)
+                : null) ?? snakeOrders(box, by)[0]!;
+        return { order, leaderFirst: true, box };
+    }
     const guess = followSource(starts)?.order;
     return guess ? { order: guess, leaderFirst: false } : null;
 }
@@ -269,7 +332,16 @@ export function trailOrderFrom(
 // ---------------------------------------------------------------------------
 
 /** Spacing on the path bar (DL-7): keep each member's distance along the way, or even steps */
-export type TrailSpacing = { kind: "keep" } | { kind: "even"; steps: number };
+/**
+ * How a dragged trail spaces its line (DL-7): Keep (the line-up's own gaps), Even N steps, or
+ * gaps given as each member's distance back along the way from the head (`back`, tail first, field
+ * units, the leader's 0): a form whose tail was slid along the trail (owner, 2026-11-17), each gap
+ * scaled, so an uneven line stays uneven.
+ */
+export type TrailSpacing =
+    | { kind: "keep" }
+    | { kind: "even"; steps: number }
+    | { kind: "gaps"; back: readonly number[] };
 
 /** What a dragged trail does (AP-T8), worked out before anything is written */
 export interface TrailDragPlan {
@@ -324,9 +396,11 @@ export function planTrailDrag(
     const ends =
         spacing.kind === "keep"
             ? startDist.map((s) => s + drawn)
-            : startDist.map(
-                  (_, q) => total - (m - 1 - q) * spacing.steps * step,
-              );
+            : spacing.kind === "gaps"
+              ? startDist.map((_, q) => total - (spacing.back[q] ?? 0))
+              : startDist.map(
+                    (_, q) => total - (m - 1 - q) * spacing.steps * step,
+                );
     // N ≤ (total − startDist[q]) / ((m − 1 − q)·step) for every member behind the leader
     let evenLimit: number | null = null;
     for (let q = 0; q < m - 1; q++) {
@@ -461,6 +535,8 @@ export interface TrailDragInput {
      * at the playhead). The one over exactly the window when absent.
      */
     keepMove?: number | null;
+    /** A box with no remembered order snakes row by row (the default) or column by column (SN-2) */
+    snake?: SnakeBy;
 }
 
 export interface TrailDragResult extends FollowTrailResult {
@@ -511,7 +587,17 @@ async function planDragInTransaction(
         const [x, y] = resolver.positionAt(m, from);
         return [x, y];
     });
-    const along = await followOrderAt(tx, ids, from, starts);
+    // The window's own line counts an order set by hand inside it (`rememberedOrderInWindow`)
+    const along = await followOrderAt(
+        tx,
+        ids,
+        input.ends === "keep" ? from : window,
+        starts,
+        {
+            by: input.snake,
+            leader: ids.indexOf(leaderId),
+        },
+    );
     if (!along) refuse(trailDragRefusal.notFitted());
     const order = trailOrderFrom(along.order, ids.indexOf(leaderId));
     if (!order) refuse(trailDragRefusal.notAnEnd());
@@ -697,5 +783,188 @@ export async function dragTrail(
     const { db, ...input } = args;
     return await transactionWithHistory(db, "dragTrail", (tx) =>
         dragTrailInTransaction(tx, input),
+    );
+}
+
+// ---------------------------------------------------------------------------
+// AP-T16: drag a dragged-out trail's head
+// ---------------------------------------------------------------------------
+
+export interface TrailHeadInput {
+    /** The trail's route */
+    routeId: number;
+    /**
+     * The trail's points now, in walking order from the leader, the last one its head: the stored
+     * points cut back (shorter) or run on (longer), kept ids staying
+     */
+    points: readonly RoutePointInput[];
+    /** The spacing the trail was dragged out with, or Keep spacing */
+    spacing: TrailSpacing;
+    /** One step, in field units */
+    step: number;
+}
+
+export interface TrailHeadResult {
+    routeId: number;
+    transitionId: number;
+    /** The line, tail first */
+    marcherIds: number[];
+    /** The spots written, `P(e_q)`, tail first */
+    spots: XY[];
+}
+
+/**
+ * AP-T16 (owner, 2026-11-17), inside one write-wrapper transaction: the trail of a move dragged out
+ * of a line (AP-T8, `ends: "along"`) gets `points` as its trail, and everyone's end spot is planned
+ * again exactly as AP-T8 plans it for that trail (`planTrailDrag`, the line where it starts, in its
+ * order, the leader last), hand-moved spots too. The route is rewritten through AP-T2's writer
+ * (kept ids staying, its `to` the new last point); each member's slot gets its spot; and step 4c's
+ * shape recipe for the spots is saved again (DL-11), the old one left empty and deleted. The
+ * transition, its route and its rows keep their ids. Refused: a trail that isn't along the way
+ * (into end spots, round an outline), fewer than two founders, a trail shorter than `ε_geom`, Even
+ * past its limit.
+ */
+export async function dragTrailHeadInTransaction(
+    tx: DbTransaction,
+    input: TrailHeadInput,
+): Promise<TrailHeadResult> {
+    const { routeId, points, spacing, step } = input;
+    const T = schema.timeline_transitions;
+    const A = schema.timeline_assignments;
+    const transition = await tx
+        .select()
+        .from(T)
+        .where(
+            and(eq(T.route_id, routeId), eq(T.path_style, "follow_the_leader")),
+        )
+        .get();
+    if (!transition) refuse(trailRefusal.noTrail());
+    if (!isAlong(transition) || isAround(transition))
+        refuse(trailDragRefusal.headNotAlong());
+    const resolver = createResolver((await readTimelineTables(tx)).snapshot);
+    // The line as it follows now, tail first and the leader last (R-12′), where AP-T8 read it
+    const line = resolver.ftlEntry(transition.id).members;
+    if (line.length < 2) refuse(trailRefusal.tooFew());
+    const starts = line.map((m): XY => {
+        const [x, y] = resolver.positionAt(m, transition.start_beat);
+        return [x, y];
+    });
+    const plan = planTrailDrag(starts, points, spacing, step);
+    if (!(plan.drawn >= EPS_GEOM)) refuse(trailDragRefusal.tooShort());
+    if (spacing.kind === "even" && !plan.forward)
+        refuse(
+            trailDragRefusal.evenTooWide(
+                Math.floor((plan.evenLimit ?? 0) * 4) / 4,
+            ),
+        );
+    if (spacing.kind === "gaps" && !plan.forward)
+        refuse(trailDragRefusal.formPastStart());
+    // The trail: AP-T2's writer, which keeps it running to its own last point (AP-T10)
+    await editTrailPointsInTransaction({ tx, routeId, points });
+    // Each member's spot, on its own slot
+    const rows = await tx
+        .select({ marcherId: A.marcher_id, slot: A.slot_index })
+        .from(A)
+        .where(
+            and(
+                eq(A.transition_id, transition.id),
+                inArray(A.marcher_id, line),
+            ),
+        )
+        .all();
+    const slotOf = new Map(rows.map((r) => [r.marcherId, r.slot]));
+    for (const [q, m] of line.entries())
+        await updateTimelineSlotDestinationInTransaction({
+            tx,
+            transitionId: transition.id,
+            slotIndex: slotOf.get(m)!,
+            point: plan.spots[q]!,
+        });
+    // Step 4c (DL-11): the spots as a shape again, each member where it's written
+    const { recipe, members } = trailShapeRecipe(plan, line);
+    await saveShapeRecipeInTransaction({
+        tx,
+        timelineId: transition.timeline_id,
+        recipe,
+        members,
+    });
+    return {
+        routeId,
+        transitionId: transition.id,
+        marcherIds: [...line],
+        spots: plan.spots,
+    };
+}
+
+/** AP-T16 as one undoable edit. */
+export async function dragTrailHead(
+    args: { db: DbConnection } & TrailHeadInput,
+): Promise<TrailHeadResult> {
+    const { db, ...input } = args;
+    return await transactionWithHistory(db, "dragTrailHead", (tx) =>
+        dragTrailHeadInTransaction(tx, input),
+    );
+}
+
+// ---------------------------------------------------------------------------
+// A trail's form: one marcher detached (owner, 2026-11-17)
+// ---------------------------------------------------------------------------
+
+export interface TrailDetachInput {
+    /** The trail's route */
+    routeId: number;
+    marcherId: number;
+    /** Its new end spot, off the trail */
+    point: XY;
+}
+
+/**
+ * One member of a trail's form detached (Alt + drag, owner 2026-11-17), inside one write-wrapper
+ * transaction: its end spot leaves the trail for `point`, everyone else's and the trail stay. It
+ * then walks the trail to its projection and on straight to its spot (R-13″'s off-trail rule).
+ * Refused for a trail that isn't along the way, or a marcher not on it.
+ */
+export async function detachTrailSpotInTransaction(
+    tx: DbTransaction,
+    { routeId, marcherId, point }: TrailDetachInput,
+): Promise<void> {
+    const T = schema.timeline_transitions;
+    const A = schema.timeline_assignments;
+    const transition = await tx
+        .select()
+        .from(T)
+        .where(
+            and(eq(T.route_id, routeId), eq(T.path_style, "follow_the_leader")),
+        )
+        .get();
+    if (!transition) refuse(trailRefusal.noTrail());
+    if (!isAlong(transition) || isAround(transition))
+        refuse(trailDragRefusal.headNotAlong());
+    const row = await tx
+        .select({ slot: A.slot_index })
+        .from(A)
+        .where(
+            and(
+                eq(A.transition_id, transition.id),
+                eq(A.marcher_id, marcherId),
+            ),
+        )
+        .get();
+    if (!row) refuse(trailRefusal.noTrail());
+    await updateTimelineSlotDestinationInTransaction({
+        tx,
+        transitionId: transition.id,
+        slotIndex: row.slot,
+        point,
+    });
+}
+
+/** One member of a trail's form detached, as one undoable edit. */
+export async function detachTrailSpot(
+    args: { db: DbConnection } & TrailDetachInput,
+): Promise<void> {
+    const { db, ...input } = args;
+    await transactionWithHistory(db, "detachTrailSpot", (tx) =>
+        detachTrailSpotInTransaction(tx, input),
     );
 }

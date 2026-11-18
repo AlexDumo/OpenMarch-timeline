@@ -4,8 +4,8 @@ import {
     laneOutline,
     memberWalkOf,
     scheduleOf,
-    type PathShape,
 } from "../pathEdit";
+import { type PathShape } from "@/shapes/pen/penPath";
 
 /**
  * Group paths on the canvas (pathways step 15, spec Appendix I.8): each member's lane, and the

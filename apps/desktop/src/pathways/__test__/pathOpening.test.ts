@@ -97,7 +97,13 @@ describe("a stored path, shown", () => {
 
     it("takes no press, keeps the field's menu open and the selection box its own", () => {
         showPath(target(5), "T4");
-        expect(pathPenMode.claims(ON_LINE)).toBe(false);
+        expect(
+            pathPenMode.claims(ON_LINE, {
+                reachesInside: () => false,
+                isMac: false,
+                onDot: () => false,
+            }),
+        ).toBe(false);
         // Something to click, though (a click makes it active)
         expect(pathPenMode.cursorAt(ON_LINE)).toBe("pointer");
         expect(pathPenMode.cursorAt(NEAR)).toBeNull();

@@ -200,6 +200,25 @@ describeDbTests(
             expect(session()!.phase).toBe("open");
         });
 
+        it("Edit path is a toggle (owner, 2026-11-17): on, checked, then off again, the path still shown", async ({
+            db,
+            wrapper,
+            marchersAndPages: _,
+        }) => {
+            const { m1, routeId, select } = await setUp(db, wrapper);
+            select([m1]);
+            await waitFor(() =>
+                expect(session()?.target.routeId).toBe(routeId),
+            );
+            expect(session()!.phase).toBe("closed");
+            act(() => void runAction("editPath"));
+            expect(session()!.phase).toBe("open");
+            await waitFor(() => expect(isActionEnabled("editPath")).toBe(true));
+            act(() => void runAction("editPath"));
+            expect(session()!.phase).toBe("closed");
+            expect(session()!.target.routeId).toBe(routeId);
+        });
+
         it("goes when the selection moves off its marcher, so a Delete then removes nothing", async ({
             db,
             wrapper,

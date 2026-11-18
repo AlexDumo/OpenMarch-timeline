@@ -1127,12 +1127,40 @@ const STATIC_ACTIONS = {
         defaultBindings: [],
         ignoreRepeat: true,
     },
+    // Pathways step 11 (spec L.12, SN-2): which way a box with no order of its own snakes, row by
+    // row or column by column, in the Follow tool and for Ripple in into a box. No keys
+    followSnakeRows: {
+        labelKey: "actions.path.snakeRows",
+        keywordsKey: "actions.path.snakeKeywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    followSnakeColumns: {
+        labelKey: "actions.path.snakeColumns",
+        keywordsKey: "actions.path.snakeKeywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
     reverseTrail: {
         labelKey: "actions.path.reverse",
         keywordsKey: "actions.path.followKeywords",
         category: "path",
         scope: "canvas",
         defaultBindings: ["Alt+L"],
+        ignoreRepeat: true,
+    },
+    // A selected trail tucks its end shape's controls away (owner, 2026-11-17); this shows them
+    // again, or tucks them back. No key: the path bar's ··· and the palette
+    trailShapeControls: {
+        labelKey: "actions.path.shapeControls",
+        keywordsKey: "actions.path.followKeywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
         ignoreRepeat: true,
     },
 
@@ -1167,6 +1195,28 @@ const STATIC_ACTIONS = {
     clearMarcherOrder: {
         labelKey: "actions.path.clearOrder",
         keywordsKey: "actions.path.orderKeywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+
+    // While a path is drawn (the Path pen, the Follow tool, a trail's head drawn on): the path
+    // bar's Straight | Curve switch, what a click places, remembered between drawings (owner,
+    // 2026-11-17). Holding Alt places the other kind (`PEN_KEYS`). No keys: the Line's corner
+    // type has none, Alt is the keyboard's way, and every free letter is a tool's; the bar and
+    // the palette
+    pathDrawStraight: {
+        labelKey: "actions.path.drawStraight",
+        keywordsKey: "actions.path.drawKindKeywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    pathDrawCurve: {
+        labelKey: "actions.path.drawCurve",
+        keywordsKey: "actions.path.drawKindKeywords",
         category: "path",
         scope: "canvas",
         defaultBindings: [],

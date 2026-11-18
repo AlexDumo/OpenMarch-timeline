@@ -302,7 +302,7 @@ describeDbTests("Ripple into the next form (AP-T12)", (it) => {
         await expectRefused(
             db,
             () => rippleTrail({ db, window: WINDOW, marcherIds: IDS, leaderId: 4, points: [] }), // prettier-ignore
-            /line, curve or arc/,
+            /line, curve, arc or box/,
         );
     });
 
@@ -390,7 +390,7 @@ describeDbTests("Ripple into the next form (AP-T12)", (it) => {
         }
     });
 
-    it("RP-2 (review): end spots in a 2×2 block, or on the line itself, refuse with their reason", async ({
+    it("RP-2 (review, step 11): end spots in a 2×2 box ripple along its snake; on the line itself they refuse", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -412,11 +412,11 @@ describeDbTests("Ripple into the next form (AP-T12)", (it) => {
             [x0 + 20 * step, y0 - 22 * step],
             [x0 + 22 * step, y0 - 22 * step],
         ]);
-        await expectRefused(
-            db,
-            () => rippleTrail({ db, window: WINDOW, marcherIds: IDS, leaderId: 4, points: [] }), // prettier-ignore
-            /loop|block/,
-        );
+        // Step 11 (SN-4): a box is no longer refused; the tail takes the corner nearest M4 (M1's spot)
+        const boxed = await rippleTrail({ db, window: WINDOW, marcherIds: IDS, leaderId: 4, points: [] }); // prettier-ignore
+        expect(boxed.marcherIds).toEqual([1, 2, 3, 4]);
+        expect(boxed.takes).toEqual([1, 2, 4, 3]);
+        await performUndo(db);
         // The line slid two steps along itself
         await place(IDS.map((_, k): XY => [x0 + (2 + 2 * k) * step, y0]));
         await expectRefused(
@@ -570,7 +570,7 @@ describe("Ripple's plan (pure)", () => {
         expect(rippleEntrance(form, [-1, 0], 8)).toBe(7);
     });
 
-    test("RP-2: open lines, curves and arcs pass; loops, blocks, zigzags and the line itself don't", () => {
+    test("RP-2: open lines, curves, arcs and boxes pass; loops, folds, zigzags and the line itself don't", () => {
         const line: XY[] = [0, 1, 2, 3, 4].map((i) => [2 * i, 0]);
         const away = (pts: XY[]): XY[] =>
             pts.map(([x, y]) => [x + 100, y + 100]);
@@ -599,8 +599,8 @@ describe("Ripple's plan (pure)", () => {
         ];
         const v = [arm(15, 3), arm(15, 2), arm(15, 1), [0, 0] as XY, arm(-15, 1), arm(-15, 2), arm(-15, 3)]; // prettier-ignore
         expect(why(away(v))).toMatch(/formFold/);
-        // A 2×2 box around, a full circle, a 3×2 snake, a box outline: a loop
-        expect(why(away([[0, 0], [2, 0], [2, 2], [0, 2]]))).toMatch(/formLoop/); // prettier-ignore
+        // A full circle: a loop. A 2×2 box around and a 3×2 snake are boxes (step 11): they pass
+        expect(why(away([[0, 0], [2, 0], [2, 2], [0, 2]]))).toBeNull(); // prettier-ignore
         const circle = [0, 1, 2, 3, 4, 5].map(
             (i): XY => [
                 10 * Math.cos((i / 6) * 2 * Math.PI),
@@ -608,7 +608,7 @@ describe("Ripple's plan (pure)", () => {
             ],
         );
         expect(why(away(circle))).toMatch(/formLoop/);
-        expect(why(away([[0, 0], [2, 0], [4, 0], [4, 2], [2, 2], [0, 2]]))).toMatch(/formLoop/); // prettier-ignore
+        expect(why(away([[0, 0], [2, 0], [4, 0], [4, 2], [2, 2], [0, 2]]))).toBeNull(); // prettier-ignore
         // A zigzag through scattered spots: not a form
         expect(why(away([[0, 0], [2, 0], [30, 0], [32, 0]]))).toMatch(/notAForm/); // prettier-ignore
         // The line slid along itself, or the line itself: overlap

@@ -5,7 +5,8 @@
  *
  * - `planRipple` (`timelineTrailRipplePlan`, pure): the deal and the trail as the resolver builds
  *   it; the Follow tool's drawing and this write both use it.
- * - `rippleFormAt`: the next form, the members' end spots in their remembered or guessed order.
+ * - `rippleFormAt`: the next form, the members' end spots in their remembered or guessed order;
+ *   a box with no remembered order carries its default snake (step 11, SN-4).
  * - `rippleTrailInTransaction`: the write (AP-T12): step 4's Follow (AP-T1) onto the dealt spots,
  *   then the move's shape recipes re-dealt so they agree.
  */
@@ -38,6 +39,7 @@ import {
     windowMoveOf,
     type TrailWindow,
 } from "./timelineTrailDrag";
+import { mapCells, type SnakeBy } from "./timelineTrailSnake";
 
 // ---------------------------------------------------------------------------
 // Reads
@@ -46,21 +48,30 @@ import {
 /**
  * RP-2: the next form, `spots` (each of `ids`'s end spot at `beat`, the move's end) in the order
  * the show remembers for them there, or else the one their spots suggest. Null when neither has
- * one: the spots don't stand in a line, curve or arc.
+ * one: the spots don't stand in a line, curve, arc or box. A box with no remembered order (step
+ * 11, SN-4) carries its cells and `by`, so the deal can start at any corner.
  */
 export async function rippleFormAt(
     db: DbConnection | DbTransaction,
     ids: readonly number[],
     beat: number,
     spots: ReadonlyMap<number, XY>,
+    by: SnakeBy = "rows",
 ): Promise<RippleForm | null> {
     const sorted = [...new Set(ids)].sort((a, b) => a - b);
     const at = sorted.map((m) => spots.get(m)!);
-    const found = await followOrderAt(db, sorted, beat, at);
+    const found = await followOrderAt(db, sorted, beat, at, { by });
     if (!found) return null;
-    return {
+    const form = {
         ids: found.order.map((i) => sorted[i]!),
         spots: found.order.map((i) => at[i]!),
+    };
+    if (!found.box) return form;
+    // The cells as indexes into the form's own order
+    const place = new Map(found.order.map((i, k) => [i, k]));
+    return {
+        ...form,
+        snake: { box: mapCells(found.box, (i) => place.get(i)!), by },
     };
 }
 
@@ -84,6 +95,8 @@ export interface RippleInput {
     keepMove?: number | null;
     /** The marcher whose spot is the entrance, when the finish was on it (RP-4) */
     enter?: number | null;
+    /** A box with no remembered order snakes row by row (the default) or column by column (SN-2) */
+    snake?: SnakeBy;
 }
 
 export interface RippleResult extends FollowTrailResult {
@@ -169,7 +182,10 @@ export async function rippleTrailInTransaction(
         const [x, y] = resolver.positionAt(m, timeline.start_beat);
         return [x, y];
     });
-    const along = await followOrderAt(tx, ids, timeline.start_beat, starts);
+    const along = await followOrderAt(tx, ids, timeline.start_beat, starts, {
+        by: input.snake,
+        leader: ids.indexOf(leaderId),
+    });
     if (!along) refuse(trailDragRefusal.notFitted());
     const order = trailOrderFrom(along.order, ids.indexOf(leaderId));
     if (!order) refuse(trailDragRefusal.notAnEnd());
@@ -177,7 +193,13 @@ export async function rippleTrailInTransaction(
     // Each member's end spot there, its slot's stored destination (as AP-T1 reads it)
     const spots = await endSpotsInMove(tx, move, ids);
     if (!spots) refuse(trailDragRefusal.noSpots());
-    const form = await rippleFormAt(tx, ids, timeline.end_beat, spots);
+    const form = await rippleFormAt(
+        tx,
+        ids,
+        timeline.end_beat,
+        spots,
+        input.snake,
+    );
     if (!form) refuse(rippleRefusal.notAForm());
     // The line as it stands, in its own order (not by id), as the tool checks it
     const problem = rippleFormProblem(

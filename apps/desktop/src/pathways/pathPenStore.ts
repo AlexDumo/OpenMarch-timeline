@@ -49,6 +49,7 @@ import tolgee from "@/global/singletons/Tolgee";
 import type { XY } from "@/shapes/types";
 import { SMOOTH } from "@/shapes/line/lineGeometry";
 import { drawnAsGroup, type GroupMember, type PathTarget } from "./pathTarget";
+import { clickedPoint } from "@/shapes/pen/penKind";
 import { activeFieldEditor } from "@/field/editor/activeFieldEditor";
 import { dragTrail } from "@/db-functions/timelineTrailDrag";
 import { rippleTrail } from "@/db-functions/timelineTrailRipple";
@@ -62,6 +63,7 @@ import {
     intoEndSpots,
     rippleDrawnPlanOf,
     ripplesIn,
+    snakeByOf,
     type FollowDrag,
 } from "./followDrag";
 import { goRound } from "@/db-functions/timelineTrailAround";
@@ -76,9 +78,9 @@ import {
     withTension,
     type PathPoint,
     type PathShape,
-} from "./pathEdit";
+} from "@/shapes/pen/penPath";
 
-export type { PathPoint } from "./pathEdit";
+export type { PathPoint } from "@/shapes/pen/penPath";
 
 /**
  * The pen's session (pathways steps 1 and 2): a path being drawn for one marcher (`drawing`), the
@@ -160,6 +162,13 @@ export interface PathObject {
 
 interface PathPenState {
     session: PathSession | null;
+    /**
+     * The trail (its `pathKey`) whose end shape shows its own controls, or null (owner,
+     * 2026-11-17): a selected trail tucks away the controls of the placed shape its marchers stand
+     * in at the move's end (the shape's bars, handles, move dot and rotate knob) until the path
+     * bar's ··· turns them on (`trailShape.ts`)
+     */
+    shapeControlsFor?: string | null;
     /** A save is under way: the pen takes no new edit until it settles */
     saving: boolean;
     /**
@@ -335,11 +344,10 @@ export const pathMarcherIds = (
         (session.phase === "closed" && closedUnder)
             ? []
             : session.target.trail
-              ? // A trail shown closed keeps every member's walked path (its start flag
-                // positions' path is the trail as walked); drawn or open, they give way
-                session.phase === "closed"
-                  ? []
-                  : session.target.trail.members.map((m) => m.marcherId)
+              ? // A trail draws where its marchers start (ghosts) and the way they walk, shown
+                // closed too (owner, 2026-11-17), so their start flag dots and routes give way,
+                // as an open shape's do (#417)
+                session.target.trail.members.map((m) => m.marcherId)
               : session.target.group
                 ? groupLineIds(session, selected)
                 : [session.target.marcherId];
@@ -569,6 +577,19 @@ export function shapeOf(s: PathSession): PathShape {
             : intoEndSpots(s.follow) && s.follow.grabbed !== null
               ? target.to
               : (points.at(-1)?.at ?? target.from);
+        shape = {
+            from: target.from,
+            to,
+            points,
+            ends: { from: target.from, to },
+        };
+        shapes.set(s, shape);
+        return shape;
+    }
+    // A stored dragged-out trail too (AP-T10): its route runs to its own last point, as the write
+    // keeps it, never on from the head to the tail's end spot (the entrance `target.to` names)
+    if (target.trail?.along) {
+        const to = points.at(-1)?.at ?? target.from;
         shape = {
             from: target.from,
             to,
@@ -1221,9 +1242,12 @@ export function clearPath(): void {
 export const isDrawing = () =>
     usePathPenStore.getState().session?.phase === "drawing";
 
-/** While drawing, a corner placed at `at` */
-export function addPoint(at: XY): void {
-    update((s) => ({ ...s, points: [...s.points, { at }] }));
+/**
+ * While drawing, a point placed at `at`: a corner, or with `smooth` a smooth point at the plain
+ * roundness (the Straight | Curve switch, `drawKind.ts`)
+ */
+export function addPoint(at: XY, smooth = false): void {
+    update((s) => ({ ...s, points: [...s.points, clickedPoint(at, smooth)] }));
 }
 
 /**
@@ -1243,6 +1267,28 @@ export function endNewPoint(): void {
 export function removeLastPoint(): boolean {
     const { session } = usePathPenStore.getState();
     if (!session || session.phase !== "drawing") return false;
+    // A trail's head drawn on with clicks (AP-T16): the last click is taken back, its cut too;
+    // the stored points stay
+    const f = session.follow;
+    if (f?.head?.clicks) {
+        const before = f.head.history?.at(-1);
+        if (before)
+            update((s) => ({
+                ...s,
+                follow: {
+                    ...f,
+                    head: {
+                        ...f.head!,
+                        prefix: before,
+                        history: f.head!.history!.slice(0, -1),
+                    },
+                },
+                points: before,
+                pointer: before.at(-1)?.at ?? null,
+                dragging: null,
+            }));
+        return true;
+    }
     if (session.points.length > 0)
         update((s) => ({
             ...s,
@@ -1384,6 +1430,7 @@ async function saveFollow(
             points,
             keepMove: follow.keep?.timelineId ?? null,
             enter,
+            snake: snakeByOf(follow),
         });
     else
         await dragTrail({
@@ -1396,6 +1443,7 @@ async function saveFollow(
             step: follow.step,
             ends: follow.ends === "keep" ? "keep" : "trail",
             keepMove: follow.keep?.timelineId ?? null,
+            snake: snakeByOf(follow),
         });
     invalidatePlacedBoxes();
 }

@@ -6,14 +6,22 @@
 import { makeTrail, pointsPath, type FtlTrail, type XY } from "@openmarch/core";
 import { text, type TimelineText } from "@/timeline/timelineText";
 import type { RoutePointInput } from "./timelineRoutes";
+import {
+    boxCellsOf,
+    nearestSnakeEnd,
+    snakeEnds,
+    snakeFrom,
+    type BoxCells,
+    type SnakeBy,
+} from "./timelineTrailSnake";
 
 /** The refusals' texts of step 9, translated where they are shown */
 export const rippleRefusal = {
     /** RP-2: the members' end spots don't stand in a line, curve or arc */
     notAForm: () => text.t("timeline.refusals.trail.notAForm"),
-    /** RP-2: the end spots close into a loop (a circle, a box outline: steps 10 and 11) */
+    /** RP-2: the end spots close into a loop (a circle; a box outline is a box, step 11) */
     formLoop: () => text.t("timeline.refusals.trail.formLoop"),
-    /** RP-2: the end spots fold back close to themselves (a sharp V, or rows through a box) */
+    /** RP-2: the end spots fold back close to themselves (a sharp V; a box snakes, step 11) */
     formFold: () => text.t("timeline.refusals.trail.formFold"),
     /** RP-2: the end spots lie on the line where it stands, so it would walk back through itself */
     formOverlap: () => text.t("timeline.refusals.trail.formOverlap"),
@@ -57,6 +65,10 @@ function toSegment(p: XY, a: XY, b: XY): number {
  *   through a box, or a V sharper than about 47°; step 11 snakes);
  * - **overlap**: two or more spots within a quarter `s` of the line where it stands (the form slid
  *   along the line, or the line itself): the line would walk back through itself.
+ *
+ * Spots that stand in a box (step 11, SN-1, `boxCellsOf`) are dealt along its snake (SN-4), so
+ * only overlap is asked of them: a box's snake folds and its two ends may be close by design, and
+ * its remembered order, whatever it is, wins (SN-2).
  */
 export function rippleFormProblem(
     spots: readonly XY[],
@@ -65,17 +77,20 @@ export function rippleFormProblem(
     const n = spots.length;
     if (n < 2) return null;
     const steps = spots.slice(1).map((p, i) => dist(p, spots[i]!));
-    const s = median(steps);
-    if (!(s > 0) || Math.max(...steps) > 2.5 * s)
-        return rippleRefusal.notAForm();
-    const ends = dist(spots[0]!, spots[n - 1]!);
-    const length = steps.reduce((a, b) => a + b, 0);
-    if (n >= 3 && ends < 1.5 * s && ends < length / 2)
-        return rippleRefusal.formLoop();
-    for (let i = 0; i < n; i++)
-        for (let j = i + 3; j < n; j++)
-            if (dist(spots[i]!, spots[j]!) < 1.5 * s)
-                return rippleRefusal.formFold();
+    const box = boxCellsOf(spots);
+    const s = box ? usualGap(spots) : median(steps);
+    if (!box) {
+        if (!(s > 0) || Math.max(...steps) > 2.5 * s)
+            return rippleRefusal.notAForm();
+        const ends = dist(spots[0]!, spots[n - 1]!);
+        const length = steps.reduce((a, b) => a + b, 0);
+        if (n >= 3 && ends < 1.5 * s && ends < length / 2)
+            return rippleRefusal.formLoop();
+        for (let i = 0; i < n; i++)
+            for (let j = i + 3; j < n; j++)
+                if (dist(spots[i]!, spots[j]!) < 1.5 * s)
+                    return rippleRefusal.formFold();
+    }
     const onLine = spots.filter((p) =>
         starts.length === 1
             ? dist(p, starts[0]!) < s / 4
@@ -85,6 +100,14 @@ export function rippleFormProblem(
     ).length;
     return onLine >= 2 ? rippleRefusal.formOverlap() : null;
 }
+
+/** The median of each spot's distance to its nearest other: a box's usual spacing */
+const usualGap = (spots: readonly XY[]): number =>
+    median(
+        spots.map((p, i) =>
+            Math.min(...spots.map((q, j) => (i === j ? Infinity : dist(p, q)))),
+        ),
+    );
 
 // ---------------------------------------------------------------------------
 // Pure: the deal and the trail
@@ -96,6 +119,19 @@ export interface RippleForm {
     readonly ids: readonly number[];
     /** The spots, in the same order */
     readonly spots: readonly XY[];
+    /**
+     * A box with no remembered order (step 11, SN-4): its cells (indexes into `ids` and `spots`)
+     * and which way its default snake runs. The deal then starts at whichever corner is nearest
+     * where the connector arrives, and runs along the snake from there; `ids` and `spots` are its
+     * snake from the top left.
+     */
+    readonly snake?: { readonly box: BoxCells; readonly by: SnakeBy };
+}
+
+/** The spot indexes the form can be entered at (RP-4): its two ends, or a box's corners (SN-4) */
+export function formEnds(form: RippleForm): number[] {
+    if (form.snake) return snakeEnds(form.snake.box, form.snake.by);
+    return form.ids.length > 1 ? [0, form.ids.length - 1] : [0];
 }
 
 /** What a ripple does (AP-T12), worked out before anything is written */
@@ -124,13 +160,20 @@ export interface RipplePlan {
 /**
  * RP-4: the end of `form` the line enters, as the marcher standing on it now. `enter`, when it is
  * one of the form's two ends, wins (a finish on its spot); else the end nearer `at` (where the
- * drawing arrives), ties to the form's first.
+ * drawing arrives), ties to the form's first. A box with no remembered order (SN-4) is entered at
+ * one of its corners the same way: `enter` when it stands on one, else the one nearest `at`.
  */
 export function rippleEntrance(
     form: RippleForm,
     at: XY,
     enter?: number | null,
 ): number {
+    if (form.snake) {
+        const { box, by } = form.snake;
+        const corners = snakeEnds(box, by).map((i) => form.ids[i]!);
+        if (enter != null && corners.includes(enter)) return enter;
+        return form.ids[nearestSnakeEnd(box, by, (i) => form.spots[i]!, at)]!;
+    }
     const first = form.ids[0]!;
     const last = form.ids[form.ids.length - 1]!;
     if (enter === first || enter === last) return enter;
@@ -159,11 +202,15 @@ export function planRipple(
     const leader = starts[m - 1]!;
     const arrive = points.at(-1)?.at ?? leader;
     const entrance = rippleEntrance(form, arrive, enter);
-    const fromFirst = entrance === form.ids[0];
-    const takes = fromFirst ? [...form.ids] : [...form.ids].reverse();
-    const spots = (fromFirst ? [...form.spots] : [...form.spots].reverse()).map(
-        (p): XY => [p[0], p[1]],
-    );
+    // In the form's order from the entrance: a box's snake from its corner (SN-4), else the
+    // form's own order, from whichever end it is
+    const dealt = form.snake
+        ? snakeFrom(form.snake.box, form.snake.by, form.ids.indexOf(entrance))!
+        : entrance === form.ids[0]
+          ? form.ids.map((_, i) => i)
+          : form.ids.map((_, i) => form.ids.length - 1 - i);
+    const takes = dealt.map((i) => form.ids[i]!);
+    const spots = dealt.map((i): XY => [form.spots[i]![0], form.spots[i]![1]]);
     const path = pointsPath(spots);
     const trail = makeTrail(starts, [], path, {
         from: [leader[0], leader[1]],

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { landClicked } from "@/shapes/line/lineGeometry";
 import type { ToolEnv } from "@/shapes/tool/toolKind";
+import { PATH_MENU } from "../pathEdit";
 import {
-    PATH_MENU,
     clickPathHandle,
     pointKey,
     dragPathHandle,
@@ -13,7 +13,7 @@ import {
     pathHandles,
     pathHonors,
     type PathShape,
-} from "../pathEdit";
+} from "@/shapes/pen/penPath";
 
 /**
  * A path's corners are edited as a Line's points are (owner lab feedback on fork #674): the same

@@ -52,6 +52,14 @@ ordinary positions it writes.
 - `command/`: the command bar's shape steps.
   `preview/`: a shape's small picture, drawn from its own geometry. `transform/`: turning and
   flipping a plain selection, with no recipe. `draw/`: conversions between fills.
+- `pen/`: the shared pen (plan in fork PR #1067's notes; `penSubject.ts` is its contract). A
+  caller's drawn line is a `PenSubject`; the pen owns the drawing gestures (`penDrawing.ts`: click,
+  press-and-drag roundness, double-click, the leg to the pointer once a frame), the Straight |
+  Curve switch and Alt (`penKind.ts`), the cue (`penCue.ts`), the drawing bar and hint
+  (`PenBar.tsx`), the keys and commands (`usePenKeys.ts`), and a path's points, handles, landing
+  and point and leg menus (`penPath.ts`). It imports neither `toolMachine` nor pathways, and never
+  writes history: each write is the subject's. Pathways' Path pen, Follow tool and trail head draw
+  through it (`pathways/penSubjects.ts`); the Line tool doesn't yet.
 - `assign.ts`, `leastTravel.ts`: who goes where. `leastTravel` is the one replaceable solver.
 
 ## The host and its kinds

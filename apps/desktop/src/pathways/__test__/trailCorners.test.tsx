@@ -1,4 +1,6 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { runAction } from "@/shortcuts/registry";
+import { useActionHandler } from "@/shortcuts/useActionHandler";
 import {
     act,
     cleanup,
@@ -13,7 +15,14 @@ import {
 } from "@openmarch/core";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import { PathEditor } from "../PathEditor";
-import { chipPlaces } from "../TrailCornerCounts";
+import {
+    chipObstaclesOf,
+    chipPlaces,
+    chipSize,
+    toggleCornerChips,
+    useCornerChipsStore,
+    type ChipObstacle,
+} from "../TrailCornerCounts";
 import { subscribeHistoryChanges } from "@/db-functions/history";
 import { clearPath, showPath, usePathPenStore } from "../pathPenStore";
 import type { PathTarget } from "../pathTarget";
@@ -79,6 +88,7 @@ const sessionOf = (target: PathTarget): PathSession => {
 
 afterEach(() => {
     act(() => clearPath());
+    useCornerChipsStore.setState({ pinnedFor: null, listOpen: false });
     cleanup();
 });
 
@@ -351,11 +361,16 @@ describe("corner counts on a trail (spec L.9, pathways step 6)", () => {
 });
 
 describe("the corner chips and their lists (TC-5 to TC-7)", () => {
-    it("QA-TC-7: a selected trail shows a chip at each corner; a tap lists who turns when, and nothing is written", () => {
+    it("QA-TC-7: a selected trail shows a chip at each corner once pinned; a tap lists who turns when, and nothing is written", () => {
         let commits = 0;
         const stop = subscribeHistoryChanges(() => commits++);
         act(() => showPath(alongTarget(), "T4"));
         render(<PathEditor fieldProperties={fieldProperties} />);
+        // Selected, the chips wait for the summary (owner, 2026-11-18)
+        expect(screen.queryAllByTestId("trail-corner-count")).toHaveLength(0);
+        // On count everywhere: no summary on the bar either
+        expect(screen.queryByTestId("path-corner-summary")).toBeNull();
+        act(() => toggleCornerChips(usePathPenStore.getState().session!));
         const chips = screen.getAllByTestId("trail-corner-count");
         expect(chips.map((c) => c.textContent)).toEqual(["2–6", "8–14"]);
         expect(chips.every((c) => c.dataset.off === undefined)).toBe(true);
@@ -424,8 +439,250 @@ describe("chips in a dense block or zoomed out (TC-5)", () => {
             stopBefore: 0,
             offCount: false,
         });
-        const corners = [corner(1, 0), corner(2, 30), corner(3, 100)];
+        // 10 px apart: the second chip, on the same side, would sit on the first
+        const corners = [corner(1, 0), corner(2, 10), corner(3, 100)];
         const places = chipPlaces(corners, (x, y) => ({ x, y }));
         expect(places.map((p) => p.corner.d)).toEqual([1, 3]);
+    });
+});
+
+describe("a chip never covers a point, handle, dot or label (owner, 2026-11-17)", () => {
+    /** The owner's case: a corner point dragged out to the right, the legs in and out of it */
+    const pulledRight = (
+        x: number,
+        y: number,
+        offCount = true,
+    ): CornerCount => ({
+        d: 1,
+        at: [x, y],
+        turn: 1.8,
+        dirIn: [0.8, 0.6],
+        dirOut: [-0.8, 0.6],
+        turns: [
+            { q: 0, count: 4.6, onCount: false },
+            { q: 1, count: 10.2, onCount: false },
+        ],
+        stopBefore: 0,
+        offCount,
+    });
+    const id = (x: number, y: number) => ({ x, y });
+    /** The chip's box on screen, as it hangs from its anchor */
+    const boxOf = (
+        place: ReturnType<typeof chipPlaces>[number],
+        size: { w: number; h: number },
+    ) => ({
+        x: place.left + (place.sx * size.w) / 2,
+        y: place.top + (place.sy * size.h) / 2,
+        w: size.w,
+        h: size.h,
+    });
+    /** How far a point is from a box (0 inside it) */
+    const gap = (box: ReturnType<typeof boxOf>, x: number, y: number) =>
+        Math.hypot(
+            Math.max(0, Math.abs(x - box.x) - box.w / 2),
+            Math.max(0, Math.abs(y - box.y) - box.h / 2),
+        );
+
+    it("QA-TC-15: outside the corner, its edge a fixed gap from the point however wide it is (a corner pulled out right: the chip right of it)", () => {
+        const corner = pulledRight(500, 500);
+        for (const w of [40, 80, 200]) {
+            const size = { w, h: 18 };
+            const [place] = chipPlaces([corner], id, [], () => size);
+            expect(place!.sx).toBe(1);
+            expect(place!.sy).toBeCloseTo(0, 9);
+            const box = boxOf(place!, size);
+            // Its near edge 18 px right of the point, whatever its width
+            expect(box.x - w / 2).toBeCloseTo(518, 9);
+            expect(gap(box, 500, 500)).toBeGreaterThanOrEqual(12);
+        }
+        // Every way a corner can point: the chip clears it
+        for (let a = 0; a < 2 * Math.PI; a += Math.PI / 12) {
+            const c: CornerCount = {
+                ...pulledRight(500, 500),
+                dirIn: [Math.cos(a), Math.sin(a)],
+                dirOut: [Math.cos(a + 2), Math.sin(a + 2)],
+            };
+            const size = chipSize(c, false);
+            const [place] = chipPlaces([c], id, [], () => size);
+            expect(gap(boxOf(place!, size), 500, 500)).toBeGreaterThan(12);
+        }
+    });
+
+    it("QA-TC-16: the side outside the turn taken (a point, a dot's label): the next free side; every side taken: farther out", () => {
+        const corner = pulledRight(500, 500);
+        const size = chipSize(corner, false);
+        const point: ChipObstacle = { kind: "circle", x: 540, y: 500, r: 8 };
+        const [aside] = chipPlaces([corner], id, [point], () => size);
+        const box = boxOf(aside!, size);
+        expect(gap(box, 540, 500)).toBeGreaterThan(8);
+        expect(gap(box, 500, 500)).toBeGreaterThan(12);
+        // Square to the way out of the turn: below it
+        expect(aside!.sy).toBe(1);
+        // A label on every side near the corner: the chip goes farther out, still clear of them
+        const near: ChipObstacle[] = [
+            { kind: "box", x: 530, y: 500, w: 20, h: 14 },
+            { kind: "box", x: 470, y: 500, w: 20, h: 14 },
+            { kind: "box", x: 500, y: 525, w: 20, h: 14 },
+            { kind: "box", x: 500, y: 475, w: 20, h: 14 },
+        ];
+        const [far] = chipPlaces([corner], id, near, () => size);
+        const farBox = boxOf(far!, size);
+        for (const o of near)
+            expect(
+                Math.abs(farBox.x - o.x) >= (farBox.w + o.w) / 2 ||
+                    Math.abs(farBox.y - o.y) >= (farBox.h + o.h) / 2,
+            ).toBe(true);
+    });
+
+    it("what a chip keeps off: the open trail's points and leg handles, and the line's starts and spots", () => {
+        const s = sessionOf(alongTarget());
+        act(() =>
+            usePathPenStore.setState({ session: { ...s, phase: "open" } }),
+        );
+        const view = { panX: 0, panY: 0, zoom: 1, width: 800, height: 600 };
+        const obstacles = chipObstaclesOf(
+            usePathPenStore.getState().session!,
+            view as never,
+        );
+        const has = (x: number, y: number) =>
+            obstacles.some(
+                (o) => o.kind === "circle" && o.x === x && o.y === y,
+            );
+        // the corner point (6, 8) in steps, and the first leg's middle handle
+        expect(has(6 * S, 8 * S)).toBe(true);
+        expect(has(6 * S, 4 * S)).toBe(true);
+        for (const p of [...homes, ...spots]) expect(has(p.x, p.y)).toBe(true);
+    });
+});
+
+describe("a selected trail's chips wait for a click on the bar's summary (owner, 2026-11-17, 2026-11-18)", () => {
+    it("QA-CT-4: off a count, the selected trail's bar reads Edit path · 2 corners turn between counts · ···; a click pins the chips, again unpins them", () => {
+        act(() => showPath(alongTarget(12), "T4"));
+        render(<PathEditor fieldProperties={fieldProperties} />);
+        const bar = screen.getByTestId("path-editor");
+        const summary = screen.getByTestId("path-corner-summary");
+        expect(summary.textContent).toBe("2 corners turn between counts");
+        // In that order on the bar, with no Reverse of its own (the field menu and Alt+L have it)
+        const order = [...bar.querySelectorAll("[data-testid]")]
+            .map((e) => e.getAttribute("data-testid"))
+            .filter((id) =>
+                [
+                    "path-edit",
+                    "path-corner-summary",
+                    "path-more",
+                    "path-reverse",
+                ].includes(id!),
+            );
+        expect(order).toEqual([
+            "path-edit",
+            "path-corner-summary",
+            "path-more",
+        ]);
+        expect(screen.queryByTestId("path-off-count")).toBeNull();
+        expect(screen.queryByTestId("trail-reverse")).toBeNull();
+        expect(screen.queryAllByTestId("trail-corner-count")).toHaveLength(0);
+        act(() => {
+            fireEvent.click(summary);
+        });
+        expect(summary.getAttribute("aria-pressed")).toBe("true");
+        expect(screen.getAllByTestId("trail-corner-count")).toHaveLength(2);
+        act(() => {
+            fireEvent.click(summary);
+        });
+        expect(screen.queryAllByTestId("trail-corner-count")).toHaveLength(0);
+    });
+
+    it("QA-CT-5: open (Edit path) the chips always show; Reverse is on the field's menu and Alt+L, not the bar or a mark", () => {
+        act(() => showPath(alongTarget(), "T4"));
+        act(() => {
+            const s = usePathPenStore.getState().session!;
+            usePathPenStore.setState({ session: { ...s, phase: "open" } });
+        });
+        render(<PathEditor fieldProperties={fieldProperties} />);
+        expect(screen.getAllByTestId("trail-corner-count")).toHaveLength(2);
+        expect(screen.queryByTestId("path-reverse")).toBeNull();
+        expect(screen.queryByTestId("trail-reverse")).toBeNull();
+    });
+
+    it("pointing at a selected trail shows no chips: only the summary does (owner, 2026-11-18)", () => {
+        act(() => showPath(alongTarget(12), "T4"));
+        render(<PathEditor fieldProperties={fieldProperties} />);
+        const corner = trailCornersOf(usePathPenStore.getState().session!)!
+            .corners[0]!;
+        act(() => {
+            fireEvent.pointerMove(window, {
+                clientX: corner.at[0],
+                clientY: corner.at[1],
+                pointerType: "mouse",
+            });
+        });
+        expect(screen.queryAllByTestId("trail-corner-count")).toHaveLength(0);
+        const summary = screen.getByTestId("path-corner-summary");
+        expect(summary.getAttribute("aria-pressed")).toBe("false");
+        act(() => {
+            fireEvent.click(summary);
+        });
+        expect(summary.getAttribute("aria-pressed")).toBe("true");
+        expect(screen.getAllByTestId("trail-corner-count")).toHaveLength(2);
+    });
+
+    it("the chips go when the trail is let go or another trail is selected, and don't come back with it", () => {
+        act(() => showPath(alongTarget(12), "T4"));
+        render(<PathEditor fieldProperties={fieldProperties} />);
+        act(() => {
+            fireEvent.click(screen.getByTestId("path-corner-summary"));
+        });
+        expect(screen.getAllByTestId("trail-corner-count")).toHaveLength(2);
+        // Let go, then selected again: it starts without them
+        act(() => clearPath());
+        expect(useCornerChipsStore.getState().pinnedFor).toBeNull();
+        act(() => showPath(alongTarget(12), "T4"));
+        expect(screen.queryAllByTestId("trail-corner-count")).toHaveLength(0);
+        // Another trail selected while they show
+        act(() => {
+            fireEvent.click(screen.getByTestId("path-corner-summary"));
+        });
+        expect(screen.getAllByTestId("trail-corner-count")).toHaveLength(2);
+        act(() =>
+            showPath(
+                { ...alongTarget(12), transitionId: 2, routeId: 10 },
+                "T4",
+            ),
+        );
+        expect(useCornerChipsStore.getState().pinnedFor).toBeNull();
+        expect(screen.queryAllByTestId("trail-corner-count")).toHaveLength(0);
+    });
+
+    it("Escape hides the chips first; the next Escape is the field's", () => {
+        const fieldEscape = vi.fn();
+        function FieldEscape() {
+            useActionHandler("cancelAlignmentUpdates", fieldEscape);
+            return null;
+        }
+        act(() => showPath(alongTarget(12), "T4"));
+        render(
+            <>
+                <FieldEscape />
+                <PathEditor fieldProperties={fieldProperties} />
+            </>,
+        );
+        act(() => {
+            fireEvent.click(screen.getByTestId("path-corner-summary"));
+        });
+        expect(screen.getAllByTestId("trail-corner-count")).toHaveLength(2);
+        act(() => {
+            runAction("cancelAlignmentUpdates");
+        });
+        expect(screen.queryAllByTestId("trail-corner-count")).toHaveLength(0);
+        expect(
+            screen
+                .getByTestId("path-corner-summary")
+                .getAttribute("aria-pressed"),
+        ).toBe("false");
+        expect(fieldEscape).not.toHaveBeenCalled();
+        act(() => {
+            runAction("cancelAlignmentUpdates");
+        });
+        expect(fieldEscape).toHaveBeenCalledTimes(1);
     });
 });

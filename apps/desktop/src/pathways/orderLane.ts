@@ -146,6 +146,31 @@ export function laneTip(
 }
 
 /** The fade's ink strength (alpha of the lane ink) at the leader and at the tail (step 4i) */
+/** Whether a field color is dark enough that the lane turns light on it */
+export function isDarkField({
+    r,
+    g,
+    b,
+}: {
+    r: number;
+    g: number;
+    b: number;
+}): boolean {
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b < 140;
+}
+
+/** The lane's dark ink on a light field, and its light ink on a dark one */
+export const LANE_INK_DARK = "#1c1f26";
+export const LANE_INK_LIGHT = "#ffffff";
+
+/**
+ * How strong a trail's walked way is drawn (owner, 2026-11-17), as a fraction of full ink: just
+ * under the lane's pale tail (`FADE_TAIL`), so the band reads as running on into it, quieter
+ */
+export const WALKED_INK = 0.11;
+/** Its width as a part of the selected lane's: the band at lower strength, a little narrower */
+export const WALKED_WIDTH = 0.7;
+
 export const FADE_LEAD = 0.72;
 export const FADE_TAIL = 0.14;
 /** A crossed order's thread: its ink strength at the leader and at the tail */
