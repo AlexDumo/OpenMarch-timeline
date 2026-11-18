@@ -87,13 +87,14 @@ const SOUSAPHONE = {
     },
     // the neck: on from the hoop's end, up behind the left shoulder and
     // forward into the bell. Its players wear a beret, not a plumed shako
-    // (owner, 2026-11-10), so the bell rides low over the beret: its center
-    // about 0.34 m above the eyes and its lower rim at the brow, as side-on
-    // photos of players show (2026-11-10).
+    // (owner, 2026-11-10), so the bell rides low over the beret, as side-on
+    // photos of players show (2026-11-10). Its lower rim sits about 8 cm
+    // above the eyes (owner, 2026-11-18: at the brow it hid too much of a
+    // player's view), so looking ahead the player sees under it.
     neck: {
         rise: 0.2,
-        top: [0.15, 1.96, -0.21] as Vec3,
-        tail: [0.15, 1.96, -0.12] as Vec3,
+        top: [0.15, 2.1, -0.21] as Vec3,
+        tail: [0.15, 2.1, -0.12] as Vec3,
         bends: [0.22, 0.14] as [number, number],
         radii: [
             [0, 0.064],

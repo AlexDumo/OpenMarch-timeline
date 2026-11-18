@@ -7,6 +7,7 @@ import {
     headQuaternion,
     hold,
     holdId,
+    onTurnedHead,
     playingLips,
     snareHolds,
     stickOf,
@@ -312,6 +313,31 @@ describe("holds", () => {
         expect(fore).toBeGreaterThan(0);
         // and the elbow stays in front of the chest (front at z 0.12)
         expect(elbow[2]).toBeGreaterThan(0.16);
+    });
+
+    it("sousaphone up: the player sees ahead under the bell", () => {
+        // the eyes between the pupils (EYE_AT_REST) with the head up; no
+        // tubing ahead of the face from level to 12 degrees up, across the
+        // middle of the view (owner, 2026-11-18: the bell hid too much)
+        const h = hold("sousaphone", "up");
+        const eye = onTurnedHead(h.head, [0, 1.678, 0.06]);
+        let blocking = 0;
+        for (const piece of brassHorn("sousaphone", "low").pieces)
+            for (let i = 0; i < piece.positions.length; i += 3) {
+                const [x, y, z] = sub(
+                    inBody(h, [
+                        piece.positions[i],
+                        piece.positions[i + 1],
+                        piece.positions[i + 2],
+                    ]),
+                    eye,
+                );
+                if (z < 0.1) continue;
+                const up = (Math.atan2(y, z) * 180) / Math.PI;
+                const across = (Math.atan2(x, z) * 180) / Math.PI;
+                if (up > 0 && up < 12 && Math.abs(across) < 30) blocking++;
+            }
+        expect(blocking).toBe(0);
     });
 
     it("contra up: valves high in front of the face, the left hand on the front bow", () => {
