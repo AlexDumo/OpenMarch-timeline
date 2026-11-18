@@ -1460,7 +1460,8 @@
             "none": "No se despliega",
             "right": "Se despliega desde la derecha"
         },
-        "rotation": "Rotación",
+        "elevation": "Altura sobre el suelo",
+        "rotateAxis": "Girar en {axis}",
         "selectedCount": "{count, plural, one {# elemento de utilería seleccionado} other {# elementos de utilería seleccionados}}",
         "show": "Mostrar en el campo",
         "showNames": "Mostrar todos los nombres",

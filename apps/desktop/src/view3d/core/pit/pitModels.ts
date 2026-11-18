@@ -14,6 +14,7 @@
  *
  * Plain TypeScript only: this module lives under `view3d/core/`.
  */
+import { writePosedMatrix } from "../props/propPose";
 import type { Detail } from "@/view3d/core/instruments/model";
 import manifestJson from "@/view3d/assets/pit/manifest.json";
 
@@ -189,6 +190,7 @@ export function isNearPitItem(
  * Writes a model instance's matrix (column-major, as three stores it): `scale` times real size
  * (an imported model sized to its Outline; built-ins are 1), turned by the item's 2D turn
  * (degrees, clockwise on screen, so +X turns toward +Z) and standing at `center` on `baseY`.
+ * `tilt` tips it about the middle of its `height` (m), as `writePosedMatrix` (fork #1087).
  */
 export function writePitModelMatrix(
     out: Float32Array,
@@ -197,25 +199,18 @@ export function writePitModelMatrix(
     center: { x: number; z: number },
     baseY: number,
     scale = 1,
+    tilt?: { pitch: number; roll: number; height: number },
 ): void {
-    const radians = (rotationDeg * Math.PI) / 180;
-    const cos = Math.cos(radians) * scale;
-    const sin = Math.sin(radians) * scale;
-    const o = index * 16;
-    out[o] = cos;
-    out[o + 1] = 0;
-    out[o + 2] = sin;
-    out[o + 3] = 0;
-    out[o + 4] = 0;
-    out[o + 5] = scale;
-    out[o + 6] = 0;
-    out[o + 7] = 0;
-    out[o + 8] = -sin;
-    out[o + 9] = 0;
-    out[o + 10] = cos;
-    out[o + 11] = 0;
-    out[o + 12] = center.x;
-    out[o + 13] = baseY;
-    out[o + 14] = center.z;
-    out[o + 15] = 1;
+    writePosedMatrix(
+        out,
+        index,
+        {
+            rotation: rotationDeg,
+            pitch: tilt?.pitch ?? 0,
+            roll: tilt?.roll ?? 0,
+        },
+        { x: scale, y: scale, z: scale },
+        { x: center.x, y: baseY, z: center.z },
+        (tilt?.height ?? 0) / 2,
+    );
 }

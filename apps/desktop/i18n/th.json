@@ -1460,7 +1460,8 @@
             "none": "ไม่คลี่ออก",
             "right": "คลี่ออกจากด้านขวา"
         },
-        "rotation": "การหมุน",
+        "elevation": "ความสูงจากพื้น",
+        "rotateAxis": "หมุนแกน {axis}",
         "selectedCount": "{count, plural, other {เลือกพร็อพ # ชิ้น}}",
         "show": "แสดงบนสนาม",
         "showNames": "แสดงชื่อทั้งหมด",

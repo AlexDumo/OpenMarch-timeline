@@ -1113,6 +1113,132 @@ const shots = [
         },
     },
     {
+        id: "3d-props-lifted",
+        kind: "still",
+        // Three imported chairs where 3d-props-imported puts them: the left one lifted 1.2 m, the
+        // middle one tipped forward onto its back (Rotate X 90°), the right one tipped 30° to the
+        // side and lifted 0.5 m
+        async setup(ctx) {
+            const { page } = ctx;
+            await seekInPage(page, 2, 0.02);
+            const toScreen = await fieldToScreen(page);
+            const { pps, center } = await riserSpot(page);
+            await importChair(page, { add: true });
+            for (const feet of [-5, 0, 5]) {
+                await propsPanel(page);
+                await page.getByRole("button", { name: "Place Chair" }).click();
+                await page.waitForTimeout(300);
+                const at = toScreen({ x: center.x + feet * pps, y: center.y });
+                await page.mouse.click(at.x, at.y);
+                await page.waitForTimeout(800);
+            }
+            await page.keyboard.press("Escape");
+            const poses = [
+                { "Off the ground": 1.2 },
+                { "Rotate X": 90 },
+                { "Rotate Z": 30, "Off the ground": 0.5 },
+            ];
+            for (const [index, fields] of poses.entries()) {
+                await propsPanel(page);
+                await page
+                    .getByRole("button", { name: "Edit prop" })
+                    .nth(index)
+                    .click();
+                await page.waitForTimeout(500);
+                for (const [label, value] of Object.entries(fields))
+                    await setPropField(page, label, value);
+                await page.keyboard.press("Escape");
+                await page.waitForTimeout(300);
+            }
+            await seekInPage(page, 2, 0.5);
+            const { view } = await open3d(ctx);
+            const chairs = { x: 633, y: 649 };
+            await view.mouse.move(chairs.x, chairs.y);
+            for (let i = 0; i < 7; i++) {
+                await view.mouse.wheel(0, -120);
+                await ctx.wait(150);
+            }
+            await view.mouse.move(ctx.window.width - 4, ctx.window.height / 2);
+            // The model loads from the show, then draws in place of the blocks
+            await ctx.wait(4000);
+            return {
+                // Closer than 3d-props-imported, around the three chairs
+                box: {
+                    x: chairs.x - 230,
+                    y: chairs.y - 150,
+                    width: 460,
+                    height: 260,
+                },
+                target: view,
+            };
+        },
+    },
+    {
+        id: "3d-props-over-time",
+        kind: "clip",
+        // One imported chair on page 2. Near the end of the page it is set to stand 1.5 m off the
+        // ground, turned 180° (Rotate Y) and tipped 45° forward (Rotate X), with a 16-count
+        // Transition. The playhead is stepped across the page while the 3D View is filmed, so
+        // the clip shows every moment in between
+        async setup(ctx) {
+            const { page } = ctx;
+            await seekInPage(page, 2, 0.02);
+            const toScreen = await fieldToScreen(page);
+            const { center } = await riserSpot(page);
+            await importChair(page, { add: true });
+            await propsPanel(page);
+            await page.getByRole("button", { name: "Place Chair" }).click();
+            await page.waitForTimeout(300);
+            const spot = toScreen(center);
+            await page.mouse.click(spot.x, spot.y);
+            await page.waitForTimeout(800);
+            await page.keyboard.press("Escape");
+            await seekInPage(page, 2, 0.95);
+            await propsPanel(page);
+            await page
+                .getByRole("button", { name: "Edit prop" })
+                .first()
+                .click();
+            await page.waitForTimeout(500);
+            await setPropField(page, "Off the ground", 1.5);
+            await setPropField(page, "Rotate Y", 180);
+            await setPropField(page, "Rotate X", 45);
+            await setPropField(page, "Transition", 16);
+            await page.keyboard.press("Escape");
+            await page.waitForTimeout(300);
+            await seekInPage(page, 2, 0.02);
+            const { view } = await open3d(ctx);
+            const chair = { x: 633, y: 649 };
+            await view.mouse.move(chair.x, chair.y);
+            for (let i = 0; i < 7; i++) {
+                await view.mouse.wheel(0, -120);
+                await ctx.wait(150);
+            }
+            await view.mouse.move(ctx.window.width - 4, ctx.window.height / 2);
+            await ctx.wait(4000);
+            return {
+                box: {
+                    x: chair.x - 230,
+                    y: chair.y - 170,
+                    width: 460,
+                    height: 280,
+                },
+                target: view,
+            };
+        },
+        async perform({ page, film }) {
+            await film.hold(0.6);
+            const steps = 60;
+            for (let i = 0; i <= steps; i++) {
+                await seekInPage(page, 2, 0.02 + (0.93 * i) / steps);
+                // Two frames a step: slow enough to follow
+                await film.frame();
+                await film.frame();
+            }
+            await film.hold(1);
+        },
+    },
+    {
         id: "3d-front-ensemble-add",
         kind: "still",
         // The front ensemble's Add view: every model as a picture, by group, with search

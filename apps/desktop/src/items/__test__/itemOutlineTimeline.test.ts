@@ -113,6 +113,22 @@ describe("fieldOutlineWrite", () => {
         });
     });
 
+    it("keeps the lift and tilts (#1087)", () => {
+        const write = fieldOutlineWrite({
+            itemId: 7,
+            beatId: 13,
+            drawn,
+            shown: { ...shown, elevation: 1.5, pitch: 20, roll: -5 },
+            rows: [],
+        });
+        expect(write.geometry).toMatchObject({
+            rotation: 45,
+            elevation: 1.5,
+            pitch: 20,
+            roll: -5,
+        });
+    });
+
     it("scales an imported model's height by as much as its width grew (#1078)", () => {
         const write = fieldOutlineWrite({
             itemId: 7,

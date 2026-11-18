@@ -182,6 +182,9 @@ export function ItemEditor({ itemId }: { itemId: number }) {
         depth?: number;
         height?: number;
         rotation?: number;
+        elevation?: number;
+        pitch?: number;
+        roll?: number;
         transitionLength?: number;
         rollsOutFrom?: LeadingEdge | null;
     }) => {
@@ -196,6 +199,9 @@ export function ItemEditor({ itemId }: { itemId: number }) {
                 depth: patch.depth ?? shown.depth,
                 height: patch.height ?? shown.height,
                 rotation: patch.rotation ?? shown.rotation,
+                elevation: patch.elevation ?? shown.elevation,
+                pitch: patch.pitch ?? shown.pitch,
+                roll: patch.roll ?? shown.roll,
                 transitionLength:
                     patch.transitionLength ?? existing?.transition_length ?? 1,
                 rollsOutFrom:
@@ -354,12 +360,40 @@ export function ItemEditor({ itemId }: { itemId: number }) {
                             onCommit={(height) => writeSide("height", height)}
                         />
                         <CommitNumber
-                            label={t("props.rotation")}
+                            label={t("props.elevation")}
+                            unit={t("props.units.meters")}
+                            min={0}
+                            step={0.1}
+                            value={shown.elevation}
+                            onCommit={(elevation) =>
+                                writeOutline({ elevation })
+                            }
+                        />
+                        {/* Rotate X, Y and Z as the import review names them: Y is the turn on
+                            the field, X tips the top toward the audience, Z to their right */}
+                        <CommitNumber
+                            label={t("props.rotateAxis", { axis: "X" })}
                             unit="°"
-                            min={-360}
+                            min={-720}
+                            step={15}
+                            value={shown.pitch}
+                            onCommit={(pitch) => writeOutline({ pitch })}
+                        />
+                        <CommitNumber
+                            label={t("props.rotateAxis", { axis: "Y" })}
+                            unit="°"
+                            min={-720}
                             step={15}
                             value={shown.rotation}
                             onCommit={(rotation) => writeOutline({ rotation })}
+                        />
+                        <CommitNumber
+                            label={t("props.rotateAxis", { axis: "Z" })}
+                            unit="°"
+                            min={-720}
+                            step={15}
+                            value={shown.roll}
+                            onCommit={(roll) => writeOutline({ roll })}
                         />
                         <CommitNumber
                             label={t("props.transition")}

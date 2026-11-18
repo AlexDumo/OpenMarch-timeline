@@ -511,6 +511,15 @@ deletes the change. It joins undo history and repair like the cue tables.
   wins, eases in over the transition, beat delete cascades; in history and
   repair.
 - A footprint is **width** and **depth**; vertical size is **height**.
+- Since fork #1087 a change also holds **elevation** (m off the ground),
+  **pitch** and **roll** (degrees, tilts in the item's own frame: pitch brings
+  its top toward its front, roll toward its right), easing over the same
+  transition as raw numbers like rotation, so 0 to 360 is a whole turn. The
+  prop settings name them Off the ground, Rotate X and Rotate Z, with yaw as
+  Rotate Y. The 3D View lifts and tilts the prop about the middle of its
+  height; a lift adds to what it stands on, and a tilted platform isn't stood
+  on. The 2D field draws the footprint level. The field's rotate handle already
+  stores the turn as dragged, so 350° turned 20° stores 370°.
 - Independent of moves: a resize never needs a move, and dragging a move
   doesn't carry its resizes.
 - Edited on Visuals mode's Items tab. A drag of an Outline in the 2D editor

@@ -91,7 +91,7 @@
         "chapter": "3d-view",
         "kind": "still",
         "width": 996,
-        "height": 1240
+        "height": 1364
     },
     "3d-props-handles": {
         "chapter": "3d-view",
@@ -111,6 +111,19 @@
         "kind": "still",
         "width": 1600,
         "height": 960
+    },
+    "3d-props-lifted": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 920,
+        "height": 520
+    },
+    "3d-props-over-time": {
+        "chapter": "3d-view",
+        "kind": "clip",
+        "width": 920,
+        "height": 560,
+        "seconds": 6.87
     },
     "3d-props-panel": {
         "chapter": "3d-view",

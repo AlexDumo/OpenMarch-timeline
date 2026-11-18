@@ -16,7 +16,10 @@ export type OutlineType =
     | "freehand";
 export type LeadingEdge = "front" | "back" | "left" | "right";
 
-/** One row of `item_geometry`, with its beat as a position. Sizes in meters, rotation in degrees. */
+/**
+ * One row of `item_geometry`, with its beat as a position. Sizes and elevation in meters, angles
+ * in degrees.
+ */
 export interface GeometryChange {
     /** The position of the beat the change is on */
     beat: number;
@@ -24,7 +27,14 @@ export interface GeometryChange {
     width: number;
     depth: number;
     height: number;
+    /** Yaw on the field plane */
     rotation: number;
+    /** Lifted off the ground; 0 when not stored */
+    elevation?: number;
+    /** Tilt about the left-right axis: positive brings the top toward the audience */
+    pitch?: number;
+    /** Tilt about the front-back axis: positive lays the top to the audience's right */
+    roll?: number;
     customOutline: unknown;
     /** In counts, at least 1 */
     transitionLength: number;
@@ -38,6 +48,9 @@ export interface ItemGeometry {
     depth: number;
     height: number;
     rotation: number;
+    elevation: number;
+    pitch: number;
+    roll: number;
     customOutline: unknown;
     rollsOut: boolean;
     leadingEdge: LeadingEdge | null;
@@ -56,6 +69,9 @@ const settled = (c: GeometryChange): ItemGeometry => ({
     depth: c.depth,
     height: c.height,
     rotation: c.rotation,
+    elevation: c.elevation ?? 0,
+    pitch: c.pitch ?? 0,
+    roll: c.roll ?? 0,
     customOutline: c.customOutline,
     rollsOut: c.rollsOut,
     leadingEdge: c.leadingEdge,
@@ -70,29 +86,40 @@ function geometryAt(
 ): ItemGeometry | null {
     const first = sorted[0];
     if (count === 0 || !first || position < first.beat) return null;
+    /**
+     * When change `j` starts easing in: its transition's first count, but never before the change
+     * it eases from. A transition longer than the gap eases over the gap (fork #1087: it used to
+     * find nothing to ease from and jump to the end).
+     */
+    const startOf = (j: number) =>
+        Math.max(transitionStart(sorted[j]!), sorted[j - 1]!.beat);
     // The latest change whose transition has started takes over
     let i = count - 1;
     let current = sorted[i];
-    while (i > 0 && current && transitionStart(current) > position) {
+    while (i > 0 && current && startOf(i) > position) {
         current = sorted[--i];
     }
     if (!current) return null;
     // The first change has nothing to ease from: it is in place on its count
     if (i === 0 || position >= current.beat) return settled(current);
 
-    const start = transitionStart(current);
+    const start = startOf(i);
     const from = geometryAt(sorted, i, start);
     if (!from) return settled(current);
     const progress = (position - start) / (current.beat - start);
     const k = ease(progress);
     const blend = (a: number, b: number) => a + (b - a) * k;
+    const settledNow = settled(current);
     // Outline type, custom outline and roll-out switch when the transition starts
     return {
-        ...settled(current),
+        ...settledNow,
         width: blend(from.width, current.width),
         depth: blend(from.depth, current.depth),
         height: blend(from.height, current.height),
         rotation: blend(from.rotation, current.rotation),
+        elevation: blend(from.elevation, settledNow.elevation),
+        pitch: blend(from.pitch, settledNow.pitch),
+        roll: blend(from.roll, settledNow.roll),
         progress,
     };
 }

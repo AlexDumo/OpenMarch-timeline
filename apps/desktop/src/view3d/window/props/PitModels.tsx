@@ -90,7 +90,7 @@ interface ModelGroup {
     /** A built-in's name, or an imported model's `items.model` value */
     name: string;
     /** An imported model's real footprint, which its Outline scales; null for a built-in */
-    sizeM: { width: number; depth: number } | null;
+    sizeM: { width: number; depth: number; height: number } | null;
     tracks: PropTrack[];
     /** Detailed first when there are two */
     tiers: Tier[];
@@ -330,7 +330,7 @@ export default function PitModels({ fieldProperties }: PitModelsProps) {
         cam[1] = p.y;
         cam[2] = p.z;
 
-        let liftOf: ((marcherId: number) => number) | undefined;
+        let liftOf: ((marcherId: number) => number | undefined) | undefined;
         if (positions && stacks) {
             const bases = new Map<number, number>();
             for (const solid of propSolidsAt({
@@ -340,7 +340,7 @@ export default function PitModels({ fieldProperties }: PitModelsProps) {
                 fieldProperties,
             }))
                 bases.set(solid.id, solid.base);
-            liftOf = (marcherId) => bases.get(marcherId) ?? 0;
+            liftOf = (marcherId) => bases.get(marcherId);
         }
         const beat = positions?.beatAt(ms) ?? 0;
         for (const g of groups) {
@@ -369,13 +369,24 @@ export default function PitModels({ fieldProperties }: PitModelsProps) {
                         g.near.set(track.marcherId, near);
                         tier = near ? 0 : 1;
                     }
+                    const scale = g.sizeM ? modelScale(at, g.sizeM) : 1;
                     writePitModelMatrix(
                         g.tiers[tier].matrices,
                         counts[tier]++,
                         at.rotation,
                         scratch,
-                        FIELD_SURFACE_Y + (liftOf?.(track.marcherId) ?? 0),
-                        g.sizeM ? modelScale(at, g.sizeM) : 1,
+                        // Stacked: the layout's base, which counts the prop's own lift;
+                        // equipment the layout leaves out lifts by its own
+                        FIELD_SURFACE_Y +
+                            (liftOf?.(track.marcherId) ?? at.elevation),
+                        scale,
+                        {
+                            pitch: at.pitch,
+                            roll: at.roll,
+                            height: g.sizeM
+                                ? g.sizeM.height * scale
+                                : at.height,
+                        },
                     );
                 }
             g.tiers.forEach((t, k) => {

@@ -1460,7 +1460,8 @@
             "none": "展開しない",
             "right": "右から展開"
         },
-        "rotation": "回転",
+        "elevation": "地面からの高さ",
+        "rotateAxis": "{axis}軸で回転",
         "selectedCount": "{count, plural, other {#個のプロップを選択中}}",
         "show": "フィールドに表示",
         "showNames": "すべての名前を表示",

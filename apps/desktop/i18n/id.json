@@ -1460,7 +1460,8 @@
             "none": "Tidak terbentang",
             "right": "Terbentang dari kanan"
         },
-        "rotation": "Rotasi",
+        "elevation": "Tinggi dari tanah",
+        "rotateAxis": "Putar sumbu {axis}",
         "selectedCount": "{count, plural, one {# properti dipilih} other {# properti dipilih}}",
         "show": "Tampilkan di lapangan",
         "showNames": "Tampilkan semua nama",

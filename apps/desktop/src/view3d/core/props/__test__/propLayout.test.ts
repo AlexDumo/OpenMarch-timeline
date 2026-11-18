@@ -312,3 +312,54 @@ describe("platformTopAt", () => {
         expect(platformTopAt(solids, { x: 20, z: 0 })).toBe(0);
     });
 });
+
+describe("lifted and tilted props (fork #1087)", () => {
+    const here = at({ 1: { x: 0, z: 0 }, 2: { x: 0, z: 0 } });
+
+    it("lifts a prop's underside by its elevation", () => {
+        const [solid] = propsAt(
+            [prop(1, "obstacle", [box(0, 1, 1, 1, { elevation: 2 })])],
+            0,
+            here,
+        );
+        expect(solid!.base).toBeCloseTo(2);
+    });
+
+    it("lifts what stands on a lifted platform with it, and performers to its top", () => {
+        const solids = propsAt(
+            [
+                prop(1, "platform", [box(0, 4, 4, 0.6, { elevation: 1 })]),
+                prop(2, "obstacle", [box(0, 1, 1, 1)]),
+            ],
+            0,
+            here,
+        );
+        expect(byId(solids).get(1)!.base).toBeCloseTo(1);
+        expect(byId(solids).get(2)!.base).toBeCloseTo(1.6);
+        expect(platformTopAt(solids, { x: 0, z: 0 })).toBeCloseTo(1.6);
+        expect(liftPlatforms(solids)[0]!.top).toBeCloseTo(1.6);
+    });
+
+    it("doesn't stand anything on a tilted platform", () => {
+        const solids = propsAt(
+            [
+                prop(1, "platform", [box(0, 4, 4, 0.6, { pitch: 30 })]),
+                prop(2, "obstacle", [box(0, 1, 1, 1)]),
+            ],
+            0,
+            here,
+        );
+        expect(byId(solids).get(2)!.base).toBe(0);
+        expect(platformTopAt(solids, { x: 0, z: 0 })).toBe(0);
+        expect(liftPlatforms(solids)).toEqual([]);
+    });
+
+    it("counts a whole turn of tilt as level", () => {
+        const solids = propsAt(
+            [prop(1, "platform", [box(0, 4, 4, 0.6, { roll: 360 })])],
+            0,
+            here,
+        );
+        expect(platformTopAt(solids, { x: 0, z: 0 })).toBeCloseTo(0.6);
+    });
+});

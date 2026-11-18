@@ -235,7 +235,7 @@ export default function PropBlocks({ fieldProperties }: PropBlocksProps) {
         if (!dirtyRef.current && ms === lastMsRef.current) return;
         const { frame, list } = meshes;
         if (positions) {
-            let liftOf: ((marcherId: number) => number) | undefined;
+            let liftOf: ((marcherId: number) => number | undefined) | undefined;
             if (stacks) {
                 const bases = new Map<number, number>();
                 for (const solid of propSolidsAt({
@@ -245,7 +245,7 @@ export default function PropBlocks({ fieldProperties }: PropBlocksProps) {
                     fieldProperties,
                 }))
                     bases.set(solid.id, solid.base);
-                liftOf = (marcherId) => bases.get(marcherId) ?? 0;
+                liftOf = (marcherId) => bases.get(marcherId);
             }
             placePropBlocks(
                 tracks,

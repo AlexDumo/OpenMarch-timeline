@@ -172,6 +172,12 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
     23: (db) => {
         dropTables(db, ["show_assets", "show_asset_blobs"]);
     },
+    // A prop's lift and tilts (fork #1087): the columns go. The history triggers name them
+    24: (db) => {
+        dropTriggers(db);
+        for (const column of ["elevation", "pitch", "roll"])
+            db.exec(`ALTER TABLE item_geometry DROP COLUMN ${column}`);
+    },
 };
 
 /**

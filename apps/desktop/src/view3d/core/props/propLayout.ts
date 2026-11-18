@@ -13,6 +13,7 @@
  * Plain TypeScript only: this module lives under `view3d/core/`. Outlines are in world meters on
  * the ground plane (+X toward side 2, +Z toward the audience), turned as the 2D field turns them.
  */
+import { isLevel } from "./propPose";
 import { modelScale } from "@/showAssets/libraryModels";
 import {
     itemGeometryAt,
@@ -67,7 +68,7 @@ export interface PropSolid {
     id: number;
     surface: SurfaceType;
     center: GroundPoint;
-    /** The height of its underside: the top of the platform it stands on, or 0 */
+    /** The height of its underside: the top of the platform it stands on, or 0, plus its own lift */
     base: number;
     /** Its vertical size, 0 for a Floor prop */
     height: number;
@@ -178,7 +179,10 @@ export function propsAt(
         drawn.push(footprintOf(input, geometry, { ...center }));
     }
 
-    const platforms = drawn.filter((f) => f.surface === "platform" && f.closed);
+    // A tilted platform isn't stood on: performers and props on it stay where they are (#1087)
+    const platforms = drawn.filter(
+        (f) => f.surface === "platform" && f.closed && isLevel(f.geometry),
+    );
     const areas = new Map(platforms.map((f) => [f.id, area(f.outline)]));
     // Of two platforms over each other's centers, which is under: the larger, then the earlier
     const lower = (a: Footprint, b: Footprint) =>
@@ -204,7 +208,7 @@ export function propsAt(
             if (!visiting.has(under.id) && standsOn(f, under))
                 base = Math.max(base, topOf(under));
         visiting.delete(f.id);
-        const t = base + f.height;
+        const t = base + (f.geometry.elevation ?? 0) + f.height;
         top.set(f.id, t);
         return t;
     };
@@ -212,13 +216,14 @@ export function propsAt(
         lower(a, b) ? -1 : lower(b, a) ? 1 : 0,
     );
     for (const f of byOrder) topOf(f);
+    // The underside: what it stands on, plus its own lift
     const baseOf = (f: Footprint): number => {
-        if (f.surface === "floor") return 0;
+        if (f.surface === "floor") return f.geometry.elevation ?? 0;
         if (top.has(f.id)) return top.get(f.id)! - f.height;
         let base = 0;
         for (const under of platforms)
             if (standsOn(f, under)) base = Math.max(base, top.get(under.id)!);
-        return base;
+        return base + (f.geometry.elevation ?? 0);
     };
 
     return drawn.map((f) => ({ ...f, base: baseOf(f) }));
@@ -231,7 +236,7 @@ export function platformTopAt(
 ): number {
     let top = 0;
     for (const s of solids)
-        if (s.surface === "platform" && holds(s, point))
+        if (s.surface === "platform" && isLevel(s.geometry) && holds(s, point))
             top = Math.max(top, s.base + s.height);
     return top;
 }
