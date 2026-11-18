@@ -1,4 +1,9 @@
 words:
+  - FULLFSYNC
+  - fsyncs
+  - xattr
+  - retarget
+  - recents
   - CANTOPEN
   - errcode
   - onedrive

@@ -60,6 +60,15 @@ export function closePersistentConnection() {
 }
 
 /**
+ * Closes the open show: closes the long-lived connection and clears the active path. Close File,
+ * switching shows and quitting use it so no connection is left on the file.
+ */
+export function closeDatabase() {
+    closePersistentConnection();
+    DB_PATH = "";
+}
+
+/**
  * Change the location of the database file the application and actively updates.
  *
  * @param path the path to the database file
