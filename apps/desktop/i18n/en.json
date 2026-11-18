@@ -4730,7 +4730,9 @@
             "cancel": "Cancel Set order",
             "done": "Keep this order",
             "doneButton": "Done",
-            "banner": "Set order: drag through the marchers from the leader, or click them one by one · {picked} of {count}",
+            "startHint": "Set order: click the leader, then move over the marchers in order, or drag through them · <cancel></cancel> cancels · {picked} of {count}",
+            "sweepHint": "Move over the marchers in order · <remove></remove> removes the last · <finish></finish> or click to finish · <cancel></cancel> cancels · {picked} of {count}",
+            "removeLast": "Remove last",
             "zoomIn": "Zoom in to read the order"
         },
         "corners": {

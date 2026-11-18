@@ -15,7 +15,9 @@
  * every line; what's drawn follows the camera and where the lines' marchers are drawn
  * (`FieldMarchers`), so it's worked out again only when either changes. It sits over the selection
  * box and its handles, takes no presses, and hides while the Follow tool or a shape tool is open
- * (they draw their own ends).
+ * (they draw their own ends). One exception: while the Follow tool's ends wait to be grabbed,
+ * hovering an end previews the order a drag from it would use, numbered, its tip left to that
+ * end's pull arrow (owner, 2026-11-17).
  */
 import {
     memo,
@@ -28,7 +30,7 @@ import {
     useSyncExternalStore,
 } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { CheckIcon, XIcon } from "@phosphor-icons/react";
+import { BackspaceIcon, CheckIcon, XIcon } from "@phosphor-icons/react";
 import { T } from "@tolgee/react";
 import tolgee from "@/global/singletons/Tolgee";
 import Shortcut from "@/components/ui/Shortcut";
@@ -103,8 +105,10 @@ import {
     type PlacedBadge,
 } from "./orderLane";
 import { usePathPenStore } from "./pathPenStore";
+import { followOrderPreview, lineOf } from "./followDrag";
 import type { FloorSampler } from "./floorSampler";
 import { resolveMarcherLook } from "@/entity-components/appearance";
+import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
 
 /** The lane's dark ink: the tip, the leader's badge, the darts */
 const LANE_INK = "#1c1f26";
@@ -299,6 +303,7 @@ function drawLine({
     others = [],
     floorAt,
     labels = [],
+    noTip = false,
 }: {
     points: readonly XY[];
     marchers: number;
@@ -314,13 +319,15 @@ function drawLine({
     floorAt: (p: XY) => number;
     /** Every drawn marcher's name label on screen: those the lane reaches are cut out of it */
     labels?: readonly Box[];
+    /** No tip past the leader: the Follow tool's pull arrow stands for it (owner, 2026-11-17) */
+    noTip?: boolean;
 }): DrawnLine {
     const own = points.slice(0, marchers);
     // On the marchers only: Set order's pointer sits on the dot it just picked and crosses earlier
     // legs on its way to the next, which would make every pick look like a fold or a crossing
     const kind = classifyOrder(own, dotRadius);
     // The tip keeps the full width; the lane itself narrows where its own ranks are close
-    const tip = kind === "lane" ? laneTip(points, halfWidth) : null;
+    const tip = kind === "lane" && !noTip ? laneTip(points, halfWidth) : null;
     const tipHalf = halfWidth;
     halfWidth = ownHalfWidth(own, halfWidth, dotRadius);
     const darts = kind === "crossed" ? threadDarts(points) : [];
@@ -434,6 +441,74 @@ function drawLine({
     };
 }
 
+/** The order a drag from the Follow tool's hovered end would use: leader first, where each stands */
+interface FollowPreview {
+    readonly order: readonly number[];
+    readonly at: ReadonlyMap<number, XY>;
+}
+
+/** How long a preview fades in, holds after the pointer leaves its end, and fades out, in ms */
+export const PREVIEW_FADE_IN = 90;
+export const PREVIEW_HOLD = 80;
+export const PREVIEW_FADE_OUT = 120;
+
+/**
+ * The Follow tool's order preview (owner, 2026-11-17; Fable's design): shown while an end is
+ * hovered, before one is grabbed. It fades in at once; on leave it holds a moment and fades out,
+ * so moving from end to end flips it rather than blinking; a grab, or the tool closing, takes it
+ * away at once. Reduced motion: no fades.
+ */
+function useFollowPreview(): {
+    preview: FollowPreview | null;
+    opacity: number;
+    fade: number;
+} {
+    const follow = usePathPenStore((s) =>
+        s.session?.phase === "drawing" ? (s.session.follow ?? null) : null,
+    );
+    const now = useMemo((): FollowPreview | null => {
+        const order = follow ? followOrderPreview(follow) : null;
+        return follow && order ? { order, at: lineOf(follow).starts } : null;
+    }, [follow]);
+    // Gone at once: grabbed, or the tool closed
+    const gone = !follow || follow.grabbed !== null;
+    const [shown, setShown] = useState<FollowPreview | null>(null);
+    const [visible, setVisible] = useState(false);
+    const still = prefersReducedMotion();
+    useEffect(() => {
+        if (now) {
+            setShown(now);
+            if (still) {
+                setVisible(true);
+                return;
+            }
+            // Mounted faded out, then in on the next frame, so the fade runs
+            const frame = requestAnimationFrame(() => setVisible(true));
+            return () => cancelAnimationFrame(frame);
+        }
+        if (gone || still) {
+            setVisible(false);
+            setShown(null);
+            return;
+        }
+        const hold = setTimeout(() => setVisible(false), PREVIEW_HOLD);
+        const clear = setTimeout(
+            () => setShown(null),
+            PREVIEW_HOLD + PREVIEW_FADE_OUT,
+        );
+        return () => {
+            clearTimeout(hold);
+            clearTimeout(clear);
+        };
+    }, [now, gone, still]);
+    const preview = gone ? null : (now ?? shown);
+    return {
+        preview,
+        opacity: visible || (still && preview) ? 1 : 0,
+        fade: still ? 0 : now ? PREVIEW_FADE_IN : PREVIEW_FADE_OUT,
+    };
+}
+
 export default function MarcherOrderOverlay({
     marchers,
     labels,
@@ -470,21 +545,25 @@ export default function MarcherOrderOverlay({
     );
     const shapeOpen = useShapeToolStore((s) => s.tool !== null);
     // Set order on has the field, so it shows over either (opening it closes them)
-    const showing =
+    const ordersShowing =
         !isPlaying &&
         (sweep !== null ||
             (!followOpen &&
                 !shapeOpen &&
                 setting !== "off" &&
                 (always || ids.length >= 2)));
+    // The Follow tool's hovered end previews its order over the tool (owner, 2026-11-17)
+    const { preview, opacity, fade } = useFollowPreview();
+    const showing = ordersShowing || (!isPlaying && preview !== null);
 
     // The forms, read while anything shows the order: the selection's, or everyone's for Always
     const key = ids.join(",");
     useEffect(
-        () => (showing ? followOrderForms(always ? "all" : ids) : undefined),
+        () =>
+            ordersShowing ? followOrderForms(always ? "all" : ids) : undefined,
         // `key` is `ids`
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [showing, always, key],
+        [ordersShowing, always, key],
     );
     const formsScope = useMarcherOrderStore((s) => s.formsScope);
     // Forms read for another selection say nothing of this one: nothing is drawn until they're in
@@ -511,25 +590,25 @@ export default function MarcherOrderOverlay({
     // The lines in force (Always) follow the forms and the beat, never a fill
     const inForce = useMemo(
         () =>
-            showing && !sweep && always && ready && forms
+            ordersShowing && !sweep && always && ready && forms
                 ? ordersInForce(forms, beat)
                 : [],
-        [showing, sweep, always, ready, forms, beat],
+        [ordersShowing, sweep, always, ready, forms, beat],
     );
     // Where the selection stands: the same map until one of them moves
     const ownAt = useDrawnAt(marchers, ids, version);
     // The selection's own line
     const own = useMemo(
         (): ShownOrder | null =>
-            !showing || sweep || !ready
+            !ordersShowing || sweep || !ready
                 ? null
                 : shownOrderOf(forms, ids, beat, ownAt),
-        [showing, sweep, ready, forms, ids, beat, ownAt],
+        [ordersShowing, sweep, ready, forms, ids, beat, ownAt],
     );
     const lines = useMemo((): ShownOrder[] => {
-        if (!showing || sweep || !ready) return [];
+        if (!ordersShowing || sweep || !ready) return [];
         return always ? withOwnOrder(inForce, own) : own ? [own] : [];
-    }, [showing, sweep, ready, own, always, inForce]);
+    }, [ordersShowing, sweep, ready, own, always, inForce]);
 
     // Where the lines' marchers stand: the same map until one of them moves
     const lineIds = useMemo(() => lines.flatMap((l) => l.order), [lines]);
@@ -644,6 +723,29 @@ export default function MarcherOrderOverlay({
                 }),
             ];
         }
+        // The Follow tool's preview: the lane from the hovered end, numbered, solid even for a box's
+        // snake (it's what the drag will do), its tip left to the end's pull arrow
+        if (preview) {
+            const points = preview.order.flatMap((id) => {
+                const p = preview.at.get(id);
+                return p ? [onScreen(p)] : [];
+            });
+            return [
+                drawLine({
+                    points,
+                    marchers: points.length,
+                    guessed: false,
+                    numbered: true,
+                    halfWidth: laneHalfWidth(dotRadius, reach, true),
+                    dotRadius,
+                    busy: busyOf(preview.order, preview.at),
+                    dots: everyone,
+                    floorAt,
+                    labels: allLabels,
+                    noTip: true,
+                }),
+            ];
+        }
         // A guessed order isn't drawn at rest; Alt shows it, hollow and dashed
         const shown = lines.filter((line) => !line.guessed || alt);
         const pointsOf = shown.map((line) =>
@@ -686,6 +788,7 @@ export default function MarcherOrderOverlay({
         marchers,
         floor,
         sweep,
+        preview,
         lines,
         lineIds,
         linesAt,
@@ -704,7 +807,7 @@ export default function MarcherOrderOverlay({
     const cover = useMemo((): FieldRect | null => {
         // Only the selection's own line, and only when it's known: a guess isn't drawn at rest, and
         // Always's other lines the selection is only part of keep today's box
-        if (!showing || sweep || ids.length < 2 || !own || own.guessed)
+        if (!ordersShowing || sweep || ids.length < 2 || !own || own.guessed)
             return null;
         const shownLines = lines.filter((line) => !line.guessed || alt);
         const l = shownLines.findIndex(
@@ -735,15 +838,32 @@ export default function MarcherOrderOverlay({
             bottom: (b.maxY + SELECTION_CLEARANCE) / zoom,
         };
         return Object.values(rect).every(Number.isFinite) ? rect : null;
-    }, [showing, sweep, ids, own, lines, alt, drawn, linesAt, labelBox, zoom]);
+    }, [
+        ordersShowing,
+        sweep,
+        ids,
+        own,
+        lines,
+        alt,
+        drawn,
+        linesAt,
+        labelBox,
+        zoom,
+    ]);
     // Before paint, so the box drawn this frame stands round this frame's lane
     useLayoutEffect(() => setSelectionCover(cover), [cover]);
     useEffect(() => () => setSelectionCover(null), []);
     // The dots the lanes are cut away from: everyone's dot, and a selected marcher's ring too
     const holes = useMemo(() => {
+        // The Follow tool rings every member of its line
+        const ringed = sweep
+            ? { ids: sweep.ids, at: sweep.at }
+            : preview && !sweep
+              ? { ids: preview.order, at: preview.at }
+              : { ids, at: linesAt };
         const selectedAt = [
-            ...(sweep ? sweep.ids : ids).flatMap((id) => {
-                const p = (sweep ? sweep.at : linesAt).get(id);
+            ...ringed.ids.flatMap((id) => {
+                const p = ringed.at.get(id);
                 return p
                     ? [{ at: { x: p.x * zoom, y: p.y * zoom }, r: reach }]
                     : [];
@@ -753,7 +873,7 @@ export default function MarcherOrderOverlay({
             ...everyone.map((at) => ({ at, r: dotRadius + 0.5 })),
             ...selectedAt,
         ];
-    }, [sweep, ids, linesAt, everyone, zoom, dotRadius, reach]);
+    }, [sweep, preview, ids, linesAt, everyone, zoom, dotRadius, reach]);
     const fieldBackground = theme.background;
     const ink = useMemo(
         () => orderInk(isDarkField(fieldBackground)),
@@ -765,9 +885,11 @@ export default function MarcherOrderOverlay({
         () =>
             sweep
                 ? sweep.picked
-                : // A guess is only a hollow dashed outline: no halos
-                  lines.filter((l) => !l.guessed).flatMap((l) => l.order),
-        [sweep, lines],
+                : preview
+                  ? preview.order
+                  : // A guess is only a hollow dashed outline: no halos
+                    lines.filter((l) => !l.guessed).flatMap((l) => l.order),
+        [sweep, preview, lines],
     );
     const indexOf = useMemo(
         () => new Map(marchers.ids.map((id, i) => [id, i])),
@@ -780,7 +902,7 @@ export default function MarcherOrderOverlay({
         const index = indexOf;
         const width = haloWidth(dotRadius);
         return haloIds.flatMap((id) => {
-            const p = (sweep ? sweep.at : linesAt).get(id);
+            const p = (sweep ? sweep.at : (preview?.at ?? linesAt)).get(id);
             const i = index.get(id);
             if (!p || i === undefined) return [];
             const look = resolveMarcherLook(marchers.stacks[i] ?? [], theme);
@@ -793,7 +915,9 @@ export default function MarcherOrderOverlay({
                       ? look.outline
                       : look.fill;
             const inner =
-                selectedSet.has(id) || sweep ? reach : dotRadius + 0.5;
+                selectedSet.has(id) || sweep || preview
+                    ? reach
+                    : dotRadius + 0.5;
             return [
                 {
                     at: { x: p.x * zoom, y: p.y * zoom },
@@ -806,6 +930,7 @@ export default function MarcherOrderOverlay({
     }, [
         haloIds,
         sweep,
+        preview,
         linesAt,
         marchers,
         version,
@@ -819,6 +944,11 @@ export default function MarcherOrderOverlay({
 
     const prefix = useId().replace(/:/g, "");
     if (!showing) return null;
+    // Only the Follow tool's preview fades; the order shown otherwise is just there
+    const fading =
+        preview && !sweep
+            ? { opacity, transition: `opacity ${fade}ms ease-out` }
+            : undefined;
     return (
         <>
             {/*
@@ -828,6 +958,7 @@ export default function MarcherOrderOverlay({
             */}
             <svg
                 className="pointer-events-none absolute inset-0 z-[5] h-full w-full"
+                style={fading}
                 data-testid="marcherOrderGround"
             >
                 <g transform={`translate(${view.panX} ${view.panY})`}>
@@ -844,7 +975,7 @@ export default function MarcherOrderOverlay({
             </svg>
             <svg
                 className="pointer-events-none absolute inset-0 z-[5] h-full w-full"
-                style={{ mixBlendMode: "multiply" }}
+                style={{ mixBlendMode: "multiply", ...fading }}
                 data-testid="marcherOrderInk"
             >
                 <g transform={`translate(${view.panX} ${view.panY})`}>
@@ -860,7 +991,11 @@ export default function MarcherOrderOverlay({
             </svg>
             <svg
                 className="pointer-events-none absolute inset-0 z-[5] h-full w-full"
+                style={fading}
                 data-testid="marcherOrderOverlay"
+                data-preview={
+                    preview && !sweep ? preview.order.join(",") : undefined
+                }
                 data-lines={drawn.length}
                 data-guessed={drawn.some((l) => l.guessed) || undefined}
             >
@@ -907,6 +1042,7 @@ export default function MarcherOrderOverlay({
                 <OrderSweepBar
                     picked={sweep.picked.length}
                     of={sweep.ids.length}
+                    started={sweep.following || sweep.picked.length > 0}
                 />
             )}
         </>
@@ -1281,21 +1417,43 @@ function ZoomNote({ box }: { box: Box }) {
 }
 
 /**
- * Set order's bar, over the field's top: how to go on, how many are picked, and Cancel and Done,
- * which touch reaches without Escape or Enter
+ * Set order's bar, over the field's top: how to go on, how many are picked, and Cancel, Remove last
+ * and Done, which touch reaches without Escape, Backspace or Enter. Before anyone is picked it says
+ * how to start (a click, or a drag); after, how to go on (owner, 2026-11-17).
  */
-function OrderSweepBar({ picked, of }: { picked: number; of: number }) {
+function OrderSweepBar({
+    picked,
+    of,
+    started,
+}: {
+    picked: number;
+    of: number;
+    started: boolean;
+}) {
+    const keys = {
+        remove: () => <Shortcut action="shapeRemoveLastPoint" />,
+        finish: () => <Shortcut action="applyShape" />,
+        cancel: () => <Shortcut action="cancelAlignmentUpdates" />,
+    };
     return (
         <div
             className={`${EDITOR_BAR} text-body text-text pointer-events-auto absolute top-12 left-1/2 z-10 -translate-x-1/2 gap-6 whitespace-nowrap`}
             data-testid="order-sweep-bar"
         >
-            <span className="px-4">
-                <T
-                    keyName="pathways.order.banner"
-                    defaultValue="Set order: drag through the marchers from the leader, or click them one by one · {picked} of {count}"
-                    params={{ picked, count: of }}
-                />
+            <span className="px-4" data-testid="order-sweep-hint">
+                {started ? (
+                    <T
+                        keyName="pathways.order.sweepHint"
+                        defaultValue="Move over the marchers in order · <remove></remove> removes the last · <finish></finish> or click to finish · <cancel></cancel> cancels · {picked} of {count}"
+                        params={{ picked, count: of, ...keys }}
+                    />
+                ) : (
+                    <T
+                        keyName="pathways.order.startHint"
+                        defaultValue="Set order: click the leader, then move over the marchers in order, or drag through them · <cancel></cancel> cancels · {picked} of {count}"
+                        params={{ picked, count: of, cancel: keys.cancel }}
+                    />
+                )}
             </span>
             <Divider />
             <IconButton
@@ -1305,6 +1463,15 @@ function OrderSweepBar({ picked, of }: { picked: number; of: number }) {
                 testId="order-sweep-cancel"
             >
                 <XIcon size={14} />
+            </IconButton>
+            <IconButton
+                label={tolgee.t("pathways.order.removeLast", "Remove last")}
+                action="shapeRemoveLastPoint"
+                onClick={() => runAction("shapeRemoveLastPoint")}
+                disabled={picked === 0}
+                testId="order-sweep-remove-last"
+            >
+                <BackspaceIcon size={14} />
             </IconButton>
             <EditorButton
                 onClick={() => runAction("applyShape")}

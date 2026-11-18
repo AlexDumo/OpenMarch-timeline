@@ -35,7 +35,10 @@ import { marcherName, type RoutePointInput } from "./timelineRoutes";
 import { moveMarchersInRangeInTransaction } from "./timelineMoves";
 import { readPageGrid } from "./timelinePageGrid";
 import { addPageFlagInTransaction } from "./pageFlags";
-import { rememberedOrderAt } from "./rememberedOrder";
+import {
+    rememberedOrderAt,
+    rememberedOrderInWindowAt,
+} from "./rememberedOrder";
 import {
     boxCellsOf,
     snakeFrom,
@@ -238,6 +241,11 @@ export function followSource(starts: readonly XY[]): FollowSource | null {
  * or else the one `followSource` guesses from where they stand (`starts`). Null when neither has
  * one. The Follow tool opening and the write both ask this, so they agree on the line's ends.
  *
+ * Given the Follow tool's `window` instead of a beat, the line is the one at its start flag, and
+ * an order set or cleared by hand inside the window counts too (`rememberedOrderInWindow`): Set
+ * order at the playhead, then Follow, uses that order over a guess or a box's snake (owner,
+ * 2026-11-17).
+ *
  * `leaderFirst` says which end leads before an end is grabbed: a remembered order runs leader
  * first; a guessed one has no leader, and the Follow tool offers its last as the leader.
  *
@@ -249,11 +257,14 @@ export function followSource(starts: readonly XY[]): FollowSource | null {
 export async function followOrderAt(
     db: DbConnection | DbTransaction,
     ids: readonly number[],
-    beat: number,
+    beat: number | TrailWindow,
     starts: readonly XY[],
     snake?: { by?: SnakeBy; leader?: number },
 ): Promise<FollowOrder | null> {
-    const remembered = await rememberedOrderAt(db, ids, beat);
+    const remembered =
+        typeof beat === "number"
+            ? await rememberedOrderAt(db, ids, beat)
+            : await rememberedOrderInWindowAt(db, ids, beat);
     if (remembered && remembered.length === ids.length)
         return {
             order: remembered.map((m) => ids.indexOf(m)),
@@ -573,10 +584,17 @@ async function planDragInTransaction(
         const [x, y] = resolver.positionAt(m, from);
         return [x, y];
     });
-    const along = await followOrderAt(tx, ids, from, starts, {
-        by: input.snake,
-        leader: ids.indexOf(leaderId),
-    });
+    // The window's own line counts an order set by hand inside it (`rememberedOrderInWindow`)
+    const along = await followOrderAt(
+        tx,
+        ids,
+        input.ends === "keep" ? from : window,
+        starts,
+        {
+            by: input.snake,
+            leader: ids.indexOf(leaderId),
+        },
+    );
     if (!along) refuse(trailDragRefusal.notFitted());
     const order = trailOrderFrom(along.order, ids.indexOf(leaderId));
     if (!order) refuse(trailDragRefusal.notAnEnd());

@@ -12,6 +12,8 @@ questions:
   - "Drag only a short way out. The tail stays in the box and the spots it left stay empty. Is that what you'd want, or should the box close up?"
   - "Drag far enough that everyone leaves. Did they keep the gaps they had in the box?"
   - "Set an order by hand first (Shift+O), then drag out. Your order should win over the snake. Did it?"
+  - "Press Follow (Shift+L) and hover each end before you grab one. Did the numbered lane make it clear who would lead and in what order, and did it stay out of the way?"
+  - "Set an order by clicking the leader and then just moving over the marchers (Backspace to take one back, Enter or a click to finish). Was that easier than holding the button down?"
   - "Ripple a line into a box on the next page (Ends: Ripple in). The tail takes the corner nearest the way in and the leader goes to the far end. Is that the order you'd write?"
   - "Ripple into a box with an empty spot in it. The snake goes through the hole and nobody stops there. Does that read right?"
   - "On a 2-row box, Go around opens first, with Drag out beside it. Should a 2-row box open on the snake instead?"
@@ -20,6 +22,19 @@ questions:
   - "Alt + drag one marcher to take it off the line. Is Alt the right way to do that, and was moving the whole form (drag between the marchers) easy to find?"
   - "Anything else about snaking through a box you'd change?"
 ---
+
+**What's new (2026-11-17, later): the order you set, and seeing it in Follow**
+
+- **Your order now wins in Follow.** An order set with **Shift+O** on the page you're working on
+  was ignored by Follow, which used the box's snake instead. Fixed: the ends offered are your
+  order's first and last, and either one leads with the rest following your order.
+- **See the order before you grab.** With Follow open, hover an end: a numbered lane shows who
+  leads and the order everyone follows. Hover another end and it flips. It goes away when you
+  move off or grab.
+- **Setting an order without holding the button.** Click the leader, then just move over the
+  marchers in order. **Backspace** takes the last one back (press again for the one before),
+  **Enter** or a click finishes, **Esc** cancels. Press-and-drag still works. On a tablet, tap to
+  start, then drag, or use **Remove last** on the bar.
 
 **What's new (2026-11-17): Edit path and dragging marchers**
 

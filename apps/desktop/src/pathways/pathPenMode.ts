@@ -49,6 +49,7 @@ import {
     followHasTrail,
     followMarchersOf,
     grabEnd,
+    followOrderPreview,
     setFollowHover,
     intoEndSpots,
     lineOf,
@@ -1155,8 +1156,12 @@ class PathPenMode implements FieldMode {
                 const hit = env
                     ? followHit(s.follow, pointer.field, env.hitRadius)
                     : null;
-                // A middle marcher takes no press: the note by it says to grab an end
-                setFollowHover(hit && !hit.end ? hit.id : null);
+                // A middle marcher takes no press: the note by it says to grab an end. An end
+                // previews the order a drag from it would use (owner, 2026-11-17)
+                setFollowHover(
+                    hit && !hit.end ? hit.id : null,
+                    hit?.end ? hit.id : null,
+                );
                 return hit?.end ? "grab" : "default";
             }
             return this.pen.cursorAt(pointer);
@@ -1486,6 +1491,7 @@ function followDrawing(session: PathSession): FieldModeDrawing {
     const line = trailLine(follow);
     const grabbed = follow.grabbed !== null;
     const starts = line.map((id) => lineOf(follow).starts.get(id)!);
+    const previewing = followOrderPreview(follow) !== null;
     const shape = shapeOf(session);
     // Keep end spots (AP-T9): the spots the line has, step 4's trail running on into the tail's;
     // Ripple in (step 9): the next form's spots as dealt, the trail running on into its entrance;
@@ -1530,8 +1536,11 @@ function followDrawing(session: PathSession): FieldModeDrawing {
         rings: [],
         // A box before a corner is grabbed (step 11): no line-up yet, since its snake runs from
         // whichever corner is grabbed; the corners' arrows say which way
+        // While an end is hovered its order's lane shows instead (`followOrderPreview`)
         lanes: [
-            ...(grabbed || !lineOf(follow).box ? [starts] : []),
+            ...((grabbed || !lineOf(follow).box) && !previewing
+                ? [starts]
+                : []),
             ...(trail ? [spots] : []),
         ].filter((l) => l.length > 1),
         memberRings: line.map((id, q) => {
@@ -1678,6 +1687,8 @@ function pullArrowsOf(
               [order[0]!, order[1]!],
               [order.at(-1)!, order.at(-2)!],
           ];
+    // An end hovered (owner, 2026-11-17): its arrow stands for the leader's tip, the others dim
+    const hovered = followOrderPreview(follow) ? follow.hoverEnd : null;
     return pairs.flatMap(([end, next]) => {
         const at = starts.get(end)!;
         const from = starts.get(next)!;
@@ -1687,6 +1698,7 @@ function pullArrowsOf(
             {
                 at,
                 dir: { x: (at.x - from.x) / d, y: (at.y - from.y) / d },
+                ...(hovered != null && hovered !== end ? { dim: true } : {}),
             },
         ];
     });

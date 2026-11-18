@@ -203,7 +203,8 @@ export async function openFollowTool(
         return [x, y];
     });
     // The order the show remembers for them, or else the one their positions suggest (step 4f)
-    const along = await followOrderAt(db, sorted, window.start, starts);
+    // through the window while nobody moves in it, so an order set at the playhead counts
+    const along = await followOrderAt(db, sorted, window, starts);
     const tailFirst = along ? tailFirstOf(along).map((i) => sorted[i]!) : null;
     // Said before drawing starts, so no drawing is lost (AP-T8's refusals)
     const dragRefusal = await dragRefusalOf(window, sorted, tailFirst);

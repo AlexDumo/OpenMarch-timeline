@@ -8,7 +8,7 @@ import { readTimelineTables } from "@/timeline/timelineRows";
 import { performUndo } from "../history";
 import { TimelineWriteError } from "../timelineErrors";
 import { moveMarchersInTarget } from "../timelineMoves";
-import { setMarcherOrder } from "../marcherOrder";
+import { clearMarcherOrder, setMarcherOrder } from "../marcherOrder";
 import { dragTrail, followOrderAt } from "../timelineTrailDrag";
 import { rippleFormAt, rippleTrail } from "../timelineTrailRipple";
 import {
@@ -161,6 +161,58 @@ describeDbTests("Snake through a box: the Follow drag (SN-2, SN-3)", (it) => {
         expect(columns.marcherIds).toEqual(IDS);
     });
 });
+
+describeDbTests(
+    "Snake through a box: an order set in the window (owner, 2026-11-17)",
+    (it) => {
+        /** A custom sweep, not row by row: down the left column, then zigzag across */
+        const CUSTOM = [5, 1, 2, 6, 7, 3, 4, 8];
+
+        for (const beat of [17, 13])
+            it(`QA-SN-16: an order set at beat ${beat} (in the window, the box standing still) wins over the snake from either end`, async ({
+                db,
+                marchersAndPages: _,
+            }) => {
+                const { step, at, spot } = await boxOfEight(db);
+                // Set order at the playhead, where the box still stands as it does at the start flag
+                await setMarcherOrder(db, { beat, order: CUSTOM });
+                const starts = IDS.map((m) => spot.get(m)!);
+                const found = (await followOrderAt(db, IDS, WINDOW, starts))!;
+                expect(found.box).toBeUndefined();
+                expect(found.order.map((i) => IDS[i])).toEqual(CUSTOM);
+                // A corner that isn't one of the order's ends is refused
+                await expectRefused(
+                    () => dragTrail({ db, window: WINDOW, marcherIds: IDS, leaderId: 1, points: [{ at: at(-6, -2) }], spacing: { kind: "keep" }, step, ends: "trail" }), // prettier-ignore
+                    /end/i,
+                );
+                // The order's first leads, the rest following in the set order
+                const first = await dragTrail({ db, window: WINDOW, marcherIds: IDS, leaderId: 5, points: [{ at: at(-6, 0) }], spacing: { kind: "keep" }, step, ends: "trail" }); // prettier-ignore
+                expect(first.marcherIds).toEqual([...CUSTOM].reverse());
+                await performUndo(db);
+                // Its last leads, the rest following in the set order reversed
+                const last = await dragTrail({ db, window: WINDOW, marcherIds: IDS, leaderId: 8, points: [{ at: at(26, 0) }], spacing: { kind: "keep" }, step, ends: "trail" }); // prettier-ignore
+                expect(last.marcherIds).toEqual(CUSTOM);
+            });
+
+        it("QA-SN-17: an order set after the window, or a Line placed in it, doesn't count; Clear order in it brings the snake back", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { spot } = await boxOfEight(db);
+            const starts = IDS.map((m) => spot.get(m)!);
+            const read = async () =>
+                (await followOrderAt(db, IDS, WINDOW, starts))!;
+            // Past the end flag: about another window
+            await setMarcherOrder(db, { beat: 18, order: CUSTOM });
+            expect((await read()).box).toBeDefined();
+            await setMarcherOrder(db, { beat: 13, order: CUSTOM });
+            expect((await read()).order.map((i) => IDS[i])).toEqual(CUSTOM);
+            // Cleared by hand later in the window: guessed again, the box's snake
+            await clearMarcherOrder(db, { beat: 15, marcherIds: IDS });
+            expect((await read()).box).toBeDefined();
+        });
+    },
+);
 
 describeDbTests("Snake through a box: Ripple in (SN-4, SN-5)", (it) => {
     /**
