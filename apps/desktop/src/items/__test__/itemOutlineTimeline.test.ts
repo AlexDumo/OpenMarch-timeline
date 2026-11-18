@@ -113,38 +113,20 @@ describe("fieldOutlineWrite", () => {
         });
     });
 
-    it("keeps the lift and tilts, and turns the way the handle was dragged (#1087)", () => {
+    it("keeps the lift and tilts (#1087)", () => {
         const write = fieldOutlineWrite({
             itemId: 7,
             beatId: 13,
-            // The handle shows 350° as -10°; dragged on to 10°, it turned 20° on
-            drawn: { ...drawn, rotation: 10 },
-            shown: {
-                ...shown,
-                rotation: 350,
-                elevation: 1.5,
-                pitch: 20,
-                roll: -5,
-            },
+            drawn,
+            shown: { ...shown, elevation: 1.5, pitch: 20, roll: -5 },
             rows: [],
         });
         expect(write.geometry).toMatchObject({
-            rotation: 370,
+            rotation: 45,
             elevation: 1.5,
             pitch: 20,
             roll: -5,
         });
-    });
-
-    it("keeps a full spin when the Outline is only resized", () => {
-        const write = fieldOutlineWrite({
-            itemId: 7,
-            beatId: 13,
-            drawn: { ...drawn, rotation: 0 },
-            shown: { ...shown, rotation: 720 },
-            rows: [],
-        });
-        expect(write.geometry.rotation).toBe(720);
     });
 
     it("scales an imported model's height by as much as its width grew (#1078)", () => {

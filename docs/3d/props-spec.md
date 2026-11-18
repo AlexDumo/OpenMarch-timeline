@@ -518,8 +518,8 @@ deletes the change. It joins undo history and repair like the cue tables.
   prop settings name them Off the ground, Rotate X and Rotate Z, with yaw as
   Rotate Y. The 3D View lifts and tilts the prop about the middle of its
   height; a lift adds to what it stands on, and a tilted platform isn't stood
-  on. The 2D field draws the footprint level. The field's rotate handle writes
-  the turn it was dragged (`shortTurn`), so 350° dragged to 10° stores 370°.
+  on. The 2D field draws the footprint level. The field's rotate handle already
+  stores the turn as dragged, so 350° turned 20° stores 370°.
 - Independent of moves: a resize never needs a move, and dragging a move
   doesn't carry its resizes.
 - Edited on Visuals mode's Items tab. A drag of an Outline in the 2D editor

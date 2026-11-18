@@ -63,17 +63,6 @@ const transitionStart = (c: GeometryChange) => c.beat - c.transitionLength + 1;
 /** Symmetric ease in and out: slow at both ends, halfway at half time. */
 const ease = (p: number) => p * p * (3 - 2 * p);
 
-/**
- * The turn from angle `a` to `b` the short way round, in degrees: -180 to 180. Exactly half a
- * turn goes the positive way. Stored angles blend as raw numbers, so 0 to 360 is a full spin;
- * a handle that drags an angle writes `a + shortTurn(a, b)` instead of `b`, so it turns the way
- * it was dragged (fork #1087).
- */
-export const shortTurn = (a: number, b: number): number => {
-    const d = (((b - a) % 360) + 360) % 360;
-    return d > 180 ? d - 360 : d;
-};
-
 const settled = (c: GeometryChange): ItemGeometry => ({
     outlineType: c.outlineType,
     width: c.width,

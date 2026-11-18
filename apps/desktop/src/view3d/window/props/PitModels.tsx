@@ -330,7 +330,7 @@ export default function PitModels({ fieldProperties }: PitModelsProps) {
         cam[1] = p.y;
         cam[2] = p.z;
 
-        let liftOf: ((marcherId: number) => number) | undefined;
+        let liftOf: ((marcherId: number) => number | undefined) | undefined;
         if (positions && stacks) {
             const bases = new Map<number, number>();
             for (const solid of propSolidsAt({
@@ -340,7 +340,7 @@ export default function PitModels({ fieldProperties }: PitModelsProps) {
                 fieldProperties,
             }))
                 bases.set(solid.id, solid.base);
-            liftOf = (marcherId) => bases.get(marcherId) ?? 0;
+            liftOf = (marcherId) => bases.get(marcherId);
         }
         const beat = positions?.beatAt(ms) ?? 0;
         for (const g of groups) {
@@ -375,9 +375,10 @@ export default function PitModels({ fieldProperties }: PitModelsProps) {
                         counts[tier]++,
                         at.rotation,
                         scratch,
-                        // Stacked: the layout's base, which counts the prop's own lift
+                        // Stacked: the layout's base, which counts the prop's own lift;
+                        // equipment the layout leaves out lifts by its own
                         FIELD_SURFACE_Y +
-                            (liftOf ? liftOf(track.marcherId) : at.elevation),
+                            (liftOf?.(track.marcherId) ?? at.elevation),
                         scale,
                         {
                             pitch: at.pitch,

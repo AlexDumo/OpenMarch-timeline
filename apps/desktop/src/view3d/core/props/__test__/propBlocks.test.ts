@@ -262,6 +262,30 @@ describe("placePropBlocks", () => {
         expect(frame.matrices[keys.indexOf("circle")][13]).toBeCloseTo(0.61);
     });
 
+    it("lifts a block by its own elevation, also when the layout leaves it out (#1087)", () => {
+        const lifted = propTracks(
+            new Map([
+                [1, [change({ beat: 0, elevation: 1 })]],
+                [2, [change({ beat: 0, elevation: 2 })]],
+            ]),
+        );
+        const frame = createPropBlockFrame(["rectangle"], 2);
+        // Item 1 stands where the layout put it (its base counts its lift); 2 isn't in it
+        placePropBlocks(
+            lifted,
+            1,
+            at(0, 0),
+            frame,
+            cachedShapeKey(),
+            0,
+            (id) => (id === 1 ? 1.6 : undefined),
+        );
+        expect(frame.matrices[0][13]).toBeCloseTo(1.6);
+        expect(frame.matrices[0][16 + 13]).toBeCloseTo(2);
+        placePropBlocks(lifted, 1, at(0, 0), frame, cachedShapeKey());
+        expect(frame.matrices[0][13]).toBeCloseTo(1);
+    });
+
     it("skips a prop without a position", () => {
         const frame = createPropBlockFrame(keys, 2);
         placePropBlocks(tracks, 5, () => false, frame, cachedShapeKey());
