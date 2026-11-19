@@ -880,6 +880,9 @@ export class FieldEditor {
         }
         this.cancelGesture();
         this.ignoredButton = null;
+        // A mouse's edit press comes with no other button down: a right press (or a Mac's
+        // Ctrl-press) whose release never arrived is over, and mustn't take this one's release
+        this.rightPress = null;
         const taken = this.ports.takePress?.() ?? false;
         if (this.propTool) {
             // The prop tool's presses draw and never select; its moves and

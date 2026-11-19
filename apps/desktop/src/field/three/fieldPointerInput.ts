@@ -54,6 +54,8 @@ export function attachFieldPointerInput(
 
     /** The pointer the editor's press captured; other captures (navigation's) aren't its to cancel. */
     let captured: number | null = null;
+    /** The button that started that press */
+    let capturedButton = 0;
     const penPan = attachPenPan(element, editor);
     const penHold = watchPenHold(editor, pointer);
     const down = (event: PointerEvent) => {
@@ -71,6 +73,7 @@ export function attachFieldPointerInput(
         if (!editor.pointerDown(drag ? { ...press, area: drag } : press))
             return;
         captured = event.pointerId;
+        capturedButton = event.button;
         element.setPointerCapture(event.pointerId);
         penHold.down(event);
     };
@@ -94,7 +97,13 @@ export function attachFieldPointerInput(
             return;
         }
         if (penPan.end(event)) return;
-        editor.pointerUp(pointer(event));
+        const at = pointer(event);
+        // A mouse's release comes once its last button lifts, and names that button: a trackpad's
+        // second finger can press the right button mid-drag and lift last. The press the editor
+        // holds ends then all the same, with its own button, or the release is lost and the drag
+        // snaps back when the capture goes
+        const ends = event.pointerId === captured && event.buttons === 0;
+        editor.pointerUp(ends ? { ...at, button: capturedButton } : at);
     };
     const cancel = (event: PointerEvent) => {
         penHold.cancel(event);
