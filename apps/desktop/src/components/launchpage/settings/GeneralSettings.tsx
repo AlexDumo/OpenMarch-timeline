@@ -21,6 +21,7 @@ export default function GeneralSettings() {
     const [automaticUpdatesEnabled, setAutomaticUpdatesEnabled] =
         useState(true);
     const [view3dAutoOpen, setView3dAutoOpen] = useState(false);
+    const [workingCopySaves, setWorkingCopySaves] = useState(false);
 
     useEffect(() => {
         // Load saved language from electron store
@@ -47,6 +48,11 @@ export default function GeneralSettings() {
             if (isMounted) setAutomaticUpdatesEnabled(savedValue !== false);
         };
         void loadAutomaticUpdatesSetting();
+        void window.electron
+            .invoke("settings:get", "workingCopySaves")
+            .then((savedValue: unknown) => {
+                if (isMounted) setWorkingCopySaves(savedValue === true);
+            });
         // Never answered opens it too (the 3D View asks), so only an explicit off reads as off
         void window.electron
             .invoke("settings:get", VIEW3D_AUTO_OPEN_SETTING)
@@ -145,6 +151,29 @@ export default function GeneralSettings() {
                             setView3dAutoOpen(checked);
                             window.electron.send("settings:set", {
                                 [VIEW3D_AUTO_OPEN_SETTING]: checked,
+                            });
+                        }}
+                    />
+                </SettingRow>
+            )}
+
+            {/* Saving through a working copy (ADR 0018); the web editor saves in the browser */}
+            {!isWebBuild && (
+                <SettingRow
+                    label={<T keyName="settings.general.workingCopySaves" />}
+                    description={
+                        <T keyName="settings.general.workingCopySaves.description" />
+                    }
+                    htmlFor="working-copy-saves"
+                >
+                    <Switch
+                        id="working-copy-saves"
+                        checked={workingCopySaves}
+                        data-testid="settings-working-copy-saves"
+                        onCheckedChange={(checked) => {
+                            setWorkingCopySaves(checked);
+                            window.electron.send("settings:set", {
+                                workingCopySaves: checked,
                             });
                         }}
                     />

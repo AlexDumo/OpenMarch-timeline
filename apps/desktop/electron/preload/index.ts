@@ -11,7 +11,12 @@ import {
 import * as DbServices from "@om-electron/database/database.services";
 
 import type { RecentFile } from "@om-electron/main/services/recent-files-service";
-import type { WorkingCopyStatus } from "@om-electron/database/workingCopy/WorkingCopySession";
+import type {
+    RecoverableShow,
+    SaveOutcome,
+    WorkingCopyConflictChoice,
+    WorkingCopyStatus,
+} from "@om-electron/database/workingCopy/WorkingCopySession";
 import type { PreviousDotsImportResult } from "@om-electron/main/services/previous-dots-import-service";
 import type {
     AuthState,
@@ -331,6 +336,28 @@ const APP_API = {
             return () =>
                 ipcRenderer.removeListener("working-copy:status", listener);
         },
+        /** Publishes the open show now (the title bar's Save Now). */
+        saveNow: () =>
+            ipcRenderer.invoke("working-copy:save-now") as Promise<void>,
+        /** Asks for a new file and makes it the open show's file. */
+        saveAs: () =>
+            ipcRenderer.invoke("working-copy:save-as") as Promise<
+                SaveOutcome | { ok: false; cancelled: true }
+            >,
+        resolveConflict: (choice: WorkingCopyConflictChoice) =>
+            ipcRenderer.invoke(
+                "working-copy:resolve-conflict",
+                choice,
+            ) as Promise<SaveOutcome | { ok: false; cancelled: true }>,
+        /** Unpublished changes earlier sessions left, for the launch page. */
+        listRecoverable: () =>
+            ipcRenderer.invoke("working-copy:list-recoverable") as Promise<
+                RecoverableShow[]
+            >,
+        recover: (id: string) =>
+            ipcRenderer.invoke("working-copy:recover", id) as Promise<number>,
+        discard: (id: string) =>
+            ipcRenderer.invoke("working-copy:discard", id) as Promise<void>,
     },
 
     onLoadFileResponse: (callback: (value: number) => void) => {

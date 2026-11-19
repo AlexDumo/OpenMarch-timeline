@@ -280,6 +280,21 @@ describe("WorkingCopySession", () => {
         expect(readValues(showPath)).toEqual(["first"]);
     });
 
+    it("publishes by itself once a read-only show is writable again", async () => {
+        if (process.getuid?.() === 0) return; // root can write anyway
+        const { session } = await openStarted({ retryDelaysMs: [50] });
+        fs.chmodSync(showPath, 0o444);
+        edit(session, "mine");
+        expect(await session.flush("test")).toMatchObject({
+            state: "readOnly",
+        });
+
+        fs.chmodSync(showPath, 0o644);
+
+        await waitFor(() => session.status().state === "saved");
+        expect(readValues(showPath)).toEqual(["first", "mine"]);
+    });
+
     it("publishes to a new path after Save As", async () => {
         const { session } = await openStarted();
         edit(session, "mine");

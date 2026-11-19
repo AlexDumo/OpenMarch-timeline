@@ -138,8 +138,8 @@ export function applicationMenuTemplate({
                 ...(saveNow
                     ? ([
                           {
+                              // No accelerator: Cmd/Ctrl+S swaps marchers.
                               label: t("menu.file.saveNow"),
-                              accelerator: "CommandOrControl+S",
                               click() {
                                   void mainProcess.publishNow();
                               },
