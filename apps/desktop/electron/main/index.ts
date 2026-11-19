@@ -19,6 +19,7 @@ import {
     isWindows7,
 } from "./gpu";
 import { randomUUID } from "node:crypto";
+import { publishFile, removeWithRetry } from "../database/atomicFile";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import * as DatabaseServices from "../database/database.services";
 import { VIEW3D_AUTO_OPEN_SETTING } from "../../src/view3d/sync/protocol";
@@ -897,6 +898,11 @@ function initGetters() {
 // A conversion running in its worker (P9.8) is stopped, and so rolled back, before the app quits.
 stopConversionWorkersOnQuit(app);
 
+// Close the show's connection on the way out, so nothing is left open on the file (ADR 0018).
+app.on("will-quit", () => {
+    DatabaseServices.closeDatabase();
+});
+
 app.on("window-all-closed", async () => {
     // The storage move's hidden windows close before the editor's opens
     if (startingUp) return;
@@ -1140,7 +1146,7 @@ async function openDatabaseAtPathWithoutReload(
     } catch (error) {
         captureException(error);
         store.delete("databasePath");
-        DatabaseServices.setDbPath("", false);
+        DatabaseServices.closeDatabase();
         console.error("Error opening database without reload:", error);
         return -1;
     }
@@ -1342,8 +1348,7 @@ export async function discardNewShowDraft(): Promise<number> {
         return 200;
     }
 
-    DatabaseServices.closePersistentConnection();
-    DatabaseServices.setDbPath("", false);
+    DatabaseServices.closeDatabase();
 
     const storedPath = store.get("databasePath") as string | undefined;
     if (storedPath === draftPath) {
@@ -1449,11 +1454,8 @@ export async function saveFile() {
 
     if (!win) return -1;
 
-    const db = DatabaseServices.connect();
-
-    // Save
-    const response = await dialog
-        .showSaveDialog(win, {
+    try {
+        const result = await dialog.showSaveDialog(win, {
             buttonLabel: t("fileDialog.saveCopy.button"),
             filters: [
                 {
@@ -1461,36 +1463,49 @@ export async function saveFile() {
                     extensions: ["dots"],
                 },
             ],
-        })
-        .then(async (path) => {
-            if (path.canceled || !path.filePath) return 0;
-
-            // Make a copy into a temp file
-            const tempPath = path.filePath + ".tmp";
-            if (fs.existsSync(tempPath)) {
-                fs.unlinkSync(tempPath);
-            }
-
-            const stmt = await db.prepare("VACUUM INTO ?");
-            await stmt.run(tempPath);
-
-            // If there is an existing file, only delete it after successful copy
-            if (fs.existsSync(path.filePath)) {
-                fs.unlinkSync(path.filePath);
-            }
-
-            fs.renameSync(tempPath, path.filePath);
-
-            addRecentFile(path.filePath);
-
-            return 200;
-        })
-        .catch((err) => {
-            console.log(err);
-            return -1;
         });
+        if (result.canceled || !result.filePath) return 0;
+        const target = resolve(result.filePath);
 
-    return response;
+        // A copy over the open show would replace the file under its own connection, and the
+        // show already holds these contents: nothing to do.
+        if (target === resolve(DatabaseServices.getDbPath())) return 200;
+
+        await writeSnapshotTo(target);
+        addRecentFile(target);
+        return 200;
+    } catch (err) {
+        console.log(err);
+        captureException(err);
+        return -1;
+    }
+}
+
+/** A private folder for files a save builds before they go beside the show (ADR 0018). */
+function saveScratchDirectory(): string {
+    const directory = join(app.getPath("userData"), "save-scratch");
+    fs.mkdirSync(directory, { recursive: true });
+    return directory;
+}
+
+/**
+ * Writes a consistent copy of the open show to `target`. The snapshot is built in the app's
+ * user data; only the finished file goes beside `target`, and replaces any file there in one
+ * rename (ADR 0018).
+ */
+async function writeSnapshotTo(target: string) {
+    const snapshot = join(saveScratchDirectory(), `${randomUUID()}.dots`);
+    try {
+        const db = DatabaseServices.connect();
+        try {
+            db.prepare("VACUUM INTO ?").run(snapshot);
+        } finally {
+            db.close();
+        }
+        await publishFile(snapshot, target);
+    } finally {
+        await removeWithRetry(snapshot);
+    }
 }
 
 /** Open-dialog filters for a show file, in the app language. */
@@ -1603,7 +1618,7 @@ async function closeCurrentFileNow(isAppQuitting: boolean) {
     }
 
     // Close the current file
-    DatabaseServices.setDbPath("", false);
+    DatabaseServices.closeDatabase();
     // A conversion the quit stopped keeps its file as the one to reopen on the next launch.
     if (!(isAppQuitting && conversionWorkersStopped()))
         store.set("databasePath", "");
@@ -1912,7 +1927,7 @@ async function setActiveDbNow(
     } catch (error) {
         captureException(error);
         store.delete("databasePath"); // Reset database path
-        DatabaseServices.setDbPath("", false);
+        DatabaseServices.closeDatabase();
         dialog.showErrorBox(
             t("fileDialog.openFailed.title"),
             (error as Error).message,
