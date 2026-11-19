@@ -72,6 +72,37 @@ test("dragging a marcher saves its new position", async ({ show }) => {
     ).toBeVisible();
 });
 
+// A Mac trackpad's second finger can press the right button mid-drag and lift last: the one
+// release then names the right button, and the drop must still land
+test("a drag released with the right button last saves where it was dropped", async ({
+    show,
+}) => {
+    const { page } = show;
+    await createMarchers(page, { quantity: 8, section: "Baritone" });
+    await expectCanvasMatchesShow(show);
+    const marcher = await visibleMarcher(page);
+    const before = await savedPosition(show, marcher.id);
+    const { x, y } = marcher.screen;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 200, y + 150, { steps: 10 });
+    await page.mouse.down({ button: "right" });
+    await page.mouse.up();
+    await page.mouse.up({ button: "right" });
+
+    const scale = await canvasScale(page);
+    await expect
+        .poll(async () =>
+            Math.abs(
+                (await savedPosition(show, marcher.id)).x -
+                    (before.x + 200 / scale),
+            ),
+        )
+        .toBeLessThan(1);
+    await expectCanvasMatchesShow(show);
+    await expect(page.getByRole("menu")).toHaveCount(0);
+});
+
 test("undo and redo a move", async ({ show }) => {
     const { page } = show;
     await createMarchers(page, { quantity: 8, section: "Baritone" });
