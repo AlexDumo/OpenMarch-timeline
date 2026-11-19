@@ -1,0 +1,200 @@
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { DatabaseSync } from "node:sqlite";
+import * as fs from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+    type RecoverChoice,
+    createWorkingCopyHost,
+    workingCopySavesEnabled,
+} from "../workingCopyHost";
+import type { WorkingCopySession } from "../../database/workingCopy/WorkingCopySession";
+
+function readValues(dbPath: string): string[] {
+    const db = new DatabaseSync(dbPath, { readOnly: true });
+    try {
+        return (
+            db.prepare("SELECT value FROM notes ORDER BY id").all() as {
+                value: string;
+            }[]
+        ).map((row) => row.value);
+    } finally {
+        db.close();
+    }
+}
+
+function edit(session: WorkingCopySession, value: string) {
+    const db = new DatabaseSync(session.workingPath);
+    db.prepare("INSERT INTO notes (value) VALUES (?)").run(value);
+    db.close();
+    session.noteActivity();
+}
+
+describe("workingCopySavesEnabled", () => {
+    it("follows the setting unless the env var forces it", () => {
+        expect(workingCopySavesEnabled(true, undefined)).toBe(true);
+        expect(workingCopySavesEnabled(undefined, undefined)).toBe(false);
+        expect(workingCopySavesEnabled(true, "0")).toBe(false);
+        expect(workingCopySavesEnabled(false, "1")).toBe(true);
+    });
+});
+
+describe("createWorkingCopyHost", () => {
+    let root: string;
+    let showPath: string;
+    let workingRoot: string;
+    let asked: string[];
+    let answer: RecoverChoice;
+
+    const makeHost = (
+        extra: Partial<Parameters<typeof createWorkingCopyHost>[0]> = {},
+    ) =>
+        createWorkingCopyHost({
+            sessionOptions: () => ({
+                workingRoot,
+                debounceMs: 60_000,
+                maxWaitMs: 60_000,
+                pollMs: 60_000,
+            }),
+            askRecover: async (entry) => {
+                asked.push(entry.manifest.showPath);
+                return answer;
+            },
+            ...extra,
+        });
+
+    const openThrough = (host: ReturnType<typeof makeHost>, recover?: any) =>
+        host.open(showPath, {
+            recover,
+            migrate: async () => ({ status: 200 }),
+            connect: () => undefined,
+        });
+
+    /** Leaves unpublished changes behind, as a quit whose publish failed or a crash would. */
+    async function leaveUnpublishedChanges(value: string) {
+        const host = makeHost();
+        const { session } = await openThrough(host);
+        edit(session!, value);
+        // Closing without publishing keeps the working copy, as a crash does.
+        await session!.close();
+    }
+
+    beforeEach(() => {
+        root = fs.mkdtempSync(join(tmpdir(), "openmarch-wc-host-"));
+        workingRoot = join(root, "working-copies");
+        showPath = join(root, "Show.dots");
+        const db = new DatabaseSync(showPath);
+        db.exec("CREATE TABLE notes (id INTEGER PRIMARY KEY, value TEXT)");
+        db.prepare("INSERT INTO notes (value) VALUES ('first')").run();
+        db.close();
+        asked = [];
+        answer = "recover";
+    });
+
+    afterEach(() => {
+        fs.rmSync(root, { recursive: true, force: true });
+    });
+
+    it("publishes and deletes the working copy when the show closes", async () => {
+        const host = makeHost();
+        const { session } = await openThrough(host);
+        edit(session!, "mine");
+        let closed = false;
+
+        expect(await host.end("close", () => (closed = true))).toBe(true);
+
+        expect(closed).toBe(true);
+        expect(host.current).toBeNull();
+        expect(readValues(showPath)).toEqual(["first", "mine"]);
+        expect(fs.readdirSync(workingRoot)).toEqual([]);
+    });
+
+    it("asks before every open of a show with unpublished changes, and recovers them", async () => {
+        await leaveUnpublishedChanges("lost?");
+        const host = makeHost();
+        host.scanAtStartup();
+        expect(host.listRecoverable()).toHaveLength(1);
+
+        const entry = await host.checkRecoveryBeforeOpen(showPath);
+
+        expect(asked).toEqual([showPath]);
+        expect(entry).not.toBeNull();
+        const { session, recovered } = await openThrough(host, entry);
+        expect(recovered).toBe(true);
+        expect(host.listRecoverable()).toEqual([]);
+        await host.end("close", () => undefined);
+        expect(readValues(showPath)).toEqual(["first", "lost?"]);
+        expect(session?.hasUnsavedChanges).toBe(false);
+    });
+
+    it("discards the changes when asked, and opens the show as it is", async () => {
+        await leaveUnpublishedChanges("unwanted");
+        const host = makeHost();
+        host.scanAtStartup();
+        answer = "discard";
+
+        expect(await host.checkRecoveryBeforeOpen(showPath)).toBeNull();
+
+        expect(host.listRecoverable()).toEqual([]);
+        expect(fs.readdirSync(workingRoot)).toEqual([]);
+        expect(readValues(showPath)).toEqual(["first"]);
+    });
+
+    it("opens nothing when the person cancels, and keeps the changes", async () => {
+        await leaveUnpublishedChanges("kept");
+        const host = makeHost();
+        host.scanAtStartup();
+        answer = "cancel";
+
+        expect(await host.checkRecoveryBeforeOpen(showPath)).toBe("cancel");
+        expect(host.listRecoverable()).toHaveLength(1);
+    });
+
+    it("doesn't ask about other shows", async () => {
+        await leaveUnpublishedChanges("x");
+        const host = makeHost();
+        host.scanAtStartup();
+
+        expect(
+            await host.checkRecoveryBeforeOpen(join(root, "Other.dots")),
+        ).toBeNull();
+        expect(asked).toEqual([]);
+    });
+
+    it("lists a show whose last publish failed at close for recovery later", async () => {
+        const host = makeHost();
+        const { session } = await openThrough(host);
+        edit(session!, "mine");
+        fs.rmSync(showPath);
+
+        expect(await host.end("quit", () => undefined)).toBe(true);
+
+        expect(host.listRecoverable().map((s) => s.showExists)).toEqual([
+            false,
+        ]);
+    });
+
+    it("can be cancelled from the unpublished-changes question", async () => {
+        const host = makeHost({ askUnpublished: async () => "cancel" });
+        const { session } = await openThrough(host);
+        edit(session!, "mine");
+        fs.rmSync(showPath);
+
+        expect(await host.end("quit", () => undefined)).toBe(false);
+        expect(host.current).toBe(session);
+        await session!.close({ discard: true });
+    });
+
+    it("throws away a new working copy whose open is refused", async () => {
+        const host = makeHost();
+        const { session, result } = await host.open(showPath, {
+            migrate: async () => ({ status: 426 }),
+            connect: () => undefined,
+        });
+
+        expect(result.status).toBe(426);
+        expect(session).toBeNull();
+        expect(host.current).toBeNull();
+        expect(fs.readdirSync(workingRoot)).toEqual([]);
+    });
+});
