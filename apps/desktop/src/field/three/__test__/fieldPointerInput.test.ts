@@ -115,6 +115,32 @@ describe("attachFieldPointerInput, a lost pointer (#208)", () => {
         expect(state.selected).toEqual([2]);
     });
 
+    // A trackpad's second finger presses the right button mid-drag (a Mac's two-finger click);
+    // the one release comes when it lifts last, and names the right button
+    it("drops the drag where it was released when the right button lifted last", () => {
+        const { editor, state, fire } = setup();
+        fire("pointerdown", { x: 100, y: 100, buttons: 1 });
+        fire("pointermove", { x: 100, y: 160, buttons: 1 });
+        fire("pointermove", { x: 100, y: 160, buttons: 3 });
+        fire("pointermove", { x: 100, y: 160, buttons: 2 });
+        fire("pointerup", { x: 100, y: 160, button: 2 });
+        fire("lostpointercapture");
+        expect(editor.activeGesture()).toBeNull();
+        expect(state.drops).toBe(1);
+        expect(state.menus).toBe(0);
+    });
+
+    it("selects what a marquee took when the right button lifted last", () => {
+        const { state, fire } = setup();
+        fire("pointerdown", { x: 50, y: 50, buttons: 1 });
+        fire("pointermove", { x: 250, y: 150, buttons: 1 });
+        fire("pointermove", { x: 250, y: 150, buttons: 3 });
+        fire("pointermove", { x: 250, y: 150, buttons: 2 });
+        fire("pointerup", { x: 250, y: 150, button: 2 });
+        fire("lostpointercapture");
+        expect(state.selected).toEqual([1, 2]);
+    });
+
     it("leaves the press alone when another pointer's capture is lost", () => {
         const { editor, fire } = setup();
         fire("pointerdown", { x: 100, y: 100 });
