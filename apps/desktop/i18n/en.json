@@ -795,6 +795,7 @@
             "cancel": "Cancel",
             "description": "There's a leftover file, “{name}”, next to this show, from a save that didn't finish. OpenMarch can't use it where it is, but it can finish recovering the show from a copy. The leftover file is moved to OpenMarch's backups, not deleted.",
             "recover": "Recover and open",
+            "syncFolder": "This show is in a folder synced by {service}. Sync apps sometimes hold on to this file while OpenMarch saves, which leaves it behind.",
             "title": "A leftover file is stopping this show from opening"
         },
         "notFound": {

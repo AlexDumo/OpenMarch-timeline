@@ -40,7 +40,7 @@ import {
     clearMissingRecentFiles,
 } from "./services/recent-files-service";
 import type AudioFile from "../../src/global/classes/AudioFile";
-import { init, captureException } from "@sentry/electron/main";
+import { init, captureException, captureMessage } from "@sentry/electron/main";
 
 import {
     automaticUpdatesAreEnabled,
@@ -65,6 +65,8 @@ import {
     recoverFromLeftoverJournal,
     SET_ASIDE_MARK,
 } from "./leftoverJournalRecovery";
+import { cloudSyncServiceFor } from "./cloudSyncFolder";
+import { describeLeftoverJournal } from "./leftoverJournalDiagnostics";
 import {
     NEEDS_CONVERSION_STATUS,
     OPEN_STOPPED_STATUS,
@@ -425,6 +427,27 @@ let refusalAfterReload: number | null = null;
  */
 let leftoverJournalFile: string | null = null;
 
+/**
+ * Reports what the leftover journal that stopped an open looks like (no paths), so the cause of
+ * repeat cases can be found. Never stops the open's answer.
+ */
+function reportLeftoverJournal(filePath: string) {
+    try {
+        const facts = describeLeftoverJournal(filePath);
+        console.warn("A leftover journal stopped an open:", facts);
+        captureMessage("Leftover journal stopped an open", {
+            level: "warning",
+            tags: {
+                syncService: facts.syncService,
+                journalOpenForWrite: facts.journalOpenForWrite,
+            },
+            extra: { ...facts },
+        });
+    } catch (error) {
+        console.error("Couldn't describe the leftover journal:", error);
+    }
+}
+
 /** The renderer's questions about a leftover journal that stopped an open. */
 function initLeftoverJournalIpcHandlers() {
     ipcMain.handle("load-file:leftoverJournal", () =>
@@ -435,6 +458,12 @@ function initLeftoverJournalIpcHandlers() {
     ipcMain.handle("load-file:recoverFromJournal", async () =>
         recoverAndOpenLeftoverJournalFile(),
     );
+    // The show a leftover journal stopped, else the open show.
+    ipcMain.handle("show:cloudSyncFolder", () => {
+        const filePath = leftoverJournalFile ?? DatabaseServices.getDbPath();
+        const service = cloudSyncServiceFor(filePath);
+        return service ? { service, filePath } : null;
+    });
 }
 
 /**
@@ -1809,8 +1838,10 @@ async function setActiveDbNow(
         result.db?.close();
         const token = result.sqlSuspension;
         // The renderer offers to open it without the journal (`load-file:recoverFromJournal`).
-        if (result.status === LEFTOVER_JOURNAL_STATUS)
+        if (result.status === LEFTOVER_JOURNAL_STATUS) {
             leftoverJournalFile = path;
+            reportLeftoverJournal(path);
+        }
 
         if (result.status === NEEDS_CONVERSION_STATUS && result.backupPath) {
             if (token !== undefined) DatabaseServices.resumeSqlProxy(token);

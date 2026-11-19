@@ -28,6 +28,7 @@ import {
 import { GPU_CRASHED_CHANNEL, GPU_PROCESS_GONE_CHANNEL } from "../main/gpu";
 import type { HistoryResponse } from "@/db-functions";
 import type { PendingConversion } from "@om-electron/database/convertOnOpenGate";
+import type { CloudSyncService } from "@om-electron/main/cloudSyncFolder";
 import type {
     SqlBatchQuery,
     SqlReadBatchResult,
@@ -340,6 +341,16 @@ const APP_API = {
      */
     recoverLeftoverJournal: () =>
         ipcRenderer.invoke("load-file:recoverFromJournal") as Promise<number>,
+    /**
+     * The cloud sync app (OneDrive, iCloud Drive, Dropbox, Google Drive, Box) whose folder holds
+     * the show a leftover journal stopped, or else the open show, and that show's path; null
+     * for a local folder (`electron/main/cloudSyncFolder.ts`).
+     */
+    getCloudSyncFolder: () =>
+        ipcRenderer.invoke("show:cloudSyncFolder") as Promise<{
+            service: CloudSyncService;
+            filePath: string;
+        } | null>,
 
     // Converting a page-era show to timelines when it opens (ADR 0012 §6)
     /** The page-era file waiting for the person to agree to convert it, or null. */
