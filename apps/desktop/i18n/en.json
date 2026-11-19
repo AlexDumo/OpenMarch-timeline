@@ -3938,7 +3938,8 @@
             "noDocument": {
                 "title": "Cannot Save or Export",
                 "message": "There is currently no active document to save or export."
-            }
+            },
+            "saveNow": "Save Now"
         },
         "view": {
             "title": "View",
@@ -4000,6 +4001,13 @@
         },
         "openFailed": {
             "title": "Error Loading Database"
+        },
+        "recoverOnOpen": {
+            "message": "OpenMarch closed before your last changes to “{name}” were saved.",
+            "detail": "Last edited {time}. Recover them to keep working where you left off, or discard them to open the show as it was last saved. Discarded changes can't be brought back.",
+            "recover": "Recover Changes",
+            "discard": "Discard Changes",
+            "cancel": "Cancel"
         }
     },
     "cues": {

@@ -1,4 +1,5 @@
 words:
+  - autocheckpoint
   - FULLFSYNC
   - fsyncs
   - xattr

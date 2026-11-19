@@ -11,6 +11,7 @@ import {
 import * as DbServices from "@om-electron/database/database.services";
 
 import type { RecentFile } from "@om-electron/main/services/recent-files-service";
+import type { WorkingCopyStatus } from "@om-electron/database/workingCopy/WorkingCopySession";
 import type { PreviousDotsImportResult } from "@om-electron/main/services/previous-dots-import-service";
 import type {
     AuthState,
@@ -314,6 +315,24 @@ const APP_API = {
     repairDatabase: (dbPath: string): Promise<string | null> =>
         ipcRenderer.invoke("database:repair", dbPath),
     closeCurrentFile: () => ipcRenderer.invoke("closeCurrentFile"),
+    // Saving through a working copy (ADR 0018)
+    workingCopy: {
+        /** The open show's save state, or null when it's edited in place. */
+        getStatus: () =>
+            ipcRenderer.invoke(
+                "working-copy:get-status",
+            ) as Promise<WorkingCopyStatus | null>,
+        onStatus: (callback: (status: WorkingCopyStatus) => void) => {
+            const listener = (
+                _event: Electron.IpcRendererEvent,
+                status: WorkingCopyStatus,
+            ) => callback(status);
+            ipcRenderer.on("working-copy:status", listener);
+            return () =>
+                ipcRenderer.removeListener("working-copy:status", listener);
+        },
+    },
+
     onLoadFileResponse: (callback: (value: number) => void) => {
         const listener = (_event: Electron.IpcRendererEvent, value: number) =>
             callback(value);
