@@ -4,6 +4,9 @@ words:
   - xattr
   - retarget
   - recents
+  - rehome
+  - rehomed
+  - rehoming
   - CANTOPEN
   - errcode
   - onedrive
@@ -361,6 +364,7 @@ words:
   - Zingali
   - Zustand
   - 日本語
+  - laned
   - lerp
   - lerped
   - slerp
