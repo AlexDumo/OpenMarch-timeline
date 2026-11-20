@@ -7,6 +7,7 @@ import {
     applyTurfSheen,
     patchTurfShader,
     TURF_SHEEN_CHUNKS,
+    TURF_SPECULAR,
 } from "../turfSheen";
 
 const params = {
@@ -61,6 +62,18 @@ describe("synthetic turf", () => {
         expect(shader.vertexShader).toContain("vTurfWorld =");
         expect(shader.fragmentShader).toContain("uTurfLay * turfSide");
         expect(shader.fragmentShader).toContain("fwidth(turfTuft)");
+        // The fibers' dull specular, set after three's own.
+        const lit = shader.fragmentShader.indexOf(
+            "#include <lights_physical_fragment>",
+        );
+        const dulled = shader.fragmentShader.indexOf("material.specularF90 *=");
+        expect(lit).toBeGreaterThan(-1);
+        expect(dulled).toBeGreaterThan(lit);
+    });
+
+    it("dulls the fibers' specular well below a plain dielectric's", () => {
+        expect(TURF_SPECULAR).toBeGreaterThan(0);
+        expect(TURF_SPECULAR).toBeLessThan(0.5);
     });
 
     it("gives the material its own program", () => {

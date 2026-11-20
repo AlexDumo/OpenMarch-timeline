@@ -1,5 +1,6 @@
 // cspell:ignore vomitory vomitories metalness tarped concourse downlights emissivemap
 import { DIESEL_TURF } from "./turf";
+import { applyTurfSheen } from "../../field/turfSheen";
 import {
     BufferGeometry,
     DoubleSide,
@@ -1523,13 +1524,17 @@ export function buildDieselBowl(ctx: DieselCtx): DieselBowl {
     const floorGeo = new BufferGeometry();
     floorGeo.setAttribute("position", new Float32BufferAttribute(floorPos, 3));
     floorGeo.computeVertexNormals();
+    // The same synthetic turf as the field (`turf.ts`), with its rolls'
+    // lay, grain, crumb and dull specular, so the apron reads as the
+    // field's turf carried on to the wall.
+    const floorMat = shared.std(parseInt(DIESEL_TURF.base.slice(1), 16), {
+        roughness: 0.95,
+    });
+    applyTurfSheen(floorMat);
     addMesh(
         floorGeo,
         setGroundLayer(
-            // The same synthetic turf as the field (`turf.ts`).
-            shared.std(parseInt(DIESEL_TURF.base.slice(1), 16), {
-                roughness: 0.95,
-            }),
+            floorMat,
             // The apron round the field: over the site's paint, under the
             // field itself.
             GROUND_LAYER.track,

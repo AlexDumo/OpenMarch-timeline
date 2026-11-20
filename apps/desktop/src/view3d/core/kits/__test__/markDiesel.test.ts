@@ -634,6 +634,34 @@ describe("Mark Diesel kit", () => {
         const press = at("pressBox");
         expect(press.y).toBeGreaterThan(f.BOWL.upperWest.top);
         expect(press.y).toBeLessThan(f.BOWL.pressBox.top);
+        // The end zone: row 30 of the north end's lower stand (photo 11),
+        // with a clear view of the field. Looking toward the field and down,
+        // the eye sees its own stand's seats and then the floor: no tunnel
+        // lid or other structure in the foreground (the old seat, behind a
+        // 200s tunnel, saw a slab from 20 to 35 degrees down).
+        const end = at("endZone");
+        expect(end.x).toBeLessThan(-f.BOWL.halfX - f.BOWL.northLower.offset);
+        expect(end.y).toBeCloseTo(
+            f.BOWL.northLower.base + 29 * f.BOWL.northLower.rise + 1.2,
+            3,
+        );
+        const solid = meshes(kit.root).filter((m) => shown(m));
+        const eye = new Vector3(...end.c.position);
+        for (let pitch = 10; pitch <= 40; pitch += 5) {
+            const a = (pitch * Math.PI) / 180;
+            const dir = new Vector3(
+                -Math.sign(end.x) * Math.cos(a),
+                -Math.sin(a),
+                0,
+            );
+            const hit = new Raycaster(eye, dir, 0.3, 200).intersectObjects(
+                solid,
+                false,
+            )[0];
+            expect(hit?.object.name, `${pitch} degrees down`).not.toBe(
+                "markDiesel.structure",
+            );
+        }
     });
 
     it("lets nothing in the hall cast a shadow but the performers' key light", () => {

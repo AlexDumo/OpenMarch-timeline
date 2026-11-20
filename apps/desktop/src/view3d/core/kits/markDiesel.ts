@@ -201,7 +201,8 @@ export const DIESEL_CAMERA_LOOK: Record<string, CameraSeat["look"]> = {
  */
 export function dieselCameras(frame: DieselFrame): CameraSeat[] {
     const { BOWL, DRAPE, FIELD_HALF_WIDTH } = frame;
-    const { lower, loge, mid, upperWest, pressBox, halfX, halfZ } = BOWL;
+    const { lower, loge, mid, upperWest, northLower, pressBox, halfX, halfZ } =
+        BOWL;
     const rowEye = (
         t: { base: number; rise: number; offset: number; depth: number },
         i: number,
@@ -227,7 +228,12 @@ export function dieselCameras(frame: DieselFrame): CameraSeat[] {
     // it and the field but its own rail. Behind the portal its parapets cut
     // off the near sideline.
     const upperRow = rowEye(upperWest, 2);
-    const endRow = rowEye(loge, 6);
+    // The end zone: row 30 of the north end's tall lower stand (photo 11),
+    // in the middle of a section. Its rows run unbroken from the field
+    // wall up, so nothing stands between the seat and the field but the
+    // heads in front. (Row 7 of the south 200s, where it was, sat right
+    // behind a tunnel's lid, which filled the bottom of the view.)
+    const endRow = rowEye(northLower, 29);
     const cam = (
         id: string,
         kind: CameraSeat["kind"],
@@ -277,7 +283,7 @@ export function dieselCameras(frame: DieselFrame): CameraSeat[] {
         cam(
             "endZone",
             "seat",
-            [halfX + endRow.d, endRow.y, endSection],
+            [-(halfX + endRow.d), endRow.y, endSection],
             [0, 0, 0],
         ),
         cam(
