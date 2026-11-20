@@ -84,6 +84,15 @@ module.exports = {
     },
     overrides: [
         {
+            // The root tsconfig has no `include`, so its program is the whole
+            // monorepo; type-checking the UI package against it took over 4 GB.
+            // The package's own tsconfig covers every file it lints.
+            files: ["packages/ui/**"],
+            parserOptions: {
+                project: "./packages/ui/tsconfig.json",
+            },
+        },
+        {
             // UI style tokens (docs/conventions/ui-styling.md): font sizes and corner radii
             // come from the theme in packages/ui/src/tailwind.css, never one-off values
             files: [
