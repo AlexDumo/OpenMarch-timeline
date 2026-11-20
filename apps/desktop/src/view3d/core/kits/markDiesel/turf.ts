@@ -6,9 +6,12 @@ import type { DieselCtx, DieselPart } from "./frame";
 
 /**
  * Mark Diesel's turf: FieldTurf-style synthetic grass, as in the reference
- * photos. Its green is a natural yellow-green (hue about 72 in the photos,
- * against the shared turf's bluer 110), not a lawn's; under this venue's
- * lamps and exposure the base comes out near `#a4bb57`. The 5-yard rolls
+ * photos. Its green is a saturated yellow-green (hue about 70, saturation
+ * about 0.7 in photos 1, 4, 6 and 10, against the shared turf's bluer 110),
+ * not a lawn's; under this venue's lamps and exposure the base comes out
+ * near `#b2c840`, as in the photos. The fibers' specular is dull
+ * (`TURF_SPECULAR`): a plain dielectric's grazing Fresnel washed the far
+ * field out pale. The 5-yard rolls
  * are only a little apart in the paint: most of their light and dark comes
  * from the fibers' lay against the view, with the fibers' sheen, blade
  * grain and rubber crumb on top (`surface: "synthetic"`,
@@ -17,9 +20,9 @@ import type { DieselCtx, DieselPart } from "./frame";
  * white.
  */
 export const DIESEL_TURF: TurfColors = {
-    base: "#879b2e",
-    stripeDark: "#83972c",
-    stripeLight: "#8b9f31",
+    base: "#8b9b2c",
+    stripeDark: "#87972a",
+    stripeLight: "#8f9f2f",
     surface: "synthetic",
 };
 

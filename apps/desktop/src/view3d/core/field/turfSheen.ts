@@ -28,15 +28,26 @@ export const TURF_LAY = 0.05;
 /** The shader chunks the patch hooks; a test pins them to three's. */
 export const TURF_SHEEN_CHUNKS = {
     vertex: ["#include <common>", "#include <project_vertex>"],
-    fragment: ["#include <common>", "#include <map_fragment>"],
+    fragment: [
+        "#include <common>",
+        "#include <map_fragment>",
+        "#include <lights_physical_fragment>",
+    ],
 } as const;
 
-const KEY = "turfSheen2";
+const KEY = "turfSheen3";
 
 /** Contrast of the blade-scale grain at full strength (near the camera). */
 export const TURF_GRAIN = 0.24;
 /** How much a grazing view lifts the fibers toward a pale sheen. */
 export const TURF_SHEEN = 0.12;
+/**
+ * The fibers' specular, as a share of a plain dielectric's. A field of thin
+ * blades scatters the lamps instead of mirroring them: at full strength the
+ * surface's grazing Fresnel laid a white veil over the whole far field, which
+ * read pale and yellow beside the photos' saturated green.
+ */
+export const TURF_SPECULAR = 0.2;
 /** Share of the surface that is rubber crumb showing between fibers. */
 export const TURF_CRUMB = 0.12;
 
@@ -98,9 +109,12 @@ export function patchTurfShader(
                 "float turfGraze = turfFlat / max(length(turfView), 1e-3);",
                 "diffuseColor.rgb *= 1.0 + uTurfLay * turfSide * turfAlong * turfGraze;",
                 // The fibers' sheen: seen low across the field their sides
-                // catch the lamps, a pale lift with no change of hue.
+                // catch the lamps, a lift with no change of hue. It stays
+                // mostly the fibers' own green: lit polyethylene keeps its
+                // color, and a lift toward gray (with the surface's grazing
+                // Fresnel on top) washed the far field out pale.
                 "float turfGray = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));",
-                "diffuseColor.rgb = mix(diffuseColor.rgb, vec3(turfGray) * 1.2 + diffuseColor.rgb * 0.15, TURF_SHEEN * pow(turfGraze, 8.0));",
+                "diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 1.1 + vec3(turfGray) * 0.25, TURF_SHEEN * pow(turfGraze, 8.0));",
                 // A soft unevenness meters across, so a wide view of the field
                 // is never one flat green (procedural: nothing tiles).
                 "diffuseColor.rgb *= 0.97 + 0.06 * turfNoise(vTurfWorld.xz * 0.14 + 3.0);",
@@ -119,6 +133,22 @@ export function patchTurfShader(
                 "diffuseColor.rgb *= 1.0 - 0.45 * turfCrumbAt * turfCrumbFade;",
             ].join("\n"),
         );
+    patchTurfSpecular(shader);
+}
+
+/** Scales a standard material's specular to the fibers' (`TURF_SPECULAR`). */
+function patchTurfSpecular(
+    shader: Pick<WebGLProgramParametersWithUniforms, "fragmentShader">,
+): void {
+    shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <lights_physical_fragment>",
+        [
+            "#include <lights_physical_fragment>",
+            `material.specularColor *= ${TURF_SPECULAR.toFixed(3)};`,
+            `material.specularColorBlended *= ${TURF_SPECULAR.toFixed(3)};`,
+            `material.specularF90 *= ${TURF_SPECULAR.toFixed(3)};`,
+        ].join("\n"),
+    );
 }
 
 /** Gives the field's material synthetic turf's lay. */
