@@ -26,7 +26,10 @@ import {
 } from "../../environment";
 import { outlineOffset } from "../bowl";
 import { buildMarkDiesel } from "../markDiesel";
+import { RING_PARTS } from "../bowl";
 import {
+    dieselRings,
+    dieselTunnelAxis,
     DIESEL_DIRECTORS,
     DIESEL_PLATFORM,
     DIESEL_SEAT_CLEAR,
@@ -151,7 +154,9 @@ describe("Mark Diesel seats", () => {
             ).toBe(true);
         }
         expect(maxU).toBeGreaterThan(15);
-        expect(maxU).toBeLessThan(60);
+        // The longest runs: the south end's front rows, which carry on round
+        // the wall's squared corners.
+        expect(maxU).toBeLessThan(70);
         // No seats on the draped sideline: it is tarped, or behind the hangs.
         for (let i = 0; i < pos.count; i++)
             if (Math.abs(pos.getX(i)) < straight)
@@ -357,6 +362,179 @@ describe("Mark Diesel seats", () => {
         expect(
             numbers.geometry.getAttribute("position").count / 6,
         ).toBeGreaterThan(30);
+    });
+});
+
+describe("Mark Diesel corner tunnels and field suites", () => {
+    /** Kit-root space to the scene's. */
+    const world = (x: number, y: number, z: number) =>
+        new Vector3(x + f.CENTER.x, y, z + f.CENTER.z);
+    /** The first hit straight down from `(x, top, z)` (kit-root space). */
+    const down = (meshes: Mesh[], x: number, z: number, top = 30) =>
+        new Raycaster(world(x, top, z), new Vector3(0, -1, 0)).intersectObjects(
+            meshes,
+            false,
+        )[0];
+    const CT = BOWL.cornerTunnels;
+    const lidD = BOWL.lower.offset + CT.lidRow * BOWL.lower.depth;
+    const { at } = dieselRings(f);
+    /**
+     * Each corner's tunnel: its centerline (from the wall's corner, out at
+     * about 45 degrees), the ring point down its middle, and how far along
+     * the line the lid starts.
+     */
+    const tunnels = [1, 3, 5, 7].map((k) => {
+        const mid =
+            RING_PARTS.slice(0, k).reduce((n, p) => n + p.segments, 0) +
+            RING_PARTS[k].segments / 2;
+        const { origin, axis } = dieselTunnelAxis(f, k);
+        const lid = at(mid, lidD, 0).sub(origin).dot(axis);
+        return { mid, origin, axis, lid };
+    });
+
+    it("opens a tunnel in each corner, with the rows that clear it as its lid", () => {
+        const kit = build();
+        // (Tarped treads, behind the drape, are in the concrete mesh.)
+        const solid = [
+            "markDiesel.treads",
+            "markDiesel.fascias",
+            "markDiesel.concrete",
+        ].map((n) => named(kit.root, n));
+        expect(lidD).toBeGreaterThan(12);
+        // Tall enough for the bands' trucks, wide enough for two.
+        expect(CT.height).toBeGreaterThanOrEqual(4.5);
+        expect(CT.width).toBeGreaterThanOrEqual(6);
+        expect(CT.width).toBeLessThanOrEqual(8);
+        for (const { origin, axis, mid } of tunnels) {
+            // Off the aisle down the middle (a ray along a seam can slip).
+            const side = new Vector3(axis.z, 0, -axis.x).multiplyScalar(0.7);
+            const onLine = (d: number) => at(mid, d, 0).add(side);
+            // Down the notch: nothing over the floor until the lid.
+            for (const d of [2, 6, lidD * 0.6, lidD - 0.5]) {
+                const p = onLine(d);
+                const hit = down(solid, p.x, p.z);
+                expect(hit, `${origin.x} ${d}`).toBeDefined();
+                expect(hit.point.y).toBeLessThan(0.1);
+                expect(hit.object.name).toBe("markDiesel.fascias");
+            }
+            // Under the lid: its rows, over the tunnel's lit ceiling and
+            // floor.
+            const lid = onLine(lidD + 1.5);
+            const top = down(solid, lid.x, lid.z);
+            expect(
+                `${top.object.name} ${top.point.y.toFixed(2)}`,
+                `${origin.toArray()}`,
+            ).toMatch(/^markDiesel.(treads|concrete) /);
+            expect(top.point.y).toBeGreaterThan(CT.height);
+            const ceiling = down(solid, lid.x, lid.z, top.point.y - 0.05);
+            expect(ceiling.point.y).toBeCloseTo(CT.height, 1);
+            const under = down(solid, lid.x, lid.z, CT.height - 0.1);
+            expect(under.point.y).toBeLessThan(0.1);
+        }
+        // The concourse's light at each tunnel's back.
+        expect(named(kit.root, "markDiesel.concourse")).toBeDefined();
+    });
+
+    it("keeps people on the treads round the tunnels and the suites", () => {
+        const kit = build();
+        const treads = named(kit.root, "markDiesel.treads");
+        let checked = 0;
+        for (const row of kit.seatRows) {
+            const near = row.points.filter(([x, , z]) => {
+                const p = new Vector3(x - f.CENTER.x, 0, z - f.CENTER.z);
+                const byTunnel = tunnels.some(
+                    ({ origin, lid }) => p.distanceTo(origin) < lid + 8,
+                );
+                const bySuites =
+                    p.x > BOWL.wallX.south - 1 &&
+                    Math.abs(p.z) < BOWL.fieldSuites.halfWidth + 4;
+                return byTunnel || bySuites;
+            });
+            for (const [x, y, z] of near) {
+                // Nobody inside a tunnel's notch, under its lid.
+                const p = new Vector3(x - f.CENTER.x, y, z - f.CENTER.z);
+                for (const { origin, axis, lid } of tunnels) {
+                    const rel = p.clone().sub(origin).setY(0);
+                    const along = rel.dot(axis);
+                    const across = Math.abs(rel.x * axis.z - rel.z * axis.x);
+                    // (Each row is cut at its front; its back edge leans
+                    // out a little with the corner's rays.)
+                    if (
+                        along > 0 &&
+                        along < lid - 0.5 &&
+                        across < CT.width / 2 - 0.5
+                    )
+                        expect(y, `${p.toArray()}`).toBeGreaterThan(CT.height);
+                }
+                // A seat under every person: a tread just under the hips
+                // (people standing on the suites' patio stand on its floor).
+                const hit = new Raycaster(
+                    new Vector3(x, y, z),
+                    new Vector3(0, -1, 0),
+                    0,
+                    1,
+                ).intersectObject(treads, false)[0];
+                if (y > 1) {
+                    expect(hit, `${p.toArray()}`).toBeDefined();
+                    expect(hit.distance).toBeLessThan(0.6);
+                }
+                checked++;
+            }
+        }
+        expect(checked).toBeGreaterThan(500);
+    });
+
+    it("puts the field suites across the south end, behind the wall", () => {
+        const kit = build();
+        const FS = BOWL.fieldSuites;
+        expect(FS.count).toBe(8);
+        // The south end's wall stands 10 m behind the end line; the north
+        // end's 8.
+        expect(BOWL.wallX.south - f.FIELD_HALF_LENGTH).toBeCloseTo(10);
+        expect(-BOWL.wallX.north - f.FIELD_HALF_LENGTH).toBeCloseTo(8);
+        // Their glass, at field level, a little behind the wall.
+        const glass = named(kit.root, "markDiesel.suites").geometry;
+        const pos = glass.getAttribute("position");
+        let front = 0;
+        // (The geometry is in kit-root space.)
+        for (let i = 0; i < pos.count; i++) {
+            const x = pos.getX(i);
+            const z = pos.getZ(i);
+            if (pos.getY(i) > 3.5) continue;
+            front++;
+            expect(x).toBeGreaterThan(BOWL.wallX.south + 0.5);
+            expect(x).toBeLessThan(BOWL.wallX.south + 3);
+            expect(Math.abs(z)).toBeLessThan(FS.halfWidth + 0.01);
+            expect(pos.getY(i)).toBeGreaterThanOrEqual(FS.floor);
+            expect(pos.getY(i)).toBeLessThanOrEqual(FS.ceiling + 1e-6);
+        }
+        expect(front).toBeGreaterThan(6);
+        // Over them, the suites' roof, then the rows behind rising from it.
+        const solid = ["markDiesel.treads", "markDiesel.fascias"].map((n) =>
+            named(kit.root, n),
+        );
+        const roof = down(solid, BOWL.wallX.south + 4, 0);
+        expect(roof.point.y).toBeGreaterThan(FS.ceiling);
+        expect(roof.point.y).toBeLessThan(FS.ceiling + 0.5);
+        const rows = down(solid, BOWL.wallX.south + 12, 0);
+        expect(rows.object.name).toBe("markDiesel.treads");
+        expect(rows.point.y).toBeGreaterThan(roof.point.y);
+        // Outside the suites the 100s still run down to the wall.
+        const beside = down(solid, BOWL.wallX.south + 1.5, FS.halfWidth + 6);
+        expect(beside.object.name).toBe("markDiesel.treads");
+        expect(beside.point.y).toBeLessThan(2);
+        // A few people out on the patio in front of the glass.
+        const patio = kit.seatRows.filter(
+            (row) =>
+                row.standing !== undefined &&
+                row.points.every(
+                    ([x, y]) =>
+                        x - f.CENTER.x > BOWL.wallX.south &&
+                        x - f.CENTER.x < BOWL.wallX.south + FS.glass &&
+                        y < 1,
+                ),
+        );
+        expect(patio.length).toBeGreaterThan(0);
     });
 });
 

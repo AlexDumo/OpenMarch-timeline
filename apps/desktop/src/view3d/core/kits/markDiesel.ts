@@ -248,12 +248,12 @@ export function dieselCameras(frame: DieselFrame): CameraSeat[] {
         target,
     });
     return [
-        // Standing at the press box's glass, over the top of the 600s.
+        // At the press box's glass, over the top row of the 600s' seats.
         cam(
             "pressBox",
             "seat",
-            [0, pressBox.bottom + 1 + 1.5, halfZ + pressBox.offset - 0.5],
-            [0, 0, -4],
+            [0, pressBox.sill + 1.15, halfZ + pressBox.offset - 0.3],
+            [0, 0, -6],
         ),
         cam(
             "judges",

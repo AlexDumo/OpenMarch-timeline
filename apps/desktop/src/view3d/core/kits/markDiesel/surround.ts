@@ -6,8 +6,8 @@ import {
     Mesh,
     MeshStandardMaterial,
 } from "three";
-import { bowlOutline } from "../bowl";
-import { DIESEL_RING } from "./bowl";
+import type { Ring } from "../bowl";
+import { DIESEL_RING, dieselRings, dieselTunnelCuts } from "./bowl";
 import {
     dieselTexture,
     dieselWallPadTexture,
@@ -111,18 +111,44 @@ export function sponsorRow(
     });
 }
 
+/**
+ * Where the pads run along `ring` (the wall's face): the open part of the
+ * ring, less the corner tunnels' mouths. Fractional ring indices.
+ */
+export function padRanges(
+    frame: Pick<DieselFrame, "BOWL">,
+    ring: Ring,
+): [number, number][] {
+    const n = ring.length;
+    let pieces: [number, number][] = [[...DIESEL_RING.open]];
+    for (const [g0, g1] of dieselTunnelCuts(frame, ring))
+        for (const shift of [-n, 0, n])
+            pieces = pieces.flatMap(([a, b]): [number, number][] => {
+                const [c, d] = [g0 + shift, g1 + shift];
+                if (d <= a || c >= b) return [[a, b]];
+                return [
+                    [a, c],
+                    [d, b],
+                ].filter(([x, y]) => y - x > 1e-6) as [number, number][];
+            });
+    return pieces;
+}
+
 export function buildDieselSurround(ctx: DieselCtx): DieselPart {
     const { BOWL } = ctx.frame;
     const object = new Group();
     object.name = "markDiesel.surround";
 
     // The wall's pads.
-    const ring = bowlOutline(BOWL.outline);
+    // Round the field wall's squared corners, not across the corner
+    // tunnels' mouths.
+    const { ring } = dieselRings(ctx.frame);
     const padTop = BOWL.fieldWall;
+    const foot = ring(-WALL_PROUD, PAD_FOOT);
     const pads = ringStrip(
-        ring(-WALL_PROUD, PAD_FOOT),
+        foot,
         ring(-WALL_PROUD, padTop),
-        [DIESEL_RING.open],
+        padRanges(ctx.frame, foot),
         (padTop - PAD_FOOT) * PAD_TILE_HEIGHTS,
     );
     const padMap = dieselWallPadTexture();

@@ -125,9 +125,13 @@ export function dieselFrame(footprint: FieldFootprint) {
     // The bowl: a rounded rectangle around the field (`kits/bowl.ts`); every
     // ring is that outline offset outward by `d` meters. The numbers are the
     // measured cross-section in `.scratch/lucas-oil/section.md`: offsets are
-    // from the field wall, which stands 14.2 m off the sidelines.
+    // from the field wall, which stands 14.2 m off the sidelines. The
+    // outline is the north end's (8 m behind the end line); the south end's
+    // wall stands further back (`front`).
     const marginX = 8;
     const marginZ = 14.2;
+    /** The south end's margin: the field suites stand behind its wall. */
+    const marginSouth = 10;
     const halfX = FIELD_HALF_LENGTH + marginX;
     const halfZ = FIELD_HALF_WIDTH + marginZ;
     // One bank from the field wall to the loge boxes: the 100s, a
@@ -162,6 +166,25 @@ export function dieselFrame(footprint: FieldFootprint) {
         outline: { centerX: 0, centerZ: 0, halfX, halfZ, cornerRadius: 16 },
         marginX,
         marginZ,
+        marginSouth,
+        /**
+         * How the rings near the field leave the outline. The field wall
+         * (offset 0) has nearly square corners, a 6 m radius where the
+         * outline has 16, and at the south end it stands
+         * `marginSouth - marginX` further back. Both blend back into the
+         * outline over the 100s, so from the cross-aisle (offset `fade`)
+         * outward every ring is the outline's. Each corner arc's center
+         * moves out by `push * (1 - d / fade)` along X and Z; the south
+         * end's points move by `south` times the same.
+         */
+        front: {
+            cornerRadius: 6,
+            push: 16 - 6,
+            south: marginSouth - marginX,
+            fade: lower.back,
+        },
+        /** The field wall's ends: x of the north and south walls. */
+        wallX: { north: -halfX, south: halfX + marginSouth - marginX },
         halfX,
         halfZ,
         /**
@@ -206,6 +229,36 @@ export function dieselFrame(footprint: FieldFootprint) {
         northLower,
         /** North end: the 400 deck over the open concourse. */
         northMid,
+        /**
+         * A tunnel in each corner, for the bands' equipment and trucks: a
+         * notch through the 100s at 45 degrees, `width` wide, open from the
+         * field wall back to the first row that clears `height` (row
+         * `lidRow`); those rows run on over it as its lid, and the tunnel
+         * goes on under them for `depth`, short of the 200s' bulkheads.
+         * 7.2 m by 4.8 m takes a band's equipment trucks.
+         */
+        cornerTunnels: {
+            width: 7.2,
+            height: 4.8,
+            lidRow: Math.ceil((4.8 + 0.45 - lower.base) / lower.rise),
+            depth: 4.5,
+        },
+        /**
+         * The field suites: eight boxes at field level across the south
+         * end, behind its wall, in front of 125 to 128. They take the
+         * 100s' first `rows` rows over `halfWidth` either side of the
+         * field's centerline; the rows behind run on over their roof.
+         */
+        fieldSuites: {
+            count: 8,
+            halfWidth: 12,
+            rows: 9,
+            /** Ring offset of the glass, behind the wall and a patio. */
+            glass: 1.6,
+            floor: 0,
+            /** Underside of the roof slab; the first row above stands on it. */
+            ceiling: 2.65,
+        },
         /** The open loge boxes behind the 200s: a band of glass. */
         logeBoxes: { offset: 30.2, bottom: 13.2, top: 16.8 },
         /** Suite glass: one level, hanging over the back of the 400s. */
@@ -230,15 +283,20 @@ export function dieselFrame(footprint: FieldFootprint) {
          */
         ribbon2: { offset: 35.2, bottom: terrace.bottom, top: terrace.base },
         /**
-         * The press box: a glazed box over the top rows of the west 600s,
-         * `halfLength` either side of the 50.
+         * The press box: a glazed box behind the top row of the west 600s,
+         * along the whole west straight. Photos B and 7, solved, put it
+         * about 44 m up; camera A alone had 48.5 to 56. Its floor sits just
+         * under the last tread, so its sill is a low parapet behind the top
+         * row and the glass looks out over the deck.
          */
         pressBox: {
             side: "+z" as const,
-            offset: 50,
-            bottom: 48.5,
-            top: 56,
-            halfLength: halfX - 16,
+            offset: upperWest.back + 0.2,
+            /** Outline offset of its back wall. */
+            back: upperWest.back + 6.5,
+            bottom: 45,
+            sill: upperWest.top + 0.25,
+            top: 49.6,
         },
     };
 
@@ -419,24 +477,31 @@ export function dieselFrame(footprint: FieldFootprint) {
 
     /**
      * The corner video boards (97 ft x 53 ft), in the two corners with no
-     * 600 level, toward the ends: in the photos from the front sideline's
-     * lower bowl (8 and 12) each hangs high, just under the end of a
-     * superframe's light row and over LED ribbon 2, and faces the field's
-     * center, so the front sideline sees it nearly face on. The whole
-     * cabinet, sign and all, stays inside the superframe's line, whose
-     * bottom chord drops toward the legs.
+     * 600 level, across the corner: `boardArc` round the outline's corner
+     * arc from the end, on a circle just inside the 500s. Photo 6 puts the
+     * south-east screen at x 1115 to 1415 px; 33 degrees lands it at 1124
+     * to 1411 (at 4 degrees it sat 230 px toward the end). Each faces the
+     * field's center, so the front sideline sees it nearly face on. The
+     * cabinet stands outside the superframe's line (|z| 45.7), past the end
+     * of the light row, and its sign stays under the superframe's bottom
+     * chord, which runs level over the corners.
      */
-    const boardArc = (4 * Math.PI) / 180;
+    const boardArc = (33 * Math.PI) / 180;
     const boardRadius = BOWL.outline.cornerRadius + terrace.offset - 0.3;
     const board = {
         width: ft(97),
         height: ft(53),
         /**
-         * Height of the screen's middle: the foot just over ribbon 2, the
-         * header sign under the light row.
+         * Height of the screen's middle: the foot 2.5 m over the 500s' last
+         * tread (34 m), so the screen's top stays just under the light row
+         * (`CATWALK_Y`). Photo 6 shows the screen's foot about 3.5 m over
+         * ribbon 2 under it, and photo 2 its top under the row's last
+         * lamps.
          */
-        y: terrace.top + 2.3 + ft(53) / 2,
+        y: terrace.top + 2.5 + ft(53) / 2,
     };
+    // On the outline's corner arc: the north end's, mirrored, so the two
+    // boards hang alike (the south wall's extra margin is the field's).
     const boardAt = (sx: number, sz: number) => ({
         x:
             sx *

@@ -61,19 +61,13 @@ const CARD = { width: 1024, height: 560 };
 /** How bright the live picture is shown, over the scene it was taken from. */
 const FEED_GAIN = 2;
 
-/** The board's sign tops out this far under the lamps of the light row. */
-const UNDER_LAMPS = 1;
-
 /**
- * Height of the middle of each screen: the sign over it stops just under
- * the light row's last lamps, which hang over it (photo 12), and its foot
- * clears ribbon 2.
+ * Height of the middle of each screen (`frame.VIDEO_BOARDS`): its foot
+ * 2.5 m over the 500s' last tread, its top just under the light row, the
+ * sign over it under the superframe's bottom chord.
  */
 export function dieselBoardCenterY(frame: DieselFrame): number {
-    const { height, header, headerGap, margin } = DIESEL_BOARD;
-    return (
-        frame.CATWALK_Y - UNDER_LAMPS - header - headerGap - margin - height / 2
-    );
+    return frame.VIDEO_BOARDS[0].y;
 }
 
 /** One video board: the middle of its screen, in kit-root space. */
@@ -85,33 +79,16 @@ export interface DieselBoardSpot {
 }
 
 /**
- * Where a board hangs against its superframe: this far along the field
- * past the corner block that ends the light row, and this far to the
- * field side of the superframe's centerline.
- */
-export const DIESEL_BOARD_HANG = { past: 9, inset: 3 } as const;
-
-/**
- * Where the two boards hang: in the corners `frame.VIDEO_BOARDS` names
- * (south-east and north-west, the two with no 600 level), high under the
- * end of a superframe, just past the last block of its light row, at the
- * height `dieselBoardCenterY` gives. Photos 8, 9 and 12 show each board
- * there, under the row's end, over the corner's lower decks; from the
- * front sideline's lower bowl it is huge and seen nearly face on. The
- * superframe's chord stays level over it (`dieselSuperframeBottom`) and
- * the catwalk stops short of it.
+ * Where the two boards hang: where `frame.VIDEO_BOARDS` puts them, in the
+ * south-east and north-west corners (the two with no 600 level), across
+ * the corner over the 500s. Photo 6 shows the south-east one there, past
+ * the end of the light row; from the front sideline's lower bowl it is
+ * huge and seen nearly face on (photos 8, 9 and 12). The superframe's
+ * chord stays level over it (`dieselSuperframeBottom`) and the catwalk
+ * stops short of it.
  */
 export function dieselBoardSpots(frame: DieselFrame): DieselBoardSpot[] {
-    const along =
-        Math.abs(frame.CATWALK_CORNERS[0][0]) + DIESEL_BOARD_HANG.past;
-    const across = frame.ROOF.superframes.z - DIESEL_BOARD_HANG.inset;
-    const y = dieselBoardCenterY(frame);
-    return frame.VIDEO_BOARDS.map(({ id, x, z }) => ({
-        id,
-        x: Math.sign(x) * along,
-        y,
-        z: Math.sign(z) * across,
-    }));
+    return frame.VIDEO_BOARDS.map(({ id, x, y, z }) => ({ id, x, y, z }));
 }
 
 /**

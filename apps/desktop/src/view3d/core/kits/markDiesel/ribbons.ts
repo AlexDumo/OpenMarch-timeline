@@ -69,21 +69,38 @@ export function ringStrip(
     const pos: number[] = [];
     const uv: number[] = [];
     const tiles: number[] = [];
+    /** The point at fractional index `f` (ranges may end between points). */
+    const pointAt = (ring: Ring, f: number) => {
+        const i = Math.floor(f);
+        return ring[i % n].clone().lerp(ring[(i + 1) % n], f - i);
+    };
     for (const [i0, i1] of ranges) {
+        /** The segments' ends: every ring point between `i0` and `i1`. */
+        const fs = [i0];
+        for (let f = Math.floor(i0) + 1; f < i1 - 1e-6; f++)
+            if (f - i0 > 1e-6) fs.push(f);
+        fs.push(i1);
         let length = 0;
-        for (let s = i0; s < i1; s++)
-            length += bottom[s % n].distanceTo(bottom[(s + 1) % n]);
+        for (let k = 0; k + 1 < fs.length; k++)
+            length += pointAt(bottom, fs[k]).distanceTo(
+                pointAt(bottom, fs[k + 1]),
+            );
         const tileLength = length / Math.max(1, Math.round(length / tile));
         tiles.push(tileLength);
         let along = 0;
-        for (let s = i0; s < i1; s++) {
-            const [i, j] = [s % n, (s + 1) % n];
-            const seg = bottom[i].distanceTo(bottom[j]);
+        for (let k = 0; k + 1 < fs.length; k++) {
+            const [fi, fj] = [fs[k], fs[k + 1]];
+            const [p, q, r, t] = [
+                pointAt(bottom, fi),
+                pointAt(bottom, fj),
+                pointAt(top, fj),
+                pointAt(top, fi),
+            ];
+            const seg = p.distanceTo(q);
             // The rings run counterclockwise seen from above: to the left,
             // seen from the field. So U falls along the ring.
             const u0 = -along / tileLength;
             const u1 = -(along + seg) / tileLength;
-            const [p, q, r, t] = [bottom[i], bottom[j], top[j], top[i]];
             for (const [c, u, v] of [
                 [p, u0, 0],
                 [r, u1, 1],
