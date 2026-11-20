@@ -33,11 +33,14 @@ import { useQuery } from "@tanstack/react-query";
 import type { FieldProperties } from "@openmarch/core";
 import {
     ACESFilmicToneMapping,
+    AgXToneMapping,
+    NeutralToneMapping,
     PCFShadowMap,
     PerspectiveCamera,
     SRGBColorSpace,
     Vector3,
     type Camera,
+    type ToneMapping,
     type Vector3Tuple,
 } from "three";
 import { fieldPropertiesQueryOptions } from "@/hooks/queries/useFieldProperties";
@@ -49,12 +52,17 @@ import {
     createEnvironment,
     createEnvironmentMap,
     defaultCrowdPalette,
+    lightingValues,
     type Environment,
+    type LightingValues,
 } from "@/view3d/core/environment";
+import { supportsPostPipeline } from "@/view3d/core/post";
 import { buildFieldSurface, venueFootprint } from "@/view3d/core/field";
 import {
     DEFAULT_CROWD_DENSITY,
     KIT_BUILDERS,
+    KIT_FIELD_ART,
+    KIT_FIELD_TURF,
     KIT_FIELD_STYLE,
 } from "@/view3d/core/kits";
 import type {
@@ -76,6 +84,7 @@ import {
 import Performers from "./performers/Performers";
 import PropBlocks from "./props/PropBlocks";
 import { warmLightingPresets } from "./warmLighting";
+import PostFx, { postSceneTarget } from "./PostFx";
 import { maxPixelRatio } from "./renderPrefs";
 
 /** Default vertical field of view, as in the reference demo. */
@@ -89,6 +98,16 @@ export const CAMERA_NEAR = DEFAULT_NEAR;
  * the viewer prefers reduced motion, so animated parts (the pro roof) snap.
  */
 export const SNAP_DT = 1e4;
+
+/** The tone curve a venue's lighting asks for; ACES unless it says otherwise. */
+const TONE_MAPPING: Record<
+    NonNullable<LightingValues["toneMapping"]>,
+    ToneMapping
+> = {
+    aces: ACESFilmicToneMapping,
+    agx: AgXToneMapping,
+    neutral: NeutralToneMapping,
+};
 
 function prefersReducedMotion(): boolean {
     return (
@@ -271,6 +290,8 @@ function SceneContents({
             fieldProperties,
             theme: fieldProperties.theme,
             style: fieldStyle,
+            centerArt: KIT_FIELD_ART[kitId],
+            turf: KIT_FIELD_TURF[kitId],
             params,
             image,
             maxTextureSize: gl.capabilities.maxTextureSize,
@@ -281,7 +302,7 @@ function SceneContents({
             scene.remove(surface.mesh);
             surface.dispose();
         };
-    }, [scene, gl, fieldProperties, fieldStyle, params, image]);
+    }, [scene, gl, fieldProperties, fieldStyle, kitId, params, image]);
 
     // Crowd: one instanced mesh from the kit's seat rows.
     useEffect(() => {
@@ -290,13 +311,14 @@ function SceneContents({
             density: kit.crowdDensity ?? DEFAULT_CROWD_DENSITY,
             palette: defaultCrowdPalette({ homeColor, awayColor }),
             quality,
+            ...kit.crowd,
         });
         // Seat rows are in kit-root space, so the crowd lives under the root.
-        kit.root.add(crowd.mesh);
+        kit.root.add(crowd.object);
         clearAroundCamera(crowd, kit, camera);
         useView3dSceneStore.getState()._setCrowd(crowd);
         return () => {
-            kit.root.remove(crowd.mesh);
+            kit.root.remove(crowd.object);
             const store = useView3dSceneStore.getState();
             if (store.crowd === crowd) store._setCrowd(null);
             crowd.dispose();
@@ -310,8 +332,9 @@ function SceneContents({
             ? settings.lighting
             : kit.defaultLighting;
         env.setSurroundings(kit.surroundings !== false);
-        env.setLighting(preset, kit.focus);
+        const values = env.setLighting(preset, kit.focus, kit.lightingVenue);
         gl.toneMappingExposure = env.exposure;
+        gl.toneMapping = TONE_MAPPING[values.toneMapping ?? "aces"];
         kit.setLighting(preset);
         // A new kit shows its lighting state at once (the pro roof doesn't
         // slide on load). Later changes animate unless the viewer prefers
@@ -341,11 +364,17 @@ function SceneContents({
             const { kit, lighting } = useView3dSceneStore.getState();
             const environment = envRef.current;
             if (!kit || !environment || !lighting) return;
+            // With the post pass on, the scene draws into its target, and a
+            // material compiles differently for a target than for the canvas.
+            const target = postSceneTarget();
+            const drawingTo = gl.getRenderTarget();
+            if (target) gl.setRenderTarget(target);
             void warmLightingPresets(gl, scene, camera, {
                 env: environment,
                 kit,
                 current: lighting,
             });
+            if (target) gl.setRenderTarget(drawingTo);
             // What it just compiled doesn't start another wait.
             warm.programs = gl.info.programs?.length ?? 0;
         }, WARM_AFTER_MS);
@@ -355,16 +384,28 @@ function SceneContents({
     // Environment map: what brass and glossy surfaces reflect, in the
     // preset's sky (instruments.md §4). Rebuilt for a new preset.
     const appliedLighting = useView3dSceneStore((s) => s.lighting);
+    const lightingVenue = kit?.lightingVenue;
     useEffect(() => {
         if (!appliedLighting || !gl.capabilities.isWebGL2) return;
-        const map = createEnvironmentMap(gl, appliedLighting);
+        const map = createEnvironmentMap(gl, appliedLighting, lightingVenue);
         scene.environment = map.texture;
         scene.environmentIntensity = 0.6;
         return () => {
             if (scene.environment === map.texture) scene.environment = null;
             map.dispose();
         };
-    }, [gl, scene, appliedLighting]);
+    }, [gl, scene, appliedLighting, lightingVenue]);
+
+    // Bloom and lens ghosts, for a venue whose lighting asks for them and
+    // only at high quality (`PostFx.tsx`). Every other venue, and low
+    // quality, draws straight to the canvas as before.
+    const bloom = useMemo(
+        () =>
+            quality === "high" && appliedLighting && supportsPostPipeline(gl)
+                ? lightingValues(appliedLighting, lightingVenue).bloom
+                : undefined,
+        [gl, quality, appliedLighting, lightingVenue],
+    );
 
     // Clear the store when the scene goes away.
     useEffect(
@@ -397,7 +438,12 @@ function SceneContents({
 
     const cameraTuple = useRef<Vector3Tuple>([0, 0, 0]);
     useFrame((state, dt) => {
-        const current = useView3dSceneStore.getState().kit;
+        const { kit: current, crowd } = useView3dSceneStore.getState();
+        // The crowd's full figures follow the camera (kit-root frame).
+        if (current && crowd) {
+            current.root.worldToLocal(scratch.copy(state.camera.position));
+            crowd.follow([scratch.x, scratch.y, scratch.z]);
+        }
         if (!current?.onFrame) return;
         const p = state.camera.position;
         const tuple = cameraTuple.current;
@@ -413,6 +459,7 @@ function SceneContents({
 
     return (
         <>
+            {bloom && <PostFx settings={bloom} />}
             <Performers fieldProperties={fieldProperties} />
             <PropBlocks fieldProperties={fieldProperties} />
         </>
