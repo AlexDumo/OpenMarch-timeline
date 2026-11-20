@@ -1,3 +1,4 @@
+// cspell:ignore Panini hfov
 /**
  * Shared contracts for 3D View (ADR 0010). Everything under `view3d/core/` is
  * framework-free: no React, React Three Fiber, drei, Electron or database
@@ -16,6 +17,7 @@ export type VenueKitId =
     | "bighs"
     | "college"
     | "pro"
+    | "markDiesel"
     | "gym"
     | "arena"
     | "blank";
@@ -85,6 +87,14 @@ export interface CameraSeat {
     target: Vector3Tuple;
     /** Vertical field of view; defaults to the window's. */
     fovDeg?: number;
+    /**
+     * How far a person here can usefully turn their head in Seat view, in
+     * degrees: `yawDeg` either way from the facing, `downDeg` and `upDeg`
+     * from level. Each defaults to the window's (100, 60, 45). An enclosed
+     * seat, such as a press box, declares less, so a turn stops before the
+     * view is the booth's own walls and ceiling.
+     */
+    look?: { yawDeg?: number; downDeg?: number; upDeg?: number };
 }
 
 /**
@@ -98,6 +108,50 @@ export interface SeatRow {
     depth: number;
     /** Home side, away side or neutral; picks crowd colors. */
     side: "home" | "away" | "neutral";
+    /**
+     * Share of this row's people who stand, 0 to 1, in place of the crowd's
+     * own `standing` (a deck people stand on rather than seats).
+     * "people" only.
+     */
+    standing?: number;
+}
+
+/**
+ * How a kit wants its crowd drawn (`KitResult.crowd`). The scene passes these
+ * to `buildCrowd` with the seat rows. Positions are in the seat rows' own
+ * (kit-root) space.
+ */
+export interface KitCrowdOptions {
+    /**
+     * "blocks": the shared block crowd, with a fill light of its own.
+     * "people": torso-and-head figures lit only by the scene, so they go
+     * dark with the venue; full figures around the camera and cards
+     * further out, so a full house stays cheap. Default "blocks".
+     */
+    style?: "blocks" | "people";
+    /** Distance between neighbors along a row, meters. Default 0.64. */
+    spacing?: number;
+    /**
+     * How full the seat at a point is, 0 to 1; multiplies the density. Lets
+     * a kit fill one stand and leave another nearly empty.
+     */
+    fill?(x: number, y: number, z: number): number;
+    /**
+     * The light that reaches the seat at a point, 0 to 1 (the kit's baked
+     * spill); multiplies the person's colors. "people" only.
+     */
+    shade?(x: number, y: number, z: number): number;
+    /** Fraction of people standing, 0 to 1. "people" only. Default 0. */
+    standing?: number;
+    /** Clothing colors (hex) for every row, instead of the team palette. */
+    clothes?: number[];
+    /**
+     * The most the scene clears around a camera in a seat, meters. Figures
+     * that hold up at arm's length can stay closer than the blocks do.
+     */
+    clearRadius?: number;
+    /** People between aisles along a row, for rows already split at aisles. */
+    aisleEvery?: number;
 }
 
 export interface KitBuildInput {
@@ -133,6 +187,15 @@ export interface KitResult {
      * and recolor it without rebuilding the kit. Defaults to 0.6.
      */
     crowdDensity?: number;
+    /** Kit-level crowd options (style, fill, shade); see `KitCrowdOptions`. */
+    crowd?: KitCrowdOptions;
+    /**
+     * Seat view's lens in this venue, in place of the window's defaults
+     * (`SEAT_VIEW_DEFAULTS`): the widest horizontal field of view in
+     * degrees, and the Panini `d` and `s`. For a room much bigger or smaller
+     * than the usual stadium.
+     */
+    seatView?: { hfovDeg?: number; d?: number; s?: number };
     /**
      * Whether the shared land and horizon (fields, woods, a town) surround
      * the venue at high quality. Defaults to true; the blank venue stays bare.
@@ -140,6 +203,13 @@ export interface KitResult {
     surroundings?: boolean;
     lightingPresets: LightingPreset[];
     defaultLighting: LightingPreset;
+    /**
+     * The key of this kit's own lighting values (`lightingValues(preset,
+     * venue)`), for a kit whose hall is lit unlike the shared presets. The
+     * scene passes it to the environment and its environment map. Absent for
+     * kits that use the shared values.
+     */
+    lightingVenue?: string;
     /** Applies a preset; ignores ones not in `lightingPresets`. */
     setLighting(preset: LightingPreset): void;
     /**

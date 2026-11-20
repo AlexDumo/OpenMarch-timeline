@@ -337,3 +337,90 @@ export function openingCamera(
 export function cameraIndexForKey(key: string): number | null {
     return /^[1-9]$/.test(key) ? Number(key) - 1 : null;
 }
+
+/**
+ * Seat view (ui.md UI-3): at a person's seat, a drag turns the head about
+ * the eye instead of moving the camera. The yaw is measured from the way
+ * the seat faces (its target); the pitch from level, so a press box that
+ * looks down still stops at the same place on the floor and the roof.
+ */
+/** How far the head turns either way from the seat's facing, in radians (100°). */
+export const LOOK_YAW_LIMIT = (100 * Math.PI) / 180;
+/** The lowest look, below level, in radians (60°). */
+export const LOOK_PITCH_MIN = (-60 * Math.PI) / 180;
+/** The highest look, above level, in radians (45°). */
+export const LOOK_PITCH_MAX = (45 * Math.PI) / 180;
+/** A head turn eases toward where the drag put it with this half-life (ms). */
+export const LOOK_HALF_LIFE_MS = 40;
+/** Seat view's narrowest zoom (horizontal field of view, degrees). */
+export const SEAT_ZOOM_MIN_DEG = 30;
+
+/** Which way a seat faces: the azimuth (from +Z toward +X) and pitch (up from level) from `eye` to `target`. */
+export function lookAngles(
+    eye: Vector3Tuple,
+    target: Vector3Tuple,
+): { azimuth: number; pitch: number } {
+    const dx = target[0] - eye[0];
+    const dy = target[1] - eye[1];
+    const dz = target[2] - eye[2];
+    return {
+        azimuth: Math.atan2(dx, dz),
+        pitch: Math.atan2(dy, Math.hypot(dx, dz)),
+    };
+}
+
+/** The unit direction for an azimuth and pitch (see `lookAngles`). */
+export function lookDirection(azimuth: number, pitch: number): Vector3Tuple {
+    const c = Math.cos(pitch);
+    return [c * Math.sin(azimuth), Math.sin(pitch), c * Math.cos(azimuth)];
+}
+
+/** How far the head may turn at one seat, in radians (see `clampLook`). */
+export interface LookLimits {
+    /** Either way from the seat's facing. */
+    yaw: number;
+    /** The lowest look, below level (negative). */
+    pitchMin: number;
+    /** The highest look, above level. */
+    pitchMax: number;
+}
+
+/** The limits at a seat that declares none: an open seat in the stands. */
+export const DEFAULT_LOOK_LIMITS: Readonly<LookLimits> = {
+    yaw: LOOK_YAW_LIMIT,
+    pitchMin: LOOK_PITCH_MIN,
+    pitchMax: LOOK_PITCH_MAX,
+};
+
+/**
+ * The limits a camera declares (`CameraSeat.look`, degrees), with the
+ * defaults for what it leaves out. Never wider than the defaults.
+ */
+export function lookLimits(look?: CameraSeat["look"]): LookLimits {
+    const rad = (deg: number | undefined, fallback: number) =>
+        deg === undefined
+            ? fallback
+            : Math.min(fallback, Math.max(0, (deg * Math.PI) / 180));
+    return {
+        yaw: rad(look?.yawDeg, LOOK_YAW_LIMIT),
+        pitchMin: -rad(look?.downDeg, -LOOK_PITCH_MIN),
+        pitchMax: rad(look?.upDeg, LOOK_PITCH_MAX),
+    };
+}
+
+/** A head turn within the limits: `yaw` from the seat's facing, `pitch` from level. */
+export function clampLook(
+    yaw: number,
+    pitch: number,
+    limits: Readonly<LookLimits> = DEFAULT_LOOK_LIMITS,
+): { yaw: number; pitch: number } {
+    return {
+        yaw: Math.min(limits.yaw, Math.max(-limits.yaw, yaw)),
+        pitch: Math.min(limits.pitchMax, Math.max(limits.pitchMin, pitch)),
+    };
+}
+
+/** True for cameras where a person sits or stands (seat view applies there). */
+export function isPersonSeat(seat: Pick<CameraSeat, "kind">): boolean {
+    return seat.kind === "seat" || seat.kind === "floor";
+}

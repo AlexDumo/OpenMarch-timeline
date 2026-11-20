@@ -3308,10 +3308,12 @@
         "camera": {
             "blimp": "Blimp",
             "corner": "Corner",
+            "directors": "Directors' area",
             "endZone": "End zone",
             "floor": "On the floor",
             "frontRow": "Front row",
             "geJudge": "GE judge",
+            "judges": "Judges' level",
             "judgesTable": "Judges' table",
             "lowerBowl": "Lower bowl",
             "podium": "Podium",
@@ -3328,6 +3330,7 @@
             "college": "College bowl",
             "gym": "Indoor gym",
             "hs": "High school",
+            "markDiesel": "Mark Diesel Stadium",
             "pro": "Pro dome"
         },
         "lighting": {
@@ -3350,6 +3353,7 @@
             "venue": "Venue",
             "freeCamera": "Free view",
             "director": "Director",
+            "seatView": "Seat view",
             "followPerformer": "Follow a performer",
             "followPerformerTooltip": "Follow a performer: click a performer to follow them",
             "following": "Following {name}",
@@ -3427,6 +3431,8 @@
             "pan": "Pan, or drag with the right mouse button",
             "zoom": "Zoom",
             "pausedPose": "Paused: show the actual step or the closed position",
+            "lookAround": "In Seat view: look around from the seat",
+            "seatZoom": "In Seat view: narrow or widen what you see",
             "followPerformer": "Pick a performer to follow",
             "pointOfView": "Following: switch to their point of view and back"
         },

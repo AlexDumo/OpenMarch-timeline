@@ -2,10 +2,14 @@
 import { describe, expect, it } from "vitest";
 import {
     RESOLUTION_STORAGE_KEY,
+    SEAT_VIEW_STORAGE_KEY,
     loadResolution,
+    loadSeatView,
     maxPixelRatio,
     parseResolution,
+    parseSeatView,
     saveResolution,
+    saveSeatView,
 } from "../renderPrefs";
 
 function memoryStorage(): Storage {
@@ -51,5 +55,26 @@ describe("resolution", () => {
         expect(maxPixelRatio("sharp")).toBe(2);
         expect(maxPixelRatio("balanced")).toBe(1.5);
         expect(maxPixelRatio("fast")).toBe(1);
+    });
+});
+
+describe("seat view", () => {
+    it("is on unless it was turned off", () => {
+        expect(parseSeatView(null)).toBe(true);
+        expect(parseSeatView("on")).toBe(true);
+        expect(parseSeatView("maybe")).toBe(true);
+        expect(parseSeatView("off")).toBe(false);
+        expect(loadSeatView(memoryStorage())).toBe(true);
+        expect(loadSeatView(broken)).toBe(true);
+    });
+
+    it("round-trips a saved choice", () => {
+        const storage = memoryStorage();
+        saveSeatView(false, storage);
+        expect(storage.getItem(SEAT_VIEW_STORAGE_KEY)).toBe("off");
+        expect(loadSeatView(storage)).toBe(false);
+        saveSeatView(true, storage);
+        expect(loadSeatView(storage)).toBe(true);
+        expect(() => saveSeatView(false, broken)).not.toThrow();
     });
 });
