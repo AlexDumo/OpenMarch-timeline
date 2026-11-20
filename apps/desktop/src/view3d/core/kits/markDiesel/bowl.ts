@@ -169,6 +169,13 @@ export const DIESEL_SEAT_CLEAR = 1;
 /** Seat height above the tread: where a person's hips are. */
 const SEAT_HEIGHT = 0.41;
 /**
+ * A person's hips sit this far in front of the back of their tread: on the
+ * seat's pan, back against its back (`profile` in `addTier`). That leaves
+ * their knees and shins (about 0.48 m ahead of the hips) on the tread,
+ * behind the row's front edge; in the first row that edge is the field wall.
+ */
+const SEAT_SETBACK = 0.3;
+/**
  * Wheelchair platforms at the top of the 100s on the front sideline: a
  * flat deck at the cross-aisle's level in place of rows `firstRow` to
  * `lastRow` (the last rows), a section wide, with a rail at its front.
@@ -872,7 +879,7 @@ export function buildDieselBowl(ctx: DieselCtx): DieselBowl {
             const light = spill(o + t.depth / 2, h);
             const front = ring(o, h);
             const back = ring(o + t.depth, h);
-            const seatLine = ring(o + t.depth * 0.5, h + SEAT_HEIGHT);
+            const seatLine = ring(o + t.depth - SEAT_SETBACK, h + SEAT_HEIGHT);
             const below = new Map<number, Ring>();
             // A seat: its back leans away from the field, and the folded pan
             // stands in front of the back's lower half.

@@ -7,6 +7,7 @@ import {
     Matrix4,
     Mesh,
     MeshStandardMaterial,
+    Quaternion,
     Raycaster,
     Vector3,
     type Object3D,
@@ -22,6 +23,7 @@ import {
     CROWD_NEAR,
     PERSON_SPACING,
     setTexturePainting,
+    STANDING_LIFT,
     type Crowd,
 } from "../../environment";
 import { outlineOffset } from "../bowl";
@@ -565,6 +567,119 @@ describe("Mark Diesel section numbers", () => {
 });
 
 describe("Mark Diesel crowd", () => {
+    it.each(["high", "low"] as const)(
+        "keeps everyone on their tread and behind the field wall (%s)",
+        (quality) => {
+            const kit = build(quality);
+            const crowd = crowdOf(kit, quality);
+            const treads = named(kit.root, "markDiesel.treads");
+            // The field wall's face, as a closed line round the field.
+            const wall = dieselRings(f).ring(0, 0);
+            const n = wall.length;
+            /** Meters behind the wall's face (negative: on the field side). */
+            const behindWall = (x: number, z: number) => {
+                let best = Infinity;
+                let side = 0;
+                for (let i = 0; i < n; i++) {
+                    const a = wall[i];
+                    const b = wall[(i + 1) % n];
+                    const ex = b.x - a.x;
+                    const ez = b.z - a.z;
+                    const t = Math.min(
+                        1,
+                        Math.max(
+                            0,
+                            ((x - a.x) * ex + (z - a.z) * ez) /
+                                (ex * ex + ez * ez),
+                        ),
+                    );
+                    const d = Math.hypot(x - a.x - ex * t, z - a.z - ez * t);
+                    if (d < best) {
+                        best = d;
+                        side = Math.sign(ex * (z - a.z) - ez * (x - a.x));
+                    }
+                }
+                return best * side;
+            };
+            const outward = Math.sign(behindWall(0, BOWL.halfZ + 100));
+
+            // The full figure, and the card's foot: both keep the seat's
+            // size whatever the person's build (the shaders divide the
+            // instance's scale back out below the hips).
+            const figure = crowdPersonGeometry(quality);
+            cleanup.push(() => figure.dispose());
+            const at = figure.getAttribute("position");
+            const part = figure.getAttribute("aPart");
+            const cardReach = Math.max(
+                ...Array.from(
+                    crowdCardGeometry().getAttribute("position").array,
+                ).filter((_, k) => k % 3 === 0),
+            );
+            const look = crowd.mesh.geometry.getAttribute("aLook");
+            const m = new Matrix4();
+            const fit = new Matrix4();
+            const seat = new Vector3();
+            const turn = new Quaternion();
+            const size = new Vector3();
+            const v = new Vector3();
+            const one = new Vector3(1, 1, 1);
+            let nearWall = 0;
+            let onTread = 0;
+            for (let i = 0; i < crowd.count; i++) {
+                crowd.mesh.getMatrixAt(i, m);
+                m.decompose(seat, turn, size);
+                fit.compose(seat, turn, one);
+                const standing = look.getY(i) === 1;
+                // Each kit seat is 0.41 m over its tread (the hips).
+                let tread = seat.y - 0.41 - (standing ? STANDING_LIFT : 0);
+                if (seat.y < 4) {
+                    const hit = new Raycaster(
+                        seat,
+                        new Vector3(0, -1, 0),
+                        0,
+                        2,
+                    ).intersectObject(treads, false)[0];
+                    if (hit) {
+                        tread = hit.point.y;
+                        onTread++;
+                    }
+                }
+                const hips =
+                    outward *
+                    behindWall(seat.x - f.CENTER.x, seat.z - f.CENTER.z);
+                if (hips > 2) {
+                    // Far from the wall: only the feet.
+                    for (let k = 0; k < at.count; k++) {
+                        const p = part.getX(k);
+                        if (p !== (standing ? 3 : 2)) continue;
+                        v.fromBufferAttribute(at, k).applyMatrix4(fit);
+                        expect(v.y).toBeGreaterThan(tread - 1e-3);
+                    }
+                    continue;
+                }
+                nearWall++;
+                const where = `person ${i} at ${seat.toArray().map((c) => c.toFixed(2))}`;
+                // A card turned side on reaches its knees out this far.
+                expect(hips, where).toBeGreaterThanOrEqual(cardReach);
+                for (let k = 0; k < at.count; k++) {
+                    const p = part.getX(k);
+                    // Seated people have no legs, standing people no lap.
+                    if (p === (standing ? 2 : 3)) continue;
+                    const lower = p === 2 || p === 3;
+                    v.fromBufferAttribute(at, k).applyMatrix4(lower ? fit : m);
+                    const behind =
+                        outward *
+                        behindWall(v.x - f.CENTER.x, v.z - f.CENTER.z);
+                    expect(behind, where).toBeGreaterThanOrEqual(0);
+                    if (lower) expect(v.y, where).toBeGreaterThan(tread - 1e-3);
+                }
+            }
+            // The first rows all round, the north stand's and the patio's.
+            expect(nearWall).toBeGreaterThan(quality === "high" ? 300 : 150);
+            expect(onTread).toBeGreaterThan(quality === "high" ? 300 : 150);
+        },
+    );
+
     it("asks for people, seated at the seats' pitch, lit by the venue", () => {
         const kit = build();
         expect(kit.crowd?.style).toBe("people");
