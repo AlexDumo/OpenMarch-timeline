@@ -1,8 +1,8 @@
 // cspell:ignore raycaster Panini hfov
 /**
- * What the picture's lens is right now, shared by the seat view pass
- * (`../SeatView.tsx`), which draws with it, and the camera rig, which turns
- * pointer positions into rays with it.
+ * What the picture's lens is right now, shared by seat view
+ * (`../SeatView.tsx`), which draws with it through the post pipeline, and
+ * the camera rig, which turns pointer positions into rays with it.
  *
  * In seat view the canvas isn't the camera's own projection: it is the
  * Panini remap of a wider source (`core/post/panini.ts`). A ray from
@@ -18,12 +18,12 @@ import {
     sourceToScreen,
     type PaniniFrame,
 } from "@/view3d/core/post/panini";
-import { SEAT_VIEW_DEFAULTS } from "@/view3d/core/post/seatViewPass";
+import { SEAT_VIEW_DEFAULTS } from "@/view3d/core/post/seatViewSource";
 
 export const seatLens = {
     /**
      * The lens and extents of the last frame drawn, or null while the
-     * canvas shows the camera's own projection. The pass sets it.
+     * canvas shows the camera's own projection. Seat view sets it.
      */
     frame: null as PaniniFrame | null,
     /**

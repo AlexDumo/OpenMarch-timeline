@@ -12,6 +12,8 @@ import { PerspectiveCamera, type Camera, type Vector3Tuple } from "three";
 import {
     clampLook,
     clampRadius,
+    DEFAULT_LOOK_LIMITS,
+    type LookLimits,
     FLY_MS,
     lookAngles,
     lookDirection,
@@ -35,7 +37,7 @@ import {
     type Tween,
 } from "./rigMath";
 import { damp, targetOnGround, zoomAbout, zoomRatioLimits } from "./inputMath";
-import { SEAT_VIEW_DEFAULTS } from "@/view3d/core/post/seatViewPass";
+import { SEAT_VIEW_DEFAULTS } from "@/view3d/core/post/seatViewSource";
 
 /** A wheel zoom eases in with this half-life (ms): quick, but not a jump. */
 export const ZOOM_HALF_LIFE_MS = 45;
@@ -73,6 +75,18 @@ interface Head {
     /** Seat view's horizontal field of view, degrees. */
     fov: number;
     goalFov: number;
+    /** Seat view's widest field of view here (degrees): where it starts, and the most a zoom out reaches. */
+    widest: number;
+    /** How far the head turns at this seat. */
+    limits: LookLimits;
+}
+
+/** What a seat brings with it (`sit`). */
+export interface SitOptions {
+    /** Seat view's widest field of view in this venue, degrees. Defaults to `SEAT_VIEW_DEFAULTS.hfovDeg`. */
+    widestDeg?: number;
+    /** How far the head may turn here. Defaults to `DEFAULT_LOOK_LIMITS`. */
+    limits?: LookLimits;
 }
 
 interface ActiveTween {
@@ -122,12 +136,13 @@ export class RigController {
      * Sits at `eye` facing `target`: the head starts looking there, at seat
      * view's widest field of view. Ends any fly-to.
      */
-    sit(eye: Vector3Tuple, target: Vector3Tuple) {
+    sit(eye: Vector3Tuple, target: Vector3Tuple, options: SitOptions = {}) {
         this.active = null;
         this.stopMotion();
+        const limits = options.limits ?? DEFAULT_LOOK_LIMITS;
         const { azimuth, pitch } = lookAngles(eye, target);
-        const start = clampLook(0, pitch).pitch;
-        const fov = SEAT_VIEW_DEFAULTS.hfovDeg;
+        const start = clampLook(0, pitch, limits).pitch;
+        const fov = options.widestDeg ?? SEAT_VIEW_DEFAULTS.hfovDeg;
         this.head = {
             eye: [...eye],
             facing: azimuth,
@@ -145,6 +160,8 @@ export class RigController {
             goalPitch: start,
             fov,
             goalFov: fov,
+            widest: fov,
+            limits: { ...limits },
         };
         this.apply();
     }
@@ -157,7 +174,11 @@ export class RigController {
     lookBy(dYaw: number, dPitch: number): boolean {
         const h = this.head;
         if (!h || this.active) return false;
-        const next = clampLook(h.goalYaw + dYaw, h.goalPitch + dPitch);
+        const next = clampLook(
+            h.goalYaw + dYaw,
+            h.goalPitch + dPitch,
+            h.limits,
+        );
         h.goalYaw = next.yaw;
         h.goalPitch = next.pitch;
         return true;
@@ -176,7 +197,7 @@ export class RigController {
             Math.sin(azimuth - h.facing),
             Math.cos(azimuth - h.facing),
         );
-        const next = clampLook(yaw, pitch);
+        const next = clampLook(yaw, pitch, h.limits);
         h.goalYaw = next.yaw;
         h.goalPitch = next.pitch;
         return true;
@@ -191,7 +212,7 @@ export class RigController {
         const h = this.head;
         if (!h || this.active) return false;
         h.goalFov = Math.min(
-            SEAT_VIEW_DEFAULTS.hfovDeg,
+            h.widest,
             Math.max(SEAT_ZOOM_MIN_DEG, h.goalFov * ratio),
         );
         return true;

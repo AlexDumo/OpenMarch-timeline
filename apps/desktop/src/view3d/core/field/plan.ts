@@ -94,6 +94,12 @@ export interface PlanText {
     leadingMark?: boolean;
     /** Painted behind the text (and mark) as a drop shadow and outline. */
     shadow?: string;
+    /**
+     * Paints digits as a football field's block numerals (`blockDigits.ts`),
+     * `height` tall and two thirds as wide, instead of in the font. Text with
+     * other characters falls back to the font.
+     */
+    block?: boolean;
 }
 
 export interface PlanArrow {
@@ -142,6 +148,34 @@ export interface PlanLogo {
  * Diagonal bands across a rectangle, like the stripes painted in college end
  * zones. Bands are `width` meters wide every `spacing` meters, at 45 degrees.
  */
+/**
+ * Artwork a venue paints at midfield in place of the OpenMarch logo, such as
+ * its own roundel. The venue owns the art; the plan only sizes and places it.
+ */
+export interface FieldCenterArt {
+    /** Width over height of the artwork's box. */
+    aspect: number;
+    /** Widest it is painted, in meters; it also has to fit between the hashes. */
+    maxWidth: number;
+    /**
+     * Paints the artwork into a `w` x `h` pixel box whose top-left corner is
+     * the origin and whose top faces the back sideline.
+     */
+    paint(g: CanvasRenderingContext2D, w: number, h: number): void;
+}
+
+/** A venue's own midfield artwork (`FieldCenterArt`), centered on (x, z). */
+export interface PlanArt {
+    type: "art";
+    role: "centerLogo";
+    x: number;
+    z: number;
+    /** Size of the artwork's box in meters. */
+    width: number;
+    height: number;
+    art: FieldCenterArt;
+}
+
 export interface PlanHatch {
     type: "hatch";
     role: "endZoneHatch";
@@ -177,6 +211,12 @@ export interface PlanGrain {
     seed: number;
     /** Overall opacity of the noise, 0 to 1. */
     strength: number;
+    /**
+     * `grass` (default): blade speckle and soft growth blotches. `synthetic`:
+     * fine rubber-crumb speckle and fiber streaks across the field, with
+     * only a trace of large-scale wear.
+     */
+    surface?: TurfSurface;
 }
 
 /** The generated tarp's background artwork (gradient, glow and arcs). */
@@ -192,6 +232,7 @@ export type PlanItem =
     | PlanImage
     | PlanTarpArt
     | PlanLogo
+    | PlanArt
     | PlanHatch
     | PlanFade
     | PlanGrain;
@@ -208,6 +249,27 @@ export interface ImageSize {
     height: number;
 }
 
+/**
+ * A venue's grass, for the `turf` style: the base green and the two mowing
+ * stripes, sRGB hex strings. Paint (lines, numbers, logos) is not part of
+ * it, so whites stay white.
+ */
+export interface TurfColors {
+    base: string;
+    stripeDark: string;
+    stripeLight: string;
+    /**
+     * What the grass is. `synthetic` (FieldTurf-style) paints crumb and fiber
+     * grain instead of growth blotches, and the surface shades each 5-yard
+     * roll by its fibers' lay against the view (`turfSheen.ts`). Defaults to
+     * `grass`, the shared turf's look.
+     */
+    surface?: TurfSurface;
+}
+
+/** Natural grass, or synthetic turf laid in 5-yard rolls. */
+export type TurfSurface = "grass" | "synthetic";
+
 export interface PlanInput {
     fieldProperties: FieldProperties;
     theme: FieldTheme;
@@ -215,6 +277,10 @@ export interface PlanInput {
     params: VenueParams;
     /** Turf end-zone paint; defaults to `solid`. */
     endZoneStyle?: EndZoneStyle;
+    /** The venue's own midfield artwork; turf paints the OpenMarch logo without it. */
+    centerArt?: FieldCenterArt;
+    /** The venue's own grass colors; turf paints the shared ones without it. */
+    turf?: TurfColors;
     /** The field background image's size, or null when there is none. */
     image: ImageSize | null;
 }

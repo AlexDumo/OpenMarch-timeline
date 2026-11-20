@@ -1,4 +1,5 @@
-import type { FieldSurfaceStyle } from "../field";
+import type { FieldCenterArt, FieldSurfaceStyle, TurfColors } from "../field";
+import { DIESEL_TURF } from "./markDiesel/turf";
 import type { KitBuilder, VenueKitId } from "../types";
 import { buildArena } from "./arena";
 import { buildBighs } from "./bighs";
@@ -6,6 +7,8 @@ import { buildBlank } from "./blank";
 import { buildCollege } from "./college";
 import { buildGym } from "./gym";
 import { buildHs } from "./hs";
+import { buildMarkDiesel } from "./markDiesel";
+import { dieselFieldArt } from "./markDiesel/brand";
 import { buildProKit } from "./pro";
 
 /**
@@ -17,6 +20,7 @@ export const KIT_BUILDERS: Readonly<Record<VenueKitId, KitBuilder>> = {
     bighs: buildBighs,
     college: buildCollege,
     pro: buildProKit,
+    markDiesel: buildMarkDiesel,
     gym: buildGym,
     arena: buildArena,
     blank: buildBlank,
@@ -33,10 +37,26 @@ export const KIT_FIELD_STYLE: Readonly<Record<VenueKitId, FieldSurfaceStyle>> =
         bighs: "turf",
         college: "turf",
         pro: "turf",
+        markDiesel: "turf",
         gym: "tarp",
         arena: "tarp",
         blank: "theme",
     };
+
+/**
+ * Midfield art a kit paints in place of the OpenMarch logo
+ * (`FieldSurfaceInput.centerArt`).
+ */
+export const KIT_FIELD_ART: Readonly<
+    Partial<Record<VenueKitId, FieldCenterArt>>
+> = { markDiesel: dieselFieldArt };
+
+/**
+ * Grass colors a kit paints in place of the shared turf's
+ * (`FieldSurfaceInput.turf`). Kits without an entry are unchanged.
+ */
+export const KIT_FIELD_TURF: Readonly<Partial<Record<VenueKitId, TurfColors>>> =
+    { markDiesel: DIESEL_TURF };
 
 /** Crowd density used when a kit doesn't suggest one (`KitResult`). */
 export const DEFAULT_CROWD_DENSITY = 0.6;

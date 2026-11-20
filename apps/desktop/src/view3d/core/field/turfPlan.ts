@@ -27,8 +27,11 @@ export const TURF = {
 
 /** Five yards in meters: the mowing-stripe width. */
 export const FIVE_YARDS = 4.572;
-/** Line widths and mark sizes in meters (from the reference demo). */
-const LINE = 0.12;
+/**
+ * Line widths and mark sizes in meters. Lines and hashes are 4 inches wide
+ * and hashes 2 feet long (NFL, NCAA and high school rules alike).
+ */
+const LINE = 0.1016;
 const BORDER = 0.3;
 const MARK = 0.61;
 /** End zones are at least this deep; a 5-yard gap never is. */
@@ -48,7 +51,8 @@ export function planTurf(ctx: PlanContext): void {
     const xs = sortedVisibleX(ctx);
     const play = playingRegion(ctx, xs);
 
-    pushRect(ctx, "background", TURF.base, f.minX, f.minZ, f.maxX, f.maxZ);
+    const grass = ctx.turf ?? TURF;
+    pushRect(ctx, "background", grass.base, f.minX, f.minZ, f.maxX, f.maxZ);
     planStripes(ctx, play.minX, play.maxX);
     planEndZones(ctx, play);
     for (const xc of xs)
@@ -60,7 +64,13 @@ export function planTurf(ctx: PlanContext): void {
     planHashesAndTicks(ctx, xs, play);
     planTurfNumbers(ctx);
     pushBorder(ctx, TURF.paint, BORDER);
-    ctx.items.push({ type: "grain", role: "grain", seed: 7, strength: 1 });
+    ctx.items.push({
+        type: "grain",
+        role: "grain",
+        seed: 7,
+        strength: 1,
+        surface: ctx.turf?.surface ?? "grass",
+    });
 }
 
 interface PlayingRegion {
@@ -103,7 +113,8 @@ function planStripes(ctx: PlanContext, minX: number, maxX: number): void {
     const f = ctx.footprint;
     const first = Math.floor(minX / FIVE_YARDS + 1e-9);
     for (let k = first; k * FIVE_YARDS < maxX - 1e-9; k++) {
-        const color = k % 2 === 0 ? TURF.stripeLight : TURF.stripeDark;
+        const grass = ctx.turf ?? TURF;
+        const color = k % 2 === 0 ? grass.stripeLight : grass.stripeDark;
         const x0 = Math.max(minX, k * FIVE_YARDS);
         const x1 = Math.min(maxX, (k + 1) * FIVE_YARDS);
         pushRect(ctx, "stripe", color, x0, f.minZ, x1, f.maxZ);
@@ -146,26 +157,36 @@ const LOGO_MAX_WIDTH = 4 * FIVE_YARDS;
 const LOGO_MIN_WIDTH = FIVE_YARDS;
 
 /**
- * The OpenMarch logo, in white paint, at the middle of the center line, reading from the
- * front sideline, as large as fits inside the hash rows nearest the middle
- * (or in the middle third of a field without hashes). Skipped on fields too small to
- * hold it.
+ * The OpenMarch logo, in white paint (or the venue's own `centerArt`), at
+ * the middle of the center line, reading from the front sideline. It is the
+ * same size on every field: as large as fits in the middle third of the
+ * width, which is between the hashes on a high school field. On fields with
+ * narrower hashes (college, pro) the hash marks run under it. Skipped on
+ * fields too small to hold it.
  */
 function planCenterLogo(ctx: PlanContext, play: PlayingRegion): void {
     const f = ctx.footprint;
     const midZ = (f.minZ + f.maxZ) / 2;
-    const hashZs = ctx.fieldProperties.useHashes
-        ? realHashes(ctx).map((c) => checkpointWorld(ctx, c))
-        : [];
-    const back = Math.max(f.minZ, ...hashZs.filter((z) => z < midZ - 1e-6));
-    const front = Math.min(f.maxZ, ...hashZs.filter((z) => z > midZ + 1e-6));
-    const room = hashZs.length
-        ? 2 * Math.min(midZ - back, front - midZ) - 2 * MARK
-        : (f.maxZ - f.minZ) / 3;
-    const aspect = OPENMARCH_LOGO.width / OPENMARCH_LOGO.height;
-    const width = Math.min(LOGO_MAX_WIDTH, room * aspect);
+    const room = (f.maxZ - f.minZ) / 3 - 2 * MARK;
+    const art = ctx.centerArt;
+    const aspect = art
+        ? art.aspect
+        : OPENMARCH_LOGO.width / OPENMARCH_LOGO.height;
+    const width = Math.min(art?.maxWidth ?? LOGO_MAX_WIDTH, room * aspect);
     if (width < LOGO_MIN_WIDTH) return;
     if (play.minX > -width || play.maxX < width) return;
+    if (art) {
+        ctx.items.push({
+            type: "art",
+            role: "centerLogo",
+            x: 0,
+            z: midZ,
+            width,
+            height: width / aspect,
+            art,
+        });
+        return;
+    }
     ctx.items.push({
         type: "logo",
         role: "centerLogo",
@@ -348,6 +369,23 @@ function planTurfNumbers(ctx: PlanContext): void {
     }
 }
 
+/**
+ * Yard-number proportions as shares of the number's height (6 ft on every
+ * template): each digit is 4 ft wide, its inner edge 6 in from the yard line.
+ * The direction arrow is a triangle with an 18 in base and 36 in sides (NCAA
+ * Rule 1-2-1-i; NFL fields paint the same), its base 6 in outside the outer
+ * digit, its axis a little toward the sideline of the number's middle, as
+ * the reference photos show.
+ */
+const DIGIT_WIDTH = 2 / 3;
+const DIGIT_GAP = 1 / 12;
+const ARROW_BASE = 0.25;
+/** Its 36 in sides are half the number's height. */
+const ARROW_SIDE = 1 / 2;
+const ARROW_LENGTH = Math.sqrt(ARROW_SIDE ** 2 - (ARROW_BASE / 2) ** 2);
+const ARROW_GAP = 1 / 12;
+const ARROW_AXIS = 0.6;
+
 function planNumber(
     ctx: PlanContext,
     label: string,
@@ -360,7 +398,8 @@ function planNumber(
     // Reading from the back flips left and right.
     const reading = rotation === 0 ? 1 : -1;
     const chars = label.length === 2 ? [...label] : [label];
-    const offset = chars.length === 2 ? h / 2 : 0;
+    const w = h * DIGIT_WIDTH;
+    const offset = chars.length === 2 ? h * DIGIT_GAP + w / 2 : 0;
     chars.forEach((text, i) =>
         ctx.items.push({
             type: "text",
@@ -372,19 +411,23 @@ function planNumber(
             rotation,
             color: TURF.paint,
             weight: 600,
+            block: true,
         }),
     );
     if (Math.abs(x) < 1e-6) return;
     const dir = x < 0 ? -1 : 1;
     const towardOutside = Math.sign(band.outside - band.inside);
+    // The digits' outer edge: past the one digit, or the outer of two.
+    const edge = chars.length === 2 ? offset + w / 2 : w / 2;
+    const length = h * ARROW_LENGTH;
     ctx.items.push({
         type: "arrow",
         role: "arrow",
-        x: x + dir * (offset + h * 0.95),
-        z: band.inside + towardOutside * h * 0.25,
+        x: x + dir * (edge + h * ARROW_GAP + length / 2),
+        z: band.inside + towardOutside * h * ARROW_AXIS,
         dir,
-        length: h * 0.32,
-        halfWidth: h * 0.18,
+        length,
+        halfWidth: (h * ARROW_BASE) / 2,
         color: TURF.paint,
     });
 }

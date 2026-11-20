@@ -375,14 +375,48 @@ export function lookDirection(azimuth: number, pitch: number): Vector3Tuple {
     return [c * Math.sin(azimuth), Math.sin(pitch), c * Math.cos(azimuth)];
 }
 
+/** How far the head may turn at one seat, in radians (see `clampLook`). */
+export interface LookLimits {
+    /** Either way from the seat's facing. */
+    yaw: number;
+    /** The lowest look, below level (negative). */
+    pitchMin: number;
+    /** The highest look, above level. */
+    pitchMax: number;
+}
+
+/** The limits at a seat that declares none: an open seat in the stands. */
+export const DEFAULT_LOOK_LIMITS: Readonly<LookLimits> = {
+    yaw: LOOK_YAW_LIMIT,
+    pitchMin: LOOK_PITCH_MIN,
+    pitchMax: LOOK_PITCH_MAX,
+};
+
+/**
+ * The limits a camera declares (`CameraSeat.look`, degrees), with the
+ * defaults for what it leaves out. Never wider than the defaults.
+ */
+export function lookLimits(look?: CameraSeat["look"]): LookLimits {
+    const rad = (deg: number | undefined, fallback: number) =>
+        deg === undefined
+            ? fallback
+            : Math.min(fallback, Math.max(0, (deg * Math.PI) / 180));
+    return {
+        yaw: rad(look?.yawDeg, LOOK_YAW_LIMIT),
+        pitchMin: -rad(look?.downDeg, -LOOK_PITCH_MIN),
+        pitchMax: rad(look?.upDeg, LOOK_PITCH_MAX),
+    };
+}
+
 /** A head turn within the limits: `yaw` from the seat's facing, `pitch` from level. */
 export function clampLook(
     yaw: number,
     pitch: number,
+    limits: Readonly<LookLimits> = DEFAULT_LOOK_LIMITS,
 ): { yaw: number; pitch: number } {
     return {
-        yaw: Math.min(LOOK_YAW_LIMIT, Math.max(-LOOK_YAW_LIMIT, yaw)),
-        pitch: Math.min(LOOK_PITCH_MAX, Math.max(LOOK_PITCH_MIN, pitch)),
+        yaw: Math.min(limits.yaw, Math.max(-limits.yaw, yaw)),
+        pitch: Math.min(limits.pitchMax, Math.max(limits.pitchMin, pitch)),
     };
 }
 

@@ -11,11 +11,15 @@ import {
     LOOK_PITCH_MAX,
     LOOK_PITCH_MIN,
     LOOK_YAW_LIMIT,
+    lookLimits,
     SEAT_ZOOM_MIN_DEG,
 } from "../rigMath";
 import { projectToScreen, seatLens, setRayFromScreen } from "../seatLens";
 import { paniniFrame } from "@/view3d/core/post/panini";
-import { SEAT_VIEW_DEFAULTS } from "@/view3d/core/post/seatViewPass";
+import {
+    SEAT_VIEW_DEFAULTS,
+    seatViewLook,
+} from "@/view3d/core/post/seatViewSource";
 
 const DEG = Math.PI / 180;
 const EYE: [number, number, number] = [0, 14, 35];
@@ -209,5 +213,66 @@ describe("picking through the seat view lens", () => {
         expect(projectToScreen([behind.x, behind.y, behind.z], camera)).toBe(
             null,
         );
+    });
+});
+
+describe("per-seat look limits and the venue's lens", () => {
+    it("takes a camera's declared range in degrees, never wider than the defaults", () => {
+        expect(lookLimits()).toEqual({
+            yaw: LOOK_YAW_LIMIT,
+            pitchMin: LOOK_PITCH_MIN,
+            pitchMax: LOOK_PITCH_MAX,
+        });
+        const box = lookLimits({ yawDeg: 40, upDeg: 25 });
+        expect(box.yaw).toBeCloseTo(40 * DEG, 12);
+        expect(box.pitchMax).toBeCloseTo(25 * DEG, 12);
+        expect(box.pitchMin).toBe(LOOK_PITCH_MIN);
+        expect(lookLimits({ yawDeg: 300, downDeg: -5 })).toEqual({
+            yaw: LOOK_YAW_LIMIT,
+            pitchMin: -0,
+            pitchMax: LOOK_PITCH_MAX,
+        });
+    });
+
+    it("stops an enclosed seat's head at its own limits", () => {
+        const camera = new PerspectiveCamera(45, 1.6, 0.1, 3000);
+        const rig = new RigController(camera);
+        rig.sit(EYE, FIELD, { limits: lookLimits({ yawDeg: 40, upDeg: 25 }) });
+        rig.update(0);
+        rig.lookBy(3, 3);
+        settle(rig);
+        expect(rig.look!.yaw).toBeCloseTo(40 * DEG, 6);
+        expect(rig.look!.pitch).toBeCloseTo(25 * DEG, 6);
+        // A double-click past the limit stops there too.
+        const p = lookDirection(facing.azimuth - 90 * DEG, 0);
+        rig.turnHeadTo([EYE[0] + p[0] * 50, EYE[1], EYE[2] + p[2] * 50]);
+        settle(rig, 3000);
+        expect(rig.look!.yaw).toBeCloseTo(-40 * DEG, 6);
+    });
+
+    it("starts and zooms out to the venue's widest view", () => {
+        const camera = new PerspectiveCamera(45, 1.6, 0.1, 3000);
+        const rig = new RigController(camera);
+        rig.sit(EYE, FIELD, { widestDeg: 95 });
+        rig.update(0);
+        expect(rig.seatFovDeg).toBe(95);
+        rig.seatZoom(0.5);
+        settle(rig);
+        rig.seatZoom(100);
+        settle(rig, 3000);
+        expect(rig.seatFovDeg).toBeCloseTo(95, 1);
+    });
+
+    it("fills a venue's lens from the defaults", () => {
+        expect(seatViewLook()).toEqual({
+            hfovDeg: SEAT_VIEW_DEFAULTS.hfovDeg,
+            d: SEAT_VIEW_DEFAULTS.d,
+            s: SEAT_VIEW_DEFAULTS.s,
+        });
+        expect(seatViewLook({ hfovDeg: 95, s: 0.5 })).toEqual({
+            hfovDeg: 95,
+            d: SEAT_VIEW_DEFAULTS.d,
+            s: 0.5,
+        });
     });
 });

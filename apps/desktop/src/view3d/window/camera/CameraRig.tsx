@@ -70,8 +70,10 @@ import {
     SEAT_FOV_DEG,
     SEATED_EYE,
     seatAim,
+    lookLimits,
     ZOOM_PER_WHEEL,
 } from "./rigMath";
+import { seatViewLook } from "@/view3d/core/post/seatViewSource";
 import { snapToSeatRows } from "./seatSnap";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
 import { useView3dSyncStore } from "@/view3d/sync/view3dSyncStore";
@@ -165,6 +167,21 @@ export function pickSeatEye(
 }
 
 // eslint-disable-next-line max-lines-per-function
+/**
+ * Seat view at a seat: the venue's widest field of view (`KitResult.seatView`)
+ * and how far the head turns there (`CameraSeat.look`).
+ */
+function sitOptions(seat?: CameraSeat): {
+    widestDeg: number;
+    limits: ReturnType<typeof lookLimits>;
+} {
+    const kit = useView3dSceneStore.getState().kit;
+    return {
+        widestDeg: seatViewLook(kit?.seatView).hfovDeg,
+        limits: lookLimits(seat?.look),
+    };
+}
+
 export default function CameraRig() {
     const camera = useThree((s) => s.camera);
     const gl = useThree((s) => s.gl);
@@ -202,15 +219,18 @@ export default function CameraRig() {
     const flyToSeat = (seat: CameraSeat) => {
         const aim = seatAim(seat);
         const person = isPersonSeat(seat);
-        // Seat view blends in over the flight, so the flag is set now.
+        // Seat view blends in over the flight, so the flag and the width
+        // it blends toward are set now.
         useCameraStore.getState()._setSeated(person);
+        const sitAt = sitOptions(seat);
+        if (person) seatLens.hfovDeg = sitAt.widestDeg;
         rig.flyTo(aim.position, aim.target, {
             nowMs: performance.now(),
             instant: prefersReducedMotion(),
             fovDeg: seat.fovDeg ?? SEAT_FOV_DEG,
             onArrive: (position) => {
                 clearCrowdAround(position);
-                if (person) rig.sit(aim.position, aim.target);
+                if (person) rig.sit(aim.position, aim.target, sitAt);
             },
         });
     };
@@ -570,13 +590,16 @@ export default function CameraRig() {
             store._setActive(null);
             store._setSeated(true);
             useDirectorStore.getState().setDirecting(false);
+            // A picked seat is open: the venue's lens, the usual limits.
+            const pickedAt = sitOptions();
+            seatLens.hfovDeg = pickedAt.widestDeg;
             const focusAt: Vector3Tuple = [...current.focus];
             rig.flyTo(eye, focusAt, {
                 nowMs: performance.now(),
                 instant: prefersReducedMotion(),
                 onArrive: (position) => {
                     clearCrowdAround(position);
-                    rig.sit(eye, focusAt);
+                    rig.sit(eye, focusAt, pickedAt);
                 },
             });
         };

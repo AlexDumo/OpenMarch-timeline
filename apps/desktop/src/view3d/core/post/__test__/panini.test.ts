@@ -14,7 +14,7 @@ import {
     screenToSource,
     sourceToScreen,
 } from "../panini";
-import { SEAT_VIEW_DEFAULTS } from "../seatViewPass";
+import { SEAT_VIEW_DEFAULTS } from "../seatViewSource";
 
 const DEG = Math.PI / 180;
 const LENSES = [
