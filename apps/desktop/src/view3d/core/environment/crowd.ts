@@ -747,6 +747,18 @@ interface PeopleUniforms {
     uCrowdMean: IUniform<Color>;
 }
 
+/**
+ * A person's build: the instance's scale. It sizes everything above the
+ * hips; laps and legs are fit to the seat and the tread instead (divided
+ * by it again), so a big person's knees and feet stay on their tread.
+ */
+const CROWD_BUILD_GLSL = /* glsl */ `
+vec3 crowdBuild() {
+    return vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz),
+        length(instanceMatrix[2].xyz));
+}
+`;
+
 const PEOPLE_VERTEX_GLSL = /* glsl */ `
 attribute float aPart;
 attribute float aShade;
@@ -816,9 +828,13 @@ const PEOPLE_COLOR_GLSL = /* glsl */ `
 #endif
 `;
 
-/** Seated people have no legs to stand on; standing people have no lap. */
+/**
+ * Seated people have no legs to stand on; standing people have no lap. Both
+ * keep the size they have at the seat, whatever the person's build.
+ */
 const PEOPLE_POSE_GLSL = /* glsl */ `
     transformed = crowdPose(transformed, false);
+    if (aPart > 1.5 && aPart < 3.5) transformed /= crowdBuild();
     if (aPart > 1.5 && aPart < 2.5) transformed *= 1.0 - step(0.5, aLook.y);
     if (aPart > 2.5 && aPart < 3.5) transformed *= step(0.5, aLook.y);
 `;
@@ -836,6 +852,7 @@ function peopleMaterial(uniforms: PeopleUniforms): MeshStandardMaterial {
     material.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
         Object.assign(shader.uniforms, uniforms);
         shader.vertexShader =
+            CROWD_BUILD_GLSL +
             PEOPLE_VERTEX_GLSL +
             shader.vertexShader
                 .replace(
@@ -870,8 +887,12 @@ export const CROWD_NEAR = {
 /** The camera moves this far before the full figures follow it, meters. */
 export const CROWD_FOLLOW_STEP = 2.5;
 
-/** The card's extent around the seat, meters: knees to back, shins to crown. */
-const CARD_HALF_WIDTH = 0.52;
+/**
+ * The card's extent around the seat, meters: knees to back, shins to crown.
+ * Side on, its knees reach as far as the full figure's (0.46 m), with a
+ * little more for the soft edge, so neither leaves its tread.
+ */
+const CARD_HALF_WIDTH = 0.48;
 const CARD_BOTTOM = -0.38;
 const CARD_TOP = 0.8;
 /** How much of the camera's elevation the card leans back by. */
@@ -1026,6 +1047,8 @@ const CARD_BEGIN_GLSL = /* glsl */ `
         transformed = vec3(position.x * v.y - up * sin(tilt) * v.x,
             up * cos(tilt) + min(y, 0.0),
             -position.x * v.x - up * sin(tilt) * v.y) * crowdKeep;
+        // The card's foot keeps the seat's size, as the figure's legs do.
+        if (y < 0.0) transformed /= crowdBuild();
     }
 `;
 
@@ -1070,7 +1093,7 @@ const CARD_SHAPE_GLSL = /* glsl */ `
         // the card when seen side on), then the shins. From behind the seat
         // hides both, until from high above the lap shows past it.
         float above = smoothstep(0.15, 0.6, vCardRise);
-        float kx = vCardSide * 0.44;
+        float kx = vCardSide * 0.4;
         float lw = 0.17 * abs(vCardFront) + 0.06;
         float lap = min(min(p.y + 0.02, 0.14 - p.y),
             abs(kx) * 0.5 + lw - abs(p.x - kx * 0.5));
@@ -1117,6 +1140,7 @@ function cardMaterial(uniforms: CardUniforms): MeshStandardMaterial {
     material.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
         Object.assign(shader.uniforms, uniforms);
         shader.vertexShader =
+            CROWD_BUILD_GLSL +
             CARD_VERTEX_GLSL +
             shader.vertexShader
                 .replace(
