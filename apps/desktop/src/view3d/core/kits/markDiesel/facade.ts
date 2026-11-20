@@ -30,7 +30,7 @@ import { dieselLighting } from "./lighting";
  * brick gables at the north and south ends with a big window in each, and a
  * square entry tower at each corner. Inside it is a dark wall; the end windows
  * show the sky by day and go dark, with their steel grid, when the roof is
- * shut. Sources are in `.scratch/diesel-oil/facade.md`.
+ * shut.
  *
  * Everything is merged into a handful of meshes, and none of them cast
  * shadows: the envelope must never throw one across the field.
