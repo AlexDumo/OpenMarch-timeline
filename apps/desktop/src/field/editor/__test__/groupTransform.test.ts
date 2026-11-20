@@ -37,6 +37,7 @@ const pointer = (
     field: { x, y },
     screen: { x, y },
     button: 0,
+    kind: "mouse",
     shift: false,
     alt: false,
     ctrl: false,
@@ -418,39 +419,6 @@ describe("ScaleGesture", () => {
         // Mac Ctrl is a right-click, never $mod; Shift is fine, not proportional
         expect(scaled({ ctrl: true }, true)).toEqual({ x: 1.5, y: 1 });
         expect(scaled({ shift: true })).toEqual({ x: 1.13, y: 1 });
-    });
-
-    it("keeps the ratio by default with the ratio lock on, and constrain frees it (#545)", () => {
-        const scaled = (
-            handle: "se" | "e",
-            modifiers: Partial<FieldPointer> = {},
-        ) => {
-            const h = host();
-            const origin = pointer(200, handle === "se" ? 250 : 225);
-            const gesture = new ScaleGesture(
-                origin,
-                FORMATION,
-                h,
-                handle,
-                BOX,
-                keysAt(origin),
-                true,
-            );
-            gesture.move(pointer(250, origin.field.y, modifiers));
-            gesture.cancel();
-            return last(h.show);
-        };
-        expect(scaleOf(scaled("se"))).toEqual({ x: 1.4, y: 1.4 });
-        expect(scaleOf(scaled("se", { ctrl: true }))).toEqual({ x: 1.5, y: 1 });
-        // A side scales both ways, about the center line, and one axis with constrain
-        expect(at(scaled("e"))).toEqual([
-            [100, 187.5],
-            [250, 217.5],
-            [175, 262.5],
-        ]);
-        expect(scaled("e", { ctrl: true }).map((p) => p.y)).toEqual([
-            200, 220, 250,
-        ]);
     });
 
     it("scales about the box's center with from center (Alt; #545)", () => {

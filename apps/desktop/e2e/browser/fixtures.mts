@@ -11,6 +11,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { waitForField, waitForSettledField } from "./app.mjs";
+import { workerPolicyFor } from "../../src/security/appCsp";
 
 const desktopDir = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
@@ -82,6 +83,7 @@ async function openInBrowser(
     storage: Record<string, string>,
     initScript: string | null,
     videoExportPath: string,
+    touchScreen: boolean,
 ): Promise<App> {
     const { openShow } = (await import(pathToFileURL(hostBundle).href)) as {
         openShow: typeof import("./host/index").openShow;
@@ -92,7 +94,11 @@ async function openInBrowser(
         settings: appSettings,
         videoExportPath,
     });
-    const context = await browser.newContext({ viewport: VIEWPORT });
+    const context = await browser.newContext({
+        viewport: VIEWPORT,
+        // A touch screen: touch points, (pointer: coarse) and (hover: none)
+        hasTouch: touchScreen,
+    });
     await context.addInitScript((storage) => {
         for (const [key, value] of Object.entries(storage))
             localStorage.setItem(key, value);
@@ -137,6 +143,16 @@ async function openInBrowser(
         );
         if (!file.startsWith(rendererDir) || !fs.existsSync(file))
             return route.fulfill({ status: 404, body: "Not found" });
+        // A worker's own policy, as the web build's `_headers` sends it
+        const worker = workerPolicyFor(url.href);
+        if (worker)
+            return route.fulfill({
+                path: file,
+                headers: {
+                    "Content-Type": "text/javascript",
+                    "Content-Security-Policy": worker.csp,
+                },
+            });
         return route.fulfill({ path: file });
     });
 
@@ -326,6 +342,14 @@ type Fixtures = {
      * only, e.g. to take WebGL away.
      */
     initScript: string | null;
+    /**
+     * Runs the app on a touch screen (`hasTouch`): it matches
+     * `(pointer: coarse)` and `(hover: none)`, so the "auto" input mode lays
+     * the app out for touch, while `page.mouse` still presses as a mouse.
+     * Browser target only; the `browser-touch` project turns it on, to run
+     * the mouse scenarios on a touch device.
+     */
+    touchScreen: boolean;
     show: Show;
 };
 
@@ -379,6 +403,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
     uiSettings: [undefined, { option: true }],
     fieldQualityNotice: [false, { option: true }],
     initScript: [null, { option: true }],
+    touchScreen: [false, { option: true }],
 
     show: async (
         {
@@ -391,6 +416,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
             uiSettings,
             fieldQualityNotice,
             initScript,
+            touchScreen,
         },
         use,
         testInfo,
@@ -417,6 +443,8 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
         if (target === "electron") {
             if (initScript)
                 throw new Error("initScript only runs in the browser target");
+            if (touchScreen)
+                throw new Error("touchScreen only runs in the browser target");
             requireBuilt(electronMain, "build");
             app = await openInElectron(
                 databasePath,
@@ -433,6 +461,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
                 storage,
                 initScript,
                 videoExportPath,
+                touchScreen,
             );
         }
         const { page } = app;

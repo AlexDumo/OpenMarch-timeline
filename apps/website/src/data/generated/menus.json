@@ -272,11 +272,26 @@
             "label": "Help",
             "items": [
                 {
+                    "label": "Get Help…",
+                    "keys": [
+                        "F1"
+                    ],
+                    "action": "openHelp"
+                },
+                {
                     "label": "Keyboard Shortcuts",
                     "keys": [
                         "?"
                     ],
                     "action": "showShortcuts"
+                },
+                {
+                    "label": "Report a Bug or Send Feedback…",
+                    "action": "reportFeedback"
+                },
+                {
+                    "label": "View My Reports",
+                    "action": "viewMyReports"
                 },
                 {
                     "separator": true
@@ -494,11 +509,26 @@
             "label": "Help",
             "items": [
                 {
+                    "label": "Get Help…",
+                    "keys": [
+                        "F1"
+                    ],
+                    "action": "openHelp"
+                },
+                {
                     "label": "Keyboard Shortcuts",
                     "keys": [
                         "?"
                     ],
                     "action": "showShortcuts"
+                },
+                {
+                    "label": "Report a Bug or Send Feedback…",
+                    "action": "reportFeedback"
+                },
+                {
+                    "label": "View My Reports",
+                    "action": "viewMyReports"
                 },
                 {
                     "separator": true

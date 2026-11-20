@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import SettingsWindow from "@/settings/SettingsWindow";
+import { installEditorDiagnostics } from "@/feedback/editorDiagnostics";
 import "./styles/index.css";
 // Load every weight the UI uses, or Chromium fakes medium/semibold/bold by smearing 400.
 import "@fontsource/dm-sans/400.css";
@@ -73,6 +74,12 @@ function mountEditor() {
         posthog.init(import.meta.env.VITE_PUBLIC_POSTHOG_KEY, options);
     }
 
+    // The model import worker, for end-to-end tests until the import screen uses it (fork #998)
+    if (isPlaywrightSession)
+        void import("./showAssets/modelImport/modelImportTestApi").then((m) =>
+            m.installModelImportTestApi(),
+        );
+
     // Load saved language from electron store on app start
     window.electron
         ?.getLanguage()
@@ -84,6 +91,9 @@ function mountEditor() {
         .catch((error) => {
             console.warn("Failed to load saved language:", error);
         });
+
+    // Recent actions and errors, sent only with a bug report (fork #801)
+    if (!isSettingsWindow) installEditorDiagnostics();
 
     // Basic or Expert (UI-19): read it and keep it in sync with the Settings window
     initEditorModeStore();

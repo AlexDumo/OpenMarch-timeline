@@ -1,5 +1,5 @@
 import { threeZoomControls } from "@/field/three/fieldNavigation";
-import Toolbar from "@/components/toolbar/Toolbar";
+import Toolbar, { PreviewToolbar } from "@/components/toolbar/Toolbar";
 import Inspector from "@/components/inspector/Inspector";
 import SidebarModal from "@/components/sidebar/SidebarModal";
 import { SelectedPageProvider } from "@/context/SelectedPageContext";
@@ -29,14 +29,13 @@ import { useUiSettingsStore } from "./stores/UiSettingsStore";
 import { useSnapOnWhenFileOpens } from "./hooks/useSnapOnWhenFileOpens";
 import CanvasZoomControls from "@/components/canvas/CanvasZoomControls";
 import FieldDisplayBar from "@/components/canvas/display/FieldDisplayBar";
-import View3dButton from "@/components/toolbar/View3dButton";
 import Sidebar from "@/components/sidebar/Sidebar";
 import Toaster from "./components/ui/Toaster";
 import SvgPreviewHandler from "./utilities/SvgPreviewHandler";
 import { useIsPreviewMode } from "./stores/PreviewModeStore";
 import { PreviewModeHost } from "./components/preview/PreviewMode";
-import WorkspaceViewSwitch from "./components/toolbar/WorkspaceViewSwitch";
 import { useEditorModeStore } from "./stores/EditorModeStore";
+import { useIsFieldEditMode } from "./field/editMode/fieldEditModeStore";
 import ErrorBoundary from "./ErrorBoundary";
 import {
     QueryCache,
@@ -55,9 +54,12 @@ import { InContextTools } from "@tolgee/web/tools";
 import AlertModal from "./components/AlertModal";
 import ConvertShowDialog from "./components/ConvertShowDialog";
 import ShortcutsDialog from "./components/ShortcutsDialog";
+import HelpDialog from "./components/help/HelpDialog";
 import MusicXmlChecksDialog from "./components/music/MusicXmlChecksDialog";
 import WebWelcomeModal from "./components/WebWelcomeModal";
 import WebSettingsSheet from "./components/WebSettingsSheet";
+import ReportDrawer, { ReportRecordingBar } from "./feedback/ReportDrawer";
+import { canSendReports } from "./feedback/openReport";
 import WebHomeScreenPrompt from "./components/web/WebHomeScreenPrompt";
 import WebVersionsDialog from "./components/web/WebVersionsDialog";
 import { isWebBuild } from "./utilities/webBuild";
@@ -246,6 +248,7 @@ function App() {
     // Tempo mode: the tempo lanes are the only thing in focus; the rest steps back and
     // takes no input until tempo mode is done
     const tempoMode = useTempoModeStore((s) => s.on);
+    const fieldEditing = useIsFieldEditMode();
     const tempoModeClass = clsx(
         "transition-opacity duration-200",
         tempoMode && "pointer-events-none opacity-30 select-none",
@@ -268,12 +271,19 @@ function App() {
                     {isWebBuild && <WebWelcomeModal />}
                     <ConvertShowDialog />
                     {isWebBuild && <WebSettingsSheet />}
+                    {canSendReports && <ReportRecordingBar />}
+                    {canSendReports && (
+                        <ReportDrawer
+                            placement={drawerShown ? "sheet" : "overlay"}
+                        />
+                    )}
                     {isWebBuild && <WebHomeScreenPrompt />}
                     {isWebBuild && <WebVersionsDialog />}
                     <ShortcutDispatcher />
                     {!isWebBuild && <CheckForUpdatesHandler />}
                     <CommandPalette />
                     <ShortcutsDialog />
+                    <HelpDialog />
                     <MusicXmlChecksDialog />
                     <LongPressGuard />
                     <WindowTooSmallNotice size={windowSize} />
@@ -316,10 +326,7 @@ function App() {
                                                     >
                                                         {preview ? (
                                                             // Only the workspace switch, to go back, and the 3D View
-                                                            <div className="flex items-center justify-end gap-8">
-                                                                <View3dButton />
-                                                                <WorkspaceViewSwitch />
-                                                            </div>
+                                                            <PreviewToolbar />
                                                         ) : (
                                                             <div
                                                                 className={
@@ -329,7 +336,14 @@ function App() {
                                                                     tempoMode
                                                                 }
                                                             >
-                                                                <Toolbar />
+                                                                <Toolbar
+                                                                    tempoMode={
+                                                                        tempoMode
+                                                                    }
+                                                                    tempoModeClass={
+                                                                        tempoModeClass
+                                                                    }
+                                                                />
                                                             </div>
                                                         )}
                                                         <div
@@ -343,23 +357,30 @@ function App() {
                                                             inert={tempoMode}
                                                         >
                                                             {!preview && (
-                                                                <>
+                                                                <div className="flex h-full min-h-0 shrink-0">
                                                                     <Sidebar />
                                                                     <SidebarModal />
-                                                                </>
+                                                                </div>
                                                             )}
                                                             <Suspense>
                                                                 <ThreeField />
                                                             </Suspense>
-                                                            <CanvasZoomControls
-                                                                canvas={
-                                                                    threeZoomControls
-                                                                }
-                                                            />
-                                                            <FieldDisplayBar />
+                                                            {/* The Edit field mode holds the view still, fitted inside its rulers */}
+                                                            {!fieldEditing && (
+                                                                <>
+                                                                    <CanvasZoomControls
+                                                                        canvas={
+                                                                            threeZoomControls
+                                                                        }
+                                                                    />
+                                                                    <FieldDisplayBar />
+                                                                </>
+                                                            )}
                                                         </div>
                                                         <TimelineSplitter>
-                                                            <TimelineContainer />
+                                                            <div className="flex min-h-0 flex-1 flex-col">
+                                                                <TimelineContainer />
+                                                            </div>
                                                         </TimelineSplitter>
                                                     </div>
                                                     {!preview && (

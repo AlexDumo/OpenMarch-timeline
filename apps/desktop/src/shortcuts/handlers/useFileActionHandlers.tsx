@@ -5,9 +5,12 @@ import { CircleNotchIcon } from "@phosphor-icons/react";
 import AudioFile from "@/global/classes/AudioFile";
 import { useSelectedAudioFile } from "@/context/SelectedAudioFileContext";
 import { useAlertModalStore } from "@/stores/AlertModalStore";
+import { useHelpDialogStore } from "@/stores/HelpDialogStore";
 import { requestOpenNewShowDialog } from "@/utilities/openNewShowDialog";
 import { isWebBuild } from "@/utilities/webBuild";
+import { canSendReports, openReport } from "@/feedback/openReport";
 import { useActionHandler } from "../useActionHandler";
+import { MY_REPORTS_URL } from "@/feedback/reportsApi";
 
 // eslint-disable-next-line max-lines-per-function
 export function useFileActionHandlers() {
@@ -24,6 +27,18 @@ export function useFileActionHandlers() {
 
     useActionHandler("openSettings", () => {
         void window.electron.openSettingsWindow();
+    });
+
+    useActionHandler("openHelp", () =>
+        useHelpDialogStore.getState().setOpen(true),
+    );
+
+    // Web builds that can't sign in have no report form (fork #801)
+    useActionHandler("reportFeedback", () => openReport(), {
+        enabled: canSendReports,
+    });
+    useActionHandler("viewMyReports", () => {
+        window.open(MY_REPORTS_URL, "_blank", "noopener,noreferrer");
     });
 
     useActionHandler("launchLoadFileDialogue", () => {
@@ -135,7 +150,6 @@ export function useFileActionHandlers() {
                         setSelectedAudioFile(selectedAudioFileWithoutAudio);
                     });
                     window.dispatchEvent(new CustomEvent("audioFilesUpdated"));
-                    toast.success(t("fileTab.toasts.audioUploaded"));
                 } else {
                     const errorMessage =
                         response?.error?.message ||

@@ -17,9 +17,9 @@ export interface MenuAction {
     readonly labelKey: string;
     /**
      * The shortcut, in Electron's accelerator form. The menu only shows it: the renderer's own
-     * keyboard handler owns the key, so text fields keep Space and letters
+     * keyboard handler owns the key, so text fields keep Space and letters. None for an unbound action
      */
-    readonly accelerator: string;
+    readonly accelerator?: string;
     /** Left out of the menu in Basic mode, where the action's handler is off (UI-19) */
     readonly expertOnly?: true;
 }
@@ -61,11 +61,14 @@ export const CHECK_FOR_UPDATES_MENU_ACTION = {
 } as const;
 
 export const HELP_MENU_ACTIONS: readonly MenuAction[] = [
+    { action: "openHelp", labelKey: "menu.help.openHelp", accelerator: "F1" },
     {
         action: "showShortcuts",
         labelKey: "menu.help.showShortcuts",
         accelerator: "Shift+/",
     },
+    { action: "reportFeedback", labelKey: "menu.help.reportFeedback" },
+    { action: "viewMyReports", labelKey: "menu.help.viewMyReports" },
 ];
 
 /** Whether `action` is one the menu may send */

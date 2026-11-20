@@ -3,12 +3,16 @@ import { test, expect, type Show } from "../fixtures.mjs";
 import {
     clickMarcher,
     drawnMarchers,
+    emulateTouchScreen,
     openSettings,
     expectCanvasMatchesShow,
     goTo,
+    penDrag,
     readField,
     selectPage,
     setUiSettings,
+    touchDrag,
+    twoFingerPan,
     waitForField,
     waitForIdle,
 } from "../app.mjs";
@@ -46,16 +50,6 @@ const HOME: SeedPosition[] = [
     [8, 880, 500],
 ];
 const ALL = HOME.map(([id]) => id);
-
-/**
- * A click that can't pair with the one before it into a double-click (which goes inside a
- * shape): the field takes two clicks on one spot within 500 ms as one (`DOUBLE_CLICK_MS`),
- * however much happened between them.
- */
-async function freshClick(page: Page, at: Point) {
-    await page.waitForTimeout(550);
-    await page.mouse.click(at.x, at.y);
-}
 
 test.use({
     seedSql: seedShowSql({
@@ -794,7 +788,7 @@ test("change: an open box fades everyone else, still readable, and once drawn hi
     await expect.poll(looks).toEqual(expected("full", "full"));
 });
 
-test("change: the chip and the plain selection's Transform section draw their direction marks as icons, never as text a font may make an emoji", async ({
+test("change: the chip draws its direction marks as icons, never as text a font may make an emoji", async ({
     show,
 }) => {
     const { page } = show;
@@ -804,12 +798,6 @@ test("change: the chip and the plain selection's Transform section draw their di
     await expect(chip.locator('[data-glyph="across"]')).toHaveCount(1);
     await expect(chip.locator('[data-glyph="deep"]')).toHaveCount(1);
     expect(await chip.innerText()).not.toMatch(PICTOGRAPHIC);
-    // A plain selection's Transform section
-    await page.keyboard.press("Escape");
-    await selectAll(page);
-    const transform = page.getByTestId("transform-section");
-    await expect(transform).toBeVisible();
-    expect(await transform.innerText()).not.toMatch(PICTOGRAPHIC);
 });
 
 test("change: start positions show as faint dots in the marchers' own color", async ({
@@ -2011,25 +1999,40 @@ async function spacings(page: Page): Promise<[number, number]> {
     ];
 }
 
-test("change: the Transform section turns a plain selection around the pivot, writing positions only", async ({
+test("change: a plain selection turns around its pivot, pulled out of the center with Ctrl onto a corner marcher, writing positions only", async ({
     show,
 }) => {
     const { page } = show;
     await selectAll(page);
-    const section = page.getByTestId("transform-section");
-    await expect(section).toBeVisible();
-    // A plain selection has no scale, and the Align row has the flips
-    await expect(section.getByTestId("transform-scale-more")).toHaveCount(0);
+    const pivot = () =>
+        page.evaluate(() => window.fieldTest!.selectionPivot!());
+    await expect.poll(async () => (await pivot())?.own).toBe(false);
     const steps = await undoSteps(show);
 
-    // A quarter turn clockwise around the back-left corner of their box
+    // Ctrl-drag the pivot out of the center onto the back-left marcher: it snaps there
     const before = await savedPositions(show, 0);
-    const corner = {
-        x: Math.min(...before.map((p) => p.x)),
-        y: Math.min(...before.map((p) => p.y)),
-    };
-    await section.getByTestId("transform-pivot-nw").click();
-    const rotation = section.getByRole("textbox", { name: "Rotation" });
+    const corner = before.reduce((a, b) => (b.x + b.y < a.x + a.y ? b : a));
+    const target = await marcherScreen(page, corner.id);
+    const from = (await pivot())!.screen;
+    await page.mouse.move(from.x, from.y);
+    await page.keyboard.down("Control");
+    await page.mouse.down();
+    await page.mouse.move((from.x + target.x) / 2, (from.y + target.y) / 2);
+    await page.mouse.move(target.x + 2, target.y + 1);
+    await page.mouse.up();
+    await page.keyboard.up("Control");
+    await expect
+        .poll(async () => {
+            const p = await pivot();
+            return p && p.own && Math.hypot(p.x - corner.x, p.y - corner.y);
+        })
+        .toBeLessThan(0.01);
+    expect(await undoSteps(show)).toBe(steps);
+
+    // A quarter turn clockwise, typed in the Arrange section
+    const rotation = page
+        .getByTestId("arrange-section")
+        .getByRole("textbox", { name: "Rotation" });
     await rotation.fill("90");
     await rotation.blur();
     await expect
@@ -2049,21 +2052,6 @@ test("change: the Transform section turns a plain selection around the pivot, wr
     await expectCanvasMatchesShow(show);
 });
 
-test("change: with a kind armed and nothing drawn yet, the Transform section shows the selection's controls", async ({
-    show,
-}) => {
-    const { page } = show;
-    await selectAll(page);
-    await page.keyboard.press("b");
-    await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
-    const section = page.getByTestId("transform-section");
-    await expect(section).toBeVisible();
-    await expect(
-        section.getByRole("textbox", { name: "Rotation" }),
-    ).toBeVisible();
-    await expect(section.getByTestId("transform-scale-more")).toHaveCount(0);
-});
-
 test("change: the inspector shows no shape section while a shape is open or a placed one is selected (#435)", async ({
     show,
 }) => {
@@ -2071,7 +2059,6 @@ test("change: the inspector shows no shape section while a shape is open or a pl
     const inspectorShape = async () => {
         for (const id of [
             "shape-tool-section",
-            "transform-section",
             "placed-box-summary",
             "shape-layout-picker",
         ])
@@ -4793,7 +4780,7 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         // From the floating editor, on Page 2, where the box is only carried
         await selectPage(show, "Page 2");
         const member = await marcherScreen(page, 1);
-        await freshClick(page, member);
+        await page.mouse.click(member.x, member.y);
         await expect(readoutShown).toBeVisible();
         const steps = await undoSteps(show);
         await readoutShown.getByTestId("shape-editor-ungroup").click();
@@ -4810,14 +4797,14 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         expect((await readField(page)).selection).toEqual(ALL);
         // A click on a member picks just that marcher
         await page.keyboard.press("Escape");
-        await freshClick(page, member);
+        await page.mouse.click(member.x, member.y);
         expect((await readField(page)).selection).toEqual([1]);
         await expect(readoutShown).toBeHidden();
 
         // Page 1 keeps its box
         await page.keyboard.press("Escape");
         await selectPage(show, "Page 1");
-        await freshClick(page, member);
+        await page.mouse.click(member.x, member.y);
         await expect(readoutShown).toBeVisible();
 
         // Undo shares Page 1's box with Page 2 again
@@ -4827,7 +4814,7 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         expect(await laterMoves()).toBe(0);
         await page.keyboard.press("Escape");
         await selectPage(show, "Page 2");
-        await freshClick(page, member);
+        await page.mouse.click(member.x, member.y);
         await expect(readoutShown).toBeVisible();
 
         // Page 2's own copy (a pivot change there) ungroups too, and Page 1's box doesn't come
@@ -4846,7 +4833,7 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         await expect.poll(kinds).toEqual(["block"]);
         await waitForIdle(page);
         await page.keyboard.press("Escape");
-        await freshClick(page, member);
+        await page.mouse.click(member.x, member.y);
         await expect(readoutShown).toBeVisible();
 
         // The field's menu offers it for a selected box only, first
@@ -4860,7 +4847,7 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         // On Page 1, the shortcut ends the box there: nobody moves, and Page 2 follows
         await page.keyboard.press("Escape");
         await selectPage(show, "Page 1");
-        await freshClick(page, member);
+        await page.mouse.click(member.x, member.y);
         await expect(readoutShown).toBeVisible();
         await page.keyboard.press("ControlOrMeta+Shift+g");
         await expect.poll(kinds).toEqual(["ungrouped"]);
@@ -4930,7 +4917,7 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         // A click on a member selects the whole group, on Page 2 too, where it's carried
         await page.keyboard.press("Escape");
         await selectPage(show, "Page 2");
-        await freshClick(page, member);
+        await page.mouse.click(member.x, member.y);
         await expect(readoutShown).toBeVisible();
         expect((await readField(page)).selection).toEqual(ALL);
 
@@ -4947,7 +4934,7 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         // Page 1 keeps its group
         await page.keyboard.press("Escape");
         await selectPage(show, "Page 1");
-        await freshClick(page, member);
+        await page.mouse.click(member.x, member.y);
         await expect(readoutShown).toBeVisible();
 
         // Undo carries it to Page 2 again; a second undo takes the group away
@@ -4957,7 +4944,7 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         expect(await laterMoves()).toBe(0);
         await page.keyboard.press("Escape");
         await selectPage(show, "Page 2");
-        await freshClick(page, member);
+        await page.mouse.click(member.x, member.y);
         await expect(readoutShown).toBeVisible();
         await page.keyboard.press("ControlOrMeta+z");
         await expect.poll(kinds).toEqual([]);
@@ -5854,51 +5841,6 @@ test("change: a click on a placed circle's member selects it whole, its handle c
 // Tablets (#1060 tablet layout, merged from main): an Apple Pencil edits the field as a mouse
 // does, fingers only navigate it, and on a screen that can't hover the shape never calms down
 
-/** Drags a pen (an Apple Pencil) from `from` to `to`, in viewport pixels, through Chromium's input. */
-async function penDrag(page: Page, from: Point, to: Point, steps = 12) {
-    const cdp = await page.context().newCDPSession(page);
-    const send = (
-        type: "mousePressed" | "mouseMoved" | "mouseReleased",
-        p: Point,
-    ) =>
-        cdp.send("Input.dispatchMouseEvent", {
-            type,
-            x: p.x,
-            y: p.y,
-            button: "left",
-            buttons: type === "mouseReleased" ? 0 : 1,
-            clickCount: type === "mouseMoved" ? 0 : 1,
-            pointerType: "pen",
-        });
-    await send("mouseMoved", from);
-    await send("mousePressed", from);
-    for (let i = 1; i <= steps; i++)
-        await send("mouseMoved", {
-            x: from.x + ((to.x - from.x) * i) / steps,
-            y: from.y + ((to.y - from.y) * i) / steps,
-        });
-    await send("mouseReleased", to);
-    await cdp.detach();
-}
-
-/** Drags one finger from `from` to `to`, in viewport pixels. */
-async function fingerDrag(page: Page, from: Point, to: Point, steps = 10) {
-    const cdp = await page.context().newCDPSession(page);
-    const send = (type: "touchStart" | "touchMove" | "touchEnd", p?: Point) =>
-        cdp.send("Input.dispatchTouchEvent", {
-            type,
-            touchPoints: p ? [{ x: p.x, y: p.y, id: 0 }] : [],
-        });
-    await send("touchStart", from);
-    for (let i = 1; i <= steps; i++)
-        await send("touchMove", {
-            x: from.x + ((to.x - from.x) * i) / steps,
-            y: from.y + ((to.y - from.y) * i) / steps,
-        });
-    await send("touchEnd");
-    await cdp.detach();
-}
-
 test("change: an Apple Pencil draws the box, stretches it by a handle and moves it, as a mouse does", async ({
     show,
 }) => {
@@ -5939,7 +5881,7 @@ test("change: an Apple Pencil draws the box, stretches it by a handle and moves 
     expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
 });
 
-test("change: a finger on the field with the box tool armed pans, and draws no box", async ({
+test("change: a finger on the field with the box tool armed draws the box, and two fingers pan (tablet 1.4)", async ({
     show,
 }) => {
     const { page } = show;
@@ -5952,26 +5894,33 @@ test("change: a finger on the field with the box tool armed pans, and draws no b
     const pan = async () => (await readField(page)).viewport.pan;
     const before = await pan();
 
-    await fingerDrag(
+    // One finger draws, as the mouse does, and the view stays put
+    await touchDrag(
         page,
         await toScreen(page, { x: cf.x - 15 * S, y: cf.y - 25 * S }),
         await toScreen(page, { x: cf.x - 5 * S, y: cf.y - 19 * S }),
     );
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    const drawn = (await shapeOverlay(page))!.outline;
+    expect(drawn).not.toBeNull();
+    expect(await pan()).toEqual(before);
+
+    // Two fingers move the view, and leave the box as drawn
+    await twoFingerPan(
+        page,
+        await toScreen(page, { x: cf.x + 10 * S, y: cf.y - 10 * S }),
+        { x: 80, y: 40 },
+    );
     await expect.poll(async () => (await pan()).x).not.toBe(before.x);
-    expect((await shapeOverlay(page))!.outline).toBeNull();
-    await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
+    expect((await shapeOverlay(page))!.outline).toEqual(drawn);
 });
 
 test("change: on a screen that can't hover, the open box's controls and its floating editor stay solid with the pointer away", async ({
     show,
 }) => {
     const { page } = show;
-    const cdp = await page.context().newCDPSession(page);
     // A touch screen: (hover: none)
-    await cdp.send("Emulation.setTouchEmulationEnabled", {
-        enabled: true,
-        maxTouchPoints: 5,
-    });
+    const stopTouch = await emulateTouchScreen(page);
     expect(
         await page.evaluate(() => matchMedia("(hover: hover)").matches),
     ).toBe(false);
@@ -5990,7 +5939,7 @@ test("change: on a screen that can't hover, the open box's controls and its floa
             .evaluate((el) => getComputedStyle(el).opacity),
     ).toBe("1");
     expect(await editorOpacity(page)).toBe(1);
-    await cdp.detach();
+    await stopTouch();
 });
 
 // The field's menu (#315, from main) and the shapes: it acts on the selection, so it stays shut

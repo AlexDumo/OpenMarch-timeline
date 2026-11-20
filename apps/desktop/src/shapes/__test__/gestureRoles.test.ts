@@ -78,6 +78,7 @@ const pointer = (field: XY, keys: Partial<HeldKeys> = {}): FieldPointer => ({
     field,
     screen: field,
     button: 0,
+    kind: "mouse",
     ...NO_KEYS,
     ...keys,
 });
@@ -459,6 +460,15 @@ describe("a placed box, with role keys mid-drag", () => {
 
         key("keyup", {});
         expect(depthOf(shown())).toBeCloseTo(deep, 6);
+        mode.cancel();
+    });
+
+    it("with the ratio lock on, a side handle keeps the box's proportions with no key held (#1037)", () => {
+        useShapeEditorStore.setState({ ratioLocked: true });
+        const { mode, handle, shown } = pressed(placed(), "e");
+        mode.move(pointer({ x: handle.x + 3 * STEP, y: handle.y }));
+        expect(widthOf(shown()) / depthOf(shown())).toBeCloseTo(1, 1);
+        expect(depthOf(shown())).toBeGreaterThan(4 * STEP);
         mode.cancel();
     });
 

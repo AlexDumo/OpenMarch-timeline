@@ -15,6 +15,7 @@ import {
     defaultWorkspaceSettings,
 } from "@/settings/workspaceSettings";
 import { Button, Input, UnitInput } from "@openmarch/ui";
+import { PerformerDefaultsFields } from "./PerformerDefaultsFields";
 import * as Form from "@radix-ui/react-form";
 import { SidebarModalLauncher } from "./SidebarModal";
 import FormField from "../ui/FormField";
@@ -22,7 +23,6 @@ import { XIcon, SlidersHorizontalIcon } from "@phosphor-icons/react";
 import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 import clsx from "clsx";
 import { T, useTranslate } from "@tolgee/react";
-import { toast } from "sonner";
 import { conToastError } from "@/utilities/utils";
 
 const inputClassname = clsx("col-span-6 self-center");
@@ -166,7 +166,6 @@ function WorkspaceSettingsModalContents() {
                 conToastError(t("workspaceSettings.updateFailed"), error);
             return;
         }
-        toast.success(t("workspaceSettings.saved"));
         toggleOpen();
     }, [
         localSettings,
@@ -450,6 +449,15 @@ function WorkspaceSettingsModalContents() {
                         },
                     )}
                 </Form.Root>
+                <PerformerDefaultsFields
+                    value={localSettings.performerDefaults}
+                    onChange={(performerDefaults) =>
+                        setLocalSettings({
+                            ...localSettings,
+                            performerDefaults,
+                        })
+                    }
+                />
             </div>
 
             <div className="flex w-[30rem] max-w-full shrink-0 flex-col gap-8">
