@@ -11,8 +11,7 @@ import { buildDieselFixtures } from "./fixtures";
 import type { DieselCtx, DieselFrame, DieselPart } from "./frame";
 
 /**
- * How the Mark Diesel kit is lit (sources and reasoning in
- * `.scratch/lucas-oil/lighting.md`).
+ * How the Mark Diesel kit is lit.
  *
  * The look, from photos of a championship night with the roof shut: the
  * field is bright, even and a little cool; the lights are banks of hot

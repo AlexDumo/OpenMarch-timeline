@@ -145,8 +145,8 @@ describe("dieselFrame", () => {
         expect(terrace.base).toBeGreaterThanOrEqual(B.upperFascia.top);
         expect(upperWest.base).toBeGreaterThan(terrace.top + 2);
         // The press box stands behind the top row of the west 600s, not
-        // over it, its floor about 44 to 45 m up (photos B and 7; Pyware
-        // has 44.3), its sill just over the last tread.
+        // over it, its floor about 44 to 45 m up (solved from photos B
+        // and 7), its sill just over the last tread.
         expect(B.pressBox.offset).toBeGreaterThanOrEqual(upperWest.back);
         expect(B.pressBox.bottom).toBeGreaterThanOrEqual(44);
         expect(B.pressBox.bottom).toBeLessThanOrEqual(45);

@@ -10,8 +10,9 @@ import type {
 
 /**
  * The shared frame of the Mark Diesel kit: every dimension the bowl, roof,
- * drape, facade, lighting and boards agree on. Sources for the numbers are in
- * `.scratch/lucas-oil/section.md`.
+ * drape, facade, lighting and boards agree on. The numbers come from a
+ * measured cross-section: published seating charts, aerial footprints and
+ * camera positions solved from photos of the field.
  *
  * Kit-root space: the origin is the FIELD CENTER at field level, +Y is up and
  * the field's long axis is X. The kit root sits at the footprint's center in
@@ -124,7 +125,7 @@ export function dieselFrame(footprint: FieldFootprint) {
 
     // The bowl: a rounded rectangle around the field (`kits/bowl.ts`); every
     // ring is that outline offset outward by `d` meters. The numbers are the
-    // measured cross-section in `.scratch/lucas-oil/section.md`: offsets are
+    // measured cross-section: offsets are
     // from the field wall, which stands 14.2 m off the sidelines. The
     // outline is the north end's (8 m behind the end line); the south end's
     // wall stands further back (`front`).
