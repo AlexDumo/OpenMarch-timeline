@@ -441,6 +441,124 @@ export interface DieselBowl extends DieselPart {
     treads: Mesh;
 }
 
+/**
+ * The bowl's rings, in kit-root space: ring `(d, y)` is the outline offset
+ * `d` meters outward (along each point's normal) at height `y`, with every
+ * ring sharing the outline's point count. Near the field the rings leave the
+ * outline (`BOWL.front`): the field wall's corners are nearly square and the
+ * south end's wall stands further back, both fading out by the cross-aisle.
+ * Each corner arc's center moves out and its radius shrinks by the same
+ * amount, so the arcs stay tangent to the straights (which only grow).
+ */
+export function dieselRings(frame: Pick<DieselFrame, "BOWL">) {
+    const { BOWL } = frame;
+    const outline = bowlOutline(BOWL.outline);
+    const base = outline(0, 0);
+    const out = outline(1, 0).map((p, i) => p.sub(base[i]));
+    const { push, south, fade } = BOWL.front;
+    /** Per point: the corner it is on (signs), or 0 for a straight. */
+    const corner = base.map((_, i) => {
+        const part = PART_START.findIndex(
+            (s, k) => i >= s && i < PART_START[k + 1],
+        );
+        return RING_PARTS[part].kind === "arc";
+    });
+    const southEnd = base.map(
+        (_, i) => i >= PART_START[2] && i < PART_START[3],
+    );
+    /** How much of the squaring a ring `d` out keeps: 1 at the wall. */
+    const keep = (d: number) => Math.min(1, Math.max(0, 1 - d / fade));
+    const at = (i: number, d: number, y: number) => {
+        const k = i % N;
+        const b = base[k];
+        const n = out[k];
+        const t = keep(d);
+        let x = b.x + n.x * d;
+        let z = b.z + n.z * d;
+        if (corner[k]) {
+            const sx = Math.sign(b.x);
+            const sz = Math.sign(b.z);
+            x += t * (sx * (push + (sx > 0 ? south : 0)) - n.x * push);
+            z += t * (sz * push - n.z * push);
+        } else if (southEnd[k]) x += t * south;
+        return new Vector3(x, y, z);
+    };
+    const ring = (d: number, y: number): Ring =>
+        base.map((_, i) => at(i, d, y));
+    return { base, out, at, ring };
+}
+
+/**
+ * Where a ring crosses into and out of the stretch where `inside(p)` is at
+ * most zero, looking only between ring points `i0` and `i1`: fractional
+ * ring indices, or null when it never does. `inside` should be a signed
+ * distance (linear along a chord) for the ends to land exactly.
+ */
+export function ringCut(
+    ring: Ring,
+    i0: number,
+    i1: number,
+    inside: (p: Vector3) => number,
+): [number, number] | null {
+    let from = -1;
+    let to = -1;
+    let prev = inside(ring[i0 % N]);
+    if (prev <= 0) from = i0;
+    for (let i = i0 + 1; i <= i1; i++) {
+        const v = inside(ring[i % N]);
+        if (from < 0 && prev > 0 && v <= 0) from = i - 1 + prev / (prev - v);
+        if (from >= 0 && prev <= 0 && v > 0) {
+            to = i - 1 + prev / (prev - v);
+            break;
+        }
+        prev = v;
+    }
+    if (from < 0) return null;
+    return [from, to < 0 ? i1 : to];
+}
+
+/**
+ * The corner tunnels' openings on a ring (`BOWL.cornerTunnels`): for each
+ * corner, the stretch between the tunnel's two walls, which run parallel
+ * to the corner's 45 degree line, as fractional ring indices.
+ */
+export function dieselTunnelCuts(
+    frame: Pick<DieselFrame, "BOWL">,
+    ring: Ring,
+): [number, number][] {
+    const half = frame.BOWL.cornerTunnels.width / 2;
+    const cuts: [number, number][] = [];
+    for (const k of [1, 3, 5, 7]) {
+        const mid = PART_START[k] + HALF_ARC;
+        const { axis, origin } = dieselTunnelAxis(frame, k);
+        const across = new Vector3(axis.z, 0, -axis.x);
+        const cut = ringCut(
+            ring,
+            PART_START[k] - 2,
+            PART_START[k + 1] + 2,
+            (p) =>
+                Math.abs(
+                    (p.x - origin.x) * across.x + (p.z - origin.z) * across.z,
+                ) - half,
+        );
+        if (cut && cut[0] < mid && cut[1] > mid) cuts.push(cut);
+    }
+    return cuts;
+}
+
+/**
+ * A corner tunnel's centerline: the 45 degree line through the field
+ * wall's corner, pointing out of the bowl. `k` is the corner's part in
+ * `RING_PARTS`.
+ */
+export function dieselTunnelAxis(frame: Pick<DieselFrame, "BOWL">, k: number) {
+    const { at } = dieselRings(frame);
+    const mid = PART_START[k] + HALF_ARC;
+    const origin = at(mid, 0, 0);
+    const axis = at(mid, frame.BOWL.front.fade, 0).sub(origin).setY(0);
+    return { origin, axis: axis.normalize() };
+}
+
 /** The point at fractional index `f` on a ring (along its chords). */
 function ringAt(ring: Ring, f: number): Vector3 {
     const i = Math.floor(f);
@@ -519,7 +637,6 @@ export function buildDieselBowl(ctx: DieselCtx): DieselBowl {
     const { lower, loge, club, mid, cornerMid, terrace } = BOWL;
     const { upperWest, upperEast, upperSouth, cornerUpper } = BOWL;
     const { northLower, northMid } = BOWL;
-    const outline = bowlOutline(BOWL.outline);
     const R = DIESEL_RING;
     const high = quality === "high";
     const spill = dieselSpill(frame);
@@ -561,21 +678,9 @@ export function buildDieselBowl(ctx: DieselCtx): DieselBowl {
         return mesh;
     };
 
-    // Every ring is the inner outline pushed out along its own normals, so
-    // one base ring and its normals make them all.
-    const base = outline(0, 0);
-    const out = outline(1, 0).map((p, i) => p.sub(base[i]));
-    const ring = (d: number, y: number): Ring =>
-        base.map(
-            (p, i) => new Vector3(p.x + out[i].x * d, y, p.z + out[i].z * d),
-        );
-    /** The point of ring `(d, y)` at ring point `i`. */
-    const at = (i: number, d: number, y: number) =>
-        new Vector3(
-            base[i % N].x + out[i % N].x * d,
-            y,
-            base[i % N].z + out[i % N].z * d,
-        );
+    // Every ring is the inner outline pushed out along its own normals,
+    // squared off near the field (`dieselRings`).
+    const { out, ring, at } = dieselRings(frame);
 
     /**
      * `band.slice` over a section, leaving out the stretch `gap` (fractional
@@ -733,7 +838,29 @@ export function buildDieselBowl(ctx: DieselCtx): DieselBowl {
             k: number;
             cut: (row: number) => [number, number];
         };
+        /**
+         * Openings through row `row`, on ring `line` (the row's front, or
+         * its line of seats): stretches as fractional ring indices.
+         */
+        cuts?: (row: number, line: Ring) => [number, number][];
     }
+    /** The part of `gaps` that falls in a section, if any (one at most). */
+    const gapIn = (
+        gaps: [number, number][],
+        { s, e }: { s: number; e: number },
+    ): [number, number] | null => {
+        for (const [g0, g1] of gaps)
+            for (const shift of [0, N, -N]) {
+                const a = Math.max(g0 + shift, s);
+                const b = Math.min(g1 + shift, e);
+                if (b - a > 1e-6) return [a, b];
+            }
+        return null;
+    };
+    /** Meters along a ring from point `s` to fractional index `f`. */
+    const metersTo = (r: Ring, s: number, f: number) =>
+        ringLength(r, s, Math.floor(f)) +
+        r[Math.floor(f) % N].distanceTo(ringAt(r, f));
     const addTier = (t: FrameTier, options: TierOptions) => {
         const mine = (options.fine ? upperSections : sections).filter((sec) =>
             inRanges(sec, options.ranges),
@@ -755,6 +882,9 @@ export function buildDieselBowl(ctx: DieselCtx): DieselBowl {
                 panFoot: ring(o + t.depth - 0.33, h + 0.2),
                 panTop: ring(o + t.depth - 0.2, h + 0.62),
             };
+            // (Rings share their points, so a cut's ring indices on the
+            // row's front hold for its tread and its seats.)
+            const rowGaps = options.cuts?.(i, front) ?? [];
             for (const sec of mine) {
                 const platform = options.platforms?.has(sec.k) ?? false;
                 if (platform && i > P.firstRow && i <= P.lastRow) continue;
@@ -775,6 +905,7 @@ export function buildDieselBowl(ctx: DieselCtx): DieselBowl {
                     options.directors?.k === sec.k
                         ? options.directors.cut(i)
                         : null;
+                const opening = gapIn(rowGaps, sec);
                 const mouth = dCut
                     ? metersSpan(front, sec, dCut)
                     : g &&
@@ -783,7 +914,7 @@ export function buildDieselBowl(ctx: DieselCtx): DieselBowl {
                         i >= g.firstRow &&
                         i <= g.lastRow
                       ? tunnelSpan(sec)
-                      : null;
+                      : opening;
                 if (i === 0 && options.fascia)
                     options.fascia.band.slice(under, edge, sec.s, sec.e, {
                         tile: options.fascia.tile,
@@ -836,17 +967,29 @@ export function buildDieselBowl(ctx: DieselCtx): DieselBowl {
                     i <= g.lastRow
                         ? g.width + 0.8
                         : 0;
+                const seatGap = opening;
                 const spans = dCut
                     ? [
                           [half, dCut[0] - 0.15],
                           [dCut[1] + 0.15, len - half],
                       ]
-                    : cut
+                    : seatGap
                       ? [
-                            [half, (len - cut) / 2],
-                            [(len + cut) / 2, len - half],
+                            [
+                                half,
+                                metersTo(seatLine, sec.s, seatGap[0]) - 0.15,
+                            ],
+                            [
+                                metersTo(seatLine, sec.s, seatGap[1]) + 0.15,
+                                len - half,
+                            ],
                         ]
-                      : [[half, len - half]];
+                      : cut
+                        ? [
+                              [half, (len - cut) / 2],
+                              [(len + cut) / 2, len - half],
+                          ]
+                        : [[half, len - half]];
                 for (const [a, b] of spans) {
                     const count = Math.floor((b - a) / DIESEL_SEAT_PITCH);
                     if (count < 1) continue;
@@ -930,6 +1073,30 @@ export function buildDieselBowl(ctx: DieselCtx): DieselBowl {
     const sides = [R.front, R.south, R.back];
     const notTarped = (x: number, z: number) => !inTarp(x, z);
 
+    // The corner tunnels cut every row of the field-level banks in front of
+    // the first row that clears them (the lid); the field suites cut the
+    // south end's first rows.
+    const CT = BOWL.cornerTunnels;
+    const FS = BOWL.fieldSuites;
+    /** Outline offset of the tunnels' lids: the front of `lidRow`. */
+    const lidD = lower.offset + CT.lidRow * lower.depth;
+    const suiteCut = (r: Ring) =>
+        ringCut(
+            r,
+            PART_START[2],
+            PART_START[3],
+            (p) => Math.abs(p.z) - FS.halfWidth,
+        );
+    const bankCuts =
+        (t: FrameTier, suites: boolean) =>
+        (i: number, line: Ring): [number, number][] => {
+            const gaps =
+                t.offset + i * t.depth < lidD - 1e-6
+                    ? dieselTunnelCuts(frame, line)
+                    : [];
+            const suite = suites && i < FS.rows ? suiteCut(line) : null;
+            return suite ? [...gaps, suite] : gaps;
+        };
     // The 100s and the 200s: one bank, tarped on the draped side.
     addTier(lower, {
         ranges: main,
@@ -937,11 +1104,13 @@ export function buildDieselBowl(ctx: DieselCtx): DieselBowl {
         wall: WALL_BLUE,
         crowd: notTarped,
         platforms,
+        cuts: bankCuts(lower, true),
     });
     addTier(northLower, {
         ranges: [R.north],
         wall: WALL_BLUE,
         crowd: notTarped,
+        cuts: bankCuts(northLower, false),
     });
     // The 200s' front wall, over the cross-aisle: bare concrete, house-lit,
     // with the 2xx plaques (photo 13).
@@ -1061,10 +1230,64 @@ export function buildDieselBowl(ctx: DieselCtx): DieselBowl {
         for (const range of ranges)
             glass.slice(a, b, ...range, { tile: DIESEL_SUITE_TILE });
     };
-    /** A thin rail along a ring: an upright strip and a flat one. */
-    const rail = (d: number, y: number, ranges: RingRange[]) => {
-        band(d, y - 0.05, d, y, ranges, RAIL_TINT);
-        band(d - 0.03, y, d + 0.03, y, ranges, RAIL_TINT);
+    /** `ranges` less `gaps` (both in ring indices; gaps may be fractional). */
+    const without = (
+        ranges: RingRange[],
+        gaps: [number, number][],
+    ): [number, number][] => {
+        let pieces: [number, number][] = ranges.map(([a, b]) => [a, b]);
+        for (const [g0, g1] of gaps)
+            for (const shift of [-N, 0, N]) {
+                const next: [number, number][] = [];
+                for (const [a, b] of pieces) {
+                    const [c, d] = [g0 + shift, g1 + shift];
+                    if (d <= a || c >= b) {
+                        next.push([a, b]);
+                        continue;
+                    }
+                    if (c - a > 1e-6) next.push([a, c]);
+                    if (b - d > 1e-6) next.push([d, b]);
+                }
+                pieces = next;
+            }
+        return pieces;
+    };
+    /**
+     * `into.slice` between rings `a` and `b` over each piece (fractional
+     * ring indices).
+     */
+    const slicePieces = (
+        into: BandBuilder,
+        a: Ring,
+        b: Ring,
+        pieces: [number, number][],
+        options: SliceOptions,
+    ) => {
+        for (const [f0, f1] of pieces) {
+            if (f1 - f0 < 1e-6) continue;
+            const fs = [f0];
+            for (let i = Math.floor(f0) + 1; i < f1 - 1e-6; i++)
+                if (i - f0 > 1e-6) fs.push(i);
+            fs.push(f1);
+            into.slice(
+                fs.map((f) => ringAt(a, f)),
+                fs.map((f) => ringAt(b, f)),
+                0,
+                fs.length - 1,
+                options,
+            );
+        }
+    };
+    /** A quad into `into`'s geometry: `a`, `b` along the bottom, then up. */
+    const quadInto = (
+        into: BandBuilder,
+        [a, b, c, d]: Vector3[],
+        tint: Tint,
+    ) => {
+        into.pos.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+        into.pos.push(a.x, a.y, a.z, c.x, c.y, c.z, d.x, d.y, d.z);
+        into.uv.push(0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0);
+        for (let k = 0; k < 6; k++) into.color.push(...tint);
     };
     /**
      * A glass rail along a ring, `d` out, from `y0` up to its cap at `y1`
@@ -1277,23 +1500,33 @@ export function buildDieselBowl(ctx: DieselCtx): DieselBowl {
     band(deckBack, upperWest.base, deckBack, 0, bare, SHADE);
     // The 600s: a back wall, and the slab under them.
     for (const [t, range] of uppers) {
-        band(t.back, t.top + RIM, t.back, t.bottom, [range], SHADE);
+        // Under the press box's sill on the west, not up past it.
+        const rim = range === R.front ? BOWL.pressBox.sill : t.top + RIM;
+        band(t.back, rim, t.back, t.bottom, [range], SHADE);
         litBand(t.offset, t.bottom, t.back, t.bottom, [range], SOFFIT_LIT);
         band(t.back, t.bottom, t.back, 0, [range], SHADE);
     }
-    // The press box: a glazed box over the top rows of the west 600s.
+    // The press box: a glazed box behind the top row of the west 600s. Its
+    // sill is a low parapet just over the last tread, so the box looks out
+    // over the deck; over its roof the 600s' back wall rises to the side
+    // roof's shade.
     const box = BOWL.pressBox;
     {
         const west = [R.front];
-        const back = upperWest.back;
-        const sill = box.bottom + 1;
-        const head = box.top - 0.9;
-        litBand(box.offset, box.bottom, back, box.bottom, west, SOFFIT_LIT);
-        litBand(box.offset, box.bottom, box.offset, sill, west, FASCIA_LIT);
-        glazing(box.offset, sill, head, west);
+        const head = box.top - 0.7;
+        litBand(
+            upperWest.back,
+            box.sill,
+            box.offset,
+            box.sill,
+            west,
+            FASCIA_LIT,
+        );
+        litBand(box.offset, box.bottom, box.offset, box.sill, west, FASCIA_LIT);
+        glazing(box.offset, box.sill, head, west);
         litBand(box.offset, head, box.offset, box.top, west, FASCIA_LIT);
-        band(box.offset, box.top, back, box.top, west, SHADE);
-        band(back, upperWest.top + RIM, back, box.top, west, SHADE);
+        band(box.offset, box.top, box.back, box.top, west, SHADE);
+        band(box.back, box.bottom, box.back, box.top, west, SHADE);
     }
     // The north stand: an open concourse behind the lower bank, dark under
     // the high deck, and a ledge from the deck's back wall to the window.
@@ -1360,13 +1593,28 @@ export function buildDieselBowl(ctx: DieselCtx): DieselBowl {
         );
     // The north stand meets the main ring halfway round each north corner:
     // a bulkhead closes the main ring's decks, and each bank shows its side.
+    // Under them runs a corner tunnel: up to its lid, the two banks' sides
+    // are the tunnel's own walls (`addCornerTunnels`).
+    const endWallOverTunnel = (k: number, t: FrameTier) => {
+        const floor = BOWL.cornerTunnels.height;
+        wallQuad(
+            k,
+            [
+                [lidD, floor],
+                [lidD, t.base + ((lidD - t.offset) / t.depth) * t.rise],
+                [t.back, t.top + t.rise],
+                [t.back, floor],
+            ],
+            END,
+        );
+    };
     for (const k of [R.north[0], R.north[1]]) {
         const hasUpper = k === R.northEast[1];
         const top = hasUpper
             ? cornerUpper.top + cornerUpper.rise + RIM
             : upperWest.base;
-        endWall(k, lower, 0);
-        endWall(k, northLower, 0);
+        endWallOverTunnel(k, lower);
+        endWallOverTunnel(k, northLower);
         endWall(k, loge, 0);
         endWall(k, northMid, northMid.bottom, RIM);
         wallQuad(
@@ -1416,23 +1664,57 @@ export function buildDieselBowl(ctx: DieselCtx): DieselBowl {
             [
                 [box.offset, box.bottom],
                 [box.offset, box.top],
-                [upperWest.back, box.top],
-                [upperWest.back, box.bottom],
+                [box.back, box.top],
+                [box.back, box.bottom],
             ],
             END,
         );
 
     // The padded field wall stands above the first tread: its face is the
     // pads (`surround.ts`), its top a concrete cap.
+    // It stops at the corner tunnels' mouths.
     const wallCap = 0.3;
-    band(0, lower.base, 0, BOWL.fieldWall, openMain, WALL_BLUE);
-    band(0, lower.base, 0, BOWL.fieldWall, tarp, WALL_BLACK);
-    band(0, BOWL.fieldWall, wallCap, BOWL.fieldWall, main, scale(TREAD, 0.9));
-    band(wallCap, BOWL.fieldWall, wallCap, lower.base, main, SHADE);
+    const tunnelGaps = dieselTunnelCuts(frame, ring(0, 0));
+    const wallBand = (
+        d0: number,
+        y0: number,
+        d1: number,
+        y1: number,
+        ranges: RingRange[],
+        tint: Tint,
+    ) =>
+        slicePieces(
+            concrete,
+            ring(d0, y0),
+            ring(d1, y1),
+            without(ranges, tunnelGaps),
+            { tint },
+        );
+    wallBand(0, lower.base, 0, BOWL.fieldWall, openMain, WALL_BLUE);
+    wallBand(0, lower.base, 0, BOWL.fieldWall, tarp, WALL_BLACK);
+    wallBand(
+        0,
+        BOWL.fieldWall,
+        wallCap,
+        BOWL.fieldWall,
+        main,
+        scale(TREAD, 0.9),
+    );
+    wallBand(wallCap, BOWL.fieldWall, wallCap, lower.base, main, SHADE);
     // The field wall's rail and the 200s' front rail are dark steel (photos
     // 1 and 10). The cross-aisle's edge and the balcony fronts above are
     // glass with a metal cap (photos 12 and 13).
-    rail(lower.offset + 0.06, BOWL.fieldWall + 0.5, [R.open]);
+    {
+        const d = lower.offset + 0.06;
+        const y = BOWL.fieldWall + 0.5;
+        const pieces = without([R.open], dieselTunnelCuts(frame, ring(d, 0)));
+        slicePieces(concrete, ring(d, y - 0.05), ring(d, y), pieces, {
+            tint: RAIL_TINT,
+        });
+        slicePieces(concrete, ring(d - 0.03, y), ring(d + 0.03, y), pieces, {
+            tint: RAIL_TINT,
+        });
+    }
     glassRail(
         lower.back + 0.06,
         aisleY,
@@ -1505,6 +1787,8 @@ export function buildDieselBowl(ctx: DieselCtx): DieselBowl {
 
     addPlatforms();
     addLogeTunnels(tunnels);
+    addCornerTunnels();
+    addFieldSuites();
     if (directors) addDirectors(directors);
     const plaqueLabels = addSectionNumbers();
     if (high) {
@@ -2064,6 +2348,242 @@ export function buildDieselBowl(ctx: DieselCtx): DieselBowl {
             [2.3, 3.4],
             [5.7, 6.4],
         ]);
+    }
+
+    /**
+     * The corner tunnels (`BOWL.cornerTunnels`): in each corner a notch
+     * through the field-level bank down to the floor, between two concrete
+     * walls parallel to the corner's 45 degree line, then a tunnel on under
+     * the rows that clear it (the lid), lined and lit like the 200s'
+     * mouths, with the concourse's light at its back. In the north corners
+     * the notch takes half of each bank, the main ring's and the north
+     * stand's.
+     */
+    function addCornerTunnels(): void {
+        for (const corner of [1, 3, 5, 7]) {
+            const mid = PART_START[corner] + HALF_ARC;
+            // The bank on each side of the notch: before it and after it.
+            const pair: [FrameTier, FrameTier] =
+                corner === 5
+                    ? [lower, northLower]
+                    : corner === 7
+                      ? [northLower, lower]
+                      : [lower, lower];
+            addNotchSide(corner, 0, pair[0]);
+            addNotchSide(corner, 1, pair[1]);
+            addNotchFloor(corner);
+            // The tunnel under the lid, square to the 45 degree line.
+            const { axis } = dieselTunnelAxis(frame, corner);
+            const front = ringAt(ring(lidD, 0), mid);
+            const across = new Vector3(axis.z, 0, -axis.x);
+            const p = (x: number, d: number, y: number) =>
+                front
+                    .clone()
+                    .addScaledVector(across, x)
+                    .addScaledVector(axis, d)
+                    .setY(y);
+            lineTunnel(p, CT.width / 2, CT.depth, 0, CT.height);
+        }
+    }
+
+    /** Ring index of a corner tunnel's edge `e` (0 or 1) on a ring. */
+    function tunnelEdge(r: Ring, corner: number, e: 0 | 1): number {
+        const mid = PART_START[corner] + HALF_ARC;
+        const cut = dieselTunnelCuts(frame, r).find(
+            ([a, b]) => a < mid && b > mid,
+        );
+        return cut ? cut[e] : mid;
+    }
+
+    /**
+     * One side `e` of a corner's notch, through bank `t`: each cut row's
+     * side, from the floor up to its tread (at the row's own cut, one ring
+     * index front to back, as `addTier` cuts its tread), the field wall's
+     * end, and over the tunnel's mouth the lid's face and a cap back to the
+     * first row that runs over it.
+     */
+    function addNotchSide(corner: number, e: 0 | 1, t: FrameTier): void {
+        const side = scale(SOFFIT_LIT, 0.75);
+        const mid = PART_START[corner] + HALF_ARC;
+        const kept = Math.max(0, Math.ceil((lidD - t.offset) / t.depth - 1e-6));
+        for (let i = 0; i < kept; i++) {
+            const d0 = t.offset + i * t.depth;
+            const d1 = Math.min(d0 + t.depth, lidD);
+            const h = t.base + i * t.rise;
+            const f = tunnelEdge(ring(d0, 0), corner, e);
+            quadInto(
+                lit,
+                [
+                    ringAt(ring(d0, 0), f),
+                    ringAt(ring(d1, 0), f),
+                    ringAt(ring(d1, h), f),
+                    ringAt(ring(d0, h), f),
+                ],
+                side,
+            );
+            // The step to the next row's cut, which stands a little to one
+            // side: the face between them, up to this row's tread.
+            const next = tunnelEdge(ring(d1, 0), corner, e);
+            if (Math.abs(next - f) > 1e-4)
+                quadInto(
+                    lit,
+                    [
+                        ringAt(ring(d1, 0), f),
+                        ringAt(ring(d1, 0), next),
+                        ringAt(ring(d1, h), next),
+                        ringAt(ring(d1, h), f),
+                    ],
+                    side,
+                );
+        }
+        if (t === lower) {
+            const f = tunnelEdge(ring(0, 0), corner, e);
+            const g = tunnelEdge(ring(wallCap, 0), corner, e);
+            quadInto(
+                lit,
+                [
+                    ringAt(ring(0, lower.base), f),
+                    ringAt(ring(wallCap, lower.base), g),
+                    ringAt(ring(wallCap, BOWL.fieldWall), g),
+                    ringAt(ring(0, BOWL.fieldWall), f),
+                ],
+                side,
+            );
+        }
+        const hPrev = t.base + (kept - 1) * t.rise;
+        const dKept = t.offset + kept * t.depth;
+        const edge = tunnelEdge(ring(lidD, 0), corner, e);
+        const span: [number, number][] = [e === 0 ? [edge, mid] : [mid, edge]];
+        const dFace = lidD - 0.02;
+        slicePieces(lit, ring(dFace, CT.height), ring(dFace, hPrev), span, {
+            tint: scale(FASCIA_LIT, 0.8),
+        });
+        if (dKept - lidD > 0.01)
+            slicePieces(
+                treadBand,
+                ring(dFace, hPrev),
+                ring(dKept, hPrev),
+                span,
+                {
+                    tint: scale(TREAD, spill(lidD, hPrev)),
+                },
+            );
+    }
+
+    /** A corner notch's floor: concrete from the turf apron to the mouth. */
+    function addNotchFloor(corner: number): void {
+        const tint = scale(SOFFIT_LIT, 0.42);
+        const steps = 6;
+        const n = 6;
+        const lerp = (u: number, x0: number, x1: number) =>
+            x0 + ((x1 - x0) * u) / n;
+        for (let j = 0; j < steps; j++) {
+            const ra = ring(0.4 + ((lidD - 0.4) * j) / steps, 0.03);
+            const rb = ring(0.4 + ((lidD - 0.4) * (j + 1)) / steps, 0.03);
+            const [a0, a1] = [
+                tunnelEdge(ra, corner, 0),
+                tunnelEdge(ra, corner, 1),
+            ];
+            const [b0, b1] = [
+                tunnelEdge(rb, corner, 0),
+                tunnelEdge(rb, corner, 1),
+            ];
+            for (let q = 0; q < n; q++)
+                quadInto(
+                    lit,
+                    [
+                        ringAt(ra, lerp(q, a0, a1)),
+                        ringAt(ra, lerp(q + 1, a0, a1)),
+                        ringAt(rb, lerp(q + 1, b0, b1)),
+                        ringAt(rb, lerp(q, b0, b1)),
+                    ],
+                    tint,
+                );
+        }
+    }
+
+    /**
+     * The field suites (`BOWL.fieldSuites`): across the south end, behind
+     * the field wall, a row of glass fronts at field level with their
+     * rooms lit warm, under a slab that the rows behind rise from. A
+     * narrow patio runs between the wall and the glass, with a few people
+     * out on it.
+     */
+    function addFieldSuites(): void {
+        const span = (d: number) => {
+            const cut = suiteCut(ring(d, 0));
+            return cut ? [cut] : [];
+        };
+        const g = FS.glass;
+        const roof = FS.ceiling + 0.25;
+        const dBack = lower.offset + FS.rows * lower.depth;
+        // The field wall's lower half, where the first row's riser was, and
+        // its back face down to the patio.
+        slicePieces(concrete, ring(0, 0), ring(0, lower.base), span(0), {
+            tint: WALL_BLUE,
+        });
+        slicePieces(
+            concrete,
+            ring(wallCap, lower.base),
+            ring(wallCap, 0),
+            span(wallCap),
+            { tint: SHADE },
+        );
+        // The patio, the glass, the slab's edge and its top.
+        slicePieces(lit, ring(0.4, 0.03), ring(g, 0.03), span(g), {
+            tint: scale(SOFFIT_LIT, 0.5),
+        });
+        slicePieces(glass, ring(g, FS.floor), ring(g, FS.ceiling), span(g), {
+            tile: DIESEL_SUITE_TILE,
+        });
+        slicePieces(lit, ring(g, FS.ceiling), ring(g, roof), span(g), {
+            tint: FASCIA_LIT,
+        });
+        slicePieces(treadBand, ring(g, roof), ring(dBack, roof), span(g), {
+            tint: scale(TREAD, spill(g, roof)),
+        });
+        glassRail(g + 0.1, roof, roof + GLASS_RAIL.deck, span(g + 0.1));
+        // The ends: a wall from the field wall back under the rows.
+        const [a, b] = span(0)[0] ?? [0, 0];
+        const [c, d] = span(dBack)[0] ?? [0, 0];
+        for (const [f0, f1] of [
+            [a, c],
+            [b, d],
+        ])
+            quadInto(
+                lit,
+                [
+                    ringAt(ring(wallCap, 0), f0),
+                    ringAt(ring(dBack, 0), f1),
+                    ringAt(ring(dBack, roof), f1),
+                    ringAt(ring(wallCap, roof), f0),
+                ],
+                scale(SOFFIT_LIT, 0.7),
+            );
+        // A few people out on the patio, in front of their suites.
+        const south = sections.filter((sec) => inRanges(sec, [R.south]));
+        const line = ring((wallCap + g) / 2 + 0.2, FS.floor + SEAT_HEIGHT);
+        const cut = suiteCut(line);
+        if (!cut) return;
+        for (const sec of south) {
+            const piece = gapIn([cut], sec);
+            if (!piece) continue;
+            const m0 = metersTo(line, sec.s, piece[0]);
+            const m1 = metersTo(line, sec.s, piece[1]);
+            for (const [u0, u1] of [
+                [0.15, 0.25],
+                [0.6, 0.68],
+            ])
+                pushSeatRow(
+                    line,
+                    sec,
+                    m0 + (m1 - m0) * u0,
+                    m0 + (m1 - m0) * u1,
+                    0.8,
+                    { ranges: [], crowd: () => true },
+                    1,
+                );
+        }
     }
 
     /**

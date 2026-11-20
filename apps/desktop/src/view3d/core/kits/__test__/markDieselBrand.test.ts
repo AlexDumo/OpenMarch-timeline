@@ -491,7 +491,47 @@ describe("Mark Diesel field surround", () => {
         expect(pads.max.z).toBeCloseTo(BOWL.halfZ - WALL_PROUD, 3);
         // Not the back straight: the wall under the drape stays black.
         expect(pads.min.z).toBeGreaterThan(-BOWL.halfZ + 1);
-        expect(pads.max.x).toBeCloseTo(BOWL.halfX - WALL_PROUD, 3);
+        // The south end's wall stands 2 m further back than the north's.
+        expect(pads.max.x).toBeCloseTo(BOWL.wallX.south - WALL_PROUD, 3);
+        expect(pads.min.x).toBeCloseTo(BOWL.wallX.north + WALL_PROUD, 3);
+    });
+
+    it("leaves the corner tunnels' mouths open, and squares the wall's corners", () => {
+        const part = keep(buildDieselBoards(context("low")));
+        const { BOWL } = frame;
+        const pads = (
+            part.object.getObjectByName("markDiesel.wallPads") as Mesh
+        ).geometry.getAttribute("position");
+        // The pads near each corner's 45 degree line, at the wall.
+        const corners = [
+            [BOWL.wallX.south, BOWL.halfZ],
+            [BOWL.wallX.south, -BOWL.halfZ],
+            [BOWL.wallX.north, BOWL.halfZ],
+            [BOWL.wallX.north, -BOWL.halfZ],
+        ];
+        const r = BOWL.front.cornerRadius;
+        for (const [cx, cz] of corners) {
+            const sx = Math.sign(cx);
+            const sz = Math.sign(cz);
+            // The wall's corner: its arc's middle, 45 degrees round.
+            const mx = cx - sx * r * (1 - Math.SQRT1_2);
+            const mz = cz - sz * r * (1 - Math.SQRT1_2);
+            let near = 0;
+            for (let i = 0; i < pads.count; i++)
+                if (
+                    Math.hypot(pads.getX(i) - mx, pads.getZ(i) - mz) <
+                    BOWL.cornerTunnels.width / 2 - 0.5
+                )
+                    near++;
+            expect(near, `${cx}, ${cz}`).toBe(0);
+        }
+        // Along the straights the pads run nearly into the corner: the
+        // wall's corner radius is 6 m, not the stands' 16.
+        let reach = 0;
+        for (let i = 0; i < pads.count; i++)
+            if (pads.getZ(i) > BOWL.halfZ - 0.5)
+                reach = Math.max(reach, pads.getX(i));
+        expect(reach).toBeGreaterThan(BOWL.wallX.south - r - 0.5);
     });
 
     it("stands the sponsor boards along the back sideline, facing the audience", () => {
@@ -625,16 +665,17 @@ describe("Mark Diesel video boards", () => {
             );
             expect(screen.min.y).toBeGreaterThan(frame.BOWL.ribbon2.top);
             expect(screen.max.y - screen.min.y).toBeCloseTo(ft(53), 3);
-            // It hangs under the end of a superframe, past the last block
-            // of the light row: where its face crosses the frame's
-            // centerline it is clear of the catwalk, and the sign's top is
+            // It hangs across the corner, past the end of the light row:
+            // the whole cabinet is beyond the catwalk's last block, it
+            // stands outside the superframe's line, and the sign's top is
             // under the bottom chord.
-            const reach = Math.abs(frame.CATWALK_CORNERS[0][0]) + 4;
+            const reach = Math.abs(frame.CATWALK_CORNERS[0][0]) + 2;
             const across = new Vector3(1, 0, 0).applyEuler(board.rotation);
-            const t =
-                (Math.sign(spot.z) * frame.ROOF.superframes.z - spot.z) /
-                across.z;
-            expect(Math.abs(spot.x + t * across.x)).toBeGreaterThan(reach + 1);
+            const halfWidth = DIESEL_BOARD.width / 2 + DIESEL_BOARD.margin;
+            expect(
+                Math.abs(spot.x) - halfWidth * Math.abs(across.x),
+            ).toBeGreaterThan(reach);
+            expect(Math.abs(spot.z)).toBeGreaterThan(frame.ROOF.superframes.z);
             const signTop =
                 spot.y +
                 DIESEL_BOARD.height / 2 +
@@ -642,7 +683,7 @@ describe("Mark Diesel video boards", () => {
                 DIESEL_BOARD.headerGap +
                 DIESEL_BOARD.header;
             expect(signTop).toBeLessThan(
-                dieselSuperframeBottom(frame, spot.x) - 2,
+                dieselSuperframeBottom(frame, spot.x) - 0.5,
             );
             expect(signTop).toBeGreaterThan(frame.CATWALK_Y - 2);
             // The signs (one mesh) stand over the screens, under the roof.

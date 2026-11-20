@@ -144,7 +144,18 @@ describe("dieselFrame", () => {
         expect(B.upperFascia.bottom).toBeGreaterThanOrEqual(suite.top);
         expect(terrace.base).toBeGreaterThanOrEqual(B.upperFascia.top);
         expect(upperWest.base).toBeGreaterThan(terrace.top + 2);
-        expect(B.pressBox.bottom).toBeGreaterThan(upperWest.top + 1.5);
+        // The press box stands behind the top row of the west 600s, not
+        // over it, its floor about 44 to 45 m up (photos B and 7; Pyware
+        // has 44.3), its sill just over the last tread.
+        expect(B.pressBox.offset).toBeGreaterThanOrEqual(upperWest.back);
+        expect(B.pressBox.bottom).toBeGreaterThanOrEqual(44);
+        expect(B.pressBox.bottom).toBeLessThanOrEqual(45);
+        expect(B.pressBox.sill).toBeGreaterThan(upperWest.top);
+        expect(B.pressBox.sill).toBeLessThan(upperWest.top + 0.5);
+        expect(B.pressBox.top).toBeLessThan(
+            f.ROOF.roofY(B.halfZ + B.pressBox.back) - f.ROOF.thickness - 3,
+        );
+        expect(B.halfZ + B.pressBox.back).toBeLessThan(f.BUILDING.halfZ);
         // Ribbon 2 and the ring of names are one band of height.
         expect(B.ribbon2.bottom).toBe(B.upperFascia.bottom);
         expect(B.ribbon2.top).toBe(B.upperFascia.top);
@@ -170,21 +181,47 @@ describe("dieselFrame", () => {
         expect(f.ROOF.roofY(backZ) - f.ROOF.thickness).toBeGreaterThan(
             upperEast.top + 3,
         );
-        // The corner boards hang just over ribbon 2, in front of the 500s,
-        // with their tops under the catwalk.
+        // The corner boards hang across the corners, 33 degrees round the
+        // corner arc from the ends (photo 6), over the 500s' front, their
+        // foot 34 m up (2.5 m over the 500s' last tread) and their top just
+        // under the light row, outside the superframes' line and past the
+        // end of the light row.
         for (const b of f.VIDEO_BOARDS) {
-            expect(b.y - b.height / 2).toBeGreaterThan(B.ribbon2.top + 1);
+            expect(b.width).toBeCloseTo(ft(97));
+            expect(b.height).toBeCloseTo(ft(53));
+            expect(b.y - b.height / 2).toBeCloseTo(34, 0);
+            expect(b.y - b.height / 2).toBeGreaterThan(B.terrace.top + 2);
+            expect(b.y + b.height / 2).toBeLessThan(f.CATWALK_Y);
             const d = outlineOffset(B.outline, b.x, b.z);
             expect(d).toBeLessThan(terrace.offset);
-            expect(d).toBeGreaterThan(B.ribbon2.offset - 4);
-            expect(b.y + b.height / 2).toBeLessThan(f.CATWALK_Y);
+            expect(d).toBeGreaterThan(B.ribbon2.offset - 1);
+            const arc = Math.atan2(
+                Math.abs(b.z) - (B.halfZ - B.outline.cornerRadius),
+                Math.abs(b.x) - (B.halfX - B.outline.cornerRadius),
+            );
+            expect((arc * 180) / Math.PI).toBeCloseTo(33, 3);
+            expect(Math.abs(b.z)).toBeGreaterThan(f.ROOF.superframes.z);
+            // The screen faces the field's center; its nearer end is past
+            // the light row's last block.
+            const yaw = Math.atan2(-b.x, -b.z);
+            expect(
+                Math.abs(b.x) - (b.width / 2) * Math.abs(Math.cos(yaw)),
+            ).toBeGreaterThan(Math.abs(f.CATWALK_CORNERS[0][0]));
         }
+        // South-east and north-west, mirrored.
+        const [se, nw] = f.VIDEO_BOARDS;
+        expect([Math.sign(se.x), Math.sign(se.z)]).toEqual([1, -1]);
+        expect(nw.x).toBeCloseTo(-se.x);
+        expect(nw.z).toBeCloseTo(-se.z);
     });
 
     it("follows the show's own field", () => {
         const s = dieselFrame(small);
         expect(s.CENTER).toEqual({ x: 2, z: -13 });
         expect(s.BOWL.halfX).toBeCloseTo(22 + s.BOWL.marginX);
+        expect(s.BOWL.wallX.south - s.BOWL.wallX.north).toBeCloseTo(
+            44 + s.BOWL.marginX + s.BOWL.marginSouth,
+        );
         // Heights don't depend on the field.
         expect(s.CATWALK_Y).toBe(f.CATWALK_Y);
         expect(s.ROOF.ridgeY).toBe(f.ROOF.ridgeY);
@@ -266,7 +303,8 @@ describe("Mark Diesel kit", () => {
         // Suite glass: the open loge boxes behind the 200s are the lowest
         // glass, and the one suite level the highest, under the ring.
         const suites = box(kit.root, "markDiesel.suites");
-        expect(suites.min.y).toBeCloseTo(BOWL.logeBoxes.bottom, 3);
+        // (The field suites' glass, at field level, is the lowest.)
+        expect(suites.min.y).toBeCloseTo(BOWL.fieldSuites.floor, 3);
         expect(suites.max.y).toBeGreaterThanOrEqual(BOWL.suites[0].top);
         expect(suites.max.y).toBeLessThan(BOWL.pressBox.top);
 
@@ -314,8 +352,14 @@ describe("Mark Diesel kit", () => {
             const d = outlineOffset(o, row.points[0][0], row.points[0][2]);
             expect(d).toBeGreaterThan(0);
             for (const [x, y, z] of row.points) {
-                // A row keeps to one ring, at one height.
-                expect(Math.abs(outlineOffset(o, x, z) - d)).toBeLessThan(0.05);
+                // A row keeps to one ring, at one height. (Near the field
+                // the rings square off from the outline's corners.)
+                const off = Math.abs(outlineOffset(o, x, z) - d);
+                expect(off).toBeLessThan(
+                    d >= f.BOWL.front.fade
+                        ? 0.05
+                        : f.BOWL.front.push + f.BOWL.front.south,
+                );
                 expect(y).toBe(row.points[0][1]);
             }
             const mid = row.points[Math.floor(row.points.length / 2)];
@@ -630,10 +674,42 @@ describe("Mark Diesel kit", () => {
         expect(upper.x).toBeCloseTo(0);
         expect(upper.y).toBeGreaterThan(f.BOWL.upperWest.base);
         expect(upper.z).toBeGreaterThan(f.BOWL.halfZ + f.BOWL.upperWest.offset);
-        // The press box hangs over the top rows of the west 600s.
+        // The press box stands behind the top row of the west 600s: its eye
+        // is behind the last row and over its seat backs, and nothing of
+        // the stand comes between it and the field.
         const press = at("pressBox");
-        expect(press.y).toBeGreaterThan(f.BOWL.upperWest.top);
+        expect(press.y).toBeGreaterThan(f.BOWL.upperWest.top + 1);
         expect(press.y).toBeLessThan(f.BOWL.pressBox.top);
+        expect(press.z).toBeGreaterThan(
+            f.BOWL.halfZ + f.BOWL.upperWest.back - 0.5,
+        );
+        const stand = [
+            "markDiesel.treads",
+            "markDiesel.seats",
+            "markDiesel.concrete",
+            "markDiesel.fascias",
+        ].flatMap((n) => byName(kit.root, n));
+        const pressEye = new Vector3(...press.c.position);
+        for (const x of [-40, -20, 0, 20, 40])
+            for (const z of [f.FIELD_HALF_WIDTH, 0, -f.FIELD_HALF_WIDTH]) {
+                const to = new Vector3(
+                    x + f.CENTER.x,
+                    0.05,
+                    z + f.CENTER.z,
+                ).sub(pressEye);
+                const ray = new Raycaster(
+                    pressEye,
+                    to.clone().normalize(),
+                    0.05,
+                    to.length() - 0.3,
+                );
+                expect(
+                    ray
+                        .intersectObjects(stand, false)
+                        .map((h) => h.object.name),
+                    `${x}, ${z}`,
+                ).toEqual([]);
+            }
         // The end zone: row 30 of the north end's lower stand (photo 11),
         // with a clear view of the field. Looking toward the field and down,
         // the eye sees its own stand's seats and then the floor: no tunnel
