@@ -17,6 +17,9 @@
  *   there), so highlight it without flying.
  * - `currentPose()`: the view right now (eye, look-at point, field of
  *   view), for saving it as a camera. Null before the rig mounts.
+ * - `seated`: the view is at, or flying to, a person's eye: a seat or floor
+ *   camera, or a picked seat. Seat view (`../SeatView.tsx`) draws only
+ *   then, and drags turn the head there. Any move away clears it.
  *
  * Fields starting with `_` are for the rig only.
  */
@@ -37,6 +40,9 @@ export interface CameraState {
     setPickMode: (on: boolean) => void;
     markActive: (id: string) => void;
     currentPose: () => ViewPose | null;
+    seated: boolean;
+    /** Rig only. */
+    _setSeated: (seated: boolean) => void;
     /** Rig only: sets where `currentPose` reads from. */
     _setPoseSource: (source: (() => ViewPose) | null) => void;
     /** Rig only: the latest `selectCamera` call. */
@@ -62,6 +68,10 @@ export const useCameraStore = create<CameraState>()((set, get) => ({
     setPickMode: (on) => set({ pickMode: on }),
     markActive: (id) => set({ activeCameraId: id, pickMode: false }),
     currentPose: () => poseSource?.() ?? null,
+    seated: false,
+    _setSeated: (seated) => {
+        if (get().seated !== seated) set({ seated });
+    },
     _setPoseSource: (source) => {
         poseSource = source;
     },

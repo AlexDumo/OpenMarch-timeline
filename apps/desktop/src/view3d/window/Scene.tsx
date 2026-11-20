@@ -22,7 +22,8 @@
  *
  * What it built is published in `useView3dSceneStore` (`sceneStore.ts`) for
  * the camera rig and the overlay. The camera rig (`camera/CameraRig.tsx`,
- * P3.2) places and moves the camera. Performers (`performers/`), props
+ * P3.2) places and moves the camera. At a seat, seat view (`SeatView.tsx`)
+ * draws what a person there sees instead of the photo-matched camera. Performers (`performers/`), props
  * (`props/PropBlocks.tsx`) and items with a built-in model
  * (`props/PitModels.tsx`) follow the editor's playback.
  */
@@ -72,6 +73,7 @@ import type {
 } from "@/view3d/core/types";
 import type { VenueSettings } from "@/view3d/core/venueSettings";
 import CameraRig from "./camera/CameraRig";
+import SeatView, { seatViewSceneTarget } from "./SeatView";
 import { DEFAULT_NEAR } from "./camera/rigMath";
 import { CROWD_CLEAR_RADIUS, useView3dSceneStore } from "./sceneStore";
 import { useFieldImage } from "./useFieldImage";
@@ -186,6 +188,7 @@ export default function Scene() {
                     />
                 )}
                 {ready && <CameraRig />}
+                {ready && <SeatView />}
                 <DrawWhenNeeded />
             </Canvas>
         </div>
@@ -386,11 +389,17 @@ function SceneContents({
             const { kit, lighting } = useView3dSceneStore.getState();
             const environment = envRef.current;
             if (!kit || !environment || !lighting) return;
+            // In seat view the scene draws into its target, and a material
+            // compiles differently for a target than for the canvas.
+            const target = seatViewSceneTarget();
+            const drawingTo = gl.getRenderTarget();
+            if (target) gl.setRenderTarget(target);
             void warmLightingPresets(gl, scene, camera, {
                 env: environment,
                 kit,
                 current: lighting,
             });
+            if (target) gl.setRenderTarget(drawingTo);
             // What it just compiled doesn't start another wait.
             warm.programs = gl.info.programs?.length ?? 0;
         }, WARM_AFTER_MS);

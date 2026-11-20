@@ -3071,7 +3071,8 @@
             "pickSeatTooltip": "Pick a seat: click a seat in the stands to sit there",
             "venue": "Venue",
             "freeCamera": "Free view",
-            "director": "Director"
+            "director": "Director",
+            "seatView": "Seat view"
         },
         "readout": {
             "count": "Count {count} of {total}",
@@ -3139,7 +3140,9 @@
             "zoomOrPinch": "Zoom, or pinch on a trackpad",
             "pan": "Pan, or drag with the right mouse button",
             "zoom": "Zoom",
-            "pausedPose": "Paused: show the actual step or the closed position"
+            "pausedPose": "Paused: show the actual step or the closed position",
+            "lookAround": "In Seat view: look around from the seat",
+            "seatZoom": "In Seat view: narrow or widen what you see"
         },
         "keyNames": {
             "pair": "<first></first> / <second></second>"

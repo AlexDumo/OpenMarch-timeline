@@ -1,12 +1,21 @@
+// cspell:ignore hfov
 /**
  * The camera rig's state machine (P3.2): an orbit pose around a target plus
  * an optional fly-to tween. It owns no React and no DOM; `CameraRig.tsx`
  * feeds it input and calls `update` once per frame.
+ *
+ * At a person's seat (`sit`), it also holds a head: in seat view a drag
+ * turns it about the fixed eye (`look`) and the wheel zooms the eye's field
+ * of view (`seatZoom`), both eased. Any other move or fly leaves the seat.
  */
 import { PerspectiveCamera, type Camera, type Vector3Tuple } from "three";
 import {
+    clampLook,
     clampRadius,
     FLY_MS,
+    lookAngles,
+    lookDirection,
+    LOOK_HALF_LIFE_MS,
     MAX_PAN,
     MAX_RADIUS,
     maxPhiAboveGround,
@@ -17,6 +26,7 @@ import {
     ORBIT_PER_PX,
     panTarget,
     positionFromSpherical,
+    SEAT_ZOOM_MIN_DEG,
     sphericalFromPose,
     tweenPose,
     zoomRadius,
@@ -25,6 +35,7 @@ import {
     type Tween,
 } from "./rigMath";
 import { damp, targetOnGround, zoomAbout, zoomRatioLimits } from "./inputMath";
+import { SEAT_VIEW_DEFAULTS } from "@/view3d/core/post/seatViewPass";
 
 /** A wheel zoom eases in with this half-life (ms): quick, but not a jump. */
 export const ZOOM_HALF_LIFE_MS = 45;
@@ -43,6 +54,25 @@ export interface FlyOptions {
     fovDeg?: number;
     /** Called once when the camera lands. */
     onArrive?: (position: Vector3Tuple) => void;
+}
+
+/** Head turns smaller than this (radians) count as arrived. */
+const LOOK_STOP = 1e-4;
+
+/** The head at a seat: a fixed eye, turned and zoomed, each easing to its goal. */
+interface Head {
+    eye: Vector3Tuple;
+    /** The seat's facing (azimuth from +Z toward +X); yaw is measured from it. */
+    facing: number;
+    /** How far ahead the look-at point sits, so leaving the seat orbits about it. */
+    distance: number;
+    yaw: number;
+    pitch: number;
+    goalYaw: number;
+    goalPitch: number;
+    /** Seat view's horizontal field of view, degrees. */
+    fov: number;
+    goalFov: number;
 }
 
 interface ActiveTween {
@@ -67,8 +97,105 @@ export class RigController {
     private velocity = { theta: 0, phi: 0 };
     /** Recent drag steps, for the fling speed on release. */
     private samples: { t: number; theta: number; phi: number }[] = [];
+    private head: Head | null = null;
 
     constructor(private readonly camera: Camera) {}
+
+    /** True while the view is at a person's seat (`sit`), until it moves away. */
+    get seated(): boolean {
+        return this.head !== null;
+    }
+
+    /** Seat view's horizontal field of view at this seat now (degrees), eased. */
+    get seatFovDeg(): number {
+        return this.head?.fov ?? SEAT_VIEW_DEFAULTS.hfovDeg;
+    }
+
+    /** The head's turn from the seat's facing and its pitch from level, radians; null when not seated. */
+    get look(): { yaw: number; pitch: number } | null {
+        return this.head
+            ? { yaw: this.head.yaw, pitch: this.head.pitch }
+            : null;
+    }
+
+    /**
+     * Sits at `eye` facing `target`: the head starts looking there, at seat
+     * view's widest field of view. Ends any fly-to.
+     */
+    sit(eye: Vector3Tuple, target: Vector3Tuple) {
+        this.active = null;
+        this.stopMotion();
+        const { azimuth, pitch } = lookAngles(eye, target);
+        const start = clampLook(0, pitch).pitch;
+        const fov = SEAT_VIEW_DEFAULTS.hfovDeg;
+        this.head = {
+            eye: [...eye],
+            facing: azimuth,
+            distance: Math.max(
+                1,
+                Math.hypot(
+                    target[0] - eye[0],
+                    target[1] - eye[1],
+                    target[2] - eye[2],
+                ),
+            ),
+            yaw: 0,
+            pitch: start,
+            goalYaw: 0,
+            goalPitch: start,
+            fov,
+            goalFov: fov,
+        };
+        this.apply();
+    }
+
+    /**
+     * Turns the head by `dYaw` and `dPitch` radians (positive turns left and
+     * up), within the limits; it eases there. False when not seated or
+     * while flying.
+     */
+    lookBy(dYaw: number, dPitch: number): boolean {
+        const h = this.head;
+        if (!h || this.active) return false;
+        const next = clampLook(h.goalYaw + dYaw, h.goalPitch + dPitch);
+        h.goalYaw = next.yaw;
+        h.goalPitch = next.pitch;
+        return true;
+    }
+
+    /**
+     * Turns the head to face `point`, within the limits; it eases there.
+     * False when not seated or while flying.
+     */
+    turnHeadTo(point: Vector3Tuple): boolean {
+        const h = this.head;
+        if (!h || this.active) return false;
+        const { azimuth, pitch } = lookAngles(h.eye, point);
+        // The shorter way round from the seat's facing.
+        const yaw = Math.atan2(
+            Math.sin(azimuth - h.facing),
+            Math.cos(azimuth - h.facing),
+        );
+        const next = clampLook(yaw, pitch);
+        h.goalYaw = next.yaw;
+        h.goalPitch = next.pitch;
+        return true;
+    }
+
+    /**
+     * Zooms seat view by `ratio` (new field of view over old), between
+     * `SEAT_ZOOM_MIN_DEG` and seat view's widest. False when not seated or
+     * while flying.
+     */
+    seatZoom(ratio: number): boolean {
+        const h = this.head;
+        if (!h || this.active) return false;
+        h.goalFov = Math.min(
+            SEAT_VIEW_DEFAULTS.hfovDeg,
+            Math.max(SEAT_ZOOM_MIN_DEG, h.goalFov * ratio),
+        );
+        return true;
+    }
 
     get flying(): boolean {
         return this.active !== null;
@@ -81,8 +208,13 @@ export class RigController {
 
     /** True while the camera moves on its own: a fly-to, an easing zoom, a coasting orbit. */
     get moving(): boolean {
+        const h = this.head;
         return (
             this.active !== null ||
+            (h !== null &&
+                (h.goalYaw !== h.yaw ||
+                    h.goalPitch !== h.pitch ||
+                    h.goalFov !== h.fov)) ||
             this.pendingZoom !== 0 ||
             this.velocity.theta !== 0 ||
             this.velocity.phi !== 0
@@ -92,6 +224,7 @@ export class RigController {
     /** Places the camera at once and makes the pose the orbit state. */
     jumpTo(position: Vector3Tuple, target: Vector3Tuple, fovDeg?: number) {
         this.active = null;
+        this.head = null;
         this.stopMotion();
         this.setPose(position, target);
         if (fovDeg !== undefined) this.setFov(fovDeg);
@@ -101,6 +234,7 @@ export class RigController {
     /** Starts a fly-to from wherever the camera is now. */
     flyTo(position: Vector3Tuple, target: Vector3Tuple, options: FlyOptions) {
         this.stopMotion();
+        this.head = null;
         const p = this.camera.position;
         const fromFov = this.fov();
         this.active = {
@@ -132,6 +266,7 @@ export class RigController {
     /** Drag orbit. Returns false while flying (input is ignored then). */
     orbit(dxPx: number, dyPx: number): boolean {
         if (this.active) return false;
+        this.head = null;
         const s = this.spherical;
         s.theta -= dxPx * ORBIT_PER_PX;
         s.phi = orbitPhi(
@@ -145,6 +280,7 @@ export class RigController {
     /** Drag pan in the ground plane. */
     pan(dxPx: number, dyPx: number, focus: Vector3Tuple): boolean {
         if (this.active) return false;
+        this.head = null;
         this.target = panTarget(this.target, this.spherical, dxPx, dyPx, focus);
         return true;
     }
@@ -152,6 +288,7 @@ export class RigController {
     /** Wheel zoom (`deltaY` in pixels). */
     zoomWheel(deltaY: number): boolean {
         if (this.active) return false;
+        this.head = null;
         this.setRadius(zoomRadius(this.spherical.radius, deltaY));
         return true;
     }
@@ -159,6 +296,7 @@ export class RigController {
     /** Pinch zoom: `ratio` is old finger distance over new. */
     zoomRatio(ratio: number): boolean {
         if (this.active) return false;
+        this.head = null;
         this.setRadius(clampRadius(this.spherical.radius * ratio));
         return true;
     }
@@ -173,6 +311,7 @@ export class RigController {
         nowMs: number,
     ): boolean {
         if (this.active) return false;
+        this.head = null;
         void nowMs;
         this.pendingZoom += pixels * ZOOM_PER_WHEEL;
         this.zoomAnchor = point ? [...point] : null;
@@ -182,6 +321,7 @@ export class RigController {
     /** Pinch zoom toward `point`: `ratio` is the new radius over the old. */
     zoomRatioAt(ratio: number, point: Vector3Tuple | null): boolean {
         if (this.active) return false;
+        this.head = null;
         this.zoomBy(ratio, point);
         return true;
     }
@@ -239,6 +379,7 @@ export class RigController {
         focus: Vector3Tuple,
     ): boolean {
         if (this.active) return false;
+        this.head = null;
         let x = this.target[0] + from[0] - to[0];
         let z = this.target[2] + from[2] - to[2];
         const ox = x - focus[0];
@@ -279,8 +420,21 @@ export class RigController {
             this.camera.updateMatrixWorld();
             return;
         }
-        this.ease(dt);
+        if (this.head) this.easeHead(dt);
+        else this.ease(dt);
         this.apply();
+    }
+
+    /** Eases the head's turn and zoom toward their goals. */
+    private easeHead(dt: number) {
+        const h = this.head!;
+        const toward = (value: number, goal: number, stop: number) => {
+            const left = damp(goal - value, dt, LOOK_HALF_LIFE_MS);
+            return Math.abs(left) < stop ? goal : goal - left;
+        };
+        h.yaw = toward(h.yaw, h.goalYaw, LOOK_STOP);
+        h.pitch = toward(h.pitch, h.goalPitch, LOOK_STOP);
+        h.fov = toward(h.fov, h.goalFov, 0.01);
     }
 
     /** Applies this frame's share of the eased wheel zoom and the coasting orbit. */
@@ -381,6 +535,23 @@ export class RigController {
     }
 
     private apply() {
+        const h = this.head;
+        if (h) {
+            // The eye stays put; the look-at point keeps the orbit state in
+            // step, so leaving the seat orbits about what the head faced.
+            const dir = lookDirection(h.facing + h.yaw, h.pitch);
+            const target: Vector3Tuple = [
+                h.eye[0] + dir[0] * h.distance,
+                h.eye[1] + dir[1] * h.distance,
+                h.eye[2] + dir[2] * h.distance,
+            ];
+            this.setPose(h.eye, target);
+            this.camera.position.set(...h.eye);
+            this.camera.lookAt(...target);
+            this.camera.updateMatrixWorld();
+            this.setNear(nearFor(h.distance));
+            return;
+        }
         const pos = positionFromSpherical(this.spherical, this.target);
         this.camera.position.set(...pos);
         this.camera.lookAt(...this.target);

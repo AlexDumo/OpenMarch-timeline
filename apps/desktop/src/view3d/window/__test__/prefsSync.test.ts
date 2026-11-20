@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { QUALITY_STORAGE_KEY } from "../qualityPreference";
-import { RESOLUTION_STORAGE_KEY } from "../renderPrefs";
+import { RESOLUTION_STORAGE_KEY, SEAT_VIEW_STORAGE_KEY } from "../renderPrefs";
 import { startPrefsSync, useView3dSceneStore } from "../sceneStore";
 
 /** What the browser does in this window when another one saves a key. */
@@ -35,6 +35,16 @@ describe("startPrefsSync", () => {
         savedElsewhere(QUALITY_STORAGE_KEY, "auto");
         expect(useView3dSceneStore.getState().quality).toBe("low");
         expect(useView3dSceneStore.getState().autoLowered).toBe(true);
+    });
+
+    it("picks up seat view turned off elsewhere, and saves it here", () => {
+        stop = startPrefsSync();
+        useView3dSceneStore.getState().setSeatView(true);
+        expect(localStorage.getItem(SEAT_VIEW_STORAGE_KEY)).toBe("on");
+        savedElsewhere(SEAT_VIEW_STORAGE_KEY, "off");
+        expect(useView3dSceneStore.getState().seatView).toBe(false);
+        useView3dSceneStore.getState().setSeatView(true);
+        expect(localStorage.getItem(SEAT_VIEW_STORAGE_KEY)).toBe("on");
     });
 
     it("stops listening", () => {

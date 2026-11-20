@@ -544,6 +544,15 @@ const MOVE_SHORTCUTS: Record<ControlScheme, ShortcutRows> = {
     ],
 };
 
+/**
+ * At a seat or floor camera with Seat view on (ui.md UI-3), the drag and
+ * the wheel turn and zoom the eyes instead, whatever the scheme.
+ */
+const SEAT_SHORTCUTS: ShortcutRows = [
+    ["lookAround", { binding: "drag" }],
+    ["seatZoom", { binding: "scroll" }],
+];
+
 const SHORTCUTS: ShortcutRows = [
     ["playPause", { binding: "Space" }],
     ["previousNext", { pair: ["Q", "E"] }],
@@ -574,14 +583,18 @@ function ShortcutList() {
     const scheme = useView3dSceneStore((s) => s.controlScheme);
     return (
         <dl className="text-sub grid grid-cols-[auto_1fr] items-baseline gap-x-12 gap-y-4">
-            {[...SHORTCUTS, ...MOVE_SHORTCUTS[scheme]].map(([name, keys]) => (
-                <div key={name} className="contents">
-                    <dt className="flex items-center gap-4 whitespace-nowrap">
-                        <ShortcutKeysCell keys={keys} />
-                    </dt>
-                    <dd className="text-text/80">{t(`view3d.keys.${name}`)}</dd>
-                </div>
-            ))}
+            {[...SHORTCUTS, ...MOVE_SHORTCUTS[scheme], ...SEAT_SHORTCUTS].map(
+                ([name, keys]) => (
+                    <div key={name} className="contents">
+                        <dt className="flex items-center gap-4 whitespace-nowrap">
+                            <ShortcutKeysCell keys={keys} />
+                        </dt>
+                        <dd className="text-text/80">
+                            {t(`view3d.keys.${name}`)}
+                        </dd>
+                    </div>
+                ),
+            )}
         </dl>
     );
 }
