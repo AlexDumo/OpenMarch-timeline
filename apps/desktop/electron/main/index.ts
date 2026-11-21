@@ -20,6 +20,7 @@ import {
 } from "./gpu";
 import { randomUUID } from "node:crypto";
 import {
+    isSameFile,
     publishFile,
     removeWithRetry,
     tempPathBeside,
@@ -90,6 +91,10 @@ import {
 } from "./leftoverJournalRecovery";
 import { cloudSyncServiceFor } from "./cloudSyncFolder";
 import { describeLeftoverJournal } from "./leftoverJournalDiagnostics";
+import {
+    diagnosticTags,
+    stripDiagnosticBreadcrumbs,
+} from "./privateDiagnostics";
 import {
     NEEDS_CONVERSION_STATUS,
     OPEN_STOPPED_STATUS,
@@ -177,7 +182,18 @@ console.log("Sentry error reporting enabled:", enableSentry);
 init({
     dsn: "https://72e6204c8e527c4cb7a680db2f9a1e0b@o4509010215239680.ingest.us.sentry.io/4509010222579712",
     enabled: enableSentry,
+    // The app's own diagnostics go without the console breadcrumbs, which name files.
+    beforeSend: stripDiagnosticBreadcrumbs,
 });
+
+/**
+ * Whether the app may send its own diagnostics now. Read each time: the person can opt out of
+ * analytics after launch.
+ */
+const diagnosticsAllowed = () =>
+    enableSentry &&
+    !store.get("optOutAnalytics") &&
+    !process.env.PLAYWRIGHT_SESSION;
 
 ipcMain.on("settings:set", (event, settings) => {
     for (const [key, value] of Object.entries(settings)) {
@@ -467,12 +483,13 @@ function reportLeftoverJournal(filePath: string) {
     try {
         const facts = describeLeftoverJournal(filePath);
         console.warn("A leftover journal stopped an open:", facts);
+        if (!diagnosticsAllowed()) return;
         captureMessage("Leftover journal stopped an open", {
             level: "warning",
-            tags: {
+            tags: diagnosticTags({
                 syncService: facts.syncService,
                 journalOpenForWrite: facts.journalOpenForWrite,
-            },
+            }),
             extra: { ...facts },
         });
     } catch (error) {
@@ -701,6 +718,7 @@ function initIpcHandlers() {
 
 void app.whenReady().then(async () => {
     app.setName("OpenMarch");
+    clearSaveScratch();
     console.log("NODE:", process.versions.node);
 
     if (isCodegen) {
@@ -1518,8 +1536,9 @@ export async function saveFile() {
         const target = resolve(result.filePath);
 
         // A copy over the open show would replace the file under its own connection, and the
-        // show already holds these contents: nothing to do.
-        if (target === resolve(DatabaseServices.getDbPath())) return 200;
+        // show already holds these contents: nothing to do. The same file can be spelled
+        // differently (case on Windows and macOS, a symbolic link), so compare the files.
+        if (isSameFile(target, DatabaseServices.getDbPath())) return 200;
 
         await writeSnapshotTo(target);
         addRecentFile(target);
@@ -1532,10 +1551,24 @@ export async function saveFile() {
 }
 
 /** A private folder for files a save builds before they go beside the show (ADR 0018). */
+const saveScratchPath = () => join(app.getPath("userData"), "save-scratch");
+
 function saveScratchDirectory(): string {
-    const directory = join(app.getPath("userData"), "save-scratch");
+    const directory = saveScratchPath();
     fs.mkdirSync(directory, { recursive: true });
     return directory;
+}
+
+/**
+ * Deletes snapshots a save left in the scratch folder when the app crashed or was killed during
+ * it. Call at startup: the single-instance lock means no other run is saving.
+ */
+function clearSaveScratch() {
+    try {
+        fs.rmSync(saveScratchPath(), { recursive: true, force: true });
+    } catch (error) {
+        console.warn("Couldn't clear the save scratch folder:", error);
+    }
 }
 
 /**

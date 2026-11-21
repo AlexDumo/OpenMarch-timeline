@@ -75,7 +75,9 @@ before. Recovery of existing working copies works whatever the setting.
    person is offered Save As.
 7. **Temp files.** Temp files beside a show that match its name are deleted when it opens and after
    each publish, whatever their age: only OpenMarch makes them. A delete that fails because a
-   sync app holds the file is retried and otherwise left for the next open.
+   sync app holds the file is retried for 2 s, then in the background for a minute (sync apps
+   can hold a new file for 20 s or more), and otherwise left for the next open. Snapshots a
+   crash left in `userData/save-scratch` are deleted at startup.
 8. **Close and quit.** Closing or quitting publishes first. If that can't happen, a dialog offers to
    retry, overwrite or save elsewhere (as fits the problem), close and recover later, or cancel.
    Quitting closes every connection, and the working folder is deleted once its changes are
