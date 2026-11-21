@@ -139,6 +139,66 @@ describe("the shape tool's reach by pointer kind", () => {
     });
 });
 
+describe("a finger's or pen's reach gives way to a move (#873)", () => {
+    /** A straight Line from A to B, drawn */
+    const straight = () => {
+        let t = openTool(lineTool, marchers);
+        for (const p of [A, B]) t = click(t, p);
+        const done = finishPoints(t, shapeContextFor(field()));
+        return { params: done.params, n: done.marchers.length };
+    };
+    const targetAt = (
+        at: XY,
+        kind: PointerKind,
+        standing: readonly XY[] = [],
+    ) => {
+        const { params, n } = straight();
+        return shapeTargetAt(lineTool, params, n, at, {
+            ...toolEnvFor(field(), undefined, { kind }),
+            pivotSnaps: () => standing,
+        });
+    };
+    // On the line, 16 px in from its end: within a finger's reach of the end's handle, past a
+    // mouse's
+    const along = { x: A.x + 16, y: A.y };
+
+    it("moves the line from a press on it beyond the handle as drawn", () => {
+        expect(targetAt(along, "touch")).toEqual({ type: "move" });
+        expect(targetAt(along, "pen")).toEqual({ type: "move" });
+        expect(targetAt(along, "mouse")).toEqual({ type: "move" });
+    });
+
+    it("keeps the handle for a press on the handle as drawn", () => {
+        const on = { x: A.x + 6, y: A.y };
+        expect(targetAt(on, "touch")).toEqual({ type: "handle", key: "p0" });
+        expect(targetAt(on, "mouse")).toEqual({ type: "handle", key: "p0" });
+    });
+
+    it("keeps the whole reach for a press off the line", () => {
+        const off = { x: A.x - 13, y: A.y - 13 };
+        expect(targetAt(off, "touch")).toEqual({ type: "handle", key: "p0" });
+        // A mouse there misses the handle (and turns the line from past its end)
+        expect(targetAt(off, "mouse")).not.toEqual({
+            type: "handle",
+            key: "p0",
+        });
+    });
+
+    it("gives the handle up to a marcher the press lands on nearer than it", () => {
+        const at = { x: A.x + 8, y: A.y + 2 };
+        const standing = [{ x: A.x + 10, y: A.y }];
+        expect(targetAt(at, "touch", standing)).not.toEqual({
+            type: "handle",
+            key: "p0",
+        });
+        // A mouse's handle wins within its reach, whatever stands there
+        expect(targetAt(at, "mouse", standing)).toEqual({
+            type: "handle",
+            key: "p0",
+        });
+    });
+});
+
 describe("tapping a line's points", () => {
     it("keeps the points already down when a press is lost (a second finger lands to pan)", () => {
         openShapeTool(clicking(), null, null);

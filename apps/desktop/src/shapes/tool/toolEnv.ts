@@ -13,6 +13,7 @@ import {
     thresholdsFor,
     type PointerKind,
 } from "@/field/editor/pointerThresholds";
+import { hitRadius as marcherHitRadius } from "@/field/editor/hitTest";
 
 /**
  * How far from a handle a mouse press still takes it, in screen pixels (`pointerThresholds.ts`).
@@ -55,8 +56,9 @@ export const NO_ROLES: Roles = {
  * docs/timeline/research/shapes/modifier-roles.md). `snapOn` is the Snap toggle, read from the
  * settings when the env is made unless given, so a change mid-drag applies on the next move. A
  * dragged pivot snaps to every marcher drawn, and to `spots` (an open shape's, where its marchers
- * will stand). `kind` is what presses: a pen or finger reaches handles from further away (tablet
- * 1.4); a mouse when absent.
+ * will stand). `kind` is what presses: a pen or finger reaches handles from further away, and
+ * that reach gives way to a move on a marcher or on the shape (`marcherReach`, tablet 1.4); a
+ * mouse when absent.
  */
 export function toolEnvFor(
     field: ShapeField,
@@ -94,6 +96,10 @@ export function toolEnvFor(
         },
         hitRadius: thresholdsFor(kind).shapeHandleReach / (field.zoom() || 1),
         stemUnit: HANDLE_REACH_PX / (field.zoom() || 1),
+        marcherReach:
+            kind === "mouse"
+                ? undefined
+                : marcherHitRadius(field.zoom() || 1, kind),
         zoom: field.zoom() || 1,
         fieldLines: fieldLinesOf(fieldProperties),
         pullRadius: EDGE_PULL_PX / (field.zoom() || 1),
