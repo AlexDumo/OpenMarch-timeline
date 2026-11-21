@@ -19,7 +19,11 @@ import {
     isWindows7,
 } from "./gpu";
 import { randomUUID } from "node:crypto";
-import { publishFile, removeWithRetry } from "../database/atomicFile";
+import {
+    isSameFile,
+    publishFile,
+    removeWithRetry,
+} from "../database/atomicFile";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import * as DatabaseServices from "../database/database.services";
 import { VIEW3D_AUTO_OPEN_SETTING } from "../../src/view3d/sync/protocol";
@@ -673,6 +677,7 @@ function initIpcHandlers() {
 
 void app.whenReady().then(async () => {
     app.setName("OpenMarch");
+    clearSaveScratch();
     console.log("NODE:", process.versions.node);
 
     if (isCodegen) {
@@ -1484,8 +1489,9 @@ export async function saveFile() {
         const target = resolve(result.filePath);
 
         // A copy over the open show would replace the file under its own connection, and the
-        // show already holds these contents: nothing to do.
-        if (target === resolve(DatabaseServices.getDbPath())) return 200;
+        // show already holds these contents: nothing to do. The same file can be spelled
+        // differently (case on Windows and macOS, a symbolic link), so compare the files.
+        if (isSameFile(target, DatabaseServices.getDbPath())) return 200;
 
         await writeSnapshotTo(target);
         addRecentFile(target);
@@ -1498,10 +1504,24 @@ export async function saveFile() {
 }
 
 /** A private folder for files a save builds before they go beside the show (ADR 0018). */
+const saveScratchPath = () => join(app.getPath("userData"), "save-scratch");
+
 function saveScratchDirectory(): string {
-    const directory = join(app.getPath("userData"), "save-scratch");
+    const directory = saveScratchPath();
     fs.mkdirSync(directory, { recursive: true });
     return directory;
+}
+
+/**
+ * Deletes snapshots a save left in the scratch folder when the app crashed or was killed during
+ * it. Call at startup: the single-instance lock means no other run is saving.
+ */
+function clearSaveScratch() {
+    try {
+        fs.rmSync(saveScratchPath(), { recursive: true, force: true });
+    } catch (error) {
+        console.warn("Couldn't clear the save scratch folder:", error);
+    }
 }
 
 /**

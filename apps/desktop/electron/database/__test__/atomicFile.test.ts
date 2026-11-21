@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+    mkdirSync,
     mkdtempSync,
     readFileSync,
     readdirSync,
     rmSync,
+    symlinkSync,
+    unlinkSync,
     writeFileSync,
 } from "fs";
 import { tmpdir } from "os";
@@ -11,6 +14,8 @@ import { basename, join } from "path";
 import {
     RenameRetriesExhaustedError,
     fsyncDirectory,
+    isSameFile,
+    removeNowOrLater,
     renameWithRetry,
     publishFile,
     removeWithRetry,
@@ -214,6 +219,123 @@ describe("removeWithRetry", () => {
         expect(await removeWithRetry(join(tmpdir(), "openmarch-none"))).toBe(
             true,
         );
+    });
+});
+
+describe("removeNowOrLater", () => {
+    it("keeps deleting a temp file a sync app holds for longer than the first try", async () => {
+        const clock = fakeClock();
+        // Held for 25 s, as a sync app uploading a new file can.
+        const remove = async () => {
+            if (clock.now() < 25_000) throw errno("EBUSY");
+        };
+
+        const { removed, lingering } = await removeNowOrLater("x.tmp", {
+            now: clock.now,
+            sleep: clock.sleep,
+            remove,
+        });
+
+        expect(removed).toBe(false);
+        expect(await lingering).toBe(true);
+        expect(Math.max(...clock.sleeps)).toBeLessThanOrEqual(2000);
+    });
+
+    it("gives up in the background after the linger time", async () => {
+        const clock = fakeClock();
+        const { lingering } = await removeNowOrLater("x.tmp", {
+            now: clock.now,
+            sleep: clock.sleep,
+            lingerMs: 10_000,
+            remove: async () => {
+                throw errno("EBUSY");
+            },
+        });
+
+        expect(await lingering).toBe(false);
+        expect(clock.now()).toBeLessThan(15_000);
+    });
+});
+
+describe("publishFile's clean-up", () => {
+    it("deletes its temp file in the background when a sync app holds it past the first try", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "openmarch-atomic-held-"));
+        try {
+            const target = join(dir, "show.dots");
+            const source = join(dir, "snapshot.dots");
+            writeFileSync(target, "old");
+            writeFileSync(source, "new");
+            const clock = fakeClock();
+            let tempPath = "";
+
+            await expect(
+                publishFile(source, target, {
+                    platform: "win32",
+                    now: clock.now,
+                    sleep: clock.sleep,
+                    budgetMs: 0,
+                    rename: async () => {
+                        throw errno("EBUSY");
+                    },
+                    removeOptions: {
+                        // Held for 20 s, longer than the first two seconds of tries.
+                        remove: async (filePath) => {
+                            tempPath = filePath;
+                            if (clock.now() < 20_000) throw errno("EBUSY");
+                            unlinkSync(filePath);
+                        },
+                    },
+                }),
+            ).rejects.toBeInstanceOf(RenameRetriesExhaustedError);
+
+            expect(tempPath).not.toBe("");
+            await expect
+                .poll(() => readdirSync(dir).includes(basename(tempPath)))
+                .toBe(false);
+            expect(readFileSync(target, "utf8")).toBe("old");
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+    });
+});
+
+describe("isSameFile", () => {
+    let dir: string;
+    beforeEach(() => {
+        dir = mkdtempSync(join(tmpdir(), "openmarch-same-file-"));
+    });
+    afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+    it("knows a file through a symbolic link or a different spelling", () => {
+        const show = join(dir, "Band", "Show.dots");
+        mkdirSync(join(dir, "Band"));
+        writeFileSync(show, "x");
+        symlinkSync(join(dir, "Band"), join(dir, "Linked"));
+
+        expect(isSameFile(show, join(dir, "Linked", "Show.dots"))).toBe(true);
+        expect(isSameFile(show, join(dir, "Band", ".", "Show.dots"))).toBe(
+            true,
+        );
+        expect(isSameFile(show, join(dir, "Band", "Other.dots"))).toBe(false);
+    });
+
+    it("ignores case on Windows and macOS when the file isn't there to compare", () => {
+        const a = join(dir, "Show.dots");
+        const b = join(dir, "SHOW.DOTS");
+
+        expect(isSameFile(a, b, "win32")).toBe(true);
+        expect(isSameFile(a, b, "darwin")).toBe(true);
+        expect(isSameFile(a, b, "linux")).toBe(false);
+    });
+
+    it("tells two files with the same contents apart", () => {
+        writeFileSync(join(dir, "a.dots"), "x");
+        writeFileSync(join(dir, "b.dots"), "x");
+
+        expect(isSameFile(join(dir, "a.dots"), join(dir, "b.dots"))).toBe(
+            false,
+        );
+        expect(isSameFile(join(dir, "a.dots"), "")).toBe(false);
     });
 });
 
