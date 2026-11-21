@@ -16,14 +16,18 @@ import { randomUUID } from "node:crypto";
 import { basename, dirname, join, resolve } from "node:path";
 import type { DatabaseSync, StatementSync } from "node:sqlite";
 import {
+    LINGERING_DELETE_MS,
     RenameRetriesExhaustedError,
     type RenameRetryOptions,
     publishFile,
+    removeNowOrLater,
     removeWithRetry,
     tempFilePattern,
 } from "../atomicFile";
 import {
+    type ConflictCheck,
     type FileIdentity,
+    type FileStatIdentity,
     checkForConflict,
     sameStat,
     statIdentity,
@@ -47,6 +51,12 @@ export type WorkingCopyManifest = {
      * compare with, such as after Save As to a new file.
      */
     originalIdentity: FileIdentity | null;
+    /**
+     * The file a publish is about to rename over the show, recorded just before the rename. If
+     * the app stops before it records the publish as done, the show matching this is still ours,
+     * not someone else's change.
+     */
+    pendingIdentity?: FileIdentity | null;
     /** True from the first edit after a publish until the next publish succeeds. */
     unsaved: boolean;
     pid: number;
@@ -171,6 +181,36 @@ class ChangedDuringPublishError extends Error {
     }
 }
 
+/** Save As moved the show while a publish to the old file was under way. */
+class SavedAsDuringPublishError extends Error {
+    constructor() {
+        super("The show was saved under a new name during the publish");
+    }
+}
+
+/**
+ * Stands in for the show's identity when a manifest from another version doesn't say what it
+ * was. It matches no file, so recovering such a copy asks before replacing the show.
+ */
+const UNKNOWN_IDENTITY: FileIdentity = {
+    size: -1,
+    mtimeMs: -1,
+    ino: -1,
+    dev: -1,
+    sha256: null,
+};
+
+function isFileIdentity(value: unknown): value is FileIdentity {
+    const identity = value as FileIdentity | null;
+    return (
+        !!identity &&
+        typeof identity.size === "number" &&
+        typeof identity.mtimeMs === "number" &&
+        typeof identity.ino === "number" &&
+        typeof identity.dev === "number"
+    );
+}
+
 function getSqlite(): typeof import("node:sqlite") {
     const sqlite = process.getBuiltinModule?.("node:sqlite") as
         | typeof import("node:sqlite")
@@ -179,24 +219,71 @@ function getSqlite(): typeof import("node:sqlite") {
     return sqlite;
 }
 
+/**
+ * Writes the manifest durably: a flushed temp file renamed over it, then the folder flushed, so
+ * a power cut leaves the old manifest or the new one, never an empty file.
+ */
 function writeManifest(directory: string, manifest: WorkingCopyManifest) {
     const target = join(directory, MANIFEST_FILE_NAME);
     const temp = `${target}.tmp`;
-    fs.writeFileSync(temp, JSON.stringify(manifest, null, 2));
+    const fd = fs.openSync(temp, "w");
+    try {
+        fs.writeFileSync(fd, JSON.stringify(manifest, null, 2));
+        fs.fsyncSync(fd);
+    } finally {
+        fs.closeSync(fd);
+    }
     fs.renameSync(temp, target);
+    if (process.platform !== "win32") {
+        try {
+            const dirFd = fs.openSync(directory, "r");
+            try {
+                fs.fsyncSync(dirFd);
+            } finally {
+                fs.closeSync(dirFd);
+            }
+        } catch {
+            // Only the extra durability is lost.
+        }
+    }
 }
 
-function readManifest(directory: string): WorkingCopyManifest | null {
+function readManifestFile(file: string): WorkingCopyManifest | null {
+    let parsed: Partial<WorkingCopyManifest> & { version?: unknown };
     try {
-        const manifest = JSON.parse(
-            fs.readFileSync(join(directory, MANIFEST_FILE_NAME), "utf8"),
-        ) as WorkingCopyManifest;
-        return manifest?.version === 1 && typeof manifest.showPath === "string"
-            ? manifest
-            : null;
+        parsed = JSON.parse(fs.readFileSync(file, "utf8"));
     } catch {
         return null;
     }
+    if (!parsed || typeof parsed.showPath !== "string" || !parsed.showPath)
+        return null;
+    if (parsed.version === 1) return parsed as WorkingCopyManifest;
+    // Another version's manifest (a newer build wrote it): keep what it says about the show,
+    // assume unpublished changes, and check with the person before replacing the show.
+    return {
+        version: 1,
+        id: typeof parsed.id === "string" ? parsed.id : "",
+        showPath: parsed.showPath,
+        originalIdentity: isFileIdentity(parsed.originalIdentity)
+            ? parsed.originalIdentity
+            : UNKNOWN_IDENTITY,
+        pendingIdentity: null,
+        unsaved: parsed.unsaved !== false,
+        pid: typeof parsed.pid === "number" ? parsed.pid : 0,
+        appVersion:
+            typeof parsed.appVersion === "string" ? parsed.appVersion : "",
+        openedAt: typeof parsed.openedAt === "string" ? parsed.openedAt : "",
+        lastEditAt:
+            typeof parsed.lastEditAt === "string" ? parsed.lastEditAt : null,
+        lastSavedAt:
+            typeof parsed.lastSavedAt === "string" ? parsed.lastSavedAt : null,
+    };
+}
+
+/** The folder's manifest, or the one a crash left half written (its temp file). */
+function readManifest(directory: string): WorkingCopyManifest | null {
+    const target = join(directory, MANIFEST_FILE_NAME);
+    return readManifestFile(target) ?? readManifestFile(`${target}.tmp`);
 }
 
 /** The file a publish replaces: the show file with symbolic links resolved. */
@@ -219,6 +306,15 @@ export function resolveSaveTarget(showPath: string): string {
  */
 export async function removeStaleTempFiles(
     showFile: string,
+    {
+        budgetMs = 1000,
+        lingerMs = 0,
+    }: {
+        /** How long to retry each held file before moving on. */
+        budgetMs?: number;
+        /** How long to keep deleting a held file in the background afterwards; 0 for not at all. */
+        lingerMs?: number;
+    } = {},
 ): Promise<{ found: number; removed: number }> {
     const directory = dirname(showFile);
     const pattern = tempFilePattern(basename(showFile));
@@ -233,8 +329,12 @@ export async function removeStaleTempFiles(
     for (const name of names) {
         if (!pattern.test(name)) continue;
         found++;
-        if (await removeWithRetry(join(directory, name), { budgetMs: 1000 }))
-            removed++;
+        const file = join(directory, name);
+        const gone =
+            lingerMs > 0
+                ? (await removeNowOrLater(file, { budgetMs, lingerMs })).removed
+                : await removeWithRetry(file, { budgetMs });
+        if (gone) removed++;
     }
     return { found, removed };
 }
@@ -245,7 +345,9 @@ export async function removeStaleTempFiles(
  * exited.
  *
  * Folders whose show was published are deleted. Folders with unpublished changes are returned so
- * the person can recover or discard them.
+ * the person can recover or discard them. A folder that still holds a working copy is never
+ * deleted unless its manifest says everything was published: one whose manifest can't be read
+ * is kept (and listed when the show it belongs to is known).
  */
 export function scanWorkingCopies(
     workingRoot: string,
@@ -263,13 +365,26 @@ export function scanWorkingCopies(
         const directory = join(workingRoot, entry.name);
         const manifest = readManifest(directory);
         const workingPath = join(directory, WORKING_FILE_NAME);
-        if (!manifest || !manifest.unsaved || !fs.existsSync(workingPath)) {
+        if (!fs.existsSync(workingPath) || (manifest && !manifest.unsaved)) {
             // Nothing to recover: a clean close, a crash before the first edit, or an open that
             // never finished.
             fs.rmSync(directory, { recursive: true, force: true });
             continue;
         }
-        recoverable.push({ id: entry.name, directory, workingPath, manifest });
+        if (!manifest) {
+            // A working copy whose show isn't known: it may hold unpublished edits, so keep it.
+            console.warn(
+                "Kept a working copy whose manifest can't be read:",
+                entry.name,
+            );
+            continue;
+        }
+        recoverable.push({
+            id: entry.name,
+            directory,
+            workingPath,
+            manifest: { ...manifest, id: manifest.id || entry.name },
+        });
     }
     return recoverable.sort((a, b) =>
         (b.manifest.lastEditAt ?? "").localeCompare(
@@ -332,7 +447,8 @@ export class WorkingCopySession {
     private conflict: WorkingCopyStatus["conflict"];
     private retryAt: number | undefined;
     private retryIndex = 0;
-    private overwriteOnce = false;
+    /** Bumped by Save As; a publish started before it doesn't record anything for the new file. */
+    private targetVersion = 0;
     private started = false;
     private closed = false;
 
@@ -573,12 +689,39 @@ export class WorkingCopySession {
         return run;
     }
 
-    /** Publishes over the show even though it changed on disk ("Keep my version"). */
+    /**
+     * Publishes over the show even though it changed on disk ("Keep my version"). The choice
+     * covers the show as it is now: it becomes the version publishes compare with, so a later
+     * change (a sync app finishing another download) is a conflict again.
+     */
     overwriteShow(): Promise<SaveOutcome> {
-        this.overwriteOnce = true;
-        if (this.state === "conflict" || this.state === "readOnly")
-            this.setState("unsaved");
-        return this.flush("overwrite", true);
+        const accept = this.queue.then(async () => {
+            if (this.closed || !this.started) return;
+            let current: Awaited<ReturnType<SaveWorker["identity"]>>;
+            try {
+                const worker = await this.ensureWorker();
+                current = await worker.identity(this.targetPath);
+            } catch (error) {
+                // The conflict stays, and the person can choose again.
+                console.error("Couldn't read the show to overwrite it:", error);
+                return;
+            }
+            this.expected = current
+                ? {
+                      size: current.size,
+                      mtimeMs: current.mtimeMs,
+                      ino: current.ino,
+                      dev: current.dev,
+                      sha256: current.sha256,
+                  }
+                : null;
+            this.manifest.originalIdentity = this.expected;
+            this.persistManifest();
+            if (this.state === "conflict" || this.state === "readOnly")
+                this.setState("unsaved");
+        });
+        this.queue = accept.catch(() => undefined);
+        return accept.then(() => this.flush("overwrite", true));
     }
 
     /**
@@ -586,8 +729,11 @@ export class WorkingCopySession {
      * save dialog already confirmed replacing a file there.
      */
     retarget(newShowPath: string): Promise<SaveOutcome> {
+        const oldTarget = this.targetPath;
+        this.targetVersion++;
         this.manifest.showPath = resolve(newShowPath);
         this.manifest.originalIdentity = null;
+        this.manifest.pendingIdentity = null;
         this.targetPath = resolveSaveTarget(this.manifest.showPath);
         this.expected = null;
         this.conflict = undefined;
@@ -597,7 +743,16 @@ export class WorkingCopySession {
         this.manifest.unsaved = true;
         this.persistManifest();
         this.setState("unsaved");
-        return this.flush("retarget", true);
+        const run = this.flush("retarget", true);
+        if (oldTarget !== this.targetPath) {
+            // Temp files a blocked publish left beside the old file, once nothing writes there.
+            const cleanUp = () =>
+                removeStaleTempFiles(oldTarget, {
+                    lingerMs: LINGERING_DELETE_MS,
+                });
+            void run.then(cleanUp, cleanUp);
+        }
+        return run;
     }
 
     /**
@@ -609,6 +764,9 @@ export class WorkingCopySession {
         keptForRecovery: boolean;
     }> {
         if (this.closed) return { keptForRecovery: false };
+        // A commit since the last check (the poll runs every few seconds) is an unpublished
+        // change: it decides whether the folder is kept.
+        this.noteActivity();
         this.clearSaveTimers();
         this.clearRetryTimer();
         if (this.pollTimer) clearInterval(this.pollTimer);
@@ -623,6 +781,12 @@ export class WorkingCopySession {
         const keep = !discard && this.hasUnsavedChanges;
         if (keep) this.persistManifest();
         else fs.rmSync(this.directory, { recursive: true, force: true });
+        // Temp files a blocked publish left: sync apps can hold them for 20 s or more, so try
+        // for a few seconds and then keep trying in the background while the app runs.
+        await removeStaleTempFiles(this.targetPath, {
+            budgetMs: 3000,
+            lingerMs: LINGERING_DELETE_MS,
+        });
         this.setState("closed");
         return { keptForRecovery: keep };
     }
@@ -720,7 +884,7 @@ export class WorkingCopySession {
         }
         if (!force && !this.hasUnsavedChanges)
             return { ok: true, skipped: true };
-        if (this.state === "conflict" && !this.overwriteOnce)
+        if (this.state === "conflict")
             return {
                 ok: false,
                 state: "conflict",
@@ -733,11 +897,34 @@ export class WorkingCopySession {
         return outcome;
     }
 
+    /**
+     * Compares the show on disk with what OpenMarch last loaded or published. A show that
+     * matches the file a publish was about to rename into place is ours too: that publish
+     * renamed it but didn't get to record it (a failed folder flush, or a crash).
+     */
+    private checkShow(
+        expected: FileIdentity,
+        actual: FileIdentity | null,
+    ): ConflictCheck {
+        const check = checkForConflict(expected, actual);
+        const pending = this.manifest.pendingIdentity;
+        if (check.conflict && pending && actual) {
+            const ours = checkForConflict(pending, actual);
+            if (!ours.conflict) return ours;
+        }
+        return check;
+    }
+
     // eslint-disable-next-line max-lines-per-function
     private async save(reason: string): Promise<SaveOutcome> {
         const started = performance.now();
         const generation = this.editGeneration;
         const target = this.targetPath;
+        const targetVersion = this.targetVersion;
+        // Save As during this publish: nothing it found or did is about the new file, and the
+        // publish Save As queued takes over.
+        const savedAsSince = () => this.targetVersion !== targetVersion;
+        const superseded: SaveOutcome = { ok: true, skipped: true };
         const name = basename(target);
         const platform = this.options.platform;
         this.setState("saving");
@@ -745,6 +932,7 @@ export class WorkingCopySession {
 
         try {
             if (await isReadOnly(target, platform)) {
+                if (savedAsSince()) return superseded;
                 const message = `${name} is read-only. Use Save As to keep your changes.`;
                 // Check again later: the person may make it writable again.
                 this.scheduleRetry();
@@ -762,20 +950,23 @@ export class WorkingCopySession {
 
             const worker = await this.ensureWorker();
             for (let attempt = 0; ; attempt++) {
-                const expected = this.overwriteOnce ? null : this.expected;
+                const expected = this.expected;
                 const snapshot = await worker.snapshot({
                     snapshotPath,
                     originalPath: target,
                     expectedStat: expected,
                 });
                 let renameAttempts = 0;
+                /** The temp file's identity, which the show has once it's renamed over it. */
+                const renamed: { identity?: FileStatIdentity } = {};
                 try {
                     if (expected) {
-                        const check = checkForConflict(
+                        const check = this.checkShow(
                             expected,
                             snapshot.original,
                         );
                         if (check.conflict) {
+                            if (savedAsSince()) return superseded;
                             const message =
                                 check.reason === "missing"
                                     ? `${name} was moved or deleted since OpenMarch opened it.`
@@ -797,43 +988,60 @@ export class WorkingCopySession {
                     }
 
                     const original = snapshot.original;
+                    /**
+                     * The worker read the show a moment ago. If it changed since (a sync app
+                     * finished downloading another version), stop and check again rather than
+                     * overwrite blind.
+                     */
+                    const assertShowUnchanged = async () => {
+                        if (savedAsSince())
+                            throw new SavedAsDuringPublishError();
+                        let current: FileStatIdentity | null = null;
+                        try {
+                            current = statIdentity(
+                                await fs.promises.stat(target),
+                            );
+                        } catch {
+                            current = null;
+                        }
+                        const unchanged = original
+                            ? current !== null && sameStat(current, original)
+                            : current === null;
+                        if (!unchanged)
+                            throw new ChangedDuringPublishError(name);
+                    };
                     ({ attempts: renameAttempts } = await publishFile(
                         snapshotPath,
                         target,
                         {
                             platform,
                             budgetMs: 5000,
+                            // A rename blocked by a sync app is retried for seconds: check the
+                            // show again before every try, not just the first.
                             shouldRetry: async () => {
-                                try {
-                                    return (
-                                        await fs.promises.stat(target)
-                                    ).isFile();
-                                } catch {
-                                    return true;
-                                }
+                                await assertShowUnchanged();
+                                return true;
                             },
                             ...this.options.renameOptions,
                             beforeRename: async (tempPath) => {
                                 if (original)
                                     await this.copyMetadata(target, tempPath);
-                                // The worker read the show a moment ago. If it changed since,
-                                // check again rather than overwrite blind.
-                                let current: ReturnType<
-                                    typeof statIdentity
-                                > | null = null;
-                                try {
-                                    current = statIdentity(
-                                        await fs.promises.stat(target),
-                                    );
-                                } catch {
-                                    current = null;
-                                }
-                                const unchanged = original
-                                    ? current !== null &&
-                                      sameStat(current, original)
-                                    : current === null;
-                                if (!unchanged && !this.overwriteOnce)
-                                    throw new ChangedDuringPublishError(name);
+                                await assertShowUnchanged();
+                                // A rename keeps size, modification time, inode and device, so
+                                // this is the show once it's renamed. Taken before the rename, a
+                                // file a sync app swaps in right after isn't mistaken for ours;
+                                // recorded before it, a crash right after the rename isn't
+                                // mistaken for someone else's change.
+                                renamed.identity = statIdentity(
+                                    await fs.promises.stat(tempPath),
+                                );
+                                if (savedAsSince())
+                                    throw new SavedAsDuringPublishError();
+                                this.manifest.pendingIdentity = {
+                                    ...renamed.identity,
+                                    sha256: snapshot.snapshot.sha256,
+                                };
+                                this.persistManifest();
                             },
                         },
                     ));
@@ -848,15 +1056,16 @@ export class WorkingCopySession {
                     await removeWithRetry(snapshotPath);
                 }
 
+                if (savedAsSince()) return superseded;
                 this.expected = {
-                    ...statIdentity(await fs.promises.stat(target)),
+                    ...renamed.identity!,
                     sha256: snapshot.snapshot.sha256,
                 };
                 const deferralsBefore = this.retryIndex;
-                this.overwriteOnce = false;
                 this.savedGeneration = generation;
                 this.retryIndex = 0;
                 this.manifest.originalIdentity = this.expected;
+                this.manifest.pendingIdentity = null;
                 this.manifest.lastSavedAt = new Date().toISOString();
                 this.manifest.unsaved = this.hasUnsavedChanges;
                 this.persistManifest();
@@ -879,6 +1088,7 @@ export class WorkingCopySession {
                 return { ok: true, metrics };
             }
         } catch (error) {
+            if (savedAsSince()) return superseded;
             return this.deferSave(error, reason);
         }
     }

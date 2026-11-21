@@ -185,6 +185,41 @@ describe("createWorkingCopyHost", () => {
         await session!.close({ discard: true });
     });
 
+    it("offers the changes a close just left when the same show is opened again", async () => {
+        const host = makeHost({ askUnpublished: async () => "close" });
+        const { session } = await openThrough(host);
+        edit(session!, "mine");
+        // The publish can't happen (the show is gone), and the person closes anyway.
+        fs.renameSync(showPath, `${showPath}.away`);
+        let closed = false;
+
+        const entry = await host.prepareOpen(showPath, {
+            closeConnections: () => (closed = true),
+        });
+
+        expect(closed).toBe(true);
+        expect(host.current).toBeNull();
+        expect(asked).toEqual([showPath]);
+        expect(entry).not.toBeNull();
+        expect(entry).not.toBe("cancel");
+    });
+
+    it("keeps the open show open for a file that only asks a question first", async () => {
+        const host = makeHost();
+        const { session } = await openThrough(host);
+        edit(session!, "mine");
+
+        const entry = await host.prepareOpen(join(root, "PageEra.dots"), {
+            closeConnections: () => undefined,
+            keepCurrentOpen: true,
+        });
+
+        expect(entry).toBeNull();
+        expect(host.current).toBe(session);
+        await host.end("close", () => undefined);
+        expect(readValues(showPath)).toEqual(["first", "mine"]);
+    });
+
     it("throws away a new working copy whose open is refused", async () => {
         const host = makeHost();
         const { session, result } = await host.open(showPath, {

@@ -4,6 +4,8 @@ import * as fs from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import {
+    MANIFEST_FILE_NAME,
+    WORKING_FILE_NAME,
     type PublishMetrics,
     type WorkingCopyOptions,
     type WorkingCopyStatus,
@@ -44,6 +46,23 @@ function edit(session: WorkingCopySession, value: string, notify = true) {
         db.close();
     }
     if (notify) session.noteActivity();
+}
+
+/** A sync app putting another version of the show in place: a new file renamed over it. */
+function replaceShow(showPath: string, values: string[]) {
+    const incoming = join(dirname(showPath), "incoming.tmp");
+    const db = new DatabaseSync(incoming);
+    db.exec("CREATE TABLE notes (id INTEGER PRIMARY KEY, value TEXT NOT NULL)");
+    for (const value of values)
+        db.prepare("INSERT INTO notes (value) VALUES (?)").run(value);
+    db.close();
+    fs.renameSync(incoming, showPath);
+}
+
+function readManifestOf(session: WorkingCopySession) {
+    return JSON.parse(
+        fs.readFileSync(join(session.directory, MANIFEST_FILE_NAME), "utf8"),
+    );
 }
 
 async function waitFor(predicate: () => boolean, timeoutMs = 5000) {
@@ -359,6 +378,277 @@ describe("WorkingCopySession", () => {
         expect(keptForRecovery).toBe(false);
         expect(fs.existsSync(session.directory)).toBe(false);
         expect(fs.readdirSync(showDir)).toEqual(["Show.dots"]);
+    });
+
+    it("checks the show again before each blocked rename retry, and stops when a sync app replaced it", async () => {
+        let renames = 0;
+        const { session } = await openStarted({
+            platform: "win32",
+            renameOptions: {
+                sleep: async () => {},
+                rename: async (from, to) => {
+                    renames++;
+                    if (renames === 1) {
+                        // The sync app finishes downloading a newer version while it holds the
+                        // show.
+                        replaceShow(showPath, ["first", "from the cloud"]);
+                        throw errno("EBUSY");
+                    }
+                    await fs.promises.rename(from, to);
+                },
+            },
+        });
+        edit(session, "mine");
+
+        const outcome = await session.flush("test");
+
+        expect(outcome).toMatchObject({ ok: false, state: "conflict" });
+        expect(readValues(showPath)).toEqual(["first", "from the cloud"]);
+        expect(strayFilesBeside(showPath)).toEqual([]);
+    });
+
+    it("keeps my version only over the show the person saw, not one that changed after", async () => {
+        let blocked = false;
+        const { session } = await openStarted({
+            platform: "win32",
+            retryDelaysMs: [60_000],
+            renameOptions: {
+                budgetMs: 0,
+                rename: async (from, to) => {
+                    if (blocked) throw errno("EBUSY");
+                    await fs.promises.rename(from, to);
+                },
+            },
+        });
+        replaceShow(showPath, ["first", "theirs"]);
+        edit(session, "mine");
+        expect(await session.flush("test")).toMatchObject({
+            state: "conflict",
+        });
+
+        // "Keep my version", but the publish is held up...
+        blocked = true;
+        expect(await session.overwriteShow()).toMatchObject({
+            state: "deferred",
+        });
+        // ...and meanwhile another version arrives.
+        replaceShow(showPath, ["first", "theirs, again"]);
+        blocked = false;
+
+        expect(await session.flush("retry", true)).toMatchObject({
+            state: "conflict",
+        });
+        expect(readValues(showPath)).toEqual(["first", "theirs, again"]);
+
+        expect((await session.overwriteShow()).ok).toBe(true);
+        expect(readValues(showPath)).toEqual(["first", "mine"]);
+    });
+
+    it("records the file it renamed, not one a sync app swapped in right after", async () => {
+        let swapAfterRename = true;
+        const { session } = await openStarted({
+            renameOptions: {
+                rename: async (from, to) => {
+                    await fs.promises.rename(from, to);
+                    if (swapAfterRename) {
+                        swapAfterRename = false;
+                        replaceShow(showPath, ["first", "theirs"]);
+                    }
+                },
+            },
+        });
+        edit(session, "mine");
+        expect((await session.flush("test")).ok).toBe(true);
+
+        edit(session, "more");
+        const outcome = await session.flush("test");
+
+        expect(outcome).toMatchObject({ ok: false, state: "conflict" });
+        expect(readValues(showPath)).toEqual(["first", "theirs"]);
+    });
+
+    it("knows its own rename when the publish failed right after it", async () => {
+        let failAfterRename = true;
+        const { session } = await openStarted({
+            retryDelaysMs: [60_000],
+            renameOptions: {
+                rename: async (from, to) => {
+                    await fs.promises.rename(from, to);
+                    if (failAfterRename) {
+                        failAfterRename = false;
+                        // As a folder flush that fails, or a crash, right after the rename.
+                        throw errno("EIO");
+                    }
+                },
+            },
+        });
+        edit(session, "mine");
+        expect(await session.flush("test")).toMatchObject({
+            state: "deferred",
+        });
+        expect(readValues(showPath)).toEqual(["first", "mine"]);
+        expect(readManifestOf(session).pendingIdentity).not.toBeNull();
+
+        // The same session publishes again without a conflict...
+        edit(session, "more");
+        expect((await session.flush("test")).ok).toBe(true);
+        expect(readValues(showPath)).toEqual(["first", "mine", "more"]);
+        expect(readManifestOf(session).pendingIdentity).toBeNull();
+    });
+
+    it("recovers a copy whose last rename went through but wasn't recorded", async () => {
+        const { session } = await openStarted({
+            retryDelaysMs: [60_000],
+            renameOptions: {
+                rename: async (from, to) => {
+                    await fs.promises.rename(from, to);
+                    throw errno("EIO");
+                },
+            },
+        });
+        edit(session, "mine");
+        await session.flush("test");
+        // A crash now: copy the folder as the next launch finds it.
+        const crashedRoot = join(root, "crashed");
+        fs.cpSync(session.directory, join(crashedRoot, session.id), {
+            recursive: true,
+        });
+
+        const [entry] = scanWorkingCopies(crashedRoot);
+        const resumed = WorkingCopySession.resume(entry, {
+            ...options(),
+            workingRoot: crashedRoot,
+        });
+        sessions.push(resumed);
+        await resumed.start();
+
+        expect((await resumed.flush("recover")).ok).toBe(true);
+        expect(readValues(showPath)).toEqual(["first", "mine"]);
+    });
+
+    it("doesn't take the old file's identity into a Save As made during a publish", async () => {
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => (release = resolve));
+        let holdNext = true;
+        const { session } = await openStarted({
+            renameOptions: {
+                rename: async (from, to) => {
+                    if (holdNext) {
+                        holdNext = false;
+                        await gate;
+                    }
+                    await fs.promises.rename(from, to);
+                },
+            },
+        });
+        edit(session, "mine");
+        const inFlight = session.flush("idle");
+        await waitFor(() => !holdNext);
+
+        const copy = join(showDir, "Copy.dots");
+        const saveAs = session.retarget(copy);
+        release();
+        await inFlight;
+        expect((await saveAs).ok).toBe(true);
+
+        edit(session, "more");
+        expect((await session.flush("test")).ok).toBe(true);
+        expect(readValues(copy)).toEqual(["first", "mine", "more"]);
+    });
+
+    it("counts a commit nobody reported when it closes, and keeps it for recovery", async () => {
+        const { session } = await openStarted();
+        edit(session, "unreported", false);
+
+        const { keptForRecovery } = await session.close();
+
+        expect(keptForRecovery).toBe(true);
+        expect(scanWorkingCopies(workingRoot)).toHaveLength(1);
+    });
+
+    it("deletes temp files a blocked publish left when it closes, and beside the old file after Save As", async () => {
+        const { session } = await openStarted();
+        const stale = join(showDir, ".~Show.dots.0badf00d.tmp");
+        fs.writeFileSync(stale, "x");
+        edit(session, "mine");
+
+        await session.retarget(join(showDir, "Copy.dots"));
+        await waitFor(() => !fs.existsSync(stale));
+
+        const staleCopy = join(showDir, ".~Copy.dots.0badf00d.tmp");
+        fs.writeFileSync(staleCopy, "x");
+        await session.close();
+        expect(fs.existsSync(staleCopy)).toBe(false);
+    });
+
+    describe("scanWorkingCopies", () => {
+        const makeFolder = (id: string, manifest: string | null) => {
+            const directory = join(workingRoot, id);
+            fs.mkdirSync(directory, { recursive: true });
+            const db = new DatabaseSync(join(directory, WORKING_FILE_NAME));
+            db.exec(
+                "CREATE TABLE notes (id INTEGER PRIMARY KEY, value TEXT NOT NULL)",
+            );
+            db.prepare("INSERT INTO notes (value) VALUES ('unsaved')").run();
+            db.close();
+            if (manifest !== null)
+                fs.writeFileSync(join(directory, MANIFEST_FILE_NAME), manifest);
+            return directory;
+        };
+
+        it("never deletes a working copy whose manifest can't be read", () => {
+            const torn = makeFolder("torn", "");
+            const missing = makeFolder("missing", null);
+
+            expect(scanWorkingCopies(workingRoot)).toEqual([]);
+            expect(fs.existsSync(join(torn, WORKING_FILE_NAME))).toBe(true);
+            expect(fs.existsSync(join(missing, WORKING_FILE_NAME))).toBe(true);
+        });
+
+        it("lists a copy whose manifest was only half replaced", () => {
+            const directory = makeFolder("half", null);
+            fs.writeFileSync(
+                join(directory, `${MANIFEST_FILE_NAME}.tmp`),
+                JSON.stringify({
+                    version: 1,
+                    id: "half",
+                    showPath,
+                    originalIdentity: null,
+                    unsaved: true,
+                    pid: 1,
+                    appVersion: "",
+                    openedAt: "",
+                    lastEditAt: null,
+                    lastSavedAt: null,
+                }),
+            );
+
+            expect(
+                scanWorkingCopies(workingRoot).map((e) => e.manifest.showPath),
+            ).toEqual([showPath]);
+        });
+
+        it("lists a newer version's copy, and asks before it replaces the show", async () => {
+            makeFolder(
+                "newer",
+                JSON.stringify({
+                    version: 2,
+                    showPath,
+                    somethingNew: { unsaved: true },
+                }),
+            );
+
+            const [entry] = scanWorkingCopies(workingRoot);
+            expect(entry.manifest.showPath).toBe(showPath);
+            const resumed = WorkingCopySession.resume(entry, options());
+            sessions.push(resumed);
+            await resumed.start();
+
+            expect(await resumed.flush("recover")).toMatchObject({
+                state: "conflict",
+            });
+            expect(readValues(showPath)).toEqual(["first"]);
+        });
     });
 
     it("removeStaleTempFiles counts and deletes only this show's temp files", async () => {

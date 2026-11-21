@@ -85,6 +85,90 @@ export function createWorkingCopyHost(deps: WorkingCopyHostDeps) {
         );
     };
 
+    /**
+     * Before any open of `showPath` (startup, Recent Files, the file dialog, a double-click):
+     * if it has unpublished changes from an earlier session, asks first. Returns the entry
+     * to recover, `null` to open the show as it is, or `"cancel"` to open nothing.
+     */
+    async function checkRecoveryBeforeOpen(
+        showPath: string,
+    ): Promise<RecoverableWorkingCopy | null | "cancel"> {
+        const entry = findRecoverableFor(recoverable, showPath);
+        if (!entry) return null;
+        const choice = await deps.askRecover(entry);
+        if (choice === "cancel") return "cancel";
+        if (choice === "discard") {
+            discardWorkingCopy(entry);
+            recoverable = recoverable.filter((item) => item.id !== entry.id);
+            return null;
+        }
+        return entry;
+    }
+
+    /**
+     * Publishes the open show for the last time and releases its working copy. When that
+     * publish fails, asks (if it can); returns false if the person cancels. Concurrent calls
+     * share one run. `closeConnections` closes the app's connections to the working copy.
+     */
+    function end(
+        reason: string,
+        closeConnections: () => void,
+    ): Promise<boolean> {
+        if (!current) return Promise.resolve(true);
+        ending ??= (async () => {
+            const session = current!;
+            try {
+                let outcome = await session.flush(reason);
+                while (
+                    !outcome.ok &&
+                    outcome.state !== "closed" &&
+                    session.hasUnsavedChanges &&
+                    deps.askUnpublished
+                ) {
+                    const choice = await deps.askUnpublished(session, outcome);
+                    if (choice === "cancel") return false;
+                    if (choice === "close") break;
+                    outcome = await session.flush(reason);
+                }
+                setCurrent(null);
+                closeConnections();
+                const { keptForRecovery } = await session.close();
+                if (keptForRecovery) rescan();
+                return true;
+            } finally {
+                ending = null;
+            }
+        })();
+        return ending;
+    }
+
+    /**
+     * Before any open: publishes and releases the open show, then asks about unpublished changes
+     * the show being opened has from an earlier session, including any that closing the open
+     * show just left (its publish failed and the person closed anyway). With `keepCurrentOpen`
+     * (a file that first asks whether to convert it) the open show stays open unless the person
+     * recovers. Returns the entry to recover, `null` to open the show as it is, or `"cancel"`.
+     */
+    async function prepareOpen(
+        showPath: string,
+        {
+            closeConnections,
+            keepCurrentOpen = false,
+        }: { closeConnections: () => void; keepCurrentOpen?: boolean },
+    ): Promise<RecoverableWorkingCopy | null | "cancel"> {
+        if (!keepCurrentOpen && !(await end("switch", closeConnections)))
+            return "cancel";
+        const recover = await checkRecoveryBeforeOpen(showPath);
+        if (
+            recover &&
+            recover !== "cancel" &&
+            keepCurrentOpen &&
+            !(await end("switch", closeConnections))
+        )
+            return "cancel";
+        return recover;
+    }
+
     return {
         /** The session of the open show, if it is edited through a working copy. */
         get current() {
@@ -121,27 +205,9 @@ export function createWorkingCopyHost(deps: WorkingCopyHostDeps) {
             return true;
         },
 
-        /**
-         * Before any open of `showPath` (startup, Recent Files, the file dialog, a double-click):
-         * if it has unpublished changes from an earlier session, asks first. Returns the entry
-         * to recover, `null` to open the show as it is, or `"cancel"` to open nothing.
-         */
-        async checkRecoveryBeforeOpen(
-            showPath: string,
-        ): Promise<RecoverableWorkingCopy | null | "cancel"> {
-            const entry = findRecoverableFor(recoverable, showPath);
-            if (!entry) return null;
-            const choice = await deps.askRecover(entry);
-            if (choice === "cancel") return "cancel";
-            if (choice === "discard") {
-                discardWorkingCopy(entry);
-                recoverable = recoverable.filter(
-                    (item) => item.id !== entry.id,
-                );
-                return null;
-            }
-            return entry;
-        },
+        checkRecoveryBeforeOpen,
+
+        prepareOpen,
 
         /**
          * Opens `showPath` through a new working copy, or continues `recover`. `migrate` runs the
@@ -206,41 +272,6 @@ export function createWorkingCopyHost(deps: WorkingCopyHostDeps) {
             await session.close({ discard: true });
         },
 
-        /**
-         * Publishes the open show for the last time and releases its working copy. When that
-         * publish fails, asks (if it can); returns false if the person cancels. Concurrent calls
-         * share one run. `closeConnections` closes the app's connections to the working copy.
-         */
-        end(reason: string, closeConnections: () => void): Promise<boolean> {
-            if (!current) return Promise.resolve(true);
-            ending ??= (async () => {
-                const session = current!;
-                try {
-                    let outcome = await session.flush(reason);
-                    while (
-                        !outcome.ok &&
-                        outcome.state !== "closed" &&
-                        session.hasUnsavedChanges &&
-                        deps.askUnpublished
-                    ) {
-                        const choice = await deps.askUnpublished(
-                            session,
-                            outcome,
-                        );
-                        if (choice === "cancel") return false;
-                        if (choice === "close") break;
-                        outcome = await session.flush(reason);
-                    }
-                    setCurrent(null);
-                    closeConnections();
-                    const { keptForRecovery } = await session.close();
-                    if (keptForRecovery) rescan();
-                    return true;
-                } finally {
-                    ending = null;
-                }
-            })();
-            return ending;
-        },
+        end,
     };
 }

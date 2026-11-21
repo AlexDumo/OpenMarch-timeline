@@ -61,28 +61,37 @@ before. Recovery of existing working copies works whatever the setting.
    - The 30 s maximum stays, so the file in the folder is never more than about 30 s behind
      during continuous editing.
 5. **Conflicts.** Before each rename the show's size, modification time, inode and device are
-   compared with what was last loaded or published, and checked again just before the rename.
-   Only when they differ is the show hashed (SHA-256, on the worker) and compared with the last
+   compared with what was last loaded or published, and checked again just before the rename
+   and before each retry of a blocked rename. Only when they differ is the show hashed (SHA-256, on the worker) and compared with the last
    known hash: a touched or re-downloaded file with the same bytes is not a conflict. The hash
    taken at open is computed on the worker, not the main thread. Changed content, or a missing
    file, is never overwritten: publishing pauses and the person chooses "Keep my version", "Use
-   the version on disk" or "Save mine as a copy…".
+   the version on disk" or "Save mine as a copy…". "Keep my version" covers the show as it was
+   when the person chose: if it changes again before the publish goes through, they're asked
+   again. What a publish records as the show is the temp file's identity, read before the rename
+   (a rename keeps it), and it is written to the manifest as pending before the rename, so a
+   failure or crash right after the rename isn't later mistaken for someone else's change.
 6. **Failures.** A rename that fails with `EPERM`, `EBUSY` or `EACCES` on Windows is retried with
    backoff (10 ms up to 100 ms) for 5 s. Then, as for any other failed publish, the temp file is
    deleted (retrying while a sync app holds it), the working copy stays authoritative, the title
    bar says the show isn't in its folder yet, and the publish is retried after 2, 4, 8, 15 and
    then every 30 s, and on the next blur or close. A read-only show isn't published over; the
    person is offered Save As.
-7. **Temp files.** Temp files beside a show that match its name are deleted when it opens and after
-   each publish, whatever their age: only OpenMarch makes them. A delete that fails because a
-   sync app holds the file is retried and otherwise left for the next open.
-8. **Close and quit.** Closing or quitting publishes first. If that can't happen, a dialog offers to
+7. **Temp files.** Temp files beside a show that match its name are deleted when it opens (with
+   the setting on or off), after each publish, when it closes and, after Save As, beside the old
+   file, whatever their age: only OpenMarch makes them. A delete that fails because a
+   sync app holds the file is retried for 2 s, then in the background for a minute (sync apps
+   can hold a new file for 20 s or more), and otherwise left for the next open. Snapshots a
+   crash left in `userData/save-scratch` are deleted at startup.
+8. **Close and quit.** Closing, quitting, switching shows and restarting for an update publish
+   first, while the window is still visible. If that can't happen, a dialog offers to
    retry, overwrite or save elsewhere (as fits the problem), close and recover later, or cancel.
    Quitting closes every connection, and the working folder is deleted once its changes are
    published.
 9. **Recovery.** A manifest beside each working copy records the show's path, its last known
-   identity and whether there are unpublished changes. At startup, working copies without
-   unpublished changes are deleted. Opening a show that has one, from any path (startup, Recent
+   identity and whether there are unpublished changes; it is flushed to disk when written. At
+   startup, working copies without unpublished changes are deleted; one whose manifest can't be
+   read is kept, never deleted. Opening a show that has one, from any path (startup, Recent
    Files, the file dialog, a double-click), first asks whether to recover it; the launch page lists
    the rest. Recovering reopens the working copy (replaying its WAL) and publishes it with the
    usual conflict check.

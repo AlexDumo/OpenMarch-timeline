@@ -8,7 +8,7 @@
  */
 import * as fs from "node:fs";
 import { randomBytes } from "node:crypto";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 /** Flushes a file's contents to disk. On macOS libuv uses F_FULLFSYNC. */
 export async function fsyncFile(filePath: string): Promise<void> {
@@ -137,6 +137,15 @@ export async function removeIfPresent(filePath: string): Promise<void> {
     }
 }
 
+export type RemoveRetryOptions = Pick<
+    RenameRetryOptions,
+    "budgetMs" | "sleep" | "now"
+> & {
+    /** The longest wait between attempts, in ms. */
+    maxDelayMs?: number;
+    remove?: (filePath: string) => Promise<void>;
+};
+
 /**
  * Deletes a file, retrying for a while when another process holds it (a sync app uploading a
  * temp file it just saw). Returns false, instead of throwing, when it is still there at the end:
@@ -148,20 +157,50 @@ export async function removeWithRetry(
         budgetMs = 2000,
         sleep = defaultSleep,
         now = Date.now,
-    }: Pick<RenameRetryOptions, "budgetMs" | "sleep" | "now"> = {},
+        maxDelayMs = 200,
+        remove = removeIfPresent,
+    }: RemoveRetryOptions = {},
 ): Promise<boolean> {
     const start = now();
     for (let attempt = 1; ; attempt++) {
         try {
-            await removeIfPresent(filePath);
+            await remove(filePath);
             return true;
         } catch (error) {
-            const delay = Math.min(200, attempt * 25);
+            if ((error as NodeJS.ErrnoException)?.code === "ENOENT")
+                return true;
+            const delay = Math.min(maxDelayMs, attempt * 25);
             if (!isBusyError(error) || now() - start + delay > budgetMs)
                 return false;
             await sleep(delay);
         }
     }
+}
+
+/**
+ * How long a temp file a sync app still holds keeps being deleted in the background. Sync apps
+ * can hold a new file for 20 s or more while they upload it.
+ */
+export const LINGERING_DELETE_MS = 60_000;
+
+/**
+ * Deletes a file now if it can, and otherwise keeps trying in the background (every 2 s at
+ * most, for {@link LINGERING_DELETE_MS}). Resolves to whether the first, short try removed it;
+ * `lingering` settles when the background tries end.
+ */
+export async function removeNowOrLater(
+    filePath: string,
+    options: RemoveRetryOptions & { lingerMs?: number } = {},
+): Promise<{ removed: boolean; lingering: Promise<boolean> }> {
+    const { lingerMs = LINGERING_DELETE_MS, ...rest } = options;
+    if (await removeWithRetry(filePath, rest))
+        return { removed: true, lingering: Promise.resolve(true) };
+    const lingering = removeWithRetry(filePath, {
+        ...rest,
+        budgetMs: lingerMs,
+        maxDelayMs: 2000,
+    });
+    return { removed: false, lingering };
 }
 
 /** A temp file's name beside `target`: `.~<name>.<hex>.tmp`. */
@@ -182,6 +221,8 @@ export function tempFilePattern(fileName: string): RegExp {
 export type PublishOptions = RenameRetryOptions & {
     /** Runs on the finished temp file just before the rename (copy permissions, a last check). */
     beforeRename?: (tempPath: string) => Promise<void>;
+    /** Overrides for deleting the temp file after a failure, for tests. */
+    removeOptions?: RemoveRetryOptions & { lingerMs?: number };
 };
 
 /**
@@ -241,7 +282,47 @@ export async function publishFile(
         await fsyncDirectory(dirname(target), options.platform);
         return { ...result, tempPath };
     } catch (error) {
-        await removeWithRetry(tempPath);
+        // A sync app may hold the new temp file for a while: keep deleting it in the background
+        // rather than leave it beside the show until the next open.
+        await removeNowOrLater(tempPath, {
+            sleep: options.sleep,
+            now: options.now,
+            ...options.removeOptions,
+        });
         throw error;
     }
+}
+
+/**
+ * Whether `a` and `b` name the same file: the same device and inode when both exist, otherwise
+ * the same real path (ignoring case on Windows and macOS, whose file systems usually do).
+ */
+export function isSameFile(
+    a: string,
+    b: string,
+    platform: NodeJS.Platform = process.platform,
+): boolean {
+    if (!a || !b) return false;
+    try {
+        const statA = fs.statSync(a, { bigint: true });
+        const statB = fs.statSync(b, { bigint: true });
+        if (statA.ino !== 0n && statB.ino !== 0n)
+            return statA.dev === statB.dev && statA.ino === statB.ino;
+    } catch {
+        // One of them doesn't exist (yet): compare paths.
+    }
+    const real = (p: string) => {
+        try {
+            return fs.realpathSync.native(p);
+        } catch {
+            try {
+                return join(fs.realpathSync.native(dirname(p)), basename(p));
+            } catch {
+                return resolve(p);
+            }
+        }
+    };
+    const fold = (p: string) =>
+        platform === "win32" || platform === "darwin" ? p.toLowerCase() : p;
+    return fold(real(a)) === fold(real(b));
 }
