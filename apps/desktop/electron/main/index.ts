@@ -428,6 +428,8 @@ async function createWindow(title?: string) {
 
     // Publish when the person switches away, so the show in its folder is current (ADR 0018).
     win.on("blur", () => {
+        // A working-copy question taking focus isn't the person leaving.
+        if (workingCopyQuestionsOpen > 0) return;
         void workingCopies.current?.flush("blur");
     });
 
@@ -1939,6 +1941,27 @@ function reportWorkingCopyStatus(status: WorkingCopyStatus) {
         );
 }
 
+/** How many working-copy questions are on screen (recover, unpublished changes). */
+let workingCopyQuestionsOpen = 0;
+
+/**
+ * Shows a working-copy question over the window. While it's up, the window's blur is the
+ * question taking focus, not the person leaving: no publish starts, so the title bar keeps
+ * showing why the last one failed.
+ */
+async function askWorkingCopyQuestion(
+    options: Electron.MessageBoxOptions,
+): Promise<Electron.MessageBoxReturnValue> {
+    workingCopyQuestionsOpen++;
+    try {
+        return win && !win.isDestroyed()
+            ? await dialog.showMessageBox(win, options)
+            : await dialog.showMessageBox(options);
+    } finally {
+        workingCopyQuestionsOpen--;
+    }
+}
+
 /** Asks whether to recover a show's unpublished changes before it opens. */
 async function askRecoverOnOpen(
     entry: RecoverableWorkingCopy,
@@ -1966,10 +1989,7 @@ async function askRecoverOnOpen(
     if (approvedRecoveryId === entry.id) return "recover";
     // A Playwright run can't answer a native dialog: recover, as the safe choice.
     if (process.env.PLAYWRIGHT_SESSION) return "recover";
-    const { response } =
-        win && !win.isDestroyed()
-            ? await dialog.showMessageBox(win, options)
-            : await dialog.showMessageBox(options);
+    const { response } = await askWorkingCopyQuestion(options);
     return choices[response] ?? "cancel";
 }
 
@@ -1999,10 +2019,7 @@ const workingCopies = createWorkingCopyHost({
 
 /** Non-identifying publish numbers for Sentry, respecting the analytics opt-out (ADR 0018). */
 const workingCopyTelemetry = createWorkingCopyTelemetry({
-    enabled: () =>
-        enableSentry &&
-        !store.get("optOutAnalytics") &&
-        !process.env.PLAYWRIGHT_SESSION,
+    enabled: diagnosticsAllowed,
     platform: process.platform,
     appVersion: app.getVersion(),
 });
@@ -2072,10 +2089,7 @@ async function askAboutUnpublishedChanges(
     };
     // A Playwright run can't answer: close and keep the changes for recovery.
     if (process.env.PLAYWRIGHT_SESSION) return "close";
-    const { response } =
-        win && !win.isDestroyed()
-            ? await dialog.showMessageBox(win, options)
-            : await dialog.showMessageBox(options);
+    const { response } = await askWorkingCopyQuestion(options);
     const answer = choices[response]?.answer ?? "cancel";
     if (answer === "cancel" || answer === "close") return answer;
     if (answer === "overwrite") await session.overwriteShow();

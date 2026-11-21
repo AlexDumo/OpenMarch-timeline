@@ -5,9 +5,11 @@
  *
  * Each publish adds a breadcrumb (it travels with any error report); each session sends one
  * summary event when it ends, rather than one event per publish. Nothing is sent when analytics
- * are opted out.
+ * are opted out. The summary is a diagnostic event (`privateDiagnostics.ts`): it goes without
+ * the console breadcrumbs, which name files.
  */
 import { addBreadcrumb, captureMessage } from "@sentry/electron/main";
+import { diagnosticTags } from "./privateDiagnostics";
 import type { PublishMetrics } from "../database/workingCopy/WorkingCopySession";
 
 export type PublishEvent =
@@ -146,13 +148,13 @@ export function createWorkingCopyTelemetry({
             )
                 return;
             sink.summary(
-                {
+                diagnosticTags({
                     platform,
                     appVersion,
                     syncService: s.syncService,
                     hadConflict: String(s.conflicts > 0),
                     hadDeferral: String(s.deferrals > 0),
-                },
+                }),
                 {
                     publishes: s.publishes,
                     publishAvgMs: s.publishes

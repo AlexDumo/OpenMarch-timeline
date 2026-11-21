@@ -111,11 +111,11 @@ The title bar shows where the show stands. Select it for details and a <Ui k="wo
 | <Ui k="workingCopy.status.saving" plain /> | The show file is being written. |
 | <Ui k="workingCopy.status.problem" plain /> | OpenMarch couldn't write the show file, usually because a sync app or another program is using it. Your changes are kept safe, and OpenMarch keeps trying by itself. If the file is read-only, select <Ui k="workingCopy.saveAs" /> to save the show as a new file and keep working in it. |
 
-If you close or quit while OpenMarch can't write the show file, it asks first: try again, save as a new file, or <Ui k="fileDialog.unpublished.closeAnyway" plain /> and keep the changes for later.
+If you close, quit or restart OpenMarch for an update while it can't write the show file, it asks first: try again, save as a new file, or <Ui k="fileDialog.unpublished.closeAnyway" plain /> and keep the changes for later.
 
 If OpenMarch quits or the computer crashes before your last changes reach the file, they aren't lost. The next time you open that show, however you open it, OpenMarch asks whether to <Ui k="fileDialog.recoverOnOpen.recover" plain /> or <Ui k="fileDialog.recoverOnOpen.discard" plain />. The start page also lists them under <Ui k="workingCopy.recovery.title" plain />.
 
-If the show file was changed by another program or computer since OpenMarch last saved it, for example by a sync app bringing in someone else's version, OpenMarch doesn't write over it. It asks whether to <Ui k="workingCopy.conflict.keepMine" plain />, <Ui k="workingCopy.conflict.keepTheirs" plain />, or <Ui k="workingCopy.conflict.saveCopy" plain />.
+If the show file was changed by another program or computer since OpenMarch last saved it, for example by a sync app bringing in someone else's version, OpenMarch doesn't write over it. It asks whether to <Ui k="workingCopy.conflict.keepMine" plain />, <Ui k="workingCopy.conflict.keepTheirs" plain />, or <Ui k="workingCopy.conflict.saveCopy" plain />. <Ui k="workingCopy.conflict.keepMine" plain /> replaces the version you were asked about: if the file changes again before yours is written, OpenMarch asks again.
 
 ## Share a show
 

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { DIAGNOSTIC_TAG } from "../privateDiagnostics";
 
 vi.mock("@sentry/electron/main", () => ({
     addBreadcrumb: vi.fn(),
@@ -66,6 +67,8 @@ describe("working-copy telemetry", () => {
             platform: "win32",
             hadDeferral: "true",
             hadConflict: "false",
+            // Sent without breadcrumbs: the console's name files (privateDiagnostics.ts).
+            [DIAGNOSTIC_TAG]: "true",
         });
         expect(extra).toMatchObject({
             publishes: 2,
