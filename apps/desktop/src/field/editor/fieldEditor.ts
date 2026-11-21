@@ -1,5 +1,9 @@
 import type { FieldTestGesture } from "@/field/fieldTestApi";
 import {
+    fieldInputDebugOn,
+    logFieldInput,
+} from "@/field/debug/fieldInputDebug";
+import {
     pressChoiceOf,
     type HeldRole,
     REACH_INSIDE,
@@ -1170,7 +1174,18 @@ export class FieldEditor {
     }
 
     /** The pointer was lost (capture lost, the window lost focus): nothing is clicked or dropped. */
-    pointerCancel(): void {
+    pointerCancel(reason = "cancelled"): void {
+        if (fieldInputDebugOn()) {
+            const undone = this.gesture
+                ? "drag or marquee"
+                : this.modePress
+                  ? "box or tool press"
+                  : this.press
+                    ? "press"
+                    : null;
+            if (undone)
+                logFieldInput("CANCELLED", `${undone}: ${reason}`, true);
+        }
         // The last click stays: the renderer also cancels after every release
         // A press the prop tool was drawing with is dropped (a second finger
         // landed to move the view): the corners already down stay

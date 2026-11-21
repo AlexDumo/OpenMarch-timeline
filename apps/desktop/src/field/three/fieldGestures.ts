@@ -186,7 +186,8 @@ export class FieldGestures {
     dispose(): void {
         this.cancelTimer?.();
         this.cancelTimer = null;
-        if (this.single?.role === "edit") this.env.editor()?.pointerCancel();
+        if (this.single?.role === "edit")
+            this.env.editor()?.pointerCancel("touch gestures stopped");
         this.single = null;
         this.navigation = null;
         this.state = initialGestureState();
@@ -258,7 +259,8 @@ export class FieldGestures {
                 break;
             }
             case "cancelSingle":
-                if (this.single?.role === "edit") editor?.pointerCancel();
+                if (this.single?.role === "edit")
+                    editor?.pointerCancel("a touch gesture took over");
                 this.single = null;
                 break;
             case "longPressCommit": {
