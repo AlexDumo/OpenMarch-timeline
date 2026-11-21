@@ -325,3 +325,79 @@ test("a finger draws a polygon prop corner by corner, with Undo point and Finish
     // Fingers drew; none moved the view
     expect((await readField(page)).viewport).toEqual(view);
 });
+
+test("a finger on a line, just in from its end, moves the line; on the end's handle, it moves the end (#873)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await selectAll(page);
+    await page.keyboard.press("l");
+    const a = await onField(page, 0.3, 0.6);
+    const b = await onField(page, 0.5, 0.6);
+    await tapPoints(page, [a, b]);
+    await tapOn(page, page.getByTestId("shape-tool-finish"));
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    const drawn = (await shapeOverlay(page))!;
+    const ends = (o: FieldTestShapeOverlay) => {
+        const sorted = [...o.handles].sort((p, q) => p.x - q.x);
+        return { left: sorted[0]!, right: sorted.at(-1)! };
+    };
+    const before = ends(drawn);
+
+    // On the line, 16 px in from the right end: within a finger's reach of
+    // the end's handle (22 px), past a mouse's (10). The whole line goes down
+    const grid = await fieldGrid(show);
+    const step = grid.pixelsPerStep * (await canvasScale(page));
+    const on = { x: before.right.x - 16, y: before.right.y };
+    await touchDrag(page, on, { x: on.x, y: on.y + 4 * step }, { steps: 12 });
+    await expect
+        .poll(async () => {
+            const now = ends((await shapeOverlay(page))!);
+            return (
+                now.left.y > before.left.y + 2 * step &&
+                now.right.y > before.right.y + 2 * step &&
+                Math.abs(
+                    now.right.x - now.left.x - (before.right.x - before.left.x),
+                ) < 1
+            );
+        })
+        .toBe(true);
+
+    // On the end's handle as drawn: that end alone moves
+    const moved = ends((await shapeOverlay(page))!);
+    const onHandle = { x: moved.right.x + 3, y: moved.right.y };
+    await touchDrag(
+        page,
+        onHandle,
+        { x: onHandle.x + 4 * step, y: onHandle.y },
+        { steps: 12 },
+    );
+    await expect
+        .poll(async () => ends((await shapeOverlay(page))!).right.x)
+        .toBeGreaterThan(moved.right.x + step);
+    expect(
+        Math.abs(ends((await shapeOverlay(page))!).left.x - moved.left.x),
+    ).toBeLessThan(1);
+
+    await tapOn(page, page.getByTestId("shape-editor-discard"));
+});
+
+test("the prop drawing card's Cancel turns the tool off (#873)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await page.locator("#sidebar-launcher-props").click();
+    await page.getByRole("button", { name: "Polygon" }).click();
+    await expect
+        .poll(() => page.evaluate(() => window.fieldTest!.activeGesture()))
+        .toBe("prop");
+    await tapPoints(page, [await onField(page, 0.3, 0.3)]);
+    const cancel = page.getByTestId("prop-draw-cancel");
+    await expect(cancel).toHaveText("Cancel");
+    await tapOn(page, cancel);
+    await expect(cancel).toBeHidden();
+    await expect
+        .poll(() => page.evaluate(() => window.fieldTest!.activeGesture()))
+        .toBeNull();
+    expect(await show.query("SELECT id FROM item_geometry")).toEqual([]);
+});
