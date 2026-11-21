@@ -15,7 +15,9 @@ import {
     RenameRetriesExhaustedError,
     fsyncDirectory,
     isSameFile,
+    pendingDeleteCount,
     removeNowOrLater,
+    settlePendingDeletes,
     renameWithRetry,
     publishFile,
     removeWithRetry,
@@ -254,6 +256,58 @@ describe("removeNowOrLater", () => {
 
         expect(await lingering).toBe(false);
         expect(clock.now()).toBeLessThan(15_000);
+    });
+});
+
+describe("settlePendingDeletes", () => {
+    it("waits for background deletes before the app quits", async () => {
+        let release!: () => void;
+        const held = new Promise<void>((resolve) => (release = resolve));
+        let free = false;
+        const { lingering } = await removeNowOrLater("x.tmp", {
+            budgetMs: 0,
+            sleep: () => held,
+            remove: async () => {
+                if (!free) throw errno("EBUSY");
+            },
+        });
+        expect(pendingDeleteCount()).toBe(1);
+
+        const settling = settlePendingDeletes(5_000);
+        free = true;
+        release();
+
+        expect(await settling).toEqual({ settled: true });
+        expect(await lingering).toBe(true);
+        expect(pendingDeleteCount()).toBe(0);
+    });
+
+    it("gives up at the cap, so quitting never hangs", async () => {
+        let release!: () => void;
+        let released = false;
+        const held = new Promise<void>((resolve) => (release = resolve));
+        const { lingering } = await removeNowOrLater("x.tmp", {
+            budgetMs: 0,
+            lingerMs: 1_000,
+            // The sync app holds it until the test ends; then its time is up.
+            now: () => (released ? 1_000_000 : 0),
+            sleep: () => held,
+            remove: async () => {
+                throw errno("EBUSY");
+            },
+        });
+
+        const started = Date.now();
+        expect(await settlePendingDeletes(50)).toEqual({ settled: false });
+        expect(Date.now() - started).toBeLessThan(1_000);
+
+        released = true;
+        release();
+        expect(await lingering).toBe(false);
+    });
+
+    it("returns at once when nothing is pending", async () => {
+        expect(await settlePendingDeletes(10_000)).toEqual({ settled: true });
     });
 });
 
