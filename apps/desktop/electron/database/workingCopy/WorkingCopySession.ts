@@ -447,6 +447,10 @@ export class WorkingCopySession {
     private retryIndex = 0;
     /** Bumped by Save As; a publish started before it doesn't record anything for the new file. */
     private targetVersion = 0;
+    /** Questions on screen that hold automatic publishes; see {@link holdAutomaticPublishes}. */
+    private holds = 0;
+    /** An automatic publish came due while held. */
+    private automaticDue = false;
     private started = false;
     private closed = false;
 
@@ -688,6 +692,43 @@ export class WorkingCopySession {
     }
 
     /**
+     * Holds the publishes nobody asked for at that moment (after an edit, a retry, the window
+     * losing focus) while the person answers a question or picks a file: each one writes a
+     * full temp file beside the show, which a sync app may grab, and the title bar would say
+     * "Saving…" behind the question. Publishes the person asks for (Try Again, Keep my version,
+     * Save As, Save Now) still run at once. Call the returned function when the question
+     * closes; one that came due meanwhile then runs after the first retry delay.
+     */
+    holdAutomaticPublishes(): () => void {
+        this.holds++;
+        let released = false;
+        return () => {
+            if (released) return;
+            released = true;
+            this.holds--;
+            if (this.holds > 0 || !this.automaticDue || this.closed) return;
+            this.automaticDue = false;
+            this.clearRetryTimer();
+            this.retryTimer = setTimeout(() => {
+                this.retryTimer = null;
+                this.publishAutomatically("resume");
+            }, this.options.retryDelaysMs[0]);
+            this.retryTimer.unref?.();
+        };
+    }
+
+    /** A publish nobody asked for right now: a timer, or the window losing focus. */
+    publishAutomatically(reason: string): void {
+        if (this.closed) return;
+        if (this.holds > 0) {
+            this.automaticDue = true;
+            this.clearSaveTimers();
+            return;
+        }
+        void this.flush(reason);
+    }
+
+    /**
      * Publishes over the show even though it changed on disk ("Keep my version"). The choice
      * covers the show as it is now: it becomes the version publishes compare with, so a later
      * change (a sync app finishing another download) is a conflict again.
@@ -841,12 +882,12 @@ export class WorkingCopySession {
         if (!this.started) return;
         if (this.debounceTimer) clearTimeout(this.debounceTimer);
         this.debounceTimer = setTimeout(
-            () => void this.flush("idle"),
+            () => this.publishAutomatically("idle"),
             this.options.debounceMs,
         );
         if (!this.maxWaitTimer)
             this.maxWaitTimer = setTimeout(
-                () => void this.flush("max-wait"),
+                () => this.publishAutomatically("max-wait"),
                 this.options.maxWaitMs,
             );
     }
@@ -1128,7 +1169,7 @@ export class WorkingCopySession {
         this.clearRetryTimer();
         this.retryTimer = setTimeout(() => {
             this.retryTimer = null;
-            void this.flush("retry");
+            this.publishAutomatically("retry");
         }, delay);
         this.retryTimer.unref?.();
         this.setState("deferred", { message, retryAt, errorCode });

@@ -404,7 +404,7 @@ async function createWindow(title?: string) {
 
     // Publish when the person switches away, so the show in its folder is current (ADR 0018).
     win.on("blur", () => {
-        void workingCopies.current?.flush("blur");
+        workingCopies.current?.publishAutomatically("blur");
     });
 
     // Make all links open with the browser, not with the application

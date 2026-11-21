@@ -75,13 +75,16 @@ before. Recovery of existing working copies works whatever the setting.
    backoff (10 ms up to 100 ms) for 5 s. Then, as for any other failed publish, the temp file is
    deleted (retrying while a sync app holds it), the working copy stays authoritative, the title
    bar says the show isn't in its folder yet, and the publish is retried after 2, 4, 8, 15 and
-   then every 30 s, and on the next blur or close. A read-only show isn't published over; the
-   person is offered Save As.
+   then every 30 s, and on the next blur or close. While the person answers a working-copy
+   question or picks a file for Save As, these automatic publishes wait, and the one that came
+   due runs after the question closes; what the person chooses (Try Again, Keep my version, Save
+   As) runs at once. A read-only show isn't published over; the person is offered Save As.
 7. **Temp files.** Temp files beside a show that match its name are deleted when it opens (with
    the setting on or off), after each publish, when it closes and, after Save As, beside the old
    file, whatever their age: only OpenMarch makes them. A delete that fails because a
    sync app holds the file is retried for 2 s, then in the background for a minute (sync apps
-   can hold a new file for 20 s or more), and otherwise left for the next open. Snapshots a
+   can hold a new file for 20 s or more); quitting waits up to 10 s for those deletes. What
+   is still held then is left for the next open. Snapshots a
    crash left in `userData/save-scratch` are deleted at startup.
 8. **Close and quit.** Closing, quitting, switching shows and restarting for an update publish
    first, while the window is still visible. If that can't happen, a dialog offers to
