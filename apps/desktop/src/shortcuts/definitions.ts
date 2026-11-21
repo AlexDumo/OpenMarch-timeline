@@ -881,6 +881,15 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: [],
     },
+    // The prop tool turned off, drawing or placing nothing (#873): the drawing card's Cancel. No
+    // key of its own: Escape already does it (cancelAlignmentUpdates)
+    propCancelDrawing: {
+        labelKey: "actions.prop.cancelDrawing",
+        category: "edit",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
     // The floating editor's turn and Recalculate (#429), for the open or selected shape only. While
     // one is shown, Alt+F and Alt+Shift+F (flipHorizontal/flipVertical) flip the shape instead of
     // the marchers (shapes/editor/ShapeEditorBar)

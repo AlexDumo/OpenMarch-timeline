@@ -51,6 +51,13 @@ export interface ToolEnv {
      */
     readonly stemUnit?: number;
     /**
+     * A pen's or finger's press (tablet 1.4): how far from a marcher's center it lands on that
+     * marcher, in field units. Its wider handle reach then gives way to a move where the press is
+     * on a nearer marcher or on the shape as drawn (`shapeTargetAt`'s rule, the selection box's
+     * `wideHandleWins`). Absent for a mouse, whose handles always win within their reach.
+     */
+    readonly marcherReach?: number;
+    /**
      * Screen pixels per field unit, for what depends on how far the field is zoomed in (a Line's
      * dragged interval snapping to half steps rather than whole ones); unknown when absent
      */
@@ -65,7 +72,10 @@ export interface ToolEnv {
      * when the host sets it, the center when absent
      */
     readonly pivot?: Pivot;
-    /** Where marchers stand, for a dragged pivot to snap to (#350); none when absent */
+    /**
+     * Where marchers stand, for a dragged pivot to snap to (#350) and for a pen's or finger's
+     * press to land on (`marcherReach`); none when absent
+     */
     readonly pivotSnaps?: () => readonly XY[];
     /** The box's ratio lock: changing one spacing changes the other in proportion */
     readonly ratioLocked?: boolean;

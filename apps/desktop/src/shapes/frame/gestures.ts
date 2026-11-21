@@ -147,7 +147,8 @@ export function shapeTargetAt(
     // straight line's midpoint, #524)
     if (env.reachInside && near(controls.center, at, env.hitRadius))
         return { type: "pivot", pulled: true };
-    if (best) return { type: "handle", key: best.key };
+    if (best && !wideReachGivesWay(kind, params, n, at, env, best))
+        return { type: "handle", key: best.key };
     if (near(controls.knob, at, env.hitRadius))
         return { type: "rotate", from: "knob" };
     if (near(controls.center, at, env.hitRadius))
@@ -167,6 +168,38 @@ export function shapeTargetAt(
         return { type: "rotate", from: "corner" };
     if (kind.contains(params, n, at, env)) return { type: "move" };
     return null;
+}
+
+/**
+ * Whether a pen's or finger's press within a handle's reach moves the shape instead (tablet 1.4),
+ * by the selection box's rule (`wideHandleWins` in `field/editor/groupTransform.ts`). Their reach
+ * is wider than the handle a mouse takes, so on a narrow shape (a short line, a box two marchers
+ * wide) it would cover nearly all of it, and a finger meant to move the shape would grab a handle.
+ * So the handle gives way when:
+ *
+ * - a marcher the press lands on is nearer than the handle, or
+ * - the press is on the shape as drawn (its body by a mouse's reach) and beyond the handle a
+ *   mouse takes. Outside the shape, the whole reach is the handle's.
+ *
+ * A mouse's press (no `marcherReach`) keeps its own rule: within its reach, the handle wins.
+ */
+function wideReachGivesWay(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+    at: XY,
+    env: ToolEnv,
+    handle: { readonly d: number },
+): boolean {
+    const reach = env.marcherReach;
+    if (reach === undefined) return false;
+    for (const m of env.pivotSnaps?.() ?? []) {
+        const d = Math.hypot(m.x - at.x, m.y - at.y);
+        if (d <= reach && d < handle.d) return true;
+    }
+    const drawn = env.stemUnit ?? env.hitRadius;
+    if (handle.d <= drawn) return false;
+    return kind.contains(params, n, at, { ...env, hitRadius: drawn });
 }
 
 const angleFrom = (pivot: XY, p: XY) =>
