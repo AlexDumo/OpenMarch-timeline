@@ -158,7 +158,8 @@
         },
         "prop": {
             "finishDrawing": "Prop: Finish drawing",
-            "removeLastPoint": "Prop: Remove the last corner while drawing"
+            "removeLastPoint": "Prop: Remove the last corner while drawing",
+            "cancelDrawing": "Prop: Cancel drawing"
         },
         "select": {
             "selectAll": "Select all",

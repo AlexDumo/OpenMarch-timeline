@@ -1,4 +1,4 @@
-import { Button, getButtonClassName } from "@openmarch/ui";
+import { getButtonClassName } from "@openmarch/ui";
 import { useFieldLayerRef } from "@/components/canvas/fieldLayers";
 import { InfoIcon } from "@phosphor-icons/react";
 import { T, useTranslate } from "@tolgee/react";
@@ -34,7 +34,6 @@ export default function PropDrawingNotice() {
     const { t } = useTranslate();
     const drawingMode = useItemDrawingStore((s) => s.drawingMode);
     const placing = useItemDrawingStore((s) => s.placing);
-    const reset = useItemDrawingStore((s) => s.resetDrawingState);
     const touch = useIsTouchMode();
     const layerRef = useFieldLayerRef<HTMLDivElement>();
     if (!drawingMode) return null;
@@ -81,9 +80,13 @@ export default function PropDrawingNotice() {
                     )}
                 </div>
             )}
-            <Button size="compact" variant="secondary" onClick={reset}>
+            <ActionButton
+                action="propCancelDrawing"
+                className={actionClass("secondary")}
+                data-testid="prop-draw-cancel"
+            >
                 <T keyName="props.draw.cancel" />
-            </Button>
+            </ActionButton>
         </div>
     );
 }

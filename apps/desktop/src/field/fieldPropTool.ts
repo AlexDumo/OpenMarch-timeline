@@ -53,7 +53,7 @@ const stampOf = (
  * canvas's cancel action. While a polygon or arc is drawn corner by corner, its
  * last corner can be taken back, and a polygon finished, as its double-click
  * does: the drawing card's Undo point and Finish in the touch layout
- * (tablet 1.4).
+ * (tablet 1.4). Its Cancel turns the tool off, as Escape does (#873).
  */
 export function useFieldPropTool(
     editor: FieldEditor,
@@ -77,6 +77,14 @@ export function useFieldPropTool(
             editor.removeLastPropPoint();
         },
         { enabled: (shape?.points ?? 0) > 0 },
+    );
+    const drawing = useItemDrawingStore((s) => s.drawingMode !== null);
+    useActionHandler(
+        "propCancelDrawing",
+        () => {
+            useItemDrawingStore.getState().resetDrawingState();
+        },
+        { enabled: drawing },
     );
     useEffect(() => {
         latestField.current = field;
