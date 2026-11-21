@@ -581,6 +581,69 @@ describe("WorkingCopySession", () => {
         expect(fs.existsSync(staleCopy)).toBe(false);
     });
 
+    it("holds retries while a question is open, and still publishes when the person asks", async () => {
+        let blocked = true;
+        let renames = 0;
+        const { session } = await openStarted({
+            platform: "win32",
+            retryDelaysMs: [30],
+            renameOptions: {
+                budgetMs: 0,
+                rename: async (from, to) => {
+                    renames++;
+                    if (blocked) throw errno("EBUSY");
+                    await fs.promises.rename(from, to);
+                },
+            },
+        });
+        edit(session, "mine");
+        expect(await session.flush("quit")).toMatchObject({
+            state: "deferred",
+        });
+
+        const release = session.holdAutomaticPublishes();
+        const triesBefore = renames;
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        session.publishAutomatically("blur");
+
+        // No retry and no blur publish wrote a temp file behind the question.
+        expect(renames).toBe(triesBefore);
+        expect(session.status().state).toBe("deferred");
+        expect(strayFilesBeside(showPath)).toEqual([]);
+
+        // Try Again publishes at once, held or not.
+        blocked = false;
+        expect((await session.flush("quit")).ok).toBe(true);
+        expect(readValues(showPath)).toEqual(["first", "mine"]);
+        release();
+    });
+
+    it("picks up a retry that came due once the question closes", async () => {
+        let blocked = true;
+        const { session } = await openStarted({
+            platform: "win32",
+            retryDelaysMs: [30],
+            renameOptions: {
+                budgetMs: 0,
+                rename: async (from, to) => {
+                    if (blocked) throw errno("EBUSY");
+                    await fs.promises.rename(from, to);
+                },
+            },
+        });
+        edit(session, "mine");
+        const release = session.holdAutomaticPublishes();
+        await session.flush("quit");
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        expect(session.status().state).toBe("deferred");
+
+        blocked = false;
+        release();
+
+        await waitFor(() => session.status().state === "saved");
+        expect(readValues(showPath)).toEqual(["first", "mine"]);
+    });
+
     describe("scanWorkingCopies", () => {
         const makeFolder = (id: string, manifest: string | null) => {
             const directory = join(workingRoot, id);

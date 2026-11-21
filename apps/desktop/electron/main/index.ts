@@ -22,6 +22,7 @@ import { randomUUID } from "node:crypto";
 import {
     isSameFile,
     publishFile,
+    settlePendingDeletes,
     removeWithRetry,
     tempPathBeside,
 } from "../database/atomicFile";
@@ -419,6 +420,7 @@ async function createWindow(title?: string) {
         } catch (e) {
             console.error("Error closing file:", e);
         }
+        await finishPendingDeletes();
 
         isQuitting = true;
         win!.destroy();
@@ -428,9 +430,7 @@ async function createWindow(title?: string) {
 
     // Publish when the person switches away, so the show in its folder is current (ADR 0018).
     win.on("blur", () => {
-        // A working-copy question taking focus isn't the person leaving.
-        if (workingCopyQuestionsOpen > 0) return;
-        void workingCopies.current?.flush("blur");
+        workingCopies.current?.publishAutomatically("blur");
     });
 
     // Make all links open with the browser, not with the application
@@ -882,6 +882,16 @@ function startUpdates(): UpdateController {
 }
 
 /**
+ * Before quitting: gives temp files a sync app still holds up to 10 s to be deleted, so they
+ * aren't left beside the show until it next opens. Quitting goes on at the cap (ADR 0018).
+ */
+async function finishPendingDeletes() {
+    const { settled } = await settlePendingDeletes(10_000);
+    if (!settled)
+        console.warn("Quitting with temp files still held by another program");
+}
+
+/**
  * Before a restart for an update or a move to Applications: close the show the way quitting
  * does, but keep it as the file to open on the next launch. A new show that was never saved is
  * discarded, as on quit.
@@ -902,6 +912,7 @@ async function closeShowForRestart(): Promise<boolean> {
     } catch (error) {
         console.error("Error closing file before restarting:", error);
     }
+    await finishPendingDeletes();
     if (reopen) store.set("databasePath", reopen);
     // The windows close without asking again
     isQuitting = true;
@@ -1941,25 +1952,31 @@ function reportWorkingCopyStatus(status: WorkingCopyStatus) {
         );
 }
 
-/** How many working-copy questions are on screen (recover, unpublished changes). */
-let workingCopyQuestionsOpen = 0;
-
 /**
- * Shows a working-copy question over the window. While it's up, the window's blur is the
- * question taking focus, not the person leaving: no publish starts, so the title bar keeps
- * showing why the last one failed.
+ * Runs `ask` (a working-copy question or the Save As dialog) with the open show's automatic
+ * publishes held: no retry, idle or blur publish writes a temp file behind it, and the title bar
+ * keeps showing why the last one failed. What the person then chooses publishes at once.
  */
-async function askWorkingCopyQuestion(
+async function withAutomaticPublishesHeld<T>(
+    ask: () => Promise<T>,
+): Promise<T> {
+    const release = workingCopies.current?.holdAutomaticPublishes();
+    try {
+        return await ask();
+    } finally {
+        release?.();
+    }
+}
+
+/** Shows a working-copy question over the window, with automatic publishes held. */
+function askWorkingCopyQuestion(
     options: Electron.MessageBoxOptions,
 ): Promise<Electron.MessageBoxReturnValue> {
-    workingCopyQuestionsOpen++;
-    try {
-        return win && !win.isDestroyed()
-            ? await dialog.showMessageBox(win, options)
-            : await dialog.showMessageBox(options);
-    } finally {
-        workingCopyQuestionsOpen--;
-    }
+    return withAutomaticPublishesHeld(() =>
+        win && !win.isDestroyed()
+            ? dialog.showMessageBox(win, options)
+            : dialog.showMessageBox(options),
+    );
 }
 
 /** Asks whether to recover a show's unpublished changes before it opens. */
@@ -2105,16 +2122,18 @@ async function chooseWorkingCopyTarget(
     showPath: string,
 ): Promise<string | null> {
     const name = basename(showPath).replace(/\.dots$/i, "");
-    const result = await showSaveDialogHandler({
-        buttonLabel: t("fileDialog.saveAs.button"),
-        defaultPath: join(dirname(showPath), `${name} (2).dots`),
-        filters: [
-            {
-                name: t("fileDialog.filters.openMarchFile"),
-                extensions: ["dots"],
-            },
-        ],
-    });
+    const result = await withAutomaticPublishesHeld(() =>
+        showSaveDialogHandler({
+            buttonLabel: t("fileDialog.saveAs.button"),
+            defaultPath: join(dirname(showPath), `${name} (2).dots`),
+            filters: [
+                {
+                    name: t("fileDialog.filters.openMarchFile"),
+                    extensions: ["dots"],
+                },
+            ],
+        }),
+    );
     if (result.canceled || !result.filePath) return null;
     return result.filePath.endsWith(".dots")
         ? result.filePath
