@@ -31,9 +31,10 @@ import {
     workingCopySavesEnabled,
     type RecoverChoice,
 } from "./workingCopyHost";
-import type {
-    RecoverableWorkingCopy,
-    WorkingCopyStatus,
+import {
+    type RecoverableWorkingCopy,
+    type WorkingCopyStatus,
+    removeStaleTempFiles,
 } from "../database/workingCopy/WorkingCopySession";
 import { DatabaseSync } from "node:sqlite";
 import {
@@ -856,10 +857,17 @@ function startUpdates(): UpdateController {
  * does, but keep it as the file to open on the next launch. A new show that was never saved is
  * discarded, as on quit.
  */
-async function closeShowForRestart() {
-    // Out of sight first, as quitting does: nothing typed now could be saved
-    win?.hide();
+async function closeShowForRestart(): Promise<boolean> {
     const reopen = currentNewShowDraftPath ? "" : DatabaseServices.getDbPath();
+    // A working copy publishes while the window is still visible, so a failed publish can ask
+    // the person, and they can keep the show open instead (ADR 0018).
+    const proceed = await endWorkingCopy("quit").catch((error) => {
+        console.error("Error saving before restarting:", error);
+        return true;
+    });
+    if (!proceed) return false;
+    // Out of sight, as quitting does: nothing typed now could be saved
+    win?.hide();
     try {
         await closeCurrentFile(true);
     } catch (error) {
@@ -868,6 +876,7 @@ async function closeShowForRestart() {
     if (reopen) store.set("databasePath", reopen);
     // The windows close without asking again
     isQuitting = true;
+    return true;
 }
 
 ipcMain.handle(UPDATE_IPC_CHANNELS.getState, () => updates?.getState() ?? null);
@@ -880,7 +889,7 @@ ipcMain.handle(UPDATE_IPC_CHANNELS.download, () => updates?.download());
 ipcMain.handle(UPDATE_IPC_CHANNELS.install, () => updates?.install());
 ipcMain.handle(UPDATE_IPC_CHANNELS.moveToApplications, async () => {
     if (!isMacOS || app.isInApplicationsFolder()) return false;
-    await closeShowForRestart();
+    if (!(await closeShowForRestart())) return false;
     let moved = false;
     try {
         // Quits and opens the moved copy when it works
@@ -2010,6 +2019,19 @@ function checkWorkingCopyOpen(
     return "working-copy";
 }
 
+/** Whether `path` is a page-era (version 7) show, which asks whether to convert it before it opens. */
+function isPageEraFile(path: string): boolean {
+    let db: DatabaseSync | undefined;
+    try {
+        db = new DatabaseSync(path, { readOnly: true });
+        return readUserVersion(db) === PAGE_MODEL_USER_VERSION;
+    } catch {
+        return false;
+    } finally {
+        db?.close();
+    }
+}
+
 /**
  * The open itself: through a working copy when working-copy saves are on (or to continue a
  * recovered one), otherwise in place. A new show is created in place, then reopened through a
@@ -2021,15 +2043,17 @@ async function openShowWithSaveMode(
     options: OpenShowOptions,
     recover?: RecoverableWorkingCopy,
 ): Promise<OpenShowResult> {
-    // Publish and release the show that is open first.
-    if (!(await endWorkingCopy("switch")))
-        return { status: OPEN_STOPPED_STATUS };
-
+    // The caller (setActiveDbNow) has published and released the show that was open, unless
+    // this file only asks whether to convert it first.
     const enabled =
         workingCopySavesEnabled(store.get(WORKING_COPY_SETTING)) &&
         !isNewShowDraftPath(path);
-    if (!recover && !enabled)
+    if (!recover && !enabled) {
+        // Temp files a working-copy publish or Save As Copy left beside it (a sync app held
+        // them), now that it's edited in place.
+        if (!isNewFile) void removeStaleTempFiles(path);
         return openShowDatabase(path, isNewFile, openShowDeps(), options);
+    }
 
     if (isNewFile) {
         const created = await openShowDatabase(path, true, openShowDeps());
@@ -2043,8 +2067,10 @@ async function openShowWithSaveMode(
     if (!recover) {
         const check = checkWorkingCopyOpen(path);
         if (typeof check === "number") return { status: check };
-        if (check === "in-place")
+        if (check === "in-place") {
+            void removeStaleTempFiles(path);
             return openShowDatabase(path, false, openShowDeps(), options);
+        }
     }
 
     const showPath = recover?.manifest.showPath ?? resolve(path);
@@ -2133,11 +2159,21 @@ async function setActiveDbNow(
     leftoverJournalFile = null;
     const hadShowOpen = DatabaseServices.getDbPath() !== "";
     try {
-        // Unpublished changes from an earlier session are offered before anything opens
-        // (ADR 0018), whichever way the show is being opened.
+        // Publish and release the open show first (ADR 0018); the person may cancel if that
+        // fails. Then unpublished changes from an earlier session are offered before anything
+        // opens, whichever way the show is being opened, including changes closing the open
+        // show just left behind. A page-era file first asks whether to convert it, over the
+        // open show, as with working-copy saves off: only Confirm closes the open show.
+        const closeConnections = () => DatabaseServices.closeDatabase();
         const recover = isNewFile
-            ? null
-            : await workingCopies.checkRecoveryBeforeOpen(path);
+            ? (await endWorkingCopy("switch"))
+                ? null
+                : "cancel"
+            : await workingCopies.prepareOpen(path, {
+                  closeConnections,
+                  keepCurrentOpen:
+                      !options.conversionConfirmed && isPageEraFile(path),
+              });
         if (recover === "cancel") return OPEN_STOPPED_STATUS;
 
         // The 3D View shows one show; a confirmed conversion is about to replace it.
