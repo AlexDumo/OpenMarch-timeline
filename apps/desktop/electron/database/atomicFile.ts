@@ -200,7 +200,41 @@ export async function removeNowOrLater(
         budgetMs: lingerMs,
         maxDelayMs: 2000,
     });
+    pendingDeletes.add(lingering);
+    void lingering.finally(() => pendingDeletes.delete(lingering));
     return { removed: false, lingering };
+}
+
+/** Background deletes {@link removeNowOrLater} started that haven't finished. */
+const pendingDeletes = new Set<Promise<boolean>>();
+
+/** How many background deletes are still trying. */
+export function pendingDeleteCount(): number {
+    return pendingDeletes.size;
+}
+
+/**
+ * Before the app quits: waits for the background deletes still trying, at most `capMs`, so a
+ * temp file a sync app let go of a few seconds late doesn't stay beside the show. Never
+ * rejects, and resolves at the cap whatever is still pending, so quitting can't hang.
+ */
+export async function settlePendingDeletes(
+    capMs = 10_000,
+): Promise<{ settled: boolean }> {
+    if (pendingDeletes.size === 0) return { settled: true };
+    let timer: NodeJS.Timeout | undefined;
+    const cap = new Promise<false>((resolve) => {
+        timer = setTimeout(() => resolve(false), capMs);
+    });
+    try {
+        const settled = await Promise.race([
+            Promise.allSettled([...pendingDeletes]).then(() => true as const),
+            cap,
+        ]);
+        return { settled };
+    } finally {
+        clearTimeout(timer);
+    }
 }
 
 /** A temp file's name beside `target`: `.~<name>.<hex>.tmp`. */

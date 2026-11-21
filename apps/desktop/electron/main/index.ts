@@ -22,6 +22,7 @@ import { randomUUID } from "node:crypto";
 import {
     isSameFile,
     publishFile,
+    settlePendingDeletes,
     removeWithRetry,
 } from "../database/atomicFile";
 import { basename, dirname, join, resolve, sep } from "node:path";
@@ -369,6 +370,7 @@ async function createWindow(title?: string) {
         } catch (e) {
             console.error("Error closing file:", e);
         }
+        await finishPendingDeletes();
 
         isQuitting = true;
         win!.destroy();
@@ -813,6 +815,16 @@ function startUpdates(): UpdateController {
  * does, but keep it as the file to open on the next launch. A new show that was never saved is
  * discarded, as on quit.
  */
+/**
+ * Before quitting: gives temp files a sync app still holds up to 10 s to be deleted, so they
+ * aren't left beside the show until it next opens. Quitting goes on at the cap (ADR 0018).
+ */
+async function finishPendingDeletes() {
+    const { settled } = await settlePendingDeletes(10_000);
+    if (!settled)
+        console.warn("Quitting with temp files still held by another program");
+}
+
 async function closeShowForRestart() {
     // Out of sight first, as quitting does: nothing typed now could be saved
     win?.hide();
@@ -822,6 +834,7 @@ async function closeShowForRestart() {
     } catch (error) {
         console.error("Error closing file before restarting:", error);
     }
+    await finishPendingDeletes();
     if (reopen) store.set("databasePath", reopen);
     // The windows close without asking again
     isQuitting = true;
