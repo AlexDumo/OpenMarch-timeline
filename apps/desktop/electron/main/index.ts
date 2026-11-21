@@ -68,6 +68,10 @@ import {
 import { cloudSyncServiceFor } from "./cloudSyncFolder";
 import { describeLeftoverJournal } from "./leftoverJournalDiagnostics";
 import {
+    diagnosticTags,
+    stripDiagnosticBreadcrumbs,
+} from "./privateDiagnostics";
+import {
     NEEDS_CONVERSION_STATUS,
     OPEN_STOPPED_STATUS,
 } from "../database/convertOnOpenGate";
@@ -153,7 +157,18 @@ console.log("Sentry error reporting enabled:", enableSentry);
 init({
     dsn: "https://72e6204c8e527c4cb7a680db2f9a1e0b@o4509010215239680.ingest.us.sentry.io/4509010222579712",
     enabled: enableSentry,
+    // The app's own diagnostics go without the console breadcrumbs, which name files.
+    beforeSend: stripDiagnosticBreadcrumbs,
 });
+
+/**
+ * Whether the app may send its own diagnostics now. Read each time: the person can opt out of
+ * analytics after launch.
+ */
+const diagnosticsAllowed = () =>
+    enableSentry &&
+    !store.get("optOutAnalytics") &&
+    !process.env.PLAYWRIGHT_SESSION;
 
 ipcMain.on("settings:set", (event, settings) => {
     for (const [key, value] of Object.entries(settings)) {
@@ -435,12 +450,13 @@ function reportLeftoverJournal(filePath: string) {
     try {
         const facts = describeLeftoverJournal(filePath);
         console.warn("A leftover journal stopped an open:", facts);
+        if (!diagnosticsAllowed()) return;
         captureMessage("Leftover journal stopped an open", {
             level: "warning",
-            tags: {
+            tags: diagnosticTags({
                 syncService: facts.syncService,
                 journalOpenForWrite: facts.journalOpenForWrite,
-            },
+            }),
             extra: { ...facts },
         });
     } catch (error) {
