@@ -31,9 +31,10 @@ function edit(session: WorkingCopySession, value: string) {
 }
 
 describe("workingCopySavesEnabled", () => {
-    it("follows the setting unless the env var forces it", () => {
+    it("is on unless turned off, and the env var forces it", () => {
         expect(workingCopySavesEnabled(true, undefined)).toBe(true);
-        expect(workingCopySavesEnabled(undefined, undefined)).toBe(false);
+        expect(workingCopySavesEnabled(undefined, undefined)).toBe(true);
+        expect(workingCopySavesEnabled(false, undefined)).toBe(false);
         expect(workingCopySavesEnabled(true, "0")).toBe(false);
         expect(workingCopySavesEnabled(false, "1")).toBe(true);
     });

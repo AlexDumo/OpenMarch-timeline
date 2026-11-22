@@ -21,7 +21,7 @@ export default function GeneralSettings() {
     const [automaticUpdatesEnabled, setAutomaticUpdatesEnabled] =
         useState(true);
     const [view3dAutoOpen, setView3dAutoOpen] = useState(false);
-    const [workingCopySaves, setWorkingCopySaves] = useState(false);
+    const [workingCopySaves, setWorkingCopySaves] = useState(true);
 
     useEffect(() => {
         // Load saved language from electron store
@@ -51,7 +51,8 @@ export default function GeneralSettings() {
         void window.electron
             .invoke("settings:get", "workingCopySaves")
             .then((savedValue: unknown) => {
-                if (isMounted) setWorkingCopySaves(savedValue === true);
+                // On by default (ADR 0018), so only an explicit off reads as off
+                if (isMounted) setWorkingCopySaves(savedValue !== false);
             });
         // Never answered opens it too (the 3D View asks), so only an explicit off reads as off
         void window.electron

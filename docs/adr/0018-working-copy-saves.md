@@ -29,7 +29,8 @@ in place: every commit writes the show and a `-journal` beside it.
 
 ## Decision
 
-Behind the `workingCopySaves` setting, off by default while it's tested on real machines.
+Behind the `workingCopySaves` setting, on by default from 0.2.0-beta.7 (it was
+off while it was tested); turning it off goes back to editing in place.
 `OPENMARCH_WORKING_COPY=1` or `=0` forces it on or off. With it off, shows are edited in place as
 before. Recovery of existing working copies works whatever the setting.
 

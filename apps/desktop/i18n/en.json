@@ -1976,8 +1976,8 @@
         "shortcuts.conflictWith": "<keys></keys> is already used by {actions}.",
         "shortcuts.recordingHint": "Press keys… (<keys></keys> to cancel)",
         "shortcuts.category.field": "Field",
-        "general.workingCopySaves": "Save shows through a working copy (beta)",
-        "general.workingCopySaves.description": "Edits go to a private copy, and your show file is updated a few seconds after you stop editing, all at once. Safer in folders that OneDrive, iCloud Drive or Dropbox sync. Applies to the next show you open.",
+        "general.workingCopySaves": "Save shows through a working copy",
+        "general.workingCopySaves.description": "Edits go to a private copy, and your show file is updated a few seconds after you stop editing, all at once. Safe in folders that OneDrive, iCloud Drive or Dropbox sync. Turn it off to write every change straight to the show file, as earlier versions did. Applies to the next show you open.",
         "shortcuts.category.path": "Paths"
     },
     "shapes": {

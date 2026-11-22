@@ -32,7 +32,7 @@ import { Steps, Aside } from "@astrojs/starlight/components";
 
 <InShort>Select <Ui k="launchpage.files.createNew" /> or <Ui k="launchpage.files.openFile" /> on the start page or in the toolbar's <Ui k="inspector.shape.fileTab" plain /> tab. Every change saves itself; in the web editor, select <Ui k="web.backUp" /> often to keep a copy.</InShort>
 
-A show is one file, ending in `.dots`. It holds everything: the marchers and sections, the music and tempo, the field, the drill on the timeline, props, and the 3D View's venue and cameras. The desktop app saves every change to that file as you make it, so there's no Save button (unless you try [saving through a working copy](#save-through-a-working-copy-beta)). The web editor keeps shows in the browser instead; read [Keep shows safe in the web editor](#keep-shows-safe-in-the-web-editor) before you rely on it.
+A show is one file, ending in `.dots`. It holds everything: the marchers and sections, the music and tempo, the field, the drill on the timeline, props, and the 3D View's venue and cameras. The desktop app saves on its own a few seconds after you stop editing, so there's no Save step to remember; see [How the desktop app saves](#how-the-desktop-app-saves). The web editor keeps shows in the browser instead; read [Keep shows safe in the web editor](#keep-shows-safe-in-the-web-editor) before you rely on it.
 
 ## The start page
 
@@ -96,11 +96,9 @@ To keep a separate copy, for example before trying something big or to send to a
 
 To close the show and go back to the start page, select <Ui k="fileTab.exitFile" />.
 
-## Save through a working copy (beta)
+## How the desktop app saves
 
-Turn on <Ui k="settings.general.workingCopySaves" /> in Settings › General to try another way of saving, made for shows in folders that OneDrive, iCloud Drive or Dropbox keep in step with the cloud. It applies to the next show you open, and it's off unless you turn it on.
-
-With it on, your changes go to a private copy inside OpenMarch, and the show file is updated in one step: about 15 seconds after you stop editing (at most 30 seconds while you keep going), when you switch to another app, when you close the show, and when you choose **File › <Ui k="menu.file.saveNow" plain />** or <Ui k="workingCopy.saveNow" plain /> in the title bar. A sync app never sees a half-written show or a `-journal` file next to it.
+Your changes go to a private copy inside OpenMarch, and the show file is updated in one step: about 15 seconds after you stop editing (at most 30 seconds while you keep going), when you switch to another app, when you close the show, and when you choose **File › <Ui k="menu.file.saveNow" plain />** or <Ui k="workingCopy.saveNow" plain /> in the title bar. A sync app such as OneDrive, iCloud Drive or Dropbox never sees a half-written show or a `-journal` file next to it, so shows are safe to keep in folders they sync.
 
 The title bar shows where the show stands. Select it for details and a <Ui k="workingCopy.saveNow" /> button.
 
@@ -116,6 +114,8 @@ If you close, quit or restart OpenMarch for an update while it can't write the s
 If OpenMarch quits or the computer crashes before your last changes reach the file, they aren't lost. The next time you open that show, however you open it, OpenMarch asks whether to <Ui k="fileDialog.recoverOnOpen.recover" plain /> or <Ui k="fileDialog.recoverOnOpen.discard" plain />. The start page also lists them under <Ui k="workingCopy.recovery.title" plain />.
 
 If the show file was changed by another program or computer since OpenMarch last saved it, for example by a sync app bringing in someone else's version, OpenMarch doesn't write over it. It asks whether to <Ui k="workingCopy.conflict.keepMine" plain />, <Ui k="workingCopy.conflict.keepTheirs" plain />, or <Ui k="workingCopy.conflict.saveCopy" plain />. <Ui k="workingCopy.conflict.keepMine" plain /> replaces the version you were asked about: if the file changes again before yours is written, OpenMarch asks again.
+
+To go back to the way earlier versions saved, writing every change straight to the show file as you make it, turn off <Ui k="settings.general.workingCopySaves" /> in Settings › General. It applies to the next show you open. Keep it on for shows in a synced folder.
 
 ## Share a show
 

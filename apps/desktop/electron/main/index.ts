@@ -1927,8 +1927,8 @@ function backupBeforeMigrations(path: string) {
 }
 
 /************************************** WORKING COPY **************************************/
-// Saving through a private working copy (ADR 0018). Opt-in through the "workingCopySaves"
-// setting, or OPENMARCH_WORKING_COPY=1 / =0 to force it.
+// Saving through a private working copy (ADR 0018). On unless the "workingCopySaves" setting
+// is turned off; OPENMARCH_WORKING_COPY=1 / =0 forces it.
 
 const workingCopyRoot = () => join(app.getPath("userData"), "working-copies");
 

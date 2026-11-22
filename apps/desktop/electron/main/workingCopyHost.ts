@@ -19,7 +19,7 @@ import {
     scanWorkingCopies,
 } from "../database/workingCopy/WorkingCopySession";
 
-/** The setting that turns working-copy saves on (Settings ▸ General). */
+/** The setting for working-copy saves (Settings ▸ General). On unless it is set to false. */
 export const WORKING_COPY_SETTING = "workingCopySaves";
 /** `1` or `0` forces working-copy saves on or off, whatever the setting says. */
 export const WORKING_COPY_ENV = "OPENMARCH_WORKING_COPY";
@@ -31,7 +31,7 @@ export function workingCopySavesEnabled(
 ): boolean {
     if (env === "1") return true;
     if (env === "0") return false;
-    return setting === true;
+    return setting !== false;
 }
 
 /** What the person chose for a show that has unpublished changes from an earlier session. */
