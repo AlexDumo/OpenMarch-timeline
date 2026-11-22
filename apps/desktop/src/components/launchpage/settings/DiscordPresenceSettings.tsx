@@ -5,20 +5,29 @@ import SettingRow from "@/settings/SettingRow";
 import SettingsPanel from "@/settings/SettingsPanel";
 import {
     DISCORD_PRESENCE_SETTING,
+    DISCORD_SHOW_NAME_SETTING,
     discordPresenceEnabled,
+    discordShowNameEnabled,
 } from "@/discord/discordPresenceSettings";
 
-/** Settings > Privacy: whether the person's Discord status shows OpenMarch. Desktop only. */
+/**
+ * Settings > Privacy: whether the person's Discord status shows OpenMarch, and whether it also
+ * names the open show (off unless they turn it on). Desktop only.
+ */
 export default function DiscordPresenceSettings() {
     const [enabled, setEnabled] = useState(true);
+    const [showName, setShowName] = useState(false);
 
     useEffect(() => {
         let isMounted = true;
-        void window.electron
-            .invoke("settings:get", DISCORD_PRESENCE_SETTING)
-            .then((saved: unknown) => {
-                if (isMounted) setEnabled(discordPresenceEnabled(saved));
-            });
+        void Promise.all([
+            window.electron.invoke("settings:get", DISCORD_PRESENCE_SETTING),
+            window.electron.invoke("settings:get", DISCORD_SHOW_NAME_SETTING),
+        ]).then(([savedEnabled, savedShowName]: unknown[]) => {
+            if (!isMounted) return;
+            setEnabled(discordPresenceEnabled(savedEnabled));
+            setShowName(discordShowNameEnabled(savedShowName));
+        });
         return () => {
             isMounted = false;
         };
@@ -28,9 +37,7 @@ export default function DiscordPresenceSettings() {
         <SettingsPanel heading={<T keyName="settings.privacy.discord" />}>
             <SettingRow
                 label={<T keyName="settings.privacy.discord.toggle" />}
-                description={
-                    <T keyName="settings.privacy.discord.description" />
-                }
+                description={<T keyName="settings.privacy.discord.about" />}
                 htmlFor="discord-presence"
             >
                 <Switch
@@ -44,6 +51,27 @@ export default function DiscordPresenceSettings() {
                     }}
                 />
             </SettingRow>
+            {/* Only means something while the status is on */}
+            {enabled && (
+                <SettingRow
+                    label={<T keyName="settings.privacy.discord.showName" />}
+                    description={
+                        <T keyName="settings.privacy.discord.showName.description" />
+                    }
+                    htmlFor="discord-presence-show-name"
+                >
+                    <Switch
+                        id="discord-presence-show-name"
+                        checked={showName}
+                        onCheckedChange={(checked) => {
+                            setShowName(checked);
+                            window.electron.send("settings:set", {
+                                [DISCORD_SHOW_NAME_SETTING]: checked,
+                            });
+                        }}
+                    />
+                </SettingRow>
+            )}
         </SettingsPanel>
     );
 }

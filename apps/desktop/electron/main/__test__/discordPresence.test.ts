@@ -94,6 +94,50 @@ describe("presenceActivity", () => {
         expect(JSON.stringify(activity)).not.toContain("Fall Show");
     });
 
+    it("names the show on a second line only when asked", () => {
+        const activity = presenceActivity(
+            { showPath: "/shows/Fall Show 2026.dots", isNewShowDraft: false },
+            started,
+            t,
+            true,
+        );
+        expect(activity.details).toBe("<discord.presence.designing>");
+        expect(activity.state).toBe("Fall Show 2026");
+    });
+
+    it("cuts a long show name to Discord's 128 characters and skips a one-letter one", () => {
+        const long = presenceActivity(
+            {
+                showPath: `/shows/${"x".repeat(200)}.dots`,
+                isNewShowDraft: false,
+            },
+            started,
+            t,
+            true,
+        );
+        expect(long.state).toHaveLength(128);
+        const short = presenceActivity(
+            { showPath: "/shows/A.dots", isNewShowDraft: false },
+            started,
+            t,
+            true,
+        );
+        expect(short.state).toBeUndefined();
+    });
+
+    it("never names a new show's draft file", () => {
+        const activity = presenceActivity(
+            {
+                showPath: "/data/new-show-drafts/abc.dots",
+                isNewShowDraft: true,
+            },
+            started,
+            t,
+            true,
+        );
+        expect(JSON.stringify(activity)).not.toContain("abc");
+    });
+
     it("says a new show is being started", () => {
         const activity = presenceActivity(
             {
