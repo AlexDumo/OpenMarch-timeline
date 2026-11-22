@@ -57,6 +57,15 @@ import { VIEW3D_AUTO_OPEN_SETTING } from "../../src/view3d/sync/protocol";
 import { THEME_SYNC_CHANNEL } from "../../src/global/themeSync";
 import { buildApplicationMenu } from "./application-menu";
 import { onMainLanguageChange, setMainLanguage, t } from "./i18n";
+import { connectDiscordIpc, discordIpcPaths } from "./discord/discordIpc";
+import {
+    createDiscordPresence,
+    DISCORD_CLIENT_ID,
+} from "./discord/discordPresence";
+import {
+    DISCORD_PRESENCE_SETTING,
+    discordPresenceEnabled,
+} from "../../src/discord/discordPresenceSettings";
 import { textContextMenuTemplate } from "./textContextMenu";
 import { openSettingsWindow } from "./settings-window";
 import { registerReports } from "./reports";
@@ -228,6 +237,24 @@ const diagnosticsAllowed = () =>
     !store.get("optOutAnalytics") &&
     !process.env.PLAYWRIGHT_SESSION;
 
+/** The person's Discord status (Settings > Privacy). Tests never touch a real Discord. */
+const discordPresence = createDiscordPresence({
+    clientId:
+        process.env.PLAYWRIGHT_SESSION || process.env.CI
+            ? ""
+            : DISCORD_CLIENT_ID,
+    connect: () =>
+        connectDiscordIpc({
+            clientId: DISCORD_CLIENT_ID,
+            paths: discordIpcPaths(process.platform, process.env),
+            pid: process.pid,
+        }),
+    isEnabled: () =>
+        discordPresenceEnabled(store.get(DISCORD_PRESENCE_SETTING)),
+    t,
+});
+onMainLanguageChange(() => discordPresence.refresh());
+
 ipcMain.on("settings:set", (event, settings) => {
     for (const [key, value] of Object.entries(settings)) {
         store.set(key, value);
@@ -266,6 +293,8 @@ ipcMain.on("settings:set", (event, settings) => {
         updates?.setAutomaticDownload(
             automaticUpdatesAreEnabled(settings.automaticUpdates),
         );
+
+    if (DISCORD_PRESENCE_SETTING in settings) discordPresence.refresh();
 });
 
 ipcMain.handle("settings:get", (_, key) => {
@@ -436,6 +465,11 @@ async function createWindow(title?: string) {
 
     // Test actively push message to the Electron-Renderer
     win.webContents.on("did-finish-load", () => {
+        // Every open and close of a show reloads the page
+        discordPresence.setScreen({
+            showPath: DatabaseServices.getDbPath(),
+            isNewShowDraft: !!currentNewShowDraftPath,
+        });
         win?.webContents.send(
             "main-process-message",
             new Date().toLocaleString(),
@@ -896,6 +930,8 @@ let appIsQuitting = false;
 app.on("before-quit", () => {
     appIsQuitting = true;
 });
+// Not before-quit: a quit can still be cancelled then, and the status would be gone
+app.on("will-quit", () => discordPresence.stop());
 /** Linux: where the update put the new AppImage, if it named it differently */
 let installedAppImage: string | undefined;
 
