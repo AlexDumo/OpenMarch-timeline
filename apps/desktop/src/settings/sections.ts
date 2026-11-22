@@ -183,6 +183,14 @@ export const ALL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
         searchKeys: [
             "settings.privacy.analytics",
             "settings.privacy.analytics.toggle",
+            // Not in the web build, which can't reach the Discord app
+            ...(isWebBuild
+                ? []
+                : [
+                      "settings.privacy.discord",
+                      "settings.privacy.discord.toggle",
+                      "settings.privacy.discord.showName",
+                  ]),
         ],
     },
     {
