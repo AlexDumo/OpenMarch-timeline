@@ -313,8 +313,9 @@ function checkStorageFor(
         return; // The open reports a missing show itself
     }
     try {
-        const { bavail, bsize } = fs.statfsSync(workingRoot);
-        if (bavail * bsize < needed) {
+        const { bavail, bsize, blocks } = fs.statfsSync(workingRoot);
+        // Some network shares report no size at all: unknown, not full
+        if (blocks > 0 && bavail * bsize < needed) {
             fs.rmSync(directory, { recursive: true, force: true });
             throw new WorkingCopyStorageError(
                 "Not enough space for a working copy",
@@ -619,8 +620,15 @@ export class WorkingCopySession {
         } catch (error) {
             fs.rmSync(directory, { recursive: true, force: true });
             // Out of room or a read-only drive while copying: OpenMarch's folder, not the show
+            // (SQLite reports a full disk as SQLITE_FULL, 13, while it writes the copy)
             const code = (error as NodeJS.ErrnoException)?.code;
-            if (code === "ENOSPC" || code === "EDQUOT" || code === "EROFS")
+            const sqliteCode = (error as { errcode?: number })?.errcode;
+            if (
+                code === "ENOSPC" ||
+                code === "EDQUOT" ||
+                code === "EROFS" ||
+                (code === "ERR_SQLITE_ERROR" && sqliteCode === 13)
+            )
                 throw new WorkingCopyStorageError(
                     "OpenMarch's folder ran out of room for the working copy",
                     { cause: error },

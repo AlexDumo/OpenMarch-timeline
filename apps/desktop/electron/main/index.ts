@@ -548,10 +548,13 @@ async function recoverAndOpenLeftoverJournalFile(): Promise<number> {
         }
         if (result.outcome === "recovered")
             console.log(
-                `Recovered ${filePath} (${result.from}); its journal is now ${result.journalKeptAt}`,
+                `Recovered a show in ${whereIs(filePath)} (${result.from}); its journal is now in ${whereIs(result.journalKeptAt)}`,
             );
     } catch (error) {
-        console.error("Couldn't recover from the leftover journal:", error);
+        console.error(
+            "Couldn't recover from the leftover journal:",
+            withoutPaths(error),
+        );
         captureException(error);
         const step =
             error instanceof JournalRecoveryError ? error.step : "stage";
@@ -1191,7 +1194,7 @@ app.on("activate", () => {
  * @returns 200 for success, -1 for failure
  */
 async function createFileAtPath(filePath: string) {
-    console.log("createFileAtPath:", filePath);
+    console.log(`Creating a show in ${whereIs(filePath)}`);
 
     if (!filePath) return -1;
 
@@ -1870,7 +1873,7 @@ function backupLeftoverJournal(path: string) {
         const backup = backupBeforeJournalRecovery(path, backupDir());
         if (backup)
             console.log(
-                `Leftover journal next to ${path}: copied the file to ${backup.showCopy}` +
+                `Leftover journal next to a show in ${whereIs(path)}: copied the file to ${whereIs(backup.showCopy)}` +
                     (backup.journalCopy ? " with its journal" : ""),
             );
     } catch (error) {
@@ -1891,7 +1894,7 @@ function backupBeforeMigrations(path: string) {
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const originalName = path.split(/[\\/]/).pop();
     const backupPath = join(backupDir, `backup_${timestamp}_${originalName}`);
-    console.log("Creating backup of database in " + backupPath);
+    console.log(`Creating a backup of the show in ${whereIs(backupPath)}`);
     fs.copyFileSync(path, backupPath);
 
     console.log("Deleting backups older than 30 days");
@@ -1992,7 +1995,7 @@ async function publishBeforeExport() {
     if (outcome && !outcome.ok)
         console.warn(
             "Exporting before the show could be saved:",
-            outcome.message,
+            outcome.state,
         );
 }
 
@@ -2045,7 +2048,7 @@ function checkWorkingCopyOpen(
     try {
         fs.writeFileSync(probe, "", { flag: "wx" });
     } catch (error) {
-        console.error("Can't write beside the show:", error);
+        console.error("Can't write beside the show:", withoutPaths(error));
         return 403;
     }
     void removeWithRetry(probe);
@@ -2287,7 +2290,7 @@ async function setActiveDbNow(
                 win?.webContents.reload();
             } else {
                 console.error(
-                    `Error loading database file [code=${result.status}] [path=${path}]`,
+                    `Error loading database file [code=${result.status}] [in ${whereIs(path)}]`,
                 );
                 if (hadShowOpen && !DatabaseServices.getDbPath()) {
                     // The refusal closed the show that was open: go to the launch page, which

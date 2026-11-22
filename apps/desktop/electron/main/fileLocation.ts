@@ -29,7 +29,8 @@ export function describeLocation(
         return `OpenMarch's own folder${share}`;
     if (share) return "a network share";
     const service = cloudSyncServiceFor(filePath);
-    if (service) return `a ${service} folder`;
+    if (service)
+        return `${service.startsWith("i") ? "an" : "a"} ${service} folder`;
     if (platform === "darwin" && file.startsWith("/volumes/"))
         return "an external or network drive";
     return "a local folder";

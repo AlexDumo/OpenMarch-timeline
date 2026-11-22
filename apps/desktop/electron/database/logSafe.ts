@@ -10,11 +10,12 @@
  * hold spaces, so an unquoted one takes the rest of the line.
  */
 const PATH_PATTERNS: [RegExp, string][] = [
-    [/'[^'\n]*[\\/][^'\n]*'/g, "'<path>'"],
-    [/"[^"\n]*[\\/][^"\n]*"/g, '"<path>"'],
+    // Through the last quote on the line: a name can hold a quote (Tom's Show.dots)
+    [/'[^\n]*[\\/][^\n]*'/g, "'<path>'"],
+    [/"[^\n]*[\\/][^\n]*"/g, '"<path>"'],
     [/[A-Za-z]:\\[^\n]*/g, "<path>"],
     [/\\\\[^\n]*/g, "<path>"],
-    [/(^|[\s:=(])\/[^\n]*/gm, "$1<path>"],
+    [/(^|[\s:=([,])\/[^\s/'"]+\/[^\n]*/gm, "$1<path>"],
 ];
 
 /** `error` as one line, with every file path in its message replaced by `<path>`. */
