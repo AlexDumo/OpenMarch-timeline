@@ -491,7 +491,15 @@
         "empty": "No ensembles found. Create one above!",
         "loading": "Loading ensembles...",
         "viewDetails": "View ensemble details",
-        "loadError": "Error loading ensembles: {error}"
+        "loadError": "Error loading ensembles: {error}",
+        "expiry": {
+            "expiredBadge": "Expired {date}",
+            "expiredExplanation": "These ensembles have expired. You can still open and attach their productions, but new productions and revisions can't be pushed to the mobile app. Contact sales@openmarch.com to extend one.",
+            "expiresIn": "{days, plural, =0 {Expires today ({date}).} one {Expires in # day ({date}).} other {Expires in # days ({date}).}} Contact sales@openmarch.com to extend it.",
+            "hideExpired": "Hide expired ensembles",
+            "noActive": "No active ensembles.",
+            "showExpired": "View expired ensembles ({count})"
+        }
     },
     "exportCoordinates": {
         "abbreviateCoordinateDescriptions": "Abbreviate coordinate descriptions",
@@ -1360,6 +1368,11 @@
             "description": "OpenMarch couldn't reach its online service or confirm your sign-in. Check your internet connection and try again.",
             "retry": "Try again",
             "title": "Can't reach OpenMarch"
+        },
+        "expired": {
+            "addAudioDisabled": "Can't add audio: this ensemble expired on {date}.",
+            "banner": "This ensemble expired on {date}. New revisions can't be pushed to the mobile app. Contact sales@openmarch.com to extend it.",
+            "pushDisabled": "Can't push: this ensemble expired on {date}."
         }
     },
     "music": {
@@ -1883,6 +1896,15 @@
         "general.editorMode.note": "Switching keeps your show as it is. Anything made in Expert that Basic can't edit stays, plays and is shown as locked in Basic.",
         "general.language": "Language",
         "general.openView3dWithShow": "Open 3D View when a show opens",
+        "general.editorDisplay": "Open the editor on",
+        "general.view3dDisplay": "Open the 3D View on",
+        "general.windows": "Windows",
+        "general.windowDisplay.last": "Where you left it",
+        "general.windowDisplay.display": "Display {number} · {size}",
+        "general.windowDisplay.namedDisplay": "{name} · {size}",
+        "general.windowDisplay.main": "{display} (main)",
+        "general.windowDisplay.disconnected": "A display that isn't connected",
+        "general.windowDisplay.disconnected.description": "Until that display is connected again, the window opens where you left it.",
         "general.performanceMode": "Performance mode",
         "general.performanceMode.description": "Draw the field more simply so it stays smooth on slower computers. The field switches to this by itself when graphics run in software.",
         "general.showFullDatabasePath": "Show full file path",
@@ -1902,6 +1924,9 @@
         "privacy.analytics.disabled": "You are not sharing analytics. If you experience issues or bugs, we will not be aware of them. If you have an issue, please <a>submit feedback</a> so that we can address it.",
         "privacy.analytics.enabled": "You're sharing usage analytics. Thank you for helping us improve OpenMarch for everyone.",
         "privacy.analytics.toggle": "Enable analytics",
+        "privacy.discord": "Discord status",
+        "privacy.discord.description": "While Discord is open on this computer, your Discord status says you're designing a show in OpenMarch, and for how long. It never shows the show's name. Your friends and the people in your servers can see it.",
+        "privacy.discord.toggle": "Show OpenMarch in my Discord status",
         "privacy.description": "Choose what OpenMarch shares to help improve the app.",
         "repairDotsFile": "Repair DOTS file",
         "repairDotsFile.cancel": "Cancel",
@@ -1991,6 +2016,12 @@
         "shortcuts.recordingHint": "Press keys… (<keys></keys> to cancel)",
         "shortcuts.category.field": "Field",
         "shortcuts.category.path": "Paths"
+    },
+    "discord": {
+        "presence.designing": "Designing a show",
+        "presence.getOpenMarch": "Get OpenMarch",
+        "presence.launchPage": "Choosing a show",
+        "presence.newShow": "Starting a new show"
     },
     "shapes": {
         "box": {
@@ -3249,13 +3280,12 @@
             "lockYCaption": "Lock Y",
             "snapCaption": "Snap to grid",
             "lockMarchersAriaLabel": "Cursor movement and marcher snap",
-            "placeAllMarchers": "Place all marchers",
-            "placeSelectedMarchers": "Place selected marchers",
+            "allMarchers": "All marchers",
+            "selectedMarchers": "Selected marchers",
             "clearThisPage": "{clearThisPage}",
             "snapToggleCaption": "Snap",
-            "toNextPageSpots": "...to next page's spots",
-            "setMarcherPositionsAriaLabel": "Set marcher positions",
-            "toPreviousPagePositions": "...to previous page positions"
+            "moveToNextPageSpots": "Move to next page's spots",
+            "setMarcherPositionsAriaLabel": "Set marcher positions"
         },
         "collisions": {
             "collisionsToolbar": "Collisions",
