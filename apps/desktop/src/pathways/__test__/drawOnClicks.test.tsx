@@ -31,6 +31,7 @@ import {
     setOtherKindHeld,
     useDrawKindStore,
 } from "../../shapes/pen/penKind";
+import { setFollowTheLeader } from "../followTheLeader";
 
 // The write itself is AP-T16's (`timelineTrailHead.test.ts`: the rows, ids kept): here, what the
 // field hands it, in one history transaction (one undo step)
@@ -84,6 +85,8 @@ const hover = (p: FieldPointer) => {
 };
 
 beforeEach(() => {
+    // Trails are edited only with Follow-the-leader on (#1095)
+    setFollowTheLeader(true);
     vi.useFakeTimers();
     localStorage.removeItem(DRAW_KIND_STORAGE_KEY);
     useDrawKindStore.setState({ kind: "straight", otherHeld: false });
@@ -97,6 +100,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+    setFollowTheLeader(false);
     clearPath();
     setShapeField(null);
     vi.useRealTimers();

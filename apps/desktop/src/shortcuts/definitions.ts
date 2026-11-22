@@ -697,6 +697,40 @@ const STATIC_ACTIONS = {
         scope: "global",
         defaultBindings: [],
     },
+    // The Props panel's model import (fork #999): Import… asks for a model's files and shows its
+    // review; an Imported tile places that model with a click on the field (args: the show
+    // asset's `id` and `versionHash`). From the palette, with no model named, the Props panel
+    // opens on its Imported group
+    importModel: {
+        labelKey: "actions.items.importModel",
+        keywordsKey: "actions.items.importModelKeywords",
+        category: "file",
+        scope: "global",
+        defaultBindings: [],
+    },
+    placeImportedModel: {
+        labelKey: "actions.items.placeImportedModel",
+        keywordsKey: "actions.items.placeImportedModelKeywords",
+        category: "edit",
+        scope: "global",
+        defaultBindings: [],
+    },
+    // The Assets view (fork #1001): the show's imported assets, their credits and size
+    openAssets: {
+        labelKey: "actions.ui.openAssets",
+        keywordsKey: "actions.ui.openAssetsKeywords",
+        category: "ui",
+        scope: "global",
+        defaultBindings: [],
+    },
+    // Lists the assets nothing in the show uses and, once confirmed, removes them
+    removeUnusedAssets: {
+        labelKey: "actions.file.removeUnusedAssets",
+        keywordsKey: "actions.file.removeUnusedAssetsKeywords",
+        category: "file",
+        scope: "global",
+        defaultBindings: [],
+    },
     // Opens the front ensemble's Add view (the pictures of every model), as its Add button does
     addFrontEnsembleEquipment: {
         labelKey: "actions.ui.addFrontEnsembleEquipment",
@@ -928,7 +962,7 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
     },
 
-    // Pathways step 1 (ADR 0014): the Path pen draws a cornered path for one selected marcher's
+    // Pathways step 1 (ADR 0016): the Path pen draws a cornered path for one selected marcher's
     // move at the playhead. P as in design tools' pen. While it draws, Enter (applyShape) finishes,
     // Backspace (shapeRemoveLastPoint) takes the last corner back and Escape
     // (cancelAlignmentUpdates) cancels, handled only then (pathways/PathPenKeys)

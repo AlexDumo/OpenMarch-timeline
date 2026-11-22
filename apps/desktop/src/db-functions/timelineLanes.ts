@@ -1,5 +1,5 @@
 /**
- * Lanes, pathways step 24 (ADR 0015, spec v0.10 J.1 and J.8): a lane binds one slot of one
+ * Lanes, pathways step 24 (ADR 0017, spec v0.10 J.1 and J.8): a lane binds one slot of one
  * transition to a route, so a path no longer moves marchers out of their move. This module holds
  * what every procedure that touches slots shares:
  *
@@ -12,10 +12,12 @@
  * - **AP-R20** (`deleteLanesFromSlotInTransaction`): lanes above a lowered slot count go first;
  * - K6 links (`timeline_route_sources`, spec J.1): the group path a Detached copy came from, and
  *   deleting the links that name routes about to go (AP-H3 step 3, AP-R2);
- * - the file version (11) written with a file's first lane (ADR 0015 §9).
+ * - the file version (11) written with a file's first lane (ADR 0017 §9).
  *
  * Standalone on purpose (schema and drizzle only), so the transition and membership procedures
- * can use it without importing the route procedures.
+ * can use it without importing the route procedures. The schema comes from the migrations module,
+ * not `@/global/database/db`: the in-transaction transition writes import this module, and the
+ * main process and the convert-on-open worker (P9.8) must load no renderer module.
  */
 import { and, asc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import type { XY } from "@openmarch/core";
@@ -26,7 +28,7 @@ import {
     ARC_MODEL_USER_VERSION,
     OUTLINE_MODEL_USER_VERSION,
 } from "@om-electron/database/fileVersion";
-import { schema } from "@/global/database/db";
+import * as schema from "@om-electron/database/migrations/schema";
 import type { DbConnection, DbTransaction } from "./types";
 
 /** A row of `timeline_lanes`. */
@@ -232,11 +234,11 @@ async function raiseFileVersion(
         await tx.run(sql.raw(`PRAGMA user_version = ${version}`));
 }
 
-/** Writes the lane-model file version (11) with a file's first lane (ADR 0015 §9). */
+/** Writes the lane-model file version (11) with a file's first lane (ADR 0017 §9). */
 export const markLaneModelInTransaction = (tx: DbTransaction) =>
     raiseFileVersion(tx, LANE_MODEL_USER_VERSION);
 
-/** Writes the Adjust file version (12) with a file's first Adjust (ADR 0015 §9, step 3b). */
+/** Writes the Adjust file version (12) with a file's first Adjust (ADR 0017 §9, step 3b). */
 export const markAdjustModelInTransaction = (tx: DbTransaction) =>
     raiseFileVersion(tx, ADJUST_MODEL_USER_VERSION);
 

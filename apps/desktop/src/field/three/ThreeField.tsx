@@ -33,6 +33,8 @@ import {
     itemGeometryQueryOptions,
     moveMarchersInTargetMutationOptions,
 } from "@/hooks/queries";
+import { showAssetsQueryOptions } from "@/hooks/queries/useShowAssets";
+import { libraryModels } from "@/showAssets/libraryModels";
 import {
     beatIndexesById,
     itemOutlineChanges,
@@ -86,6 +88,7 @@ import { useShapeFocus } from "@/shapes/field/useShapeFocus";
 import { useFollowFocus } from "@/pathways/useFollowFocus";
 import { useOrderSweepFocus } from "@/pathways/marcherOrderStore";
 import MarcherOrderOverlay from "@/pathways/MarcherOrderOverlay";
+import { useFollowTheLeader } from "@/pathways/followTheLeader";
 import { useFieldItemWrites } from "@/field/fieldItemWrites";
 import {
     snapToRounding,
@@ -394,6 +397,7 @@ function ThreeFieldView() {
     // The Follow tool's line, or Set order's (pathways step 4g): everyone else fades
     const followFocus = useFollowFocus();
     const sweepFocus = useOrderSweepFocus();
+    const followTheLeader = useFollowTheLeader();
     useShapeFocus(dimming, followFocus ?? sweepFocus);
     // #824: while the Field panel is open the drill can't be picked, and while its lines are
     // edited the drill steps back
@@ -827,8 +831,9 @@ function ThreeFieldView() {
                         theme={fieldProperties.theme}
                     />
                 )}
-                {/* A line's order, and Set order's sweep (pathways step 4g) */}
-                {fieldProperties && (
+                {/* A line's order, and Set order's sweep (pathways step 4g): only with
+                    Follow-the-leader on (#1095) */}
+                {fieldProperties && followTheLeader && (
                     <MarcherOrderOverlay
                         marchers={marchers}
                         labels={orderLabels}
@@ -883,6 +888,8 @@ function useFieldItems(
 ): ReadonlyMap<number, string> {
     const { data: itemRows } = useQuery(allItemsQueryOptions());
     const { data: geometry } = useQuery(itemGeometryQueryOptions());
+    const { data: assets } = useQuery(showAssetsQueryOptions());
+    const library = useMemo(() => libraryModels(assets), [assets]);
     const { hiddenPropIds, showPropNames, propNameOverrides } =
         useUiSettingsStore(
             useShallow((s) => ({
@@ -914,8 +921,9 @@ function useFieldItems(
                     item.model ? [[item.marcher_id, item.model] as const] : [],
                 ),
             ),
+            library,
         });
-    }, [items, itemRows, geometry, beats, hiddenPropIds]);
+    }, [items, itemRows, geometry, beats, hiddenPropIds, library]);
     return useMemo(
         () =>
             new Map(

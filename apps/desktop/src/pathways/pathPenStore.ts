@@ -1,3 +1,4 @@
+import { isFollowTheLeaderOn } from "./followTheLeader";
 import { create } from "zustand";
 import { db } from "@/global/database/db";
 import { toast } from "sonner";
@@ -637,6 +638,8 @@ export function startDrawing(
     object = false,
     byRoute = object,
 ): void {
+    // No trail is drawn with Follow-the-leader off (#1095); its commands say so
+    if (target.trail && !isFollowTheLeaderOn()) return;
     usePathPenStore.setState({
         session: {
             phase: "drawing",
@@ -766,6 +769,11 @@ export function activatePath(
     lane: number | null = null,
     selectionChanges = false,
 ): void {
+    // A trail with Follow-the-leader off (#1095) is shown quiet: it can't be edited
+    if (target.trail && !isFollowTheLeaderOn()) {
+        focusPath(target, drill);
+        return;
+    }
     const { session } = usePathPenStore.getState();
     const same =
         session !== null &&
@@ -1158,7 +1166,10 @@ export function showPath(
             : !session.object &&
               (pathKey(session.target) === pathKey(target) ||
                   becameLoose(session.target, target)));
-    const open = next || activated || (session?.phase === "open" && same);
+    // A trail with Follow-the-leader off (#1095) stays quiet: it can't be edited
+    const open =
+        (next || activated || (session?.phase === "open" && same)) &&
+        !(target.trail && !isFollowTheLeaderOn());
     const kept =
         open && session && session.selected !== null
             ? Number(session.selected.slice(1)) < points.length
@@ -1190,6 +1201,8 @@ export function showPath(
 export function openPath(): boolean {
     const { session } = usePathPenStore.getState();
     if (!session || session.phase === "drawing") return false;
+    // A trail with Follow-the-leader off (#1095) can't be edited
+    if (session.target.trail && !isFollowTheLeaderOn()) return false;
     // A line going round an outline (step 10, AP-T15): the outline has no points to edit
     if (session.target.trail?.around) {
         toast.error(aroundPointsReason(), { id: "path-pen" });
