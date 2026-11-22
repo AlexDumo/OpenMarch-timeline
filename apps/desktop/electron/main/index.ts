@@ -100,6 +100,7 @@ import {
 import {
     displayListing,
     moveToChosenDisplay,
+    placementSupported,
     rememberWindowState,
     showWhenReady,
     windowPlacement,
@@ -108,6 +109,7 @@ import type { WindowDefaults } from "./window-placement";
 import {
     LIST_DISPLAYS_CHANNEL,
     WINDOW_OPEN_ON_SETTINGS,
+    type DisplaysResponse,
 } from "../../src/settings/windowPlacementSettings";
 import { withAppCsp } from "./workerCsp";
 import { DESKTOP_PAGE_CSP } from "../../src/security/appCsp";
@@ -206,7 +208,13 @@ ipcMain.handle("settings:get", (_, key) => {
     return store.get(key);
 });
 
-ipcMain.handle(LIST_DISPLAYS_CHANNEL, () => displayListing());
+ipcMain.handle(
+    LIST_DISPLAYS_CHANNEL,
+    (): DisplaysResponse => ({
+        supported: placementSupported(),
+        displays: displayListing(),
+    }),
+);
 
 ipcMain.handle("env:get", () => {
     return {
@@ -301,7 +309,6 @@ async function createWindow(title?: string) {
         title: title || "OpenMarch", // i18n-ignore: product name
         icon: join(process.env.VITE_PUBLIC, "favicon.ico"),
         ...placement.bounds,
-        fullscreen: placement.fullScreen,
         show: false,
         backgroundColor: windowBackground(store.get("theme", "light")),
         minWidth: EDITOR_WINDOW_DEFAULTS.min.width,
@@ -952,7 +959,8 @@ app.on("second-instance", (_event, commandLine) => {
     // If not an auth callback, just focus the window
     if (!isAuthCallback && win) {
         if (win.isMinimized()) win.restore();
-        win.focus();
+        // Still hidden while it starts: it shows itself, in place, in a moment
+        if (win.isVisible()) win.focus();
     }
 });
 
@@ -1088,7 +1096,8 @@ app.on("activate", () => {
     if (startingUp) return;
     const allWindows = BrowserWindow.getAllWindows();
     if (win && !win.isDestroyed()) {
-        win.focus();
+        // Still hidden while it starts: it shows itself, in place, in a moment
+        if (win.isVisible()) win.focus();
     } else if (allWindows.length) {
         allWindows[0].focus();
     } else {

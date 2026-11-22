@@ -21,6 +21,7 @@ import {
     rememberWindowState,
     showWhenReady,
     windowPlacement,
+    type PendingShow,
 } from "./window-state";
 import {
     VIEW3D_AUTO_OPEN_CHANNELS,
@@ -78,6 +79,9 @@ export const VIEW3D_WINDOW_DEFAULTS: WindowDefaults = {
 
 let config: View3dWindowConfig | null = null;
 let view3dWindow: BrowserWindow | null = null;
+/** For the open window: saves where it is now, and shows it if a background open still waits */
+let view3dWindowState: { flush: () => void } | null = null;
+let view3dPendingShow: PendingShow | null = null;
 
 /** The show's file name without `.dots`, for the window title. */
 export function showNameFromPath(dbPath: string): string {
@@ -238,6 +242,11 @@ export function openView3dWindow({
 
     if (view3dWindow && !view3dWindow.isDestroyed()) {
         if (background) return true;
+        if (!view3dWindow.isVisible() && view3dPendingShow) {
+            // Opened in the background and not shown yet: show it where it belongs
+            view3dPendingShow.showNow();
+            return true;
+        }
         if (view3dWindow.isMinimized()) view3dWindow.restore();
         view3dWindow.show();
         view3dWindow.focus();
@@ -257,7 +266,6 @@ export function openView3dWindow({
         title: t("view3d.window.title", { showName: query.show }),
         icon: config.icon,
         ...placement.bounds,
-        fullscreen: placement.fullScreen,
         minWidth: VIEW3D_WINDOW_DEFAULTS.min.width,
         minHeight: VIEW3D_WINDOW_DEFAULTS.min.height,
         backgroundColor: colors.color,
@@ -282,11 +290,18 @@ export function openView3dWindow({
         },
     });
     view3dWindow = created;
-    rememberWindowState(config.store, "view3d", created);
-    showWhenReady(created, placement, { inactive: background });
+    view3dWindowState = rememberWindowState(config.store, "view3d", created);
+    view3dPendingShow = showWhenReady(created, placement, {
+        inactive: background,
+        returnFocusTo: config.getEditorWindow,
+    });
 
     created.on("closed", () => {
-        if (view3dWindow === created) view3dWindow = null;
+        if (view3dWindow === created) {
+            view3dWindow = null;
+            view3dWindowState = null;
+            view3dPendingShow = null;
+        }
         if (!view3dWindow) sendWindowState(false);
     });
 
@@ -311,6 +326,8 @@ export function openView3dWindow({
 /** Closes the 3D View window if it's open. Called when the show or the editor closes. */
 export function closeView3dWindow() {
     if (view3dWindow && !view3dWindow.isDestroyed()) {
+        // `destroy()` emits no "close", so save where it is first
+        view3dWindowState?.flush();
         // `destroy()` emits "closed", which sends the window state.
         view3dWindow.destroy();
     }

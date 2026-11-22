@@ -266,3 +266,75 @@ describe("listDisplays", () => {
         ]);
     });
 });
+
+describe("resolvePlacement keeps a restored window usable", () => {
+    it("shrinks it to a display whose resolution dropped", () => {
+        const smaller = {
+            id: 2,
+            workArea: { x: 1440, y: 0, width: 1280, height: 720 },
+        };
+        const placement = resolvePlacement({
+            saved: onMonitor,
+            openOn: "last",
+            displays: [laptop, smaller],
+            primary: laptop,
+            defaults: view3dDefaults,
+        });
+        expect(placement.bounds).toEqual({
+            x: 1440,
+            y: 0,
+            width: 1280,
+            height: 720,
+        });
+    });
+
+    it("brings a title bar above the screen back onto it", () => {
+        const placement = resolvePlacement({
+            saved: {
+                bounds: { x: 200, y: -300, width: 1000, height: 700 },
+                maximized: false,
+                fullScreen: false,
+                displayId: 1,
+            },
+            openOn: "last",
+            displays,
+            primary: laptop,
+            defaults: view3dDefaults,
+        });
+        expect(placement.bounds).toEqual({
+            x: 200,
+            y: 25,
+            width: 1000,
+            height: 700,
+        });
+    });
+
+    it("trusts normal bounds over the display id for a window that wasn't maximized", () => {
+        // Mostly on the laptop, its display id from a slightly different overlap rule
+        const saved = {
+            bounds: { x: 100, y: 100, width: 1000, height: 700 },
+            maximized: false,
+            fullScreen: false,
+            displayId: 2,
+        };
+        expect(
+            resolvePlacement({
+                saved,
+                openOn: "last",
+                displays,
+                primary: laptop,
+                defaults: view3dDefaults,
+            }).bounds,
+        ).toEqual(saved.bounds);
+    });
+});
+
+describe("parseSavedWindowState rejects corrupt sizes", () => {
+    it("ignores values beyond any real desktop", () => {
+        expect(
+            parseSavedWindowState({
+                bounds: { x: 0, y: 0, width: 1e12, height: 800 },
+            }),
+        ).toBeUndefined();
+    });
+});

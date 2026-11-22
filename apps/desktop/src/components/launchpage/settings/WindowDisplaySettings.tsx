@@ -12,6 +12,7 @@ import {
     OPEN_ON_LAST,
     WINDOW_OPEN_ON_SETTINGS,
     type DisplayListing,
+    type DisplaysResponse,
     type PlacedWindow,
 } from "@/settings/windowPlacementSettings";
 
@@ -53,7 +54,9 @@ const ROWS: { kind: PlacedWindow; labelKey: string; id: string }[] = [
  */
 export default function WindowDisplaySettings() {
     const { t } = useTolgee(["language"]);
-    const [displays, setDisplays] = useState<DisplayListing[]>([]);
+    // Null until main answers
+    const [response, setResponse] = useState<DisplaysResponse | null>(null);
+    const displays = response?.displays ?? [];
     const [choices, setChoices] = useState<Record<PlacedWindow, string>>({
         editor: OPEN_ON_LAST,
         view3d: OPEN_ON_LAST,
@@ -63,7 +66,7 @@ export default function WindowDisplaySettings() {
     const loadDisplays = useCallback(() => {
         void window.electron
             .invoke(LIST_DISPLAYS_CHANNEL)
-            .then((list: DisplayListing[]) => setDisplays(list ?? []));
+            .then((answer: DisplaysResponse) => setResponse(answer));
     }, []);
 
     useEffect(() => {
@@ -99,13 +102,17 @@ export default function WindowDisplaySettings() {
         });
     };
 
+    // Linux under Wayland: the system decides where windows go
+    if (response && !response.supported) return null;
+
     return (
         <>
             {ROWS.map(({ kind, labelKey, id }) => {
                 const choice = choices[kind];
                 const chosen = displays.find((d) => String(d.id) === choice);
                 // A display chosen before that isn't plugged in now
-                const missing = choice !== OPEN_ON_LAST && !chosen;
+                const missing =
+                    response !== null && choice !== OPEN_ON_LAST && !chosen;
                 const label =
                     choice === OPEN_ON_LAST
                         ? t("settings.general.windowDisplay.last")

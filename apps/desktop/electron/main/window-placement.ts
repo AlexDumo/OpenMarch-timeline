@@ -39,8 +39,13 @@ export interface WindowDefaults {
     min: { width: number; height: number };
 }
 
+/** Beyond any real desktop; a saved value past it is corrupt (X11 caps windows at 32767 px) */
+const MAX_COORDINATE = 100_000;
+
 const isNumber = (value: unknown): value is number =>
-    typeof value === "number" && Number.isFinite(value);
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    Math.abs(value) <= MAX_COORDINATE;
 
 function isRectangle(value: unknown): value is Rectangle {
     if (!value || typeof value !== "object") return false;
@@ -110,12 +115,34 @@ function centeredIn(
     };
 }
 
+const clamp = (value: number, min: number, max: number) =>
+    Math.min(Math.max(value, min), max);
+
+/** The bounds, no bigger than the work area (nor smaller than the minimum) and moved inside it */
+function keptWithin(
+    workArea: Rectangle,
+    bounds: Rectangle,
+    min: { width: number; height: number },
+): Rectangle {
+    const width = Math.min(Math.max(bounds.width, min.width), workArea.width);
+    const height = Math.min(
+        Math.max(bounds.height, min.height),
+        workArea.height,
+    );
+    return {
+        x: clamp(bounds.x, workArea.x, workArea.x + workArea.width - width),
+        y: clamp(bounds.y, workArea.y, workArea.y + workArea.height - height),
+        width,
+        height,
+    };
+}
+
 /**
  * Where a window opens.
  *
  * - With a display chosen (`openOn` is its id) and connected, it opens there. If it was last on
- *   that display it comes back exactly as it was; otherwise it keeps its size (shrunk to fit) and
- *   is centered there.
+ *   that display it comes back as it was (kept within the display); otherwise it keeps its size
+ *   (shrunk to fit) and is centered there.
  * - Otherwise (`"last"`, or the chosen display isn't connected) it comes back where it was left,
  *   if that display is still connected.
  * - Failing that, it opens on the main display.
@@ -145,8 +172,12 @@ export function resolvePlacement({
         saved?.displayId !== undefined
             ? displays.find((d) => d.id === saved.displayId)
             : undefined;
-    // The display it was last on, if that's still connected
-    const lastDisplay = onId ?? onBounds;
+    // The display it was last on, if that's still connected. Normal bounds say it, unless the
+    // window was maximized or full screen, when they can be left on another display.
+    const lastDisplay =
+        saved?.maximized || saved?.fullScreen
+            ? (onId ?? onBounds)
+            : (onBounds ?? onId);
 
     const target = chosen ?? lastDisplay ?? primary;
 
@@ -162,14 +193,11 @@ export function resolvePlacement({
         };
     }
 
-    // Back where it was left, exactly as it was
+    // Back where it was left, as it was, but kept within that display: its resolution may have
+    // dropped since, and a title bar above the screen couldn't be grabbed
     if (onBounds && onBounds.id === target.id) {
         return {
-            bounds: {
-                ...saved.bounds,
-                width: Math.max(saved.bounds.width, defaults.min.width),
-                height: Math.max(saved.bounds.height, defaults.min.height),
-            },
+            bounds: keptWithin(onBounds.workArea, saved.bounds, defaults.min),
             maximized: saved.maximized,
             fullScreen: saved.fullScreen,
         };

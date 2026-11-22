@@ -19,7 +19,10 @@ import Kbd from "@/components/docs/Kbd.astro";
 import Ui from "@/components/docs/Ui.astro";
 import InShort from "@/components/docs/InShort.astro";
 
-<InShort>With a show open, select <Ui k="view3d.open" /> at the right end of the toolbar, beside the Editor and Preview switch.</InShort>
+<InShort>
+  With a show open, select <Ui k="view3d.open" /> at the right end of the
+  toolbar, beside the Editor and Preview switch.
+</InShort>
 
 The 3D View shows the show from the stands: the band in uniform on a lit field, with instruments, flags and a crowd. It opens in a window of its own and follows the editor, so you can write drill in one window and watch it in the other. To watch from a stadium, choose it under <Ui k="view3d.overlay.venue" plain /> in View settings ([Change the venue and uniforms](/guides/3d-view/venue-and-uniforms/)); to watch from a seat, use <Ui k="view3d.overlay.pickSeat" plain /> in the camera menu ([Move the camera](/guides/3d-view/cameras/#sit-in-the-stands)).
 
@@ -38,7 +41,7 @@ The first time the 3D View opens with a show, it asks <Ui k="view3d.autoOpenProm
 
 ## Choose its screen
 
-In the desktop app the 3D View opens where you last left it: the same monitor, the same size, and maximized or full screen if it was. To show it on a projector or second screen every time, choose that screen in [Settings](/guides/reference/settings/#windows) under <Ui k="settings.general.view3dDisplay" plain />. If the 3D View is open, it moves there straight away. <Ui k="settings.general.editorDisplay" plain /> does the same for the editor.
+In the desktop app the 3D View opens where you last left it: the same monitor, the same size, and maximized or full screen if it was. To show it on a projector or second screen every time, choose that screen in [Settings](/guides/reference/settings/#windows) under <Ui k="settings.general.view3dDisplay" plain />. If the 3D View is open, it moves there straight away (unless it's full screen: then it moves the next time it opens). When it opens by itself with a show, it opens maximized rather than full screen, so it doesn't take over your screen. <Ui k="settings.general.editorDisplay" plain /> does the same for the editor.
 
 ## Play the show in 3D
 

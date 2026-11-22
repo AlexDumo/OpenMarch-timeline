@@ -15,8 +15,14 @@ export const WINDOW_OPEN_ON_SETTINGS: Record<PlacedWindow, string> = {
 /** Opens where it was left, the default */
 export const OPEN_ON_LAST = "last";
 
-/** Returns the connected displays as `DisplayListing[]` */
+/** Returns a `DisplaysResponse` */
 export const LIST_DISPLAYS_CHANNEL = "window:list-displays";
+
+export interface DisplaysResponse {
+    /** False where the app can't place windows (Linux under Wayland): the menus are hidden */
+    supported: boolean;
+    displays: DisplayListing[];
+}
 
 export interface DisplayListing {
     id: number;
