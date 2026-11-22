@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
     mkdirSync,
     mkdtempSync,
@@ -60,6 +60,29 @@ describe("renameWithRetry", () => {
         expect(result.attempts).toBe(4);
         expect(calls).toHaveLength(4);
         expect(clock.sleeps).toEqual([10, 20, 30]);
+    });
+
+    it("keeps retrying when the computer's clock jumps", async () => {
+        // Each read of the wall clock is an hour later, as if the clock were being set
+        let wall = Date.now();
+        const spy = vi.spyOn(Date, "now").mockImplementation(() => {
+            wall += 3_600_000;
+            return wall;
+        });
+        try {
+            const failures = ["EBUSY", "EBUSY"];
+            const result = await renameWithRetry("a.tmp", "show.dots", {
+                platform: "win32",
+                sleep: async () => {},
+                rename: async () => {
+                    const code = failures.shift();
+                    if (code) throw errno(code);
+                },
+            });
+            expect(result.attempts).toBe(3);
+        } finally {
+            spy.mockRestore();
+        }
     });
 
     it("gives up after the budget and reports the last error", async () => {
