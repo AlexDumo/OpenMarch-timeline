@@ -37,7 +37,7 @@ import {
     dedup,
     getBounds,
     prune,
-    simplify,
+    simplifyPrimitive,
     uninstance,
     weld,
 } from "@gltf-transform/functions";
@@ -605,21 +605,32 @@ async function simplifyTo(
     target: number,
 ): Promise<number> {
     await MeshoptSimplifier.ready;
+    await doc.transform(weld({ overwrite: false }));
     const start = sceneTriangles(scene);
     let now = start;
     for (const error of [0.01, 0.05, 0.2, 1]) {
         if (now <= target) break;
-        await doc.transform(
-            simplify({
-                simplifier: MeshoptSimplifier,
-                ratio: Math.min(1, (target / now) * 0.95),
-                error,
-            }),
-        );
+        const ratio = Math.min(1, (target / now) * 0.95);
+        for (const mesh of doc.getRoot().listMeshes())
+            for (const prim of mesh.listPrimitives()) {
+                const triangles = primitiveTriangles(prim);
+                if (triangles <= PART_TRIANGLE_FLOOR) continue;
+                // The error is relative to the part's own size, so at a wide limit a thin
+                // part (a pole, a rail) would collapse to nothing (#1169): each part keeps
+                // at least the floor, whatever that costs the target
+                simplifyPrimitive(prim, {
+                    simplifier: MeshoptSimplifier,
+                    ratio: Math.max(ratio, PART_TRIANGLE_FLOOR / triangles),
+                    error,
+                });
+            }
         now = sceneTriangles(scene);
     }
     return now;
 }
+
+/** The fewest triangles simplifying leaves a part, so no part disappears (#1169) */
+export const PART_TRIANGLE_FLOOR = 12;
 
 function stripExtras(doc: Document): void {
     const root = doc.getRoot();
