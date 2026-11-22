@@ -8,7 +8,9 @@ import {
 import { useTranslate } from "@tolgee/react";
 import clsx from "clsx";
 import { twMerge } from "tailwind-merge";
-import { CaretUpIcon, WarningIcon } from "@phosphor-icons/react";
+import { CaretUpIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
+import { getButtonClassName } from "@openmarch/ui";
+import { Tip } from "@/components/ui/Tip";
 import ActionButton from "@/shortcuts/ActionButton";
 import { POPOVER_CLASS } from "@/components/ui/popupClasses";
 import {
@@ -37,6 +39,10 @@ import {
 const COPIED_FOR = 1500;
 /** How near a drag on the field comes before the chip fades out of its way, in CSS px */
 const FADE_REACH = 48;
+/** How far a press moves before it counts as a drag, in CSS px */
+const DRAG_SLOP = 4;
+/** How long the whole chip stays after the last thing done with it, before it rests, in ms */
+const REST_AFTER = 5000;
 
 /**
  * What's copied, in the field's bottom-left corner (#961, owner 2026-11-22), across from the
@@ -75,6 +81,11 @@ function ChipOrCard({
 }) {
     const { t } = useTranslate();
     const [open, setOpen] = useState(false);
+    // Rested: only the picture. A copy kept from before (a restart) starts rested; a new copy
+    // shows the whole chip
+    const [rested, setRested] = useState(!copiedNow);
+    const [hovered, setHovered] = useState(false);
+    const [focusIn, setFocusIn] = useState(false);
     const box = useRef<HTMLDivElement>(null);
     // The pill and the shape editor bar are placed again as it comes, goes, opens and folds
     const noteLayer = useFieldLayerRef<HTMLDivElement>();
@@ -87,15 +98,25 @@ function ChipOrCard({
     );
     const toggle = useRef<HTMLButtonElement>(null);
     const fold = useRef<HTMLButtonElement>(null);
-    const faded = useFadeWhileDraggingNear(box);
     const shapeShown = useShapeShown();
+    // A drag on the field elsewhere: the chip rests at once, out of the way of what's edited
+    const restNow = useCallback(() => {
+        if (!box.current?.contains(document.activeElement)) setRested(true);
+    }, []);
+    const faded = useFadeWhileDraggingNear(box, restNow);
     const touch = useIsTouchMode();
     const pasteReason = useActionReason("pasteFormation");
 
-    // A paste preview opening: folded, and the focus off the chip so Enter and Escape reach it
+    // A new copy shows the whole chip
+    useEffect(() => {
+        if (copiedNow) setRested(false);
+    }, [copiedNow]);
+    // A paste preview opening: the whole chip, folded, and the focus off it so Enter and Escape
+    // reach the paste
     useEffect(() => {
         if (!shapeShown) return;
         setOpen(false);
+        setRested(false);
         const active = document.activeElement;
         if (active instanceof HTMLElement && box.current?.contains(active))
             active.blur();
@@ -114,16 +135,40 @@ function ChipOrCard({
         else if (focusBack.current) toggle.current?.focus();
         focusBack.current = false;
     }, [open]);
+    // Rests a while after the last thing done with it: not while it's open, pointed at, focused
+    // or a paste is open
+    useEffect(() => {
+        if (rested || open || shapeShown || hovered || focusIn) return;
+        const timer = setTimeout(() => setRested(true), REST_AFTER);
+        return () => clearTimeout(timer);
+    }, [rested, open, shapeShown, hovered, focusIn, copiedNow]);
+    // Woken from rest by a press: the whole chip, the focus kept on it
+    const wakeFocus = useRef(false);
+    const wake = () => {
+        wakeFocus.current = !!box.current?.contains(document.activeElement);
+        setRested(false);
+    };
+    useEffect(() => {
+        if (!rested && wakeFocus.current) toggle.current?.focus();
+        wakeFocus.current = false;
+    }, [rested]);
 
     const status = chipStatus(t, view.fit, pasteReason, copiedNow, shapeShown);
     const countText = t("shapes.clipboard.marchers", {
         count: view.summary.count,
     });
+    const label = t("shapes.clipboard.chipLabel", {
+        name: view.name,
+        count: countText,
+        status: status.text,
+    });
+    const showRested = rested && !open;
     return (
         <div
             ref={setBox}
             data-testid="clipboard-chip"
             data-open={open || undefined}
+            data-rested={showRested || undefined}
             data-faded={faded || undefined}
             data-flash={copiedNow || undefined}
             // #927: the pill and the shape editor bar keep off it
@@ -132,11 +177,20 @@ function ChipOrCard({
             data-field-control
             className={twMerge(
                 POPOVER_CLASS,
-                "pointer-events-auto absolute bottom-6 left-6 z-10 p-4 motion-safe:transition-[opacity,box-shadow] motion-safe:duration-150",
+                "group pointer-events-auto absolute bottom-6 left-6 z-10 p-4 motion-safe:transition-[opacity,box-shadow] motion-safe:duration-150",
                 open && "p-12",
                 copiedNow && "ring-accent ring-2",
                 faded && "pointer-events-none opacity-20",
             )}
+            onPointerEnter={(e) => {
+                if (e.pointerType === "mouse") setHovered(true);
+            }}
+            onPointerLeave={() => setHovered(false)}
+            onFocus={() => setFocusIn(true)}
+            onBlur={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+                    setFocusIn(false);
+            }}
             onKeyDown={(e) => {
                 // Escape inside the open card folds it, and goes no further (the field's
                 // Escape would clear the selection)
@@ -149,6 +203,33 @@ function ChipOrCard({
         >
             {open ? (
                 <ClipboardCard view={view} onFold={foldByHand} foldRef={fold} />
+            ) : showRested ? (
+                <Tip
+                    label={t("shapes.clipboard.restedTip", {
+                        name: view.name,
+                        count: countText,
+                    })}
+                    action="pasteFormation"
+                    // Beside it, clear of the Clear button on its corner
+                    side="right"
+                >
+                    <button
+                        ref={toggle}
+                        type="button"
+                        onClick={wake}
+                        aria-label={label}
+                        data-testid="clipboard-chip-rested"
+                        className="rounded-4 enabled:hover:bg-text/10 focus-visible:bg-text/10 touch:size-44 flex size-36 items-center justify-center outline-hidden"
+                    >
+                        <PicturePreview
+                            picture={view.picture}
+                            summary={view.summary}
+                            count={view.drawnCount}
+                            view={CHIP_VIEW}
+                            testId="clipboard-chip-picture"
+                        />
+                    </button>
+                </Tip>
             ) : (
                 <div className="flex items-center gap-8 pr-4">
                     <button
@@ -156,11 +237,7 @@ function ChipOrCard({
                         type="button"
                         onClick={() => setOpen(true)}
                         aria-expanded={false}
-                        aria-label={t("shapes.clipboard.chipLabel", {
-                            name: view.name,
-                            count: countText,
-                            status: status.text,
-                        })}
+                        aria-label={label}
                         data-testid="clipboard-chip-toggle"
                         className="rounded-4 enabled:hover:bg-text/10 focus-visible:bg-text/10 touch:min-h-44 flex min-w-0 items-center gap-8 px-4 py-4 text-left outline-hidden"
                     >
@@ -223,6 +300,25 @@ function ChipOrCard({
                         </ActionButton>
                     )}
                 </div>
+            )}
+            {/* Clear, on the chip's top-left corner, away from Paste and the picture's tooltip
+                (owner 2026-11-22). Desktop: shown while it's pointed at or focused. Touch: on
+                the whole chip (a tap wakes a rested one first). The card has its own Clear */}
+            {!open && (!touch || !showRested) && (
+                <ActionButton
+                    action="clearClipboard"
+                    data-testid="clipboard-chip-clear"
+                    // It reaches past the chip's corner: the pill keeps off it too (#927)
+                    data-field-layer="control"
+                    className={clsx(
+                        `${getButtonClassName({ variant: "secondary", size: "compact", content: "icon" })} bg-modal shadow-modal absolute`,
+                        "-top-12 -left-12",
+                        !touch &&
+                            "invisible group-focus-within:visible group-hover:visible",
+                    )}
+                >
+                    <XIcon size={16} aria-hidden />
+                </ActionButton>
             )}
         </div>
     );
@@ -330,10 +426,14 @@ function useCopiedFlash(picture: ClipboardView["picture"] | null): boolean {
  */
 function useFadeWhileDraggingNear(
     box: React.RefObject<HTMLDivElement | null>,
+    /** A drag that started elsewhere has moved: the chip rests */
+    onDragAway: () => void,
 ): boolean {
     const [faded, setFaded] = useState(false);
     useEffect(() => {
         let dragging = false;
+        let movedAway = false;
+        let from = { x: 0, y: 0 };
         const down = (e: PointerEvent) => {
             const el = box.current;
             dragging = !(
@@ -341,9 +441,17 @@ function useFadeWhileDraggingNear(
                 e.target instanceof Node &&
                 el.contains(e.target)
             );
+            movedAway = false;
+            from = { x: e.clientX, y: e.clientY };
         };
         const move = (e: PointerEvent) => {
             if (!dragging || e.buttons === 0) return;
+            if (!movedAway) {
+                movedAway =
+                    Math.hypot(e.clientX - from.x, e.clientY - from.y) >
+                    DRAG_SLOP;
+                if (movedAway) onDragAway();
+            }
             const r = box.current?.getBoundingClientRect();
             if (!r) return;
             const near =
@@ -367,7 +475,7 @@ function useFadeWhileDraggingNear(
             window.removeEventListener("pointerup", up, true);
             window.removeEventListener("pointercancel", up, true);
         };
-    }, [box]);
+    }, [box, onDragAway]);
     return faded;
 }
 

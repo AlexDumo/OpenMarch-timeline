@@ -2542,6 +2542,7 @@
             "reasonOpenShape": "Place or discard the open shape first",
             "reasonSelectToCopy": "Select marchers to copy them",
             "reasonSelectToPaste": "Select the marchers to paste onto",
+            "restedTip": "Clipboard: {name}, {count} · Paste",
             "shapeAsPositions": "{name} positions",
             "title": "Clipboard"
         }

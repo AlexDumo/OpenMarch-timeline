@@ -99,11 +99,20 @@ const preview = (page: Page) => page.getByTestId("shape-tool-readout");
 /** The clipboard chip in the field's bottom-left corner (#961) */
 const chip = (page: Page) => page.getByTestId("clipboard-chip");
 
+/** The whole chip: a rested one (only its picture) is woken with a click */
+async function wakeChip(page: Page) {
+    const rested = page.getByTestId("clipboard-chip-rested");
+    if (await rested.isVisible()) await rested.click();
+    await expect(page.getByTestId("clipboard-chip-rested")).toBeHidden();
+}
+
 /** Opens the chip's Clipboard card, unless it's open already, and returns it */
 async function openCard(page: Page) {
     const card = page.getByTestId("clipboard-section");
-    if (!(await card.isVisible()))
+    if (!(await card.isVisible())) {
+        await wakeChip(page);
         await page.getByTestId("clipboard-chip-toggle").click();
+    }
     await expect(card).toBeVisible();
     return card;
 }
@@ -627,8 +636,11 @@ test("the Clipboard chip sits in the field's bottom-left corner, says Copied, op
     await waitForField(page);
     await expect(chip(page)).toBeVisible();
     await expect(page.getByTestId("clipboard-section")).toBeHidden();
-    await expect(page.getByTestId("clipboard-chip-kind")).toHaveText(
-        "Positions",
+    // A copy kept from before starts rested: only its picture, which still says what it is
+    await expect(chip(page)).toHaveAttribute("data-rested", "true");
+    await expect(page.getByTestId("clipboard-chip-rested")).toHaveAttribute(
+        "aria-label",
+        /^Clipboard: Positions, 4 marchers\./,
     );
 
     // Escape inside the card folds it, and leaves the selection alone
@@ -666,9 +678,11 @@ test("the chip's line says how the copy fits or why Paste can't run, its Paste i
     // Nobody selected: why Paste can't run, without hovering
     await blur(page);
     await page.keyboard.press("Escape");
+    await wakeChip(page);
     await expect(status).toHaveText("Select the marchers to paste onto");
     // Two selected: a warning that two spots stay empty
     await select(page, [5, 6]);
+    await wakeChip(page);
     await expect(status).toHaveText("2 spots stay empty");
     await expect(status).toHaveAttribute("data-status", "emptySpots");
     // The chip's picture still shows all four copied dots
@@ -697,8 +711,10 @@ test("the chip's line says how the copy fits or why Paste can't run, its Paste i
     }
     // A paste opened with the focus inside the chip (its button on a tablet; Ctrl/Cmd+V with
     // the card's switch focused on desktop) leaves the focus off the chip: Enter places it
-    if (touch) await page.getByTestId("clipboard-chip-paste").click();
-    else {
+    if (touch) {
+        await wakeChip(page);
+        await page.getByTestId("clipboard-chip-paste").click();
+    } else {
         const card = await openCard(page);
         await card.getByTestId("clipboard-fold").focus();
         await page.keyboard.press("ControlOrMeta+v");
@@ -735,8 +751,95 @@ test("a drag on the field near the chip fades it out of the way", async ({
     const from = { x: at.x + at.width + 120, y: at.y - 160 };
     await page.mouse.move(from.x, from.y);
     await page.mouse.down();
-    await page.mouse.move(at.x + at.width + 20, at.y + 10, { steps: 12 });
+    // To just above its left end: near it whether it's whole or has rested to its picture
+    await page.mouse.move(at.x + 10, at.y - 20, { steps: 12 });
     await expect(chip(page)).toHaveAttribute("data-faded", "true");
     await page.mouse.up();
     await expect(chip(page)).not.toHaveAttribute("data-faded", "true");
+});
+
+test("the chip rests to its picture after a while or on a drag elsewhere, and a click brings it back", async ({
+    show,
+}) => {
+    const { page } = show;
+    await select(page, [1, 2, 3, 4]);
+    await page.keyboard.press("ControlOrMeta+c");
+    await expect(page.getByTestId("clipboard-chip-toggle")).toBeVisible();
+    await page.mouse.move(5, 500);
+    // Five seconds with nothing done with it: only the picture
+    await expect(chip(page)).toHaveAttribute("data-rested", "true", {
+        timeout: 8000,
+    });
+    await expect(page.getByTestId("clipboard-chip-status")).toBeHidden();
+    // A click: the whole chip again
+    await page.getByTestId("clipboard-chip-rested").click();
+    await expect(page.getByTestId("clipboard-chip-toggle")).toBeVisible();
+    // A drag on the field elsewhere rests it at once
+    const field = (await page.getByTestId("threeField").boundingBox())!;
+    const from = { x: field.x + field.width - 120, y: field.y + 80 };
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x - 60, from.y + 40, { steps: 6 });
+    await page.mouse.up();
+    await expect(chip(page)).toHaveAttribute("data-rested", "true");
+    // A new copy, and a paste, show the whole chip
+    await select(page, [1, 2]);
+    await page.keyboard.press("ControlOrMeta+c");
+    await expect(page.getByTestId("clipboard-chip-toggle")).toBeVisible();
+});
+
+test("the chip's X clears the clipboard: on hover on desktop, on the whole chip on a tablet", async ({
+    show,
+}) => {
+    const { page } = show;
+    const touch = test.info().project.name === "browser-touch";
+    await select(page, [1, 2, 3, 4]);
+    await page.keyboard.press("ControlOrMeta+c");
+    const clear = page.getByTestId("clipboard-chip-clear");
+    if (touch) {
+        await expect(clear).toBeVisible();
+    } else {
+        // Hidden until the chip is pointed at
+        await page.mouse.move(5, 500);
+        await expect(clear).toBeHidden();
+        await page.getByTestId("clipboard-chip-toggle").hover();
+        await expect(clear).toBeVisible();
+    }
+    await clear.click();
+    await expect(chip(page)).toBeHidden();
+    await expect(page.getByTestId("clipboard-live")).toHaveText(
+        "Clipboard cleared",
+    );
+});
+
+test("an open paste that doesn't fit says so under its editor, and one that fits says nothing", async ({
+    show,
+}) => {
+    const { page } = show;
+    const notice = page.getByTestId("paste-fit-notice");
+    await select(page, [1, 2, 3, 4]);
+    await page.keyboard.press("ControlOrMeta+c");
+    // Onto two: two spots stay empty
+    await select(page, [5, 6]);
+    await blur(page);
+    await page.keyboard.press("ControlOrMeta+v");
+    await expect(preview(page)).toBeVisible();
+    await expect(notice).toHaveText("2 spots stay empty");
+    await expect(notice).toHaveAttribute("data-fit", "emptySpots");
+    await page.keyboard.press("Escape");
+    await expect(preview(page)).toBeHidden();
+    await expect(notice).toBeHidden();
+    // Onto four: it fits, nothing to say
+    await select(page, [5, 6, 7, 8]);
+    await blur(page);
+    await page.keyboard.press("ControlOrMeta+v");
+    await expect(preview(page)).toBeVisible();
+    await expect(notice).toBeHidden();
+    await page.keyboard.press("Escape");
+    // Onto six: two marchers have no spot
+    await select(page, [3, 4, 5, 6, 7, 8]);
+    await blur(page);
+    await page.keyboard.press("ControlOrMeta+v");
+    await expect(notice).toHaveText("2 marchers have no spot");
+    await expect(notice).toHaveAttribute("data-fit", "leftOut");
 });

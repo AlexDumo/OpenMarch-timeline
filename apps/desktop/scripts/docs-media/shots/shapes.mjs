@@ -1254,6 +1254,9 @@ const shots = [
             await page.keyboard.up("Shift");
             await page.waitForTimeout(500);
             await tidy(page);
+            // Rested to its picture by now, it's woken first
+            const rested = page.getByTestId("clipboard-chip-rested");
+            if (await rested.isVisible()) await rested.click();
             await page.getByTestId("clipboard-chip-toggle").click();
             const card = page.getByTestId("clipboard-chip");
             await card.getByTestId("clipboard-section").waitFor();

@@ -23,13 +23,29 @@ import {
     useShapeToolStore,
 } from "../tool/shapeToolStore";
 import { openDrawn, slotsOf } from "../tool/toolMachine";
-import { pictureOf, planPaste, standingOnSpots } from "./picture";
+import {
+    pictureFit,
+    pictureOf,
+    pictureSummary,
+    planPaste,
+    standingOnSpots,
+} from "./picture";
 import {
     copiedPicture,
     keepPicture,
     useCopiedPictureStore,
     announceClipboard,
+    usePasteNoticeStore,
 } from "./pictureStore";
+
+/** The paste's notice goes with it: placed, discarded, or another shape opened in its place */
+useShapeToolStore.subscribe((now, before) => {
+    if (
+        usePasteNoticeStore.getState().fit !== null &&
+        (now.tool === null || now.tool.kind !== before.tool?.kind)
+    )
+        usePasteNoticeStore.setState({ fit: null });
+});
 
 /**
  * Copy and paste of a formation (#961, owner 2026-11-15). Copy keeps where the marchers `ids`
@@ -127,6 +143,17 @@ export function pasteFormation(
         undefined,
         { keepDiscarded: startingOver },
     );
+    // How it fits, under the paste's editor, while it's open
+    const fit = pictureFit(
+        pictureSummary(picture, field.fieldProperties.pixelsPerStep, {
+            asPositions:
+                useCopiedPictureStore.getState().pasteAs === "positions",
+        }),
+        ids.length,
+    );
+    usePasteNoticeStore.setState({
+        fit: fit.fit === "emptySpots" || fit.fit === "leftOut" ? fit : null,
+    });
     // No toast for marchers left out (owner 2026-11-22): the chip warned before the paste, and
     // a screen reader hears it with the preview
     const preview = tolgee.t(

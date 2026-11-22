@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { syncFromStorage } from "@/stores/syncFromStorage";
-import { readPicture, type CopiedPicture } from "./picture";
+import { readPicture, type CopiedPicture, type PictureFit } from "./picture";
 
 /**
  * The app's own clipboard for a copied picture (#961, owner 2026-11-15): kept in localStorage
@@ -45,6 +45,15 @@ export const useClipboardAnnouncementStore = create<{
     text: string;
     n: number;
 }>(() => ({ text: "", n: 0 }));
+
+/**
+ * How the open paste fits the marchers it was pasted onto (owner 2026-11-22): shown under the
+ * paste's floating editor when spots stay empty or marchers are left out. Null with no paste
+ * open, or one that fits.
+ */
+export const usePasteNoticeStore = create<{ fit: PictureFit | null }>(() => ({
+    fit: null,
+}));
 
 /** Has screen readers say `text` (the toast that once said it is gone) */
 export function announceClipboard(text: string): void {
