@@ -481,7 +481,15 @@
         "empty": "No ensembles found. Create one above!",
         "loading": "Loading ensembles...",
         "viewDetails": "View ensemble details",
-        "loadError": "Error loading ensembles: {error}"
+        "loadError": "Error loading ensembles: {error}",
+        "expiry": {
+            "expiredBadge": "Expired {date}",
+            "expiredExplanation": "These ensembles have expired. You can still open and attach their productions, but new productions and revisions can't be pushed to the mobile app. Contact sales@openmarch.com to extend one.",
+            "expiresIn": "{days, plural, =0 {Expires today ({date}).} one {Expires in # day ({date}).} other {Expires in # days ({date}).}} Contact sales@openmarch.com to extend it.",
+            "hideExpired": "Hide expired ensembles",
+            "noActive": "No active ensembles.",
+            "showExpired": "View expired ensembles ({count})"
+        }
     },
     "exportCoordinates": {
         "abbreviateCoordinateDescriptions": "Abbreviate coordinate descriptions",
@@ -1351,6 +1359,11 @@
             "description": "OpenMarch couldn't reach its online service or confirm your sign-in. Check your internet connection and try again.",
             "retry": "Try again",
             "title": "Can't reach OpenMarch"
+        },
+        "expired": {
+            "addAudioDisabled": "Can't add audio: this ensemble expired on {date}.",
+            "banner": "This ensemble expired on {date}. New revisions can't be pushed to the mobile app. Contact sales@openmarch.com to extend it.",
+            "pushDisabled": "Can't push: this ensemble expired on {date}."
         }
     },
     "music": {
@@ -1702,10 +1715,14 @@
             "title": "Add equipment",
             "button": "Add"
         },
-        "empty": "No front ensemble yet. Add equipment and podiums, or start from a preset.",
         "list": {
             "equipment": "Equipment",
             "podiums": "Podiums"
+        },
+        "custom": {
+            "title": "Or build it yourself",
+            "description": "Pick instruments, speakers and podiums one at a time.",
+            "button": "Add equipment"
         },
         "placeInstructions": "Click the field to place the {name}. It is on the field from the playhead's count.",
         "equipment": {
@@ -1743,6 +1760,7 @@
             "always": "Each also adds a podium on the 50 and a mixer behind the pit.",
             "addPerformers": "Also add performers",
             "apply": "Apply",
+            "use": "Use this preset",
             "replaces": "Replaces the equipment the last preset added. Its players move to the new spots; those left without an instrument are removed, unless they have moves later in the show. Undo brings everything back. Equipment you added yourself stays.",
             "none": "None",
             "start": "Start from a preset",
@@ -1869,6 +1887,15 @@
         "general.editorMode.note": "Switching keeps your show as it is. Anything made in Expert that Basic can't edit stays, plays and is shown as locked in Basic.",
         "general.language": "Language",
         "general.openView3dWithShow": "Open 3D View when a show opens",
+        "general.editorDisplay": "Open the editor on",
+        "general.view3dDisplay": "Open the 3D View on",
+        "general.windows": "Windows",
+        "general.windowDisplay.last": "Where you left it",
+        "general.windowDisplay.display": "Display {number} · {size}",
+        "general.windowDisplay.namedDisplay": "{name} · {size}",
+        "general.windowDisplay.main": "{display} (main)",
+        "general.windowDisplay.disconnected": "A display that isn't connected",
+        "general.windowDisplay.disconnected.description": "Until that display is connected again, the window opens where you left it.",
         "general.performanceMode": "Performance mode",
         "general.performanceMode.description": "Draw the field more simply so it stays smooth on slower computers. The field switches to this by itself when graphics run in software.",
         "general.showFullDatabasePath": "Show full file path",
@@ -2163,6 +2190,15 @@
             "groupNeedsTwo": "Select 2 or more marchers to group them",
             "ungroupError": "Couldn't ungroup the shape",
             "ungroupIsolated": "Ungroup this shape outside isolation: it comes from an earlier page",
+            "droppedAtFlag": {
+                "many": "{count, plural, one {# marcher isn't part of the shape at this flag anymore} other {# marchers aren't part of the shape at this flag anymore}}",
+                "one": "{name} isn't part of the shape at this flag anymore"
+            },
+            "leftOut": {
+                "hint": "A shape holds only marchers whose last mid-page position on this page is at the same count. Remove the positions that differ, then place the shape again.",
+                "many": "{count, plural, one {# marcher is on its spot, but isn't part of the shape} other {# marchers are on their spots, but aren't part of the shape}}",
+                "one": "{name} is on its spot, but isn't part of the shape"
+            },
             "leftShape": {
                 "many": "{count, plural, one {# left the {shape, select, block {box} circle {circle} other {shape}}} other {# left the {shape, select, block {box} circle {circle} other {shape}}}}",
                 "one": "{name} left the {shape, select, block {box} circle {circle} other {shape}}"
@@ -2761,6 +2797,7 @@
             "point": {
                 "label": "Position at count {count} of page {page}",
                 "remove": "Remove this count's position",
+                "removeHeld": "{count, plural, =1 {This marcher is {heldLower} from this count, so its position here stays. Remove the hold first.} other {These marchers are {heldLower} from this count, so their positions here stay. Remove the holds first.}}",
                 "tooltip": "Position at count {count} of page {page}. Right-click to remove it."
             },
             "locked": "{count, plural, =1 {One marcher uses Expert moves on this page. Switch to Expert to edit it.} other {# marchers use Expert moves on this page. Switch to Expert to edit them.}}",
@@ -3192,13 +3229,12 @@
             "lockYCaption": "Lock Y",
             "snapCaption": "Snap to grid",
             "lockMarchersAriaLabel": "Cursor movement and marcher snap",
-            "placeAllMarchers": "Place all marchers",
-            "placeSelectedMarchers": "Place selected marchers",
+            "allMarchers": "All marchers",
+            "selectedMarchers": "Selected marchers",
             "clearThisPage": "{clearThisPage}",
             "snapToggleCaption": "Snap",
-            "toNextPageSpots": "...to next page's spots",
-            "setMarcherPositionsAriaLabel": "Set marcher positions",
-            "toPreviousPagePositions": "...to previous page positions"
+            "moveToNextPageSpots": "Move to next page's spots",
+            "setMarcherPositionsAriaLabel": "Set marcher positions"
         },
         "collisions": {
             "collisionsToolbar": "Collisions",
