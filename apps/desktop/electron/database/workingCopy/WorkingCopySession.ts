@@ -1279,7 +1279,8 @@ export class WorkingCopySession {
         const why =
             error instanceof RenameRetriesExhaustedError
                 ? "another program is using the file"
-                : withoutPaths(error);
+                : // On screen only, where the person's own paths are fine; logs use withoutPaths
+                  ((error as Error)?.message ?? String(error));
         const message = `Couldn't save ${basename(this.targetPath)}: ${why}. Your changes are kept and OpenMarch will try again.`;
         console.error("Publish deferred:", withoutPaths(error));
         this.scheduleRetry(delay);
