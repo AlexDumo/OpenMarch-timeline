@@ -130,6 +130,16 @@ export interface TrailTarget {
      */
     around?: boolean;
     /**
+     * Round an outline (R-13‴): each member's walk round it as the resolver has it, tail first,
+     * which its corner counts read (step 6, owner 2026-11-22: only at the outline's own corners)
+     */
+    aroundWalk?: readonly {
+        readonly startDist: number;
+        readonly endDist: number;
+        readonly inStraight: number;
+        readonly straight: number;
+    }[];
+    /**
      * The end line every slot's destination makes, in the order the line enters it (slot order,
      * or reversed with R-12′), vacant slots included (R-13′): what corner counts read for a trail
      * that isn't along the way (step 6, TC-1). Absent while a new trail is drawn: then it is the
@@ -727,6 +737,16 @@ function targetOfTrail(
             reverse: trail.reverse,
             along: trail.along,
             ...(trail.around ? { around: true } : {}),
+            ...(trail.around && entry.around && entry.members.length > 0
+                ? {
+                      aroundWalk: entry.members.map((_, q) => ({
+                          startDist: entry.startDist[q]!,
+                          endDist: entry.endDist[q]!,
+                          inStraight: entry.around!.inStraight[q]!,
+                          straight: entry.around!.straight[q]!,
+                      })),
+                  }
+                : {}),
             endLine,
             ...(entry.members.length === 0 ? { unfounded: true } : {}),
         },

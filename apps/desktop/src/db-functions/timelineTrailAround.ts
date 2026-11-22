@@ -71,6 +71,22 @@ export const goRoundRefusal = {
     reverseNobody: () => text.t("timeline.refusals.trail.reverseNobody"),
 };
 
+/**
+ * Why the Follow tool finds no line or outline to follow (owner, 2026-11-22: say why, not just
+ * what to select)
+ */
+export const followShapeRefusal = {
+    /** Only some of a placed shape's marchers are selected */
+    part: (count: number, total: number) =>
+        text.t("timeline.refusals.trail.notFittedPart", { count, total }),
+    /** They stand in a shape only at the move's end: the playhead is a page early */
+    later: () => text.t("timeline.refusals.trail.notFittedLater"),
+    /** A circle or box they stand on, but not all the way round */
+    gap: () => text.t("timeline.refusals.trail.notFittedGap"),
+    /** Some stand too far off the shape the rest make */
+    off: () => text.t("timeline.refusals.trail.notFittedOff"),
+};
+
 // ---------------------------------------------------------------------------
 // Pure: the outline
 // ---------------------------------------------------------------------------
@@ -267,6 +283,58 @@ function allRound(loop: RoutePath, starts: readonly XY[]): boolean {
 }
 
 /**
+ * Whether the starts go all the way round a box outline `loop` (its four sides, legs 0 to 3 in
+ * walking order): each gap between neighbors along one side is no more than 2.5 times the usual
+ * gap along that side and the one opposite (the Box tool spaces a box's back and front alike, and
+ * its sides alike, each pair its own interval), and the two pairs' usual gaps are within 2.5 times
+ * of each other, so two ranks far apart or three sides of a box still aren't outlines. A gap
+ * round a corner takes the wider pair's. An odd count's one spot left out of a side spaced wider
+ * than the others fits (owner, 2026-11-22: a Box tool outline of 15 was refused when its gap was
+ * judged by the closer spacing of the other sides).
+ */
+function boxAllRound(
+    loop: RoutePath,
+    starts: readonly XY[],
+    tol: number,
+): boolean {
+    const L = loop.L;
+    const D = loop.D;
+    if (D.length !== 5) return allRound(loop, starts);
+    const d = starts.map((p) => nearestOnLoop(loop, p)).sort((a, b) => a - b);
+    // the sides a distance round is on: two at a corner
+    const sidesAt = (x: number): number[] => {
+        const out: number[] = [];
+        for (let j = 0; j < 4; j++) {
+            const lo = D[j]!;
+            const hi = D[j + 1]!;
+            if (x >= lo - tol && x <= hi + tol) out.push(j);
+        }
+        // past the last corner, back at the first
+        if (x >= L - tol && !out.includes(0)) out.push(0);
+        if (x <= tol && !out.includes(3)) out.push(3);
+        return out;
+    };
+    const gaps = d.map((x, i) => {
+        const next = i + 1 < d.length ? d[i + 1]! : d[0]! + L;
+        const a = sidesAt(x);
+        const b = sidesAt(next >= L ? next - L : next);
+        const shared = a.find((j) => b.includes(j));
+        return { len: next - x, pair: shared === undefined ? -1 : shared % 2 };
+    });
+    const usual = [0, 1].map((pair) => {
+        const along = gaps.filter((g) => g.pair === pair).map((g) => g.len);
+        return along.length ? median(along) : null;
+    });
+    const all = median(gaps.map((g) => g.len));
+    const of = (pair: number) => usual[pair] ?? all;
+    const wider = Math.max(of(0), of(1));
+    if (wider > 2.5 * Math.min(of(0), of(1))) return false;
+    return gaps.every(
+        (g) => g.len <= 2.5 * (g.pair < 0 ? wider : of(g.pair)) + EPS_GEOM,
+    );
+}
+
+/**
  * How far a marcher may stand from the outline it's fitted to (DO-2): a quarter of the usual
  * spacing, and never more than half a step, so an oval, a hexagon or an octagon isn't taken for
  * a circle
@@ -282,6 +350,8 @@ export const fitTolerance = (usual: number, step: number): number =>
 function boxCandidate(
     starts: readonly XY[],
     tol: number,
+    /** Skip the all-the-way-round test, to tell a gap from no box at all (`outlineMiss`) */
+    anyGaps = false,
 ): (Outline & { cornered: boolean }) | null {
     const corners = smallestBox(starts);
     if (!corners) return null;
@@ -313,7 +383,7 @@ function boxCandidate(
     if (!(residual <= tol && onEach && wide)) return null;
     const geometry = boxOutline(corners);
     const loop = makeLoop(geometry);
-    if (!loop || !allRound(loop, starts)) return null;
+    if (!loop || (!anyGaps && !boxAllRound(loop, starts, tol))) return null;
     const cornered = corners.some((k) =>
         starts.some((p) => Math.hypot(p[0] - k[0], p[1] - k[1]) <= tol),
     );
@@ -377,6 +447,32 @@ function circleCandidate(
     return loop
         ? { kind: "circle", geometry, loop, residual, full: true }
         : null;
+}
+
+/**
+ * Why `starts` make no outline, when they nearly do (owner, 2026-11-22: the refusal says why):
+ * `gap`, a circle or box they stand on but not all the way round (a gap too wide, or spacing too
+ * uneven); `off`, one they would make if some didn't stand up to three times too far off it; null
+ * when they fit one, or are nowhere near one.
+ */
+export function outlineMiss(
+    starts: readonly XY[],
+    step: number,
+): "gap" | "off" | null {
+    if (starts.length < 4 || fitOutline(starts, step)) return null;
+    const usual = median(nearestGaps(starts));
+    if (!(usual > EPS_GEOM)) return null;
+    const tol = fitTolerance(usual, step);
+    if (circleCandidate(starts, usual, tol) || boxCandidate(starts, tol, true))
+        return "gap";
+    const loose = circleCandidate(starts, usual, 3 * tol);
+    if (
+        (loose && allRound(loose.loop, starts)) ||
+        boxCandidate(starts, 3 * tol) ||
+        (onALine(starts, 3 * tol) && !onALine(starts, usual / 4))
+    )
+        return "off";
+    return null;
 }
 
 /**

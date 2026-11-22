@@ -36,7 +36,12 @@ import {
     aroundLine,
     aroundOutline,
     aroundPlanOf,
+    cancelRoundSlide,
+    endRoundSlide,
     goingRound,
+    roundHit,
+    slideRound,
+    startRoundSlide,
 } from "./followAround";
 import {
     followEnds,
@@ -304,6 +309,8 @@ class PathPenMode implements FieldMode {
         lane: LaneHold | null;
         /** The Follow tool (step 4b): the press on an end that draws the trail's first leg */
         firstLeg?: boolean;
+        /** Going round (owner, 2026-11-22): the press that grabbed the line to slide it round */
+        round?: boolean;
     } | null = null;
     private listeners = new Set<() => void>();
 
@@ -481,8 +488,12 @@ class PathPenMode implements FieldMode {
         // The Follow tool, its ends pulsing: a press on an end grabs it and drags out the first
         // leg; a marcher in the middle of the line, or the empty field, takes no press (DL-4)
         if (s.phase === "drawing" && s.follow && s.follow.grabbed === null) {
-            // Going round (step 10): nothing on the field to press; the bar holds its choices
-            if (goingRound(s.follow)) return;
+            // Going round (owner, 2026-11-22): a press on the line or the outline grabs the line,
+            // and the drag slides it round; elsewhere nothing
+            if (goingRound(s.follow)) {
+                this.pressRound(s, pointer, isMac);
+                return;
+            }
             const env = envOf();
             const hit = env
                 ? followHit(s.follow, pointer.field, env.hitRadius)
@@ -548,6 +559,27 @@ class PathPenMode implements FieldMode {
             lane,
         };
         if (s.phase === "drawing") this.preview(pointer, keys.roles());
+    }
+
+    /** Going round: a press on the line or the outline grabs it to slide it round (owner, 2026-11-22) */
+    private pressRound(s: PathSession, pointer: FieldPointer, isMac: boolean) {
+        const env = envOf();
+        if (!env || !startRoundSlide(pointer.field, env.hitRadius)) return;
+        this.held = {
+            start: pointer,
+            screen: pointer.screen,
+            key: null,
+            base: shapeOf(s),
+            before: [],
+            moved: false,
+            landed: null,
+            keys: holdGesture<FieldPointer>(pointer, () => {}, [], isMac, {
+                honored: honored(shapeOf(s), null),
+                screen: () => this.held?.screen ?? pointer.screen,
+            }),
+            lane: null,
+            round: true,
+        };
     }
 
     private endHeld() {
@@ -741,6 +773,13 @@ class PathPenMode implements FieldMode {
 
     move(pointer: FieldPointer): void {
         const p = this.held;
+        // Going round, the line grabbed: it slides round with the pointer, snapped, live
+        if (p?.round) {
+            p.screen = pointer.screen;
+            p.moved = true;
+            slideRound(pointer.field);
+            return;
+        }
         if (!p) {
             if (this.session?.phase === "drawing")
                 this.preview(pointer, rolesOf(pointer, "shape"));
@@ -768,6 +807,11 @@ class PathPenMode implements FieldMode {
         this.dropPendingPointer();
         const s = this.session;
         if (!p || !s) return;
+        // Going round, the line let go: written in one undo step when it moved, else put back
+        if (p.round) {
+            if (endRoundSlide()) void finishDrawing();
+            return;
+        }
         if (s.phase === "drawing") {
             // The first leg dragged out of an end (step 4b): its end is the trail's first point;
             // a click on the end only grabs it, and clicks go on from there
@@ -962,6 +1006,11 @@ class PathPenMode implements FieldMode {
         const p = this.held;
         this.endHeld();
         this.dropPendingPointer();
+        // A lost press while sliding the line round: back as it was
+        if (p?.round) {
+            cancelRoundSlide();
+            return;
+        }
         if (p?.lane) setLaneEdit(null);
         if (!p?.moved) return;
         if (this.session?.phase === "open")
@@ -982,7 +1031,7 @@ class PathPenMode implements FieldMode {
      * grabbed one of the Follow tool's ends is kept: lifted, it's the click that grabs it.
      */
     longPress(): boolean {
-        return !this.held?.firstLeg;
+        return !this.held?.firstLeg && !this.held?.round;
     }
 
     cursorAt(
@@ -999,7 +1048,16 @@ class PathPenMode implements FieldMode {
         if (s.phase === "drawing") {
             // The Follow tool's ends pulse: the hand over an end, nothing elsewhere (DL-4)
             if (s.follow && s.follow.grabbed === null) {
-                if (goingRound(s.follow)) return "default";
+                // Going round: the line and the outline are what's grabbed to slide it round
+                if (goingRound(s.follow)) {
+                    if (s.follow.roundSlide) return "grab";
+                    const env = envOf();
+                    return env &&
+                        roundHit(s.follow, pointer.field, env.hitRadius) !==
+                            null
+                        ? "grab"
+                        : "default";
+                }
                 const env = envOf();
                 const hit = env
                     ? followHit(s.follow, pointer.field, env.hitRadius)
@@ -1394,8 +1452,57 @@ function aroundDrawing(session: PathSession): FieldModeDrawing {
             label: id === leaderId ? leaderLabel : followerLabel,
         })),
         pullArrows: aroundArrows(follow),
+        ...roundTip(follow, plan),
         ...realMarchers(session, starts, line, null),
     };
+}
+
+/**
+ * The note going round (owner, 2026-11-22): by the pointer while the line slides, how far ("4
+ * spots"); by the leader while digits are typed, how far they say; by the leader before anything
+ * moved, to drag it round
+ */
+function roundTip(
+    follow: FollowDrag,
+    plan: ReturnType<typeof aroundPlanOf>,
+): Pick<FieldModeDrawing, "tip"> {
+    const a = follow.around;
+    if (!a || !plan) return {};
+    const leaderAt = plan.spots.at(-1);
+    const at = follow.roundSlide
+        ? follow.roundSlide.pointer
+        : leaderAt && { x: leaderAt[0], y: leaderAt[1] };
+    if (!at) return {};
+    if (!follow.roundSlide && !follow.roundTyped && a.amount === 0)
+        return {
+            tip: {
+                at,
+                text: tolgee.t(
+                    "pathways.round.dragTip",
+                    "Drag around the outline, or type how far",
+                ),
+            },
+        };
+    if (!follow.roundSlide && !follow.roundTyped) return {};
+    return { tip: { at, text: roundCountText(a.amount, a.unit) } };
+}
+
+/** How far round, as the note by the pointer says it: "4 spots", "1 step" */
+export function roundCountText(
+    amount: number,
+    unit: "spots" | "steps",
+): string {
+    return unit === "spots"
+        ? tolgee.t(
+              "pathways.round.spotsCount",
+              "{count, plural, one {# spot} other {# spots}}",
+              { count: amount },
+          )
+        : tolgee.t(
+              "pathways.round.stepsCount",
+              "{count, plural, one {# step} other {# steps}}",
+              { count: amount },
+          );
 }
 
 /** Over a middle marcher before an end is grabbed (step 4d): the note to drag from an end */
