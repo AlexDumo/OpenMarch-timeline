@@ -25,6 +25,7 @@ import {
     isHeadDrag,
     trailHeadOf,
 } from "../trailHead";
+import { setFollowTheLeader } from "../followTheLeader";
 
 /**
  * A dragged-out trail's head, AP-T16 (owner, 2026-11-17): the handle at the head of a stored trail
@@ -130,6 +131,8 @@ const env: ToolEnv = {
 };
 
 beforeEach(() => {
+    // Trails are edited only with Follow-the-leader on (#1095)
+    setFollowTheLeader(true);
     vi.useFakeTimers();
     setShapeField({
         fieldProperties: () => fieldProperties,
@@ -140,6 +143,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+    setFollowTheLeader(false);
     clearPath();
     setShapeField(null);
     vi.useRealTimers();

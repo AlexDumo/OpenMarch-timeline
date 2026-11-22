@@ -24,6 +24,7 @@ import {
 import type { AdjustProfile } from "@openmarch/core";
 import type { PathTarget } from "../pathTarget";
 import { DRAW_KIND_STORAGE_KEY, setDrawKind } from "../../shapes/pen/penKind";
+import { setFollowTheLeader } from "../followTheLeader";
 
 /**
  * The path's floating editor (owner lab feedback on fork #674): the shape editor's bar, opaque,
@@ -464,5 +465,51 @@ describe("the path's floating editor", () => {
             "aria-disabled",
             "true",
         );
+    });
+});
+
+describe("a stored trail's marks with Follow-the-leader off (#1095)", () => {
+    /** Three marchers in a row, tail to leader, ending in a column to the right */
+    const members = [1, 2, 3].map((id, i) => ({
+        marcherId: id,
+        drill: `T${id}`,
+        from: { x: 4 * i * STEP, y: 0 },
+        to: { x: 20 * STEP, y: (10 + 4 * i) * STEP },
+    }));
+    const trail: PathTarget = {
+        timelineId: 1,
+        transitionId: 7,
+        marcherId: 3,
+        start: 0,
+        end: 16,
+        from: members[2]!.from,
+        to: members[0]!.to,
+        routeId: 5,
+        points: [{ id: "c1", at: [14 * STEP, 0] }],
+        ends: { from: members[2]!.from, to: members[0]!.to },
+        group: null,
+        trail: { members, leaderId: 3, reverse: false },
+    };
+    afterEach(() => act(() => setFollowTheLeader(false)));
+
+    it("off: no corner counts or corner summary; Edit path greyed, a click on it opens nothing. On: back at once", () => {
+        act(() => showPath(trail, "3"));
+        render(<PathEditor fieldProperties={fieldProperties} />);
+        expect(bar().dataset.phase).toBe("closed");
+        expect(screen.queryByTestId("trail-corner-count")).toBeNull();
+        expect(screen.queryByTestId("path-corner-summary")).toBeNull();
+        // Reverse is on the field's menu and Alt+L, never the bar (step 11, owner 2026-11-17)
+        expect(screen.queryByTestId("path-reverse")).toBeNull();
+        const edit = screen.getByTestId("path-edit");
+        expect(edit.getAttribute("aria-disabled")).toBe("true");
+        expect(edit.dataset.tipHint).toMatch(/Follow-the-leader \(preview\)/);
+        act(() => {
+            fireEvent.click(edit);
+        });
+        expect(bar().dataset.phase).toBe("closed");
+        act(() => setFollowTheLeader(true));
+        expect(
+            screen.getByTestId("path-edit").getAttribute("aria-disabled"),
+        ).toBeNull();
     });
 });

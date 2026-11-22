@@ -66,6 +66,7 @@ import {
     TrailCornerCounts,
 } from "./TrailCornerCounts";
 import { useTrailEndShape, useTrailShapeControls } from "./trailShape";
+import { trailOffReason, useFollowTheLeader } from "./followTheLeader";
 import { offCountTally, trailCornersOf } from "./trailCorners";
 import {
     EVEN_FIRST,
@@ -144,6 +145,9 @@ export function PathEditor({
     const ownable = usePathPenStore((s) => s.ownable);
     const shapeToolOpen = useShapeToolStore((s) => s.tool !== null);
     const ownLines = usePathPenStore((s) => s.ownLines);
+    // A trail's leader mark and corner counts only with Follow-the-leader on (#1095)
+    const followTheLeader = useFollowTheLeader();
+    const trailMarks = !!session?.target.trail && followTheLeader;
     if (!session) {
         // Several marchers each on their own path (after Detach all, sim round 3): the bar
         // stays, saying so, instead of going away as if the selection had lost its paths
@@ -174,9 +178,7 @@ export function PathEditor({
         return hidden || shapeToolOpen ? null : (
             <RichTips>
                 {groupLabel}
-                {session.target.trail && (
-                    <TrailCornerCounts session={session} />
-                )}
+                {trailMarks && <TrailCornerCounts session={session} />}
                 {session.target.routeId !== null && (
                     <PathEditorBar
                         session={session}
@@ -198,7 +200,7 @@ export function PathEditor({
         <>
             {groupLabel}
             {session.phase === "drawing" && <PathPenBanner session={session} />}
-            {session.target.trail && <TrailCornerCounts session={session} />}
+            {trailMarks && <TrailCornerCounts session={session} />}
             <RichTips>
                 <PathEditorBar
                     session={session}
@@ -527,6 +529,7 @@ function PathEditorBar({
     // The Follow tool's line, its end spots and the pointer stay clear too, with room under each
     // for the field's note (the hover note, the step readout), so the bar never covers the work
     const footprint = useMemo(() => followFootprint(session), [session]);
+    const followTheLeader = useFollowTheLeader();
     const place = stackedPlacement(
         {
             outline: outline.map((p) => fieldToElement(view, p.x, p.y)),
@@ -560,9 +563,10 @@ function PathEditorBar({
     const faded = drawing && session.dragging !== null;
     const quiet = session.phase === "closed";
     // Step 6 (TC-7): a trail's turns that fall between counts. Selected (closed), the bar sums
-    // them up after Edit path, and the chips wait for a hover or a click on it (owner, 2026-11-17)
+    // them up after Edit path, and the chips wait for a hover or a click on it (owner, 2026-11-17).
+    // Follow-the-leader off (#1095): none
     const offCount =
-        quiet && !session.target.trail
+        (quiet && !session.target.trail) || !followTheLeader
             ? { turns: 0, corners: 0 }
             : offCountTally(trailCornersOf(session));
     const stored = session.target.routeId !== null;
@@ -587,6 +591,7 @@ function PathEditorBar({
     // Drawing on from a trail's head (AP-T16): its spacing and ends are the trail's own
     const headClicks = drawing && !!session.follow?.head?.clicks;
     const kindChoice =
+        followTheLeader &&
         drawing &&
         !session.byRoute &&
         !session.follow &&
@@ -797,6 +802,9 @@ function PathSlots({ session }: { session: PathSession }) {
     // loose path (round 7) is the marchers' own paths edited together: Edit path
     const group =
         !!session.target.group && !session.target.lane && !isLoose(session);
+    // A trail can't be edited with Follow-the-leader off (#1095): Edit path stays, saying why
+    const followTheLeader = useFollowTheLeader();
+    const locked = !!session.target.trail && !followTheLeader;
     return (
         <>
             {/* The tooltip is the command's name, its shortcut and one short line (owner,
@@ -808,24 +816,28 @@ function PathSlots({ session }: { session: PathSession }) {
                         : tolgee.t("actions.path.edit", "Edit path")
                 }
                 hint={
-                    group
-                        ? tolgee.t(
-                              "pathways.editor.editGroupHint",
-                              "Every marcher on it follows",
-                          )
-                        : session.target.trail
+                    locked
+                        ? trailOffReason()
+                        : group
                           ? tolgee.t(
-                                "pathways.editor.editTrailHint",
-                                "Drag its points, or its head to draw on",
+                                "pathways.editor.editGroupHint",
+                                "Every marcher on it follows",
                             )
-                          : tolgee.t(
-                                "pathways.editor.editHint",
-                                "A click on its line does it too",
-                            )
+                          : session.target.trail
+                            ? tolgee.t(
+                                  "pathways.editor.editTrailHint",
+                                  "Drag its points, or its head to draw on",
+                              )
+                            : tolgee.t(
+                                  "pathways.editor.editHint",
+                                  "A click on its line does it too",
+                              )
                 }
                 action="editPath"
+                disabled={locked}
                 pressed={editing}
                 onClick={() => runAction("editPath")}
+                onDisabledClick={sayWhy(locked ? trailOffReason() : null)}
                 testId="path-edit"
                 className={EDIT_SLOT_WIDTH}
             >

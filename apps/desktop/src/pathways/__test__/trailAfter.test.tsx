@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
@@ -11,6 +11,7 @@ import type { PathSession } from "../pathPenStore";
 import { drawingOf } from "../pathPenMode";
 import { pathHandles, pathOutline } from "@/shapes/pen/penPath";
 import type { PathTarget } from "../pathTarget";
+import { setFollowTheLeader } from "../followTheLeader";
 
 /**
  * A dragged-out trail once it's made (pathways step 11 follow-up, owner's lab test 2026-11-17):
@@ -89,7 +90,11 @@ const setPhase = (phase: PathSession["phase"]) =>
         usePathPenStore.setState({ session: { ...s, phase } });
     });
 
+// Trails are edited only with Follow-the-leader on (#1095)
+beforeEach(() => setFollowTheLeader(true));
+
 afterEach(() => {
+    setFollowTheLeader(false);
     act(() => clearPath());
     act(() => {
         useTimelineResolverStore.setState({ resolver: null });

@@ -19,6 +19,7 @@ import type { PathTarget } from "../pathTarget";
 import { cancelFollowDrawing, followPlanOf } from "../followDrag";
 import { headSpacingOf, isHeadDrag } from "../trailHead";
 import { formGrabFor, splitAt, tailSpacing } from "../trailForm";
+import { setFollowTheLeader } from "../followTheLeader";
 
 vi.mock("@/db-functions/history", async (importOriginal) => {
     const actual =
@@ -123,6 +124,8 @@ const writes = (name: string) =>
 const picked = { ids: [] as readonly number[] };
 
 beforeEach(() => {
+    // Trails are edited only with Follow-the-leader on (#1095)
+    setFollowTheLeader(true);
     vi.useFakeTimers();
     vi.mocked(transactionWithHistory).mockClear();
     picked.ids = [1, 2, 3, 4, 5];
@@ -142,6 +145,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+    setFollowTheLeader(false);
     act(() => clearPath());
     setPathSelectionPort(null);
     setShapeField(null);

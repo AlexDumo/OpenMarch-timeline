@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runAction } from "@/shortcuts/registry";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import {
@@ -34,6 +34,7 @@ import {
     trailCornersOf,
 } from "../trailCorners";
 import type { PathSession } from "../pathPenStore";
+import { setFollowTheLeader } from "../followTheLeader";
 
 /**
  * Corner counts for block letters, pathways step 6 (spec Appendix L.9): the counts the field shows
@@ -86,10 +87,14 @@ const sessionOf = (target: PathTarget): PathSession => {
     return usePathPenStore.getState().session!;
 };
 
+// Corner counts show only with Follow-the-leader on (#1095)
+beforeEach(() => setFollowTheLeader(true));
+
 afterEach(() => {
     act(() => clearPath());
     useCornerChipsStore.setState({ pinnedFor: null, listOpen: false });
     cleanup();
+    setFollowTheLeader(false);
 });
 
 /** Each corner's turns as [drill, count to a tenth], leader first */
