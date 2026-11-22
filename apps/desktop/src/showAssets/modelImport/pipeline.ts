@@ -89,6 +89,7 @@ import type {
     Vec3,
 } from "./types";
 import { validateModel } from "./validate";
+import { openZips } from "./zip";
 
 export interface ModelImportEnv {
     images: ImageCodec;
@@ -114,7 +115,8 @@ export async function importModel(
         notes: [],
     };
     try {
-        const opened = await openAndCheck(files, report);
+        const unzipped = openZips(files);
+        const opened = await openAndCheck(unzipped.files, report);
         if (!opened) return { ok: false, report };
         const read = await readClean(opened, env, report);
         if (!read) return { ok: false, report };
@@ -171,7 +173,7 @@ export async function importModel(
             model: {
                 name:
                     titleOf(opened.json) ??
-                    opened.name.replace(/\.(glb|gltf)$/i, ""),
+                    fileTitle(opened.name, unzipped.zipName),
                 parts: {
                     model,
                     distant: distant.bytes,
@@ -187,6 +189,22 @@ export async function importModel(
         report.cantImport.push(error.refusal);
         return { ok: false, report };
     }
+}
+
+/** Names model files get from exporters, which say nothing about the model */
+const GENERIC_NAMES = new Set(["scene", "model", "untitled", "object"]);
+
+/**
+ * A title from the model's file name, or from the zip it came in when the file is only called
+ * `scene` (Sketchfab's `scene.gltf`), as `scaffold stairs` for `scaffold_stairs.zip`.
+ */
+export function fileTitle(path: string, zipName: string | null): string {
+    const name = path
+        .slice(path.lastIndexOf("/") + 1)
+        .replace(/\.(glb|gltf)$/i, "");
+    if (zipName && GENERIC_NAMES.has(name.toLowerCase()))
+        return zipName.replace(/[_]+/g, " ").trim() || name;
+    return name;
 }
 
 /**

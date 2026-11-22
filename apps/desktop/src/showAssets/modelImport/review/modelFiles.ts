@@ -6,13 +6,16 @@
 import { touchSafeAccept } from "@/utilities/fileAccept";
 import type { PickedFile } from "../types";
 
-/** What the picker offers: a model, and the buffers and pictures a `.gltf` names */
+/**
+ * What the picker offers: a model, the buffers and pictures a `.gltf` names, or a zip of them
+ * (#1168), as Sketchfab hands a glTF out
+ */
 export const MODEL_FILE_ACCEPT =
-    ".glb,.gltf,.bin,.png,.jpg,.jpeg,.webp,.ktx2,model/gltf-binary,model/gltf+json";
+    ".glb,.gltf,.zip,.bin,.png,.jpg,.jpeg,.webp,.ktx2,model/gltf-binary,model/gltf+json,application/zip";
 
-/** True when the files include a model, so a drop of them is an import */
+/** True when the files include a model or a zip, so a drop of them is an import */
 export const hasModelFile = (names: readonly string[]): boolean =>
-    names.some((name) => /\.(glb|gltf)$/i.test(name));
+    names.some((name) => /\.(glb|gltf|zip)$/i.test(name));
 
 export async function readPickedFiles(
     files: Iterable<File>,

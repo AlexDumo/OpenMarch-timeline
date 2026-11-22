@@ -86,9 +86,11 @@ export function openPickedFiles(files: readonly PickedFile[]): OpenedModel {
     const file = models[0];
     const { format, json, bin } = parseContainer(file.bytes);
     const others = files.filter((f) => f !== file);
+    // A model inside a folder (in a zip) names its files from that folder
+    const folder = file.name.slice(0, file.name.lastIndexOf("/") + 1);
     const resources: Record<string, Uint8Array> = {};
     for (const uri of externalUris(json)) {
-        resources[uri] = findResource(uri, others);
+        resources[uri] = findResource(uri, others, folder);
     }
     return { name: file.name, format, bytes: file.bytes, json, bin, resources };
 }
@@ -195,13 +197,20 @@ export function resourcePathOf(
 /**
  * The picked file a URI names. A picked file has only a name (a browser's file picker gives no
  * folders), so `textures/wood.png` matches a file picked as `textures/wood.png` or, failing
- * that, the only one picked as `wood.png`.
+ * that, the only one picked as `wood.png`. Files from a zip are named by their path in it, so
+ * the path is tried first from the model's own `folder`.
  */
-function findResource(uri: string, files: readonly PickedFile[]): Uint8Array {
+function findResource(
+    uri: string,
+    files: readonly PickedFile[],
+    folder = "",
+): Uint8Array {
     const resolved = resourcePathOf(uri);
     if (!resolved.ok) throw new RefusedError(resolved.refusal);
     const { path } = resolved;
-    const exact = files.find((f) => f.name === path);
+    const exact =
+        (folder && files.find((f) => f.name === folder + path)) ||
+        files.find((f) => f.name === path);
     if (exact) return exact.bytes;
     const base = path.slice(path.lastIndexOf("/") + 1);
     const byName = files.filter(
