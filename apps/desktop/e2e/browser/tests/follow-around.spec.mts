@@ -24,12 +24,24 @@ import type { FieldTestShapeOverlay } from "../../../src/field/fieldTestApi";
 // leader around the outline slides the whole line, with the count by the pointer, and letting
 // go writes it in one undo step. Spec Appendix L.11, DO-1.
 
-// Fifteen trumpets scattered, all in view, on three pages
-const HOME: SeedPosition[] = Array.from({ length: 15 }, (_, i) => [
-    i + 1,
-    460 + (i % 5) * 90,
-    280 + Math.floor(i / 5) * 90 + (i % 2) * 20,
-]);
+// Fifteen trumpets scattered, all in view, on three pages: no line, curve, arc or box among them
+const HOME: SeedPosition[] = [
+    [1, 470, 300],
+    [2, 610, 262],
+    [3, 545, 410],
+    [4, 720, 330],
+    [5, 498, 505],
+    [6, 812, 455],
+    [7, 655, 488],
+    [8, 905, 290],
+    [9, 760, 560],
+    [10, 580, 600],
+    [11, 870, 610],
+    [12, 455, 640],
+    [13, 690, 395],
+    [14, 950, 470],
+    [15, 525, 335],
+];
 const ALL = HOME.map(([id]) => id);
 
 test.use({
