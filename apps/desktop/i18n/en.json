@@ -2523,7 +2523,6 @@
             "chipLaidOut": "{count, plural, one {Laid out for # marcher} other {Laid out for # marchers}}",
             "chipLeftOut": "{count, plural, one {# marcher has no spot} other {# marchers have no spot}}",
             "chipShapeOpen": "Place or discard the open shape",
-            "clear": "Clear",
             "fitEmptySpots": "{count, plural, one {With {selected} selected, # spot stays empty} other {With {selected} selected, # spots stay empty}}",
             "fitExact": "{count, plural, one {Fits the # marcher selected} other {Fits the # marchers selected}}",
             "fitLaidOut": "{count, plural, one {Laid out for the # marcher selected} other {Laid out for the # marchers selected}}",
@@ -2542,7 +2541,7 @@
             "reasonOpenShape": "Place or discard the open shape first",
             "reasonSelectToCopy": "Select marchers to copy them",
             "reasonSelectToPaste": "Select the marchers to paste onto",
-            "restedTip": "Clipboard: {name}, {count} · Paste",
+            "restedTip": "Clipboard: {name}, {count} · Show details",
             "shapeAsPositions": "{name} positions",
             "title": "Clipboard"
         }

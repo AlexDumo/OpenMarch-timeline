@@ -19,6 +19,7 @@ import {
     subscribeToActionHandlers,
 } from "@/shortcuts/registry";
 import { useIsTouchMode } from "@/stores/InputModeStore";
+import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useFieldLayerRef } from "@/components/canvas/fieldLayers";
 import { useShapeShown } from "../tool/shapeToolStore";
 import {
@@ -39,8 +40,6 @@ import {
 const COPIED_FOR = 1500;
 /** How near a drag on the field comes before the chip fades out of its way, in CSS px */
 const FADE_REACH = 48;
-/** How far a press moves before it counts as a drag, in CSS px */
-const DRAG_SLOP = 4;
 /** How long the whole chip stays after the last thing done with it, before it rests, in ms */
 const REST_AFTER = 5000;
 
@@ -49,7 +48,9 @@ const REST_AFTER = 5000;
  * zoom box: there only while something is copied. Folded, a chip: the picture as it will paste,
  * what it is and how many marchers, one line saying how it fits the selection (or why Paste
  * can't run), and in the touch layout a Paste button. A press on the chip opens its card above it
- * (`ClipboardCard`); it always starts folded, so it never stays open over the field.
+ * (`ClipboardCard`); it always starts folded, so it never stays open over the field. Five seconds
+ * after it was last used it rests to its picture; choosing other marchers, a copy or a paste
+ * shows it whole again, and a click on the picture opens the card.
  *
  * - A copy says "Copied" on the chip's second line for a moment, with an accent ring: no toast.
  * - A live region, always there, has screen readers say each copy, clear and paste preview.
@@ -99,11 +100,7 @@ function ChipOrCard({
     const toggle = useRef<HTMLButtonElement>(null);
     const fold = useRef<HTMLButtonElement>(null);
     const shapeShown = useShapeShown();
-    // A drag on the field elsewhere: the chip rests at once, out of the way of what's edited
-    const restNow = useCallback(() => {
-        if (!box.current?.contains(document.activeElement)) setRested(true);
-    }, []);
-    const faded = useFadeWhileDraggingNear(box, restNow);
+    const faded = useFadeWhileDraggingNear(box);
     const touch = useIsTouchMode();
     const pasteReason = useActionReason("pasteFormation");
 
@@ -111,6 +108,17 @@ function ChipOrCard({
     useEffect(() => {
         if (copiedNow) setRested(false);
     }, [copiedNow]);
+    // So does choosing who to paste onto: its line says how the copy fits them, the moment it
+    // matters (a marquee or a click on the field changes the selection)
+    const selection = (useSelectedMarchers()?.selectedMarchers ?? [])
+        .map((m) => m.id)
+        .join(",");
+    const lastSelection = useRef(selection);
+    useEffect(() => {
+        if (selection === lastSelection.current) return;
+        lastSelection.current = selection;
+        setRested(false);
+    }, [selection]);
     // A paste preview opening: the whole chip, folded, and the focus off it so Enter and Escape
     // reach the paste
     useEffect(() => {
@@ -141,10 +149,16 @@ function ChipOrCard({
         if (rested || open || shapeShown || hovered || focusIn) return;
         const timer = setTimeout(() => setRested(true), REST_AFTER);
         return () => clearTimeout(timer);
-    }, [rested, open, shapeShown, hovered, focusIn, copiedNow]);
-    // Woken from rest by a press: the whole chip, the focus kept on it
+    }, [rested, open, shapeShown, hovered, focusIn, copiedNow, selection]);
+    // A press on the rested picture: its card at once on desktop (one click to the details and
+    // Paste); on a tablet the whole chip, with its one-tap Paste and Clear
     const wakeFocus = useRef(false);
     const wake = () => {
+        if (!touch) {
+            setRested(false);
+            setOpen(true);
+            return;
+        }
         wakeFocus.current = !!box.current?.contains(document.activeElement);
         setRested(false);
     };
@@ -213,7 +227,6 @@ function ChipOrCard({
                         name: view.name,
                         count: countText,
                     })}
-                    action="pasteFormation"
                     // Beside it, clear of the Clear button on its corner
                     side="right"
                 >
@@ -237,8 +250,13 @@ function ChipOrCard({
                 </Tip>
             ) : (
                 <div
-                    className={clsx("flex items-center gap-8", touch && "pr-6")}
+                    className={clsx(
+                        "flex items-center gap-8",
+                        touch && "pr-6 pl-6",
+                    )}
                 >
+                    {/* Clear on a tablet: in the row, at the far end from Paste, a finger's size */}
+                    {touch && <ClearButton touch />}
                     <button
                         ref={toggle}
                         type="button"
@@ -309,26 +327,27 @@ function ChipOrCard({
                     )}
                 </div>
             )}
-            {/* Clear, on the chip's top-left corner, away from Paste and the picture's tooltip
-                (owner 2026-11-22). Desktop: shown while it's pointed at or focused. Touch: on
-                the whole chip (a tap wakes a rested one first). The card has its own Clear */}
-            {!open && (!touch || !showRested) && (
-                <ActionButton
-                    action="clearClipboard"
-                    data-testid="clipboard-chip-clear"
-                    // It reaches past the chip's corner: the pill keeps off it too (#927)
-                    data-field-layer="control"
-                    className={clsx(
-                        `${getButtonClassName({ variant: "secondary", size: "compact", content: "icon" })} bg-modal shadow-modal absolute`,
-                        "-top-12 -left-12",
-                        !touch &&
-                            "invisible group-focus-within:visible group-hover:visible",
-                    )}
-                >
-                    <XIcon size={16} aria-hidden />
-                </ActionButton>
-            )}
+            {/* Clear on desktop: on the chip's top-left corner, away from the picture's tooltip,
+                shown while it's pointed at or focused (owner 2026-11-22) */}
+            {!open && !touch && <ClearButton touch={false} />}
         </div>
+    );
+}
+
+/** The chip's Clear (owner 2026-11-22): the one way to empty the clipboard from the field */
+function ClearButton({ touch }: { touch: boolean }) {
+    return (
+        <ActionButton
+            action="clearClipboard"
+            data-testid="clipboard-chip-clear"
+            className={clsx(
+                `${getButtonClassName({ variant: "secondary", size: "compact", content: "icon" })} shrink-0`,
+                !touch &&
+                    "bg-modal shadow-modal invisible absolute -top-12 -left-12 group-focus-within:visible group-hover:visible",
+            )}
+        >
+            <XIcon size={16} aria-hidden />
+        </ActionButton>
     );
 }
 
@@ -434,14 +453,10 @@ function useCopiedFlash(picture: ClipboardView["picture"] | null): boolean {
  */
 function useFadeWhileDraggingNear(
     box: React.RefObject<HTMLDivElement | null>,
-    /** A drag that started elsewhere has moved: the chip rests */
-    onDragAway: () => void,
 ): boolean {
     const [faded, setFaded] = useState(false);
     useEffect(() => {
         let dragging = false;
-        let movedAway = false;
-        let from = { x: 0, y: 0 };
         const down = (e: PointerEvent) => {
             const el = box.current;
             dragging = !(
@@ -449,17 +464,9 @@ function useFadeWhileDraggingNear(
                 e.target instanceof Node &&
                 el.contains(e.target)
             );
-            movedAway = false;
-            from = { x: e.clientX, y: e.clientY };
         };
         const move = (e: PointerEvent) => {
             if (!dragging || e.buttons === 0) return;
-            if (!movedAway) {
-                movedAway =
-                    Math.hypot(e.clientX - from.x, e.clientY - from.y) >
-                    DRAG_SLOP;
-                if (movedAway) onDragAway();
-            }
             const r = box.current?.getBoundingClientRect();
             if (!r) return;
             const near =
@@ -483,7 +490,7 @@ function useFadeWhileDraggingNear(
             window.removeEventListener("pointerup", up, true);
             window.removeEventListener("pointercancel", up, true);
         };
-    }, [box, onDragAway]);
+    }, [box]);
     return faded;
 }
 

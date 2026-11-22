@@ -78,9 +78,8 @@ export const CLIPBOARD_BUTTON_CLASS = `${getButtonClassName({
 /**
  * The Clipboard chip opened (#961, owner 2026-11-22): everything about what's copied. The
  * picture, what it is and how many marchers, the Paste as switch for a shape, Paste and Paste
- * exactly (their keys in their tooltips), how it fits the selection now, and Clear, kept apart from the pastes.
- * The fit line always holds its room, so nothing above it moves as the selection changes: the
- * card grows up from the field's corner.
+ * exactly (their keys in their tooltips), and one line on how it fits the selection now (or,
+ * with none selected, how many it takes). It's as wide as what it says. Clear is the chip's X.
  */
 export function ClipboardCard({
     view,
@@ -98,7 +97,7 @@ export function ClipboardCard({
         <section
             data-testid="clipboard-section"
             aria-label={t("shapes.clipboard.title")}
-            className="flex w-320 flex-col gap-8"
+            className="flex w-max max-w-320 flex-col gap-8"
         >
             <div className="flex items-center gap-12">
                 <PicturePreview
@@ -134,11 +133,6 @@ export function ClipboardCard({
                     <CaretDownIcon size={16} aria-hidden />
                 </button>
             </div>
-            <p className="text-sub" data-testid="clipboard-rule">
-                {summary.anyNumber
-                    ? t("shapes.clipboard.anyNumber")
-                    : t("shapes.clipboard.fixed", { count: summary.count })}
-            </p>
             {copied.type === "shape" && (
                 <div className="flex items-center gap-8">
                     <span className="text-sub text-text-subtitle">
@@ -185,28 +179,38 @@ export function ClipboardCard({
                     {t("actions.edit.pasteInPlace")}
                 </ActionButton>
             </div>
-            {/* Two lines' room, kept when it's empty: the card doesn't grow or shrink with the selection */}
+            {/* One line about the fit: how it fits the marchers selected, or with none selected
+                how many it takes. Clear is the chip's X */}
+            {/* Two lines' room: the line is one or two lines long as the selection changes, and
+                the buttons above it must not move under the pointer (sims, 2026-11-16) */}
             <div className="min-h-32">
-                <FitLine fit={fit} />
-            </div>
-            {/* Clear empties the clipboard: apart from the pastes, below a line */}
-            <div className="border-stroke flex justify-end border-t pt-8">
-                <ActionButton
-                    action="clearClipboard"
-                    data-testid="clipboard-clear"
-                    className={CLIPBOARD_BUTTON_CLASS}
-                >
-                    {t("shapes.clipboard.clear")}
-                </ActionButton>
+                <FitLine fit={fit} summary={summary} />
             </div>
         </section>
     );
 }
 
 /** How the copied picture fits the marchers selected now; nothing with none selected */
-export function FitLine({ fit }: { fit: PictureFit }) {
+export function FitLine({
+    fit,
+    summary,
+}: {
+    fit: PictureFit;
+    summary: PictureSummary;
+}) {
     const { t } = useTranslate();
-    if (fit.fit === "none") return null;
+    if (fit.fit === "none")
+        return (
+            <p
+                className="text-sub text-text-subtitle"
+                data-testid="clipboard-fit"
+                data-fit="none"
+            >
+                {summary.anyNumber
+                    ? t("shapes.clipboard.anyNumber")
+                    : t("shapes.clipboard.fixed", { count: summary.count })}
+            </p>
+        );
     const mismatch = fit.fit === "emptySpots" || fit.fit === "leftOut";
     const text =
         fit.fit === "laidOut"
