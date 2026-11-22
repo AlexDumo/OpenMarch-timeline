@@ -1262,7 +1262,6 @@
     "settings.general.editorDisplay": "Label of a menu in Settings > General that picks which monitor (display) the main editor window opens on. Not in the web editor.",
     "settings.general.view3dDisplay": "Label of a menu in Settings > General that picks which monitor (display) the 3D View window opens on. Not in the web editor.",
     "settings.general.windows": "Heading above a group of settings in Settings > General about the app's windows (the main editor window and the 3D View window): whether the 3D View opens by itself and which monitor each window opens on. Means application windows, not the Microsoft Windows operating system. Not in the web editor.",
-    "settings.general.windowDisplay.description": "Help text under the two 'Open ... on' menus. Each window reopens at the size it last had, maximized or not. Picking a monitor moves an open window to it straight away.",
     "settings.general.windowDisplay.last": "Menu choice (the default) in the 'Open ... on' menus: the window reopens on whichever monitor it was on when it was last closed.",
     "settings.general.windowDisplay.display": "Menu choice naming a monitor that has no name from the system. {number} is its position counting from the left (1, 2, 3); {size} is its resolution such as '2560 × 1440'. 'Display' means a monitor or projector.",
     "settings.general.windowDisplay.namedDisplay": "Menu choice naming a monitor by the name the system gives it ({name}, for example 'DELL U2720Q'), followed by its resolution {size} such as '2560 × 1440'.",

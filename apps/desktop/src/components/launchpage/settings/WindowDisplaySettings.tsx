@@ -118,10 +118,8 @@ export default function WindowDisplaySettings() {
                         label={<T keyName={labelKey} />}
                         htmlFor={id}
                         description={
-                            missing ? (
+                            missing && (
                                 <T keyName="settings.general.windowDisplay.disconnected.description" />
-                            ) : (
-                                <T keyName="settings.general.windowDisplay.description" />
                             )
                         }
                     >
