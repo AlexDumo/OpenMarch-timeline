@@ -3127,6 +3127,10 @@
                 "removeTrailFirst": "{move} follows a drawn trail: remove the trail first",
                 "noTrail": "This trail is gone",
                 "notFitted": "Select marchers standing in a line, curve, arc or box to drag out a trail",
+                "notFittedPart": "{count, plural, one {Only # of this shape's {total} marchers is selected} other {Only # of this shape's {total} marchers are selected}}. Select all of them to follow",
+                "notFittedLater": "They aren't in a shape until the end of this move. Go to the next page to follow from there",
+                "notFittedGap": "They stand on a circle or box with a gap too wide to go around, or spacing too uneven. Close the gap or even out the spacing",
+                "notFittedOff": "Some stand too far off the line, circle or box the rest make. Line them up first",
                 "notAnEnd": "Drag the trail out of an end of the line",
                 "tooShort": "Draw a longer trail",
                 "evenTooWide": "Even spacing can be at most {limit} steps here, or someone would walk backward",
@@ -4864,7 +4868,7 @@
             "groupDrawing": "Group path for {count} marchers: <how></how> · Right-click removes the last · Double-click to finish · <esc></esc> to cancel",
             "trailDrawing": "Trail for {count} marchers, {marcher} leading: <how></how> · Right-click removes the last · Double-click to finish · <esc></esc> to cancel",
             "followGrab": "Follow: drag a trail out of either end of the line · <esc></esc> to leave",
-            "goRound": "Go around: {count} marchers follow {marcher} around the {shape} · <enter></enter> to finish · <esc></esc> to leave",
+            "goRound": "Go around: drag {marcher} around the {shape} and the {count} marchers follow, or type how far · <enter></enter> to finish · <esc></esc> to leave",
             "circle": "circle",
             "boxOutline": "box outline",
             "rippleDrawing": "Ripple in, {marcher} leading: click an end of the form to go straight in, or click for corners first · Double-click to finish · <esc></esc> to cancel",
@@ -4968,6 +4972,11 @@
             "alone": "This marcher is alone on its path: Edit path changes it",
             "severalSelected": "Click one of them again to pick just that marcher, then edit their line",
             "noneSelected": "Select a marcher on the group path to edit their line"
+        },
+        "round": {
+            "dragTip": "Drag around the outline, or type how far",
+            "spotsCount": "{count, plural, one {# spot} other {# spots}}",
+            "stepsCount": "{count, plural, one {# step} other {# steps}}"
         }
     },
     "help": {

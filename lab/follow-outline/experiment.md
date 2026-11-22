@@ -3,12 +3,17 @@
 # Keep `id` stable: feedback is filed under it.
 id: follow-outline
 title: "Go around a circle or a box outline (pathways, step 10)"
-summary: "Step 10 of pathways: select marchers standing on a circle or the outline of a box, press Shift+L, and they follow their leader around it. Choose how far (spots or steps) and which way around, then press Enter. One undo step."
+summary: "Step 10 of pathways: select marchers standing on a circle or the outline of a box, press Shift+L, then drag the leader around it and the whole line follows. Let go to keep it (one undo step), or type how far and press Enter."
 status: open
 variants: []
 questions:
-  - "Put eight marchers on a circle (the Circle tool), go to the next page, select them and press Shift+L. Did it open going around, and was it clear which way they'll go and who leads?"
-  - "The number of spots starts at what a normal step a count would cover. Was that a good starting point, or did you always change it?"
+  - "New (2026-11-22): Shift+L no longer moves anyone. Drag the leader around the circle and let go. Did that feel like you moved the line yourself? Was the count by the pointer clear?"
+  - "Drag back past where they started: the line goes the other way around, the one at the back leading. Is that what you expected?"
+  - "Type a number (say 4) and press Enter instead of dragging. Was that easy to find from the note by the leader?"
+  - "On a tablet, drag the leader with a finger or pencil. Did it work as with a mouse?"
+  - "New (2026-11-22): place fifteen with the Box tool in Outline, go to the next page, select them and press Shift+L. Did Go around open? If Follow ever refuses, did the message tell you what to change?"
+  - "New (2026-11-22): a circle shows no corner chips and no 'Turns between counts' warning any more; a box outline shows chips only at its four corners. Is that right?"
+  - "Put eight marchers on a circle (the Circle tool), go to the next page, select them and press Shift+L. Was it clear which way they'll go and who leads?"
   - "Try Spots, then Steps. Which did you want? Did ending between spots with Steps ever make sense for you?"
   - "Go once around (as many spots as there are places, or more). Everyone ends where they started, and the bar says '1 × around'. Was that clear while you were setting it up?"
   - "Press Clockwise around (or Reverse leader, Alt+L) to go the other way. The one at the back becomes the leader. Is that who you expected to lead?"
@@ -23,16 +28,34 @@ questions:
 Field** and turn on **Follow-the-leader (preview)**. Without it, Follow and Go around don't
 show.
 
-**What's new**
+**What's new (2026-11-22, from your feedback)**
+
+- **Follow feels like a move.** Shift+L (or Go around) no longer moves anyone. **Drag the
+  leader** (or any marcher of the line, or the outline) around it: the whole line slides with
+  you, snapped to whole spots, and a count by the pointer says how far ("4 spots"). **Let go**
+  to keep it, one undo step. **Esc** while dragging puts it back. Drag back past where they
+  started to go the other way around. Or **type a number** and press **Enter** for an exact
+  count. With nothing dragged or typed, Enter writes nothing.
+- **Box outlines from the Box tool go around.** An odd count in a narrow outline box (say
+  fifteen, 4 steps wide and 9 deep) was refused; it works now.
+- **Refusals say why.** If Follow can't find a line or outline, it tells you the reason: you're
+  a page early (they only stand in the shape at the end of this move), only part of a shape
+  is selected, there's a gap too wide or the spacing is too uneven, or some marchers stand too
+  far off the shape.
+- **No corner warnings on curves.** "Turns between counts" is for sharp corners, where a
+  marcher plants and turns. It now shows only at real corners: a box's corners and corner
+  points you draw. A circle, an arc or a curved leg never shows it.
+
+**From before**
 
 - **Go around a circle or a box outline.** Select marchers standing all the way around a
   circle or the outline of a box (the Circle tool, or the Box tool with Outline) and press
   **Shift+L** (or the Follow button by the Path pen, or **Go around** in the command
   palette). The Follow tool opens in **Go around**: the outline is drawn with arrows
   showing the way around, and the marchers stand where they'll stop.
-- **How far:** a number of **spots** (the places around the outline) or **steps**, with
-  **−** and **+**, or typed. It starts at what a normal step a count covers in the move. It
-  can be more than once around, up to 100 times; the bar then says how many times around.
+- **How far:** a number of **spots** (the places around the outline) or **steps**: drag, type,
+  or use **−** and **+** on the bar. It starts at 0. It can be more than once around, up to
+  100 times; the bar then says how many times around.
 - **By spots, each marcher moves on to the place that many ahead,** so everyone lands on a
   spot even when the spacing is uneven, nobody passes anyone, and a gap goes around with the
   line. **By steps** everyone goes the same distance. The one behind the widest gap leads.
@@ -55,10 +78,10 @@ show.
 
 1. On page 1, select eight marchers and draw a circle with the Circle tool (O).
 2. Go to page 2, select the eight, press **Shift+L**.
-3. Press **+** a few times, then **Clockwise around** to go the other way, then **Preview**.
-4. Press **Enter**, then **Space** to watch it.
+3. Drag the leader a quarter of the way around and let go. Then **Space** to watch it.
+4. Undo, press **Shift+L** again, type **4**, press **Enter**.
 5. Do the same with twelve marchers on a box outline (Box tool, then Outline).
-6. Try it with a finger or pencil on a tablet: every choice is a button on the bar.
+6. Try it with a finger or pencil on a tablet: drag the leader, or use − and + on the bar.
 
 **Good to know**
 
@@ -77,4 +100,3 @@ show.
   when it's reshaped.
 - A line on part of a box outline: a line alone doesn't say where the box is.
 - Editing the outline's points. Reverse leader and Shift+L are the ways to change it.
-- Turning counts at a box outline's corners (step 6's chips are for open trails).
