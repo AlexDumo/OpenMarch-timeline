@@ -9,7 +9,9 @@
  */
 import {
     alongEnds,
+    aroundCornerCounts,
     cornerCounts,
+    makeLoop,
     roundCount,
     trailCornerCounts,
     wayCorners,
@@ -20,6 +22,7 @@ import {
 } from "@openmarch/core";
 import type { XY } from "@/shapes/types";
 import { followDrawnPlanOf, keepsEndSpots } from "./followDrag";
+import { aroundPlanOf, goingRound } from "./followAround";
 import { shapeOf, storedPoints, type PathSession } from "./pathPenStore";
 
 /** A trail's corners as the field shows them */
@@ -46,6 +49,61 @@ export function trailCornersOf(s: PathSession): TrailCornersView | null {
     return view;
 }
 
+/**
+ * A line going round an outline (R-13‴, step 10; owner, 2026-11-22): it turns only at the
+ * outline's own corners (a box's vertices), never along a circle's arcs. Live from the plan while
+ * the Follow tool goes round; for a stored move, from the resolver's own walk (`aroundWalk`).
+ */
+function aroundView(s: PathSession): TrailCornersView | null {
+    const trail = s.target.trail!;
+    const { members } = trail;
+    const drills = members.map((m) => m.drill);
+    const counts = s.target.end - s.target.start;
+    const f = s.follow;
+    if (f) {
+        const plan = aroundPlanOf(f);
+        if (!plan) return null;
+        const w = plan.walk;
+        return {
+            corners: aroundCornerCounts(
+                plan.loop,
+                plan.line.map((_, q) => ({
+                    startDist: w.startDist[q]!,
+                    endDist: w.endDist[q]!,
+                    inStraight: w.inStraight[q]!,
+                    straight: w.straight[q]!,
+                })),
+                counts,
+            ),
+            drills,
+        };
+    }
+    const walks = trail.aroundWalk;
+    const loop = makeLoop({
+        from: tuple(s.target.from),
+        to: tuple(s.target.to),
+        points: s.target.points,
+        ...(s.target.toBulge === undefined
+            ? {}
+            : { toBulge: s.target.toBulge }),
+        closed: true,
+    });
+    if (!loop || !walks || walks.length !== members.length) return null;
+    return {
+        corners: aroundCornerCounts(
+            loop,
+            walks.map((w, q) => {
+                const until = members[q]!.until;
+                return until === undefined
+                    ? w
+                    : { ...w, until: until - s.target.start };
+            }),
+            counts,
+        ),
+        drills,
+    };
+}
+
 function computeView(s: PathSession): TrailCornersView | null {
     const trail = s.target.trail;
     if (!trail || trail.members.length === 0 || trail.unfounded) return null;
@@ -54,6 +112,8 @@ function computeView(s: PathSession): TrailCornersView | null {
     const counts = s.target.end - s.target.start;
     const origins = members.map((m) => tuple(m.from));
     const f = s.follow;
+    // Round an outline (step 10, owner 2026-11-22): turns only at the outline's own corners
+    if ((f && goingRound(f)) || (!f && trail.around)) return aroundView(s);
     if (f) {
         if (f.grabbed === null) return null;
         if (!keepsEndSpots(f)) {

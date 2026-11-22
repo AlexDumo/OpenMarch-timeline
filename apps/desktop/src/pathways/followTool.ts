@@ -390,12 +390,16 @@ function againAround(
     if (gone < 0) gone += L;
     if (gone > L - loopSnap(L)) gone = 0;
     gone += again.laps * L;
+    const unit = whole ? "spots" : "steps";
+    const amount = Math.max(1, Math.round(whole ? spots : gone / base.step));
     return {
         ...around,
         reversed,
         leader,
-        unit: whole ? "spots" : "steps",
-        amount: Math.max(1, Math.round(whole ? spots : gone / base.step)),
+        unit,
+        amount,
         again: true,
+        // Finish with nothing changed writes nothing (owner, 2026-11-22)
+        stored: { amount, unit, reversed },
     };
 }

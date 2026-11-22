@@ -37,6 +37,9 @@ import {
     planGoRound,
     reverseOutline,
 } from "../timelineTrailAround";
+import { findTrailTarget } from "@/pathways/pathTarget";
+import { trailCornersOf } from "@/pathways/trailCorners";
+import type { PathSession } from "@/pathways/pathPenStore";
 
 keepFixturesInPageMode("its tests convert the show themselves");
 
@@ -657,6 +660,71 @@ describeDbTests("Go round an outline (AP-T13 to AP-T15)", (it) => {
                 6,
             );
         });
+    });
+
+    it("QA-AP-OL-CC (owner, 2026-11-22): a stored move round a circle shows no corner counts", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const drills = new Map(IDS.map((m) => [m, `M${m}`]));
+        const sessionOf = async (): Promise<PathSession> => {
+            const r = await resolverOf(db);
+            const target = (await findTrailTarget(db, r, IDS, drills, 10))!;
+            expect(target.trail?.around).toBe(true);
+            expect(target.trail?.aroundWalk).toHaveLength(8);
+            return {
+                phase: "open",
+                target,
+                drill: "8",
+                points: [],
+                pointer: null,
+                selected: null,
+                dragging: null,
+                object: false,
+                byRoute: false,
+            } as unknown as PathSession;
+        };
+        // a circle, three places on over 8 counts: no corner at all
+        const { step } = await onOutline(db, (cc, s) =>
+            circlePlaces(cc, 6 * s),
+        );
+        await goRound({ db, window: WINDOW, marcherIds: IDS, leaderId: null, reversed: false, amount: 3, unit: "spots", step }); // prettier-ignore
+        expect(trailCornersOf(await sessionOf())?.corners).toEqual([]);
+    });
+
+    it("QA-AP-OL-CC2 (owner, 2026-11-22): round a box outline, turns only at its four corners, each on the beat the resolver has the marcher there", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const drills = new Map(IDS.map((m) => [m, `M${m}`]));
+        const { step, at } = await onOutline(db, boxPlaces);
+        await goRound({ db, window: WINDOW, marcherIds: IDS, leaderId: null, reversed: false, amount: 3, unit: "spots", step }); // prettier-ignore
+        const r = await resolverOf(db);
+        const target = (await findTrailTarget(db, r, IDS, drills, 10))!;
+        const view = trailCornersOf({
+            phase: "open",
+            target,
+            drill: "8",
+            points: [],
+            pointer: null,
+            selected: null,
+            dragging: null,
+            object: false,
+            byRoute: false,
+        } as unknown as PathSession)!;
+        // the box's corners are places 0, 2, 4 and 6
+        const corners = [0, 2, 4, 6].map((i) => at[i]!);
+        expect(view.corners.length).toBeGreaterThan(0);
+        for (const c of view.corners) {
+            expect(corners.some((k) => near(k, c.at, 1e-6))).toBe(true);
+            for (const t of c.turns) {
+                const id = target.trail!.members[t.q]!.marcherId;
+                expect(
+                    near(r.positionAt(id, WINDOW.start + t.count), c.at, 1e-6),
+                    `M${id} on ${t.count}`,
+                ).toBe(true);
+            }
+        }
     });
 
     it("QA-AP-OL-3: the other way round: counterclockwise, and the old tail leads", async ({

@@ -33,6 +33,10 @@ import {
     setGoRound,
     setRoundUnit,
     stepRoundAmount,
+    cancelRoundSlide,
+    clearRoundTyped,
+    eraseRoundDigit,
+    typeRoundDigit,
 } from "./followAround";
 import { followWindowNow, isTrailLineAt, openFollowTool } from "./followTool";
 import { trailOffReason, useFollowTheLeader } from "./followTheLeader";
@@ -379,7 +383,9 @@ export function usePathPenActions(): void {
     const canPreview = usePathPenStore(
         (s) =>
             (!!s.session?.points.length ||
-                goingRound(s.session?.follow) ||
+                // going round, once somebody moves
+                (goingRound(s.session?.follow) &&
+                    (s.session?.follow?.around?.amount ?? 0) > 0) ||
                 (!!s.session?.follow && ripplesIn(s.session.follow))) &&
             followMarchersOf(s.session) !== null,
     );
@@ -455,7 +461,7 @@ export function usePathPenActions(): void {
         enabled: round && roundAmount < roundMax,
     });
     useActionHandler("followRoundLess", () => stepRoundAmount(-1), {
-        enabled: round && roundAmount > 1,
+        enabled: round && roundAmount > 0,
     });
     useActionHandler("followRoundSpots", () => setRoundUnit("spots"), {
         enabled: round,
@@ -985,6 +991,35 @@ function usePathObjects(drills: ReadonlyMap<number, string>): void {
 }
 
 /**
+ * Going round (owner, 2026-11-22): digits typed on the field, not in a text field, set how far
+ * exactly, shown live, until Enter writes it. They go ahead of any command bound to a digit (the
+ * field's own keys come back when the tool closes).
+ */
+function useRoundDigits(active: boolean): void {
+    useEffect(() => {
+        if (!active) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.ctrlKey || e.metaKey || e.altKey || !/^[0-9]$/.test(e.key))
+                return;
+            const el = e.target as HTMLElement | null;
+            if (
+                el &&
+                (el.isContentEditable ||
+                    el.tagName === "INPUT" ||
+                    el.tagName === "TEXTAREA" ||
+                    el.tagName === "SELECT")
+            )
+                return;
+            if (!typeRoundDigit(e.key)) return;
+            e.preventDefault();
+            e.stopPropagation();
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+    }, [active]);
+}
+
+/**
  * The keys the pen takes over while it draws or a path is open (not while it's only shown,
  * closed), mounted after the editor's own handlers (as the shape tool's are), so they sit on top
  * and go back when the pen closes. They are the Line's keys (`ShapeToolKeys`):
@@ -998,6 +1033,8 @@ function usePathObjects(drills: ReadonlyMap<number, string>): void {
  */
 export function PathPenKeys(): null {
     const phase = usePathPenStore((s) => s.session?.phase ?? null);
+    const round = usePathPenStore((s) => goingRound(s.session?.follow));
+    useRoundDigits(round);
     const picked = usePathPenStore((s) => s.session?.selected ?? null);
     const pickedLane = usePathPenStore((s) => s.session?.lane ?? null);
     const drawing = phase === "drawing";
@@ -1011,6 +1048,9 @@ export function PathPenKeys(): null {
             else if (!drawing && picked !== null) selectPoint(null);
             // The Follow tool (step 4b): Escape cancels the trail drawn, then leaves the tool
             else if (drawing && cancelFollowDrawing()) return;
+            // Going round: Escape puts back a slide or digits typed, then leaves the tool
+            else if (drawing && (cancelRoundSlide() || clearRoundTyped()))
+                return;
             else closePath();
         },
         {
@@ -1034,6 +1074,8 @@ export function PathPenKeys(): null {
     useActionHandler(
         "shapeRemoveLastPoint",
         () => {
+            // Going round: Backspace takes back the last digit typed
+            if (drawing && eraseRoundDigit()) return;
             if (drawing) removeLastPoint();
             // A picked lane takes the key: its Adjust key goes, or the spot resets, never the path
             else if (pickedLane) void deleteOnLane(pickedLane);

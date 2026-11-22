@@ -25,6 +25,8 @@ import {
     aroundPlanOf,
     goingRound,
     type FollowAround,
+    type RoundSlide,
+    type RoundTyped,
 } from "./followAround";
 import {
     storedPoints,
@@ -98,6 +100,13 @@ export interface FollowDrag {
      * round it. Absent or null when it doesn't.
      */
     readonly around?: FollowAround | null;
+    /**
+     * Going round, the line grabbed and slid round the outline by hand (owner, 2026-11-22).
+     * Absent or null otherwise.
+     */
+    readonly roundSlide?: RoundSlide | null;
+    /** Going round, digits typed for how far, until Enter (owner, 2026-11-22). Absent or null otherwise. */
+    readonly roundTyped?: RoundTyped | null;
 }
 
 /** The path bar's Ends (DL-8, AP-T9, RP-1) */
