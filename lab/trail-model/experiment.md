@@ -18,6 +18,10 @@ questions:
   - "Anything else about editing a trail you'd change?"
 ---
 
+**First, turn it on:** Follow-the-leader is a preview, off by default. Open **Settings ›
+Field** and turn on **Follow-the-leader (preview)**. Without it, trails can't be made or
+edited.
+
 **What's new (2026-11-17): the path is the move**
 
 - **Marchers are beads on a string.** A trail you dragged out of a line or a box has one truth:

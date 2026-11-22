@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
     act,
     cleanup,
@@ -20,6 +20,7 @@ import {
 import type { PathTarget } from "../pathTarget";
 import { liveTrailOf } from "../trailLive";
 import { drawingOf, pathPenMode } from "../pathPenMode";
+import { setFollowTheLeader } from "../followTheLeader";
 
 /**
  * A trail's path is the only truth (owner, 2026-11-17, spec L.18) on the field: while a point of a
@@ -91,7 +92,11 @@ const dragHead = (at: [number, number]) =>
 const near = (a: { x: number; y: number }, b: { x: number; y: number }) =>
     Math.hypot(a.x - b.x, a.y - b.y) < 1e-6;
 
+// Trails are edited only with Follow-the-leader on (#1095)
+beforeEach(() => setFollowTheLeader(true));
+
 afterEach(() => {
+    setFollowTheLeader(false);
     act(() => clearPath());
     cleanup();
 });
@@ -176,5 +181,16 @@ describe("A trail's path is the only truth on the field (L.18)", () => {
             "aria-disabled",
             "true",
         );
+    });
+
+    it("with Follow-the-leader off (#1095), ··· has no Convert to shape: it edits the trail", async () => {
+        open(alongTarget());
+        setFollowTheLeader(false);
+        render(<PathEditor fieldProperties={fieldProperties} />);
+        fireEvent.keyDown(screen.getByTestId("path-more"), {
+            key: "ArrowDown",
+        });
+        await screen.findByTestId("path-more-menu");
+        expect(screen.queryByTestId("path-convert-shape")).toBeNull();
     });
 });
