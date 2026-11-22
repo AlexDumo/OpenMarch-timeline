@@ -1238,8 +1238,9 @@ const shots = [
         id: "shapes-clipboard-card",
         kind: "still",
         covers: ["apps/desktop/src/shapes/clipboard"],
-        // A section's positions copied, two of its marchers selected: the inspector's Clipboard
-        // card says how many spots the copy has and that two stay empty (#961)
+        // A section's positions copied, two of its marchers selected: the Clipboard card, opened
+        // from the chip in the field's corner, says how many spots the copy has and that two stay
+        // empty (#961)
         async setup({ page, around }) {
             const { prefix } = await start(page);
             await page.keyboard.press("Control+KeyC");
@@ -1253,8 +1254,9 @@ const shots = [
             await page.keyboard.up("Shift");
             await page.waitForTimeout(500);
             await tidy(page);
-            const card = page.getByTestId("clipboard-section");
-            await card.scrollIntoViewIfNeeded();
+            await page.getByTestId("clipboard-chip-toggle").click();
+            const card = page.getByTestId("clipboard-chip");
+            await card.getByTestId("clipboard-section").waitFor();
             await page.mouse.move(5, 500);
             await page.waitForTimeout(300);
             return { box: await around(card, 10) };

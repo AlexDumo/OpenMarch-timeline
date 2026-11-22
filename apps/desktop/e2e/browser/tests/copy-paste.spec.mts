@@ -96,6 +96,22 @@ const savedShapes = async (show: Show) => {
 
 const preview = (page: Page) => page.getByTestId("shape-tool-readout");
 
+/** The clipboard chip in the field's bottom-left corner (#961) */
+const chip = (page: Page) => page.getByTestId("clipboard-chip");
+
+/** Opens the chip's Clipboard card, unless it's open already, and returns it */
+async function openCard(page: Page) {
+    const card = page.getByTestId("clipboard-section");
+    if (!(await card.isVisible()))
+        await page.getByTestId("clipboard-chip-toggle").click();
+    await expect(card).toBeVisible();
+    return card;
+}
+
+/** Takes the focus off the chip, so the field's own keys (Escape) reach it */
+const blur = (page: Page) =>
+    page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+
 const toasts = (page: Page) => page.locator("[data-sonner-toast]");
 
 /** How many undo steps the show has. */
@@ -168,7 +184,7 @@ test("a placed box copied and pasted onto other marchers previews centered on th
         .poll(async () => (await readField(page)).selection.length)
         .toBe(4);
     await page.keyboard.press("ControlOrMeta+c");
-    await expect(page.getByTestId("clipboard-kind")).toHaveText("Box");
+    await expect(page.getByTestId("clipboard-chip-kind")).toHaveText("Box");
 
     await select(page, [5, 6, 7, 8]);
     const steps = await undoSteps(show);
@@ -235,7 +251,7 @@ test("Copy right after Place copies the box, and pasting it again onto the same 
     // Copied the moment the shape tool closes, before the box is read back
     await expect(preview(page)).toBeHidden();
     await page.keyboard.press("ControlOrMeta+c");
-    await expect(page.getByTestId("clipboard-kind")).toHaveText("Box");
+    await expect(page.getByTestId("clipboard-chip-kind")).toHaveText("Box");
     await expect.poll(() => savedShapes(show)).toBe(1);
     await waitForIdle(page);
 
@@ -266,6 +282,7 @@ test("a box pasted onto fewer marchers is laid out for them with its spacing kep
     await page.keyboard.press("ControlOrMeta+c");
     await select(page, [5, 6, 7]);
     const steps = await undoSteps(show);
+    await blur(page);
     await page.keyboard.press("ControlOrMeta+Shift+v");
     await expect(preview(page)).toBeVisible();
     const spots = sorted((await shapeOverlay(page))!.spots);
@@ -297,9 +314,7 @@ test("loose dots pasted exactly onto fewer marchers take the nearest dots, draw 
     const { page } = show;
     await select(page, [1, 2, 3, 4]);
     await page.keyboard.press("ControlOrMeta+c");
-    await expect(page.getByTestId("clipboard-count")).toHaveText(
-        "4 marchers",
-    );
+    await expect(chip(page)).toContainText("4 marchers");
 
     await select(page, [5, 6]);
     const steps = await undoSteps(show);
@@ -371,9 +386,7 @@ test("the copied picture is the app's own: still there after a reload", async ({
     const { page } = show;
     await select(page, [1, 2, 3, 4]);
     await page.keyboard.press("ControlOrMeta+c");
-    await expect(page.getByTestId("clipboard-count")).toHaveText(
-        "4 marchers",
-    );
+    await expect(chip(page)).toContainText("4 marchers");
     await page.reload();
     await waitForField(page);
     await expectCanvasMatchesShow(show);
@@ -410,9 +423,7 @@ test("the field menu offers Copy, Paste and Paste exactly: the pastes only once 
         );
     await item("copyFormation").click();
     await expect(menu).toBeHidden();
-    await expect(page.getByTestId("clipboard-count")).toHaveText(
-        "2 marchers",
-    );
+    await expect(chip(page)).toContainText("2 marchers");
 
     await select(page, [5, 6]);
     await openOn("T5");
@@ -423,17 +434,16 @@ test("the field menu offers Copy, Paste and Paste exactly: the pastes only once 
     expect((await shapeOverlay(page))!.spots).toHaveLength(2);
 });
 
-test("the inspector's Clipboard card shows what is copied and how it fits the selection", async ({
+test("the Clipboard card shows what is copied and how it fits the selection", async ({
     show,
 }) => {
     const { page } = show;
-    const card = page.getByTestId("clipboard-section");
-    await expect(card).toBeHidden();
+    await expect(chip(page)).toBeHidden();
 
     // Positions: so many spots, checked against the selection
     await select(page, [1, 2, 3, 4]);
     await page.keyboard.press("ControlOrMeta+c");
-    await expect(card).toBeVisible();
+    const card = await openCard(page);
     await expect(card.getByTestId("clipboard-kind")).toHaveText("Positions");
     await expect(card.getByTestId("clipboard-count")).toHaveText("4 marchers");
     await expect(card.getByTestId("clipboard-picture")).toHaveAttribute(
@@ -458,12 +468,18 @@ test("the inspector's Clipboard card shows what is copied and how it fits the se
     // The buttons stay put when the line about the selection goes
     const clear = card.getByTestId("clipboard-clear");
     const clearAt = await clear.boundingBox();
+    const pasteAt = await card.getByTestId("clipboard-paste").boundingBox();
+    await blur(page);
     await page.keyboard.press("Escape");
     await expect
         .poll(async () => (await readField(page)).selection.length)
         .toBe(0);
     await expect(card.getByTestId("clipboard-fit")).toBeHidden();
     expect(await clear.boundingBox()).toEqual(clearAt);
+    // The card grows up from the corner: the buttons above the line don't move either
+    expect(await card.getByTestId("clipboard-paste").boundingBox()).toEqual(
+        pasteAt,
+    );
     await select(page, [3, 4, 5, 6, 7, 8]);
 
     // Paste exactly's tooltip explains it, under its name
@@ -472,15 +488,17 @@ test("the inspector's Clipboard card shows what is copied and how it fits the se
         "Puts the copy on the exact spot it was copied from",
     );
     await page.mouse.move(5, 500);
-    // Its Paste opens the preview, as Ctrl/Cmd+V does
+    // Its Paste opens the preview, as Ctrl/Cmd+V does, and folds the card
     await card.getByTestId("clipboard-paste").click();
     await expect(preview(page)).toBeVisible();
+    await expect(card).toBeHidden();
     await page.keyboard.press("Escape");
     await expect(preview(page)).toBeHidden();
 
     // A shape: any number
     await placeBox(show);
     await page.keyboard.press("ControlOrMeta+c");
+    await openCard(page);
     await expect(card.getByTestId("clipboard-kind")).toHaveText("Box");
     await expect(card.getByTestId("clipboard-rule")).toHaveText(
         "Pastes onto any number of marchers, keeping its spacing",
@@ -502,7 +520,7 @@ test("a copied box switched to Positions on the Clipboard card pastes onto its e
     const { page } = show;
     const boxSpots = sorted(await placeBox(show));
     await page.keyboard.press("ControlOrMeta+c");
-    const card = page.getByTestId("clipboard-section");
+    const card = await openCard(page);
     await expect(card.getByTestId("clipboard-kind")).toHaveText("Box");
     await card.getByTestId("clipboard-paste-as-positions").click();
     await expect(card.getByTestId("clipboard-kind")).toHaveText(
@@ -515,6 +533,7 @@ test("a copied box switched to Positions on the Clipboard card pastes onto its e
     await expect(card.getByTestId("clipboard-fit")).toHaveText(
         "With 3 selected, 1 spot stays empty",
     );
+    await blur(page);
     await page.keyboard.press("ControlOrMeta+Shift+v");
     await expect(preview(page)).toBeVisible();
     const spots = sorted((await shapeOverlay(page))!.spots);
@@ -537,6 +556,7 @@ test("a copied box switched to Positions on the Clipboard card pastes onto its e
         .poll(async () => (await readField(page)).selection.length)
         .toBe(4);
     await page.keyboard.press("ControlOrMeta+c");
+    await openCard(page);
     await expect(card.getByTestId("clipboard-paste-as-shape")).toHaveAttribute(
         "data-state",
         "on",
@@ -549,9 +569,10 @@ test("pasted exactly again as the shape onto marchers already on its spots, each
     const { page } = show;
     const boxSpots = sorted(await placeBox(show));
     await page.keyboard.press("ControlOrMeta+c");
-    const card = page.getByTestId("clipboard-section");
+    const card = await openCard(page);
     await card.getByTestId("clipboard-paste-as-positions").click();
     await select(page, [5, 6, 7, 8]);
+    await blur(page);
     await page.keyboard.press("ControlOrMeta+Shift+v");
     await expect(preview(page)).toBeVisible();
     await page.keyboard.press("Enter");
@@ -562,7 +583,9 @@ test("pasted exactly again as the shape onto marchers already on its spots, each
     await waitForIdle(page);
     const standing = await savedAt(show, [5, 6, 7, 8]);
 
+    await openCard(page);
     await card.getByTestId("clipboard-paste-as-shape").click();
+    await blur(page);
     await page.keyboard.press("ControlOrMeta+Shift+v");
     await expect(preview(page)).toBeVisible();
     await page.keyboard.press("Enter");
@@ -572,41 +595,121 @@ test("pasted exactly again as the shape onto marchers already on its spots, each
     expect(await savedAt(show, [5, 6, 7, 8])).toEqual(standing);
 });
 
-test("the Clipboard card sits at the top of the inspector, folds (remembered after a reload) and Clear empties it", async ({
+test("the Clipboard chip sits in the field's bottom-left corner, says Copied, opens its card folded after a reload, and Clear empties it", async ({
     show,
 }) => {
     const { page } = show;
     await select(page, [1, 2, 3, 4]);
     await page.keyboard.press("ControlOrMeta+c");
-    const card = page.getByTestId("clipboard-section");
-    await expect(card).toBeVisible();
-    // First in the inspector
-    const top = await page.evaluate(() => {
-        const el = document.querySelector('[data-testid="clipboard-section"]');
-        const list = el?.parentElement;
-        return list ? list.firstElementChild === el : false;
-    });
-    expect(top).toBe(true);
+    await expect(chip(page)).toBeVisible();
+    // No toast: the chip says it for a moment, and a screen reader hears it
+    await expect(page.getByTestId("clipboard-chip-status")).toHaveText(
+        "Copied",
+    );
+    await expect(page.getByTestId("clipboard-live")).toHaveText(
+        "Copied Positions, 4 marchers",
+    );
+    await expect(toasts(page)).toHaveCount(0);
+    await expect(page.getByTestId("clipboard-chip-status")).toHaveText(
+        "Fits the 4 selected",
+    );
+    // In the field's bottom-left corner
+    const field = (await page.getByTestId("threeField").boundingBox())!;
+    const at = (await chip(page).boundingBox())!;
+    expect(at.x - field.x).toBeLessThan(20);
+    expect(field.y + field.height - (at.y + at.height)).toBeLessThan(20);
+    // Not in the inspector any more
+    await expect(page.getByTestId("clipboard-section")).toBeHidden();
 
-    // Folded: only the heading, which still says what's copied
-    await card.getByRole("button", { name: "Clipboard" }).click();
-    await expect(card.getByTestId("clipboard-picture")).toBeHidden();
-    await expect(card).toContainText("Clipboard: Positions, 4 marchers");
+    // Opened, then a reload: it starts folded again
+    await openCard(page);
     await page.reload();
     await waitForField(page);
-    await expect(card).toContainText("Clipboard: Positions, 4 marchers");
-    await expect(card.getByTestId("clipboard-picture")).toBeHidden();
-    await card.getByRole("button", { name: /Clipboard/ }).click();
-    await expect(card.getByTestId("clipboard-picture")).toBeVisible();
+    await expect(chip(page)).toBeVisible();
+    await expect(page.getByTestId("clipboard-section")).toBeHidden();
+    await expect(page.getByTestId("clipboard-chip-kind")).toHaveText(
+        "Positions",
+    );
 
-    // Clear: nothing to paste
+    // Escape inside the card folds it, and leaves the selection alone
+    await select(page, [5, 6]);
+    await openCard(page);
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("clipboard-section")).toBeHidden();
+    expect((await readField(page)).selection.length).toBe(2);
+
+    // Clear: nothing to paste, and the chip goes
+    const card = await openCard(page);
     await card.getByTestId("clipboard-clear").click();
-    await expect(card).toBeHidden();
+    await expect(chip(page)).toBeHidden();
+    await expect(page.getByTestId("clipboard-live")).toHaveText(
+        "Clipboard cleared",
+    );
     await expectCanvasMatchesShow(show);
     await select(page, [5, 6]);
     await page.keyboard.press("ControlOrMeta+v");
     await expect(preview(page)).toBeHidden();
     await page.reload();
     await waitForField(page);
-    await expect(card).toBeHidden();
+    await expect(chip(page)).toBeHidden();
+});
+
+test("the chip's line says how the copy fits or why Paste can't run, and its Paste leaves Enter to place", async ({
+    show,
+}) => {
+    const { page } = show;
+    await select(page, [1, 2, 3, 4]);
+    await page.keyboard.press("ControlOrMeta+c");
+    const status = page.getByTestId("clipboard-chip-status");
+    // Nobody selected: why Paste can't run, without hovering
+    await blur(page);
+    await page.keyboard.press("Escape");
+    await expect(status).toHaveText("Select the marchers to paste onto");
+    // Two selected: a warning that two spots stay empty
+    await select(page, [5, 6]);
+    await expect(status).toHaveText("2 spots stay empty");
+    await expect(status).toHaveAttribute("data-status", "emptySpots");
+    // The chip's picture still shows all four copied dots
+    await expect(page.getByTestId("clipboard-chip-picture")).toHaveAttribute(
+        "data-dots",
+        "4",
+    );
+
+    // The chip's Paste opens the preview and leaves the focus off the chip: Enter places it
+    await page.getByTestId("clipboard-chip-paste").click();
+    await expect(preview(page)).toBeVisible();
+    await expect(page.getByTestId("clipboard-live")).toHaveText(
+        "Paste preview. Enter places it, Escape discards it.",
+    );
+    const focusedInChip = await page.evaluate(
+        () =>
+            !!document
+                .querySelector('[data-testid="clipboard-chip"]')
+                ?.contains(document.activeElement),
+    );
+    expect(focusedInChip).toBe(false);
+    await page.keyboard.press("Enter");
+    await expect(preview(page)).toBeHidden();
+    // While a shape is open, the chip said why Paste can't run; placed, it fits again
+    await expect(status).not.toHaveText(
+        "Place or discard the open shape first",
+    );
+});
+
+test("a drag on the field near the chip fades it out of the way", async ({
+    show,
+}) => {
+    const { page } = show;
+    await select(page, [1, 2, 3, 4]);
+    await page.keyboard.press("ControlOrMeta+c");
+    await expect(chip(page)).toBeVisible();
+    const at = (await chip(page).boundingBox())!;
+    // A marquee from the empty field above the chip, down beside it
+    const from = { x: at.x + at.width + 120, y: at.y - 160 };
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(at.x + at.width + 20, at.y + 10, { steps: 12 });
+    await expect(chip(page)).toHaveAttribute("data-faded", "true");
+    await page.mouse.up();
+    await expect(chip(page)).not.toHaveAttribute("data-faded", "true");
 });

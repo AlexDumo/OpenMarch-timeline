@@ -29,6 +29,7 @@ import {
     copiedPicture,
     keepPicture,
     useCopiedPictureStore,
+    announceClipboard,
 } from "./pictureStore";
 
 /**
@@ -128,6 +129,12 @@ export function pasteFormation(
         planCanvasEdit(),
         undefined,
         { keepDiscarded: startingOver },
+    );
+    announceClipboard(
+        tolgee.t(
+            "shapes.clipboard.announcePreview",
+            "Paste preview. Enter places it, Escape discards it.",
+        ),
     );
     if (plan.left > 0)
         toast.message(

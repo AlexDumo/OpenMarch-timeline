@@ -1,9 +1,10 @@
+import type React from "react";
 import { useMemo } from "react";
 import { useTranslate } from "@tolgee/react";
 import { getButtonClassName, SegmentedTextSwitch } from "@openmarch/ui";
-import { WarningIcon } from "@phosphor-icons/react";
+import { CaretDownIcon, WarningIcon } from "@phosphor-icons/react";
 import ActionButton from "@/shortcuts/ActionButton";
-import { InspectorCollapsible } from "@/components/inspector/InspectorCollapsible";
+import Shortcut from "@/components/ui/Shortcut";
 import { runAction } from "@/shortcuts/registry";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { performersOnly } from "@/global/classes/Marcher";
@@ -19,19 +20,17 @@ import {
     type PictureFit,
     type PictureSummary,
 } from "./picture";
-import { setClipboardFolded, useCopiedPictureStore } from "./pictureStore";
+import { useCopiedPictureStore } from "./pictureStore";
 
 /**
- * The inspector's Clipboard card (#961, owner 2026-11-15): what Copy kept, so it's plain before
- * pasting whether any number of marchers can take it or how many to select. A small picture of
- * it, what it is ("Box", "Positions") and how many marchers, a line saying how it fits the
- * selection now, and Paste and Paste exactly. Shown once something is copied.
+ * What's copied and how it fits the selection now (#961), for the Clipboard chip and its card:
+ * the picture, what it is as copied and as it pastes, how many marchers are selected and the fit.
+ * Null while nothing is copied.
  */
-export function ClipboardSection() {
+export function useClipboardView() {
     const { t } = useTranslate();
     const picture = useCopiedPictureStore((s) => s.picture);
     const pasteAs = useCopiedPictureStore((s) => s.pasteAs);
-    const folded = useCopiedPictureStore((s) => s.folded);
     const { data: fieldProperties } = useQuery(fieldPropertiesQueryOptions());
     const selectedMarchers = useSelectedMarchers()?.selectedMarchers ?? [];
     const selected = performersOnly(selectedMarchers).length;
@@ -52,41 +51,59 @@ export function ClipboardSection() {
     );
     if (!picture || !copied || !summary) return null;
     const fit = pictureFit(summary, selected);
-    // A shape pasting as its positions says both, so the card doesn't still read "Box"
+    // A shape pasting as its positions says both, so it doesn't still read "Box"
     const shapeName = copied.kind?.shape.label;
     const name = !shapeName
         ? t("shapes.clipboard.positions")
         : summary.type === "positions"
           ? t("shapes.clipboard.shapeAsPositions", { name: shapeName })
           : shapeName;
+    // A shape is drawn as it will paste: laid out for the marchers selected
+    const drawnCount =
+        fit.fit === "laidOut" ? fit.selected : picture.dots.length;
+    return { picture, pasteAs, copied, summary, fit, name, drawnCount };
+}
+
+export type ClipboardView = NonNullable<ReturnType<typeof useClipboardView>>;
+
+/** A button in the chip and its card: compact, a full finger's height in the touch layout */
+export const CLIPBOARD_BUTTON_CLASS = `${getButtonClassName({
+    variant: "secondary",
+    size: "compact",
+})} touch:min-h-48 flex items-center gap-8`;
+
+/**
+ * The Clipboard chip opened (#961, owner 2026-11-22): everything about what's copied. The
+ * picture, what it is and how many marchers, the Paste as switch for a shape, Paste and Paste
+ * exactly with their keys, how it fits the selection now, and Clear, kept apart from the pastes.
+ * The fit line always holds its room, so nothing above it moves as the selection changes: the
+ * card grows up from the field's corner.
+ */
+export function ClipboardCard({
+    view,
+    onFold,
+    foldRef,
+}: {
+    view: ClipboardView;
+    /** Folds the card back into the chip */
+    onFold: () => void;
+    foldRef?: React.Ref<HTMLButtonElement>;
+}) {
+    const { t } = useTranslate();
+    const { picture, pasteAs, copied, summary, fit, name, drawnCount } = view;
     return (
-        <InspectorCollapsible
+        <section
             data-testid="clipboard-section"
-            open={!folded}
-            onOpenChange={(open) => setClipboardFolded(!open)}
-            // Folded, the heading still says what's copied
-            translatableTitle={
-                folded
-                    ? {
-                          keyName: "shapes.clipboard.titleFolded",
-                          parameters: { name, count: summary.count },
-                      }
-                    : { keyName: "shapes.clipboard.title" }
-            }
-            className="mt-12 flex flex-col gap-8"
+            aria-label={t("shapes.clipboard.title")}
+            className="flex w-320 flex-col gap-8"
         >
             <div className="flex items-center gap-12">
                 <PicturePreview
                     picture={picture}
                     summary={summary}
-                    // A shape is drawn as it will paste: laid out for the marchers selected
-                    count={
-                        fit.fit === "laidOut"
-                            ? fit.selected
-                            : picture.dots.length
-                    }
+                    count={drawnCount}
                 />
-                <div className="flex min-w-0 flex-col">
+                <div className="flex min-w-0 flex-1 flex-col">
                     <span
                         className="text-body font-medium"
                         data-testid="clipboard-kind"
@@ -102,7 +119,24 @@ export function ClipboardSection() {
                         })}
                     </span>
                 </div>
+                <button
+                    ref={foldRef}
+                    type="button"
+                    onClick={onFold}
+                    aria-expanded
+                    aria-label={t("shapes.clipboard.fold")}
+                    title={t("shapes.clipboard.fold")}
+                    data-testid="clipboard-fold"
+                    className="rounded-6 text-text-subtitle hover:text-text touch:min-h-48 touch:min-w-48 flex size-32 shrink-0 items-center justify-center self-start hover:bg-white/10"
+                >
+                    <CaretDownIcon size={16} aria-hidden />
+                </button>
             </div>
+            <p className="text-sub" data-testid="clipboard-rule">
+                {summary.anyNumber
+                    ? t("shapes.clipboard.anyNumber")
+                    : t("shapes.clipboard.fixed", { count: summary.count })}
+            </p>
             {copied.type === "shape" && (
                 <div className="flex items-center gap-8">
                     <span className="text-sub text-text-subtitle">
@@ -132,56 +166,55 @@ export function ClipboardSection() {
                     />
                 </div>
             )}
-            {/* The buttons sit above the lines that change with the selection, so they never move under the pointer */}
             <div className="flex flex-wrap gap-8">
                 <ActionButton
                     action="pasteFormation"
                     data-testid="clipboard-paste"
-                    className={getButtonClassName({
-                        variant: "secondary",
-                        size: "compact",
-                    })}
+                    className={CLIPBOARD_BUTTON_CLASS}
                 >
                     <span className="text-body">{t("actions.edit.paste")}</span>
+                    <Shortcut
+                        action="pasteFormation"
+                        className="touch:hidden"
+                    />
                 </ActionButton>
                 <ActionButton
                     action="pasteFormationInPlace"
                     data-testid="clipboard-paste-in-place"
                     hint={t("shapes.clipboard.pasteExactlyHint")}
-                    className={getButtonClassName({
-                        variant: "secondary",
-                        size: "compact",
-                    })}
+                    className={CLIPBOARD_BUTTON_CLASS}
                 >
                     <span className="text-body">
                         {t("actions.edit.pasteInPlace")}
                     </span>
+                    <Shortcut
+                        action="pasteFormationInPlace"
+                        className="touch:hidden"
+                    />
                 </ActionButton>
+            </div>
+            {/* Two lines' room, kept when it's empty: the card doesn't grow or shrink with the selection */}
+            <div className="min-h-32">
+                <FitLine fit={fit} />
+            </div>
+            {/* Clear empties the clipboard: apart from the pastes, below a line */}
+            <div className="border-stroke flex justify-end border-t pt-8">
                 <ActionButton
                     action="clearClipboard"
                     data-testid="clipboard-clear"
-                    className={`${getButtonClassName({
-                        variant: "secondary",
-                        size: "compact",
-                    })} ml-auto`}
+                    className={CLIPBOARD_BUTTON_CLASS}
                 >
                     <span className="text-body">
                         {t("shapes.clipboard.clear")}
                     </span>
                 </ActionButton>
             </div>
-            <p className="text-sub" data-testid="clipboard-rule">
-                {summary.anyNumber
-                    ? t("shapes.clipboard.anyNumber")
-                    : t("shapes.clipboard.fixed", { count: summary.count })}
-            </p>
-            <FitLine fit={fit} />
-        </InspectorCollapsible>
+        </section>
     );
 }
 
 /** How the copied picture fits the marchers selected now; nothing with none selected */
-function FitLine({ fit }: { fit: PictureFit }) {
+export function FitLine({ fit }: { fit: PictureFit }) {
     const { t } = useTranslate();
     if (fit.fit === "none") return null;
     const mismatch = fit.fit === "emptySpots" || fit.fit === "leftOut";
@@ -215,27 +248,34 @@ function FitLine({ fit }: { fit: PictureFit }) {
     );
 }
 
-/** The picture's box, in CSS pixels */
+/** The picture's box in the card, in CSS pixels */
 const VIEW = { width: 72, height: 52 } as const;
-/** Room kept clear inside the box */
-const PAD = 6;
+/** The chip's smaller box */
+export const CHIP_VIEW = { width: 40, height: 28 } as const;
 
 /**
  * The copied picture drawn small: its dots where they stood, and a shape's outline, a shape laid
  * out for the marchers selected when it pastes for another count. North is the
  * back of the field, as on the field itself. Decoration: the words beside it say what it is.
  */
-function PicturePreview({
+export function PicturePreview({
     picture,
     summary,
     count,
+    view = VIEW,
+    testId = "clipboard-picture",
 }: {
     picture: CopiedPicture;
     summary: PictureSummary;
     /** How many dots to draw: a shape laid out for another count draws that many */
     count: number;
+    /** Its size: the card's by default */
+    view?: { width: number; height: number };
+    testId?: string;
 }) {
     const { t } = useTranslate();
+    // Room kept clear inside the box
+    const pad = view.width < VIEW.width ? 4 : 6;
     const drawn = useMemo(() => {
         const shape = shapeDrawn(picture, summary, count);
         const dots = shape?.dots ?? picture.dots;
@@ -248,13 +288,13 @@ function PicturePreview({
         const width = Math.max(...xs) - left;
         const height = Math.max(...ys) - top;
         const scale = Math.min(
-            width > 0 ? (VIEW.width - 2 * PAD) / width : Infinity,
-            height > 0 ? (VIEW.height - 2 * PAD) / height : Infinity,
+            width > 0 ? (view.width - 2 * pad) / width : Infinity,
+            height > 0 ? (view.height - 2 * pad) / height : Infinity,
         );
         const k = Number.isFinite(scale) ? scale : 1;
         // Centered in the box
-        const ox = (VIEW.width - width * k) / 2 - left * k;
-        const oy = (VIEW.height - height * k) / 2 - top * k;
+        const ox = (view.width - width * k) / 2 - left * k;
+        const oy = (view.height - height * k) / 2 - top * k;
         const at = (p: { x: number; y: number }) => ({
             x: ox + p.x * k,
             y: oy + p.y * k,
@@ -269,19 +309,20 @@ function PicturePreview({
                     .join(" "),
             },
         };
-    }, [picture, summary, count]);
+    }, [picture, summary, count, view, pad]);
     // Smaller dots when there are many, so a block still reads as a block
     const r =
-        drawn.dots.length > 40 ? 1.25 : drawn.dots.length > 16 ? 1.75 : 2.25;
+        (drawn.dots.length > 40 ? 1.25 : drawn.dots.length > 16 ? 1.75 : 2.25) *
+        (view.width < VIEW.width ? 0.6 : 1);
     return (
         <svg
-            width={VIEW.width}
-            height={VIEW.height}
-            viewBox={`0 0 ${VIEW.width} ${VIEW.height}`}
+            width={view.width}
+            height={view.height}
+            viewBox={`0 0 ${view.width} ${view.height}`}
             role="img"
             aria-label={t("shapes.clipboard.pictureLabel")}
             className="rounded-6 bg-fg-2 text-text shrink-0"
-            data-testid="clipboard-picture"
+            data-testid={testId}
             data-dots={drawn.dots.length}
         >
             {drawn.outline &&

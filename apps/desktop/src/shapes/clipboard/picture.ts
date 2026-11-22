@@ -136,7 +136,7 @@ function readShape(
 }
 
 /**
- * What the copied picture is, as the inspector's Clipboard card says it (#961): a shape that is
+ * What the copied picture is, as the Clipboard chip and card say it (#961): a shape that is
  * laid out for any number of marchers, or spots that only so many fill (a group, or positions)
  */
 export interface PictureSummary {

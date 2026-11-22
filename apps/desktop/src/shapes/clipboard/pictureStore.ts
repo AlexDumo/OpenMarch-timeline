@@ -32,33 +32,23 @@ function load(): CopiedPicture | null {
  */
 export type PasteAs = "shape" | "positions";
 
-/** Whether the inspector's Clipboard card is folded, kept per user like other view choices */
-const FOLDED_KEY = "openmarch:clipboardCardFolded";
-
-function loadFolded(): boolean {
-    if (typeof localStorage === "undefined") return false;
-    try {
-        return localStorage.getItem(FOLDED_KEY) === "true";
-    } catch {
-        return false;
-    }
-}
-
 export const useCopiedPictureStore = create<{
     picture: CopiedPicture | null;
     pasteAs: PasteAs;
-    /** The Clipboard card shows only its heading */
-    folded: boolean;
-}>(() => ({ picture: load(), pasteAs: "shape", folded: loadFolded() }));
+}>(() => ({ picture: load(), pasteAs: "shape" }));
 
-/** Folds or unfolds the inspector's Clipboard card, remembered across restarts */
-export function setClipboardFolded(folded: boolean): void {
-    useCopiedPictureStore.setState({ folded });
-    try {
-        localStorage.setItem(FOLDED_KEY, String(folded));
-    } catch {
-        // Still folded until the app closes
-    }
+/**
+ * What the Clipboard chip's live region says next (#961): a copy, a clear, a paste preview
+ * opening. `n` counts them, so the same words said twice are announced twice.
+ */
+export const useClipboardAnnouncementStore = create<{
+    text: string;
+    n: number;
+}>(() => ({ text: "", n: 0 }));
+
+/** Has screen readers say `text` (the toast that once said it is gone) */
+export function announceClipboard(text: string): void {
+    useClipboardAnnouncementStore.setState((s) => ({ text, n: s.n + 1 }));
 }
 
 /**

@@ -2,7 +2,6 @@ import MarcherEditor from "./MarcherEditor";
 import PageEditor from "./PageEditor";
 import { ShapeToolSection } from "@/shapes/tool/ShapeToolSection";
 import { ArrangeSection } from "./ArrangeSection";
-import { ClipboardSection } from "@/shapes/clipboard/ClipboardSection";
 import { PageNotesSection } from "./PageNotesSection";
 import { T } from "@tolgee/react";
 import { InspectorPageProvider } from "./InspectorPageContext";
@@ -22,10 +21,7 @@ function Inspector() {
                 {/* Scrollable inspector content */}
                 {/* relative so Radix's visually-hidden native selects are contained here instead of escaping to the document */}
                 <div className="relative mt-8 flex min-h-0 flex-1 flex-col gap-48 overflow-y-auto">
-                    {/* What Copy kept, once something is copied (#961): at the top, so it's in view
-                        while choosing who to paste onto (owner, 2026-11-15) */}
-                    <ClipboardSection />
-                    {/* Shapes come next: picking one is the usual next step after selecting */}
+                    {/* Shapes first: picking one is the usual next step after selecting */}
                     <ShapeToolSection />
                     {/* Align, flip, rotate and distribute two or more marchers */}
                     <ArrangeSection />

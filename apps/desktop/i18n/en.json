@@ -2497,14 +2497,24 @@
             "countAt": "{count} at {interval}"
         },
         "clipboard": {
+            "announceCleared": "Clipboard cleared",
+            "announceCopied": "{count, plural, one {Copied {name}, # marcher} other {Copied {name}, # marchers}}",
+            "announcePreview": "Paste preview. Enter places it, Escape discards it.",
             "anyNumber": "Pastes onto any number of marchers, keeping its spacing",
             "asShape": "Shape",
+            "chipCopied": "Copied",
+            "chipEmptySpots": "{count, plural, one {# spot stays empty} other {# spots stay empty}}",
+            "chipExact": "{count, plural, one {Fits the # selected} other {Fits the # selected}}",
+            "chipLabel": "Clipboard: {name}, {count}. {status}. Show details",
+            "chipLaidOut": "{count, plural, one {Laid out for # marcher} other {Laid out for # marchers}}",
+            "chipLeftOut": "{count, plural, one {# marcher has no spot} other {# marchers have no spot}}",
             "clear": "Clear",
             "fitEmptySpots": "{count, plural, one {With {selected} selected, # spot stays empty} other {With {selected} selected, # spots stay empty}}",
             "fitExact": "{count, plural, one {Fits the # marcher selected} other {Fits the # marchers selected}}",
             "fitLaidOut": "{count, plural, one {Laid out for the # marcher selected} other {Laid out for the # marchers selected}}",
             "fitLeftOut": "{count, plural, one {# selected marcher has no spot and stays put} other {# selected marchers have no spot and stay put}}",
             "fixed": "{count, plural, one {Fills # spot: select # marcher to fill it} other {Fills # spots: select # marchers to fill them all}}",
+            "fold": "Hide clipboard details",
             "left": "{count, plural, one {# marcher has no spot and stays put} other {# marchers have no spot and stay put}}",
             "marchers": "{count, plural, one {# marcher} other {# marchers}}",
             "pasteAs": "Paste as",
@@ -2517,8 +2527,7 @@
             "reasonSelectToCopy": "Select marchers to copy them",
             "reasonSelectToPaste": "Select the marchers to paste onto",
             "shapeAsPositions": "{name} positions",
-            "title": "Clipboard",
-            "titleFolded": "Clipboard: {name}, {count, plural, one {# marcher} other {# marchers}}"
+            "title": "Clipboard"
         }
     },
     "tags": {
