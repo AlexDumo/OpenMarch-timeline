@@ -177,7 +177,7 @@ function ChipOrCard({
             data-field-control
             className={twMerge(
                 POPOVER_CLASS,
-                "group pointer-events-auto absolute bottom-6 left-6 z-10 p-4 motion-safe:transition-[opacity,box-shadow] motion-safe:duration-150",
+                "group pointer-events-auto absolute bottom-6 left-6 z-10 p-0 motion-safe:transition-[opacity,box-shadow] motion-safe:duration-150",
                 open && "p-12",
                 copiedNow && "ring-accent ring-2",
                 faded && "pointer-events-none opacity-20",
@@ -219,7 +219,8 @@ function ChipOrCard({
                         onClick={wake}
                         aria-label={label}
                         data-testid="clipboard-chip-rested"
-                        className="rounded-4 enabled:hover:bg-text/10 focus-visible:bg-text/10 touch:size-44 flex size-36 items-center justify-center outline-hidden"
+                        // Fills the chip, so its hover is the whole chip, edge to edge
+                        className="rounded-6 enabled:hover:bg-text/10 focus-visible:bg-text/10 flex size-44 items-center justify-center outline-hidden"
                     >
                         <PicturePreview
                             picture={view.picture}
@@ -231,7 +232,9 @@ function ChipOrCard({
                     </button>
                 </Tip>
             ) : (
-                <div className="flex items-center gap-8 pr-4">
+                <div
+                    className={clsx("flex items-center gap-8", touch && "pr-6")}
+                >
                     <button
                         ref={toggle}
                         type="button"
@@ -239,7 +242,8 @@ function ChipOrCard({
                         aria-expanded={false}
                         aria-label={label}
                         data-testid="clipboard-chip-toggle"
-                        className="rounded-4 enabled:hover:bg-text/10 focus-visible:bg-text/10 touch:min-h-44 flex min-w-0 items-center gap-8 px-4 py-4 text-left outline-hidden"
+                        // Fills the chip (on a tablet, up to Paste), so its hover is the whole chip
+                        className="rounded-6 enabled:hover:bg-text/10 focus-visible:bg-text/10 touch:min-h-44 flex min-w-0 items-center gap-8 px-8 py-6 text-left outline-hidden"
                     >
                         <PicturePreview
                             picture={view.picture}
