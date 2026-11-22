@@ -23,6 +23,10 @@ questions:
   - "Anything else about snaking through a box you'd change?"
 ---
 
+**First, turn it on:** Follow-the-leader is a preview, off by default. Open **Settings ›
+Field** and turn on **Follow-the-leader (preview)**. Without it, Follow and Set order don't
+show.
+
 **What's new (2026-11-17, later): the order you set, and seeing it in Follow**
 
 - **Your order now wins in Follow.** An order set with **Shift+O** on the page you're working on
