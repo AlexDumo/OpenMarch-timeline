@@ -1,12 +1,11 @@
 /**
- * The person's Discord status while OpenMarch runs: "Playing OpenMarch — Writing drill", the
- * show's name if they allow it, and how long the show has been open. Settings > Privacy turns
- * it off (`DISCORD_PRESENCE_SETTING`) or adds the name (`DISCORD_PRESENCE_SHOW_NAME_SETTING`).
+ * The person's Discord status while OpenMarch runs: "Playing OpenMarch — Designing a show" and
+ * how long the show has been open. It never names the show: show names can be private.
+ * Settings > Privacy turns it off (`DISCORD_PRESENCE_SETTING`).
  *
  * Discord need not be running: OpenMarch tries again every so often, and sets the status as
  * soon as Discord answers. If Discord quits, it waits for it to come back.
  */
-import { basename, extname } from "node:path";
 import type { DiscordActivity, DiscordIpcConnection } from "./discordIpc";
 
 /**
@@ -28,24 +27,12 @@ export interface PresenceScreen {
     isNewShowDraft: boolean;
 }
 
-export interface PresenceSettings {
-    enabled: boolean;
-    showName: boolean;
-}
-
-/** "Fall Show 2026" for `/…/Fall Show 2026.dots` */
-export function showNameFromPath(showPath: string): string {
-    const file = basename(showPath);
-    return file.slice(0, file.length - extname(file).length) || file;
-}
-
 /**
  * The status for what's on screen. `startedAt` is when the show opened, for the elapsed time.
  * `t` is main's translator, so the status follows the app language.
  */
 export function presenceActivity(
     screen: PresenceScreen,
-    showName: boolean,
     startedAt: number,
     t: (key: string) => string,
 ): DiscordActivity {
@@ -71,15 +58,15 @@ export function presenceActivity(
         activity.details = t("discord.presence.newShow");
         return activity;
     }
-    activity.details = t("discord.presence.writingDrill");
-    if (showName) activity.state = showNameFromPath(screen.showPath);
+    activity.details = t("discord.presence.designing");
     return activity;
 }
 
 export interface DiscordPresenceDeps {
     clientId: string;
     connect: () => Promise<DiscordIpcConnection>;
-    getSettings: () => PresenceSettings;
+    /** Settings > Privacy: show OpenMarch in the Discord status */
+    isEnabled: () => boolean;
     t: (key: string) => string;
     now?: () => number;
     retryMs?: number;
@@ -97,7 +84,7 @@ export interface DiscordPresence {
 export function createDiscordPresence({
     clientId,
     connect,
-    getSettings,
+    isEnabled,
     t,
     now = Date.now,
     retryMs = RETRY_MS,
@@ -109,12 +96,10 @@ export function createDiscordPresence({
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let stopped = false;
 
-    const wanted = () => !stopped && !!clientId && getSettings().enabled;
+    const wanted = () => !stopped && !!clientId && isEnabled();
 
     const send = () => {
-        connection?.setActivity(
-            presenceActivity(screen, getSettings().showName, startedAt, t),
-        );
+        connection?.setActivity(presenceActivity(screen, startedAt, t));
     };
 
     const scheduleRetry = () => {

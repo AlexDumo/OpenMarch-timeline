@@ -5,29 +5,20 @@ import SettingRow from "@/settings/SettingRow";
 import SettingsPanel from "@/settings/SettingsPanel";
 import {
     DISCORD_PRESENCE_SETTING,
-    DISCORD_PRESENCE_SHOW_NAME_SETTING,
     discordPresenceEnabled,
-    discordPresenceShowsName,
 } from "@/discord/discordPresenceSettings";
 
-/** Settings > Privacy: what the person's Discord status shows. Desktop only. */
+/** Settings > Privacy: whether the person's Discord status shows OpenMarch. Desktop only. */
 export default function DiscordPresenceSettings() {
     const [enabled, setEnabled] = useState(true);
-    const [showName, setShowName] = useState(false);
 
     useEffect(() => {
         let isMounted = true;
-        void Promise.all([
-            window.electron.invoke("settings:get", DISCORD_PRESENCE_SETTING),
-            window.electron.invoke(
-                "settings:get",
-                DISCORD_PRESENCE_SHOW_NAME_SETTING,
-            ),
-        ]).then(([savedEnabled, savedShowName]: unknown[]) => {
-            if (!isMounted) return;
-            setEnabled(discordPresenceEnabled(savedEnabled));
-            setShowName(discordPresenceShowsName(savedShowName));
-        });
+        void window.electron
+            .invoke("settings:get", DISCORD_PRESENCE_SETTING)
+            .then((saved: unknown) => {
+                if (isMounted) setEnabled(discordPresenceEnabled(saved));
+            });
         return () => {
             isMounted = false;
         };
@@ -49,29 +40,6 @@ export default function DiscordPresenceSettings() {
                         setEnabled(checked);
                         window.electron.send("settings:set", {
                             [DISCORD_PRESENCE_SETTING]: checked,
-                        });
-                    }}
-                />
-            </SettingRow>
-            <SettingRow
-                label={<T keyName="settings.privacy.discord.showName" />}
-                description={
-                    enabled ? (
-                        <T keyName="settings.privacy.discord.showName.description" />
-                    ) : (
-                        <T keyName="settings.privacy.discord.showName.disabled" />
-                    )
-                }
-                htmlFor="discord-presence-show-name"
-            >
-                <Switch
-                    id="discord-presence-show-name"
-                    checked={enabled && showName}
-                    disabled={!enabled}
-                    onCheckedChange={(checked) => {
-                        setShowName(checked);
-                        window.electron.send("settings:set", {
-                            [DISCORD_PRESENCE_SHOW_NAME_SETTING]: checked,
                         });
                     }}
                 />

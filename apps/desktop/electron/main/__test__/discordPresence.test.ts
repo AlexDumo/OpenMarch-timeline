@@ -18,8 +18,6 @@ import {
 import {
     createDiscordPresence,
     presenceActivity,
-    showNameFromPath,
-    type PresenceSettings,
 } from "../discord/discordPresence";
 
 const t = (key: string) => `<${key}>`;
@@ -76,7 +74,6 @@ describe("presenceActivity", () => {
     it("says the launch page, with no elapsed time", () => {
         const activity = presenceActivity(
             { showPath: "", isNewShowDraft: false },
-            true,
             started,
             t,
         );
@@ -85,39 +82,29 @@ describe("presenceActivity", () => {
         expect(activity.state).toBeUndefined();
     });
 
-    it("leaves the show's name out unless the person allows it", () => {
-        const screen = {
-            showPath: "/shows/Fall Show 2026.dots",
-            isNewShowDraft: false,
-        };
-        const hidden = presenceActivity(screen, false, started, t);
-        expect(hidden.details).toBe("<discord.presence.writingDrill>");
-        expect(hidden.state).toBeUndefined();
-        expect(hidden.timestamps).toEqual({ start: started });
-        expect(JSON.stringify(hidden)).not.toContain("Fall Show");
-
-        expect(presenceActivity(screen, true, started, t).state).toBe(
-            "Fall Show 2026",
+    it("says the person is designing a show, and never names it", () => {
+        const activity = presenceActivity(
+            { showPath: "/shows/Fall Show 2026.dots", isNewShowDraft: false },
+            started,
+            t,
         );
+        expect(activity.details).toBe("<discord.presence.designing>");
+        expect(activity.state).toBeUndefined();
+        expect(activity.timestamps).toEqual({ start: started });
+        expect(JSON.stringify(activity)).not.toContain("Fall Show");
     });
 
-    it("never names a new show's draft file", () => {
+    it("says a new show is being started", () => {
         const activity = presenceActivity(
             {
                 showPath: "/data/new-show-drafts/abc.dots",
                 isNewShowDraft: true,
             },
-            true,
             started,
             t,
         );
         expect(activity.details).toBe("<discord.presence.newShow>");
-        expect(activity.state).toBeUndefined();
-    });
-
-    it("keeps a name without an extension, and strips only the last one", () => {
-        expect(showNameFromPath("/a/My.Show.dots")).toBe("My.Show");
-        expect(showNameFromPath("/a/plain")).toBe("plain");
+        expect(JSON.stringify(activity)).not.toContain("abc");
     });
 });
 
@@ -212,14 +199,14 @@ describe.skipIf(process.platform === "win32")(
                 data: { v: 1, client_id: "123" },
             });
 
-            connection.setActivity({ type: 0, details: "Writing drill" });
+            connection.setActivity({ type: 0, details: "Designing" });
             connection.setActivity(null);
             discord.ping();
             await until(() => discord.frames.length >= 4);
             const [set, clear] = discord.frames.slice(1, 3);
             expect(set.data).toMatchObject({
                 cmd: "SET_ACTIVITY",
-                args: { pid: 42, activity: { details: "Writing drill" } },
+                args: { pid: 42, activity: { details: "Designing" } },
             });
             expect(clear.data).toMatchObject({ args: { pid: 42 } });
             expect((clear.data as { args: object }).args).not.toHaveProperty(
@@ -243,7 +230,7 @@ describe.skipIf(process.platform === "win32")(
 
         it("waits for Discord, follows settings and the open show, and reconnects after Discord restarts", async () => {
             const path = socketPath();
-            let settings: PresenceSettings = { enabled: true, showName: false };
+            let enabled = true;
             const presence = createDiscordPresence({
                 clientId: "123",
                 connect: () =>
@@ -252,7 +239,7 @@ describe.skipIf(process.platform === "win32")(
                         paths: [path],
                         pid: 1,
                     }),
-                getSettings: () => settings,
+                isEnabled: () => enabled,
                 t,
                 retryMs: 20,
             });
@@ -269,15 +256,15 @@ describe.skipIf(process.platform === "win32")(
             await discord.listen();
             await until(() => activities(discord.frames).length === 1);
             expect(activities(discord.frames)[0]).toMatchObject({
-                details: "<discord.presence.writingDrill>",
+                details: "<discord.presence.designing>",
             });
             expect(activities(discord.frames)[0]).not.toHaveProperty("state");
 
-            settings = { enabled: true, showName: true };
-            presence.refresh();
+            // The show closes
+            presence.setScreen({ showPath: "", isNewShowDraft: false });
             await until(() => activities(discord.frames).length === 2);
             expect(activities(discord.frames)[1]).toMatchObject({
-                state: "Show",
+                details: "<discord.presence.launchPage>",
             });
 
             // Discord quits and comes back
@@ -287,13 +274,16 @@ describe.skipIf(process.platform === "win32")(
             cleanups.push(() => discord.quit());
             await until(() => activities(discord.frames).length === 1);
             expect(activities(discord.frames)[0]).toMatchObject({
-                state: "Show",
+                details: "<discord.presence.launchPage>",
             });
 
             // Turned off: the connection closes, and Discord clears the status
-            settings = { enabled: false, showName: true };
+            enabled = false;
             presence.refresh();
-            presence.setScreen({ showPath: "", isNewShowDraft: false });
+            presence.setScreen({
+                showPath: "/s/b.dots",
+                isNewShowDraft: false,
+            });
             await new Promise((r) => setTimeout(r, 80));
             expect(activities(discord.frames)).toHaveLength(1);
         });
@@ -306,7 +296,7 @@ describe.skipIf(process.platform === "win32")(
                     connects++;
                     return Promise.reject(new Error("unreachable"));
                 },
-                getSettings: () => ({ enabled: true, showName: true }),
+                isEnabled: () => true,
                 t,
                 retryMs: 5,
             });
