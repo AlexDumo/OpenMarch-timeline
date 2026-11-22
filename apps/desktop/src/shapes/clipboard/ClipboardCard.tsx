@@ -1,10 +1,10 @@
 import type React from "react";
 import { useMemo } from "react";
 import { useTranslate } from "@tolgee/react";
+import clsx from "clsx";
 import { getButtonClassName, SegmentedTextSwitch } from "@openmarch/ui";
 import { CaretDownIcon, WarningIcon } from "@phosphor-icons/react";
 import ActionButton from "@/shortcuts/ActionButton";
-import Shortcut from "@/components/ui/Shortcut";
 import { runAction } from "@/shortcuts/registry";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { performersOnly } from "@/global/classes/Marcher";
@@ -66,11 +66,14 @@ export function useClipboardView() {
 
 export type ClipboardView = NonNullable<ReturnType<typeof useClipboardView>>;
 
-/** A button in the chip and its card: compact, a full finger's height in the touch layout */
+/**
+ * A button in the chip and its card: a compact secondary pill, a finger's height in the touch
+ * layout. Its key is in its tooltip, not beside it. The size goes after the merge (ui-styling)
+ */
 export const CLIPBOARD_BUTTON_CLASS = `${getButtonClassName({
     variant: "secondary",
     size: "compact",
-})} touch:min-h-48 flex items-center gap-8`;
+})} touch:min-h-44 text-body`;
 
 /**
  * The Clipboard chip opened (#961, owner 2026-11-22): everything about what's copied. The
@@ -127,7 +130,7 @@ export function ClipboardCard({
                     aria-label={t("shapes.clipboard.fold")}
                     title={t("shapes.clipboard.fold")}
                     data-testid="clipboard-fold"
-                    className="rounded-6 text-text-subtitle hover:text-text touch:min-h-48 touch:min-w-48 flex size-32 shrink-0 items-center justify-center self-start hover:bg-white/10"
+                    className={`${getButtonClassName({ variant: "ghost", size: "compact", content: "icon" })} text-text-subtitle shrink-0 self-start`}
                 >
                     <CaretDownIcon size={16} aria-hidden />
                 </button>
@@ -172,11 +175,7 @@ export function ClipboardCard({
                     data-testid="clipboard-paste"
                     className={CLIPBOARD_BUTTON_CLASS}
                 >
-                    <span className="text-body">{t("actions.edit.paste")}</span>
-                    <Shortcut
-                        action="pasteFormation"
-                        className="touch:hidden"
-                    />
+                    {t("actions.edit.paste")}
                 </ActionButton>
                 <ActionButton
                     action="pasteFormationInPlace"
@@ -184,13 +183,7 @@ export function ClipboardCard({
                     hint={t("shapes.clipboard.pasteExactlyHint")}
                     className={CLIPBOARD_BUTTON_CLASS}
                 >
-                    <span className="text-body">
-                        {t("actions.edit.pasteInPlace")}
-                    </span>
-                    <Shortcut
-                        action="pasteFormationInPlace"
-                        className="touch:hidden"
-                    />
+                    {t("actions.edit.pasteInPlace")}
                 </ActionButton>
             </div>
             {/* Two lines' room, kept when it's empty: the card doesn't grow or shrink with the selection */}
@@ -204,9 +197,7 @@ export function ClipboardCard({
                     data-testid="clipboard-clear"
                     className={CLIPBOARD_BUTTON_CLASS}
                 >
-                    <span className="text-body">
-                        {t("shapes.clipboard.clear")}
-                    </span>
+                    {t("shapes.clipboard.clear")}
                 </ActionButton>
             </div>
         </section>
@@ -321,7 +312,11 @@ export function PicturePreview({
             viewBox={`0 0 ${view.width} ${view.height}`}
             role="img"
             aria-label={t("shapes.clipboard.pictureLabel")}
-            className="rounded-6 bg-fg-2 text-text shrink-0"
+            className={clsx(
+                // The chip's small one sits in a row: a row's radius (ui-styling)
+                view.width < VIEW.width ? "rounded-4" : "rounded-6",
+                "bg-fg-2 text-text shrink-0",
+            )}
             data-testid={testId}
             data-dots={drawn.dots.length}
         >

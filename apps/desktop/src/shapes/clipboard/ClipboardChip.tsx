@@ -4,7 +4,6 @@ import clsx from "clsx";
 import { twMerge } from "tailwind-merge";
 import { CaretUpIcon, WarningIcon } from "@phosphor-icons/react";
 import ActionButton from "@/shortcuts/ActionButton";
-import Shortcut from "@/components/ui/Shortcut";
 import { POPOVER_CLASS } from "@/components/ui/popupClasses";
 import {
     actionDisabledReason,
@@ -111,7 +110,7 @@ function ChipOrCard({
             data-field-layer="control"
             className={twMerge(
                 POPOVER_CLASS,
-                "pointer-events-auto absolute bottom-6 left-6 z-10 p-6 motion-safe:transition-[opacity,box-shadow] motion-safe:duration-150",
+                "pointer-events-auto absolute bottom-6 left-6 z-10 p-4 motion-safe:transition-[opacity,box-shadow] motion-safe:duration-150",
                 open && "p-12",
                 copiedNow && "ring-accent ring-2",
                 faded && "pointer-events-none opacity-20",
@@ -133,7 +132,7 @@ function ChipOrCard({
                     foldRef={fold}
                 />
             ) : (
-                <div className="flex items-center gap-6">
+                <div className="flex items-center gap-8 pr-4">
                     <button
                         ref={toggle}
                         type="button"
@@ -145,7 +144,7 @@ function ChipOrCard({
                             status: status.text,
                         })}
                         data-testid="clipboard-chip-toggle"
-                        className="rounded-6 touch:min-h-48 flex min-w-0 items-center gap-8 py-2 pr-4 pl-2 text-left hover:bg-white/10"
+                        className="rounded-4 enabled:hover:bg-text/10 focus-visible:bg-text/10 touch:min-h-44 flex min-w-0 items-center gap-8 px-4 py-4 text-left outline-hidden"
                     >
                         <PicturePreview
                             picture={view.picture}
@@ -155,14 +154,14 @@ function ChipOrCard({
                             testId="clipboard-chip-picture"
                         />
                         <span className="flex min-w-0 flex-col">
-                            <span className="text-sub truncate">
+                            <span className="truncate">
                                 <span
-                                    className="font-medium"
+                                    className="text-body font-medium"
                                     data-testid="clipboard-chip-kind"
                                 >
                                     {view.name}
                                 </span>
-                                <span className="text-text-subtitle">
+                                <span className="text-sub text-text-subtitle">
                                     {" · "}
                                     {countText}
                                 </span>
@@ -201,13 +200,7 @@ function ChipOrCard({
                         data-testid="clipboard-chip-paste"
                         className={CLIPBOARD_BUTTON_CLASS}
                     >
-                        <span className="text-body">
-                            {t("actions.edit.paste")}
-                        </span>
-                        <Shortcut
-                            action="pasteFormation"
-                            className="touch:hidden"
-                        />
+                        {t("actions.edit.paste")}
                     </ActionButton>
                 </div>
             )}
