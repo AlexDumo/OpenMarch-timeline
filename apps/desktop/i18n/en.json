@@ -1359,6 +1359,7 @@
             "title": "Can't reach OpenMarch"
         },
         "expired": {
+            "addAudioDisabled": "Can't add audio: this ensemble expired on {date}.",
             "banner": "This ensemble expired on {date}. New revisions can't be pushed to the mobile app. Contact sales@openmarch.com to extend it.",
             "pushDisabled": "Can't push: this ensemble expired on {date}."
         }

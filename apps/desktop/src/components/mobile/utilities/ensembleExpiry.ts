@@ -39,26 +39,42 @@ export function formatExpiryDate(isoDate: string): string {
     });
 }
 
+/** Anywhere on Earth (UTC-12): the last time zone where a day ends. */
+const ANYWHERE_ON_EARTH_OFFSET_MS = 12 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** An ISO date ("2027-06-30") as UTC midnight of that day, in milliseconds. */
+function isoDateToUtcDay(isoDate: string): number | null {
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate);
+    if (!match) return null;
+    const [, year, month, day] = match;
+    return Date.UTC(Number(year), Number(month) - 1, Number(day));
+}
+
 /**
- * Whole days left before an active ensemble expires, counted in calendar days
- * from today: 0 on its last day. Undefined when the ensemble has expired, the
- * date can't be read, or more than {@link EXPIRY_NOTICE_DAYS} days are left,
- * so callers show the notice only when this returns a number.
+ * Whole days left before an active ensemble expires: 0 on its last day.
+ * "Today" is the date Anywhere on Earth (UTC-12), the same day om-online
+ * counts from, so the desktop and the web show the same number wherever the
+ * viewer is. Undefined when the ensemble has expired, the date can't be read,
+ * or more than {@link EXPIRY_NOTICE_DAYS} days are left, so callers show the
+ * notice only when this returns a number.
  */
 export function expiryNoticeDays(
     ensemble: EnsembleExpiry,
     now: Date = new Date(),
 ): number | undefined {
     if (ensemble.expired) return undefined;
-    const expiresOn = parseIsoDate(ensemble.expires_on);
-    if (!expiresOn) return undefined;
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    // Round, so a daylight-saving change between the two days doesn't drop one
-    const days = Math.round(
-        (expiresOn.getTime() - today.getTime()) / (24 * 60 * 60 * 1000),
+    const expiresOn = isoDateToUtcDay(ensemble.expires_on);
+    if (expiresOn === null) return undefined;
+    const aoe = new Date(now.getTime() - ANYWHERE_ON_EARTH_OFFSET_MS);
+    const today = Date.UTC(
+        aoe.getUTCFullYear(),
+        aoe.getUTCMonth(),
+        aoe.getUTCDate(),
     );
+    const days = Math.round((expiresOn - today) / DAY_MS);
     if (days > EXPIRY_NOTICE_DAYS) return undefined;
-    // The server still says active, so its last day hasn't ended everywhere yet
+    // Below 0 only when the ensembles list is stale; the server decides expiry
     return Math.max(0, days);
 }
 

@@ -55,10 +55,8 @@ import {
 import { T, useTranslate } from "@tolgee/react";
 import tolgee from "@/global/singletons/Tolgee";
 import { formatLocale } from "@/utilities/formatLocale";
-import {
-    getGetApiEditorV1EnsemblesQueryKey,
-    useGetApiEditorV1Ensembles,
-} from "@/api/generated/ensembles/ensembles";
+import { getGetApiEditorV1EnsemblesQueryKey } from "@/api/generated/ensembles/ensembles";
+import { useProductionEnsemble } from "./queries/useProductionEnsemble";
 import { editorApiStatus } from "@/api/editor-client";
 import { ExpiryNotice } from "./EnsembleExpiry";
 import { formatExpiryDate } from "./utilities/ensembleExpiry";
@@ -73,11 +71,7 @@ export default function MobileExportView({
 }: {
     currentProduction: Production;
 }) {
-    // The production's own response has no expiry; its ensemble's row does
-    const { data: ensemblesResponse } = useGetApiEditorV1Ensembles();
-    const ensemble = ensemblesResponse?.ensembles?.find(
-        (e) => e.id === currentProduction.ensemble?.id,
-    );
+    const ensemble = useProductionEnsemble(currentProduction);
     return (
         <section className="animate-scale-in flex h-full w-full flex-col">
             <div className="flex grow flex-col gap-16 overflow-y-auto">

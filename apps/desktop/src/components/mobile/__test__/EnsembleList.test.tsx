@@ -161,10 +161,10 @@ describe("EnsembleList expiry", () => {
     });
 
     it("shows the countdown notice in the final 30 days only", () => {
-        const inTen = new Date();
-        inTen.setDate(inTen.getDate() + 10);
-        const iso = (d: Date) =>
-            `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        // Ten days after today's date Anywhere on Earth (UTC-12)
+        const hour = 60 * 60 * 1000;
+        const inTen = new Date(Date.now() - 12 * hour + 10 * 24 * hour);
+        const iso = (d: Date) => d.toISOString().slice(0, 10);
         ensemblesState.ensembles = [
             ensemble({ id: 1, name: "Soon", expires_on: iso(inTen) }),
             ensemble({ id: 2, name: "Later", expires_on: "2099-06-30" }),
