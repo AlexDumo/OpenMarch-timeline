@@ -180,9 +180,8 @@ export function ClipboardCard({
                 </ActionButton>
             </div>
             {/* One line about the fit: how it fits the marchers selected, or with none selected
-                how many it takes. Clear is the chip's X */}
-            {/* Two lines' room: the line is one or two lines long as the selection changes, and
-                the buttons above it must not move under the pointer (sims, 2026-11-16) */}
+                how many it takes (Clear is the chip's X). Room for two lines, so the buttons
+                above it don't move as the selection changes (sims, 2026-11-16) */}
             <div className="min-h-32">
                 <FitLine fit={fit} summary={summary} />
             </div>

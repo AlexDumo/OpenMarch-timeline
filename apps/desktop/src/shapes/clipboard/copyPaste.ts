@@ -24,11 +24,11 @@ import {
 } from "../tool/shapeToolStore";
 import { openDrawn, slotsOf } from "../tool/toolMachine";
 import {
-    pictureFit,
     pictureOf,
     pictureSummary,
     planPaste,
     standingOnSpots,
+    type PictureFit,
 } from "./picture";
 import {
     copiedPicture,
@@ -143,31 +143,48 @@ export function pasteFormation(
         undefined,
         { keepDiscarded: startingOver },
     );
-    // How it fits, under the paste's editor, while it's open
-    const fit = pictureFit(
-        pictureSummary(picture, field.fieldProperties.pixelsPerStep, {
+    // How it doesn't fit, from what the paste does: spots left empty (a copy that fills so many
+    // spots, onto fewer marchers) or marchers left out. Under the paste's editor while it's
+    // open, and said to a screen reader with the preview
+    const summary = pictureSummary(
+        picture,
+        field.fieldProperties.pixelsPerStep,
+        {
             asPositions:
                 useCopiedPictureStore.getState().pasteAs === "positions",
-        }),
-        ids.length,
+        },
     );
-    usePasteNoticeStore.setState({
-        fit: fit.fit === "emptySpots" || fit.fit === "leftOut" ? fit : null,
-    });
-    // No toast for marchers left out (owner 2026-11-22): the chip warned before the paste, and
-    // a screen reader hears it with the preview
+    const empty = summary.anyNumber
+        ? 0
+        : Math.max(0, summary.count - plan.marchers.length);
+    const fit: PictureFit | null =
+        plan.left > 0
+            ? {
+                  fit: "leftOut",
+                  selected: plan.marchers.length + plan.left,
+                  left: plan.left,
+              }
+            : empty > 0
+              ? { fit: "emptySpots", selected: plan.marchers.length, empty }
+              : null;
+    usePasteNoticeStore.setState({ fit });
+    // No toast (owner 2026-11-22): the chip warned before the paste, and the editor says it
     const preview = tolgee.t(
         "shapes.clipboard.announcePreview",
         "Paste preview. Enter places it, Escape discards it.",
     );
-    announceClipboard(
-        plan.left > 0
-            ? `${tolgee.t(
+    const misfit =
+        fit?.fit === "leftOut"
+            ? tolgee.t(
                   "shapes.clipboard.left",
                   "{count, plural, one {# marcher has no spot and stays put} other {# marchers have no spot and stay put}}",
-                  { count: plan.left },
-              )}. ${preview}`
-            : preview,
-    );
+                  { count: fit.left },
+              )
+            : fit?.fit === "emptySpots"
+              ? tolgee.t("shapes.clipboard.chipEmptySpots", {
+                    count: fit.empty,
+                })
+              : null;
+    announceClipboard(misfit ? `${misfit}. ${preview}` : preview);
     return true;
 }

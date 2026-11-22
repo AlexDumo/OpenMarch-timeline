@@ -33,8 +33,13 @@ marchers you have selected into the copied formation.
   spots are used. With more, the nearest marchers take the spots and the
   rest stay where they are.
 - Once you copy, a small chip shows up in the field's bottom-left corner.
-  Select it to open the Clipboard card; **Clear** in the card empties the
-  clipboard. On a tablet, the chip also has a **Paste** button.
+  Select it to open the Clipboard card. After a few seconds unused it shrinks
+  to just its picture; choosing other marchers brings it back, and selecting
+  the picture opens the card. Point at the chip and select its **X** to empty
+  the clipboard. On a tablet, the chip also has a **Paste** button and the X
+  is in the chip itself.
+- Paste onto fewer marchers than you copied: a note under the paste's
+  floating editor says how many spots stay empty.
 - Copy a box, then pick **Positions** under **Paste as** on the Clipboard
   card and paste onto fewer marchers: they take some of the box's exact
   spots instead of a smaller box, and stay plain marchers.

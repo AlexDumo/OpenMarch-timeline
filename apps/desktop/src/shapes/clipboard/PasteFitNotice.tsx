@@ -19,7 +19,8 @@ export function PasteFitNotice() {
             : t("shapes.clipboard.chipLeftOut", { count: fit.left });
     return (
         <div
-            className={`${EDITOR_BAR} text-sub text-text-subtitle gap-4 px-8`}
+            // At the editor's end, under Place
+            className={`${EDITOR_BAR} text-sub text-text-subtitle gap-4 self-end px-8`}
             data-testid="paste-fit-notice"
             data-fit={fit.fit}
         >

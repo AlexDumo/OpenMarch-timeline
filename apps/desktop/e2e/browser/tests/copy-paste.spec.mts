@@ -732,7 +732,7 @@ test("the chip's line says how the copy fits or why Paste can't run, its Paste i
     await expect(status).toHaveText("Place or discard the open shape");
     await expect(status).toHaveAttribute("data-status", "shapeOpen");
     await expect(page.getByTestId("clipboard-live")).toHaveText(
-        "Paste preview. Enter places it, Escape discards it.",
+        "2 spots stay empty. Paste preview. Enter places it, Escape discards it.",
     );
     const focusedInChip = await page.evaluate(
         () =>
@@ -789,11 +789,35 @@ test("the chip rests to its picture after a while, wakes when the selection chan
     await expect(chip(page)).toHaveAttribute("data-rested", "true", {
         timeout: 8000,
     });
+    if (!touch) {
+        // Its tooltip says what's copied and what a click does
+        await page.getByTestId("clipboard-chip-rested").hover();
+        await expect(page.getByRole("tooltip")).toContainText(
+            "Clipboard: Positions, 4 marchers · Show details",
+        );
+    }
     // A click on the picture: the card at once on desktop; the whole chip on a tablet
     await page.getByTestId("clipboard-chip-rested").click();
     if (touch)
         await expect(page.getByTestId("clipboard-chip-toggle")).toBeVisible();
-    else await expect(page.getByTestId("clipboard-section")).toBeVisible();
+    else {
+        const card = page.getByTestId("clipboard-section");
+        await expect(card).toBeVisible();
+        // The card has no Clear of its own: the chip's X clears
+        await expect(card.getByTestId("clipboard-clear")).toHaveCount(0);
+        await page.keyboard.press("Escape");
+        // Folded with the keyboard, the focus is back on the chip, which holds it whole
+        await blur(page);
+    }
+    // Rested again, a new copy shows the whole chip
+    await page.mouse.move(5, 500);
+    await expect(chip(page)).toHaveAttribute("data-rested", "true", {
+        timeout: 8000,
+    });
+    await page.keyboard.press("ControlOrMeta+c");
+    await expect(page.getByTestId("clipboard-chip-status")).toHaveText(
+        "Copied",
+    );
 });
 
 test("the chip's X clears the clipboard: on hover on desktop, on the whole chip on a tablet", async ({
@@ -834,6 +858,10 @@ test("an open paste that doesn't fit says so under its editor, and one that fits
     await expect(preview(page)).toBeVisible();
     await expect(notice).toHaveText("2 spots stay empty");
     await expect(notice).toHaveAttribute("data-fit", "emptySpots");
+    // A screen reader hears it with the preview
+    await expect(page.getByTestId("clipboard-live")).toHaveText(
+        "2 spots stay empty. Paste preview. Enter places it, Escape discards it.",
+    );
     await page.keyboard.press("Escape");
     await expect(preview(page)).toBeHidden();
     await expect(notice).toBeHidden();

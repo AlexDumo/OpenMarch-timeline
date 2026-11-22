@@ -34,6 +34,7 @@ import type { PictureFit } from "./picture";
 import {
     announceClipboard,
     useClipboardAnnouncementStore,
+    useCopiedPictureStore,
 } from "./pictureStore";
 
 /** How long the chip says "Copied" after a copy, in ms */
@@ -62,12 +63,23 @@ const REST_AFTER = 5000;
  */
 export function ClipboardChip() {
     const view = useClipboardView();
+    // The store's picture, not the view's: the view waits for the field to load, and a copy
+    // kept from before mustn't then look like a new one (no flash, no announcement)
+    const picture = useCopiedPictureStore((s) => s.picture);
     // Here, mounted while nothing is copied too, so the first copy flashes as well
-    const copiedNow = useCopiedFlash(view?.picture ?? null);
+    const copiedNow = useCopiedFlash(picture);
+    // The copy there when the field opened: the chip starts rested for it
+    const kept = useRef(picture);
     return (
         <>
-            <ClipboardAnnouncer view={view} />
-            {view && <ChipOrCard view={view} copiedNow={copiedNow} />}
+            <ClipboardAnnouncer picture={picture} view={view} />
+            {view && (
+                <ChipOrCard
+                    view={view}
+                    copiedNow={copiedNow}
+                    kept={view.picture === kept.current}
+                />
+            )}
         </>
     );
 }
@@ -75,16 +87,19 @@ export function ClipboardChip() {
 function ChipOrCard({
     view,
     copiedNow,
+    kept,
 }: {
     view: ClipboardView;
     /** A copy was just made: the chip says so for a moment */
     copiedNow: boolean;
+    /** The copy was already there when the field opened (a restart) */
+    kept: boolean;
 }) {
     const { t } = useTranslate();
     const [open, setOpen] = useState(false);
     // Rested: only the picture. A copy kept from before (a restart) starts rested; a new copy
     // shows the whole chip
-    const [rested, setRested] = useState(!copiedNow);
+    const [rested, setRested] = useState(kept);
     const [hovered, setHovered] = useState(false);
     const [focusIn, setFocusIn] = useState(false);
     const box = useRef<HTMLDivElement>(null);
@@ -204,7 +219,9 @@ function ChipOrCard({
                 if (e.pointerType === "mouse") setHovered(true);
             }}
             onPointerLeave={() => setHovered(false)}
-            onFocus={() => setFocusIn(true)}
+            // Only keyboard focus holds it whole: a tap or click leaves the focus on it too, and
+            // nothing on the field takes it back
+            onFocus={(e) => setFocusIn(e.target.matches(":focus-visible"))}
             onBlur={(e) => {
                 if (!e.currentTarget.contains(e.relatedTarget as Node | null))
                     setFocusIn(false);
@@ -499,9 +516,14 @@ function useFadeWhileDraggingNear(
  * are announced too. Says each new copy and a clear itself; a paste preview's words come from
  * `pasteFormation`.
  */
-function ClipboardAnnouncer({ view }: { view: ClipboardView | null }) {
+function ClipboardAnnouncer({
+    picture,
+    view,
+}: {
+    picture: ClipboardView["picture"] | null;
+    view: ClipboardView | null;
+}) {
     const { t } = useTranslate();
-    const picture = view?.picture ?? null;
     const last = useRef(picture);
     useEffect(() => {
         if (picture === last.current) return;
