@@ -5,6 +5,7 @@ import {
     applyFileVersionDecision,
     decideFileVersion,
     isSupportedUserVersion,
+    markOrderModelIfOrdered,
     MAX_SUPPORTED_USER_VERSION,
     MIN_SUPPORTED_USER_VERSION,
     NEW_FILE_USER_VERSION,
@@ -12,9 +13,9 @@ import {
 } from "../fileVersion";
 
 describe("file-format version", () => {
-    it("supports the page model (7), the timeline model (8), the step-15 route model (10), the lane model (11), Adjust (12), trails (13), arc legs (14) and outlines (17)", () => {
+    it("supports the page model (7), the timeline model (8), the step-15 route model (10), the lane model (11), Adjust (12), trails (13), arc legs (14), outlines (17) and order marks (18)", () => {
         expect(MIN_SUPPORTED_USER_VERSION).toBe(7);
-        expect(MAX_SUPPORTED_USER_VERSION).toBe(17);
+        expect(MAX_SUPPORTED_USER_VERSION).toBe(18);
         expect(NEW_FILE_USER_VERSION).toBe(8);
     });
 
@@ -26,7 +27,7 @@ describe("file-format version", () => {
             });
         });
 
-        it.each([7, 8, 10, 11, 12, 13, 14, 17])(
+        it.each([7, 8, 10, 11, 12, 13, 14, 17, 18])(
             "accepts an existing file at %i",
             (version) => {
                 expect(decideFileVersion(version, false)).toEqual({
@@ -36,7 +37,7 @@ describe("file-format version", () => {
             },
         );
 
-        it.each([7, 8, 10, 11, 12, 13, 14, 17])(
+        it.each([7, 8, 10, 11, 12, 13, 14, 17, 18])(
             "accepts a 'new' file already at %i without rewriting it",
             (version) => {
                 expect(decideFileVersion(version, true)).toEqual({
@@ -56,7 +57,7 @@ describe("file-format version", () => {
             },
         );
 
-        it.each([15, 16, 18, 42, 2 ** 31 - 1])(
+        it.each([15, 16, 19, 42, 2 ** 31 - 1])(
             "refuses a file at %i as too new, new or not",
             (version) => {
                 for (const isNewFile of [false, true]) {
@@ -84,9 +85,9 @@ describe("file-format version", () => {
         });
     });
 
-    it("isSupportedUserVersion covers 7, 8, 10 to 14 and 17, not 9, 15, 16 (steps not merged here) or past 17", () => {
+    it("isSupportedUserVersion covers 7, 8, 10 to 14, 17 and 18, not 9, 15, 16 (steps not merged here) or past 18", () => {
         expect(
-            [0, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18].map(
+            [0, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19].map(
                 isSupportedUserVersion,
             ),
         ).toEqual([
@@ -103,8 +104,48 @@ describe("file-format version", () => {
             false,
             false,
             true,
+            true,
             false,
         ]);
+    });
+
+    describe("markOrderModelIfOrdered (#1099)", () => {
+        const fileWith = (version: number, kinds: readonly string[]) => {
+            const db = new DatabaseSync(":memory:");
+            db.exec(
+                "CREATE TABLE timeline_shape_recipes (id INTEGER PRIMARY KEY, kind TEXT NOT NULL)",
+            );
+            for (const kind of kinds)
+                db.prepare(
+                    "INSERT INTO timeline_shape_recipes (kind) VALUES (?)",
+                ).run(kind);
+            db.prepare(`PRAGMA user_version = ${version}`).run();
+            return db;
+        };
+
+        it.each(["order", "orderClear"])(
+            "writes a file holding an %s mark as 18",
+            (kind) => {
+                for (const version of [8, 13, 17]) {
+                    const db = fileWith(version, ["line", kind]);
+                    markOrderModelIfOrdered(db);
+                    expect(readUserVersion(db)).toBe(18);
+                    db.close();
+                }
+            },
+        );
+
+        it("leaves a file with only shapes, or no recipe table, at its version", () => {
+            const shapes = fileWith(13, ["line", "ungrouped"]);
+            markOrderModelIfOrdered(shapes);
+            expect(readUserVersion(shapes)).toBe(13);
+            shapes.close();
+            const bare = new DatabaseSync(":memory:");
+            bare.prepare("PRAGMA user_version = 8").run();
+            markOrderModelIfOrdered(bare);
+            expect(readUserVersion(bare)).toBe(8);
+            bare.close();
+        });
     });
 
     describe("applyFileVersionDecision", () => {

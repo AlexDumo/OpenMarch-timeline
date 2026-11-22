@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, lte } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lte, sql } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 import { schema } from "@/global/database/db";
 import { DbConnection, describeDbTests } from "@/test/base";
@@ -105,6 +105,13 @@ const orderMoveAt = async (
     return last?.id ?? null;
 };
 
+const userVersion = async (db: DbConnection) =>
+    (
+        (await db.all(sql`PRAGMA user_version`)) as
+            | { user_version: number }[]
+            | number[][]
+    ).map((r) => (Array.isArray(r) ? r[0] : r.user_version))[0];
+
 const positions = (ids: readonly number[], beat: number) =>
     ids.map((id) => resolver().positionAt(id, beat));
 
@@ -118,6 +125,52 @@ const LINE = {
 };
 
 describeDbTests("A line's order set by hand", (it) => {
+    it("#1099: the first order mark, set or cleared, writes file version 18; a shape alone doesn't, and undo doesn't lower it", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const ids = await show(db);
+        await inARow(db, ids);
+        const before = await userVersion(db);
+        expect(before).toBeLessThan(18);
+        // A placed Line at page 2's end is a shape, not an order mark
+        const timelineId = await orderMoveAt(db, PAGE2.end, ids);
+        await transactionWithHistory(db, "test", (tx) =>
+            saveShapeRecipeInTransaction({
+                tx,
+                timelineId,
+                recipe: {
+                    kind: "line",
+                    kindVersion: 1,
+                    params: LINE,
+                    orderMode: "keep",
+                    reverse: false,
+                },
+                members: ids.map((marcherId, slot) => ({
+                    marcherId,
+                    slot,
+                    ...SPOTS[slot]!,
+                })),
+            }),
+        );
+        expect(await userVersion(db)).toBe(before);
+        await setMarcherOrder(db, { beat: PAGE2.end, order: ids });
+        expect(await userVersion(db)).toBe(18);
+        await performUndo(db);
+        expect(await userVersion(db)).toBe(18);
+    });
+
+    it("#1099: Clear order alone writes file version 18 too", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const ids = await show(db);
+        await inARow(db, ids);
+        expect(await userVersion(db)).toBeLessThan(18);
+        await clearMarcherOrder(db, { beat: PAGE2.end, marcherIds: ids });
+        expect(await userVersion(db)).toBe(18);
+    });
+
     it("QA-DL-26: Set order round-trips through rememberedOrder from the displayed beat on, and moves no one", async ({
         db,
         marchersAndPages: _,

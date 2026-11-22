@@ -26,6 +26,7 @@ import {
     PAGE_MODEL_USER_VERSION,
     readUserVersion,
     markLaneModelIfLaned,
+    markOrderModelIfOrdered,
 } from "../fileVersion";
 
 /**
@@ -323,6 +324,8 @@ export class DrizzleMigrationService {
             recreateChangeLogTriggers(this.rawDb);
             // A step-15 file whose paths 0025 moved to lanes is written as 11 (ADR 0017 §9)
             markLaneModelIfLaned(this.rawDb);
+            // A file holding an order mark from before #1099 is written as 18
+            markOrderModelIfOrdered(this.rawDb);
 
             console.log("Drizzle migrations applied successfully.");
         } catch (error) {

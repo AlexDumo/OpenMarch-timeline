@@ -13,7 +13,9 @@
  * mark there.
  *
  * Reusing the recipe tables needs no schema change (v0.1.7 files have none of them; the app's own
- * migrations add them), and an older build skips a kind it doesn't know.
+ * migrations add them). An older build would read a mark as a shape at the starting spots, so
+ * saving the first one writes file version 18 (#1099, `fileVersion.ts`) and such a build refuses
+ * the file.
  */
 import { schema } from "@/global/database/db";
 import { transactionWithHistory } from "./history";
