@@ -66,6 +66,7 @@ import {
     TrailCornerCounts,
 } from "./TrailCornerCounts";
 import { useTrailEndShape, useTrailShapeControls } from "./trailShape";
+import { nextPin, placedKey, type BarPin } from "./barPin";
 import { trailOffReason, useFollowTheLeader } from "./followTheLeader";
 import { offCountTally, trailCornersOf } from "./trailCorners";
 import {
@@ -520,6 +521,8 @@ function PathEditorBar({
                   ...(session.target.group && !session.target.trail
                       ? [...(drawn.rings ?? []), ...drawn.spots]
                       : []),
+                  // A trail's end spots, where its marchers stop: the bar keeps off them (#1102)
+                  ...(session.target.trail ? drawn.spots : []),
               ]
             : (drawn?.lanes?.flat() ?? []);
         return lines.length > 0 ? lines : pathOutline(shapeOf(session));
@@ -548,7 +551,9 @@ function PathEditorBar({
     // While drawing, the bar stays where it first appeared, beside the marchers (sim round 3: it
     // re-placed itself as the line grew, so a click meant for Finish landed on the field and
     // added a corner). It fades while a point is dragged, as the shape editor's bar does
-    const pinned = useRef<{ left: number; top: number } | null>(null);
+    // A placed point that runs the drawing under it moves it clear once (#1102, `barPin.ts`)
+    const pinned = useRef<BarPin | null>(null);
+    const key = placedKey(session);
     if (!drawing) pinned.current = null;
     // Pinned only once the drawing bar itself was measured: the closed bar's size came first
     // (review of #900)
@@ -558,7 +563,12 @@ function PathEditorBar({
         size.width > 0 &&
         Number.isFinite(size.fw)
     )
-        pinned.current = { left: place.left, top: place.top };
+        pinned.current = { left: place.left, top: place.top, key };
+    else if (pinned.current)
+        pinned.current = nextPin(pinned.current, key, place, size, [
+            ...outline.map((p) => fieldToElement(view, p.x, p.y)),
+            ...footprint.map((p) => fieldToElement(view, p.x, p.y)),
+        ]);
     const { left, top } = (drawing && pinned.current) || place;
     const faded = drawing && session.dragging !== null;
     const quiet = session.phase === "closed";
