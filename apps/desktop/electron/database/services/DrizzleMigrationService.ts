@@ -22,7 +22,7 @@ import {
 import {
     fileTooNewMessage,
     isSupportedUserVersion,
-    MAX_SUPPORTED_USER_VERSION,
+    isTooNewUserVersion,
     PAGE_MODEL_USER_VERSION,
     readUserVersion,
     markLaneModelIfLaned,
@@ -268,7 +268,7 @@ export class DrizzleMigrationService {
      */
     async applyPendingMigrations(migrationsFolder?: string): Promise<void> {
         const userVersion = readUserVersion(this.rawDb);
-        if (userVersion > MAX_SUPPORTED_USER_VERSION) {
+        if (isTooNewUserVersion(userVersion)) {
             throw new Error(fileTooNewMessage(userVersion));
         }
         if (!isSupportedUserVersion(userVersion)) {
