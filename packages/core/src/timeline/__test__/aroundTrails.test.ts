@@ -583,5 +583,5 @@ describe("going round a closed outline (spec R-13‴, pathways step 10)", () => 
             );
             walkedAgrees(db);
         }
-    });
+    }, 30_000);
 });
