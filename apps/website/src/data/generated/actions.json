@@ -1573,6 +1573,11 @@
             }
         ]
     },
+    "convertTrailToShape": {
+        "label": "Convert to shape",
+        "category": "path",
+        "bindings": []
+    },
     "trailShapeControls": {
         "label": "Shape controls",
         "category": "path",
