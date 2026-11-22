@@ -1398,8 +1398,6 @@
     "shapes.clipboard.anyNumber": "In the inspector's Clipboard card, when a whole shape (box, circle, line, arc) was copied: it can be pasted onto any number of selected marchers and is rebuilt for them with the same spacing between marchers.",
     "shapes.clipboard.asShape": "Option of the Paste as switch in the inspector's Clipboard card, beside Positions: paste the copied shape as a shape, rebuilt for any number of selected marchers and still editable.",
     "shapes.clipboard.clear": "Button on the inspector's Clipboard card that empties the clipboard of the copied formation. Short; a verb.",
-    "shapes.clipboard.copied": "Short toast after Copy when the selected marchers are not one whole shape. {count} is how many marchers' positions were copied. Example: \"16 marchers copied\".",
-    "shapes.clipboard.copiedShape": "Short toast after Copy when the selection was one whole shape. {shape} is the shape's name as shown elsewhere in the app (Box, Circle, Line, Arc, Group) and {count} is how many marchers are in it. Example: \"Box copied (16 marchers)\".",
     "shapes.clipboard.fitEmptySpots": "In the inspector's Clipboard card, when fewer marchers are selected than the copied positions have spots. {selected} is how many marchers are selected; {count} is how many copied spots nobody will stand on if they paste.",
     "shapes.clipboard.fitExact": "In the inspector's Clipboard card: the selected marchers are exactly as many as the copied spots, so every spot is filled. {count} is how many are selected.",
     "shapes.clipboard.fitLaidOut": "In the inspector's Clipboard card, when a whole shape was copied and marchers are selected: pasting rebuilds the shape for the {count} selected marchers.",

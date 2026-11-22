@@ -2500,8 +2500,6 @@
             "anyNumber": "Pastes onto any number of marchers, keeping its spacing",
             "asShape": "Shape",
             "clear": "Clear",
-            "copied": "{count, plural, one {# marcher copied} other {# marchers copied}}",
-            "copiedShape": "{shape} copied ({count, plural, one {# marcher} other {# marchers}})",
             "fitEmptySpots": "{count, plural, one {With {selected} selected, # spot stays empty} other {With {selected} selected, # spots stay empty}}",
             "fitExact": "{count, plural, one {Fits the # marcher selected} other {Fits the # marchers selected}}",
             "fitLaidOut": "{count, plural, one {Laid out for the # marcher selected} other {Laid out for the # marchers selected}}",

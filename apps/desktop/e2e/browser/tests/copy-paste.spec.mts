@@ -168,7 +168,7 @@ test("a placed box copied and pasted onto other marchers previews centered on th
         .poll(async () => (await readField(page)).selection.length)
         .toBe(4);
     await page.keyboard.press("ControlOrMeta+c");
-    await expect(toasts(page).filter({ hasText: "Box copied" })).toBeVisible();
+    await expect(page.getByTestId("clipboard-kind")).toHaveText("Box");
 
     await select(page, [5, 6, 7, 8]);
     const steps = await undoSteps(show);
@@ -235,7 +235,7 @@ test("Copy right after Place copies the box, and pasting it again onto the same 
     // Copied the moment the shape tool closes, before the box is read back
     await expect(preview(page)).toBeHidden();
     await page.keyboard.press("ControlOrMeta+c");
-    await expect(toasts(page).filter({ hasText: "Box copied" })).toBeVisible();
+    await expect(page.getByTestId("clipboard-kind")).toHaveText("Box");
     await expect.poll(() => savedShapes(show)).toBe(1);
     await waitForIdle(page);
 
@@ -297,9 +297,9 @@ test("loose dots pasted exactly onto fewer marchers take the nearest dots, draw 
     const { page } = show;
     await select(page, [1, 2, 3, 4]);
     await page.keyboard.press("ControlOrMeta+c");
-    await expect(
-        toasts(page).filter({ hasText: "4 marchers copied" }),
-    ).toBeVisible();
+    await expect(page.getByTestId("clipboard-count")).toHaveText(
+        "4 marchers",
+    );
 
     await select(page, [5, 6]);
     const steps = await undoSteps(show);
@@ -371,9 +371,9 @@ test("the copied picture is the app's own: still there after a reload", async ({
     const { page } = show;
     await select(page, [1, 2, 3, 4]);
     await page.keyboard.press("ControlOrMeta+c");
-    await expect(
-        toasts(page).filter({ hasText: "4 marchers copied" }),
-    ).toBeVisible();
+    await expect(page.getByTestId("clipboard-count")).toHaveText(
+        "4 marchers",
+    );
     await page.reload();
     await waitForField(page);
     await expectCanvasMatchesShow(show);
@@ -410,9 +410,9 @@ test("the field menu offers Copy, Paste and Paste exactly: the pastes only once 
         );
     await item("copyFormation").click();
     await expect(menu).toBeHidden();
-    await expect(
-        toasts(page).filter({ hasText: "2 marchers copied" }),
-    ).toBeVisible();
+    await expect(page.getByTestId("clipboard-count")).toHaveText(
+        "2 marchers",
+    );
 
     await select(page, [5, 6]);
     await openOn("T5");

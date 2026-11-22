@@ -38,7 +38,6 @@ import {
  * shape drawn here, and Escape throws it away. Pasting rearranges: no marcher is ever added.
  */
 
-const COPIED_TOAST = "formation-copied";
 const LEFT_TOAST = "formation-paste-left";
 
 /** The placed shape on the field whose members are exactly `ids`, if any */
@@ -78,24 +77,6 @@ export async function copyFormation(ids: readonly number[]): Promise<boolean> {
     });
     if (!picture) return false;
     keepPicture(picture);
-    toast.message(
-        shape
-            ? tolgee.t(
-                  "shapes.clipboard.copiedShape",
-                  "{shape} copied ({count, plural, one {# marcher} other {# marchers}})",
-                  {
-                      shape: shape.kind.shape.label,
-                      count: positions.length,
-                  },
-              )
-            : tolgee.t(
-                  "shapes.clipboard.copied",
-                  "{count, plural, one {# marcher copied} other {# marchers copied}}",
-                  { count: positions.length },
-              ),
-        // One notice, however often it's copied
-        { id: COPIED_TOAST },
-    );
     return true;
 }
 
