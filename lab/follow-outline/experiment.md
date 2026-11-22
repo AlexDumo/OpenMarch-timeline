@@ -11,6 +11,7 @@ questions:
   - "Drag back past where they started: the line goes the other way around, the one at the back leading. Is that what you expected?"
   - "Type a number (say 4) and press Enter instead of dragging. Was that easy to find from the note by the leader?"
   - "On a tablet, drag the leader with a finger or pencil. Did it work as with a mouse?"
+  - "New (2026-11-22): place fifteen with the Box tool in Outline, go to the next page, select them and press Shift+L. Did Go around open? If Follow ever refuses, did the message tell you what to change?"
   - "New (2026-11-22): a circle shows no corner chips and no 'Turns between counts' warning any more; a box outline shows chips only at its four corners. Is that right?"
   - "Put eight marchers on a circle (the Circle tool), go to the next page, select them and press Shift+L. Was it clear which way they'll go and who leads?"
   - "Try Spots, then Steps. Which did you want? Did ending between spots with Steps ever make sense for you?"
@@ -35,6 +36,12 @@ show.
   to keep it, one undo step. **Esc** while dragging puts it back. Drag back past where they
   started to go the other way around. Or **type a number** and press **Enter** for an exact
   count. With nothing dragged or typed, Enter writes nothing.
+- **Box outlines from the Box tool go around.** An odd count in a narrow outline box (say
+  fifteen, 4 steps wide and 9 deep) was refused; it works now.
+- **Refusals say why.** If Follow can't find a line or outline, it tells you the reason: you're
+  a page early (they only stand in the shape at the end of this move), only part of a shape
+  is selected, there's a gap too wide or the spacing is too uneven, or some marchers stand too
+  far off the shape.
 - **No corner warnings on curves.** "Turns between counts" is for sharp corners, where a
   marcher plants and turns. It now shows only at real corners: a box's corners and corner
   points you draw. A circle, an arc or a curved leg never shows it.

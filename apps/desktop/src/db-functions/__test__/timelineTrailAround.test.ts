@@ -34,9 +34,12 @@ import {
     goRoundPreview,
     goRoundRefusalFor,
     lineRound,
+    outlineMiss,
     planGoRound,
     reverseOutline,
 } from "../timelineTrailAround";
+import { acrossRange, outlineSpots } from "@/shapes/distribute/outline";
+import { keptOutline } from "@/shapes/box/boxGeometry";
 import { findTrailTarget } from "@/pathways/pathTarget";
 import { trailCornersOf } from "@/pathways/trailCorners";
 import type { PathSession } from "@/pathways/pathPenStore";
@@ -349,6 +352,125 @@ describe("the fit's review cases (step 10, QA-OL-12)", () => {
             expect([...order.slice(rot), ...order.slice(0, rot)]).toEqual([
                 ...ends.keys(),
             ]);
+        },
+    );
+});
+
+describe("Box tool outlines and why a fit fails (owner, 2026-11-22)", () => {
+    plainIt(
+        "QA-OL-14: every Box tool outline fits as a box, odd counts' gap on a side spaced wider than the rest included",
+        () => {
+            const misses: string[] = [];
+            for (let n = 4; n <= 24; n++)
+                for (const side of ["back", "right"] as const)
+                    for (const style of ["gap", "spread"] as const) {
+                        if (n % 2 === 0 && (side !== "back" || style !== "gap"))
+                            continue;
+                        const { min, max } = acrossRange(n, side);
+                        for (let a = min; a <= max; a++)
+                            for (const [across, deep] of [
+                                [2, 2],
+                                [2, 1],
+                                [5, 3],
+                                [1.5, 2],
+                            ] as const) {
+                                const sides = { a, b: Math.ceil(n / 2) - a };
+                                const starts = outlineSpots(
+                                    n,
+                                    sides,
+                                    { side, at: null, style },
+                                    across * STEP,
+                                    deep * STEP,
+                                ).map((p): XY => [p.x + 400, p.y + 300]);
+                                if (fitOutline(starts, STEP)?.kind !== "box")
+                                    misses.push(
+                                        `${n}: ${a} × ${sides.b}, ${across} × ${deep} steps, ${side} ${style}`,
+                                    );
+                            }
+                    }
+            expect(misses).toEqual([]);
+        },
+    );
+
+    plainIt(
+        "QA-OL-14b: fifteen on a Box tool outline 5 steps across and 3 deep, the gap on the back, go around",
+        () => {
+            const starts = outlineSpots(
+                15,
+                { a: 4, b: 4 },
+                { side: "back", at: null, style: "gap" },
+                5 * STEP,
+                3 * STEP,
+            ).map((p): XY => [p.x, p.y]);
+            expect(starts).toHaveLength(15);
+            expect(fitOutline(starts, STEP)?.kind).toBe("box");
+            expect(outlineOf(starts, STEP)?.full).toBe(true);
+        },
+    );
+
+    plainIt(
+        "QA-OL-14c (the owner's lab report): fifteen in a Box tool outline drawn 4 steps wide and 9 deep, the back spread to its two corners, go around",
+        () => {
+            const kept = keptOutline(4 * STEP, 9 * STEP, 15, "back", STEP / 2);
+            expect([kept.a, 8 - kept.a]).toEqual([2, 6]);
+            const starts = outlineSpots(
+                15,
+                { a: kept.a, b: 8 - kept.a },
+                { side: "back", at: null, style: "spread" },
+                kept.across,
+                kept.deep,
+            ).map((p): XY => [p.x, p.y]);
+            expect(fitOutline(starts, STEP)?.kind).toBe("box");
+        },
+    );
+
+    plainIt(
+        "QA-OL-15: two ranks far apart and three sides of a box still aren't outlines",
+        () => {
+            const ranks: XY[] = [0, 1, 2, 3].flatMap((i): XY[] => [
+                [i * 2 * STEP, 0],
+                [i * 2 * STEP, 12 * STEP],
+            ]);
+            expect(fitOutline(ranks, STEP)).toBeNull();
+            // a square of side 8 steps, 2 apart, with its whole front left out
+            const three: XY[] = [];
+            for (let i = 0; i <= 4; i++) three.push([i * 2 * STEP, 0]);
+            for (let j = 1; j <= 4; j++) {
+                three.push([0, j * 2 * STEP]);
+                three.push([8 * STEP, j * 2 * STEP]);
+            }
+            expect(fitOutline(three, STEP)).toBeNull();
+        },
+    );
+
+    plainIt(
+        "QA-OL-16: why no outline: a gap too wide is a gap; one marcher a step off a circle is off; a scatter is neither",
+        () => {
+            // a square of side 12 steps, 4 apart, with the two between the right side's corners gone
+            const square: XY[] = [];
+            for (let i = 0; i < 3; i++) {
+                square.push([i * 4 * STEP, 0]);
+                square.push([12 * STEP, i * 4 * STEP]);
+                square.push([(12 - i * 4) * STEP, 12 * STEP]);
+                square.push([0, (12 - i * 4) * STEP]);
+            }
+            const gapped = square.filter(
+                ([x, y]) => !(x === 12 * STEP && y > 0 && y < 12 * STEP),
+            );
+            expect(gapped).toHaveLength(10);
+            expect(fitOutline(gapped, STEP)).toBeNull();
+            expect(outlineMiss(gapped, STEP)).toBe("gap");
+            const ring = circlePlaces([0, 0], 6 * STEP);
+            ring[2] = [ring[2]![0] * (7.2 / 6), ring[2]![1] * (7.2 / 6)];
+            expect(fitOutline(ring, STEP)).toBeNull();
+            expect(outlineMiss(ring, STEP)).toBe("off");
+            const rand = seeded(7);
+            const scatter = Array.from(
+                { length: 8 },
+                (): XY => [rand() * 40 * STEP, rand() * 40 * STEP],
+            );
+            expect(outlineMiss(scatter, STEP)).toBeNull();
+            expect(outlineMiss(square, STEP)).toBeNull();
         },
     );
 });

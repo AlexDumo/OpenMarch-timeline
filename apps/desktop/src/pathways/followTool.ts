@@ -7,6 +7,7 @@ import { loopSnap, nearestOnLoop, type Resolver } from "@openmarch/core";
 import { db } from "@/global/database/db";
 import {
     followOrderAt,
+    followSource,
     tailFirstOf,
     trailDragRefusalFor,
     trailDragRefusal,
@@ -19,10 +20,13 @@ import {
 } from "@/db-functions/timelineTrails";
 import {
     aroundTrailOver,
+    followShapeRefusal,
     goRoundRefusal,
     goRoundRefusalFor,
+    outlineMiss,
     outlineOf,
 } from "@/db-functions/timelineTrailAround";
+import { placedBoxesAt } from "@/shapes/placed/placedBoxStore";
 import { rippleFormAt } from "@/db-functions/timelineTrailRipple";
 import {
     rippleFormProblem,
@@ -217,11 +221,17 @@ export async function openFollowTool(
         round,
     });
     const { around } = offer;
+    // No line and no outline: why, when it can be told (owner, 2026-11-22)
+    const shapeless = !around && !offer.refusal && !tailFirst;
+    const why = shapeless
+        ? await whyNoShape(resolver, sorted, window, starts, step)
+        : null;
     const refusal = around
         ? null
-        : round
-          ? (offer.refusal ?? goRoundRefusal.notOutline())
-          : dragRefusal && (offer.refusal ?? dragRefusal);
+        : (why ??
+          (round
+              ? (offer.refusal ?? goRoundRefusal.notOutline())
+              : dragRefusal && (offer.refusal ?? dragRefusal)));
     if (refusal) return translateTimelineText(refusal);
     const keep = await followKeepAt(db, resolver, sorted, beat);
     // Ripple in (step 9, RP-2): the form those end spots make, in its own order, and why not
@@ -263,6 +273,39 @@ export async function openFollowTool(
         },
     });
     return null;
+}
+
+/**
+ * Why the selection stands in no line, curve, arc or outline at the window's start flag, when it
+ * can be told (owner, 2026-11-22), in this order: they stand in one only at the move's end (the
+ * playhead is a page early); they are only part of a placed shape; a circle or box with a gap too
+ * wide or spacing too uneven; some stand too far off the shape the rest make. Null otherwise.
+ */
+async function whyNoShape(
+    resolver: Pick<Resolver, "positionAt">,
+    ids: readonly number[],
+    window: TrailWindow,
+    starts: readonly [number, number][],
+    step: number,
+): Promise<TimelineText | null> {
+    const ends = ids.map((m): [number, number] => {
+        const [x, y] = resolver.positionAt(m, window.end);
+        return [x, y];
+    });
+    const moved = ends.some(
+        (p, i) => Math.hypot(p[0] - starts[i]![0], p[1] - starts[i]![1]) > 1e-6,
+    );
+    if (moved && (followSource(ends) || outlineOf(ends, step)))
+        return followShapeRefusal.later();
+    const chosen = new Set(ids);
+    for (const shape of placedBoxesAt(window.start)) {
+        const members = shape.recipe.members.map((m) => m.marcherId);
+        const inIt = members.filter((m) => chosen.has(m)).length;
+        if (inIt === chosen.size && members.length > inIt)
+            return followShapeRefusal.part(inIt, members.length);
+    }
+    const miss = outlineMiss(starts, step);
+    return miss ? followShapeRefusal[miss]() : null;
 }
 
 /** Why a trail can't be dragged out of the line `tailFirst` (none: not a line), or null */
