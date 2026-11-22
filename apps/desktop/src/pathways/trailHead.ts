@@ -40,6 +40,7 @@ import {
     type PathPoint,
 } from "@/shapes/pen/penPath";
 import { SMOOTH } from "@/shapes/line/lineGeometry";
+import { isFollowTheLeaderOn } from "./followTheLeader";
 import {
     shapeOf,
     storedPoints,
@@ -101,6 +102,8 @@ export function canDragHead(s: PathSession | null): s is PathSession {
     return (
         !!s &&
         !!trail &&
+        // Follow-the-leader switched off while the trail was open (#1095): nothing to drag
+        isFollowTheLeaderOn() &&
         s.phase === "open" &&
         !s.follow &&
         !!trail.along &&
