@@ -39,6 +39,7 @@ import {
     type WorkingCopyConflictChoice,
     type WorkingCopySession,
     type WorkingCopyStatus,
+    WorkingCopyStorageError,
     removeStaleTempFiles,
 } from "../database/workingCopy/WorkingCopySession";
 import { createWorkingCopyTelemetry } from "./workingCopyTelemetry";
@@ -2383,11 +2384,16 @@ async function openShowWithSaveMode(
                 }),
         });
     } catch (error) {
-        // Only before a session took over: a recovered copy keeps its changes for another try.
-        if (recover || workingCopies.current) throw error;
-        // No working copy could be made (OpenMarch's own folder is full or can't be written,
-        // for example). Edit the show in place, as before working-copy saves, rather than
-        // refuse a show that would otherwise open.
+        // Only when OpenMarch's own folder can't hold a copy (full, read-only), and before a
+        // session took over. Anything about the show itself, such as a sync app writing it while
+        // it's copied, is reported as usual: editing it in place is what goes wrong in synced
+        // folders. Edit in place, as before working-copy saves, rather than refuse the show.
+        if (
+            recover ||
+            workingCopies.current ||
+            !(error instanceof WorkingCopyStorageError)
+        )
+            throw error;
         console.error(
             "Couldn't open through a working copy, editing in place:",
             error,
