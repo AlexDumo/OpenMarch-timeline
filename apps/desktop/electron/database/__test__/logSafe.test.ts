@@ -11,7 +11,7 @@ describe("withoutPaths", () => {
             "EBUSY: resource busy or locked, rename 'C:\\Users\\Jane Smith\\OneDrive\\.~Show.dots.1.tmp' -> 'C:\\Users\\Jane Smith\\OneDrive\\Senior Night.dots'",
         );
         expect(withoutPaths(error)).toBe(
-            "EBUSY: resource busy or locked, rename '<path>' -> '<path>'",
+            "EBUSY: resource busy or locked, rename '<path>'",
         );
     });
 
@@ -33,6 +33,16 @@ describe("withoutPaths", () => {
         ).toBe("Couldn't read <path>");
     });
 
+    it("removes the whole path when its name has a quote in it", () => {
+        expect(withoutPaths("open '/Users/alex/Shows/Tom's Show.dots'")).toBe(
+            "open '<path>'",
+        );
+        expect(withoutPaths("open 'C:\\Users\\O'Brien\\show.dots'")).toBe(
+            "open '<path>'",
+        );
+        expect(withoutPaths("in [/home/jane/x.dots]")).toBe("in [<path>");
+    });
+
     it("keeps the code and text that aren't paths", () => {
         expect(withoutPaths(errno("ENOSPC", "no space left on device"))).toBe(
             "ENOSPC: no space left on device",
@@ -40,5 +50,6 @@ describe("withoutPaths", () => {
         expect(withoutPaths(new Error("Saved 16.5 MB/s in 2 ms"))).toBe(
             "Saved 16.5 MB/s in 2 ms",
         );
+        expect(withoutPaths("1 / 2 done")).toBe("1 / 2 done");
     });
 });
