@@ -110,14 +110,21 @@ export function createWorkingCopyHost(deps: WorkingCopyHostDeps) {
      * publish fails, asks (if it can); returns false if the person cancels. Concurrent calls
      * share one run. `closeConnections` closes the app's connections to the working copy.
      */
+    /** The open session's start, while an open is finishing it. */
+    let starting: Promise<void> | null = null;
+
     function end(
         reason: string,
         closeConnections: () => void,
     ): Promise<boolean> {
         if (!current) return Promise.resolve(true);
         ending ??= (async () => {
-            const session = current!;
+            // The session may still be starting (an open in progress): ending it now would
+            // delete the folder its start is about to open.
             try {
+                await starting?.catch(() => undefined);
+                const session = current;
+                if (!session) return true;
                 let outcome = await session.flush(reason);
                 while (
                     !outcome.ok &&
@@ -256,7 +263,13 @@ export function createWorkingCopyHost(deps: WorkingCopyHostDeps) {
                 recoverable = recoverable.filter(
                     (entry) => entry.id !== recover.id,
                 );
-            await session.start();
+            // A quit or update restart that arrives now waits for this (see end())
+            starting = session.start();
+            try {
+                await starting;
+            } finally {
+                starting = null;
+            }
             return { result, session, staleTempFiles, recovered: !!recover };
         },
 

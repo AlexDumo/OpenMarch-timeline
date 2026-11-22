@@ -110,6 +110,28 @@ describe("createWorkingCopyHost", () => {
         expect(fs.readdirSync(workingRoot)).toEqual([]);
     });
 
+    it("finishes an open before a quit or update restart ends it", async () => {
+        const host = makeHost();
+        let ended: Promise<boolean> | undefined;
+        // The quit arrives while the session is starting (its save worker is loading)
+        const opening = host.open(showPath, {
+            migrate: async () => ({ status: 200 }),
+            connect: () => {
+                setImmediate(() => {
+                    ended = host.end("quit", () => undefined);
+                });
+            },
+        });
+
+        await expect(opening).resolves.toMatchObject({
+            result: { status: 200 },
+        });
+        await new Promise((resolve) => setImmediate(resolve));
+        expect(await ended).toBe(true);
+        expect(host.current).toBeNull();
+        expect(fs.readdirSync(workingRoot)).toEqual([]);
+    });
+
     it("asks before every open of a show with unpublished changes, and recovers them", async () => {
         await leaveUnpublishedChanges("lost?");
         const host = makeHost();

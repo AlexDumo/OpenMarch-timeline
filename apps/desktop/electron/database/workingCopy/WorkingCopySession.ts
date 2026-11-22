@@ -704,7 +704,7 @@ export class WorkingCopySession {
      * before this (migrations) are published with the first edit, not on their own.
      */
     async start(): Promise<void> {
-        if (this.started) return;
+        if (this.started || this.closed) return;
         this.started = true;
         this.watcher = new (getSqlite().DatabaseSync)(this.workingPath);
         this.dataVersionStatement = this.watcher.prepare("PRAGMA data_version");
