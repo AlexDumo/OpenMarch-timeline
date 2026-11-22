@@ -19,6 +19,7 @@ import {
     LINGERING_DELETE_MS,
     RenameRetriesExhaustedError,
     type RenameRetryOptions,
+    isSameFile,
     publishFile,
     removeNowOrLater,
     removeWithRetry,
@@ -280,10 +281,20 @@ function readManifestFile(file: string): WorkingCopyManifest | null {
     };
 }
 
-/** The folder's manifest, or the one a crash left half written (its temp file). */
+/**
+ * The folder's manifest, or the one a crash left half written (its temp file). When the temp
+ * file says there are unsaved changes and the manifest doesn't, the rename that would have
+ * recorded them failed (Windows Defender or an indexer holding the manifest, a full disk), so
+ * the folder is treated as unsaved: it may hold edits, and must never be cleared unasked.
+ */
 function readManifest(directory: string): WorkingCopyManifest | null {
     const target = join(directory, MANIFEST_FILE_NAME);
-    return readManifestFile(target) ?? readManifestFile(`${target}.tmp`);
+    const main = readManifestFile(target);
+    const temp = readManifestFile(`${target}.tmp`);
+    if (!main) return temp;
+    if (temp?.unsaved && !main.unsaved)
+        return { ...main, unsaved: true, lastEditAt: temp.lastEditAt };
+    return main;
 }
 
 /** The file a publish replaces: the show file with symbolic links resolved. */
@@ -398,10 +409,9 @@ export function findRecoverableFor(
     entries: readonly RecoverableWorkingCopy[],
     showPath: string,
 ): RecoverableWorkingCopy | undefined {
-    const wanted = resolveSaveTarget(resolve(showPath));
-    return entries.find(
-        (entry) =>
-            resolveSaveTarget(resolve(entry.manifest.showPath)) === wanted,
+    // The same file can be spelled differently (case on Windows and macOS, a symbolic link)
+    return entries.find((entry) =>
+        isSameFile(resolve(entry.manifest.showPath), resolve(showPath)),
     );
 }
 
@@ -421,6 +431,8 @@ export class WorkingCopySession {
     readonly workingPath: string;
 
     private manifest: WorkingCopyManifest;
+    /** The last manifest write failed, so the file on disk may be behind {@link manifest}. */
+    private manifestStale = false;
     private targetPath: string;
     private expected: FileIdentity | null;
     private readonly options: Required<
@@ -664,7 +676,9 @@ export class WorkingCopySession {
         if (this.closed) return;
         this.editGeneration++;
         this.manifest.lastEditAt = new Date().toISOString();
-        if (!this.manifest.unsaved) {
+        // Until "unsaved" is on disk, a crash would leave a folder that looks clean, so a write
+        // that failed is tried again with the next edit.
+        if (!this.manifest.unsaved || this.manifestStale) {
             this.manifest.unsaved = true;
             this.persistManifest();
         }
@@ -860,7 +874,9 @@ export class WorkingCopySession {
     private persistManifest() {
         try {
             writeManifest(this.directory, this.manifest);
+            this.manifestStale = false;
         } catch (error) {
+            this.manifestStale = true;
             console.error("Couldn't write the working copy manifest:", error);
         }
     }

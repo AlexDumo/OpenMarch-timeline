@@ -348,6 +348,36 @@ describe("WorkingCopySession", () => {
         expect(scanWorkingCopies(workingRoot)).toEqual([]);
     });
 
+    it("finds a show's working copy however its path is spelled", async () => {
+        const { session } = await openStarted();
+        edit(session, "unsaved");
+        await session.close();
+        // Another spelling of the same file: through a symbolic link to its folder
+        const link = join(root, "linked");
+        fs.symlinkSync(showDir, link, "dir");
+
+        const entry = findRecoverableFor(
+            scanWorkingCopies(workingRoot),
+            join(link, basename(showPath)),
+        );
+        expect(entry?.manifest.showPath).toBe(showPath);
+    });
+
+    it("records unsaved changes once a failed manifest write can go through", async () => {
+        const { session } = await openStarted();
+        const manifestPath = join(session.directory, MANIFEST_FILE_NAME);
+        // Something holds the manifest: renaming over a folder fails
+        fs.rmSync(manifestPath);
+        fs.mkdirSync(join(manifestPath, "held"), { recursive: true });
+        edit(session, "first edit");
+        fs.rmSync(manifestPath, { recursive: true });
+
+        edit(session, "second edit");
+
+        const onDisk = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+        expect(onDisk.unsaved).toBe(true);
+    });
+
     it("recovers a working copy whose process died without closing it", async () => {
         const { session } = await openStarted();
         edit(session, "crash");
@@ -689,6 +719,34 @@ describe("WorkingCopySession", () => {
             expect(
                 scanWorkingCopies(workingRoot).map((e) => e.manifest.showPath),
             ).toEqual([showPath]);
+        });
+
+        it("keeps a copy whose last manifest write failed after an edit", () => {
+            const manifest = (unsaved: boolean) =>
+                JSON.stringify({
+                    version: 1,
+                    id: "stale",
+                    showPath,
+                    originalIdentity: null,
+                    unsaved,
+                    pid: 1,
+                    appVersion: "",
+                    openedAt: "",
+                    lastEditAt: null,
+                    lastSavedAt: null,
+                });
+            const directory = makeFolder("stale", manifest(false));
+            fs.writeFileSync(
+                join(directory, `${MANIFEST_FILE_NAME}.tmp`),
+                manifest(true),
+            );
+
+            expect(scanWorkingCopies(workingRoot).map((e) => e.id)).toEqual([
+                "stale",
+            ]);
+            expect(fs.existsSync(join(directory, WORKING_FILE_NAME))).toBe(
+                true,
+            );
         });
 
         it("lists a newer version's copy, and asks before it replaces the show", async () => {

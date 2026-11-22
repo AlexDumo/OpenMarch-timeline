@@ -31,6 +31,7 @@ import {
     createWorkingCopyHost,
     workingCopySavesEnabled,
     type RecoverChoice,
+    type WorkingCopyOpen,
 } from "./workingCopyHost";
 import {
     type RecoverableWorkingCopy,
@@ -1587,7 +1588,11 @@ export async function saveFile() {
         // A copy over the open show would replace the file under its own connection, and the
         // show already holds these contents: nothing to do. The same file can be spelled
         // differently (case on Windows and macOS, a symbolic link), so compare the files.
-        if (isSameFile(target, DatabaseServices.getDbPath())) return 200;
+        if (isSameFile(target, DatabaseServices.getDbPath())) {
+            // With a working copy, the file can be a few seconds behind: write it now.
+            const outcome = await workingCopies.current?.flush("save-copy");
+            return outcome && !outcome.ok ? -1 : 200;
+        }
 
         await writeSnapshotTo(target);
         addRecentFile(target);
@@ -2348,30 +2353,46 @@ async function openShowWithSaveMode(
     }
 
     const showPath = recover?.manifest.showPath ?? resolve(path);
-    const opened = await workingCopies.open(showPath, {
-        recover,
-        migrate: async (workingPath) => {
-            const result = await openShowDatabase(
-                workingPath,
-                false,
-                {
-                    ...openShowDeps(),
-                    // The backup is of the show, under its own name.
-                    beforeMigrations: () => backupBeforeMigrations(showPath),
-                    beforeJournalRecovery: undefined,
-                },
-                options,
-            );
-            result.db?.close();
-            return { ...result, db: undefined };
-        },
-        connect: (session) =>
-            DatabaseServices.connectToWorkingCopy({
-                showPath: session.showPath,
-                workingPath: session.workingPath,
-                onActivity: () => session.noteActivity(),
-            }),
-    });
+    let opened: WorkingCopyOpen<OpenShowResult>;
+    try {
+        opened = await workingCopies.open(showPath, {
+            recover,
+            migrate: async (workingPath) => {
+                const result = await openShowDatabase(
+                    workingPath,
+                    false,
+                    {
+                        ...openShowDeps(),
+                        // The backup is of the show, under its own name.
+                        beforeMigrations: () =>
+                            backupBeforeMigrations(showPath),
+                        beforeJournalRecovery: undefined,
+                    },
+                    options,
+                );
+                result.db?.close();
+                return { ...result, db: undefined };
+            },
+            connect: (session) =>
+                DatabaseServices.connectToWorkingCopy({
+                    showPath: session.showPath,
+                    workingPath: session.workingPath,
+                    onActivity: () => session.noteActivity(),
+                }),
+        });
+    } catch (error) {
+        // Only before a session took over: a recovered copy keeps its changes for another try.
+        if (recover || workingCopies.current) throw error;
+        // No working copy could be made (OpenMarch's own folder is full or can't be written,
+        // for example). Edit the show in place, as before working-copy saves, rather than
+        // refuse a show that would otherwise open.
+        console.error(
+            "Couldn't open through a working copy, editing in place:",
+            error,
+        );
+        void removeStaleTempFiles(path);
+        return openShowDatabase(path, false, openShowDeps(), options);
+    }
     if (opened.session)
         workingCopyTelemetry.tempFilesFound(opened.staleTempFiles);
     if (opened.session)
