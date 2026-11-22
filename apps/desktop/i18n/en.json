@@ -1869,6 +1869,7 @@
         "general.openView3dWithShow": "Open 3D View when a show opens",
         "general.editorDisplay": "Open the editor on",
         "general.view3dDisplay": "Open the 3D View on",
+        "general.windows": "Windows",
         "general.windowDisplay.description": "It keeps the size you left it at, maximized or not. Choosing a display moves the window there now.",
         "general.windowDisplay.last": "Where you left it",
         "general.windowDisplay.display": "Display {number} · {size}",
