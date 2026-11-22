@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+    useSyncExternalStore,
+} from "react";
 import { useTranslate } from "@tolgee/react";
 import clsx from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -10,6 +16,8 @@ import {
     isActionEnabled,
     subscribeToActionHandlers,
 } from "@/shortcuts/registry";
+import { useIsTouchMode } from "@/stores/InputModeStore";
+import { useFieldLayerRef } from "@/components/canvas/fieldLayers";
 import { useShapeShown } from "../tool/shapeToolStore";
 import {
     CHIP_VIEW,
@@ -34,7 +42,7 @@ const FADE_REACH = 48;
  * What's copied, in the field's bottom-left corner (#961, owner 2026-11-22), across from the
  * zoom box: there only while something is copied. Folded, a chip: the picture as it will paste,
  * what it is and how many marchers, one line saying how it fits the selection (or why Paste
- * can't run), and Paste with its key. A press on the chip opens its card above it
+ * can't run), and in the touch layout a Paste button. A press on the chip opens its card above it
  * (`ClipboardCard`); it always starts folded, so it never stays open over the field.
  *
  * - A copy says "Copied" on the chip's second line for a moment, with an accent ring: no toast.
@@ -68,10 +76,20 @@ function ChipOrCard({
     const { t } = useTranslate();
     const [open, setOpen] = useState(false);
     const box = useRef<HTMLDivElement>(null);
+    // The pill and the shape editor bar are placed again as it comes, goes, opens and folds
+    const noteLayer = useFieldLayerRef<HTMLDivElement>();
+    const setBox = useCallback(
+        (el: HTMLDivElement | null) => {
+            box.current = el;
+            noteLayer(el);
+        },
+        [noteLayer],
+    );
     const toggle = useRef<HTMLButtonElement>(null);
     const fold = useRef<HTMLButtonElement>(null);
     const faded = useFadeWhileDraggingNear(box);
     const shapeShown = useShapeShown();
+    const touch = useIsTouchMode();
     const pasteReason = useActionReason("pasteFormation");
 
     // A paste preview opening: folded, and the focus off the chip so Enter and Escape reach it
@@ -101,7 +119,7 @@ function ChipOrCard({
     });
     return (
         <div
-            ref={box}
+            ref={setBox}
             data-testid="clipboard-chip"
             data-open={open || undefined}
             data-faded={faded || undefined}
@@ -195,13 +213,17 @@ function ChipOrCard({
                             aria-hidden
                         />
                     </button>
-                    <ActionButton
-                        action="pasteFormation"
-                        data-testid="clipboard-chip-paste"
-                        className={CLIPBOARD_BUTTON_CLASS}
-                    >
-                        {t("actions.edit.paste")}
-                    </ActionButton>
+                    {/* Touch only (owner 2026-11-22): desktop pastes with Ctrl/Cmd+V or the
+                        right-click menu; a tablet has no key, and this is its one-tap paste */}
+                    {touch && (
+                        <ActionButton
+                            action="pasteFormation"
+                            data-testid="clipboard-chip-paste"
+                            className={CLIPBOARD_BUTTON_CLASS}
+                        >
+                            {t("actions.edit.paste")}
+                        </ActionButton>
+                    )}
                 </div>
             )}
         </div>

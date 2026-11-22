@@ -654,7 +654,7 @@ test("the Clipboard chip sits in the field's bottom-left corner, says Copied, op
     await expect(chip(page)).toBeHidden();
 });
 
-test("the chip's line says how the copy fits or why Paste can't run, and its Paste leaves Enter to place", async ({
+test("the chip's line says how the copy fits or why Paste can't run, its Paste is touch only, and a Paste leaves Enter to place", async ({
     show,
 }) => {
     const { page } = show;
@@ -675,8 +675,15 @@ test("the chip's line says how the copy fits or why Paste can't run, and its Pas
         "4",
     );
 
-    // The chip's Paste opens the preview and leaves the focus off the chip: Enter places it
-    await page.getByTestId("clipboard-chip-paste").click();
+    // The chip's own Paste is a tablet's one-tap paste; desktop has Ctrl/Cmd+V and the menu
+    const touch = test.info().project.name === "browser-touch";
+    await expect(page.getByTestId("clipboard-chip-paste")).toHaveCount(
+        touch ? 1 : 0,
+    );
+    // A Paste from the chip (or its card) opens the preview and leaves the focus off the
+    // chip: Enter places it
+    if (touch) await page.getByTestId("clipboard-chip-paste").click();
+    else await (await openCard(page)).getByTestId("clipboard-paste").click();
     await expect(preview(page)).toBeVisible();
     await expect(page.getByTestId("clipboard-live")).toHaveText(
         "Paste preview. Enter places it, Escape discards it.",
