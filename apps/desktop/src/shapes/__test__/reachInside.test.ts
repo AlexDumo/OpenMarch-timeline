@@ -33,6 +33,8 @@ import type { PlacedBox } from "../placed/placedBox";
 import * as placedBoxStore from "../placed/placedBoxStore";
 import { toolEnvFor } from "../tool/toolEnv";
 import type { XY } from "../types";
+import { useTimelineResolverStore } from "@/timeline/timelineStore";
+import { setFollowTheLeader } from "@/pathways/followTheLeader";
 
 vi.mock("../placed/commitBox", () => ({ commitBox: vi.fn() }));
 
@@ -386,6 +388,51 @@ describe("canReachInside", () => {
         // Without it, a press on a member selects the whole box
         useBoxSelectionStore.setState({ inside: null });
         expect(boxPressSelection(2, false, [], false)).toEqual([1, 2, 3, 4]);
+    });
+
+    it("#1101: on a follow-the-leader line's end shape, a click picks the marcher and $mod has nothing to reach into", () => {
+        useBoxSelectionStore.setState({ enabled: true });
+        setFollowTheLeader(true);
+        // Marchers 1..4 arrive at the box's beat (8) as one follow-the-leader line
+        const before = useTimelineResolverStore.getState();
+        useTimelineResolverStore.setState({
+            resolver: {
+                ...before.resolver,
+                spanInfos: (marcherId: number) => [
+                    {
+                        marcherId,
+                        start: 0,
+                        end: 8,
+                        kind: "founding",
+                        assignmentId: marcherId,
+                        assignmentEnd: 8,
+                        transitionId: 30,
+                        slot: marcherId - 1,
+                    },
+                ],
+                ftlEntry: () => ({
+                    transitionId: 30,
+                    members: [1, 2, 3, 4],
+                    orderSource: { kind: "slot", fallback: false },
+                    startDist: [],
+                    endDist: [],
+                    targets: [],
+                }),
+            } as never,
+        });
+        try {
+            expect(boxPressSelection(2, false, [], false)).toBeNull();
+            expect(useBoxSelectionStore.getState().inside).toBeNull();
+            expect(canReachInside(2)).toBe(false);
+            // With Follow-the-leader off it's a shape as any other
+            setFollowTheLeader(false);
+            expect(boxPressSelection(2, false, [], false)).toEqual([
+                1, 2, 3, 4,
+            ]);
+        } finally {
+            useTimelineResolverStore.setState({ resolver: before.resolver });
+            setFollowTheLeader(false);
+        }
     });
 
     it("doesn't apply inside the box already: a click there picks one marcher anyway", () => {
