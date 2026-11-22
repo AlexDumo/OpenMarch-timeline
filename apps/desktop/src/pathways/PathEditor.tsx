@@ -1023,7 +1023,10 @@ function PathMoreMenu({ session }: { session: PathSession }) {
                   "The path already fits where its marcher stands",
               );
     const more = tolgee.t("pathways.editor.more", "More path commands");
-    // A trail's end shape (owner, 2026-11-17): its controls, tucked away while the trail is shown
+    // A trail's end shape (owner, 2026-11-17): its controls, tucked away while the trail is shown.
+    // They edit a trail: gone with Follow-the-leader off (#1095), as the switch takes their
+    // command away
+    const followTheLeader = useFollowTheLeader();
     const endShape = useTrailEndShape();
     const shapeControls = useTrailShapeControls();
     return (
@@ -1096,7 +1099,7 @@ function PathMoreMenu({ session }: { session: PathSession }) {
                                     )}
                         </MenuItemWithReason>
                     )}
-                    {trail && endShape && (
+                    {trail && endShape && followTheLeader && (
                         <>
                             <DropdownMenu.CheckboxItem
                                 className={clsx(MENU_ITEM_CLASS, "items-start")}
