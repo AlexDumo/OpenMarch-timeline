@@ -44,10 +44,13 @@ export function openZips(files: readonly PickedFile[]): {
     zipName: string | null;
 } {
     if (!files.some(isZip)) return { files: [...files], zipName: null };
-    let bytes = files
-        .filter((f) => !isZip(f))
-        .reduce((n, f) => n + f.bytes.byteLength, 0);
-    let entries = 0;
+    // What the opened files will hold, checked entry by entry before each is decoded
+    const total = {
+        bytes: files
+            .filter((f) => !isZip(f))
+            .reduce((n, f) => n + f.bytes.byteLength, 0),
+        entries: 0,
+    };
     const out: PickedFile[] = [];
     let zipName: string | null = null;
     for (const file of files) {
@@ -61,12 +64,15 @@ export function openZips(files: readonly PickedFile[]): {
             opened = unzipSync(file.bytes, {
                 filter: (entry) => {
                     if (skipped(entry.name)) return false;
-                    entries += 1;
-                    bytes += entry.originalSize;
-                    if (entries > MAX_ZIP_ENTRIES || bytes > MAX_IMPORT_BYTES)
+                    total.entries += 1;
+                    total.bytes += entry.originalSize;
+                    if (
+                        total.entries > MAX_ZIP_ENTRIES ||
+                        total.bytes > MAX_IMPORT_BYTES
+                    )
                         throw new RefusedError({
                             code: "tooLarge",
-                            bytes,
+                            bytes: total.bytes,
                             limit: MAX_IMPORT_BYTES,
                         });
                     return true;
