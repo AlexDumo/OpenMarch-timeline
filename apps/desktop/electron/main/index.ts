@@ -410,6 +410,8 @@ async function createWindow(title?: string) {
             });
             if (!proceed) {
                 windowIsClosing = false;
+                // The person kept the app open: it isn't quitting after all
+                appIsQuitting = false;
                 return;
             }
         }
