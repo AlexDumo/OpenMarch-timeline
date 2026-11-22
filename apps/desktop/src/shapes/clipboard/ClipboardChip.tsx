@@ -177,7 +177,11 @@ function ChipOrCard({
             data-field-control
             className={twMerge(
                 POPOVER_CLASS,
-                "group pointer-events-auto absolute bottom-6 left-6 z-10 p-0 motion-safe:transition-[opacity,box-shadow] motion-safe:duration-150",
+                "group pointer-events-auto absolute bottom-6 left-6 z-10 p-0 motion-safe:transition-[opacity,box-shadow,border-color] motion-safe:duration-150",
+                // Hover on the chip itself (not its Clear or Paste): its border turns accent, as
+                // the app's option cards do (only where there's a real hover: a tapped finger leaves none);
+                // keyboard focus gets a ring, plainer than a border
+                "[@media(hover:hover)]:has-[[data-chip-main]:hover]:border-accent/60 has-[[data-chip-main]:focus-visible]:ring-accent/60 has-[[data-chip-main]:focus-visible]:ring-2",
                 open && "p-12",
                 copiedNow && "ring-accent ring-2",
                 faded && "pointer-events-none opacity-20",
@@ -219,8 +223,8 @@ function ChipOrCard({
                         onClick={wake}
                         aria-label={label}
                         data-testid="clipboard-chip-rested"
-                        // Fills the chip, so its hover is the whole chip, edge to edge
-                        className="rounded-6 enabled:hover:bg-text/10 focus-visible:bg-text/10 flex size-44 items-center justify-center outline-hidden"
+                        data-chip-main
+                        className="rounded-6 flex size-44 items-center justify-center outline-hidden"
                     >
                         <PicturePreview
                             picture={view.picture}
@@ -242,8 +246,8 @@ function ChipOrCard({
                         aria-expanded={false}
                         aria-label={label}
                         data-testid="clipboard-chip-toggle"
-                        // Fills the chip (on a tablet, up to Paste), so its hover is the whole chip
-                        className="rounded-6 enabled:hover:bg-text/10 focus-visible:bg-text/10 touch:min-h-44 flex min-w-0 items-center gap-8 px-8 py-6 text-left outline-hidden"
+                        data-chip-main
+                        className="rounded-6 touch:min-h-44 flex min-w-0 items-center gap-8 px-8 py-6 text-left outline-hidden"
                     >
                         <PicturePreview
                             picture={view.picture}
