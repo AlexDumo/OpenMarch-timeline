@@ -22,6 +22,7 @@ import { randomUUID } from "node:crypto";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import * as DatabaseServices from "../database/database.services";
 import { VIEW3D_AUTO_OPEN_SETTING } from "../../src/view3d/sync/protocol";
+import { THEME_SYNC_CHANNEL } from "../../src/global/themeSync";
 import { buildApplicationMenu } from "./application-menu";
 import { onMainLanguageChange, setMainLanguage, t } from "./i18n";
 import { textContextMenuTemplate } from "./textContextMenu";
@@ -1033,6 +1034,11 @@ ipcMain.on(`menu:open`, () => {
 
 ipcMain.handle("get-theme", () => {
     return store.get("theme", "light");
+});
+
+// For the preload, before the page's first paint (index.html)
+ipcMain.on(THEME_SYNC_CHANNEL, (event) => {
+    event.returnValue = store.get("theme", "light");
 });
 
 ipcMain.handle("set-theme", (event, theme) => {
