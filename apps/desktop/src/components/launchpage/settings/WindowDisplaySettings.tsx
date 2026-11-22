@@ -66,7 +66,9 @@ export default function WindowDisplaySettings() {
     const loadDisplays = useCallback(() => {
         void window.electron
             .invoke(LIST_DISPLAYS_CHANNEL)
-            .then((answer: DisplaysResponse) => setResponse(answer));
+            .then((answer: DisplaysResponse | undefined) =>
+                setResponse(answer ?? null),
+            );
     }, []);
 
     useEffect(() => {
