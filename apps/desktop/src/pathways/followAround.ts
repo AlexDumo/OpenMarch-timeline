@@ -249,7 +249,8 @@ function updateAround(
     if (!session || !f?.around || f.grabbed !== null) return;
     const around = fn(f.around, f);
     if (!around || around === f.around) return;
-    const follow = { ...f, around };
+    // a change from the bar ends any slide, and digits typed: Escape then leaves the tool
+    const follow = { ...f, around, roundSlide: null, roundTyped: null };
     const drills = drillsOf(session);
     usePathPenStore.setState({
         session: {
@@ -451,7 +452,7 @@ function setRound(
 ): void {
     const follow: FollowDrag = { ...f, ...patch };
     const target =
-        follow.around && follow.around !== f.around
+        follow.around?.on && follow.around !== f.around
             ? aroundTarget(s.target, follow, drillsOf(s))
             : s.target;
     usePathPenStore.setState({ session: { ...s, follow, target } });
@@ -488,6 +489,11 @@ export function slideRound(at: XY): void {
     const f = s?.follow;
     const slide = f?.roundSlide;
     if (!s || !f || !slide) return;
+    // digits typed while held set how far: the pointer no longer does
+    if (f.roundTyped) {
+        setRound(s, f, { roundSlide: { ...slide, pointer: at } });
+        return;
+    }
     const base = slide.base;
     const plan = aroundPlanOf({ ...f, around: base })!;
     const L = plan.loop.L;
@@ -568,7 +574,7 @@ export function eraseRoundDigit(): boolean {
     const s = usePathPenStore.getState().session;
     const f = s?.follow;
     const typed = f?.roundTyped;
-    if (!s || !f?.around || !typed) return false;
+    if (!s || !f?.around || !typed || !goingRound(f)) return false;
     const text = typed.text.slice(0, -1);
     const amount =
         text === "" ? typed.before : Math.min(roundMaxOf(f), Number(text));
@@ -584,7 +590,7 @@ export function clearRoundTyped(): boolean {
     const s = usePathPenStore.getState().session;
     const f = s?.follow;
     const typed = f?.roundTyped;
-    if (!s || !f?.around || !typed) return false;
+    if (!s || !f?.around || !typed || !goingRound(f)) return false;
     setRound(s, f, {
         roundTyped: null,
         around:

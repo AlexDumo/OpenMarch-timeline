@@ -29,8 +29,8 @@ export const CORNER_MIN_TURN = (20 * Math.PI) / 180;
 /**
  * TC-1: a bend between two legs of the line-up or the end line (where the marchers stand) is a
  * corner only when it turns this much more than each neighboring bend between two such legs
- * (20°), and those neighbors run straight (each turns less than {@link CORNER_MIN_TURN}): a box's
- * or a block letter's vertex. A line standing in a curve or an arc gets none, even where uneven
+ * (20°), and at least twice any neighbor that is itself a turn ({@link CORNER_MIN_TURN} or more):
+ * a box's or a block letter's vertex. A line standing in a curve or an arc gets none, even where uneven
  * spacing or a gap makes one bend stand out (owner, 2026-11-22).
  */
 export const CORNER_STAND_OUT = (20 * Math.PI) / 180;
@@ -126,7 +126,8 @@ export const ARC_FIT = 0.06;
 /**
  * Whether marchers standing at `pts` stand in a circular arc, in order round it (owner,
  * 2026-11-22): four or more, each within {@link ARC_FIT} of the radius of the circle they fit, and
- * each a step on round it the same way, less than half round. Their bends are then a curve, not
+ * each a step on round it the same way, less than a quarter round, and their bends about even (none
+ * more than twice their average, so a chevron or a block letter's vertex isn't an arc). Their bends are then a curve, not
  * corners, however uneven the spacing or wide a gap.
  */
 export function standsOnArc(pts: readonly XY[]): boolean {
@@ -204,7 +205,17 @@ export function standsOnArc(pts: readonly XY[]): boolean {
         if (sign !== 0 && s !== sign) return false;
         sign = s;
     }
-    return true;
+    // about even: a straight line with one sharp bend fits a circle loosely too, but it's a vertex
+    const bends: number[] = [];
+    for (let i = 1; i + 1 < n; i++) {
+        const ax = pts[i]![0] - pts[i - 1]![0];
+        const ay = pts[i]![1] - pts[i - 1]![1];
+        const bx = pts[i + 1]![0] - pts[i]![0];
+        const by = pts[i + 1]![1] - pts[i]![1];
+        bends.push(Math.abs(Math.atan2(ax * by - ay * bx, ax * bx + ay * by)));
+    }
+    const mean = bends.reduce((a, b) => a + b, 0) / bends.length;
+    return bends.every((b) => b <= 2 * mean + 1e-9);
 }
 
 /** Straight stretches through `pts` from distance `d0`, skipping repeated points */
@@ -313,9 +324,10 @@ export function wayCorners(
         const turn = turns[i];
         if (turn == null || Math.abs(turn) < minTurn) continue;
         // TC-1: a bend in the line-up or the end line (both legs standing) must stand out from
-        // the standing bends beside it, and they must run straight, so a line in a curve or an
-        // arc gets no corner at any marcher (owner, 2026-11-22: only a real vertex); the leader's
-        // start and the entrance take the plain rule
+        // the standing bends beside it: by 20°, and to twice any of them that is itself a turn,
+        // so a line in a curve or an arc gets no corner at any marcher, while an L keeps its
+        // vertex beside a slight kink (owner, 2026-11-22: only a real vertex); the leader's start
+        // and the entrance take the plain rule
         if (standingBend(i)) {
             if (stretches[i - 1]!.arc && stretches[i]!.arc) continue;
             const outdone = [i - 1, i + 1].some(
@@ -323,7 +335,8 @@ export function wayCorners(
                     standingBend(j) &&
                     (Math.abs(turn) <
                         Math.abs(turns[j] ?? 0) + CORNER_STAND_OUT ||
-                        Math.abs(turns[j] ?? 0) >= minTurn),
+                        (Math.abs(turns[j] ?? 0) >= minTurn &&
+                            Math.abs(turn) < 2 * Math.abs(turns[j] ?? 0))),
             );
             if (outdone) continue;
         }

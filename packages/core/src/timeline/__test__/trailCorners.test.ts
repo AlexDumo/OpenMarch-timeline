@@ -11,6 +11,7 @@ import {
     aroundCornerCounts,
     CORNER_MIN_TURN,
     outlineCorners,
+    standsOnArc,
     isOnCount,
     roundCount,
     trailCornerCounts,
@@ -515,6 +516,62 @@ describe("corner counts (spec L.9, pathways step 6)", () => {
             const inLine = r.corners.filter((c) => c.d < lineLen - 1e-6);
             expect(inLine, `trial ${trial}`).toEqual([]);
         }
+    });
+
+    it("QA-TC-10c (owner, 2026-11-22): a chevron's vertex keeps its corner at 30° and 45°, and an L keeps its vertex beside a slight kink", () => {
+        expect(
+            standsOnArc([
+                [0, 0],
+                [2, 0],
+                [4, 0],
+                [6, 0],
+            ]),
+        ).toBe(false);
+        for (const deg of [30, 45]) {
+            const a = (deg * Math.PI) / 180;
+            // seven 2 apart: three along x to (6,0), three on turned by `deg`
+            const homes: XY[] = [0, 1, 2, 3].map((i): XY => [2 * i, 0]);
+            for (let i = 1; i <= 3; i++)
+                homes.push([6 + 2 * i * Math.cos(a), 2 * i * Math.sin(a)]);
+            expect(standsOnArc(homes), `${deg}°`).toBe(false);
+            const leader = homes.at(-1)!;
+            const out: XY = [leader[0] + 10, leader[1] + 10];
+            const r = countsOf(
+                show(
+                    homes,
+                    pts([out]),
+                    homes.map((): XY => out),
+                    {
+                        along: true,
+                    },
+                ),
+            );
+            expect(
+                r.corners.some((c) => near(c.at, [6, 0], 1e-9)),
+                `${deg}°`,
+            ).toBe(true);
+        }
+        // an L whose marcher after the vertex stands a little off: a 79° vertex beside a 23° kink
+        const L: XY[] = [
+            [0, 0],
+            [2, 0],
+            [4, 0],
+            [6, 0],
+            [6.4, 2],
+            [6, 4],
+            [6, 6],
+        ];
+        const leader = L.at(-1)!;
+        const out: XY = [leader[0], leader[1] + 8];
+        const r = countsOf(
+            show(
+                L,
+                pts([out]),
+                L.map((): XY => out),
+                { along: true },
+            ),
+        );
+        expect(r.corners.some((c) => near(c.at, [6, 0], 1e-9))).toBe(true);
     });
 
     it("QA-TC-13 (owner, 2026-11-22): a box outline's corners are its four vertices; a circle's quarter arcs have none", () => {

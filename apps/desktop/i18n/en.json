@@ -3119,7 +3119,7 @@
                 "removeTrailFirst": "{move} follows a drawn trail: remove the trail first",
                 "noTrail": "This trail is gone",
                 "notFitted": "Select marchers standing in a line, curve or arc to drag out a trail",
-                "notFittedPart": "Only {count} of this shape's {total} marchers are selected. Select all of them to follow",
+                "notFittedPart": "{count, plural, one {Only # of this shape's {total} marchers is selected} other {Only # of this shape's {total} marchers are selected}}. Select all of them to follow",
                 "notFittedLater": "They aren't in a shape until the end of this move. Go to the next page to follow from there",
                 "notFittedGap": "They stand on a circle or box with a gap too wide to go around, or spacing too uneven. Close the gap or even out the spacing",
                 "notFittedOff": "Some stand too far off the line, circle or box the rest make. Line them up first",

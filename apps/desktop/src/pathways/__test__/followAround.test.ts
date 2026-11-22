@@ -362,6 +362,33 @@ describe("Go round in the Follow tool (step 10)", () => {
         expect(roundChanged(now().follow!.around)).toBe(true);
     });
 
+    it("digits typed while held hold however the pointer drifts (review)", () => {
+        open(followOn());
+        startRoundSlide({ x: 0, y: 0 }, 0.5);
+        dragRound(0, 4);
+        typeRoundDigit("3");
+        dragRound(4, 9);
+        expect(now().follow!.around!.amount).toBe(3);
+        expect(endRoundSlide()).toBe(false);
+        expect(now().follow!.around!.amount).toBe(3);
+    });
+
+    it("Drag out drops digits typed, so Backspace and Escape are the drawing's again (review)", () => {
+        open(followOn());
+        typeRoundDigit("4");
+        setGoRound(false);
+        expect(goingRound(now().follow)).toBe(false);
+        expect(now().follow!.roundTyped).toBeNull();
+        expect(eraseRoundDigit()).toBe(false);
+        expect(clearRoundTyped()).toBe(false);
+        // and − or + on the bar ends digits typed too
+        setGoRound(true);
+        typeRoundDigit("2");
+        stepRoundAmount(1);
+        expect(now().follow!.roundTyped).toBeNull();
+        expect(now().follow!.around!.amount).toBe(3);
+    });
+
     it("going round again: Finish with what's stored writes nothing", () => {
         const base = followOn();
         const a = {
