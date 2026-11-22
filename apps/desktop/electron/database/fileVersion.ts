@@ -82,6 +82,12 @@ export const UNKNOWN_USER_VERSIONS: readonly number[] = [15, 16];
 
 /** Newest version this build opens. Anything higher was written by a newer release. */
 export const MAX_SUPPORTED_USER_VERSION = OUTLINE_MODEL_USER_VERSION;
+
+/** Whether a newer build wrote `userVersion`: above the newest, or a number this build skips */
+export const isTooNewUserVersion = (userVersion: number): boolean =>
+    userVersion > MAX_SUPPORTED_USER_VERSION ||
+    UNKNOWN_USER_VERSIONS.includes(userVersion);
+
 /** Version written into a brand-new file: a new show is a timeline show. */
 export const NEW_FILE_USER_VERSION = TIMELINE_MODEL_USER_VERSION;
 
@@ -124,10 +130,7 @@ export function decideFileVersion(
     if (userVersion === PARKED_FLOOR_USER_VERSION) {
         return { action: "downgrade", version: TIMELINE_MODEL_USER_VERSION };
     }
-    if (
-        userVersion > MAX_SUPPORTED_USER_VERSION ||
-        UNKNOWN_USER_VERSIONS.includes(userVersion)
-    ) {
+    if (isTooNewUserVersion(userVersion)) {
         return { action: "refuse-too-new", version: userVersion };
     }
     if (isNewFile && userVersion === 0) {
