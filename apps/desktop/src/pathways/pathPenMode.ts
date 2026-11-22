@@ -338,6 +338,11 @@ class PathPenMode implements FieldMode {
         member?: number;
         /** That marcher detached with Alt: where its spot goes, once dragged */
         detach?: { at: XY | null };
+        /**
+         * That marcher is still in the line-up, so its drag is refused: said once it's dragged,
+         * never on the press, which may be a click, a long press or a right-click (#1100)
+         */
+        lineUp?: { told: boolean };
     } | null = null;
     /** A detached marcher's spot shown while it's dragged */
     private detachShown: { id: number; at: XY } | null = null;
@@ -614,8 +619,6 @@ class PathPenMode implements FieldMode {
         // Alt, or the touch pill's Alt (the from-center toggle) for a finger
         const detach = holdsOtherKind(pointer) || isToggleOn("fromCenter");
         const grab = step && !detach ? formGrabFor(s, id, step) : null;
-        if (grab === "lineUp")
-            toast.error(formLineUpReason(), { id: "trail-form" });
         const started =
             !!step && !!grab && grab !== "lineUp" && startFormDrag(step, grab);
         const base = shapeOf(s);
@@ -641,6 +644,7 @@ class PathPenMode implements FieldMode {
             head: started,
             member: id,
             ...(detach ? { detach: { at: null } } : {}),
+            ...(grab === "lineUp" ? { lineUp: { told: false } } : {}),
         };
     }
 
@@ -771,8 +775,14 @@ class PathPenMode implements FieldMode {
                 this.headFrame.push({ at: pointer.field, roles });
             return;
         }
-        // A marcher whose drag is refused (still in the line-up): nothing to drag
-        if (p.member !== undefined) return;
+        // A marcher whose drag is refused (still in the line-up): nothing to drag, said once
+        if (p.member !== undefined) {
+            if (p.lineUp && !p.lineUp.told) {
+                p.lineUp.told = true;
+                toast.error(formLineUpReason(), { id: "trail-form" });
+            }
+            return;
+        }
         // The first leg dragged out of an end (step 4b): the pen's leg to the pointer
         if (s.phase === "drawing") {
             if (p.firstLeg) this.pen.pointAt(pointer.field, roles);
