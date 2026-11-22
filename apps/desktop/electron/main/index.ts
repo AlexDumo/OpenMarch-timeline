@@ -22,6 +22,7 @@ import { randomUUID } from "node:crypto";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import * as DatabaseServices from "../database/database.services";
 import { VIEW3D_AUTO_OPEN_SETTING } from "../../src/view3d/sync/protocol";
+import { THEME_SYNC_CHANNEL } from "../../src/global/themeSync";
 import { buildApplicationMenu } from "./application-menu";
 import { onMainLanguageChange, setMainLanguage, t } from "./i18n";
 import { connectDiscordIpc, discordIpcPaths } from "./discord/discordIpc";
@@ -99,7 +100,27 @@ import {
     type OpenShowOptions,
 } from "./openShow";
 import { choosePreviousDotsFile } from "./services/previous-dots-import-service";
-import { closeView3dWindow, initView3dWindow } from "./view3dWindow";
+import {
+    closeView3dWindow,
+    getView3dWindow,
+    initView3dWindow,
+    VIEW3D_WINDOW_DEFAULTS,
+    windowBackground,
+} from "./view3dWindow";
+import {
+    displayListing,
+    moveToChosenDisplay,
+    placementSupported,
+    rememberWindowState,
+    showWhenReady,
+    windowPlacement,
+} from "./window-state";
+import type { WindowDefaults } from "./window-placement";
+import {
+    LIST_DISPLAYS_CHANNEL,
+    WINDOW_OPEN_ON_SETTINGS,
+    type DisplaysResponse,
+} from "../../src/settings/windowPlacementSettings";
 import { withAppCsp } from "./workerCsp";
 import { DESKTOP_PAGE_CSP } from "../../src/security/appCsp";
 import {
@@ -186,6 +207,17 @@ ipcMain.on("settings:set", (event, settings) => {
     }
     broadcastSettingsChanged(event.sender, settings);
 
+    // A display just chosen in Settings: an open window moves there now
+    if (WINDOW_OPEN_ON_SETTINGS.editor in settings)
+        moveToChosenDisplay(store, "editor", win, EDITOR_WINDOW_DEFAULTS);
+    if (WINDOW_OPEN_ON_SETTINGS.view3d in settings)
+        moveToChosenDisplay(
+            store,
+            "view3d",
+            getView3dWindow(),
+            VIEW3D_WINDOW_DEFAULTS,
+        );
+
     if (Object.prototype.hasOwnProperty.call(settings, "language")) {
         setMainLanguage(settings.language);
     }
@@ -205,6 +237,14 @@ ipcMain.on("settings:set", (event, settings) => {
 ipcMain.handle("settings:get", (_, key) => {
     return store.get(key);
 });
+
+ipcMain.handle(
+    LIST_DISPLAYS_CHANNEL,
+    (): DisplaysResponse => ({
+        supported: placementSupported(),
+        displays: displayListing(),
+    }),
+);
 
 ipcMain.handle("env:get", () => {
     return {
@@ -270,6 +310,20 @@ if (!app.requestSingleInstanceLock()) {
 // process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true'
 
 let win: BrowserWindow | null = null;
+
+const EDITOR_WINDOW_DEFAULTS: WindowDefaults = {
+    // Maximized the first time; this is its size when un-maximized
+    maximized: true,
+    size: (workArea) => ({
+        width: Math.round(workArea.width * 0.8),
+        height: Math.round(workArea.height * 0.8),
+    }),
+    // Fits a portrait tablet (iPad mini is 744 wide; Windows tablets in
+    // portrait or split screen are ~768), where the Inspector folds away
+    // (src/utilities/inspectorLayout.ts).
+    min: { width: 768, height: 600 },
+};
+
 /** Until the editor's first window exists; only hidden windows may be open before it */
 let startingUp = true;
 
@@ -279,14 +333,16 @@ const view3dPreload = join(__dirname, "../preload/view3d.js");
 const url = process.env.VITE_DEV_SERVER_URL;
 // eslint-disable-next-line max-lines-per-function
 async function createWindow(title?: string) {
+    // Its display, size and maximized state, so it shows once, already in place
+    const placement = windowPlacement(store, "editor", EDITOR_WINDOW_DEFAULTS);
     win = new BrowserWindow({
         title: title || "OpenMarch", // i18n-ignore: product name
         icon: join(process.env.VITE_PUBLIC, "favicon.ico"),
-        // Fits a portrait tablet (iPad mini is 744 wide; Windows tablets in
-        // portrait or split screen are ~768), where the Inspector folds away
-        // (src/utilities/inspectorLayout.ts).
-        minWidth: 768,
-        minHeight: 600,
+        ...placement.bounds,
+        show: false,
+        backgroundColor: windowBackground(store.get("theme", "light")),
+        minWidth: EDITOR_WINDOW_DEFAULTS.min.width,
+        minHeight: EDITOR_WINDOW_DEFAULTS.min.height,
         autoHideMenuBar: true,
         // Show frame in codegen mode for easier interaction
         frame: isCodegen,
@@ -302,6 +358,8 @@ async function createWindow(title?: string) {
             spellcheck: true,
         },
     });
+    rememberWindowState(store, "editor", win);
+    showWhenReady(win, placement);
     app.commandLine.appendSwitch("enable-features", "AudioServiceOutOfProcess");
     // Touch screens (Windows tablets) need nothing here: Chromium's touch
     // events are on whenever a touch screen is present ("touch-events" is
@@ -349,7 +407,6 @@ async function createWindow(title?: string) {
             showPath: DatabaseServices.getDbPath(),
             isNewShowDraft: !!currentNewShowDraftPath,
         });
-        win?.maximize();
         win?.webContents.send(
             "main-process-message",
             new Date().toLocaleString(),
@@ -691,6 +748,7 @@ void app.whenReady().then(async () => {
         getTheme: () => store.get("theme", "light") as string,
         getLanguage: () => store.get("language", "en") as string,
         getEditorWindow: () => win,
+        store,
         // A Playwright session never asks, so the question doesn't sit over every test
         getAutoOpen: () =>
             process.env.PLAYWRIGHT_SESSION
@@ -938,7 +996,8 @@ app.on("second-instance", (_event, commandLine) => {
     // If not an auth callback, just focus the window
     if (!isAuthCallback && win) {
         if (win.isMinimized()) win.restore();
-        win.focus();
+        // Still hidden while it starts: it shows itself, in place, in a moment
+        if (win.isVisible()) win.focus();
     }
 });
 
@@ -1013,6 +1072,11 @@ ipcMain.handle("get-theme", () => {
     return store.get("theme", "light");
 });
 
+// For the preload, before the page's first paint (index.html)
+ipcMain.on(THEME_SYNC_CHANNEL, (event) => {
+    event.returnValue = store.get("theme", "light");
+});
+
 ipcMain.handle("set-theme", (event, theme) => {
     store.set("theme", theme);
     broadcastSettingsChanged(event.sender, { theme });
@@ -1074,7 +1138,8 @@ app.on("activate", () => {
     if (startingUp) return;
     const allWindows = BrowserWindow.getAllWindows();
     if (win && !win.isDestroyed()) {
-        win.focus();
+        // Still hidden while it starts: it shows itself, in place, in a moment
+        if (win.isVisible()) win.focus();
     } else if (allWindows.length) {
         allWindows[0].focus();
     } else {
