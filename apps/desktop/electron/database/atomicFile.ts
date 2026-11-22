@@ -9,6 +9,13 @@
 import * as fs from "node:fs";
 import { randomBytes } from "node:crypto";
 import { basename, dirname, join, resolve } from "node:path";
+import { performance } from "node:perf_hooks";
+
+/**
+ * A clock for retry budgets that never jumps: setting the computer's clock or a daylight-saving
+ * change mustn't stretch or cut short how long a save keeps retrying.
+ */
+const monotonicNow = () => performance.now();
 
 /** Flushes a file's contents to disk. On macOS libuv uses F_FULLFSYNC. */
 export async function fsyncFile(filePath: string): Promise<void> {
@@ -68,6 +75,7 @@ export type RenameRetryOptions = {
     budgetMs?: number;
     rename?: (from: string, to: string) => Promise<void>;
     sleep?: (ms: number) => Promise<void>;
+    /** The clock for the budget, in ms; a monotonic one by default. */
     now?: () => number;
     /** Called before each retry; stops retrying when it returns false. */
     shouldRetry?: () => Promise<boolean>;
@@ -107,7 +115,7 @@ export async function renameWithRetry(
     const budgetMs = options.budgetMs ?? 5000;
     const rename = options.rename ?? fs.promises.rename;
     const sleep = options.sleep ?? defaultSleep;
-    const now = options.now ?? Date.now;
+    const now = options.now ?? monotonicNow;
 
     const start = now();
     let attempts = 0;
@@ -156,7 +164,7 @@ export async function removeWithRetry(
     {
         budgetMs = 2000,
         sleep = defaultSleep,
-        now = Date.now,
+        now = monotonicNow,
         maxDelayMs = 200,
         remove = removeIfPresent,
     }: RemoveRetryOptions = {},
