@@ -352,7 +352,7 @@ test("loose dots pasted exactly onto fewer marchers take the nearest dots, draw 
     );
 });
 
-test("loose dots pasted onto more marchers: the nearest take the dots, a message counts the rest, and they stay put", async ({
+test("loose dots pasted onto more marchers: the nearest take the dots, the rest stay put, and a screen reader hears how many", async ({
     show,
 }) => {
     const { page } = show;
@@ -361,11 +361,11 @@ test("loose dots pasted onto more marchers: the nearest take the dots, a message
     await select(page, [3, 4, 5, 6, 7, 8]);
     await page.keyboard.press("ControlOrMeta+v");
     await expect(preview(page)).toBeVisible();
-    await expect(
-        toasts(page).filter({
-            hasText: "4 marchers have no spot and stay put",
-        }),
-    ).toBeVisible();
+    // No toast: the chip warned before the paste, and a screen reader hears it with the preview
+    await expect(toasts(page)).toHaveCount(0);
+    await expect(page.getByTestId("clipboard-live")).toHaveText(
+        "4 marchers have no spot and stay put. Paste preview. Enter places it, Escape discards it.",
+    );
     const spots = sorted((await shapeOverlay(page))!.spots);
     expect(spots).toHaveLength(2);
     await page.keyboard.press("Enter");

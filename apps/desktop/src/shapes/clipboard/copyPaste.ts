@@ -1,4 +1,3 @@
-import { toast } from "sonner";
 import tolgee from "@/global/singletons/Tolgee";
 import {
     planCanvasEdit,
@@ -38,8 +37,6 @@ import {
  * open shape of the shape host, so it's moved, turned and placed (Enter, one undo step) like a
  * shape drawn here, and Escape throws it away. Pasting rearranges: no marcher is ever added.
  */
-
-const LEFT_TOAST = "formation-paste-left";
 
 /** The placed shape on the field whose members are exactly `ids`, if any */
 function shapeSelectedWhole(ids: readonly number[]): PlacedBox | null {
@@ -130,20 +127,20 @@ export function pasteFormation(
         undefined,
         { keepDiscarded: startingOver },
     );
-    announceClipboard(
-        tolgee.t(
-            "shapes.clipboard.announcePreview",
-            "Paste preview. Enter places it, Escape discards it.",
-        ),
+    // No toast for marchers left out (owner 2026-11-22): the chip warned before the paste, and
+    // a screen reader hears it with the preview
+    const preview = tolgee.t(
+        "shapes.clipboard.announcePreview",
+        "Paste preview. Enter places it, Escape discards it.",
     );
-    if (plan.left > 0)
-        toast.message(
-            tolgee.t(
-                "shapes.clipboard.left",
-                "{count, plural, one {# marcher has no spot and stays put} other {# marchers have no spot and stay put}}",
-                { count: plan.left },
-            ),
-            { id: LEFT_TOAST },
-        );
+    announceClipboard(
+        plan.left > 0
+            ? `${tolgee.t(
+                  "shapes.clipboard.left",
+                  "{count, plural, one {# marcher has no spot and stays put} other {# marchers have no spot and stay put}}",
+                  { count: plan.left },
+              )}. ${preview}`
+            : preview,
+    );
     return true;
 }
