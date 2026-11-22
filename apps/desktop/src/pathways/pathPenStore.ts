@@ -72,7 +72,12 @@ import {
     type FollowDrag,
 } from "./followDrag";
 import { goRound } from "@/db-functions/timelineTrailAround";
-import { aroundLine, aroundPlanOf, goingRound } from "./followAround";
+import {
+    aroundLine,
+    aroundPlanOf,
+    goingRound,
+    roundChanged,
+} from "./followAround";
 import {
     besideArc,
     besideArcReason,
@@ -1774,8 +1779,14 @@ export async function finishDrawing(
 ): Promise<void> {
     const { session } = usePathPenStore.getState();
     if (!session || session.phase !== "drawing") return;
-    // Going round (step 10, AP-T13): nothing is drawn; the line goes round as the bar says
+    // Going round (step 10, AP-T13): nothing is drawn; the line goes round as the bar says. With
+    // nobody moved (not dragged round, no count typed), or just what's stored, nothing is
+    // written: it closes as Escape does (owner, 2026-11-22)
     if (session.follow && goingRound(session.follow)) {
+        if (!roundChanged(session.follow.around)) {
+            closePath();
+            return;
+        }
         if (await saveAround(session.follow))
             usePathPenStore.setState((state) => ({
                 session: null,

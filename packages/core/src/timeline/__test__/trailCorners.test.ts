@@ -6,8 +6,12 @@
  */
 import { describe, expect, it } from "vitest";
 import { createCachedResolver } from "../resolver";
+import { arcPoint, makeLoop } from "../geom";
 import {
+    aroundCornerCounts,
     CORNER_MIN_TURN,
+    outlineCorners,
+    standsOnArc,
     isOnCount,
     roundCount,
     trailCornerCounts,
@@ -478,6 +482,201 @@ describe("corner counts (spec L.9, pathways step 6)", () => {
             ),
         );
         expect(r.corners.map((c) => c.at)).toEqual([[6, 0]]);
+    });
+
+    it("QA-TC-10b (owner, 2026-11-22): a line standing in a circle with uneven spacing or a gap still gets no corner at any marcher", () => {
+        const rand = mulberry32(907);
+        for (let trial = 0; trial < 40; trial++) {
+            const n = 10 + Math.floor(rand() * 10);
+            const gap = Math.floor(rand() * n);
+            // n places on a circle of radius 7.6, each up to 6° off its place, one left empty
+            const homes: XY[] = [];
+            for (let i = 0; i < n; i++) {
+                if (i === gap) continue;
+                const a =
+                    (2 * Math.PI * i) / n +
+                    ((rand() - 0.5) * 12 * Math.PI) / 180;
+                const r = 7.6 + (rand() - 0.5) * 0.4;
+                homes.push([r * Math.cos(a), r * Math.sin(a)]);
+            }
+            const leader = homes.at(-1)!;
+            const out: XY = [leader[0] * 3, leader[1] * 3];
+            const r = countsOf(
+                show(homes, pts([out]), [out, out].concat(homes.slice(2)), {
+                    along: true,
+                }),
+            );
+            const m = homes.length;
+            let lineLen = 0;
+            for (let i = 1; i < m; i++)
+                lineLen += Math.hypot(
+                    homes[i]![0] - homes[i - 1]![0],
+                    homes[i]![1] - homes[i - 1]![1],
+                );
+            const inLine = r.corners.filter((c) => c.d < lineLen - 1e-6);
+            expect(inLine, `trial ${trial}`).toEqual([]);
+        }
+    });
+
+    it("QA-TC-10c (owner, 2026-11-22): a chevron's vertex keeps its corner at 30° and 45°, and an L keeps its vertex beside a slight kink", () => {
+        expect(
+            standsOnArc([
+                [0, 0],
+                [2, 0],
+                [4, 0],
+                [6, 0],
+            ]),
+        ).toBe(false);
+        for (const deg of [30, 45]) {
+            const a = (deg * Math.PI) / 180;
+            // seven 2 apart: three along x to (6,0), three on turned by `deg`
+            const homes: XY[] = [0, 1, 2, 3].map((i): XY => [2 * i, 0]);
+            for (let i = 1; i <= 3; i++)
+                homes.push([6 + 2 * i * Math.cos(a), 2 * i * Math.sin(a)]);
+            expect(standsOnArc(homes), `${deg}°`).toBe(false);
+            const leader = homes.at(-1)!;
+            const out: XY = [leader[0] + 10, leader[1] + 10];
+            const r = countsOf(
+                show(
+                    homes,
+                    pts([out]),
+                    homes.map((): XY => out),
+                    {
+                        along: true,
+                    },
+                ),
+            );
+            expect(
+                r.corners.some((c) => near(c.at, [6, 0], 1e-9)),
+                `${deg}°`,
+            ).toBe(true);
+        }
+        // an L whose marcher after the vertex stands a little off: a 79° vertex beside a 23° kink
+        const L: XY[] = [
+            [0, 0],
+            [2, 0],
+            [4, 0],
+            [6, 0],
+            [6.4, 2],
+            [6, 4],
+            [6, 6],
+        ];
+        const leader = L.at(-1)!;
+        const out: XY = [leader[0], leader[1] + 8];
+        const r = countsOf(
+            show(
+                L,
+                pts([out]),
+                L.map((): XY => out),
+                { along: true },
+            ),
+        );
+        expect(r.corners.some((c) => near(c.at, [6, 0], 1e-9))).toBe(true);
+    });
+
+    it("QA-TC-13 (owner, 2026-11-22): a box outline's corners are its four vertices; a circle's quarter arcs have none", () => {
+        const box = makeLoop({
+            from: [0, 0],
+            to: [0, 0],
+            closed: true,
+            points: [{ at: [8, 0] }, { at: [8, 8] }, { at: [0, 8] }],
+        })!;
+        const corners = outlineCorners(box);
+        expect(corners.map((c) => c.at)).toEqual([
+            [0, 0],
+            [8, 0],
+            [8, 8],
+            [0, 8],
+        ]);
+        expect(corners.map((c) => c.d)).toEqual([0, 8, 16, 24]);
+        // the quarter bulge that bows out, away from the middle, as the Circle tool's
+        const q = Math.tan(Math.PI / 8) / 2;
+        const mid = arcPoint([0, -6], [6, 0], q, 0.5);
+        const k = Math.hypot(mid[0], mid[1]) > 5.9 ? q : -q;
+        const circle = makeLoop({
+            from: [0, -6],
+            to: [0, -6],
+            closed: true,
+            points: [
+                { at: [6, 0], bulge: k },
+                { at: [0, 6], bulge: k },
+                { at: [-6, 0], bulge: k },
+            ],
+            toBulge: k,
+        })!;
+        expect(outlineCorners(circle)).toEqual([]);
+        // and no turns round it, however far they go
+        expect(
+            aroundCornerCounts(
+                circle,
+                [{ startDist: 0, endDist: 80, inStraight: 0, straight: 0 }],
+                16,
+            ),
+        ).toEqual([]);
+    });
+
+    it("QA-TC-14 (owner, 2026-11-22): going round a box outline, each turns at its corners on the count its steady pace reaches them", () => {
+        const box = makeLoop({
+            from: [0, 0],
+            to: [0, 0],
+            closed: true,
+            points: [{ at: [8, 0] }, { at: [8, 8] }, { at: [0, 8] }],
+        })!;
+        // a member mid-side (4 round) goes 12 round in 8 counts: past the corner at 8 on count
+        // 2.7, and stops on the corner at 16, which isn't a turn; one starting on the corner at 8
+        // doesn't turn there, and turns at 16 on count 5.3
+        const r = aroundCornerCounts(
+            box,
+            [
+                { startDist: 4, endDist: 16, inStraight: 0, straight: 0 },
+                { startDist: 8, endDist: 20, inStraight: 0, straight: 0 },
+            ],
+            8,
+        );
+        expect(r.map((c) => c.at)).toEqual([
+            [8, 0],
+            [8, 8],
+        ]);
+        expect(r[0]!.turns.map((t) => [t.q, roundCount(t.count)])).toEqual([
+            [0, 2.7],
+        ]);
+        expect(r[1]!.turns.map((t) => [t.q, roundCount(t.count)])).toEqual([
+            [1, 5.3],
+        ]);
+        expect(r.every((c) => c.offCount)).toBe(true);
+        // twice round in 16 counts from a corner: every corner on a count, the start corner
+        // passed once on the way (count 8), not at the start or the stop
+        const twice = aroundCornerCounts(
+            box,
+            [{ startDist: 0, endDist: 64, inStraight: 0, straight: 0 }],
+            16,
+        );
+        expect(
+            twice.map((c) => c.turns.map((t) => roundCount(t.count))),
+        ).toEqual([[8], [2, 10], [4, 12], [6, 14]]);
+        expect(twice.some((c) => c.offCount)).toBe(false);
+        // a straight step onto the outline first counts in the pace
+        const stepped = aroundCornerCounts(
+            box,
+            [{ startDist: 4, endDist: 12, inStraight: 4, straight: 0 }],
+            12,
+        );
+        expect(stepped[0]!.turns.map((t) => roundCount(t.count))).toEqual([8]);
+        // a founder taken over before the corner doesn't turn there
+        const cut = aroundCornerCounts(
+            box,
+            [
+                {
+                    startDist: 4,
+                    endDist: 12,
+                    inStraight: 0,
+                    straight: 0,
+                    until: 3,
+                },
+            ],
+            8,
+        );
+        expect(cut).toEqual([]);
     });
 
     it("QA-TC-11: an end line on a small arc gets no corner at each spot", () => {

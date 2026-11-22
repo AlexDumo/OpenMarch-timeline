@@ -407,7 +407,7 @@ function PathPenBanner({ session }: { session: PathSession }) {
             ) : goingRound(session.follow) ? (
                 <T
                     keyName="pathways.banner.goRound"
-                    defaultValue="Go around: {count} marchers follow {marcher} around the {shape} · <enter></enter> to finish · <esc></esc> to leave"
+                    defaultValue="Go around: drag {marcher} around the {shape} and the {count} marchers follow, or type how far · <enter></enter> to finish · <esc></esc> to leave"
                     params={{
                         count: session.follow!.ids.length,
                         marcher:
@@ -1424,7 +1424,7 @@ function GoRoundControls({ session }: { session: PathSession }) {
                         "Go around less far",
                     )}
                     action="followRoundLess"
-                    disabled={around.amount <= 1}
+                    disabled={around.amount <= 0}
                     onClick={() => runAction("followRoundLess")}
                     testId="follow-round-less"
                 >
@@ -1434,7 +1434,7 @@ function GoRoundControls({ session }: { session: PathSession }) {
                     className="rounded-6 border-stroke bg-fg-2 text-sub text-text w-[3.5em] border px-4 py-2 text-center"
                     type="number"
                     inputMode="numeric"
-                    min={1}
+                    min={0}
                     max={max}
                     value={typed ?? String(around.amount)}
                     aria-label={tolgee.t(
@@ -1446,7 +1446,7 @@ function GoRoundControls({ session }: { session: PathSession }) {
                         if (
                             e.target.value !== "" &&
                             Number.isFinite(n) &&
-                            n >= 1
+                            n >= 0
                         ) {
                             setTyped(null);
                             setRoundAmount(n);

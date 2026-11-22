@@ -165,6 +165,8 @@ export {
     trailCornerCounts,
     wayCorners,
     cornerCounts,
+    outlineCorners,
+    aroundCornerCounts,
     isOnCount,
     roundCount,
     CORNER_MIN_TURN,
@@ -177,4 +179,5 @@ export type {
     CornerTurn,
     CornerCount,
     TrailEnds,
+    AroundWalk,
 } from "./trailCorners";

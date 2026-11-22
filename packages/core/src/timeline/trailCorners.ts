@@ -2,6 +2,12 @@
  * Corner counts for block letters, pathways step 6 (spec Appendix L.9, TC-1 to TC-4): the corners
  * of a follow-the-leader trail and the count each member turns on at each one.
  *
+ * What the warning is for (owner, 2026-11-22): "turns between counts" matters where a marcher
+ * has to plant and turn sharply on a count. So a corner is only a real corner: a vertex of a box
+ * or shape the line stands in or goes round, or a corner point drawn on the trail. A curve never
+ * has one: not along an arc leg (step 10a), a circle, a smooth point's curve, nor a line standing
+ * in a curve, whatever its spacing. A circle shows no corner chips and no warning at all.
+ *
  * Counts are derived, never stored or pinned (O-1, draft model §4.5). The way is the resolver's
  * own (R-9′, R-13′, R-13″), built by the same functions, so a member is exactly at the corner at
  * the beat its count names (R-10 read backward).
@@ -23,7 +29,9 @@ export const CORNER_MIN_TURN = (20 * Math.PI) / 180;
 /**
  * TC-1: a bend between two legs of the line-up or the end line (where the marchers stand) is a
  * corner only when it turns this much more than each neighboring bend between two such legs
- * (20°), so a line standing in a curve or an arc gets no corner at every marcher
+ * (20°), and at least twice any neighbor that is itself a turn ({@link CORNER_MIN_TURN} or more):
+ * a box's or a block letter's vertex. A line standing in a curve or an arc gets none, even where uneven
+ * spacing or a gap makes one bend stand out (owner, 2026-11-22).
  */
 export const CORNER_STAND_OUT = (20 * Math.PI) / 180;
 
@@ -95,6 +103,8 @@ interface Stretch {
     dirOut: XY | null;
     /** A leg of the line-up or the end line (through where marchers stand), not the drawn part */
     standing?: boolean;
+    /** A standing leg of a line that stands in a circular arc ({@link standsOnArc}) */
+    arc?: boolean;
 }
 
 const unit = (v: XY): XY | null => {
@@ -106,6 +116,107 @@ const rotate = (u: XY, a: number): XY => [
     u[0] * Math.cos(a) - u[1] * Math.sin(a),
     u[0] * Math.sin(a) + u[1] * Math.cos(a),
 ];
+
+/**
+ * TC-1 (owner, 2026-11-22): how far a marcher may stand off the circle the line fits, as a share
+ * of its radius, for the line to stand in an arc
+ */
+export const ARC_FIT = 0.06;
+
+/**
+ * Whether marchers standing at `pts` stand in a circular arc, in order round it (owner,
+ * 2026-11-22): four or more, each within {@link ARC_FIT} of the radius of the circle they fit, and
+ * each a step on round it the same way, less than a quarter round, and their bends about even (none
+ * more than twice their average, so a chevron or a block letter's vertex isn't an arc). Their bends are then a curve, not
+ * corners, however uneven the spacing or wide a gap.
+ */
+export function standsOnArc(pts: readonly XY[]): boolean {
+    const n = pts.length;
+    if (n < 4) return false;
+    // the circle they fit best (x² + y² + a·x + b·y + c = 0 by least squares), about their
+    // middle so the sums stay well scaled
+    let mx = 0;
+    let my = 0;
+    for (const p of pts) {
+        mx += p[0] / n;
+        my += p[1] / n;
+    }
+    let sxx = 0,
+        sxy = 0,
+        syy = 0,
+        sx = 0,
+        sy = 0,
+        sxz = 0,
+        syz = 0,
+        sz = 0;
+    for (const p of pts) {
+        const x = p[0] - mx;
+        const y = p[1] - my;
+        const z = x * x + y * y;
+        sxx += x * x;
+        sxy += x * y;
+        syy += y * y;
+        sx += x;
+        sy += y;
+        sxz += x * z;
+        syz += y * z;
+        sz += z;
+    }
+    // normal equations for (a, b, c), solved by determinants
+    const m = [
+        [sxx, sxy, sx],
+        [sxy, syy, sy],
+        [sx, sy, n],
+    ];
+    const r = [-sxz, -syz, -sz];
+    const det3 = (q: number[][]) =>
+        q[0]![0]! * (q[1]![1]! * q[2]![2]! - q[1]![2]! * q[2]![1]!) -
+        q[0]![1]! * (q[1]![0]! * q[2]![2]! - q[1]![2]! * q[2]![0]!) +
+        q[0]![2]! * (q[1]![0]! * q[2]![1]! - q[1]![1]! * q[2]![0]!);
+    const D = det3(m);
+    if (!(Math.abs(D) > 1e-12)) return false;
+    const col = (k: number) =>
+        m.map((row, i) => row.map((v, j) => (j === k ? r[i]! : v)));
+    const a = det3(col(0)) / D;
+    const b = det3(col(1)) / D;
+    const c = det3(col(2)) / D;
+    const cx = -a / 2;
+    const cy = -b / 2;
+    const R2 = cx * cx + cy * cy - c;
+    if (!(R2 > 0)) return false;
+    const R = Math.sqrt(R2);
+    // a near-straight line fits a huge circle: no arc to speak of (it has no bends either)
+    let span = 0;
+    for (const p of pts)
+        span = Math.max(span, Math.hypot(p[0] - pts[0]![0], p[1] - pts[0]![1]));
+    if (R > 50 * span) return false;
+    let sign = 0;
+    for (let i = 0; i < n; i++) {
+        const x = pts[i]![0] - mx - cx;
+        const y = pts[i]![1] - my - cy;
+        if (Math.abs(Math.hypot(x, y) - R) > ARC_FIT * R) return false;
+        if (i === 0) continue;
+        const px = pts[i - 1]![0] - mx - cx;
+        const py = pts[i - 1]![1] - my - cy;
+        const step = Math.atan2(px * y - py * x, px * x + py * y);
+        if (Math.abs(step) < 1e-9 || Math.abs(step) >= Math.PI / 2)
+            return false;
+        const s = Math.sign(step);
+        if (sign !== 0 && s !== sign) return false;
+        sign = s;
+    }
+    // about even: a straight line with one sharp bend fits a circle loosely too, but it's a vertex
+    const bends: number[] = [];
+    for (let i = 1; i + 1 < n; i++) {
+        const ax = pts[i]![0] - pts[i - 1]![0];
+        const ay = pts[i]![1] - pts[i - 1]![1];
+        const bx = pts[i + 1]![0] - pts[i]![0];
+        const by = pts[i + 1]![1] - pts[i]![1];
+        bends.push(Math.abs(Math.atan2(ax * by - ay * bx, ax * bx + ay * by)));
+    }
+    const mean = bends.reduce((a, b) => a + b, 0) / bends.length;
+    return bends.every((b) => b <= 2 * mean + 1e-9);
+}
 
 /** Straight stretches through `pts` from distance `d0`, skipping repeated points */
 function polylineStretches(pts: readonly XY[], d0: number): Stretch[] {
@@ -173,7 +284,14 @@ export function wayCorners(
     endLine: readonly XY[] | null,
     minTurn = CORNER_MIN_TURN,
 ): WayCorner[] {
-    const stretches: Stretch[] = polylineStretches(origins, 0);
+    // a line standing in an arc bends at every marcher, and none of it is a corner
+    const standing = (pts: readonly XY[], d0: number): Stretch[] => {
+        const arc = standsOnArc(pts);
+        return polylineStretches(pts, d0).map((st) =>
+            arc ? { ...st, arc } : st,
+        );
+    };
+    const stretches: Stretch[] = standing(origins, 0);
     const lineLen = trail.cum[origins.length - 1] ?? 0;
     if (trail.drawn)
         stretches.push(...drawnStretches(trail.drawn.path, trail.drawn.start));
@@ -185,8 +303,7 @@ export function wayCorners(
                 lineLen,
             ).map((st) => ({ ...st, standing: false })),
         );
-    if (endLine)
-        stretches.push(...polylineStretches(endLine, trail.destOffset));
+    if (endLine) stretches.push(...standing(endLine, trail.destOffset));
     // the turn at each joint, between stretch i - 1 and stretch i (null where a stretch has no
     // direction)
     const turns: (number | null)[] = stretches.map((st, i) => {
@@ -207,13 +324,19 @@ export function wayCorners(
         const turn = turns[i];
         if (turn == null || Math.abs(turn) < minTurn) continue;
         // TC-1: a bend in the line-up or the end line (both legs standing) must stand out from
-        // the standing bends beside it, so a line in a curve or an arc gets no corner at each
-        // marcher; the leader's start and the entrance take the plain rule
+        // the standing bends beside it: by 20°, and to twice any of them that is itself a turn,
+        // so a line in a curve or an arc gets no corner at any marcher, while an L keeps its
+        // vertex beside a slight kink (owner, 2026-11-22: only a real vertex); the leader's start
+        // and the entrance take the plain rule
         if (standingBend(i)) {
+            if (stretches[i - 1]!.arc && stretches[i]!.arc) continue;
             const outdone = [i - 1, i + 1].some(
                 (j) =>
                     standingBend(j) &&
-                    Math.abs(turn) < Math.abs(turns[j] ?? 0) + CORNER_STAND_OUT,
+                    (Math.abs(turn) <
+                        Math.abs(turns[j] ?? 0) + CORNER_STAND_OUT ||
+                        (Math.abs(turns[j] ?? 0) >= minTurn &&
+                            Math.abs(turn) < 2 * Math.abs(turns[j] ?? 0))),
             );
             if (outdone) continue;
         }
@@ -338,4 +461,104 @@ export function trailCornerCounts(input: {
         })),
         counts,
     );
+}
+
+/**
+ * The corners of a closed outline walked round (R-13‴, pathways step 10): where its pieces meet
+ * at a turn of `minTurn` or more, the joint back at its start included. A box outline's four
+ * vertices; none on a circle, whose quarter arcs meet without turning (owner, 2026-11-22).
+ */
+export function outlineCorners(
+    loop: RoutePath,
+    minTurn = CORNER_MIN_TURN,
+): WayCorner[] {
+    const stretches = drawnStretches(loop, 0);
+    const n = stretches.length;
+    const corners: WayCorner[] = [];
+    for (let i = 0; i < n; i++) {
+        const a = stretches[(i + n - 1) % n]!.dirOut;
+        const b = stretches[i]!.dirIn;
+        if (!a || !b || n < 2) continue;
+        const turn = Math.atan2(
+            a[0] * b[1] - a[1] * b[0],
+            a[0] * b[0] + a[1] * b[1],
+        );
+        if (Math.abs(turn) < minTurn) continue;
+        corners.push({
+            d: stretches[i]!.d0,
+            at: stretches[i]!.a,
+            turn,
+            dirIn: a,
+            dirOut: b,
+        });
+    }
+    return corners;
+}
+
+/** One member's walk round a closed outline (R-13‴), as the resolver has it */
+export interface AroundWalk {
+    /** Where it starts round the outline, and where it stops: past the start, laps included */
+    startDist: number;
+    endDist: number;
+    /** Its straight step onto the outline first, and off it to its spot last; 0 for none */
+    inStraight: number;
+    straight: number;
+    /** When its founding span ends, in counts from the move's start (`WayWalk.until`) */
+    until?: number;
+}
+
+/**
+ * TC-2 to TC-4 for a line going round a closed outline (R-13‴, pathways step 10): each of the
+ * outline's corners ({@link outlineCorners}) with every time a member passes it, on which count,
+ * leader first. Going more than once round, a member turns at a corner more than once. Starting or
+ * stopping on a corner isn't turning there. Corners nobody turns at are left out, so a circle has
+ * none.
+ */
+export function aroundCornerCounts(
+    loop: RoutePath,
+    walks: readonly AroundWalk[],
+    counts: number,
+    minTurn = CORNER_MIN_TURN,
+): CornerCount[] {
+    const L = loop.L;
+    if (!(L > 0)) return [];
+    const out: CornerCount[] = [];
+    for (const corner of outlineCorners(loop, minTurn)) {
+        const turns: CornerTurn[] = [];
+        let stopBefore = 0;
+        walks.forEach((w, q) => {
+            const total = w.inStraight + w.endDist - w.startDist + w.straight;
+            if (!(total > 0)) return;
+            const leaves =
+                ((w.inStraight + w.endDist - w.startDist) / total) * counts;
+            // every time round it passes the corner: the first at or past its start
+            let x = corner.d + Math.ceil((w.startDist - corner.d) / L) * L;
+            let cut = false;
+            for (; x < w.endDist - PASS_EPS; x += L) {
+                if (x <= w.startDist + PASS_EPS) continue;
+                const count =
+                    ((w.inStraight + x - w.startDist) / total) * counts;
+                if (count < ON_COUNT_TOLERANCE) continue;
+                if (count > leaves - ON_COUNT_TOLERANCE) break;
+                if (
+                    w.until !== undefined &&
+                    count > w.until - ON_COUNT_TOLERANCE
+                ) {
+                    cut = true;
+                    break;
+                }
+                turns.push({ q, count, onCount: isOnCount(count) });
+            }
+            if (cut) stopBefore++;
+        });
+        if (turns.length === 0) continue;
+        turns.sort((a, b) => a.count - b.count || b.q - a.q);
+        out.push({
+            ...corner,
+            turns,
+            stopBefore,
+            offCount: turns.some((t) => !t.onCount),
+        });
+    }
+    return out;
 }
