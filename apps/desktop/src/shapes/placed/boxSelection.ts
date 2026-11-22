@@ -8,6 +8,7 @@ import {
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
+import { isTrailEndShape } from "@/pathways/trailShape";
 import { useShapeToolStore } from "../tool/shapeToolStore";
 import { clickOnMarcher } from "./boxClick";
 import {
@@ -53,7 +54,16 @@ export function boxPressSelection(
 ): readonly number[] | null {
     const state = useBoxSelectionStore.getState();
     if (!state.enabled) return null;
-    const box = boxOf(hit) ?? null;
+    const placed = boxOf(hit) ?? null;
+    // A trail's end shape takes no click as a whole: a click picks the marcher (#1101)
+    const box =
+        placed &&
+        isTrailEndShape(
+            placed.recipe.members.map((m) => m.marcherId),
+            placed.endBeat,
+        )
+            ? null
+            : placed;
     const selected = new Set(selection);
     const out = clickOnMarcher({
         marcherId: hit,
@@ -85,7 +95,14 @@ export function canReachInside(hit: number): boolean {
     const { enabled, inside } = useBoxSelectionStore.getState();
     if (!enabled) return false;
     const box = boxOf(hit);
-    return box !== undefined && box.recipe.id !== inside;
+    return (
+        box !== undefined &&
+        box.recipe.id !== inside &&
+        !isTrailEndShape(
+            box.recipe.members.map((m) => m.marcherId),
+            box.endBeat,
+        )
+    );
 }
 
 /** Goes inside the box `marcherId` is in, selecting just that marcher */
