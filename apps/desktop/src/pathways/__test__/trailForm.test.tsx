@@ -173,6 +173,19 @@ describe("a trail's form, reshaped by dragging its marchers", () => {
         expect(pathPenMode.claims(at(p.x, p.y), onMarcher(3))).toBe(false);
     });
 
+    it("#1095: with Follow-the-leader off the form takes no drag: a press on its marcher is the field's, a drag or an Alt drag writes nothing", async () => {
+        setFollowTheLeader(false);
+        const s = show(false);
+        const p = spot(3);
+        expect(formGrabFor(s, 3, S)).toBeNull();
+        expect(pathPenMode.claims(at(p.x, p.y), onMarcher(3))).toBe(false);
+        drag(3, at(p.x, Y0 + 3 * S));
+        drag(3, at(p.x, Y0 + 3 * S, true));
+        await vi.runAllTimersAsync();
+        expect(isHeadDrag(session())).toBe(false);
+        expect(vi.mocked(transactionWithHistory)).not.toHaveBeenCalled();
+    });
+
     it("QA-FD-2: a middle marcher bends the line there; it stays under the pointer, the spacing holds, the head moves with its leg; Edit path off keeps the route in", () => {
         show(false);
         const to = { x: spot(3).x, y: Y0 + 3 * S };

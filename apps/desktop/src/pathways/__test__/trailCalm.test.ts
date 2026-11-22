@@ -13,6 +13,7 @@ import {
 import type { PathTarget } from "../pathTarget";
 import { walkedRoute } from "../walkedRoute";
 import { shapeTuckedUnderTrail, toggleTrailShapeControls } from "../trailShape";
+import { setFollowTheLeader } from "../followTheLeader";
 
 /**
  * A selected trail, calmer (owner, 2026-11-17, after the trail audit): one way the line walks, from
@@ -167,6 +168,18 @@ describe("the way a trail walks (QA-CT-1, QA-CT-2)", () => {
 });
 
 describe("the end shape's controls are tucked away (QA-CT-3)", () => {
+    // The end shape is a trail's: tucked only with Follow-the-leader on (#1095)
+    beforeEach(() => setFollowTheLeader(true));
+    afterEach(() => setFollowTheLeader(false));
+
+    it("#1095: never with Follow-the-leader off, where Shape controls isn't offered: the shape keeps its controls", () => {
+        const ids = [1, 2, 3, 4, 5, 6];
+        showPath(boxTrail(), "B3");
+        expect(shapeTuckedUnderTrail(ids)).toBe(true);
+        setFollowTheLeader(false);
+        expect(shapeTuckedUnderTrail(ids)).toBe(false);
+    });
+
     it("only for exactly the trail's marchers while it's shown, stored and not drawn; Shape controls brings them back for that trail", () => {
         const ids = [1, 2, 3, 4, 5, 6];
         expect(shapeTuckedUnderTrail(ids)).toBe(false);

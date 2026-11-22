@@ -37,6 +37,7 @@ import { samePoints, type PathPoint } from "@/shapes/pen/penPath";
 import type { ToolEnv } from "@/shapes/tool/toolKind";
 import type { XY } from "@/shapes/types";
 import { EVEN_STEP, type TrailFormGrab } from "./followDrag";
+import { isFollowTheLeaderOn } from "./followTheLeader";
 import {
     storedPoints,
     usePathPenStore,
@@ -297,13 +298,15 @@ export function tailSpacing(
 
 /**
  * Whether the session's trail takes a marcher's drag: a stored trail dragged out of a line (its
- * ends along the way), selected or open, not drawn
+ * ends along the way), selected or open, not drawn. Never with Follow-the-leader off (#1095): the
+ * trail is shown quiet then, and a press on its marcher is the field's
  */
 export function canReshape(s: PathSession | null): s is PathSession {
     const trail = s?.target.trail;
     return (
         !!s &&
         !!trail &&
+        isFollowTheLeaderOn() &&
         (s.phase === "closed" || s.phase === "open") &&
         !s.follow &&
         !!trail.along &&

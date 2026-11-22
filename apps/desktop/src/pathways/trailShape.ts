@@ -1,7 +1,7 @@
 import type { Resolver } from "@openmarch/core";
 import { useBoxSelectionStore } from "@/shapes/placed/boxSelectionStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
-import { isFollowTheLeaderOn } from "./followTheLeader";
+import { isFollowTheLeaderOn, useFollowTheLeader } from "./followTheLeader";
 import {
     pathKey,
     pathShown,
@@ -61,6 +61,9 @@ export function shapeTuckedUnderTrail(
         "session" | "hidden" | "shapeControlsFor"
     > = usePathPenStore.getState(),
 ): boolean {
+    // Follow-the-leader off (#1095): Shape controls isn't offered, so nothing is tucked away and
+    // the end shape is edited as any other
+    if (!isFollowTheLeaderOn()) return false;
     const session = trailShown(state);
     return (
         !!session &&
@@ -73,7 +76,9 @@ export function shapeTuckedUnderTrail(
 export function useShapeTuckedUnderTrail(
     ids: readonly number[] | null,
 ): boolean {
-    return usePathPenStore((s) => !!ids && shapeTuckedUnderTrail(ids, s));
+    // Read so the switch re-renders it
+    const on = useFollowTheLeader();
+    return usePathPenStore((s) => on && !!ids && shapeTuckedUnderTrail(ids, s));
 }
 
 /** Whether the trail shown has its end shape's controls on (Shape controls checked) */
