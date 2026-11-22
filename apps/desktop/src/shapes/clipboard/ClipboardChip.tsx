@@ -101,19 +101,21 @@ function ChipOrCard({
             active.blur();
     }, [shapeShown]);
 
-    // Opened, the focus goes to the card's fold button; folded from the card, back to the chip
-    const opened = useRef(false);
+    // Opened, the focus goes to the card's fold button. Folded by the person (its caret, or
+    // Escape inside it) with the focus inside it, back to the chip's button; folded by a paste
+    // opening, nowhere, so Enter and Escape reach the paste
+    const focusBack = useRef(false);
+    const foldByHand = () => {
+        focusBack.current = !!box.current?.contains(document.activeElement);
+        setOpen(false);
+    };
     useEffect(() => {
         if (open) fold.current?.focus();
-        else if (
-            opened.current &&
-            box.current?.contains(document.activeElement)
-        )
-            toggle.current?.focus();
-        opened.current = open;
+        else if (focusBack.current) toggle.current?.focus();
+        focusBack.current = false;
     }, [open]);
 
-    const status = chipStatus(t, view.fit, pasteReason, copiedNow);
+    const status = chipStatus(t, view.fit, pasteReason, copiedNow, shapeShown);
     const countText = t("shapes.clipboard.marchers", {
         count: view.summary.count,
     });
@@ -126,6 +128,8 @@ function ChipOrCard({
             data-flash={copiedNow || undefined}
             // #927: the pill and the shape editor bar keep off it
             data-field-layer="control"
+            // A finger or a wheel on it is its own, not a press or zoom on the field under it
+            data-field-control
             className={twMerge(
                 POPOVER_CLASS,
                 "pointer-events-auto absolute bottom-6 left-6 z-10 p-4 motion-safe:transition-[opacity,box-shadow] motion-safe:duration-150",
@@ -139,16 +143,12 @@ function ChipOrCard({
                 if (e.key === "Escape" && open) {
                     e.preventDefault();
                     e.stopPropagation();
-                    setOpen(false);
+                    foldByHand();
                 }
             }}
         >
             {open ? (
-                <ClipboardCard
-                    view={view}
-                    onFold={() => setOpen(false)}
-                    foldRef={fold}
-                />
+                <ClipboardCard view={view} onFold={foldByHand} foldRef={fold} />
             ) : (
                 <div className="flex items-center gap-8 pr-4">
                     <button
@@ -196,19 +196,17 @@ function ChipOrCard({
                             >
                                 {status.tone === "warning" && (
                                     <WarningIcon
-                                        size={12}
+                                        size={16}
                                         weight="fill"
                                         className="text-yellow shrink-0"
                                         aria-hidden
                                     />
                                 )}
-                                <span className="truncate" title={status.text}>
-                                    {status.text}
-                                </span>
+                                <span className="truncate">{status.text}</span>
                             </span>
                         </span>
                         <CaretUpIcon
-                            size={14}
+                            size={16}
                             className="text-text-subtitle shrink-0"
                             aria-hidden
                         />
@@ -231,7 +229,7 @@ function ChipOrCard({
 }
 
 type ChipStatus = {
-    kind: "copied" | "reason" | PictureFit["fit"];
+    kind: "copied" | "reason" | "shapeOpen" | PictureFit["fit"];
     tone: "copied" | "warning" | "plain";
     text: string;
 };
@@ -246,12 +244,21 @@ function chipStatus(
     fit: PictureFit,
     pasteReason: string | null,
     copiedNow: boolean,
+    /** A shape is open (a paste being placed, or a shape being drawn) */
+    shapeOpen: boolean,
 ): ChipStatus {
     if (copiedNow)
         return {
             kind: "copied",
             tone: "copied",
             text: t("shapes.clipboard.chipCopied"),
+        };
+    // Mid-paste, what to do next rather than why Paste can't run again
+    if (shapeOpen)
+        return {
+            kind: "shapeOpen",
+            tone: "plain",
+            text: t("shapes.clipboard.chipShapeOpen"),
         };
     if (pasteReason)
         return { kind: "reason", tone: "plain", text: pasteReason };

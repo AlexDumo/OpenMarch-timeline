@@ -10,7 +10,7 @@ questions:
   - The preview starts centered on the marchers you selected. Is that where you expected it?
   - When you pasted a shape onto more or fewer marchers, was the shape it rebuilt the one you wanted?
   - When you pasted loose marchers onto fewer marchers, did it use the spots you wanted? Did you want to pick them?
-  - Did the Clipboard card in the inspector tell you what you'd copied, and how many marchers to select before pasting?
+  - Did the clipboard chip in the field's bottom-left corner tell you what you'd copied, and how many marchers to select before pasting? Did it ever get in your way?
   - Was the Shape | Positions switch the right way to choose between a rebuilt shape and the exact copied spots?
   - Did you reach for Cut or Duplicate?
 ---
@@ -32,16 +32,17 @@ marchers you have selected into the copied formation.
   same number, then onto fewer, then onto more. With fewer, the nearest
   spots are used. With more, the nearest marchers take the spots and the
   rest stay where they are.
-- The Clipboard card is at the top of the inspector. Select its heading to
-  fold it away, and **Clear** to empty the clipboard.
+- Once you copy, a small chip shows up in the field's bottom-left corner.
+  Select it to open the Clipboard card; **Clear** in the card empties the
+  clipboard. On a tablet, the chip also has a **Paste** button.
 - Copy a box, then pick **Positions** under **Paste as** on the Clipboard
   card and paste onto fewer marchers: they take some of the box's exact
   spots instead of a smaller box, and stay plain marchers.
 - Go to another page and use **Paste exactly** (Ctrl/Cmd+Shift+V): the
   preview starts exactly where the formation was copied.
-- Watch the **Clipboard** card in the inspector as you copy and change the
-  selection. It shows a picture of what's copied, whether it's a shape or
-  positions, how many marchers, and whether your selection fits.
+- Watch the clipboard chip as you copy and change the selection. It shows a
+  picture of what's copied, whether it's a shape or positions, how many
+  marchers, and whether your selection fits (or why you can't paste yet).
 - Open another show and paste there. The copied formation is kept by
   OpenMarch on this computer.
 

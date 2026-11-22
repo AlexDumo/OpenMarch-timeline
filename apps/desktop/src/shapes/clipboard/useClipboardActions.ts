@@ -100,6 +100,20 @@ export function useClipboardActions(): void {
         {
             enabled: ready && shapeCopied,
             ignoreRepeat: true,
+            disabledReason: () =>
+                !ready
+                    ? undefined
+                    : !picture
+                      ? tolgee.t(
+                            "shapes.clipboard.reasonNothingCopied",
+                            "Copy marchers first",
+                        )
+                      : !shapeCopied
+                        ? tolgee.t(
+                              "shapes.clipboard.reasonNotAShape",
+                              "Copy a whole shape first",
+                          )
+                        : undefined,
             // Names what it does now: the way back once positions are picked
             label: asPositions
                 ? tolgee.t("actions.edit.pasteAsShape")

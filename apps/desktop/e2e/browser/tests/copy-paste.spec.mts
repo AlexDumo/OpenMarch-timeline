@@ -637,6 +637,8 @@ test("the Clipboard chip sits in the field's bottom-left corner, says Copied, op
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("clipboard-section")).toBeHidden();
     expect((await readField(page)).selection.length).toBe(2);
+    // ... and gives the focus back to the chip's button, so the keyboard keeps its place
+    await expect(page.getByTestId("clipboard-chip-toggle")).toBeFocused();
 
     // Clear: nothing to paste, and the chip goes
     const card = await openCard(page);
@@ -680,11 +682,31 @@ test("the chip's line says how the copy fits or why Paste can't run, its Paste i
     await expect(page.getByTestId("clipboard-chip-paste")).toHaveCount(
         touch ? 1 : 0,
     );
-    // A Paste from the chip (or its card) opens the preview and leaves the focus off the
-    // chip: Enter places it
+    if (touch) {
+        // The pill keeps clear of the chip (#927)
+        const pill = (await page
+            .getByTestId("touch-modifier-buttons")
+            .boundingBox())!;
+        const at = (await chip(page).boundingBox())!;
+        const apart =
+            pill.x >= at.x + at.width ||
+            at.x >= pill.x + pill.width ||
+            pill.y >= at.y + at.height ||
+            at.y >= pill.y + pill.height;
+        expect(apart).toBe(true);
+    }
+    // A paste opened with the focus inside the chip (its button on a tablet; Ctrl/Cmd+V with
+    // the card's switch focused on desktop) leaves the focus off the chip: Enter places it
     if (touch) await page.getByTestId("clipboard-chip-paste").click();
-    else await (await openCard(page)).getByTestId("clipboard-paste").click();
+    else {
+        const card = await openCard(page);
+        await card.getByTestId("clipboard-fold").focus();
+        await page.keyboard.press("ControlOrMeta+v");
+    }
     await expect(preview(page)).toBeVisible();
+    // Mid-paste, the chip says what to do, not why Paste can't run
+    await expect(status).toHaveText("Place or discard the open shape");
+    await expect(status).toHaveAttribute("data-status", "shapeOpen");
     await expect(page.getByTestId("clipboard-live")).toHaveText(
         "Paste preview. Enter places it, Escape discards it.",
     );
@@ -697,10 +719,8 @@ test("the chip's line says how the copy fits or why Paste can't run, its Paste i
     expect(focusedInChip).toBe(false);
     await page.keyboard.press("Enter");
     await expect(preview(page)).toBeHidden();
-    // While a shape is open, the chip said why Paste can't run; placed, it fits again
-    await expect(status).not.toHaveText(
-        "Place or discard the open shape first",
-    );
+    // Placed, it says how the copy fits again
+    await expect(status).toHaveText("2 spots stay empty");
 });
 
 test("a drag on the field near the chip fades it out of the way", async ({

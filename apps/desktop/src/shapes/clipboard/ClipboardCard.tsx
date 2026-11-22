@@ -78,7 +78,7 @@ export const CLIPBOARD_BUTTON_CLASS = `${getButtonClassName({
 /**
  * The Clipboard chip opened (#961, owner 2026-11-22): everything about what's copied. The
  * picture, what it is and how many marchers, the Paste as switch for a shape, Paste and Paste
- * exactly with their keys, how it fits the selection now, and Clear, kept apart from the pastes.
+ * exactly (their keys in their tooltips), how it fits the selection now, and Clear, kept apart from the pastes.
  * The fit line always holds its room, so nothing above it moves as the selection changes: the
  * card grows up from the field's corner.
  */
@@ -128,7 +128,6 @@ export function ClipboardCard({
                     onClick={onFold}
                     aria-expanded
                     aria-label={t("shapes.clipboard.fold")}
-                    title={t("shapes.clipboard.fold")}
                     data-testid="clipboard-fold"
                     className={`${getButtonClassName({ variant: "ghost", size: "compact", content: "icon" })} text-text-subtitle shrink-0 self-start`}
                 >
@@ -228,7 +227,7 @@ export function FitLine({ fit }: { fit: PictureFit }) {
         >
             {mismatch && (
                 <WarningIcon
-                    size={14}
+                    size={16}
                     weight="fill"
                     className="text-yellow mt-2 shrink-0"
                     aria-hidden
