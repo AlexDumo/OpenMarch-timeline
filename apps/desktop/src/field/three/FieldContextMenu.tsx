@@ -48,6 +48,7 @@ import type { FieldMarchers } from "./fieldMarchers";
 import { fieldToElement, useFieldViewStore } from "./fieldView";
 import {
     MENU_CONTENT_CLASS,
+    POINT_MENU_PLACEMENT,
     MENU_ITEM_CLASS,
     MENU_SEPARATOR_CLASS,
 } from "@/components/ui/popupClasses";
@@ -79,8 +80,8 @@ import {
  *   a count, "Hold from last keyframe (3 of 5)", when it would change only some of them.
  * - **Hold style** (ADR 0015 D-5, #775), while a selected marcher is Held at the playhead: the
  *   show setting, stand, mark time or high mark time for that hold, the one in effect checked.
- * - A line's order (pathways step 4g), with two or more selected: **Set order**, **Reverse order**
- *   and **Clear order**.
+ * - A line's order (pathways step 4g), with two or more selected and Follow-the-leader on
+ *   (#1095): **Set order**, **Reverse order** and **Clear order**.
  * - Splitting moves (timeline mode, not Basic): **Split selected marchers into a new move** and
  *   **Split the move at the playhead**. An entry that can't run says why beside it (a split at
  *   a count refused while a line follows a trail), before anyone tries it.
@@ -313,7 +314,10 @@ export default function FieldContextMenu({
                     : MOVES.has(id)
                       ? timelineMode && hasActionHandler(id)
                       : ORDER.has(id)
-                        ? timelineMode && selectedCount >= 2
+                        ? // Gone with Follow-the-leader off (#1095): no handler then
+                          timelineMode &&
+                          selectedCount >= 2 &&
+                          hasActionHandler(id)
                         : true;
     // Swap's handler counts the marchers (props aren't swapped), so its own state is the answer
     const enabled = (id: ActionId) => isActionEnabled(id);
@@ -356,15 +360,12 @@ export default function FieldContextMenu({
             <DropdownMenu.Portal>
                 <DropdownMenu.Content
                     data-testid="field-menu"
-                    align="start"
-                    // In the touch layout its entries are taller, so it often fits neither
-                    // below nor above the finger, and Radix only flips across that way: beside
-                    // the finger it slides up or down to stay on screen (#928). Never taller than
-                    // the screen either: it scrolls instead
-                    side={touch ? "right" : "bottom"}
-                    sideOffset={touch ? 12 : 0}
-                    sticky={touch ? "always" : "partial"}
-                    collisionPadding={8}
+                    // Like a system's context menu, its top corner at the point, slid up or
+                    // across to stay on screen, and scrolled when it's taller than the window
+                    // (owner, 2026-11-18: below the point a long menu ran off the bottom). In
+                    // the touch layout it stands a little clear of the finger (#928)
+                    {...POINT_MENU_PLACEMENT}
+                    sideOffset={touch ? 12 : POINT_MENU_PLACEMENT.sideOffset}
                     // Focus isn't returned to the anchor, a hidden div: it falls to the page
                     // body. The shortcuts listen on the window, so the field's
                     // keys still work
@@ -373,9 +374,7 @@ export default function FieldContextMenu({
                     className={
                         actions
                             ? MODE_CONTENT_CLASS
-                            : touch
-                              ? `${TIMELINE_MENU_CONTENT_CLASS} max-h-(--radix-dropdown-menu-content-available-height) overflow-y-auto`
-                              : TIMELINE_MENU_CONTENT_CLASS
+                            : TIMELINE_MENU_CONTENT_CLASS
                     }
                 >
                     {/* One Escape closes an open reason tip and the menu together */}

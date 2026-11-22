@@ -11,6 +11,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import tolgee from "@/global/singletons/Tolgee";
 import type { ActionId } from "@/shortcuts/definitions";
 import { registerActionHandler } from "@/shortcuts/registry";
+import { setFollowTheLeader } from "@/pathways/followTheLeader";
 import type { FieldEditor } from "@/field/editor/fieldEditor";
 import FieldContextMenu, {
     FIELD_MENU_ACTIONS,
@@ -20,6 +21,10 @@ import type { FieldMarchers } from "../fieldMarchers";
 import { useInputModeStore } from "@/stores/InputModeStore";
 import { PATH_FIELD_MENU } from "@/pathways/pathPenMode";
 import { resetKeyboardSeen } from "@/stores/KeyboardSeenStore";
+import {
+    MENU_CONTENT_CLASS,
+    POINT_MENU_PLACEMENT,
+} from "@/components/ui/popupClasses";
 
 /**
  * The field's right-click menu (#315): registered actions, with their enabled
@@ -86,6 +91,7 @@ describe("FieldContextMenu", () => {
     afterEach(() => {
         cleanup();
         handlers.splice(0).forEach((off) => off());
+        setFollowTheLeader(false);
     });
 
     it("shows nothing until it's opened at a point", () => {
@@ -324,7 +330,9 @@ describe("FieldContextMenu", () => {
             "refitPath",
         ] as const)
             handle(id, { enabled: false, reason: null });
-        // Two selected, so Swap can run and a line's order shows
+        // Two selected, so Swap can run, and with Follow-the-leader on a line's order shows
+        // (with it off the order group is gone: followTheLeaderSwitch.test.tsx)
+        setFollowTheLeader(true);
         open({ selectedCount: 2 });
         const content = screen.getByTestId("field-menu");
         const groups: string[][] = [[]];
@@ -559,11 +567,18 @@ describe("FieldContextMenu", () => {
         expect(run).toHaveBeenCalledTimes(1);
     });
 
-    it("opens below the point with a mouse, and beside it in the touch layout, where it slides to stay on screen (#928)", () => {
+    it("opens like a system's context menu, its top corner at the point, sliding to stay on screen and scrolling past the window's height, with a mouse or a finger (#928; owner, 2026-11-18)", () => {
+        const fits = (menu: HTMLElement) => {
+            expect(menu).toHaveAttribute("data-side", "right");
+            expect(menu).toHaveAttribute("data-align", "start");
+            // Never taller than the room there: it scrolls instead
+            expect(menu.className).toContain(
+                "max-h-[var(--radix-dropdown-menu-content-available-height)]",
+            );
+            expect(menu.className).toContain("overflow-y-auto");
+        };
         open();
-        const menu = screen.getByTestId("field-menu");
-        expect(menu).toHaveAttribute("data-side", "bottom");
-        expect(menu.className).not.toContain("overflow-y-auto");
+        fits(screen.getByTestId("field-menu"));
         cleanup();
         const before = useInputModeStore.getState().preference;
         act(() => {
@@ -571,19 +586,27 @@ describe("FieldContextMenu", () => {
         });
         try {
             open();
-            const touchMenu = screen.getByTestId("field-menu");
-            expect(touchMenu).toHaveAttribute("data-side", "right");
-            // Never taller than the room there: it scrolls instead
-            expect(touchMenu.className).toContain(
-                "max-h-(--radix-dropdown-menu-content-available-height)",
-            );
-            expect(touchMenu.className).toContain("overflow-y-auto");
+            fits(screen.getByTestId("field-menu"));
         } finally {
             act(() => {
                 useInputModeStore.getState().setPreference(before);
             });
             localStorage.clear();
         }
+    });
+
+    it("every menu built on the shared panel is capped to the room Radix finds, and scrolls", () => {
+        expect(MENU_CONTENT_CLASS).toContain(
+            "max-h-[var(--radix-dropdown-menu-content-available-height)]",
+        );
+        expect(MENU_CONTENT_CLASS).toContain("overflow-y-auto");
+        expect(POINT_MENU_PLACEMENT).toMatchObject({
+            side: "right",
+            align: "start",
+            sticky: "always",
+            avoidCollisions: true,
+        });
+        expect(POINT_MENU_PLACEMENT.collisionPadding).toBeGreaterThan(0);
     });
 
     describe("shortcut caps (#880)", () => {
