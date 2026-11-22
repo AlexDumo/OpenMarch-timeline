@@ -1,5 +1,9 @@
 import type { FieldTestGesture } from "@/field/fieldTestApi";
 import {
+    fieldInputDebugOn,
+    logFieldInput,
+} from "@/field/debug/fieldInputDebug";
+import {
     pressChoiceOf,
     type HeldRole,
     REACH_INSIDE,
@@ -797,6 +801,9 @@ export class FieldEditor {
         }
         this.cancelGesture();
         this.ignoredButton = null;
+        // A mouse's edit press comes with no other button down: a right press (or a Mac's
+        // Ctrl-press) whose release never arrived is over, and mustn't take this one's release
+        this.rightPress = null;
         const taken = this.ports.takePress?.() ?? false;
         if (this.propTool) {
             // The prop tool's presses draw and never select; its moves and
@@ -1167,7 +1174,18 @@ export class FieldEditor {
     }
 
     /** The pointer was lost (capture lost, the window lost focus): nothing is clicked or dropped. */
-    pointerCancel(): void {
+    pointerCancel(reason = "cancelled"): void {
+        if (fieldInputDebugOn()) {
+            const undone = this.gesture
+                ? "drag or marquee"
+                : this.modePress
+                  ? "box or tool press"
+                  : this.press
+                    ? "press"
+                    : null;
+            if (undone)
+                logFieldInput("CANCELLED", `${undone}: ${reason}`, true);
+        }
         // The last click stays: the renderer also cancels after every release
         // A press the prop tool was drawing with is dropped (a second finger
         // landed to move the view): the corners already down stay

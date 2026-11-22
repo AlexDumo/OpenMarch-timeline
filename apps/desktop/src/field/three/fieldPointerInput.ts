@@ -6,6 +6,11 @@ import { GESTURE_TIMING } from "@/components/canvas/touch/touchGestures";
 import { fieldPointerAt, useFieldViewStore } from "./fieldView";
 import { fieldGesturesOwn } from "./fieldGestures";
 import { setView } from "./fieldNavigation";
+import {
+    describePointer,
+    fieldInputDebugOn,
+    logFieldInput,
+} from "@/field/debug/fieldInputDebug";
 
 export type FieldPointerInputOptions = {
     /**
@@ -54,6 +59,10 @@ export function attachFieldPointerInput(
 
     /** The pointer the editor's press captured; other captures (navigation's) aren't its to cancel. */
     let captured: number | null = null;
+    /** The button that started that press */
+    let capturedButton = 0;
+    /** The buttons the debug log last saw held, to log a change mid-drag */
+    let loggedButtons = 0;
     const penPan = attachPenPan(element, editor);
     const penHold = watchPenHold(editor, pointer);
     const down = (event: PointerEvent) => {
@@ -68,9 +77,19 @@ export function attachFieldPointerInput(
             // Held and lifted unmoved, it opens the menus, as anywhere
             return penHold.down(event);
         }
-        if (!editor.pointerDown(drag ? { ...press, area: drag } : press))
-            return;
+        const took = editor.pointerDown(
+            drag ? { ...press, area: drag } : press,
+        );
+        if (fieldInputDebugOn()) {
+            loggedButtons = event.buttons;
+            logFieldInput(
+                "down",
+                `${describePointer(event)}${took ? "" : " (not the editor's)"}`,
+            );
+        }
+        if (!took) return;
         captured = event.pointerId;
+        capturedButton = event.button;
         element.setPointerCapture(event.pointerId);
         penHold.down(event);
     };
@@ -81,6 +100,10 @@ export function attachFieldPointerInput(
         if (penPan.move(event)) {
             if (penPan.panning(event.pointerId)) penHold.cancel(event);
             return;
+        }
+        if (fieldInputDebugOn() && event.buttons !== loggedButtons) {
+            loggedButtons = event.buttons;
+            logFieldInput("buttons changed", describePointer(event));
         }
         const at = pointer(event);
         resting.set(event.buttons === 0 ? at : null);
@@ -94,14 +117,31 @@ export function attachFieldPointerInput(
             return;
         }
         if (penPan.end(event)) return;
-        editor.pointerUp(pointer(event));
+        const at = pointer(event);
+        // A mouse's release comes once its last button lifts, and names that button: a trackpad's
+        // second finger can press the right button mid-drag and lift last. The press the editor
+        // holds ends then all the same, with its own button, or the release is lost and the drag
+        // snaps back when the capture goes
+        const ends = event.pointerId === captured && event.buttons === 0;
+        if (fieldInputDebugOn()) {
+            loggedButtons = event.buttons;
+            logFieldInput(
+                "up",
+                `${describePointer(event)}${ends && event.button !== capturedButton ? ` (ends the press of button ${capturedButton})` : ""}`,
+            );
+        }
+        editor.pointerUp(ends ? { ...at, button: capturedButton } : at);
     };
     const cancel = (event: PointerEvent) => {
         penHold.cancel(event);
         penPan.cancel(event);
         if (event.pointerId !== captured) return;
         captured = null;
-        editor.pointerCancel();
+        editor.pointerCancel(
+            event.type === "pointercancel"
+                ? "the browser sent pointercancel"
+                : "the canvas lost the pointer before its release",
+        );
     };
     const leave = (event: PointerEvent) => {
         if (event.buttons === 0) editor.pointerLeave();
@@ -119,6 +159,7 @@ export function attachFieldPointerInput(
     const detachRight = listenForCapturedRightPresses(element, editor, pointer);
     const unsubscribe = editor.subscribe(showCursor);
     showCursor();
+    logFieldInput("input attached");
     return () => {
         element.removeEventListener("pointerdown", down);
         element.removeEventListener("pointermove", move);
@@ -130,7 +171,11 @@ export function attachFieldPointerInput(
         detachRight();
         penHold.stop();
         unsubscribe();
-        editor.pointerCancel();
+        logFieldInput(
+            "input detached",
+            "the canvas was rebuilt or the mode changed",
+        );
+        editor.pointerCancel("the field's input was detached");
         element.style.cursor = "";
     };
 }

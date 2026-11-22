@@ -160,6 +160,8 @@ import { threeFieldView } from "@/field/benchmark/fieldScenarios";
 import { r3fFrames } from "./benchmarkFrames";
 import { makeFloorSampler } from "@/pathways/floorSampler";
 import { useTheme } from "@/context/ThemeContext";
+import { useFieldInputDebug } from "@/field/debug/fieldInputDebug";
+import { FieldInputDebugPanel } from "@/field/debug/FieldInputDebugPanel";
 import {
     CHECKPOINT_FONT,
     COLLISION_FONT,
@@ -291,6 +293,11 @@ function ThreeFieldView() {
     // A new key starts the field over on a new canvas, with a new context
     const [canvasKey, setCanvasKey] = useState(0);
     const startOver = useCallback(() => setCanvasKey((key) => key + 1), []);
+    // The field input log's test (`?debugInput`): the canvas rebuilt, as after a lost GPU context
+    const debugRebuilds = useFieldInputDebug((s) => s.rebuilds);
+    useEffect(() => {
+        if (debugRebuilds > 0) startOver();
+    }, [debugRebuilds, startOver]);
 
     const marchers = useMemo(() => new FieldMarchers(), []);
     // The View tab's label form: full drill numbers ("OT12"), or the number only ("12")
@@ -707,6 +714,7 @@ function ThreeFieldView() {
                     }}
                 />
             )}
+            <FieldInputDebugPanel />
             <div className="relative h-full w-full">
                 {fieldProperties && quality.reason !== "noWebGL" && (
                     <Canvas

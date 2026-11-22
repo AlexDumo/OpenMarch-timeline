@@ -189,6 +189,24 @@ test.describe("marquee", () => {
         expect((await readField(page)).activeGesture).toBeNull();
     });
 
+    // A Mac trackpad's second finger can press the right button mid-drag and lift last: the one
+    // release then names the right button
+    test("a marquee released with the right button last still selects what it took", async ({
+        show,
+    }) => {
+        const { page } = show;
+        const rect = await around(page, ["T1", "T2"], 12);
+        await page.mouse.move(rect.left, rect.top);
+        await page.mouse.down();
+        await page.mouse.move(rect.right, rect.bottom, { steps: 8 });
+        await page.mouse.down({ button: "right" });
+        await page.mouse.up();
+        await page.mouse.up({ button: "right" });
+        await waitForIdle(page);
+        await expectSelected(page, ["T1", "T2"]);
+        await expect(page.getByRole("menu")).toHaveCount(0);
+    });
+
     test("a marquee over empty field clears the selection", async ({
         show,
     }) => {

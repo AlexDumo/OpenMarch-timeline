@@ -60,6 +60,8 @@ const IGNORED_SOURCES = [
     "**/*.spec.*",
     "**/*.d.ts",
     "src/field/benchmark/**",
+    // The field input log (`?debugInput`): a developer tool, in English
+    "src/field/debug/**",
     "src/test/**",
     "electron/database/migrations/**",
 ];

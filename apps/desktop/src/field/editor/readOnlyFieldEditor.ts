@@ -66,7 +66,7 @@ export class ReadOnlyFieldEditor extends FieldEditor {
     setReadOnly(readOnly: boolean): void {
         if (readOnly === this.readOnly) return;
         if (readOnly) {
-            this.pointerCancel();
+            this.pointerCancel("the field became read-only");
             this.cancelRotation();
             // The line tool, where the editor still has one
             (this as { setLineTool?(ids: null): void }).setLineTool?.(null);

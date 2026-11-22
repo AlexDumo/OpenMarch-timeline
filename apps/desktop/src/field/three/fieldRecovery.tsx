@@ -5,6 +5,7 @@ import {
     glRendererName,
     useFieldQualityStore,
 } from "@/field/fieldQuality";
+import { logFieldInput } from "@/field/debug/fieldInputDebug";
 
 /**
  * How long a lost WebGL context gets to come back by itself before the field
@@ -44,11 +45,16 @@ export function ContextLossGuard({ onGiveUp }: { onGiveUp: () => void }) {
         recordRenderer(renderer.getContext());
         let timer: ReturnType<typeof setTimeout> | undefined;
         const lost = () => {
+            logFieldInput("GPU context lost");
             useFieldQualityStore.setState({ contextLost: true });
             clearTimeout(timer);
-            timer = setTimeout(onGiveUp, CONTEXT_RESTORE_WAIT_MS);
+            timer = setTimeout(() => {
+                logFieldInput("GPU context gone", "rebuilding the canvas");
+                onGiveUp();
+            }, CONTEXT_RESTORE_WAIT_MS);
         };
         const restored = () => {
+            logFieldInput("GPU context restored");
             clearTimeout(timer);
             recordRenderer(renderer.getContext());
             useFieldQualityStore.setState({ contextLost: false });
