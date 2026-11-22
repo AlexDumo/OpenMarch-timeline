@@ -279,6 +279,52 @@ function readManifestFile(file: string): WorkingCopyManifest | null {
     };
 }
 
+/** OpenMarch's own folder can't hold a working copy: full, read-only or not allowed. */
+export class WorkingCopyStorageError extends Error {
+    constructor(message: string, options?: { cause?: unknown }) {
+        super(message, options);
+        this.name = "WorkingCopyStorageError";
+    }
+}
+
+// cspell:ignore bavail statfs
+/**
+ * Makes the working copy's folder, and checks there's room for the copy (twice the show: the
+ * copy and a publish snapshot), before anything is copied.
+ */
+function checkStorageFor(
+    target: string,
+    workingRoot: string,
+    directory: string,
+) {
+    try {
+        fs.mkdirSync(directory, { recursive: true });
+    } catch (error) {
+        throw new WorkingCopyStorageError(
+            "Couldn't make a folder for the working copy",
+            { cause: error },
+        );
+    }
+    let needed = 0;
+    try {
+        needed = fs.statSync(target).size * 2;
+    } catch {
+        return; // The open reports a missing show itself
+    }
+    try {
+        const { bavail, bsize } = fs.statfsSync(workingRoot);
+        if (bavail * bsize < needed) {
+            fs.rmSync(directory, { recursive: true, force: true });
+            throw new WorkingCopyStorageError(
+                "Not enough space for a working copy",
+            );
+        }
+    } catch (error) {
+        if (error instanceof WorkingCopyStorageError) throw error;
+        // No free-space figure on this system: try the copy anyway.
+    }
+}
+
 /**
  * The folder's manifest, or the one a crash left half written (its temp file). When the temp
  * file says there are unsaved changes and the manifest doesn't, the rename that would have
@@ -288,10 +334,15 @@ function readManifestFile(file: string): WorkingCopyManifest | null {
 function readManifest(directory: string): WorkingCopyManifest | null {
     const target = join(directory, MANIFEST_FILE_NAME);
     const main = readManifestFile(target);
-    const temp = readManifestFile(`${target}.tmp`);
+    const tempPath = `${target}.tmp`;
+    const temp = readManifestFile(tempPath);
     if (!main) return temp;
-    if (temp?.unsaved && !main.unsaved)
+    if (main.unsaved) return main;
+    if (temp?.unsaved)
         return { ...main, unsaved: true, lastEditAt: temp.lastEditAt };
+    // A temp file that can't be read is a write cut short (a full disk): what it would have
+    // recorded is unknown, so assume there are changes.
+    if (!temp && fs.existsSync(tempPath)) return { ...main, unsaved: true };
     return main;
 }
 
@@ -500,6 +551,10 @@ export class WorkingCopySession {
      * consistent. That connection is closed before this returns. Nothing else is written to the
      * show. Temp files a crashed publish left beside it are deleted.
      */
+    /**
+     * Opens `showPath` through a new working copy. Throws {@link WorkingCopyStorageError} when
+     * OpenMarch's own folder can't hold the copy, so the caller can edit in place instead.
+     */
     static async open(
         showPath: string,
         options: WorkingCopyOptions,
@@ -513,7 +568,7 @@ export class WorkingCopySession {
         const id = randomUUID();
         const directory = join(options.workingRoot, id);
         const workingPath = join(directory, WORKING_FILE_NAME);
-        fs.mkdirSync(directory, { recursive: true });
+        checkStorageFor(target, options.workingRoot, directory);
 
         try {
             const { found } = await removeStaleTempFiles(target);
@@ -562,6 +617,13 @@ export class WorkingCopySession {
             };
         } catch (error) {
             fs.rmSync(directory, { recursive: true, force: true });
+            // Out of room or a read-only drive while copying: OpenMarch's folder, not the show
+            const code = (error as NodeJS.ErrnoException)?.code;
+            if (code === "ENOSPC" || code === "EDQUOT" || code === "EROFS")
+                throw new WorkingCopyStorageError(
+                    "OpenMarch's folder ran out of room for the working copy",
+                    { cause: error },
+                );
             throw error;
         }
     }

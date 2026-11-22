@@ -10,6 +10,7 @@ import {
     type WorkingCopyOptions,
     type WorkingCopyStatus,
     WorkingCopySession,
+    WorkingCopyStorageError,
     findRecoverableFor,
     removeStaleTempFiles,
     scanWorkingCopies,
@@ -331,6 +332,19 @@ describe("WorkingCopySession", () => {
         expect(readValues(showPath)).toEqual(["first", "unsaved"]);
         await resumed.close();
         expect(scanWorkingCopies(workingRoot)).toEqual([]);
+    });
+
+    it("says when OpenMarch's own folder can't hold a working copy", async () => {
+        // The folder for working copies can't be made: a file is in the way
+        const blocked = join(root, "blocked");
+        fs.writeFileSync(blocked, "");
+
+        await expect(
+            WorkingCopySession.open(showPath, {
+                ...options(),
+                workingRoot: blocked,
+            }),
+        ).rejects.toBeInstanceOf(WorkingCopyStorageError);
     });
 
     it("finds a show's working copy however its path is spelled", async () => {
@@ -732,6 +746,30 @@ describe("WorkingCopySession", () => {
             expect(fs.existsSync(join(directory, WORKING_FILE_NAME))).toBe(
                 true,
             );
+        });
+
+        it("keeps a copy whose last manifest write was cut short", () => {
+            const directory = makeFolder(
+                "cut",
+                JSON.stringify({
+                    version: 1,
+                    id: "cut",
+                    showPath,
+                    originalIdentity: null,
+                    unsaved: false,
+                    pid: 1,
+                    appVersion: "",
+                    openedAt: "",
+                    lastEditAt: null,
+                    lastSavedAt: null,
+                }),
+            );
+            // A full disk: the temp file was truncated, then nothing could be written
+            fs.writeFileSync(join(directory, `${MANIFEST_FILE_NAME}.tmp`), "");
+
+            expect(scanWorkingCopies(workingRoot).map((e) => e.id)).toEqual([
+                "cut",
+            ]);
         });
 
         it("lists a newer version's copy, and asks before it replaces the show", async () => {
