@@ -68,7 +68,6 @@ import {
 } from "./rules";
 import {
     primitiveTriangles,
-    sceneNodes,
     sceneOf,
     sceneTriangles,
     topAt,
@@ -89,6 +88,7 @@ import type {
     Vec3,
 } from "./types";
 import { validateModel } from "./validate";
+import { freezeSkins } from "./skins";
 import { openZips } from "./zip";
 
 export interface ModelImportEnv {
@@ -273,10 +273,13 @@ async function readClean(
         return null;
     }
     const scene = keepOneScene(doc, report);
-    if (sceneNodes(scene).some((n) => n.getSkin() && n.getMesh())) {
+    // A rigged model stands still in the pose it has with no animation playing (#1168)
+    const frozen = freezeSkins(doc, scene);
+    if (frozen === null) {
         report.cantImport.push({ code: "rigged" });
         return null;
     }
+    if (frozen > 0) report.fixedForYou.push({ code: "rigFrozen" });
     await dropExtensions(doc, opened, report);
     if (sceneTriangles(scene) > limit) {
         report.cantImport.push({

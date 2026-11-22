@@ -1676,7 +1676,7 @@
                     "detail": "{triangles} triangles; the most it can import is {limit}."
                 },
                 "rigged": {
-                    "title": "Rigged models aren't supported",
+                    "title": "This model's rig can't be read",
                     "detail": "Import a still version of it."
                 },
                 "noGeometry": {
@@ -1705,6 +1705,7 @@
                     "morphTargets": "{count, plural, one {# shape key} other {# shape keys}}",
                     "scenes": "{count, plural, one {# other scene} other {# other scenes}}"
                 },
+                "rigFrozen": "Removed its rig: it stands still, as posed without animation",
                 "pivotMoved": "Set it on the ground at its center"
             },
             "notes": {
