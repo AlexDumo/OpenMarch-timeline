@@ -11,10 +11,17 @@
  * answers a reloaded editor's `view3d:is-open`.
  */
 import { BrowserWindow, ipcMain, shell } from "electron";
+import type Store from "electron-store";
 import { basename, extname } from "node:path";
 import * as DatabaseServices from "../database/database.services";
 import { isReadOnlySql, isView3dSqlReadMethod } from "./view3dSql";
 import { t } from "./i18n";
+import type { WindowDefaults } from "./window-placement";
+import {
+    rememberWindowState,
+    showWhenReady,
+    windowPlacement,
+} from "./window-state";
 import {
     VIEW3D_AUTO_OPEN_CHANNELS,
     VIEW3D_HELLO_CHANNEL,
@@ -39,6 +46,8 @@ export interface View3dWindowConfig {
     getLanguage: () => string;
     /** The editor window, which publishes to and answers the 3D View. */
     getEditorWindow: () => BrowserWindow | null;
+    /** Where the window was left, and the display chosen for it (window-state.ts) */
+    store: Store;
     /**
      * The "open with the show" setting, for the window's question: undefined while never answered,
      * null where the window shouldn't ask (Playwright sessions).
@@ -55,6 +64,17 @@ const TITLE_BAR_COLORS = {
     dark: { color: "#0f0e13", symbolColor: "#d0d0d0" },
     light: { color: "#ecebf0", symbolColor: "#202020" },
 } as const;
+
+/** A window's color before its page draws, so it doesn't flash white in the dark theme */
+export function windowBackground(theme: unknown): string {
+    return TITLE_BAR_COLORS[theme === "light" ? "light" : "dark"].color;
+}
+
+export const VIEW3D_WINDOW_DEFAULTS: WindowDefaults = {
+    maximized: false,
+    size: () => ({ width: 1280, height: 800 }),
+    min: { width: 640, height: 400 },
+};
 
 let config: View3dWindowConfig | null = null;
 let view3dWindow: BrowserWindow | null = null;
@@ -228,15 +248,21 @@ export function openView3dWindow({
     const isMacOS = process.platform === "darwin";
     const colors = TITLE_BAR_COLORS[query.theme === "light" ? "light" : "dark"];
 
+    const placement = windowPlacement(
+        config.store,
+        "view3d",
+        VIEW3D_WINDOW_DEFAULTS,
+    );
     const created = new BrowserWindow({
         title: t("view3d.window.title", { showName: query.show }),
         icon: config.icon,
-        width: 1280,
-        height: 800,
-        minWidth: 640,
-        minHeight: 400,
+        ...placement.bounds,
+        fullscreen: placement.fullScreen,
+        minWidth: VIEW3D_WINDOW_DEFAULTS.min.width,
+        minHeight: VIEW3D_WINDOW_DEFAULTS.min.height,
         backgroundColor: colors.color,
-        show: !background,
+        // Shown once it's in place (showWhenReady)
+        show: false,
         autoHideMenuBar: true,
         frame: config.frame,
         titleBarStyle: "hidden",
@@ -256,7 +282,8 @@ export function openView3dWindow({
         },
     });
     view3dWindow = created;
-    if (background) created.once("ready-to-show", () => created.showInactive());
+    rememberWindowState(config.store, "view3d", created);
+    showWhenReady(created, placement, { inactive: background });
 
     created.on("closed", () => {
         if (view3dWindow === created) view3dWindow = null;

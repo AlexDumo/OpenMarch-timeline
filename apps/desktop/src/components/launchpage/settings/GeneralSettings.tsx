@@ -14,6 +14,7 @@ import SettingsPanel from "@/settings/SettingsPanel";
 import { APP_LANGUAGES } from "@/utilities/languages";
 import TranslationHelpNote from "@/components/i18n/TranslationHelpNote";
 import UpdateSettingsRow from "@/updates/UpdateSettingsRow";
+import WindowDisplaySettings from "./WindowDisplaySettings";
 
 export default function GeneralSettings() {
     const tolgee = useTolgee(["language"]);
@@ -150,6 +151,9 @@ export default function GeneralSettings() {
                     />
                 </SettingRow>
             )}
+
+            {/* A browser tab can't choose its display */}
+            {!isWebBuild && <WindowDisplaySettings />}
         </SettingsPanel>
     );
 }
