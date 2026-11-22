@@ -83,7 +83,9 @@ export default function MobileExportView({
                     productionId={currentProduction.id}
                     currentProduction={currentProduction}
                     expiredOn={
-                        ensemble?.expired ? ensemble.expires_on : undefined
+                        ensemble?.expired
+                            ? (ensemble.expires_on ?? undefined)
+                            : undefined
                     }
                 />
                 <PageLinesNote />

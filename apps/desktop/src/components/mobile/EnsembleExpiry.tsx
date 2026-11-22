@@ -8,7 +8,7 @@ import {
 } from "./utilities/ensembleExpiry";
 
 /** Pill naming the day an expired ensemble's seats ran out. */
-export function ExpiredBadge({ expiresOn }: { expiresOn: string }) {
+export function ExpiredBadge({ expiresOn }: { expiresOn: string | null }) {
     const { t } = useTranslate();
     return (
         <span

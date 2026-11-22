@@ -12,7 +12,8 @@ export interface Ensemble {
     name: string;
     productions_count: number;
     /** Last day the ensemble's seats are valid (it expires once this date has ended Anywhere on Earth). Expired ensembles are still returned. */
-    expires_on: string;
+    /** @nullable */
+    expires_on: string | null;
     /** True once expires_on has ended. An expired ensemble refuses new productions, revisions and audio uploads with 403. */
     expired: boolean;
     productions: ProductionPreview[];

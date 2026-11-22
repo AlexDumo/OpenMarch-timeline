@@ -68,7 +68,11 @@ const MobileExportSettingsContent = () => {
         <div className="flex flex-col gap-16">
             <AudioFileSettings
                 production={production}
-                expiredOn={ensemble?.expired ? ensemble.expires_on : undefined}
+                expiredOn={
+                    ensemble?.expired
+                        ? (ensemble.expires_on ?? undefined)
+                        : undefined
+                }
                 setDefaultAudioFileId={() => {
                     void queryClient.invalidateQueries({
                         queryKey: getGetApiEditorV1ProductionsIdQueryKey(

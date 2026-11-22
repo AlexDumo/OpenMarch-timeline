@@ -8,8 +8,12 @@ import { formatLocale } from "@/utilities/formatLocale";
 
 /** The fields of an ensemble that say when its seats stop being valid. */
 export type EnsembleExpiry = {
-    /** Last day the ensemble's seats are valid, as an ISO date ("2027-06-30"). */
-    expires_on: string;
+    /**
+     * Last day the ensemble's seats are valid, as an ISO date ("2027-07-31").
+     * Null only for an ensemble the server hasn't given a season yet; such an
+     * ensemble never counts as expired.
+     */
+    expires_on: string | null;
     /** Set by the server once `expires_on` has ended (Anywhere on Earth). */
     expired: boolean;
 };
@@ -18,7 +22,8 @@ export type EnsembleExpiry = {
 export const EXPIRY_NOTICE_DAYS = 30;
 
 /** Reads an ISO date ("2027-06-30") as that calendar day in local time. */
-function parseIsoDate(isoDate: string): Date | null {
+function parseIsoDate(isoDate: string | null): Date | null {
+    if (!isoDate) return null;
     const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate);
     if (!match) return null;
     const [, year, month, day] = match;
@@ -29,9 +34,9 @@ function parseIsoDate(isoDate: string): Date | null {
  * The expiry date as people read it ("June 30, 2027" in English). The date is
  * a calendar day, so it is never shifted by the viewer's time zone.
  */
-export function formatExpiryDate(isoDate: string): string {
+export function formatExpiryDate(isoDate: string | null): string {
     const date = parseIsoDate(isoDate);
-    if (!date) return isoDate;
+    if (!date) return isoDate ?? "";
     return date.toLocaleDateString(formatLocale(), {
         year: "numeric",
         month: "long",
@@ -44,7 +49,8 @@ const ANYWHERE_ON_EARTH_OFFSET_MS = 12 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** An ISO date ("2027-06-30") as UTC midnight of that day, in milliseconds. */
-function isoDateToUtcDay(isoDate: string): number | null {
+function isoDateToUtcDay(isoDate: string | null): number | null {
+    if (!isoDate) return null;
     const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate);
     if (!match) return null;
     const [, year, month, day] = match;
