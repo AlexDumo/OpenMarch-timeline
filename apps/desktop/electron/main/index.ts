@@ -33,6 +33,8 @@ import {
     type RecoverChoice,
     type WorkingCopyOpen,
 } from "./workingCopyHost";
+import { describeLocation } from "./fileLocation";
+import { withoutPaths } from "../database/logSafe";
 import {
     type RecoverableWorkingCopy,
     type WorkingCopyStatus,
@@ -431,7 +433,10 @@ function resolveStartupDatabasePath(): string {
     let pathToOpen = store.get("databasePath") as string;
     const pathFromArgs = process.argv.find((arg) => arg.endsWith(".dots"));
     if (pathFromArgs) pathToOpen = pathFromArgs;
-    console.log("Path to Open:", pathToOpen);
+    console.log(
+        "Show to open at startup:",
+        pathToOpen ? `one in ${whereIs(pathToOpen)}` : "none",
+    );
     if (pathToOpen && isNewShowDraftPath(pathToOpen)) {
         if (fs.existsSync(pathToOpen)) fs.unlinkSync(pathToOpen);
         store.delete("databasePath");
@@ -743,7 +748,12 @@ void app.whenReady().then(async () => {
     if (pathToOpen.length > 0) await setActiveDb(pathToOpen);
     DatabaseServices.initHandlers();
 
-    console.log("db_path: " + DatabaseServices.getDbPath());
+    console.log(
+        "Open show: " +
+            (DatabaseServices.getDbPath()
+                ? `in ${whereIs(DatabaseServices.getDbPath())}`
+                : "none"),
+    );
 
     initIpcHandlers();
     initGetters();
@@ -1911,6 +1921,10 @@ function backupBeforeMigrations(path: string) {
 
 const workingCopyRoot = () => join(app.getPath("userData"), "working-copies");
 
+/** Where a file is, for log lines: the kind of folder, never the path (logSafe.ts). */
+const whereIs = (filePath: string) =>
+    describeLocation(filePath, app.getPath("userData"));
+
 function reportWorkingCopyStatus(status: WorkingCopyStatus) {
     if (!win || win.isDestroyed()) return;
     win.webContents.send("working-copy:status", status);
@@ -2133,14 +2147,14 @@ async function openShowWithSaveMode(
             throw error;
         console.error(
             "Couldn't open through a working copy, editing in place:",
-            error,
+            withoutPaths(error),
         );
         void removeStaleTempFiles(path);
         return openShowDatabase(path, false, openShowDeps(), options);
     }
     if (opened.session)
         console.log(
-            `Editing ${opened.session.showPath} through working copy ${opened.session.workingPath}` +
+            `Editing a show in ${whereIs(opened.session.showPath)} through a working copy in ${whereIs(opened.session.workingPath)}` +
                 (opened.staleTempFiles
                     ? ` (removed ${opened.staleTempFiles} leftover temp files)`
                     : ""),

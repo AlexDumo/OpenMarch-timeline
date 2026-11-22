@@ -35,6 +35,7 @@ import {
 } from "./fileIdentity";
 import { type ExecFile, copyFileMetadata, isReadOnly } from "./fileMetadata";
 import { SaveWorker } from "./saveWorker";
+import { withoutPaths } from "../logSafe";
 
 export const WORKING_FILE_NAME = "show.dots";
 export const MANIFEST_FILE_NAME = "manifest.json";
@@ -723,7 +724,10 @@ export class WorkingCopySession {
                 this.dataVersionStatement.get() as { data_version: number }
             ).data_version;
         } catch (error) {
-            console.error("Couldn't read the working copy's version:", error);
+            console.error(
+                "Couldn't read the working copy's version:",
+                withoutPaths(error),
+            );
             return;
         }
         if (version === this.lastDataVersion) return;
@@ -818,7 +822,10 @@ export class WorkingCopySession {
                 current = await worker.identity(this.targetPath);
             } catch (error) {
                 // The conflict stays, and the person can choose again.
-                console.error("Couldn't read the show to overwrite it:", error);
+                console.error(
+                    "Couldn't read the show to overwrite it:",
+                    withoutPaths(error),
+                );
                 return;
             }
             this.expected = current
@@ -926,7 +933,7 @@ export class WorkingCopySession {
             .catch((error) =>
                 console.warn(
                     "Couldn't hash the show in the background:",
-                    error,
+                    withoutPaths(error),
                 ),
             );
     }
@@ -937,7 +944,10 @@ export class WorkingCopySession {
             this.manifestStale = false;
         } catch (error) {
             this.manifestStale = true;
-            console.error("Couldn't write the working copy manifest:", error);
+            console.error(
+                "Couldn't write the working copy manifest:",
+                withoutPaths(error),
+            );
         }
     }
 
@@ -1197,7 +1207,7 @@ export class WorkingCopySession {
                     vacuumMs: snapshot.timings.vacuumMs,
                 };
                 console.log(
-                    `Saved ${target} (${reason}): ${(metrics.bytes / 1e6).toFixed(1)} MB in ${metrics.durationMs.toFixed(0)} ms`,
+                    `Saved the show (${reason}): ${(metrics.bytes / 1e6).toFixed(1)} MB in ${metrics.durationMs.toFixed(0)} ms`,
                 );
                 this.options.onPublish?.({ ok: true, metrics });
                 return { ok: true, metrics };
@@ -1220,7 +1230,7 @@ export class WorkingCopySession {
                     failedAttributes,
                 );
         } catch (error) {
-            console.warn("Couldn't copy file metadata:", error);
+            console.warn("Couldn't copy file metadata:", withoutPaths(error));
         }
     }
 
@@ -1243,7 +1253,7 @@ export class WorkingCopySession {
                 ? "another program is using the file"
                 : ((error as Error)?.message ?? String(error));
         const message = `Couldn't save ${basename(this.targetPath)}: ${why}. Your changes are kept and OpenMarch will try again.`;
-        console.error("Publish deferred:", error);
+        console.error("Publish deferred:", withoutPaths(error));
         this.clearRetryTimer();
         this.retryTimer = setTimeout(() => {
             this.retryTimer = null;

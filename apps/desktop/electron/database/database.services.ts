@@ -242,7 +242,8 @@ export function databaseIsReady() {
     if (isReady !== lastLoggedReadyState || DB_PATH !== lastLoggedPath) {
         console.log("databaseIsReady:", isReady);
         if (DB_PATH.length > 0) {
-            console.log("Database path:", DB_PATH);
+            // Not the path itself: log lines reach error reports (logSafe.ts)
+            console.log("Database path is set");
         } else {
             console.log("Database path is empty");
         }
