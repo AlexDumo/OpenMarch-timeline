@@ -19,6 +19,10 @@ questions:
   - "Anything else about going around you'd change?"
 ---
 
+**First, turn it on:** Follow-the-leader is a preview, off by default. Open **Settings ›
+Field** and turn on **Follow-the-leader (preview)**. Without it, Follow and Go around don't
+show.
+
 **What's new**
 
 - **Go around a circle or a box outline.** Select marchers standing all the way around a
