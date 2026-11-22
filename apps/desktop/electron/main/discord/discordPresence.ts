@@ -95,6 +95,8 @@ export function createDiscordPresence({
     let connecting = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let stopped = false;
+    /** The last reason Discord couldn't be reached, logged once rather than every retry */
+    let lastFailure = "";
 
     const wanted = () => !stopped && !!clientId && isEnabled();
 
@@ -135,17 +137,28 @@ export function createDiscordPresence({
                     return;
                 }
                 connection = opened;
+                lastFailure = "";
+                console.log("Discord status: connected to Discord");
                 opened.onClose(() => {
                     if (connection !== opened) return;
                     // Discord quit or restarted: wait for it to come back
                     connection = null;
+                    console.log(
+                        "Discord status: Discord closed the connection",
+                    );
                     scheduleRetry();
                 });
                 send();
             },
-            () => {
+            (error: unknown) => {
                 // Discord isn't running (or isn't installed)
                 connecting = false;
+                const reason = String((error as Error)?.message ?? error);
+                if (reason !== lastFailure)
+                    console.log(
+                        `Discord status: can't reach Discord (${reason})`,
+                    );
+                lastFailure = reason;
                 scheduleRetry();
             },
         );
