@@ -1101,6 +1101,28 @@
             ]
         },
         {
+            "title": "Paths",
+            "rows": [
+                {
+                    "label": "Path pen",
+                    "other": [
+                        {
+                            "keys": [
+                                "P"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "P"
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
             "title": "Batch editing",
             "rows": [
                 {
@@ -1678,6 +1700,23 @@
                     ]
                 },
                 {
+                    "label": "Get help",
+                    "other": [
+                        {
+                            "keys": [
+                                "F1"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "F1"
+                            ]
+                        }
+                    ]
+                },
+                {
                     "label": "Preview the show",
                     "other": [
                         {
@@ -2034,42 +2073,6 @@
                                 "⇧",
                                 "Z"
                             ]
-                        }
-                    ]
-                },
-                {
-                    "label": "Leave an isolated move",
-                    "other": [
-                        {
-                            "keys": [
-                                "Esc"
-                            ]
-                        }
-                    ],
-                    "mac": [
-                        {
-                            "keys": [
-                                "Esc"
-                            ]
-                        }
-                    ]
-                },
-                {
-                    "label": "Draw a range (drag)",
-                    "other": [
-                        {
-                            "keys": [
-                                "Ctrl"
-                            ],
-                            "gesture": "drag"
-                        }
-                    ],
-                    "mac": [
-                        {
-                            "keys": [
-                                "⌘"
-                            ],
-                            "gesture": "drag"
                         }
                     ]
                 },
@@ -2818,6 +2821,28 @@
             ]
         },
         {
+            "title": "Paths",
+            "rows": [
+                {
+                    "label": "Path pen",
+                    "other": [
+                        {
+                            "keys": [
+                                "P"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "P"
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
             "title": "Batch editing",
             "rows": [
                 {
@@ -3390,6 +3415,23 @@
                             "keys": [
                                 "⌘",
                                 ","
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Get help",
+                    "other": [
+                        {
+                            "keys": [
+                                "F1"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "F1"
                             ]
                         }
                     ]

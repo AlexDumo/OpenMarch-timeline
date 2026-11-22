@@ -158,25 +158,10 @@
             {
                 "key": "settings.field.stepSizeWarnings",
                 "label": "Step size warnings"
-            }
-        ]
-    },
-    {
-        "id": "view3d",
-        "label": "3D View",
-        "description": "How the 3D View draws and moves on this computer. Not saved in the show.",
-        "settings": [
-            {
-                "key": "settings.view3d.controls",
-                "label": "Controls"
             },
             {
-                "key": "settings.view3d.quality",
-                "label": "Quality"
-            },
-            {
-                "key": "settings.view3d.resolution",
-                "label": "Resolution"
+                "key": "settings.field.followTheLeader",
+                "label": "Follow-the-leader (preview)"
             }
         ]
     },
