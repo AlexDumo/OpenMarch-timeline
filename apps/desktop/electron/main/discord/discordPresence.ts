@@ -12,7 +12,7 @@ import type { DiscordActivity, DiscordIpcConnection } from "./discordIpc";
  * The OpenMarch application in the Discord developer portal. Its name is what Discord shows
  * after "Playing", and its Rich Presence art holds the `openmarch` image. Not a secret.
  */
-export const DISCORD_CLIENT_ID = "";
+export const DISCORD_CLIENT_ID = "1574144987417935975";
 
 /** The Rich Presence art key of the OpenMarch logo in the developer portal */
 export const DISCORD_LOGO_ASSET = "openmarch";
