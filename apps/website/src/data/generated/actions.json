@@ -1265,6 +1265,11 @@
         "category": "edit",
         "bindings": []
     },
+    "propCancelDrawing": {
+        "label": "Prop: Cancel drawing",
+        "category": "edit",
+        "bindings": []
+    },
     "shapeQuarterTurn": {
         "label": "Shape: Turn 90° clockwise",
         "category": "shape",
