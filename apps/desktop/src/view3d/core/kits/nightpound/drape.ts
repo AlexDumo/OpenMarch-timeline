@@ -15,10 +15,7 @@ import { Members } from "../pro/geometry";
 import {
     dieselTexture,
     OM,
-    OPENMARCH_TAGLINE,
-    OPENMARCH_URL,
     paintLogo,
-    paintLogoPanel,
     signText,
     LOGO_ASPECT,
 } from "../markDiesel/brand";
@@ -55,11 +52,8 @@ const HEM: [number, number, number] = [0.085, 0.09, 0.105];
 const PIPE = 0x22242a;
 const TRUSS = 0xb9bdc4;
 
-/** The center banner and the sponsor panels on the drape's face. */
+/** The center banner on the drape's face; the rest of the drape stays plain black. */
 const BANNER = { width: 9.6, height: 1.2, y: DRAPE_HEIGHT - 0.95 };
-const PANEL = { width: 2.6, height: 2.6, y: DRAPE_HEIGHT - 1.75 };
-/** Where the sponsor panels hang, as a share of the drape's half-run from center. */
-const PANEL_AT = [0.52, 0.86];
 
 /** Width over height of the center banner. */
 const BANNER_ASPECT = BANNER.width / BANNER.height;
@@ -96,31 +90,11 @@ function paintBanner(g: CanvasRenderingContext2D, w: number, h: number) {
     });
 }
 
-/** A sponsor panel: the app icon over the tagline and the address. */
-function paintSponsor(g: CanvasRenderingContext2D, w: number, h: number) {
-    paintLogoPanel(g, w, h);
-    g.fillStyle = OM.ink;
-    g.fillRect(w * 0.06, h * 0.78, w * 0.88, h * 0.18);
-    signText(g, OPENMARCH_TAGLINE, w / 2, h * 0.835, h * 0.032, {
-        color: OM.white,
-        align: "center",
-        spacing: 0.08,
-        maxWidth: w * 0.84,
-    });
-    signText(g, OPENMARCH_URL, w / 2, h * 0.9, h * 0.03, {
-        color: OM.lavender,
-        align: "center",
-        spacing: 0.1,
-        maxWidth: w * 0.7,
-    });
-}
-
 /**
  * The back of the floor in WGI trim, in kit-root space:
  *
  * - the drape, 11 ft of pleated black cloth on a pipe along the back of the
- *   safety zone, with the event's banner at its center and sponsor panels
- *   either side;
+ *   safety zone, with the event's banner at its center;
  * - the box it makes with the curtain tunnel behind it: a black cloth roof
  *   on the tunnel's pipe, and a return panel at each end;
  * - the openings at the back corners, the entry at +X and the exit at -X,
@@ -315,14 +289,13 @@ export function buildDrape(ctx: NightpoundCtx): NightpoundPart {
         object.add(door);
     }
 
-    // The banner and the sponsor panels, on the drape's face.
+    // The banner, at the center of the drape's face.
     const bannerTex = dieselTexture(
         2560,
         Math.round(2560 / BANNER_ASPECT),
         paintBanner,
     );
-    const sponsorTex = dieselTexture(1024, 1024, paintSponsor);
-    textures.push(bannerTex, sponsorTex);
+    textures.push(bannerTex);
     const sign = (tex: CanvasTexture) => {
         const m = new MeshStandardMaterial({
             map: tex,
@@ -344,18 +317,6 @@ export function buildDrape(ctx: NightpoundCtx): NightpoundPart {
         DRAPE_Z + 0.2,
     );
     object.add(banner);
-    const panelGeo = new PlaneGeometry(PANEL.width, PANEL.height);
-    geos.push(panelGeo);
-    const sponsorMat = sign(sponsorTex);
-    const half = (DRAPE_RUN.maxX - DRAPE_RUN.minX) / 2;
-    const mid = (DRAPE_RUN.minX + DRAPE_RUN.maxX) / 2;
-    for (const k of PANEL_AT)
-        for (const side of [-1, 1]) {
-            const p = new Mesh(panelGeo, sponsorMat);
-            p.name = "nightpound.drape.sponsor";
-            p.position.set(mid + side * k * half, PANEL.y, DRAPE_Z + 0.2);
-            object.add(p);
-        }
 
     return {
         object,
