@@ -9,7 +9,7 @@
 export const MODEL_ASSET_KIND = "model";
 
 /** Bump when the stored output changes for the same input and choices. */
-export const MODEL_IMPORT_VERSION = 3;
+export const MODEL_IMPORT_VERSION = 4;
 
 /**
  * The Light level: what a prop model is simplified to by default (props-spec section 3), and
@@ -41,8 +41,8 @@ export const TEXTURE_CAP = 1024;
  */
 export const DISTANT_TRIANGLE_CAP = 2_000;
 /**
- * …but never past these error limits, each a share of a part's size: from where the far copy
- * draws, 5% of a model is a few pixels, and wider limits cave its shape in (#1180)
+ * …but never past these error limits, each a share of the whole model's size: from where the
+ * far copy draws, 5% of a model is a few pixels, and wider limits cave its shape in (#1180)
  */
 export const DISTANT_SIMPLIFY_ERRORS = [0.01, 0.02, 0.05];
 /** …and at most this share of the detailed model's */

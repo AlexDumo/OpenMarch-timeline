@@ -3,6 +3,7 @@ import {
     PIT_MANIFEST,
     PIT_NEAR_M,
     PIT_FAR_M,
+    PIT_NEAR_MAX_M,
     PIT_NEAR_PER_M,
     hidesVenuePodium,
     isNearPitItem,
@@ -246,6 +247,10 @@ describe("isNearPitItem", () => {
         expect(
             isNearPitItem(4.5 * PIT_NEAR_PER_M * 1.5, 0, camera, true, 4.5),
         ).toBe(false);
+        // A huge one still switches across the field
+        expect(isNearPitItem(PIT_NEAR_MAX_M + 1, 0, camera, false, 40)).toBe(
+            false,
+        );
         // Small ones switch where the pit's own models do
         expect(isNearPitItem(PIT_NEAR_M + 1, 0, camera, false, 0.5)).toBe(
             false,
