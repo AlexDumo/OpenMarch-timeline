@@ -54,22 +54,30 @@ function canFreeze(node: Node): boolean {
         .listPrimitives()
         .every((prim) => {
             const position = prim.getAttribute("POSITION");
-            const joint = prim.getAttribute("JOINTS_0");
-            const weight = prim.getAttribute("WEIGHTS_0");
-            if (!position || !joint || !weight) return false;
-            if (
-                joint.getCount() !== position.getCount() ||
-                weight.getCount() !== position.getCount()
-            )
-                return false;
-            const el: number[] = [];
-            for (let i = 0; i < joint.getCount(); i++) {
-                joint.getElement(i, el);
-                if (el.some((j) => j >= joints)) return false;
-            }
-            return true;
+            if (!position || !prim.getAttribute("JOINTS_0")) return false;
+            // Every set the pose blends: its joints in range, one per vertex with a weight
+            return INFLUENCE_SETS.every((set) => {
+                const joint = prim.getAttribute(`JOINTS_${set}`);
+                const weight = prim.getAttribute(`WEIGHTS_${set}`);
+                if (!joint) return true;
+                if (!weight) return false;
+                if (
+                    joint.getCount() !== position.getCount() ||
+                    weight.getCount() !== position.getCount()
+                )
+                    return false;
+                const el: number[] = [];
+                for (let i = 0; i < joint.getCount(); i++) {
+                    joint.getElement(i, el);
+                    if (el.some((j) => j >= joints)) return false;
+                }
+                return true;
+            });
         });
 }
+
+/** The joint and weight sets the pose blends, four influences each */
+const INFLUENCE_SETS = [0, 1];
 
 function freezeNode(doc: Document, scene: Scene, node: Node): void {
     const skin = node.getSkin()!;
@@ -82,20 +90,25 @@ function freezeNode(doc: Document, scene: Scene, node: Node): void {
             inverseBind ? inverseBind.getElement(i, []) : IDENTITY,
         ),
     );
-    // The mesh may be shared with another node, skinned or not: pose a copy
+    // The mesh and its primitives may be shared with another node, skinned or not: pose a
+    // copy of each (a mesh's clone shares its primitives)
     const mesh = node.getMesh()!.clone();
-    for (const prim of mesh.listPrimitives()) freezePrimitive(doc, prim, pose);
+    for (const prim of mesh.listPrimitives()) {
+        const copy = prim.clone();
+        mesh.removePrimitive(prim).addPrimitive(copy);
+        freezePrimitive(doc, copy, pose);
+    }
     node.setMesh(mesh).setSkin(null);
-    // Its posed vertices are in world space
-    node.setMatrix(IDENTITY as Parameters<Node["setMatrix"]>[0]);
-    node.getParentNode()?.removeChild(node);
+    // Children keep where they were in the world, read before the node moves
     for (const child of node.listChildren()) {
-        // Children keep where they were in the world
         const world = child.getWorldMatrix();
         node.removeChild(child);
         child.setMatrix(world);
         scene.addChild(child);
     }
+    // Its posed vertices are in world space
+    node.setMatrix(IDENTITY as Parameters<Node["setMatrix"]>[0]);
+    node.getParentNode()?.removeChild(node);
     if (!scene.listChildren().includes(node)) scene.addChild(node);
 }
 

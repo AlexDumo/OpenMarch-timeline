@@ -77,6 +77,60 @@ describe("freezing a rig", () => {
         ]);
     });
 
+    it("keeps a frozen node's children where they were in the world", () => {
+        const { doc, scene, skinned } = rig([0, 0, 2]);
+        const hat = doc.createNode("hat").setTranslation([0, 1, 0]);
+        skinned.addChild(hat);
+        // Held by the skinned node, under the holder's 10× scale: 50, 60, 50 in the world
+        const before = hat.getWorldMatrix();
+        expect(before.slice(12, 15)).toEqual([50, 60, 50]);
+        freezeSkins(doc, scene);
+        expect(scene.listChildren()).toContain(hat);
+        expect(hat.getWorldMatrix()).toEqual(before);
+    });
+
+    it("poses a copy of a mesh another node also draws", () => {
+        const { doc, scene, skinned } = rig([0, 0, 2]);
+        const plain = doc.createNode("plain").setMesh(skinned.getMesh());
+        scene.addChild(plain);
+        freezeSkins(doc, scene);
+        expect(positions(skinned)).toEqual([0, 0, 1, 1, 0, 2, 0, 1, 2]);
+        expect(positions(plain)).toEqual([0, 0, 0, 1, 0, 0, 0, 1, 0]);
+    });
+
+    it("freezes a mesh two rigged nodes share", () => {
+        const { doc, scene, skinned } = rig([0, 0, 2]);
+        const twin = doc
+            .createNode("twin")
+            .setMesh(skinned.getMesh())
+            .setSkin(skinned.getSkin());
+        scene.addChild(twin);
+        expect(freezeSkins(doc, scene)).toBe(2);
+        expect(positions(twin)).toEqual([0, 0, 1, 1, 0, 2, 0, 1, 2]);
+    });
+
+    it("can't freeze a rig whose second joint set names a joint it doesn't have", () => {
+        const { doc, scene, skinned } = rig([0, 0, 2]);
+        const prim = skinned.getMesh()!.listPrimitives()[0];
+        const buffer = doc.getRoot().listBuffers()[0];
+        prim.setAttribute(
+            "JOINTS_1",
+            doc
+                .createAccessor()
+                .setType("VEC4")
+                .setArray(new Uint8Array([7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]))
+                .setBuffer(buffer),
+        ).setAttribute(
+            "WEIGHTS_1",
+            doc
+                .createAccessor()
+                .setType("VEC4")
+                .setArray(new Float32Array(12))
+                .setBuffer(buffer),
+        );
+        expect(freezeSkins(doc, scene)).toBeNull();
+    });
+
     it("can't freeze a rig whose weights are missing", () => {
         const { doc, scene, skinned } = rig([0, 0, 2]);
         skinned.getMesh()!.listPrimitives()[0].setAttribute("WEIGHTS_0", null);

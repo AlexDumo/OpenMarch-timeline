@@ -116,7 +116,7 @@ export async function importModel(
     };
     try {
         const unzipped = openZips(files);
-        const opened = await openAndCheck(unzipped.files, report);
+        const opened = await openAndCheck(unzipped, report);
         if (!opened) return { ok: false, report };
         const read = await readClean(opened, env, report);
         if (!read) return { ok: false, report };
@@ -212,7 +212,7 @@ export function fileTitle(path: string, zipName: string | null): string {
  * in `report`.
  */
 async function openAndCheck(
-    files: readonly PickedFile[],
+    { files, skipped }: { files: readonly PickedFile[]; skipped: string[] },
     report: ModelImportReport,
 ): Promise<OpenedModel | null> {
     const bytes = files.reduce((n, f) => n + f.bytes.byteLength, 0);
@@ -224,7 +224,7 @@ async function openAndCheck(
         });
         return null;
     }
-    const opened = openPickedFiles(files);
+    const opened = openPickedFiles(files, skipped);
     const checked = precheck(opened);
     if (checked.refusals.length) {
         report.cantImport.push(...checked.refusals);
@@ -627,6 +627,16 @@ async function simplifyTo(
 ): Promise<number> {
     await MeshoptSimplifier.ready;
     await doc.transform(weld({ overwrite: false }));
+    // The floor never takes more than the target between all the parts: a model of hundreds of
+    // small parts still fits its copy's cap, keeping a few triangles of each
+    const parts = doc
+        .getRoot()
+        .listMeshes()
+        .reduce((n, mesh) => n + mesh.listPrimitives().length, 0);
+    const floor = Math.min(
+        PART_TRIANGLE_FLOOR,
+        Math.floor(target / Math.max(1, parts)),
+    );
     const start = sceneTriangles(scene);
     let now = start;
     for (const error of [0.01, 0.05, 0.2, 1]) {
@@ -635,13 +645,13 @@ async function simplifyTo(
         for (const mesh of doc.getRoot().listMeshes())
             for (const prim of mesh.listPrimitives()) {
                 const triangles = primitiveTriangles(prim);
-                if (triangles <= PART_TRIANGLE_FLOOR) continue;
+                if (triangles <= floor) continue;
                 // The error is relative to the part's own size, so at a wide limit a thin
                 // part (a pole, a rail) would collapse to nothing (#1169): each part keeps
-                // at least the floor, whatever that costs the target
+                // at least the floor
                 simplifyPrimitive(prim, {
                     simplifier: MeshoptSimplifier,
-                    ratio: Math.max(ratio, PART_TRIANGLE_FLOOR / triangles),
+                    ratio: Math.max(ratio, floor / triangles),
                     error,
                 });
             }
@@ -650,7 +660,10 @@ async function simplifyTo(
     return now;
 }
 
-/** The fewest triangles simplifying leaves a part, so no part disappears (#1169) */
+/**
+ * The fewest triangles simplifying leaves a part, so no part disappears (#1169); less when a
+ * model has more parts than its copy's target allows this many each
+ */
 export const PART_TRIANGLE_FLOOR = 12;
 
 function stripExtras(doc: Document): void {

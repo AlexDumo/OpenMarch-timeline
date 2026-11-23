@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { Document } from "@gltf-transform/core";
 import { importModel, PART_TRIANGLE_FLOOR } from "../pipeline";
+import { DISTANT_TRIANGLE_CAP } from "../rules";
 import { primitiveTriangles } from "../sceneTriangles";
 import { env, picked, readGlb, writeGlb } from "./fixtures";
 
@@ -93,6 +94,31 @@ async function scaffold(): Promise<Uint8Array> {
     return writeGlb(doc);
 }
 
+/** `count` poles in rows, each its own mesh, and nothing else */
+async function fence(count: number): Promise<Uint8Array> {
+    const doc = new Document();
+    doc.createBuffer();
+    const scene = doc.createScene();
+    for (let i = 0; i < count; i++)
+        scene.addChild(
+            doc
+                .createNode(`post ${i}`)
+                .setMesh(
+                    doc
+                        .createMesh(`post ${i}`)
+                        .addPrimitive(
+                            pole(
+                                doc,
+                                24,
+                                (i % 20) * 0.2,
+                                Math.floor(i / 20) * 0.2,
+                            ),
+                        ),
+                ),
+        );
+    return writeGlb(doc);
+}
+
 /** Each mesh's triangles, by name */
 async function partTriangles(glb: Uint8Array): Promise<Map<string, number>> {
     const doc = await readGlb(glb);
@@ -131,5 +157,19 @@ describe("simplifying keeps every part", () => {
         // …and the deck, the one big part, did the simplifying
         const distant = await partTriangles(result.model.parts.distant);
         expect(distant.get("deck")).toBeLessThan(2_000);
+    });
+
+    it("still fits the distant copy's cap with more parts than it can give the floor each", async () => {
+        // 400 posts of 48 triangles: 19,200 in all, 5 each in a 2,000-triangle copy
+        const result = await importModel(
+            [picked("fence.glb", await fence(400))],
+            {},
+            env,
+        );
+        if (!result.ok)
+            throw new Error(JSON.stringify(result.report.cantImport));
+        const parts = await partTriangles(result.model.parts.distant);
+        const total = [...parts.values()].reduce((n, t) => n + t, 0);
+        expect(total).toBeLessThanOrEqual(DISTANT_TRIANGLE_CAP);
     });
 });

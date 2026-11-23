@@ -69,14 +69,18 @@ export function isGlb(bytes: Uint8Array): boolean {
 
 /**
  * Finds the one model among the picked files and opens it, with the files it names. Throws
- * `RefusedError` when it can't.
+ * `RefusedError` when it can't. `unread` names files that came with them but weren't read (a
+ * zip's other entries), for the refusal when there's no model.
  */
-export function openPickedFiles(files: readonly PickedFile[]): OpenedModel {
+export function openPickedFiles(
+    files: readonly PickedFile[],
+    unread: readonly string[] = [],
+): OpenedModel {
     const models = files.filter((f) => isModelName(f.name) || isGlb(f.bytes));
     if (models.length === 0)
         throw new RefusedError({
             code: "noModelFile",
-            names: files.map((f) => f.name),
+            names: [...files.map((f) => f.name), ...unread],
         });
     if (models.length > 1)
         throw new RefusedError({

@@ -5,10 +5,14 @@
  * can't select in one go. Each entry becomes a picked file named by its path in the zip, so
  * `textures/wood.png` resolves exactly.
  *
+ * Only the files a glTF can name are decoded: a model site's zip often carries the model's
+ * sources too (`.blend`, `.fbx`), which the import never reads and shouldn't count against it.
+ *
  * Bytes in, bytes out, like the rest of the import (ADR 0010 amendment 2026-11-15): nothing is
- * written anywhere. fflate decodes each entry into a buffer of the size its header declares and
- * never past it, so adding up the declared sizes before decoding bounds what a zip can cost
- * however it lies (a zip bomb gets cut short and then fails to read as a model).
+ * written anywhere. fflate decodes a compressed entry into a buffer of the size its header
+ * declares and never past it, and copies a stored one by its stored size, so adding up the
+ * larger of the two before decoding bounds what a zip can cost however it lies (a zip bomb gets
+ * cut short and then fails to read as a model).
  */
 import { unzipSync } from "fflate";
 import { RefusedError } from "./files";
@@ -25,6 +29,11 @@ export function isZip(file: PickedFile): boolean {
     return ZIP_MAGIC.every((byte, i) => file.bytes[i] === byte);
 }
 
+/** What a glTF and the files it names can be; any other entry is never decoded */
+const MODEL_ENTRY = /\.(glb|gltf|bin|png|jpe?g|webp|ktx2)$/i;
+
+const MODEL_FILE = /\.(glb|gltf)$/i;
+
 /** Entries that are never part of a model: folders, macOS metadata and hidden files */
 function skipped(path: string): boolean {
     if (path.endsWith("/")) return true;
@@ -39,11 +48,17 @@ function skipped(path: string): boolean {
  * (for a title better than `scene`). Throws `RefusedError` for a zip that's too large once
  * opened, or that can't be read.
  */
-export function openZips(files: readonly PickedFile[]): {
+export function openZips(
+    files: readonly PickedFile[],
+    limit = MAX_IMPORT_BYTES,
+): {
     files: PickedFile[];
     zipName: string | null;
+    /** The zips' other entries, never decoded: named when no model is found */
+    skipped: string[];
 } {
-    if (!files.some(isZip)) return { files: [...files], zipName: null };
+    if (!files.some(isZip))
+        return { files: [...files], zipName: null, skipped: [] };
     // What the opened files will hold, checked entry by entry before each is decoded
     const total = {
         bytes: files
@@ -52,6 +67,7 @@ export function openZips(files: readonly PickedFile[]): {
         entries: 0,
     };
     const out: PickedFile[] = [];
+    const skippedEntries: string[] = [];
     let zipName: string | null = null;
     for (const file of files) {
         if (!isZip(file)) {
@@ -65,15 +81,16 @@ export function openZips(files: readonly PickedFile[]): {
                 filter: (entry) => {
                     if (skipped(entry.name)) return false;
                     total.entries += 1;
-                    total.bytes += entry.originalSize;
-                    if (
-                        total.entries > MAX_ZIP_ENTRIES ||
-                        total.bytes > MAX_IMPORT_BYTES
-                    )
+                    if (!MODEL_ENTRY.test(entry.name)) {
+                        skippedEntries.push(entry.name);
+                        return false;
+                    }
+                    total.bytes += Math.max(entry.size, entry.originalSize);
+                    if (total.entries > MAX_ZIP_ENTRIES || total.bytes > limit)
                         throw new RefusedError({
                             code: "tooLarge",
                             bytes: total.bytes,
-                            limit: MAX_IMPORT_BYTES,
+                            limit,
                         });
                     return true;
                 },
@@ -88,5 +105,25 @@ export function openZips(files: readonly PickedFile[]): {
         for (const [name, data] of Object.entries(opened))
             out.push({ name, bytes: data });
     }
-    return { files: out, zipName };
+    return { files: out, zipName, skipped: skippedEntries };
+}
+
+/**
+ * True when a zip names a model file, read from its directory without decoding anything: a zip
+ * dropped on the window is an import only then.
+ */
+export function zipHasModel(bytes: Uint8Array): boolean {
+    let found = false;
+    try {
+        unzipSync(bytes, {
+            filter: (entry) => {
+                if (!skipped(entry.name) && MODEL_FILE.test(entry.name))
+                    found = true;
+                return false;
+            },
+        });
+    } catch {
+        return false;
+    }
+    return found;
 }

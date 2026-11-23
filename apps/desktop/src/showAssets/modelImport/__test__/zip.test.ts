@@ -5,7 +5,7 @@ import { zipSync } from "fflate";
 import { fileTitle, importModel } from "../pipeline";
 import { MAX_IMPORT_BYTES } from "../rules";
 import type { PickedFile } from "../types";
-import { openZips } from "../zip";
+import { openZips, zipHasModel } from "../zip";
 import { env, read, separateGltf } from "./fixtures";
 
 const zipOf = (name: string, entries: Record<string, Uint8Array>) => ({
@@ -104,6 +104,66 @@ describe("importing a zip", () => {
         expect(files[0].bytes.byteLength).toBe(100);
     });
 
+    it("counts a stored entry by what it holds, whatever size its header claims", () => {
+        const zip = {
+            name: "stored.zip",
+            bytes: zipSync({ "a.bin": [new Uint8Array(4_000), { level: 0 }] }),
+        };
+        // Claim it opens to nothing, in the local header and the central directory
+        const view = new DataView(zip.bytes.buffer);
+        view.setUint32(22, 0, true);
+        for (let i = zip.bytes.byteLength - 22; i >= 0; i--)
+            if (view.getUint32(i, true) === 0x02014b50) {
+                view.setUint32(i + 24, 0, true);
+                break;
+            }
+        expect(() => openZips([zip], 1_000)).toThrow(
+            expect.objectContaining({
+                refusal: expect.objectContaining({ code: "tooLarge" }),
+            }),
+        );
+    });
+
+    it("never opens the model's sources, nor counts them against the limit", () => {
+        const { files, skipped } = openZips(
+            [
+                zipOf("chair.zip", {
+                    "chair.glb": new Uint8Array(100),
+                    "source/chair.blend": new Uint8Array(5_000),
+                }),
+            ],
+            1_000,
+        );
+        expect(files.map((f) => f.name)).toEqual(["chair.glb"]);
+        expect(skipped).toEqual(["source/chair.blend"]);
+    });
+
+    it("names a zip's unread files when there's no model in it", async () => {
+        const result = await importModel(
+            [zipOf("fbx.zip", { "cube.fbx": new Uint8Array([1]) })],
+            {},
+            env,
+        );
+        expect(result.report.cantImport).toEqual([
+            { code: "noModelFile", names: ["cube.fbx"] },
+        ]);
+    });
+
+    it("tells a zip with a model in it from any other zip, without opening it", () => {
+        expect(
+            zipHasModel(zipSync({ "chair/scene.gltf": new Uint8Array([1]) })),
+        ).toBe(true);
+        expect(
+            zipHasModel(
+                zipSync({
+                    "photo.png": new Uint8Array([1]),
+                    "__MACOSX/._a.glb": new Uint8Array([1]),
+                }),
+            ),
+        ).toBe(false);
+        expect(zipHasModel(new Uint8Array([0x50, 0x4b, 3, 4, 9]))).toBe(false);
+    });
+
     it("skips folders, macOS metadata and hidden files", () => {
         const { files } = openZips([
             zipOf("m.zip", {
@@ -131,7 +191,7 @@ describe("importing a zip", () => {
 
     it("leaves files that aren't zips as picked", async () => {
         const files: PickedFile[] = await separateGltf();
-        expect(openZips(files)).toEqual({ files, zipName: null });
+        expect(openZips(files)).toEqual({ files, zipName: null, skipped: [] });
     });
 });
 
