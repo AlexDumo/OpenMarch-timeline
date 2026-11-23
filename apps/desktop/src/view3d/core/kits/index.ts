@@ -11,7 +11,8 @@ import {
     type TurfColors,
 } from "../field";
 import { DIESEL_FIELD, DIESEL_TURF } from "./markDiesel/turf";
-import type { KitBuilder, VenueKitId } from "../types";
+import type { Object3D } from "three";
+import type { FieldFootprint, KitBuilder, VenueKitId } from "../types";
 import { buildArena } from "./arena";
 import { buildBighs } from "./bighs";
 import { buildBlank } from "./blank";
@@ -100,6 +101,23 @@ export function kitFieldProperties(
     )
         return fieldProperties;
     return own;
+}
+
+/**
+ * Centers the field surface on the field the kit is built round
+ * (`footprint`) when it paints the venue's own field (`painted`, from
+ * `kitFieldProperties`) in place of the show's: a show field short of
+ * regulation size has its sidelines elsewhere. Otherwise leaves it be.
+ */
+export function placeKitField(
+    mesh: Object3D,
+    painted: FieldProperties,
+    show: FieldProperties,
+    footprint: FieldFootprint,
+): void {
+    if (painted === show) return;
+    mesh.position.x = (footprint.minX + footprint.maxX) / 2;
+    mesh.position.z = (footprint.minZ + footprint.maxZ) / 2;
 }
 
 /**

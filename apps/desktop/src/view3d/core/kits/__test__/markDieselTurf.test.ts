@@ -14,7 +14,8 @@ import {
 } from "../markDiesel/turf";
 import { DIESEL_VENUE_PARAMS } from "../markDiesel/brand";
 import { fixedFieldFootprint } from "../fixedField";
-import { kitFieldProperties, kitFieldStyle } from "..";
+import { Object3D } from "three";
+import { kitFieldProperties, kitFieldStyle, placeKitField } from "..";
 import { blockOverhang } from "../../field/blockDigits";
 import type { FieldFootprint } from "../../types";
 
@@ -286,6 +287,33 @@ describe("Mark Diesel's own lines", () => {
             indoor,
         );
         expect(kitFieldProperties("pro", hs, "stadium")).toBe(hs);
+    });
+
+    it("lays them on the field the bowl is built round, whatever the show's step", () => {
+        // An 18 in step makes the show's field 288 by 128 ft; the bowl grows
+        // round its center, and the stadium's lines must fill it exactly.
+        const small = new FieldProperties({
+            ...T.HIGH_SCHOOL_FOOTBALL_FIELD_WITH_END_ZONES,
+            stepSizeInches: 18,
+        });
+        expect(kitFieldStyle("markDiesel", small)).toBe("turf");
+        const painted = kitFieldProperties("markDiesel", small, "stadium");
+        const kit = fixedFieldFootprint(
+            venueFootprint(small, "turf"),
+        ).footprint;
+        const own = venueFootprint(painted, "turf");
+        const mesh = new Object3D();
+        placeKitField(mesh, painted, small, kit);
+        const halfX = (own.maxX - own.minX) / 2;
+        const halfZ = (own.maxZ - own.minZ) / 2;
+        expect(mesh.position.x - halfX).toBeCloseTo(kit.minX, 2);
+        expect(mesh.position.x + halfX).toBeCloseTo(kit.maxX, 2);
+        expect(mesh.position.z - halfZ).toBeCloseTo(kit.minZ, 2);
+        expect(mesh.position.z + halfZ).toBeCloseTo(kit.maxZ, 2);
+        // The show's own lines stay where the show's field puts them.
+        const shows = new Object3D();
+        placeKitField(shows, small, small, kit);
+        expect(shows.position.toArray()).toEqual([0, 0, 0]);
     });
 
     it("measures the arrow from the 4's slanted tip", () => {

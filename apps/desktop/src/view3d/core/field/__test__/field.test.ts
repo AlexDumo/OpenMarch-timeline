@@ -268,6 +268,21 @@ describe("turf on football fields", () => {
                 3,
             );
             expect(arrow.dir).toBe(-1);
+            // Only where the 40 reads toward midfield is its 4 the outer
+            // digit: the other two 40 arrows are 6 in past the 0.
+            const base = 6 * inch + 4 * ft + 6 * inch + arrow.length / 2;
+            const tip = 6 * ft * blockOverhang("4");
+            const past = p.items
+                .filter(
+                    (i) =>
+                        i.type === "arrow" && Math.abs(Math.abs(i.x) + x) < 4,
+                )
+                .map((i) => Math.abs(i.x) + x)
+                .sort((a, b) => a - b);
+            expect(past).toHaveLength(4);
+            [base, base, base + tip, base + tip].forEach((d, i) =>
+                expect(past[i]).toBeCloseTo(d, 3),
+            );
             // Lines and hashes are 4 in wide (the end lines are clipped to
             // the field, so take one in the middle).
             const line = p.items.find(
@@ -408,6 +423,27 @@ describe("turf on football fields", () => {
         );
         expect(count(hidden, "endZone")).toBe(2);
         expect(count(hidden, "yardLine")).toBe(23);
+
+        // yard lines that aren't all references still space the end zones:
+        // references only every 10 yards, or only at the goals and the 50
+        const tenOnly = new FieldProperties({
+            ...noEz,
+            xCheckpoints: noEz.xCheckpoints.map((c) => ({
+                ...c,
+                useAsReference: Math.round(c.stepsFromCenterFront) % 16 === 0,
+            })),
+        });
+        const goalsOnly = new FieldProperties({
+            ...noEz,
+            xCheckpoints: noEz.xCheckpoints.map((c) => ({
+                ...c,
+                useAsReference: Math.round(c.stepsFromCenterFront) % 80 === 0,
+            })),
+        });
+        for (const fp of [tenOnly, goalsOnly]) {
+            const f = venueFootprint(fp, "turf");
+            expect((f.maxX - f.minX) / 0.3048).toBeCloseTo(360, 1);
+        }
 
         // a stadium on an indoor grid keeps the grid's footprint
         const indoor = T.INDOOR_50x80_8to5;

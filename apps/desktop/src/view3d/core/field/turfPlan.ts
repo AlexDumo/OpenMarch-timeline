@@ -508,10 +508,12 @@ function planNumber(
     const dir = x < 0 ? -1 : 1;
     const towardOutside = Math.sign(band.outside - band.inside);
     // The digits' outer edge: past the one digit, or the outer of two.
-    // The drawings measure the arrow's gap from the 4's slanted tip.
+    // The drawings measure the arrow's gap from the 4's slanted tip, which
+    // juts out on the first digit's leading side: outward only where the
+    // number reads toward midfield.
     const edge =
         (chars.length === 2 ? offset + w / 2 : w / 2) +
-        h * blockOverhang(chars[0]);
+        (dir === -reading ? h * blockOverhang(chars[0]) : 0);
     const length = h * ARROW_LENGTH;
     ctx.items.push({
         type: "arrow",

@@ -37,6 +37,7 @@ import {
     KIT_FIELD_ART,
     KIT_FIELD_TURF,
     kitFieldProperties,
+    placeKitField,
     kitFieldStyle,
 } from "@/view3d/core/kits";
 import { defaultVenueForKit } from "@/view3d/core/venueSettings";
@@ -192,8 +193,9 @@ async function load(options: LoadOptions): Promise<LoadResult> {
     const env = createEnvironment({ quality });
     scene.add(env.root);
     scene.fog = env.fog;
+    const footprint = venueFootprint(fp, style);
     const built = KIT_BUILDERS[options.kit]({
-        footprint: venueFootprint(fp, style),
+        footprint,
         params,
         quality,
         fieldStyle: style,
@@ -202,12 +204,9 @@ async function load(options: LoadOptions): Promise<LoadResult> {
     built.setShowCredits?.(options.credits ?? SAMPLE_CREDITS);
     await brandArtReady();
     scene.add(built.root);
+    const painted = kitFieldProperties(options.kit, fp, options.fieldLines);
     const surface = buildFieldSurface({
-        fieldProperties: kitFieldProperties(
-            options.kit,
-            fp,
-            options.fieldLines,
-        ),
+        fieldProperties: painted,
         theme: fp.theme,
         style,
         centerArt: KIT_FIELD_ART[options.kit],
@@ -217,6 +216,7 @@ async function load(options: LoadOptions): Promise<LoadResult> {
         maxTextureSize: renderer.capabilities.maxTextureSize,
         anisotropy: renderer.capabilities.getMaxAnisotropy(),
     });
+    placeKitField(surface.mesh, painted, fp, footprint);
     scene.add(surface.mesh);
     await surface.ready.catch(() => undefined);
     const crowd =

@@ -71,6 +71,7 @@ import {
     KIT_FIELD_ART,
     KIT_FIELD_TURF,
     kitFieldProperties,
+    placeKitField,
     kitFieldStyle,
 } from "@/view3d/core/kits";
 import type {
@@ -355,6 +356,12 @@ function SceneContents({
             maxTextureSize: gl.capabilities.maxTextureSize,
             anisotropy: gl.capabilities.getMaxAnisotropy(),
         });
+        placeKitField(
+            surface.mesh,
+            surfaceField,
+            fieldProperties,
+            JSON.parse(footprintKey) as FieldFootprint,
+        );
         scene.add(surface.mesh);
         return () => {
             scene.remove(surface.mesh);
@@ -365,6 +372,7 @@ function SceneContents({
         gl,
         fieldProperties,
         surfaceField,
+        footprintKey,
         fieldStyle,
         kitId,
         params,

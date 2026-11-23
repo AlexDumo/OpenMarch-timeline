@@ -20,29 +20,56 @@ const END_GAPS = 12;
 /** Checkpoints this close (in steps) to a line count as that line. */
 const TOLERANCE = 0.5;
 
-/**
- * Steps between the show's yard lines: the most common gap between its
- * neighboring reference X lines (so extra lines, such as a series every 2
- * steps, don't count), or the templates' 8 without two of them.
- */
-function fiveYardSteps(xs: readonly Checkpoint[]): number {
+/** Five yards, in inches. */
+const FIVE_YARDS_INCHES = 180;
+/** How far (as a ratio) a grid's line spacing may stray from five yards. */
+const MAX_STRAY = 1.5;
+
+/** The most common gap between neighboring checkpoints, or undefined. */
+function commonGap(xs: readonly Checkpoint[]): number | undefined {
     const at = [
-        ...new Set(
-            xs
-                .filter((c) => c.useAsReference !== false)
-                .map((c) => Math.round(c.stepsFromCenterFront * 4) / 4),
-        ),
+        ...new Set(xs.map((c) => Math.round(c.stepsFromCenterFront * 4) / 4)),
     ].sort((a, b) => a - b);
     const counts = new Map<number, number>();
     for (let i = 1; i < at.length; i++) {
         const gap = at[i] - at[i - 1];
         counts.set(gap, (counts.get(gap) ?? 0) + 1);
     }
-    let best = TEMPLATE_FIVE_YARD_STEPS;
+    let best: number | undefined;
     let most = 0;
     for (const [gap, n] of counts)
-        if (n > most || (n === most && gap > best)) [best, most] = [gap, n];
+        if (n > most || (n === most && gap > (best ?? 0)))
+            [best, most] = [gap, n];
     return best;
+}
+
+/**
+ * Steps between the show's yard lines. The grid's own spacing wins, so a
+ * grid that sets its yard lines 6 steps apart keeps them 6 apart whatever
+ * the step size: the most common gap between its reference lines (so a
+ * series every 2 steps doesn't count) or, when only some yard lines are
+ * references (every 10 yards, say), between all its lines. Of those, the
+ * one nearer five yards at the show's step size; neither within half again
+ * of it, five yards it is.
+ */
+export function fiveYardSteps(
+    xs: readonly Checkpoint[],
+    stepSizeInches: number,
+): number {
+    const expected =
+        stepSizeInches > 0
+            ? FIVE_YARDS_INCHES / stepSizeInches
+            : TEMPLATE_FIVE_YARD_STEPS;
+    const stray = (gap: number) => Math.abs(Math.log(gap / expected));
+    const candidates = [
+        commonGap(xs.filter((c) => c.useAsReference !== false)),
+        commonGap(xs),
+    ].filter(
+        (gap): gap is number =>
+            gap !== undefined && stray(gap) <= Math.log(MAX_STRAY),
+    );
+    if (candidates.length === 0) return expected;
+    return candidates.reduce((a, b) => (stray(b) < stray(a) ? b : a));
 }
 
 /**
@@ -56,7 +83,7 @@ function fiveYardSteps(xs: readonly Checkpoint[]): number {
 export function withFootballEndZones(fp: FieldProperties): FieldProperties {
     if (fieldFamily(fp) !== "football") return fp;
     const xs = fp.xCheckpoints.filter((c) => c.visible !== false);
-    const FIVE_YARD_STEPS = fiveYardSteps(xs);
+    const FIVE_YARD_STEPS = fiveYardSteps(xs, fp.stepSizeInches);
     const GOAL_STEPS = GOAL_GAPS * FIVE_YARD_STEPS;
     const END_STEPS = END_GAPS * FIVE_YARD_STEPS;
     let id = Math.max(0, ...fp.xCheckpoints.map((c) => c.id)) + 1;
