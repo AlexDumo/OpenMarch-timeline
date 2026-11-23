@@ -8,10 +8,7 @@ import { transactionWithHistory } from "./history";
 import { ensureCountsInTransaction } from "./endlessCounts";
 import { splitLockedItemMovesInTransaction } from "./lockedItems";
 import { updateMarcherHomesInTransaction } from "./marcherHome";
-import {
-    setTimelineTransitionDestinationInTransaction,
-    updateTimelineSlotDestinationInTransaction,
-} from "./timelineTransitions";
+import { setTimelineTransitionDestinationInTransaction } from "./timelineTransitions";
 import { assertValid, refuse, TimelineWriteError } from "./timelineErrors";
 import {
     addMarchersToTimelineInTransaction,
@@ -41,6 +38,7 @@ import { FIRST_PAGE_ID } from "./rowMappers";
 import type { DatabaseTimelineAssignment } from "./timelineAssignments";
 // A cycle (it imports helpers from here), safe because neither module uses the other at load time
 import { setPositionsAtBeatInTransaction } from "./timelinePointMoves";
+import { removeTrailsOverRangeInTransaction } from "./timelineTrails";
 import {
     clearHeldMarksOverInTransaction,
     dropShapeHomeHoldsInTransaction,
@@ -66,6 +64,7 @@ import {
     keepNextPageInTransaction,
     readNextPageSpots,
 } from "./timelineNextPageStays";
+import { moveSlotDestinationInTransaction } from "./timelineTrailDerive";
 
 /** A move result that wrote nothing. */
 const emptyMoveResult = (): TimelineMoveResult => ({
@@ -154,6 +153,12 @@ export interface TimelineMoveResult {
      * so it stays where it was
      */
     keptLaterPages?: number[];
+    /**
+     * Clear this page on a trail (owner, 2026-11-18): the trail went whole, and these members of
+     * it weren't cleared, so they now walk straight to their end spots (ids ascending, with
+     * their names), for the note
+     */
+    trailsCleared?: { stayed: number[]; names: string[] };
 }
 
 /**
@@ -391,7 +396,8 @@ const writeSlotMoves = async ({
     }
 
     for (const { move, row } of plans) {
-        await updateTimelineSlotDestinationInTransaction({
+        // A trail's marcher moved by hand leaves it (pathways L.18, TM-3): its slot is then its own
+        const written = await moveSlotDestinationInTransaction({
             tx,
             transitionId: row.transitionId,
             slotIndex: row.slotIndex,
@@ -399,8 +405,8 @@ const writeSlotMoves = async ({
         });
         result.slots.push({
             marcherId: move.marcherId,
-            transitionId: row.transitionId,
-            slotIndex: row.slotIndex,
+            transitionId: written.transition_id,
+            slotIndex: written.slot_index,
         });
     }
 };
@@ -800,7 +806,8 @@ export const ownPageMoves = async (
  *   is written.
  *
  * In both, a shape or follow-the-leader member keeps its move, untouched, and is named in
- * `skipped` (the holds commands' rule, owner 2026-10-30).
+ * `skipped` (the holds commands' rule, owner 2026-10-30). A drawn trail is no longer one of them
+ * for Clear Page N: `moveMarchersInTarget` removes the trail first (owner, 2026-11-18).
  *
  * The add passes through (research/ownership/10-cross-page-windows.md): the drag overrides the
  * moved marchers' moves inside the range, a move the range runs into partway catches up after it,
@@ -1366,6 +1373,19 @@ export const moveMarchersInTarget = async ({
         }
         if (target.kind === "range" || target.kind === "point") {
             const pageBox = target.kind === "range" ? target : target.box;
+            // Clear Page N on a trail (owner, 2026-11-18): the trail goes whole first, so its
+            // cleared members are taken out like anyone else and the others walk straight
+            const trails =
+                clearPage &&
+                (target.kind === "range"
+                    ? isPageBox(await readPageGrid(tx), target)
+                    : target.beat === target.box.end)
+                    ? await removeTrailsOverRangeInTransaction({
+                          tx,
+                          marcherIds: moves.map((m) => m.marcherId),
+                          range: { start: pageBox.start, end: pageBox.end },
+                      })
+                    : null;
             // Clear Page N keeps the next page: where everyone stands there before the clear
             const later =
                 clearPage && keepLaterPages
@@ -1469,6 +1489,8 @@ export const moveMarchersInTarget = async ({
                     { cutMovesAcross: true },
                 );
                 if (kept.length > 0) result.keptLaterPages = kept;
+                if (trails && trails.stayed.length > 0)
+                    result.trailsCleared = trails;
             }
             await moveHeldArrivalsInTransaction(tx, held, result, {
                 basic: target.kind === "point",
@@ -1661,7 +1683,7 @@ export const shiftSlotDestinations = async ({
                         )
                         .get();
                     if (!point) continue;
-                    await updateTimelineSlotDestinationInTransaction({
+                    await moveSlotDestinationInTransaction({
                         tx,
                         transitionId: shift.transitionId,
                         slotIndex: shift.slotIndex,

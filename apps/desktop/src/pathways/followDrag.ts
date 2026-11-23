@@ -13,18 +13,34 @@ import {
     type TrailWindow,
 } from "@/db-functions/timelineTrailDrag";
 import {
+    formEnds,
     planRipple,
     ripplePreview,
     type RippleForm,
     type RipplePlan,
 } from "@/db-functions/timelineTrailRipplePlan";
+import {
+    snakeEnds,
+    snakeFrom,
+    type BoxCells,
+    type SnakeBy,
+} from "@/db-functions/timelineTrailSnake";
 import type { XY } from "@/shapes/types";
 import type { PathTarget } from "./pathTarget";
+import {
+    aroundMarchersOf,
+    aroundPlanOf,
+    goingRound,
+    type FollowAround,
+    type RoundSlide,
+    type RoundTyped,
+} from "./followAround";
 import {
     storedPoints,
     usePathPenStore,
     type PathSession,
 } from "./pathPenStore";
+import type { PathPoint } from "@/shapes/pen/penPath";
 
 /**
  * Keep end spots (AP-T9): step 4's Follow onto the spots the line has, in the move every member
@@ -45,17 +61,47 @@ export interface FollowKeep {
     readonly line?: {
         readonly starts: ReadonlyMap<number, XY>;
         readonly order: readonly number[];
+        /** A box with no remembered order there (step 11): its cells, by marcher id */
+        readonly box?: BoxCells;
     };
 }
 
 /** The Follow tool's drag in progress (a session's `follow`) */
+/** A trail's marcher grabbed to reshape its form (`trailForm.ts`) */
+export interface TrailFormGrab {
+    readonly marcherId: number;
+    /** Its place in the line, tail first */
+    readonly q: number;
+    /** What its drag does: bend the line there, move the head, or slide along the trail */
+    readonly kind: "middle" | "leader" | "tail";
+    /** Edit path off: the route in, before the form, is kept as it is */
+    readonly protect: boolean;
+    /** Each member's distance back from the head along the way when grabbed, tail first */
+    readonly back: readonly number[];
+    /** Where the leader started, along the way (the line-up's length) */
+    readonly lineLen: number;
+    /** The spacing when grabbed: a tail slide that changes it writes, though no point moved */
+    readonly spacing: TrailSpacing;
+}
+
 export interface FollowDrag {
     /** The edit window `[start flag, end flag)` the move fills (DL-2) */
     readonly window: TrailWindow;
     /** The selected marchers, by id */
     readonly ids: readonly number[];
-    /** The selection in order along the shape it stands in, one end to the other (DL-6) */
+    /**
+     * The selection in order along the shape it stands in, one end to the other (DL-6). A box's
+     * default snake from its top left, tail first, until a corner is grabbed (step 11)
+     */
     readonly order: readonly number[];
+    /**
+     * Step 11 (SN-1, SN-2): the box the selection stands in when no order is remembered, its cells
+     * by marcher id. Every corner is then an end, and the line is the box's snake from the corner
+     * grabbed. Absent or null otherwise (a remembered order always wins).
+     */
+    readonly box?: BoxCells | null;
+    /** Which way a box's default snake runs (SN-2): row by row unless the bar says columns */
+    readonly snakeBy?: SnakeBy;
     /** Where each stands at the start flag */
     readonly starts: ReadonlyMap<number, XY>;
     /** The end pressed, who leads (DL-1); null while the ends pulse */
@@ -87,6 +133,44 @@ export interface FollowDrag {
      * 4d): it takes no press, and the note by it says to grab an end. Absent or null elsewhere.
      */
     readonly hover?: number | null;
+    /**
+     * The end under the pointer while the ends wait to be grabbed (owner, 2026-11-17): the order
+     * a drag from it would use is previewed (`followOrderPreview`). Absent or null elsewhere.
+     */
+    readonly hoverEnd?: number | null;
+    /**
+     * Go round (step 10, DO-1): the line stands on a closed outline, so it can follow its leader
+     * round it. Absent or null when it doesn't.
+     */
+    readonly around?: FollowAround | null;
+    /**
+     * AP-T16 (`trailHead.ts`): a stored trail's head dragged on or back, step 4b's drag carried on
+     * from where it stopped. `prefix` is the trail's points as stored, which the drag cuts back or
+     * runs on; `restore` the session to go back to, shown, once let go or cancelled. Absent for
+     * every other drawing.
+     *
+     * `clicks` (owner, 2026-11-17): the head was clicked rather than dragged, so it's drawn on
+     * with clicks, the button up, as the pen draws: `prefix` is then the points placed so far (each
+     * click's), `history` the prefixes before each click, for Backspace, and Enter writes `prefix`.
+     */
+    readonly head?: {
+        readonly prefix: readonly PathPoint[];
+        readonly restore: PathSession;
+        readonly clicks?: boolean;
+        readonly history?: readonly (readonly PathPoint[])[];
+        /**
+         * One of its marchers dragged (owner, 2026-11-17, `trailForm.ts`): the form reshaped
+         * from that marcher, the points and spacing planned as the head drag plans them
+         */
+        readonly form?: TrailFormGrab;
+    } | null;
+    /**
+     * Going round, the line grabbed and slid round the outline by hand (owner, 2026-11-22).
+     * Absent or null otherwise.
+     */
+    readonly roundSlide?: RoundSlide | null;
+    /** Going round, digits typed for how far, until Enter (owner, 2026-11-22). Absent or null otherwise. */
+    readonly roundTyped?: RoundTyped | null;
 }
 
 /** The path bar's Ends (DL-8, AP-T9, RP-1) */
@@ -97,32 +181,58 @@ export const EVEN_STEP = 0.5;
 export const EVEN_FIRST = 2;
 
 /**
+ * Even's steps as the path bar writes them, from −/+, typing or a drag on the number alike: at
+ * least half a step, and at most `limit` (DL-7), so nobody walks backward
+ */
+export const evenStepsWithin = (steps: number, limit: number | null): number =>
+    Math.max(EVEN_STEP, limit === null ? steps : Math.min(steps, limit));
+
+/**
  * The line the tool works on: where it stands at the start flag, or with Keep end spots and
  * Ripple in, where it stands at the start of the move it follows into (`FollowKeep.line`)
  */
 export function lineOf(follow: FollowDrag): {
     starts: ReadonlyMap<number, XY>;
     order: readonly number[];
+    box?: BoxCells | null;
 } {
     const kept = intoEndSpots(follow) ? follow.keep?.line : undefined;
-    return kept ?? { starts: follow.starts, order: follow.order };
+    return (
+        kept ?? { starts: follow.starts, order: follow.order, box: follow.box }
+    );
 }
 
-/** The line, tail first and the leader last, once an end is grabbed */
+/** Which way a box's default snake runs now (SN-2) */
+export const snakeByOf = (follow: FollowDrag): SnakeBy =>
+    follow.snakeBy ?? "rows";
+
+/**
+ * The line, tail first and the leader last, once an end is grabbed. A box's (step 11, SN-2) is
+ * its snake from the corner grabbed, run back so the corner leads.
+ */
 export function trailLine(follow: FollowDrag): number[] {
     const { grabbed } = follow;
-    const { order } = lineOf(follow);
+    const { order, box } = lineOf(follow);
     if (grabbed === null) return [...order];
+    if (box) {
+        const snake = snakeFrom(box, snakeByOf(follow), grabbed);
+        if (snake) return snake.reverse();
+    }
     return order[0] === grabbed ? [...order].reverse() : [...order];
 }
 
-/** The two ends of the selection along its shape (DL-4) */
+/** The two ends of the selection along its shape (DL-4); a box's corners (step 11, SN-2) */
 export const followEnds = (follow: FollowDrag): number[] => {
-    const { order } = lineOf(follow);
+    const { order, box } = lineOf(follow);
+    if (box) return snakeEnds(box, snakeByOf(follow));
     return order.length > 1
         ? [order[0]!, order[order.length - 1]!]
         : [...order];
 };
+
+/** Whether the line is a box running its default snake (step 11), or ripples into one (SN-4) */
+export const snakesThroughBox = (follow: FollowDrag): boolean =>
+    !!lineOf(follow).box || (ripplesIn(follow) && !!follow.form?.snake);
 
 type Planned = { plan: TrailDragPlan; spacing: TrailSpacing } | null;
 
@@ -172,6 +282,7 @@ function followPlanned(s: PathSession): Planned {
 let drawnCache: {
     starts: FollowDrag["starts"];
     order: FollowDrag["order"];
+    snakeBy: SnakeBy;
     grabbed: number | null;
     spacing: TrailSpacing;
     step: number;
@@ -198,6 +309,7 @@ function followDrawnPlanned(s: PathSession): Planned {
         c &&
         c.starts === f.starts &&
         c.order === f.order &&
+        c.snakeBy === snakeByOf(f) &&
         c.grabbed === f.grabbed &&
         sameSpacing(c.spacing, f.spacing) &&
         c.step === f.step &&
@@ -213,6 +325,7 @@ function followDrawnPlanned(s: PathSession): Planned {
     drawnCache = {
         starts: f.starts,
         order: f.order,
+        snakeBy: snakeByOf(f),
         grabbed: f.grabbed,
         spacing: f.spacing,
         step: f.step,
@@ -225,8 +338,11 @@ function followDrawnPlanned(s: PathSession): Planned {
 }
 
 const sameSpacing = (a: TrailSpacing, b: TrailSpacing) =>
-    a.kind === b.kind &&
-    (a.kind !== "even" || (b.kind === "even" && a.steps === b.steps));
+    a.kind === "even"
+        ? b.kind === "even" && a.steps === b.steps
+        : a.kind === "gaps"
+          ? b.kind === "gaps" && a.back === b.back
+          : a.kind === b.kind;
 
 /**
  * What the drawing shows while a trail is drawn (step 4d): `followPlanOf` with the pointer's
@@ -332,7 +448,8 @@ export function rippleEndAt(follow: FollowDrag, at: XY): number | null {
     if (!form || !ripplesIn(follow)) return null;
     const radius = RIPPLE_END_STEPS * follow.step;
     let best: { id: number; d: number } | null = null;
-    for (const i of [0, form.ids.length - 1]) {
+    // A box's corners (step 11, SN-4), else the form's two ends
+    for (const i of formEnds(form)) {
         const p = form.spots[i]!;
         const d = Math.hypot(p[0] - at.x, p[1] - at.y);
         if (d <= radius && (!best || d < best.d))
@@ -443,6 +560,11 @@ export function cancelFollowDrawing(): boolean {
     const { session } = usePathPenStore.getState();
     const f = session?.follow;
     if (!session || !f || f.grabbed === null) return false;
+    // A trail's head dragged (AP-T16): the trail as it was, shown, nothing written
+    if (f.head) {
+        usePathPenStore.setState({ session: f.head.restore });
+        return true;
+    }
     usePathPenStore.setState({
         session: {
             ...session,
@@ -456,12 +578,33 @@ export function cancelFollowDrawing(): boolean {
 }
 
 /** The middle marcher under the pointer before an end is grabbed (step 4d), or null */
-export function setFollowHover(id: number | null): void {
+export function setFollowHover(
+    id: number | null,
+    end: number | null = null,
+): void {
     updateFollow((s, f) =>
-        (f.hover ?? null) === id || (f.grabbed !== null && id !== null)
+        ((f.hover ?? null) === id && (f.hoverEnd ?? null) === end) ||
+        (f.grabbed !== null && (id !== null || end !== null))
             ? s
-            : { ...s, follow: { ...f, hover: id } },
+            : { ...s, follow: { ...f, hover: id, hoverEnd: end } },
     );
+}
+
+/**
+ * The order a drag from the hovered end would use (owner, 2026-11-17), leader first: the line
+ * `trailLine` gives with that end grabbed, the same one the drag and the write use, so the
+ * preview can't disagree with the drag (a box's snake from that corner with Rows or Columns, a
+ * hand-set order from either end). Null with nothing hovered, once an end is grabbed, or going
+ * round.
+ */
+export function followOrderPreview(
+    follow: FollowDrag,
+): readonly number[] | null {
+    const end = follow.hoverEnd ?? null;
+    if (end === null || follow.grabbed !== null || goingRound(follow))
+        return null;
+    if (!followEnds(follow).includes(end)) return null;
+    return trailLine({ ...follow, grabbed: end }).reverse();
 }
 
 /** The path bar's Spacing (DL-7): Keep spacing, or Even N steps */
@@ -477,6 +620,37 @@ export function setFollowEnds(ends: FollowEnds): void {
         const follow = { ...f, ends };
         // The line changes where it's read (the kept move's start, step 9 review): a grabbed
         // marcher that isn't an end of it there lets go, and the ends pulse again
+        if (f.grabbed !== null && !followEnds(follow).includes(f.grabbed))
+            return {
+                ...s,
+                follow: { ...follow, grabbed: null },
+                points: [],
+                pointer: null,
+                dragging: null,
+            };
+        return {
+            ...s,
+            follow,
+            target:
+                f.grabbed === null
+                    ? s.target
+                    : followTarget(s.target, follow, drillsOf(s)),
+        };
+    });
+}
+
+/**
+ * Which way a box's default snake runs (step 11, SN-2): row by row or column by column, for the
+ * line's box and for the box Ripple in deals into. A grabbed corner keeps leading.
+ */
+export function setFollowSnake(by: SnakeBy): void {
+    updateFollow((s, f) => {
+        if (snakeByOf(f) === by) return s;
+        const form = f.form?.snake
+            ? { ...f.form, snake: { ...f.form.snake, by } }
+            : f.form;
+        const follow = { ...f, snakeBy: by, form };
+        // A hole on the grabbed corner starts the other way's snake elsewhere: it lets go
         if (f.grabbed !== null && !followEnds(follow).includes(f.grabbed))
             return {
                 ...s,
@@ -549,6 +723,8 @@ export interface FollowMarchers {
 export function followMarchersOf(s: PathSession | null): FollowMarchers | null {
     if (!s) return null;
     const f = s.follow;
+    // Going round (step 10): where they stop round the outline, or walking round it
+    if (f && goingRound(f)) return aroundMarchersOf(f);
     if (!f || !followHasTrail(s) || keepsEndSpots(f)) return null;
     // Ripple in (step 9): the marchers on their dealt spots, and the walk into the next form
     if (ripplesIn(f)) {
@@ -597,6 +773,10 @@ export function followFootprint(s: PathSession): XY[] {
     const f = s.follow;
     if (!f || s.phase !== "drawing") return [];
     const at: XY[] = [...lineOf(f).starts.values()];
+    if (goingRound(f)) {
+        for (const [x, y] of aroundPlanOf(f)?.spots ?? []) at.push({ x, y });
+        return at;
+    }
     const plan = ripplesIn(f) ? rippleDrawnPlanOf(s) : followDrawnPlanOf(s);
     if (plan) for (const [x, y] of plan.spots) at.push({ x, y });
     if (s.pointer) at.push(s.pointer);

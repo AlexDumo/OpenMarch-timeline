@@ -30,7 +30,11 @@ import {
     useFieldLayerRef,
     type Rect,
 } from "@/components/canvas/fieldLayers";
-import { usePlacedBoxPreviewStore } from "../placed/boxSelectionStore";
+import {
+    useBoxSelectionStore,
+    usePlacedBoxPreviewStore,
+} from "../placed/boxSelectionStore";
+import { useShapeTuckedUnderTrail } from "@/pathways/trailShape";
 import { keepInView } from "./keepInView";
 import { glideTo, isGliding } from "@/field/three/fieldNavigation";
 import { activeFieldEditor } from "@/field/editor/activeFieldEditor";
@@ -212,6 +216,14 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
     const hidden = useShapeHidden();
     const tool = useToolEditTarget();
     const placed = usePlacedEditTarget();
+    // A shown trail's end shape keeps its bar tucked away until the path bar's ··· shows it
+    // (pathways, owner 2026-11-17): one bar for the trail, not three
+    const box = useBoxSelectionStore((s) => s.selected);
+    const boxIds = useMemo(
+        () => box?.recipe.members.map((m) => m.marcherId) ?? null,
+        [box],
+    );
+    const tucked = useShapeTuckedUnderTrail(boxIds);
     const touch = useIsTouchMode();
     const hintLayerRef = useFieldLayerRef<HTMLDivElement>();
     if (hidden) return <ShapeAwayChip />;
@@ -253,7 +265,7 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
                 {touch && <DrawButtons clicking={clicking} />}
             </div>
         );
-    const target = toolOpen ? tool : placed;
+    const target = toolOpen ? tool : tucked ? null : placed;
     if (!target) return null;
     return (
         <RichTips>

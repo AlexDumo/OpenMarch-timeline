@@ -23,6 +23,7 @@ import {
 } from "../pathPenStore";
 import type { AdjustProfile } from "@openmarch/core";
 import type { PathTarget } from "../pathTarget";
+import { DRAW_KIND_STORAGE_KEY, setDrawKind } from "../../shapes/pen/penKind";
 import { setFollowTheLeader } from "../followTheLeader";
 
 /**
@@ -112,6 +113,27 @@ describe("the path's floating editor", () => {
         expect(
             screen.getByTestId("path-cancel").getAttribute("aria-label"),
         ).toBe("Cancel");
+        // Straight | Curve (owner, 2026-11-17): icons named in their tooltips, Straight first
+        // time; a press switches and is remembered
+        const straight = screen.getByTestId("path-draw-straight");
+        const curve = screen.getByTestId("path-draw-curve");
+        expect(straight.getAttribute("aria-pressed")).toBe("true");
+        expect(curve.getAttribute("aria-pressed")).toBe("false");
+        expect(curve.getAttribute("aria-label")).toMatch(/^Curve: /);
+        act(() => setDrawKind("curve"));
+        expect(curve.getAttribute("aria-pressed")).toBe("true");
+        expect(localStorage.getItem(DRAW_KIND_STORAGE_KEY)).toBe("curve");
+        // The hint names what a click places now, and Alt for the other kind
+        expect(screen.getByTestId("path-pen-banner").textContent).toContain(
+            "click for a curve point",
+        );
+        act(() => setDrawKind("straight"));
+        expect(screen.getByTestId("path-pen-banner").textContent).toContain(
+            "click for a corner",
+        );
+        expect(screen.getByTestId("path-pen-banner").textContent).toMatch(
+            /Alt/,
+        );
         // No outline round each icon button, as the shape bar's; Finish is the primary pill, as
         // the shape bar's Place
         for (const b of el.querySelectorAll("button"))
@@ -210,16 +232,16 @@ describe("the path's floating editor", () => {
         );
         // Detach left the bar for ···
         expect(screen.queryByTestId("path-detach")).toBeNull();
-        // Two selected: Edit <name>'s line and Match group greyed out, saying why
+        // Two selected: Edit <name>'s line and Match group greyed out, saying why: the tooltip's
+        // line under the command's name (a screen reader hears it with the tooltip, on focus)
         const line = screen.getByTestId("path-edit-line");
         expect(line.getAttribute("aria-disabled")).toBe("true");
-        expect(line.getAttribute("aria-label")).toBe(
+        expect(line.getAttribute("aria-label")).toBe("Edit marcher's line");
+        expect(line.dataset.tipHint).toBe(
             "Click one of them again to pick just that marcher, then edit their line",
         );
         expect(line.textContent).toBe("Edit marcher's line");
-        expect(
-            screen.getByTestId("path-adjust-reset").getAttribute("aria-label"),
-        ).toBe(
+        expect(screen.getByTestId("path-adjust-reset").dataset.tipHint).toBe(
             "Click one of them again to pick just that marcher, then match it to the group path",
         );
         // One bent member selected: every slot acts, in the same places
@@ -238,9 +260,7 @@ describe("the path's floating editor", () => {
         // A plain member: Match group greyed out, still in its place
         act(() => setGroupCommands([10], null));
         expect(order()).toEqual(slots);
-        expect(
-            screen.getByTestId("path-adjust-reset").getAttribute("aria-label"),
-        ).toBe(
+        expect(screen.getByTestId("path-adjust-reset").dataset.tipHint).toBe(
             "This marcher already walks the group path exactly: nothing to match",
         );
         // Only detached marchers selected: Rejoin takes the third slot, at Match group's width
@@ -472,21 +492,22 @@ describe("a stored trail's marks with Follow-the-leader off (#1095)", () => {
     };
     afterEach(() => act(() => setFollowTheLeader(false)));
 
-    it("off: no leader's mark, corner counts or Reverse leader; Edit path greyed, saying why. On: back at once", () => {
+    it("off: no corner counts or corner summary; Edit path greyed, a click on it opens nothing. On: back at once", () => {
         act(() => showPath(trail, "3"));
         render(<PathEditor fieldProperties={fieldProperties} />);
         expect(bar().dataset.phase).toBe("closed");
-        expect(screen.queryByTestId("trail-leader")).toBeNull();
         expect(screen.queryByTestId("trail-corner-count")).toBeNull();
+        expect(screen.queryByTestId("path-corner-summary")).toBeNull();
+        // Reverse is on the field's menu and Alt+L, never the bar (step 11, owner 2026-11-17)
         expect(screen.queryByTestId("path-reverse")).toBeNull();
         const edit = screen.getByTestId("path-edit");
         expect(edit.getAttribute("aria-disabled")).toBe("true");
-        expect(edit.getAttribute("aria-label")).toMatch(
-            /Follow-the-leader \(preview\)/,
-        );
+        expect(edit.dataset.tipHint).toMatch(/Follow-the-leader \(preview\)/);
+        act(() => {
+            fireEvent.click(edit);
+        });
+        expect(bar().dataset.phase).toBe("closed");
         act(() => setFollowTheLeader(true));
-        expect(screen.getByTestId("trail-leader")).toBeInTheDocument();
-        expect(screen.getByTestId("path-reverse")).toBeInTheDocument();
         expect(
             screen.getByTestId("path-edit").getAttribute("aria-disabled"),
         ).toBeNull();

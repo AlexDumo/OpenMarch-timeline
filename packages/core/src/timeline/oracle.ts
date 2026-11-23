@@ -25,6 +25,10 @@ import {
     makeAlongTrail,
     alongEnds,
     alongPoint,
+    aroundEnds,
+    aroundPoint,
+    loopPoint,
+    makeLoop,
     resolveAdjust,
     walkedPoint,
     type LaneWalk,
@@ -60,6 +64,14 @@ export interface OracleFtlEntry {
     target: Map<number, XY>;
     /** R-13″: set when the ends are along the way */
     along?: { turn: XY[]; straight: number[] };
+    /** R-13‴: set when the members go round a closed outline */
+    around?: {
+        origin: XY[];
+        enter: XY[];
+        inStraight: number[];
+        turn: XY[];
+        straight: number[];
+    };
 }
 
 export interface Oracle {
@@ -131,6 +143,23 @@ export function createOracle(db: TimelineSnapshot): Oracle {
             const p = clamp01((b - t.start) / (t.end - t.start));
             if (p <= 0) return origin(sp); // endpoints exact (8.10)
             if (p >= 1) return e.target.get(sp.m)!;
+            if (e.around) {
+                const a = e.around;
+                if (!e.trail.loop)
+                    return lerp(a.origin[q]!, e.target.get(sp.m)!, p);
+                return aroundPoint(
+                    e.trail.loop,
+                    a.origin[q]!,
+                    a.enter[q]!,
+                    a.inStraight[q]!,
+                    e.startDist[q]!,
+                    e.endDist[q]!,
+                    a.turn[q]!,
+                    a.straight[q]!,
+                    e.target.get(sp.m)!,
+                    p,
+                );
+            }
             if (e.along)
                 return alongPoint(
                     e.trail,
@@ -254,6 +283,53 @@ export function createOracle(db: TimelineSnapshot): Oracle {
         const wps = t.params?.waypoints ?? [];
         // R-9′: a trail route's drawn part in place of the waypoints
         const route = t.route == null ? null : db.routes?.[t.route]?.geometry;
+        // R-13‴: round a closed outline, each member from where it stands to its own spot
+        if (t.dest == null && t.params?.ends === "around") {
+            const pts = destinationsOf(t, db.shapes);
+            const pointOf = keyed.map(([, s], q) =>
+                dest.member(q, m, s.row!.slot),
+            );
+            const spots = pointOf.map((j) => pts[j]!);
+            const target = new Map<number, XY>(
+                members.map((mm, q) => [mm, spots[q]!]),
+            );
+            db.assignments
+                .filter((r) => r.transition === tid && !target.has(r.marcher))
+                .sort((a, b) => a.slot - b.slot || a.marcher - b.marcher)
+                .forEach((r, k) =>
+                    target.set(r.marcher, pts[dest.other(k, m, r.slot)]!),
+                );
+            const loop = makeLoop(route);
+            const ends = loop
+                ? aroundEnds(loop, origins, spots, t.params?.laps ?? 0)
+                : null;
+            return {
+                members,
+                source,
+                trail: loop
+                    ? {
+                          cum: [...ends!.startDist],
+                          destOffset: loop.L,
+                          at: (d) => loopPoint(loop, d),
+                          loop,
+                      }
+                    : {
+                          cum: origins.map(() => 0),
+                          destOffset: 0,
+                          at: () => origins[0] ?? [0, 0],
+                      },
+                startDist: ends?.startDist ?? origins.map(() => 0),
+                endDist: ends?.endDist ?? origins.map(() => 0),
+                target,
+                around: {
+                    origin: origins,
+                    enter: ends?.enter ?? [...origins],
+                    inStraight: ends?.inStraight ?? origins.map(() => 0),
+                    turn: ends?.turn ?? [...spots],
+                    straight: ends?.straight ?? origins.map(() => 0),
+                },
+            };
+        }
         // R-13″: ends along the way (line-up, then the drawn part), no destination path
         const along = t.dest == null && t.params?.ends === "along";
         const trail = along
@@ -405,6 +481,17 @@ export function createOracle(db: TimelineSnapshot): Oracle {
                 endDist: [...e.endDist],
                 targets: [...e.target.entries()],
                 ...(e.along ? { along: e.along } : {}),
+                ...(e.around
+                    ? {
+                          around: {
+                              enter: e.around.enter,
+                              inStraight: e.around.inStraight,
+                              turn: e.around.turn,
+                              straight: e.around.straight,
+                              length: e.trail.loop?.L ?? 0,
+                          },
+                      }
+                    : {}),
             };
         },
         positionAt(m, b) {

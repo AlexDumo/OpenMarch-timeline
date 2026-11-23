@@ -15,8 +15,8 @@ This folder backs the claims in `openmarch-timeline-spec.md` (§12.10). It is a 
 | `regress.mjs` | Review regressions and degenerate-geometry goldens. Known v0.1 failures are marked as expected. | QA-REG, QA-DG |
 | `props.mjs` | Direct property checks with independent geometry and boundary-valued shows; a route mode checks own and group paths of corners and arc legs against a walk written from R-14 and R-14″, and trails on their legs | §12.5 |
 | `mutate.py` | Mutation test: re-introduces twelve known bugs (three on arc legs); a named property must catch each | §12.10 |
-| `fuzz.mjs` | Differential fuzzer: resolver vs oracle under random edit batches; every third seed also runs a route world (lanes, trails, arc legs) with route and lane edits | QA-INV-08 |
-| `arcroutes.mjs` | Random R-14″ routes for the fuzzers and properties: bulges at the limits, `toBulge`, repeated points and points on an end, smooth points only away from arcs, Adjust keys in close pairs. Also used by the app's `routeArcs.test.ts` | R-14″ |
+| `fuzz.mjs` | Differential fuzzer: resolver vs oracle under random edit batches; every third seed also runs a route world (lanes, trails, arc legs, closed outlines gone round, R-13‴) with route and lane edits | QA-INV-08 |
+| `arcroutes.mjs` | Random R-14″ routes, and closed outlines (`randLoop`: circles, boxes, random loops of corners and arc legs, R-13‴), for the fuzzers and properties: bulges at the limits, `toBulge`, repeated points and points on an end, smooth points only away from arcs, Adjust keys in close pairs. Also used by the app's `routeArcs.test.ts` | R-14″ |
 | `e2e.mjs` | End-to-end fuzzer: random SQL edits, undos and redos, then SQLite, then the change log, then the resolver. Route seeds also write routes and lanes, and check the E-J5 view against I-J5 (arc legs skipped) before each edit. `--v06-anchor` restores the v0.6 range trigger as a negative control. | QA-INV-09, QA-UNDO-9 |
 | `cx.mjs` | Counter-based complexity checks, plus the informational timing CX-06 | QA-CX |
 | `deep.mjs` | Deep chains (20,000 direct, 5,000 FTL) queried cold on a deliberately small stack | QA-REG-6 |

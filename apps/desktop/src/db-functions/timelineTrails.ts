@@ -16,7 +16,7 @@
  *
  * Each is one undoable edit, and every refusal is decided before the first write.
  */
-import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNotNull, lt } from "drizzle-orm";
 import {
     createResolver,
     validateRouteGeometry,
@@ -60,7 +60,13 @@ import {
 import { pointsToStore } from "./timelineGroupRoutes";
 import { memberRows, type MemberRow } from "./timelineMemberRows";
 import { removeAssignmentRowsInTransaction } from "./timelineMembership";
-import { dropOrderMarksInTransaction } from "./shapeRecipes";
+import {
+    dropOrderMarksInTransaction,
+    hasShapeRecipes,
+    shapeRecipesOnly,
+} from "./shapeRecipes";
+import { deriveTrailSpotsInTransaction } from "./timelineTrailDerive";
+import { setMarcherOrderInTransaction } from "./marcherOrder";
 
 type TransitionDbRow = typeof schema.timeline_transitions.$inferSelect;
 
@@ -95,6 +101,8 @@ export const trailRefusal = {
     noTrail: () => text.t("timeline.refusals.trail.noTrail"),
     /** Owner, 2026-11-10: Reverse is off for a dragged-out line (R-13″) */
     reverseAlong: () => text.t("timeline.refusals.trail.reverseAlong"),
+    /** AP-T15: a move round an outline has no points to edit (step 10) */
+    aroundPoints: () => text.t("timeline.refusals.trail.aroundPoints"),
 };
 
 // ---------------------------------------------------------------------------
@@ -174,6 +182,10 @@ export interface MoveTrail {
     reverse: boolean;
     /** Whether the members end along the way (R-13″, step 4b) */
     along: boolean;
+    /** Whether the members go round a closed outline (R-13‴, step 10) */
+    around: boolean;
+    /** Round an outline, the whole times round added (R-13‴ `laps`); 0 otherwise */
+    laps: number;
     geometry: RouteGeometry;
     /** The marchers in the line, by slot: the tail first, or the leader first when reversed */
     marcherIds: number[];
@@ -188,6 +200,17 @@ const isReversed = (transition: TransitionDbRow): boolean =>
 export const isAlong = (transition: TransitionDbRow): boolean =>
     transition.path_params !== null &&
     (JSON.parse(transition.path_params) as { ends?: string }).ends === "along";
+
+/** Whether a follow move goes round a closed outline (R-13‴, pathways step 10) */
+export const isAround = (transition: TransitionDbRow): boolean =>
+    transition.path_params !== null &&
+    (JSON.parse(transition.path_params) as { ends?: string }).ends === "around";
+
+/** The whole times round a move round an outline adds (R-13‴ `laps`), 0 for none */
+const lapsOf = (transition: TransitionDbRow): number =>
+    transition.path_params === null
+        ? 0
+        : ((JSON.parse(transition.path_params) as { laps?: number }).laps ?? 0);
 
 /** A trail's last drawn point, where a route with its ends along the way runs to (AP-T8) */
 const lastPoint = (
@@ -253,6 +276,8 @@ export async function readTrails(
         end: transition.end_beat,
         reverse: isReversed(transition),
         along: isAlong(transition),
+        around: isAround(transition),
+        laps: lapsOf(transition),
         geometry: JSON.parse(geometry) as RouteGeometry,
         marcherIds: [...new Set(lines.get(transition.id) ?? [])],
     }));
@@ -631,6 +656,7 @@ export async function followTrailInTransaction({
     points,
     line,
     along = false,
+    around,
     destinations,
 }: {
     tx: DbTransaction;
@@ -647,6 +673,11 @@ export async function followTrailInTransaction({
      * the route runs to its last point (`to`), not to an end spot. A new line only.
      */
     along?: boolean;
+    /**
+     * Step 10 (AP-T13, R-13‴): the members go round this closed outline (in walking order), `laps`
+     * times round more, onto `spots` (by `line`), `path_params.ends = "around"`. A new line only.
+     */
+    around?: { geometry: RouteGeometry; laps: number; spots: readonly XY[] };
     /**
      * Step 9 (AP-T12, RP-3): each member's end spot by id, in place of the one it has, so a
      * ripple deals the next form's spots in trail order; the route then runs to the tail's. A
@@ -686,10 +717,17 @@ export async function followTrailInTransaction({
           })
         : followOrder(starts, ends);
     const leader = order[order.length - 1]!;
-    const geometry = trailGeometry(points, null, {
-        from: starts[leader]!,
-        to: along ? lastPoint(points, starts[leader]!) : ends[order[0]!]!,
-    });
+    if (around) {
+        assertValid(validateRouteGeometry(around.geometry), "route");
+        // the spots go round the outline as planned, by the line's order
+        order.forEach((i, q) => (ends[i] = around.spots[q]!));
+    }
+    const geometry =
+        around?.geometry ??
+        trailGeometry(points, null, {
+            from: starts[leader]!,
+            to: along ? lastPoint(points, starts[leader]!) : ends[order[0]!]!,
+        });
     const timeline = chosen[0]!.timeline;
 
     return await mapDbErrors(async () => {
@@ -713,9 +751,15 @@ export async function followTrailInTransaction({
                 dest_shape_id: null,
                 path_style: FTL,
                 path_params: JSON.stringify(
-                    along
-                        ? { waypoints: [], ends: "along" }
-                        : { waypoints: [] },
+                    around
+                        ? {
+                              waypoints: [],
+                              ends: "around",
+                              ...(around.laps > 0 ? { laps: around.laps } : {}),
+                          }
+                        : along
+                          ? { waypoints: [], ends: "along" }
+                          : { waypoints: [] },
                 ),
                 route_id: route.id,
                 order_mode: "slot",
@@ -783,12 +827,18 @@ export async function editTrailPointsInTransaction({
     routeId,
     points,
     toBulge,
+    planSpots = true,
 }: {
     tx: DbTransaction;
     routeId: number;
     points: readonly RoutePointInput[];
     /** The last leg's bulge (R-14″, AP-T11): a number sets it, null clears it, undefined keeps it */
     toBulge?: number | null;
+    /**
+     * A trail dragged out of a line plans its end spots again on the new route (L.18, TM-1);
+     * false when the caller writes them itself (AP-T16's head drag, with its own spacing)
+     */
+    planSpots?: boolean;
 }): Promise<void> {
     const transition = await trailTransition(tx, routeId);
     const row = await tx
@@ -798,6 +848,9 @@ export async function editTrailPointsInTransaction({
         .get();
     if (!row) refuse(trailRefusal.noTrail());
     const current = JSON.parse(row.geometry) as RouteGeometry;
+    // AP-T15: a move round an outline goes round the shape the line stands on; its points aren't
+    // edited (Reverse goes the other way round, Follow again changes how far)
+    if (isAround(transition)) refuse(trailRefusal.aroundPoints());
     const ends = (await trailEnds(tx, transition)) ?? {
         from: current.from,
         to: current.to,
@@ -814,6 +867,15 @@ export async function editTrailPointsInTransaction({
     await mapDbErrors(() =>
         writeRouteGeometryInTransaction(tx, routeId, geometry),
     );
+    // L.18 (TM-1): the path is the only truth, so its end spots follow it, in this undo step
+    if (along && planSpots) {
+        await deriveTrailSpotsInTransaction(
+            tx,
+            transition,
+            current.points,
+            geometry.points,
+        );
+    }
     await trailEditedInTransaction(tx, transition);
 }
 
@@ -848,6 +910,14 @@ export async function reverseTrailInTransaction({
     routeId: number;
 }): Promise<{ leaderId: number | null; reverse: boolean }> {
     const transition = await trailTransition(tx, routeId);
+    // AP-T14: round an outline, the other way round, each member as far as it went
+    if (isAround(transition)) {
+        const { reverseAroundInTransaction } =
+            await import("./timelineTrailAround");
+        const out = await reverseAroundInTransaction(tx, transition.id);
+        await trailEditedInTransaction(tx, transition);
+        return out;
+    }
     // Owner, 2026-11-10: a dragged-out line ends along its trail, which starts at the old leader's
     // end; reversed, everyone would walk back through the line. Drag out of the other end instead
     if (isAlong(transition)) refuse(trailRefusal.reverseAlong());
@@ -920,11 +990,30 @@ export async function reverseTrail(args: {
 export async function removeTrailInTransaction({
     tx,
     routeId,
+    keepOrder = true,
 }: {
     tx: DbTransaction;
     routeId: number;
+    /**
+     * A line dragged out of a line keeps its order once the trail goes (QA-DL-35): an order mark
+     * at the move's end, leader first, as the end shape it used to save held it (L.18, TM-4).
+     * False when the trail goes because its last marchers left it (TM-3).
+     */
+    keepOrder?: boolean;
 }): Promise<{ marcherIds: number[] }> {
     const transition = await trailTransition(tx, routeId);
+    if (keepOrder && isAlong(transition) && !isAround(transition)) {
+        const resolver = createResolver(
+            (await readTimelineTables(tx)).snapshot,
+        );
+        const line = resolver.ftlEntry(transition.id).members;
+        if (line.length >= 2) {
+            await setMarcherOrderInTransaction(tx, {
+                beat: transition.end_beat,
+                order: [...line].reverse(),
+            });
+        }
+    }
     const T = schema.timeline_transitions;
     const A = schema.timeline_assignments;
     const members = await tx
@@ -957,4 +1046,135 @@ export async function removeTrail(args: {
     return await transactionWithHistory(db, "removeTrail", (tx) =>
         removeTrailInTransaction({ tx, ...rest }),
     );
+}
+
+/**
+ * Clear Page N on a trail (owner, 2026-11-18): every trail with one of `marcherIds` in it over
+ * `range` goes whole, as Remove trail takes it (AP-T4), so the clear then takes those marchers out
+ * of the page like anyone else. A dragged-out trail's shape of end spots (DL-11, a Line, Arc or
+ * Curve of its members alone, saved in its move) is the trail's own, so it goes too. A trail can't
+ * lose members quietly, so a member who isn't cleared stays in the move, now direct, walking
+ * straight to the end spot it had.
+ *
+ * A trail whose cleared members are also in another shape in its move (one placed there, which
+ * Clear leaves alone) stays as it is: the clear would keep them in their move anyway, and names
+ * them.
+ *
+ * Returns the removed trails' members outside `marcherIds`, ascending, with their names for the
+ * note.
+ */
+export async function removeTrailsOverRangeInTransaction({
+    tx,
+    marcherIds,
+    range,
+}: {
+    tx: DbTransaction;
+    marcherIds: readonly number[];
+    range: { start: number; end: number };
+}): Promise<{ stayed: number[]; names: string[] }> {
+    if (marcherIds.length === 0) return { stayed: [], names: [] };
+    const T = schema.timeline_transitions;
+    const A = schema.timeline_assignments;
+    const trails = await tx
+        .selectDistinct({ transition: T })
+        .from(A)
+        .innerJoin(T, eq(T.id, A.transition_id))
+        .where(
+            and(
+                eq(T.path_style, FTL),
+                isNotNull(T.route_id),
+                inArray(A.marcher_id, [...new Set(marcherIds)]),
+                lt(A.start_beat, range.end),
+                gt(A.end_beat, range.start),
+            ),
+        )
+        .orderBy(asc(T.id))
+        .all();
+    const cleared = new Set(marcherIds);
+    const stayed = new Set<number>();
+    const withRecipes = trails.length > 0 && (await hasShapeRecipes(tx));
+    for (const { transition } of trails) {
+        const line = new Set(
+            (
+                await tx
+                    .selectDistinct({ id: A.marcher_id })
+                    .from(A)
+                    .where(eq(A.transition_id, transition.id))
+                    .all()
+            ).map((m) => m.id),
+        );
+        const recipes = withRecipes
+            ? await trailMoveRecipes(tx, transition.timeline_id, line)
+            : [];
+        const own = recipes.filter(
+            (r) =>
+                isAlong(transition) &&
+                TRAIL_SHAPE_KINDS.has(r.kind) &&
+                r.members.every((m) => line.has(m)),
+        );
+        // A placed shape in the move holds cleared members: Clear leaves them, so the trail stays
+        if (
+            recipes.some(
+                (r) =>
+                    !own.includes(r) &&
+                    r.members.some((m) => line.has(m) && cleared.has(m)),
+            )
+        )
+            continue;
+        // Its order goes with it: no order mark kept for a line that's cleared (TM-4)
+        const { marcherIds: members } = await removeTrailInTransaction({
+            tx,
+            routeId: transition.route_id!,
+            keepOrder: false,
+        });
+        if (own.length > 0)
+            await tx
+                .delete(schema.timeline_shape_recipes)
+                .where(
+                    inArray(
+                        schema.timeline_shape_recipes.id,
+                        own.map((r) => r.id),
+                    ),
+                )
+                .run();
+        for (const m of members) if (!cleared.has(m)) stayed.add(m);
+    }
+    const ids = [...stayed].sort((a, b) => a - b);
+    const names: string[] = [];
+    for (const m of ids) names.push(await marcherName(tx, m));
+    return { stayed: ids, names };
+}
+
+/** The kinds a dragged-out trail's shape is saved as (DL-11: a Curve is stored as a Line) */
+const TRAIL_SHAPE_KINDS: ReadonlySet<string> = new Set(["line", "arc"]);
+
+/** Move `timelineId`'s shape recipes (no order marks) any of `line` is in, with their members */
+async function trailMoveRecipes(
+    tx: DbTransaction,
+    timelineId: number,
+    line: ReadonlySet<number>,
+): Promise<{ id: number; kind: string; members: number[] }[]> {
+    const R = schema.timeline_shape_recipes;
+    const M = schema.timeline_shape_recipe_marchers;
+    const rows = await tx
+        .select({ id: R.id, kind: R.kind, marcherId: M.marcher_id })
+        .from(R)
+        .innerJoin(M, eq(M.recipe_id, R.id))
+        .where(and(eq(R.timeline_id, timelineId), shapeRecipesOnly()))
+        .orderBy(asc(R.id))
+        .all();
+    const byId = new Map<
+        number,
+        { id: number; kind: string; members: number[] }
+    >();
+    for (const r of rows) {
+        const recipe = byId.get(r.id) ?? {
+            id: r.id,
+            kind: r.kind,
+            members: [],
+        };
+        recipe.members.push(r.marcherId);
+        byId.set(r.id, recipe);
+    }
+    return [...byId.values()].filter((r) => r.members.some((m) => line.has(m)));
 }

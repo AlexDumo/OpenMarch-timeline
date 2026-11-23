@@ -138,24 +138,60 @@ describe("a trail with Follow-the-leader off (#1095)", () => {
 });
 
 describe("a trail on the field (pathways step 4)", () => {
-    it("draws the drawn part from the leader to the entrance, the line-up and the end line faint, a ring on everyone", () => {
-        showPath(trail(5), "3");
+    it("draws the drawn part from the leader to the entrance, the line-up and the end line faint, a ring on everyone, while it's drawn", () => {
+        startDrawing(trail(null), "3");
         const d = drawingOf(usePathPenStore.getState().session)!;
-        expect(d.outline![0]).toEqual(members[2]!.from);
-        expect(d.outline!.at(-1)).toEqual(members[0]!.to);
         expect(d.lanes).toEqual([
             members.map((m) => m.from),
             members.map((m) => m.to),
         ]);
         expect(d.rings).toEqual(members.map((m) => m.from));
         expect(d.ringIds).toEqual([1, 2, 3]);
-        expect(d.spots).toEqual(members.map((m) => m.to));
         expect(d.memberRings!.map((r) => r.kind)).toEqual([
             "group",
             "group",
             "own",
         ]);
         expect(d.memberRings![2]!.label).toBe("Leads the line");
+        expect(d.walked).toBeUndefined();
+    });
+
+    it("selected, it draws one way from the tail's start through the line-up, the trail and the end line; no rings, no lanes, its line kept only to be pressed (owner, 2026-11-17)", () => {
+        showPath(trail(5), "3");
+        const d = drawingOf(usePathPenStore.getState().session)!;
+        // The path's line is still there to press (a double-click opens it), but not drawn
+        expect(d.outline![0]).toEqual(members[2]!.from);
+        expect(d.outline!.at(-1)).toEqual(members[0]!.to);
+        expect(d.outlineHidden).toBe(true);
+        // One way: tail's start → leader's start → the drawn corner → the entrance → the leader's spot
+        expect(d.walked).toEqual([
+            members[0]!.from,
+            members[1]!.from,
+            members[2]!.from,
+            { x: 14 * STEP, y: 0 },
+            members[0]!.to,
+            members[1]!.to,
+            members[2]!.to,
+        ]);
+        // Ghosts where they started, plain: no "Follows the leader" or leader rings
+        expect(d.rings).toEqual(members.map((m) => m.from));
+        expect(d.memberRings).toBeUndefined();
+        expect(d.lanes).toBeUndefined();
+        // End spots drawn, but not where a marcher already stands
+        expect(d.spots).toEqual(members.map((m) => m.to));
+        expect(d.spotsClear).toBe(true);
+    });
+
+    it("open (Edit path), its line is drawn to edit, over the way it walks", () => {
+        showPath(trail(5), "3");
+        usePathPenStore.setState({
+            session: { ...usePathPenStore.getState().session!, phase: "open" },
+        });
+        const d = drawingOf(usePathPenStore.getState().session)!;
+        expect(d.outlineHidden).toBeUndefined();
+        expect(d.pathLine).toBe("edited");
+        expect(d.walked).toHaveLength(7);
+        expect(d.memberRings).toBeUndefined();
     });
 
     it("its menu offers Edit path, Reverse leader and Remove; Re-fit never", () => {
@@ -176,10 +212,14 @@ describe("a trail on the field (pathways step 4)", () => {
         );
     });
 
-    it("shown closed, its members keep their walked paths; drawn or open, they give way", () => {
+    it("shown closed, drawn or open, its members' start flag positions give way to its ghosts and way (owner, 2026-11-17)", () => {
         showPath(trail(5), "3");
         const closed = usePathPenStore.getState().session;
-        expect(pathMarcherIds(closed, false, false)).toEqual([]);
+        expect(pathMarcherIds(closed, false, false)).toEqual([1, 2, 3]);
+        // Hidden (paths level off) it isn't drawn, so they keep theirs
+        expect(pathMarcherIds(closed, true, false)).toEqual([]);
+        // An open shape has the field: a closed trail isn't drawn
+        expect(pathMarcherIds(closed, false, true)).toEqual([]);
         startDrawing(trail(null), "3");
         expect(
             pathMarcherIds(usePathPenStore.getState().session, false, false),

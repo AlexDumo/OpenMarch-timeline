@@ -24,10 +24,29 @@ import {
     followMarchersOf,
     ripplesIn,
     setFollowEnds,
+    setFollowSnake,
+    snakesThroughBox,
     setFollowPreview,
 } from "./followDrag";
-import { isTrailLineAt, openFollowTool } from "./followTool";
+import {
+    flipRoundWay,
+    goingRound,
+    roundMaxOf,
+    setGoRound,
+    setRoundUnit,
+    stepRoundAmount,
+    cancelRoundSlide,
+    clearRoundTyped,
+    eraseRoundDigit,
+    typeRoundDigit,
+} from "./followAround";
+import { followWindowNow, isTrailLineAt, openFollowTool } from "./followTool";
+import { usePenKeys, usePenKindActions } from "@/shapes/pen/usePenKeys";
+import { currentPenSubject } from "./penSubjects";
+import { toggleTrailShapeControls, useTrailEndShape } from "./trailShape";
 import { trailOffReason, useFollowTheLeader } from "./followTheLeader";
+import { outlineOf } from "@/db-functions/timelineTrailAround";
+import { currentShapeField } from "@/shapes/field/shapeField";
 import {
     closeShapeTool,
     useShapeToolStore,
@@ -48,6 +67,9 @@ import {
     type PathTarget,
 } from "./pathTarget";
 import {
+    convertShownTrail,
+    convertTrailBlocker,
+    abortPointDrag,
     acknowledgeOpenPath,
     editMemberLine,
     pathSlotsOf,
@@ -79,6 +101,7 @@ import {
     removeLastPoint,
     removePath,
     reverseShownTrail,
+    aroundPointsReason,
     switchDrawing,
     selectPoint,
     setPathHidden,
@@ -156,6 +179,11 @@ export function usePathPenActions(): void {
         // A trail can't be drawn again with Follow-the-leader off (#1095): said, not ignored
         if (now?.target.trail && now.target.routeId !== null && trailLocked) {
             toast.error(trailOffReason(), { id: "path-pen" });
+            return;
+        }
+        // A line going round an outline (step 10, AP-T15): nothing to draw again
+        if (now?.target.trail?.around && now.phase !== "drawing") {
+            toast.error(aroundPointsReason(), { id: "path-pen" });
             return;
         }
         if (
@@ -260,9 +288,11 @@ export function usePathPenActions(): void {
     useActionHandler("followTrail", () => {
         const now = usePathPenStore.getState().session;
         if (now?.phase === "drawing" && now.target.trail) return;
-        // The line's trail shown: drawn again, whoever of the line is selected
+        // The line's trail shown: drawn again, whoever of the line is selected. A line going
+        // round an outline (step 10) opens Go round again instead, below
         if (
             now?.target.trail &&
+            !now.target.trail.around &&
             now.target.routeId !== null &&
             now.phase !== "drawing" &&
             !isPlaying
@@ -361,9 +391,92 @@ export function usePathPenActions(): void {
     const canPreview = usePathPenStore(
         (s) =>
             (!!s.session?.points.length ||
+                // going round, once somebody moves
+                (goingRound(s.session?.follow) &&
+                    (s.session?.follow?.around?.amount ?? 0) > 0) ||
                 (!!s.session?.follow && ripplesIn(s.session.follow))) &&
             followMarchersOf(s.session) !== null,
     );
+    // Go round (step 10): the Follow tool on a circle or box outline
+    const round = usePathPenStore((s) => goingRound(s.session?.follow));
+    const roundOffered = usePathPenStore(
+        (s) =>
+            !!s.session?.follow?.around?.canDrag &&
+            s.session.follow.grabbed === null,
+    );
+    const roundAmount = usePathPenStore(
+        (s) => s.session?.follow?.around?.amount ?? 0,
+    );
+    const roundMax = usePathPenStore((s) => roundMaxOf(s.session?.follow));
+    // Go around (step 10): switches Go around | Drag out in the Follow tool; with the tool shut,
+    // opens it going around when the selection stands on a circle or box outline
+    const selection = useTimelineSelectionStore((s) => s.selection);
+    // Whether the selection stands on a circle or box outline at the window's start flag: the fit
+    // the Follow tool would open with, worked out once per selection, edit or window
+    const onOutline = useMemo(() => {
+        if (performers.length < 2) return false;
+        const resolver = useTimelineResolverStore.getState().resolver;
+        const window = followWindowNow();
+        const field = currentShapeField();
+        if (!resolver || !window || !field) return false;
+        const starts = performers.map((m): [number, number] => {
+            const [x, y] = resolver.positionAt(m.id, window.start);
+            return [x, y];
+        });
+        return outlineOf(starts, field.fieldProperties.pixelsPerStep) !== null;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectionKey, version, ready, selection]);
+    const canOpenRound = phase !== "drawing" && !isPlaying && onOutline;
+    useActionHandler(
+        "followGoRound",
+        () => {
+            const a = usePathPenStore.getState().session?.follow?.around;
+            if (a) {
+                setGoRound(!a.on);
+                return;
+            }
+            const resolver = useTimelineResolverStore.getState().resolver;
+            if (!resolver) return;
+            const beat = useTimelineSelectionStore.getState().playheadBeat;
+            void openFollowTool(
+                resolver,
+                performers.map((m) => m.id),
+                drills,
+                beat,
+                true,
+            ).then((refused) => {
+                if (refused) toast.error(refused, { id: "path-pen" });
+                else if (useShapeToolStore.getState().tool) closeShapeTool();
+            });
+        },
+        {
+            enabled: roundOffered || canOpenRound,
+            label: round
+                ? tolgee.t("actions.path.dragOut", "Drag a trail out instead")
+                : undefined,
+            disabledReason: round
+                ? tolgee.t(
+                      "pathways.refusals.goAroundOnly",
+                      "This line can only go around: it has no ends to drag a trail out of",
+                  )
+                : tolgee.t(
+                      "pathways.refusals.goAroundSelect",
+                      "Select marchers on a circle or box outline",
+                  ),
+        },
+    );
+    useActionHandler("followRoundMore", () => stepRoundAmount(1), {
+        enabled: round && roundAmount < roundMax,
+    });
+    useActionHandler("followRoundLess", () => stepRoundAmount(-1), {
+        enabled: round && roundAmount > 0,
+    });
+    useActionHandler("followRoundSpots", () => setRoundUnit("spots"), {
+        enabled: round,
+    });
+    useActionHandler("followRoundSteps", () => setRoundUnit("steps"), {
+        enabled: round,
+    });
     // The Follow tool's Ends (DL-8, AP-T9, RP-1): offered with end spots here; Ripple in with a
     // form to ripple into, else said why
     const followOpen = usePathPenStore((s) => !!s.session?.follow);
@@ -376,6 +489,8 @@ export function usePathPenActions(): void {
         "pathways.editor.endsNeedSpots",
         "Ripple in and Keep end spots follow into end spots the line already has on this page. Place them first (a shape tool, or move the marchers), then choose Follow",
     );
+    // Straight | Curve (owner, 2026-11-17): a setting of the user's, so it can be set any time
+    usePenKindActions();
     useActionHandler("followEndsTrail", () => setFollowEnds("trail"), {
         enabled: followOpen && hasKeep,
         disabledReason: followOpen ? noSpots : undefined,
@@ -392,6 +507,25 @@ export function usePathPenActions(): void {
               ? (formWhy ?? noSpots)
               : noSpots,
     });
+    // Snake order (step 11, SN-2): with a box that has no remembered order, or Ripple in into one
+    const snakes = usePathPenStore(
+        (s) =>
+            !!s.session?.follow &&
+            !goingRound(s.session.follow) &&
+            snakesThroughBox(s.session.follow),
+    );
+    const noBox = tolgee.t(
+        "pathways.refusals.snakeNeedsBox",
+        "Snake order is for a box with no order of its own: open Follow on marchers standing in a box, or ripple into one",
+    );
+    useActionHandler("followSnakeRows", () => setFollowSnake("rows"), {
+        enabled: snakes,
+        disabledReason: noBox,
+    });
+    useActionHandler("followSnakeColumns", () => setFollowSnake("columns"), {
+        enabled: snakes,
+        disabledReason: noBox,
+    });
     useActionHandler(
         "followPreview",
         () => {
@@ -400,14 +534,48 @@ export function usePathPenActions(): void {
         },
         { enabled: canPreview && !prefersReducedMotion() },
     );
-    useActionHandler("reverseTrail", () => void reverseShownTrail(), {
-        enabled: trailShown && phase !== "drawing" && !trailAlong,
-        disabledReason: trailAlong
-            ? tolgee.t(
-                  "timeline.refusals.trail.reverseAlong",
-                  "Reverse leader is off for a trail dragged out of a line. Drag the trail out of the other end instead.",
-              )
-            : undefined,
+    useActionHandler(
+        "reverseTrail",
+        () => (round ? flipRoundWay() : void reverseShownTrail()),
+        {
+            enabled:
+                round || (trailShown && phase !== "drawing" && !trailAlong),
+            disabledReason: trailAlong
+                ? tolgee.t(
+                      "timeline.refusals.trail.reverseAlong",
+                      "Reverse leader is off for a trail dragged out of a line. Drag the trail out of the other end instead.",
+                  )
+                : undefined,
+        },
+    );
+
+    // Convert to shape (L.18, TM-4): offered on a shown trail dragged out of a line
+    const convertBlocker = usePathPenStore((s) =>
+        trailShown &&
+        s.session?.phase !== "drawing" &&
+        s.session?.dragging === null
+            ? convertTrailBlocker(s.session)
+            : null,
+    );
+    useActionHandler(
+        "convertTrailToShape",
+        () => void convertShownTrail(),
+        {
+            enabled: convertBlocker === null,
+            disabledReason: convertBlocker ?? undefined,
+        },
+        trailShown && trailAlong && phase !== "drawing",
+    );
+
+    // Shape controls (owner, 2026-11-17): the trail's end shape's own controls, tucked away
+    // while the trail is selected, shown again or tucked back
+    const endShape = useTrailEndShape();
+    useActionHandler("trailShapeControls", toggleTrailShapeControls, {
+        enabled: endShape,
+        disabledReason: tolgee.t(
+            "pathways.refusals.noEndShape",
+            "Select a trail at the end of its move, where its marchers stand in a shape",
+        ),
     });
 
     // The selected marchers' paths always show, whatever start flag positions' paths level says:
@@ -445,11 +613,19 @@ export function usePathPenActions(): void {
         slots.shown && why !== null ? why : undefined;
     // On a group path it's named for what it edits: the line every member follows (round 3)
     const editLabel = slots.group ? editGroupPathLabel() : undefined;
-    useActionHandler("editPath", () => void openPath(), {
-        enabled: (phase === "closed" || lineEdited) && !trailLocked,
-        label: editLabel,
-        disabledReason: trailLocked ? trailOffReason() : undefined,
-    });
+    // A toggle (owner, 2026-11-17): on shows the points to drag and a trail's head to draw on; off
+    // (as Escape or a click on empty field turns it) a click only selects
+    const editing = phase === "open" && !lineEdited;
+    useActionHandler(
+        "editPath",
+        () => (editing ? closePath() : void openPath()),
+        {
+            enabled: (phase === "closed" || phase === "open") && !trailLocked,
+            checked: editing,
+            label: editLabel,
+            disabledReason: trailLocked ? trailOffReason() : undefined,
+        },
+    );
     // Edit <name>'s line (interaction round 3, was Adjust): the one selected member's line alone,
     // its handles shown at once
     const lineId = slots.lineId;
@@ -881,6 +1057,35 @@ function usePathObjects(drills: ReadonlyMap<number, string>): void {
 }
 
 /**
+ * Going round (owner, 2026-11-22): digits typed on the field, not in a text field, set how far
+ * exactly, shown live, until Enter writes it. They go ahead of any command bound to a digit (the
+ * field's own keys come back when the tool closes).
+ */
+function useRoundDigits(active: boolean): void {
+    useEffect(() => {
+        if (!active) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.ctrlKey || e.metaKey || e.altKey || !/^[0-9]$/.test(e.key))
+                return;
+            const el = e.target as HTMLElement | null;
+            if (
+                el &&
+                (el.isContentEditable ||
+                    el.tagName === "INPUT" ||
+                    el.tagName === "TEXTAREA" ||
+                    el.tagName === "SELECT")
+            )
+                return;
+            if (!typeRoundDigit(e.key)) return;
+            e.preventDefault();
+            e.stopPropagation();
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+    }, [active]);
+}
+
+/**
  * The keys the pen takes over while it draws or a path is open (not while it's only shown,
  * closed), mounted after the editor's own handlers (as the shape tool's are), so they sit on top
  * and go back when the pen closes. They are the Line's keys (`ShapeToolKeys`):
@@ -894,12 +1099,16 @@ function usePathObjects(drills: ReadonlyMap<number, string>): void {
  */
 export function PathPenKeys(): null {
     const phase = usePathPenStore((s) => s.session?.phase ?? null);
+    const round = usePathPenStore((s) => goingRound(s.session?.follow));
+    useRoundDigits(round);
     const picked = usePathPenStore((s) => s.session?.selected ?? null);
     const pickedLane = usePathPenStore((s) => s.session?.lane ?? null);
     const drawing = phase === "drawing";
     useActionHandler(
         "cancelAlignmentUpdates",
         () => {
+            // A point being dragged: the drag is called off, nothing written (L.18, TM-2)
+            if (!drawing && abortPointDrag()) return;
             // Adjusting a lane: its picked handle goes first, then back to quiet (round 2)
             if (!drawing && pickedLane?.key != null)
                 selectLane({ marcherId: pickedLane.marcherId, key: null });
@@ -907,6 +1116,9 @@ export function PathPenKeys(): null {
             else if (!drawing && picked !== null) selectPoint(null);
             // The Follow tool (step 4b): Escape cancels the trail drawn, then leaves the tool
             else if (drawing && cancelFollowDrawing()) return;
+            // Going round: Escape puts back a slide or digits typed, then leaves the tool
+            else if (drawing && (cancelRoundSlide() || clearRoundTyped()))
+                return;
             else closePath();
         },
         {
@@ -919,17 +1131,20 @@ export function PathPenKeys(): null {
                     : tolgee.t("actions.path.close", "Close path"),
         },
     );
-    useActionHandler(
-        "applyShape",
-        () => void finishDrawing(),
-        {
-            label: tolgee.t("actions.path.finish", "Finish path"),
-        },
+    // The pen's keys while drawing: Enter finishes (a trail's head drawn on writes as its drag
+    // does, AP-T16), undo takes points back first, Alt shows on the next point's cue
+    usePenKeys({
         drawing,
-    );
+        subject: currentPenSubject,
+        finishElse: () => void finishDrawing(),
+        undoElse: closePath,
+        finishLabel: tolgee.t("actions.path.finish", "Finish path"),
+    });
     useActionHandler(
         "shapeRemoveLastPoint",
         () => {
+            // Going round: Backspace takes back the last digit typed
+            if (drawing && eraseRoundDigit()) return;
             if (drawing) removeLastPoint();
             // A picked lane takes the key: its Adjust key goes, or the spot resets, never the path
             else if (pickedLane) void deleteOnLane(pickedLane);
@@ -955,18 +1170,6 @@ export function PathPenKeys(): null {
                       : tolgee.t("actions.path.remove", "Remove path"),
         },
         drawing || phase === "open",
-    );
-    // While drawing, undo takes points back first, as a Line's points are; with none left it
-    // cancels
-    useActionHandler(
-        "performUndo",
-        () => {
-            const s = usePathPenStore.getState().session;
-            if (s && s.points.length > 0) removeLastPoint();
-            else closePath();
-        },
-        {},
-        drawing,
     );
     // Corner and Smooth for the selected point of the open path (the editor bar's either/or, the
     // palette); no keys of their own, as a Line's corner type has none

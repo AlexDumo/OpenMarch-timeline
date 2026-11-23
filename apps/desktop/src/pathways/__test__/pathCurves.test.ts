@@ -3,8 +3,8 @@ import { smoothHandles, type XY as CoreXY } from "@openmarch/core";
 import { catmullRomControls } from "@/shapes/geometry/catmullRom";
 import { lineSegments, type LineParams } from "@/shapes/line/lineGeometry";
 import type { ToolEnv } from "@/shapes/tool/toolKind";
+import { PATH_MENU } from "../pathEdit";
 import {
-    PATH_MENU,
     curveOf,
     dragNewPoint,
     dragPathHandle,
@@ -17,7 +17,7 @@ import {
     tangentHandle,
     toggleSmooth,
     type PathShape,
-} from "../pathEdit";
+} from "@/shapes/pen/penPath";
 
 /**
  * Pathways step 2 (fork #644, spec v0.9 R-14 and I.5): a path's curves are the Line's. The same

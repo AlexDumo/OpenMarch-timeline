@@ -322,5 +322,26 @@ const report = (name, bad) => { bad.length ? fail++ : pass++; console.log(`${bad
   bad.length ? fail++ : pass++;
   console.log(`${bad.length ? 'FAIL' : 'PASS'}  QA-AR-1${bad.length ? '\n   ' + bad.slice(0, 6).join('\n   ') : ''}`); }
 
+// QA-OL-1 (R-13‴, plan step 10): eight marchers 4 apart round the square (0,0) (8,0) (8,8) (0,8), clockwise on the field
+// (y down), go round three spots (12) over 12 beats: one unit a beat, round the corners and past the seam. With laps 1
+// and every spot its own start, each goes once round (32) and ends where it started, bit for bit.
+{ const bad = [], same = (p, q) => p[0] === q[0] && p[1] === q[1];
+  const sq = (d) => { const x = ((d % 32) + 32) % 32; return x <= 8 ? [x, 0] : x <= 16 ? [8, x - 8] : x <= 24 ? [24 - x, 8] : [0, 32 - x]; };
+  const loop = { v: 1, closed: true, from: [0, 0], to: [0, 0], points: [{ id: 'a', at: [8, 0] }, { id: 'b', at: [8, 8] }, { id: 'c', at: [0, 8] }] };
+  const show = (end, spots, laps) => ({
+    marchers: Array.from({ length: 8 }, (_, i) => ({ id: i + 1, home: sq(4 * i) })), shapes: {}, routes: { 1: { geometry: loop } },
+    transitions: { 1: { id: 1, start: 0, end, dest: null, points: spots, slots: 8, style: 'follow_the_leader', order: 'slot', route: 1,
+      params: { waypoints: [], ends: 'around', ...(laps ? { laps } : {}) } } },
+    assignments: Array.from({ length: 8 }, (_, i) => ({ id: i + 1, marcher: i + 1, transition: 1, slot: i, start: 0, end, layer: 0 })) });
+  const three = show(12, Array.from({ length: 8 }, (_, i) => sq(4 * i + 12)));
+  const once = show(16, Array.from({ length: 8 }, (_, i) => sq(4 * i)), 1);
+  for (const [name, db, at] of [['three spots', three, (q, t) => sq(4 * q + Math.min(t, 12))], ['once round', once, (q, t) => sq(4 * q + 2 * Math.min(t, 16))]]) {
+    const o = makeOracle(db), r = makeResolver(db);
+    for (let t = 0; t <= 16; t += 0.25) for (let q = 0; q < 8; q++) { const p = o.positionAt(q + 1, t), w = at(q, t);
+      if (!same(p, r.positionAt(q + 1, t))) bad.push(`${name} M${q + 1}@${t}: oracle and resolver differ`);
+      if (Math.hypot(p[0] - w[0], p[1] - w[1]) > 1e-9) bad.push(`${name} M${q + 1}@${t}: ${p}, want ${w}`); } }
+  bad.length ? fail++ : pass++;
+  console.log(`${bad.length ? 'FAIL' : 'PASS'}  QA-OL-1${bad.length ? '\n   ' + bad.slice(0, 6).join('\n   ') : ''}`); }
+
 console.log(`${pass} of ${pass + fail} golden fixtures pass (oracle and cached resolver)`);
 if (fail) process.exitCode = 1;

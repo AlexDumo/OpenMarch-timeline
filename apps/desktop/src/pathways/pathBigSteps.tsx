@@ -10,6 +10,7 @@ import {
     rippleDrawnPlanOf,
     ripplesIn,
 } from "./followDrag";
+import { aroundPlanOf, goingRound } from "./followAround";
 import {
     memberNow,
     shapeOf,
@@ -17,12 +18,12 @@ import {
     type PathSession,
 } from "./pathPenStore";
 import {
-    curveOf,
     groupLegDistances,
     memberWalkOf,
     scheduleOf,
     type LegWhere,
 } from "./pathEdit";
+import { curveOf } from "@/shapes/pen/penPath";
 
 /**
  * Big steps for a drawn path (pathways): the verdict, its words, and its line in the marcher
@@ -107,12 +108,18 @@ function trailBigSteps(
                 ? rippleDrawnPlanOf(session)
                 : followPlanOf(session)
             : null;
+    // Going round (step 10): everyone goes the same distance round the outline
+    const round = goingRound(session.follow)
+        ? aroundPlanOf(session.follow)
+        : null;
     // Ripple in (step 9): each member's whole way into the next form, the connector included
-    const distances = plan
-        ? ("endDist" in plan ? plan.endDist : plan.ends).map(
-              (e, q) => e - plan.startDist[q]!,
-          )
-        : trailDistances(trail.members, curveOf(shapeOf(session)).L);
+    const distances = round
+        ? round.distances
+        : plan
+          ? ("endDist" in plan ? plan.endDist : plan.ends).map(
+                (e, q) => e - plan.startDist[q]!,
+            )
+          : trailDistances(trail.members, curveOf(shapeOf(session)).L);
     const threshold = fieldProperties.stepSizeWarningThresholdInches;
     let worst: { size: StepSize; drill: string } | null = null;
     trail.members.forEach((m, q) => {

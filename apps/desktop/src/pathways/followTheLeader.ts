@@ -6,9 +6,9 @@ import tolgee from "@/global/singletons/Tolgee";
  * The Follow-the-leader switch (pathways M2, #1095): Settings › Field › Follow-the-leader
  * (preview), off by default, kept in the UI settings (`UiSettings.followTheLeader`).
  *
- * With it off nobody makes or edits a trail: Follow, Set order and the order lane, Ripple in,
- * corner counts and Reverse leader are gone from the toolbar, the field bar, the menus, the
- * palette, the shortcut lists and their keys. Plain paths (the Path pen, group paths, Adjust,
+ * With it off nobody makes or edits a trail: Follow, Go around, Set order and the order lane,
+ * Ripple in, corner counts and Reverse leader are gone from the toolbar, the field bar, the menus,
+ * the palette, the shortcut lists and their keys. Plain paths (the Path pen, group paths, Adjust,
  * Detach and Rejoin) don't change. A file that already has a trail (from a lab or preview build)
  * still opens and plays it as before: its line shows its path quiet, with Remove trail, but the
  * trail can't be opened, drawn again or turned around. Turned on, everything is back at once.
@@ -23,6 +23,15 @@ export const FOLLOW_THE_LEADER_ACTIONS: ReadonlySet<ActionId> =
         "followEndsKeep",
         "followEndsRipple",
         "reverseTrail",
+        "followGoRound",
+        "followRoundMore",
+        "followRoundLess",
+        "followRoundSpots",
+        "followRoundSteps",
+        "followSnakeRows",
+        "followSnakeColumns",
+        "trailShapeControls",
+        "convertTrailToShape",
         "toggleMarcherOrder",
         "setMarcherOrder",
         "reverseMarcherOrder",

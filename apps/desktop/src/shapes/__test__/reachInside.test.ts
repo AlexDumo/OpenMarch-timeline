@@ -33,6 +33,8 @@ import type { PlacedBox } from "../placed/placedBox";
 import * as placedBoxStore from "../placed/placedBoxStore";
 import { toolEnvFor } from "../tool/toolEnv";
 import type { XY } from "../types";
+import { useTimelineResolverStore } from "@/timeline/timelineStore";
+import { setFollowTheLeader } from "@/pathways/followTheLeader";
 
 vi.mock("../placed/commitBox", () => ({ commitBox: vi.fn() }));
 
@@ -171,6 +173,44 @@ describe("the selected box's field mode and reach inside", () => {
         expect(under.fieldMenuAt).not.toHaveBeenCalled();
         withPath.cursorAt(inside);
         expect(under.cursorAt).not.toHaveBeenCalled();
+    });
+
+    it("a press outside the box that the path under it claims (a trail's head, AP-T16) is the path's to its release, the path's drawing shown meanwhile", () => {
+        const drawn = { outline: null, spots: [], walks: [], handles: [] };
+        const under = {
+            takeClick: vi.fn(() => false),
+            fieldMenuAt: vi.fn(() => null),
+            cursorAt: vi.fn(() => "grab" as const),
+            claims: vi.fn(() => true),
+            press: vi.fn(),
+            move: vi.fn(),
+            release: vi.fn(),
+            cancel: vi.fn(),
+            longPress: vi.fn(() => false),
+            drawing: vi.fn(() => drawn),
+            subscribe: vi.fn(() => () => {}),
+        };
+        const withPath = new LiveBoxMode(box, new QueryClient(), under);
+        const outside = pointer({ x: member.x + 400, y: member.y + 400 });
+        expect(withPath.claims(outside, editorSays(false))).toBe(true);
+        withPath.press(outside, editorSays(false));
+        expect(under.press).toHaveBeenCalledWith(outside, expect.anything());
+        expect(withPath.drawing()).toBe(drawn);
+        withPath.move(outside);
+        expect(under.move).toHaveBeenCalledWith(outside);
+        expect(withPath.longPress(outside)).toBe(false);
+        withPath.release(outside, null);
+        expect(under.release).toHaveBeenCalledWith(outside, null);
+        expect(withPath.drawing()).not.toBe(drawn);
+        // Lost mid-press: the path's press is cancelled, not the box's
+        withPath.press(outside, editorSays(false));
+        withPath.cancel();
+        expect(under.cancel).toHaveBeenCalledTimes(1);
+        // On the box, the box's own, whatever the path says
+        under.press.mockClear();
+        withPath.press(pointer(member), editorSays(false));
+        expect(under.press).not.toHaveBeenCalled();
+        withPath.cancel();
     });
 
     it("without anything under it, takes no click and offers no menu", () => {
@@ -348,6 +388,51 @@ describe("canReachInside", () => {
         // Without it, a press on a member selects the whole box
         useBoxSelectionStore.setState({ inside: null });
         expect(boxPressSelection(2, false, [], false)).toEqual([1, 2, 3, 4]);
+    });
+
+    it("#1101: on a follow-the-leader line's end shape, a click picks the marcher and $mod has nothing to reach into", () => {
+        useBoxSelectionStore.setState({ enabled: true });
+        setFollowTheLeader(true);
+        // Marchers 1..4 arrive at the box's beat (8) as one follow-the-leader line
+        const before = useTimelineResolverStore.getState();
+        useTimelineResolverStore.setState({
+            resolver: {
+                ...before.resolver,
+                spanInfos: (marcherId: number) => [
+                    {
+                        marcherId,
+                        start: 0,
+                        end: 8,
+                        kind: "founding",
+                        assignmentId: marcherId,
+                        assignmentEnd: 8,
+                        transitionId: 30,
+                        slot: marcherId - 1,
+                    },
+                ],
+                ftlEntry: () => ({
+                    transitionId: 30,
+                    members: [1, 2, 3, 4],
+                    orderSource: { kind: "slot", fallback: false },
+                    startDist: [],
+                    endDist: [],
+                    targets: [],
+                }),
+            } as never,
+        });
+        try {
+            expect(boxPressSelection(2, false, [], false)).toBeNull();
+            expect(useBoxSelectionStore.getState().inside).toBeNull();
+            expect(canReachInside(2)).toBe(false);
+            // With Follow-the-leader off it's a shape as any other
+            setFollowTheLeader(false);
+            expect(boxPressSelection(2, false, [], false)).toEqual([
+                1, 2, 3, 4,
+            ]);
+        } finally {
+            useTimelineResolverStore.setState({ resolver: before.resolver });
+            setFollowTheLeader(false);
+        }
     });
 
     it("doesn't apply inside the box already: a click there picks one marcher anyway", () => {
@@ -708,5 +793,52 @@ describe("reaching inside through the field editor", () => {
             expect(params.center.x).toBeGreaterThan(big.params.center.x + STEP);
             expect(params.center.y).toBeCloseTo(big.params.center.y);
         });
+    });
+});
+
+describe("a shown trail's end shape keeps only its body (pathways, owner 2026-11-17)", () => {
+    const under = (tucked: boolean) => ({
+        takeClick: vi.fn(() => false),
+        fieldMenuAt: vi.fn(() => ["editPath"]),
+        cursorAt: vi.fn(() => null),
+        tucks: vi.fn(() => tucked),
+    });
+
+    it("QA-CT-3: tucked, it draws no outline, handles, move dot or knob, and they take no press; with Shape controls on they're back", () => {
+        const big = placed(15);
+        members = membersOf(big);
+        const tucked = new LiveBoxMode(big, new QueryClient(), under(true));
+        const d = tucked.drawing()!;
+        expect(d.outline).toBeNull();
+        expect(d.handles).toEqual([]);
+        expect(d.addHandles).toEqual([]);
+        expect(d.knob).toBeUndefined();
+        expect(d.centerDot).toBeUndefined();
+        // A corner handle over marcher 1 and the center dot under 8 aren't there to press: the
+        // editor's rules have them (select or drag the marcher)
+        expect(tucked.claims(pointer(members.get(1)!), editorSays(false))).toBe(
+            false,
+        );
+        expect(tucked.claims(pointer(members.get(8)!), editorSays(false))).toBe(
+            false,
+        );
+        expect(tucked.openMenu(pointer(members.get(1)!))).toBe(false);
+        // The trail's menu where the hidden handle was
+        expect(tucked.fieldMenuAt(pointer(members.get(1)!))).toEqual([
+            "editPath",
+        ]);
+        // Its body still drags it whole
+        expect(tucked.claims(pointer(members.get(7)!), editorSays(false))).toBe(
+            true,
+        );
+
+        const shown = new LiveBoxMode(big, new QueryClient(), under(false));
+        const e = shown.drawing()!;
+        expect(e.handles.length).toBeGreaterThan(0);
+        expect(e.centerDot).toBeDefined();
+        expect(e.knob).toBeDefined();
+        expect(shown.claims(pointer(members.get(1)!), editorSays(false))).toBe(
+            true,
+        );
     });
 });

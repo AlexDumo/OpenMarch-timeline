@@ -27,6 +27,7 @@
             "clearThisPageAll": "{clearThisPage} (all marchers)",
             "clearThisPageAllAndFollowing": "{clearThisPage} (all marchers), later pages move back too",
             "clearThisPageHoldsToo": "{count, plural, one {{names}'s hold on {pages} was cleared too} other {{names}'s holds on {pages} were cleared too}}.",
+            "clearThisPageTrailToo": "The trail was removed too, so {names} now {count, plural, one {walks} other {walk}} straight.",
             "clearThisPageSelected": "{clearThisPage} (selected)",
             "clearThisPageSelectedAndFollowing": "{clearThisPage} (selected), later pages move back too",
             "defineAsShown": "{defineAsShown}",
@@ -321,8 +322,23 @@
             "reverseOrder": "Reverse order",
             "clearOrder": "Clear order",
             "orderKeywords": "order sequence leader tail first last line follow reverse numbers",
+            "goRound": "Go around",
+            "goRoundKeywords": "go around round circle box outline rotate follow leader loop lap turn",
+            "roundMore": "Go around farther",
+            "roundLess": "Go around less far",
+            "dragOut": "Drag a trail out instead",
+            "roundSpots": "Go around by spots",
+            "roundSteps": "Go around by steps",
             "recenter": "Re-center group path",
-            "recenterLoose": "Re-center path"
+            "recenterLoose": "Re-center path",
+            "snakeRows": "Snake row by row",
+            "snakeColumns": "Snake column by column",
+            "snakeKeywords": "snake box rows columns order follow leader serpentine zigzag block",
+            "shapeControls": "Shape controls",
+            "drawStraight": "Draw straight",
+            "drawCurve": "Draw curves",
+            "drawKindKeywords": "straight curve curved corner smooth round pen trail point kind",
+            "convertToShape": "Convert to shape"
         }
     },
     "analyticsOptIn": {
@@ -3231,18 +3247,31 @@
                 "split": "{move} can't be split at a count while a line follows a trail. Remove the trail first, or split before choosing Follow",
                 "removeTrailFirst": "{move} follows a drawn trail: remove the trail first",
                 "noTrail": "This trail is gone",
-                "notFitted": "Select marchers standing in a line, curve or arc to drag out a trail",
+                "notFitted": "Select marchers standing in a line, curve, arc or box to drag out a trail",
+                "notFittedPart": "{count, plural, one {Only # of this shape's {total} marchers is selected} other {Only # of this shape's {total} marchers are selected}}. Select all of them to follow",
+                "notFittedLater": "They aren't in a shape until the end of this move. Go to the next page to follow from there",
+                "notFittedGap": "They stand on a circle or box with a gap too wide to go around, or spacing too uneven. Close the gap or even out the spacing",
+                "notFittedOff": "Some stand too far off the line, circle or box the rest make. Line them up first",
                 "notAnEnd": "Drag the trail out of an end of the line",
                 "tooShort": "Draw a longer trail",
                 "evenTooWide": "Even spacing can be at most {limit} steps here, or someone would walk backward",
                 "noSpots": "Keep end spots needs every marcher in one move with spots there",
-                "notAForm": "Their end spots don't stand in a line, curve or arc, so the line can't ripple into them",
-                "formLoop": "Their end spots close into a loop (a circle or a box outline). Rippling around an outline comes in a later step",
-                "formFold": "Their end spots fold back close to themselves (a sharp V, or rows through a box), so the line would pass close by itself. Rippling along a snake comes in a later step",
+                "notAForm": "Their end spots don't stand in a line, curve, arc or box, so the line can't ripple into them",
+                "formLoop": "Their end spots close into a loop (a circle), so the line can't ripple into them yet. Rippling around a circle comes in a later step",
+                "formFold": "Their end spots fold back close to themselves (a sharp V), so the line would pass close by itself",
                 "formOverlap": "Their end spots lie on the line where it stands, so the line would walk back through itself. Move the end spots off the line first",
                 "notOneMove": "{marcher} can't join the rest of the line in one move here, so nothing was changed",
                 "noWindow": "Move the playhead past the start flag to drag out a trail",
-                "reverseAlong": "Reverse leader is off for a trail dragged out of a line. Drag the trail out of the other end instead."
+                "reverseAlong": "Reverse leader is off for a trail dragged out of a line. Drag the trail out of the other end instead.",
+                "notOutline": "Select marchers standing on a circle or a box outline to go around it",
+                "noDistance": "Choose how far to go around: at least one spot or step",
+                "tooFar": "A move can go around at most {laps} times",
+                "aroundPoints": "This line goes around the outline it stands on, which has no points to edit. Use Reverse leader to go the other way around, or Follow again to change how far",
+                "reverseNobody": "Reverse leader needs someone who starts this move on the outline",
+                "headNotAlong": "Only a trail dragged out of a line can be made longer or shorter by its head",
+                "formPastStart": "A marcher would walk back past where it started. Slide the tail less far",
+                "convertInLineUp": "Some of the line is still standing where it started. Make the trail longer, then convert it",
+                "convertNotAlong": "Only a trail dragged out of a line can be converted to a shape"
             }
         },
         "expertHolds": {
@@ -4860,7 +4889,6 @@
             "legOff": "leaving the path",
             "legAlong": "on the path",
             "legStraight": "straight to the spot",
-            "rejoinTip": "Put the selected marchers back on the group path. A detached marcher's copy goes, and so do any bends on its line",
             "refitTip": "Move this path's ends to where its marchers stand now and stretch its corners to match",
             "rehomedBadge": "Bend moved",
             "rehomedTip": "A point a bend was attached to changed, so the bend moved to the nearest points left. Check it still does what you meant.",
@@ -4878,7 +4906,6 @@
             "evenOff": "Even: the trail is too short for even steps, or someone would walk backward. Draw it longer",
             "evenCloser": "Closer together",
             "evenFarther": "Farther apart",
-            "evenSteps": "{steps} steps",
             "evenLimit": "up to {limit}",
             "ends": "Ends",
             "endsFromTrail": "From trail",
@@ -4895,14 +4922,27 @@
             "previewTip": "Preview: the marchers walk the trail from start to end, again and again",
             "previewReduced": "Preview is off while your system asks for less motion",
             "previewNothing": "Preview: place a point first",
-            "editTip": "Show this path's points to drag. A click on its line does it too",
-            "editGroupTip": "Show the group path's points to drag. Every marcher on it follows",
-            "editLineTip": "Bend only {marcher}'s line, by its handles. It keeps following the group path's edits. A click on the line does it too",
+            "followMode": "How the line follows",
+            "goRoundTip": "Go around: everyone follows the one ahead around the outline they stand on",
+            "dragOutTip": "Drag out: drag a trail out of an end of the line, and the line follows it",
+            "dragOut": "Drag out",
+            "roundHowFar": "How far around",
+            "roundAmount": "How many spots or steps around",
+            "roundSpotsTip": "Spots: each marcher moves on this many places around the outline",
+            "roundSpots": "spots",
+            "roundStepsTip": "Steps: each marcher goes this many steps around the outline, ending between spots if it must",
+            "roundSteps": "steps",
+            "roundTurns": "{turns} × around",
+            "roundClockwiseTip": "Going clockwise around. Reverse leader goes the other way around",
+            "roundCounterTip": "Going counterclockwise around. Reverse leader goes the other way around",
+            "roundClockwise": "Clockwise around",
+            "roundCounter": "Counterclockwise around",
+            "previewRoundTip": "Preview: the marchers go around from start to end, again and again",
+            "roundOffOutline": "{count, plural, one {# marcher stands off the outline and steps onto it first} other {# marchers stand off the outline and step onto it first}}",
             "detachFromGroupCount": "Detach {count} from group path",
             "detachNote": "Stops following group path changes",
             "detachAllCount": "Detach all {count} marchers",
             "detachAllNote": "Ends the group path; each marcher gets their own copy",
-            "resetTip": "Take this marcher's bends off, so it walks the group path like the others again",
             "groupLabel": "Group path · {count}",
             "groupLabelTip": "Select everyone on this group path",
             "ownPaths": "{count} own paths",
@@ -4910,7 +4950,24 @@
             "drawPath": "Draw path",
             "rejoinCount": "Rejoin {count}",
             "more": "More path commands",
-            "looseLabel": "{count} paths"
+            "looseLabel": "{count} paths",
+            "snake": "Snake order",
+            "snakeRows": "Rows",
+            "snakeColumns": "Columns",
+            "shapeControlsNote": "The end shape's spacing, size, turn and handles",
+            "drawKind": "What a click places",
+            "straightTip": "Straight: a click places a corner. For one curve point:",
+            "curveTip": "Curve: a click places a smooth point. For one corner:",
+            "editHint": "A click on its line does it too",
+            "editTrailHint": "Drag its points, or its head to draw on",
+            "editGroupHint": "Every marcher on it follows",
+            "editLineHint": "Bend this line only. It still follows the group path",
+            "rejoinHint": "Back on the group path. Copies and bends go",
+            "resetHint": "Takes this marcher's bends off",
+            "snakeRowsHint": "Along the corner's row, then back along the next",
+            "snakeColumnsHint": "Along the corner's column, then back along the next",
+            "evenSpacing": "Even spacing, in steps",
+            "evenStepsUnit": "{steps, plural, one {step} other {steps}}"
         },
         "menu": {
             "pointType": "Corner type",
@@ -4932,7 +4989,11 @@
             "remove": "Couldn't remove the path",
             "adjust": "Couldn't bend this line",
             "refit": "Couldn't re-fit the path",
-            "reverse": "Couldn't reverse the trail"
+            "reverse": "Couldn't reverse the trail",
+            "goRound": "Couldn't go around",
+            "headDrag": "Couldn't change the trail",
+            "detachFormMarcher": "Couldn't move the marcher off the trail",
+            "convert": "Couldn't convert the trail to a shape"
         },
         "refusals": {
             "noMove": "{marcher} has no move at the playhead to draw a path on",
@@ -4941,15 +5002,27 @@
             "twoMoves": "These marchers are in different moves at the playhead: select marchers of one move to draw a group path",
             "followTwo": "Select the marchers of a line (two or more) to follow a trail",
             "followTwoMoves": "These marchers are in different moves at the playhead: select marchers of one move to follow a trail",
+            "goAroundSelect": "Select marchers on a circle or box outline",
+            "goAroundOnly": "This line can only go around: it has no ends to drag a trail out of",
+            "snakeNeedsBox": "Snake order is for a box with no order of its own: open Follow on marchers standing in a box, or ripple into one",
+            "noEndShape": "Select a trail at the end of its move, where its marchers stand in a shape",
+            "formLineUp": "This marcher is still in the line-up. Lengthen the trail to bend here.",
             "followTheLeaderOff": "This line follows a trail. Turn on Follow-the-leader (preview) in Settings › Field to edit it"
         },
         "banner": {
-            "drawingPoints": "{marcher}'s path: click for a corner, drag for a smooth point · Right-click or <keys></keys> removes the last · Double-click to finish · <esc></esc> to cancel",
-            "drawingPointsClick": "{marcher}'s path: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel",
-            "groupDrawing": "Group path for {count} marchers: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel",
-            "trailDrawing": "Trail for {count} marchers, {marcher} leading: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel",
+            "drawingPoints": "{marcher}'s path: <how></how> · Right-click or <keys></keys> removes the last · Double-click to finish · <esc></esc> to cancel",
+            "drawingPointsClick": "{marcher}'s path: <how></how> · Right-click removes the last · Double-click to finish · <esc></esc> to cancel",
+            "groupDrawing": "Group path for {count} marchers: <how></how> · Right-click removes the last · Double-click to finish · <esc></esc> to cancel",
+            "trailDrawing": "Trail for {count} marchers, {marcher} leading: <how></how> · Right-click removes the last · Double-click to finish · <esc></esc> to cancel",
+            "followGrab": "Follow: drag a trail out of either end of the line · <esc></esc> to leave",
+            "goRound": "Go around: drag {marcher} around the {shape} and the {count} marchers follow, or type how far · <enter></enter> to finish · <esc></esc> to leave",
+            "circle": "circle",
+            "boxOutline": "box outline",
             "rippleDrawing": "Ripple in, {marcher} leading: click an end of the form to go straight in, or click for corners first · Double-click to finish · <esc></esc> to cancel",
-            "followGrab": "Follow: drag a trail out of either end of the line · <esc></esc> to leave"
+            "followGrabBox": "Follow: drag a trail out of a corner of the box, and the box snakes out after it · <esc></esc> to leave",
+            "headDrawing": "Drawing on the trail, {marcher} leading: <how></how> · Back along it to shorten · <enter></enter> or double-click to finish · <esc></esc> to cancel",
+            "clickStraight": "click for a corner, <alt></alt> for a curve point, drag for a smooth point",
+            "clickCurve": "click for a curve point, <alt></alt> for a corner, drag to set its roundness"
         },
         "toolbar": {
             "path": "Path",
@@ -4972,7 +5045,8 @@
             "reversed": "{marcher} leads now",
             "detached": "{count, plural, one {# marcher detached} other {# marchers detached}}",
             "groupEnded": "{count, plural, one {Group path ended: # marcher has their own path} other {Group path ended: # marchers have their own paths}}",
-            "keptLive": "Kept as one group path: {names} share a spot, so they can't each have their own"
+            "keptLive": "Kept as one group path: {names} share a spot, so they can't each have their own",
+            "converted": "Placed a Line through the end spots. Edit it with the shape tools"
         },
         "rings": {
             "group": "Follows the group path",
@@ -4983,16 +5057,14 @@
             "leader": "Leads the line",
             "follower": "Follows the leader",
             "dragEnd": "Drag a trail out of this end",
-            "grabEnd": "Drag from an end of the line"
+            "grabEnd": "Drag from an end of the line",
+            "dragCorner": "Drag a trail out of this corner",
+            "grabCorner": "Drag from a corner of the box"
         },
         "lanes": {
             "hover": "{marcher}'s line",
             "hoverAdjusted": "{marcher}'s line · bent",
             "stacked": "click for the next of {count}"
-        },
-        "trail": {
-            "leader": "Leader · {marcher}",
-            "reverseTip": "Make the other end of the line lead. Everyone keeps their end spot."
         },
         "order": {
             "error": "Error saving the line's order",
@@ -5004,7 +5076,9 @@
             "cancel": "Cancel Set order",
             "done": "Keep this order",
             "doneButton": "Done",
-            "banner": "Set order: drag through the marchers from the leader, or click them one by one · {picked} of {count}",
+            "startHint": "Set order: click the leader, then move over the marchers in order, or drag through them · <cancel></cancel> cancels · {picked} of {count}",
+            "sweepHint": "Move over the marchers in order · <remove></remove> removes the last · <finish></finish> or click to finish · <cancel></cancel> cancels · {picked} of {count}",
+            "removeLast": "Remove last",
             "zoomIn": "Zoom in to read the order"
         },
         "corners": {
@@ -5016,7 +5090,12 @@
             "betweenCounts": "{count} · between {before} and {after}",
             "stopBefore": "{count, plural, one {# stops or leaves the trail before turning here} other {# stop or leave the trail before turning here}}",
             "offCountShort": "Turns between counts",
-            "offCountTip": "{turns, plural, one {# turn falls} other {# turns fall}} between counts, at {corners, plural, one {# corner} other {# corners}}. Each marcher reaches a corner at its own steady speed. Move the corner, change the spacing or the move's counts to put every turn on a count. Tap or click a corner's count to see who turns when."
+            "offCountTip": "{turns, plural, one {# turn falls} other {# turns fall}} between counts, at {corners, plural, one {# corner} other {# corners}}. Each marcher reaches a corner at its own steady speed. Move the corner, change the spacing or the move's counts to put every turn on a count. Tap or click a corner's count to see who turns when.",
+            "summary": "{corners, plural, one {# corner turns} other {# corners turn}} between counts",
+            "offCountTitle": "{turns, plural, one {# turn falls} other {# turns fall}} between counts",
+            "offCountHint": "Move a corner, or change the spacing or counts",
+            "showChips": "Show the corners' counts",
+            "hideChips": "Hide the corners' counts"
         },
         "inspector": {
             "path": "Path"
@@ -5041,6 +5120,11 @@
             "alone": "This marcher is alone on its path: Edit path changes it",
             "severalSelected": "Click one of them again to pick just that marcher, then edit their line",
             "noneSelected": "Select a marcher on the group path to edit their line"
+        },
+        "round": {
+            "dragTip": "Drag around the outline, or type how far",
+            "spotsCount": "{count, plural, one {# spot} other {# spots}}",
+            "stepsCount": "{count, plural, one {# step} other {# steps}}"
         }
     },
     "help": {

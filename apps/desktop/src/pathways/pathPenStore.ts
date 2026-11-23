@@ -32,7 +32,7 @@ import {
     setAdjustKey,
 } from "@/db-functions/timelinePathAdjust";
 import type { RehomeReport } from "@/db-functions/timelineRouteGeometry";
-import type { AdjustProfile } from "@openmarch/core";
+import { EPS_GEOM, type AdjustProfile } from "@openmarch/core";
 import {
     drawGroupRouteInTransaction,
     detachFromGroupPath,
@@ -50,8 +50,13 @@ import tolgee from "@/global/singletons/Tolgee";
 import type { XY } from "@/shapes/types";
 import { SMOOTH } from "@/shapes/line/lineGeometry";
 import { drawnAsGroup, type GroupMember, type PathTarget } from "./pathTarget";
+import { clickedPoint } from "@/shapes/pen/penKind";
 import { activeFieldEditor } from "@/field/editor/activeFieldEditor";
 import { dragTrail } from "@/db-functions/timelineTrailDrag";
+import {
+    convertTrailToShape,
+    planTrailEdit,
+} from "@/db-functions/timelineTrailDerive";
 import { rippleTrail } from "@/db-functions/timelineTrailRipple";
 import {
     invalidatePlacedBoxes,
@@ -63,8 +68,16 @@ import {
     intoEndSpots,
     rippleDrawnPlanOf,
     ripplesIn,
+    snakeByOf,
     type FollowDrag,
 } from "./followDrag";
+import { goRound } from "@/db-functions/timelineTrailAround";
+import {
+    aroundLine,
+    aroundPlanOf,
+    goingRound,
+    roundChanged,
+} from "./followAround";
 import {
     besideArc,
     besideArcReason,
@@ -75,9 +88,9 @@ import {
     withTension,
     type PathPoint,
     type PathShape,
-} from "./pathEdit";
+} from "@/shapes/pen/penPath";
 
-export type { PathPoint } from "./pathEdit";
+export type { PathPoint } from "@/shapes/pen/penPath";
 
 /**
  * The pen's session (pathways steps 1 and 2): a path being drawn for one marcher (`drawing`), the
@@ -159,6 +172,13 @@ export interface PathObject {
 
 interface PathPenState {
     session: PathSession | null;
+    /**
+     * The trail (its `pathKey`) whose end shape shows its own controls, or null (owner,
+     * 2026-11-17): a selected trail tucks away the controls of the placed shape its marchers stand
+     * in at the move's end (the shape's bars, handles, move dot and rotate knob) until the path
+     * bar's ··· turns them on (`trailShape.ts`)
+     */
+    shapeControlsFor?: string | null;
     /** A save is under way: the pen takes no new edit until it settles */
     saving: boolean;
     /**
@@ -334,11 +354,10 @@ export const pathMarcherIds = (
         (session.phase === "closed" && closedUnder)
             ? []
             : session.target.trail
-              ? // A trail shown closed keeps every member's walked path (its start flag
-                // positions' path is the trail as walked); drawn or open, they give way
-                session.phase === "closed"
-                  ? []
-                  : session.target.trail.members.map((m) => m.marcherId)
+              ? // A trail draws where its marchers start (ghosts) and the way they walk, shown
+                // closed too (owner, 2026-11-17), so their start flag dots and routes give way,
+                // as an open shape's do (#417)
+                session.target.trail.members.map((m) => m.marcherId)
               : session.target.group
                 ? groupLineIds(session, selected)
                 : [session.target.marcherId];
@@ -568,6 +587,19 @@ export function shapeOf(s: PathSession): PathShape {
             : intoEndSpots(s.follow) && s.follow.grabbed !== null
               ? target.to
               : (points.at(-1)?.at ?? target.from);
+        shape = {
+            from: target.from,
+            to,
+            points,
+            ends: { from: target.from, to },
+        };
+        shapes.set(s, shape);
+        return shape;
+    }
+    // A stored dragged-out trail too (AP-T10): its route runs to its own last point, as the write
+    // keeps it, never on from the head to the tail's end spot (the entrance `target.to` names)
+    if (target.trail?.along) {
+        const to = points.at(-1)?.at ?? target.from;
         shape = {
             from: target.from,
             to,
@@ -1180,6 +1212,11 @@ export function openPath(): boolean {
     if (!session || session.phase === "drawing") return false;
     // A trail with Follow-the-leader off (#1095) can't be edited
     if (session.target.trail && !isFollowTheLeaderOn()) return false;
+    // A line going round an outline (step 10, AP-T15): the outline has no points to edit
+    if (session.target.trail?.around) {
+        toast.error(aroundPointsReason(), { id: "path-pen" });
+        return false;
+    }
     if (session.phase === "closed" || session.lane)
         usePathPenStore.setState({
             session: { ...session, phase: "open", selected: null, lane: null },
@@ -1227,9 +1264,12 @@ export function clearPath(): void {
 export const isDrawing = () =>
     usePathPenStore.getState().session?.phase === "drawing";
 
-/** While drawing, a corner placed at `at` */
-export function addPoint(at: XY): void {
-    update((s) => ({ ...s, points: [...s.points, { at }] }));
+/**
+ * While drawing, a point placed at `at`: a corner, or with `smooth` a smooth point at the plain
+ * roundness (the Straight | Curve switch, `drawKind.ts`)
+ */
+export function addPoint(at: XY, smooth = false): void {
+    update((s) => ({ ...s, points: [...s.points, clickedPoint(at, smooth)] }));
 }
 
 /**
@@ -1249,6 +1289,28 @@ export function endNewPoint(): void {
 export function removeLastPoint(): boolean {
     const { session } = usePathPenStore.getState();
     if (!session || session.phase !== "drawing") return false;
+    // A trail's head drawn on with clicks (AP-T16): the last click is taken back, its cut too;
+    // the stored points stay
+    const f = session.follow;
+    if (f?.head?.clicks) {
+        const before = f.head.history?.at(-1);
+        if (before)
+            update((s) => ({
+                ...s,
+                follow: {
+                    ...f,
+                    head: {
+                        ...f.head!,
+                        prefix: before,
+                        history: f.head!.history!.slice(0, -1),
+                    },
+                },
+                points: before,
+                pointer: before.at(-1)?.at ?? null,
+                dragging: null,
+            }));
+        return true;
+    }
     if (session.points.length > 0)
         update((s) => ({
             ...s,
@@ -1348,6 +1410,33 @@ export function dragPoints(
     update((s) => withToBulge({ ...s, dragging: index, points }, toBulge));
 }
 
+let dragAborts = 0;
+
+/** How many point drags Escape has called off (L.18, TM-2): a press held from before is dead */
+export const pointDragAborts = (): number => dragAborts;
+
+/**
+ * Escape while a point of the open path is dragged (L.18, TM-2): the points and the last leg's
+ * bulge as stored, nothing written, and the press that dragged it drags no more. False when no
+ * point is dragged.
+ */
+export function abortPointDrag(): boolean {
+    const { session } = usePathPenStore.getState();
+    if (!session || session.phase !== "open" || session.dragging === null)
+        return false;
+    dragAborts++;
+    update((s) => {
+        const { toBulge: _was, ...rest } = s;
+        return {
+            ...rest,
+            ...toBulgeOf(s.target),
+            dragging: null,
+            points: pointsOf(s.target),
+        };
+    });
+    return true;
+}
+
 /** A drag that was lost puts the points back. */
 export function cancelDrag(
     before: readonly PathPoint[],
@@ -1390,6 +1479,7 @@ async function saveFollow(
             points,
             keepMove: follow.keep?.timelineId ?? null,
             enter,
+            snake: snakeByOf(follow),
         });
     else
         await dragTrail({
@@ -1402,6 +1492,7 @@ async function saveFollow(
             step: follow.step,
             ends: follow.ends === "keep" ? "keep" : "trail",
             keepMove: follow.keep?.timelineId ?? null,
+            snake: snakeByOf(follow),
         });
     invalidatePlacedBoxes();
 }
@@ -1638,6 +1729,45 @@ async function save(
     }
 }
 
+/** Why a line going round an outline isn't opened for point edits (AP-T15) */
+export const aroundPointsReason = (): string =>
+    tolgee.t(
+        "timeline.refusals.trail.aroundPoints",
+        "This line goes around the outline it stands on, which has no points to edit. Use Reverse leader to go the other way around, or Follow again to change how far",
+    );
+
+/** Go round as the Follow tool's bar says (AP-T13): one undo step; false when it's refused */
+async function saveAround(follow: FollowDrag): Promise<boolean> {
+    const { saving } = usePathPenStore.getState();
+    const plan = aroundPlanOf(follow);
+    const around = follow.around;
+    if (saving || !plan || !around) return false;
+    usePathPenStore.setState({ saving: true });
+    try {
+        await goRound({
+            db,
+            window: follow.window,
+            marcherIds: follow.ids,
+            // the leader the drawing shows, so the write is what's shown
+            leaderId: aroundLine(follow, plan).at(-1) ?? null,
+            reversed: around.reversed,
+            amount: around.amount,
+            unit: around.unit,
+            step: follow.step,
+        });
+        invalidatePlacedBoxes();
+        return true;
+    } catch (error) {
+        toastTimelineError(
+            error,
+            tolgee.t("pathways.errors.goRound", "Couldn't go around"),
+        );
+        return false;
+    } finally {
+        usePathPenStore.setState({ saving: false });
+    }
+}
+
 /**
  * Enter, a double-click or a click on the last point: the path drawn so far becomes the marcher's
  * (AP-R1). With no point placed it's the same as Escape, as a Line with too few points is. The
@@ -1649,6 +1779,21 @@ export async function finishDrawing(
 ): Promise<void> {
     const { session } = usePathPenStore.getState();
     if (!session || session.phase !== "drawing") return;
+    // Going round (step 10, AP-T13): nothing is drawn; the line goes round as the bar says. With
+    // nobody moved (not dragged round, no count typed), or just what's stored, nothing is
+    // written: it closes as Escape does (owner, 2026-11-22)
+    if (session.follow && goingRound(session.follow)) {
+        if (!roundChanged(session.follow.around)) {
+            closePath();
+            return;
+        }
+        if (await saveAround(session.follow))
+            usePathPenStore.setState((state) => ({
+                session: null,
+                saved: state.saved + 1,
+            }));
+        return;
+    }
     // Into end spots (Keep end spots, Ripple in) the trail may run straight in (RP-6)
     const straightIn =
         !!session.follow &&
@@ -2116,6 +2261,80 @@ export async function reverseShownTrail(): Promise<void> {
         toastTimelineError(
             error,
             tolgee.t("pathways.errors.reverse", "Couldn't reverse the trail"),
+        );
+    } finally {
+        usePathPenStore.setState({ saving: false });
+    }
+}
+
+/**
+ * Why Convert to shape can't run on the shown trail (L.18, TM-4), or null: it isn't a trail
+ * dragged out of a line, or its tail is still in the line it stands in (the trail is shorter than
+ * the line), the write's own check on what the field has
+ */
+export function convertTrailBlocker(
+    session: PathSession | null,
+): string | null {
+    const trail = session?.target.trail;
+    if (
+        !session ||
+        !trail?.along ||
+        trail.around ||
+        trail.unfounded ||
+        trail.members.length < 2 ||
+        session.target.routeId === null
+    )
+        return tolgee.t(
+            "timeline.refusals.trail.convertNotAlong",
+            "Only a trail dragged out of a line can be converted to a shape",
+        );
+    const plan = planTrailEdit(
+        trail.members.map((m): [number, number] => [m.from.x, m.from.y]),
+        session.target.points,
+        trail.members.map((m): [number, number] => [m.to.x, m.to.y]),
+        session.target.points,
+    );
+    const lineLen = plan.startDist.at(-1) ?? 0;
+    return plan.ends[0]! < lineLen - EPS_GEOM
+        ? tolgee.t(
+              "timeline.refusals.trail.convertInLineUp",
+              "Some of the line is still standing where it started. Make the trail longer, then convert it",
+          )
+        : null;
+}
+
+/**
+ * **Convert to shape** (L.18, TM-4): a Line through the shown trail's end spots, which the shape
+ * tools then own; the trail leads into it and stops planning the spots. One undo step. The trail
+ * is read again and stays as it was shown.
+ */
+export async function convertShownTrail(): Promise<void> {
+    const { session, saving } = usePathPenStore.getState();
+    if (
+        !session?.target.trail ||
+        session.phase === "drawing" ||
+        saving ||
+        session.target.routeId === null
+    )
+        return;
+    usePathPenStore.setState({ saving: true });
+    try {
+        await convertTrailToShape({ db, routeId: session.target.routeId });
+        invalidatePlacedBoxes();
+        usePathPenStore.setState((state) => ({ saved: state.saved + 1 }));
+        toastWithUndo(
+            tolgee.t(
+                "pathways.toasts.converted",
+                "Placed a Line through the end spots. Edit it with the shape tools",
+            ),
+        );
+    } catch (error) {
+        toastTimelineError(
+            error,
+            tolgee.t(
+                "pathways.errors.convert",
+                "Couldn't convert the trail to a shape",
+            ),
         );
     } finally {
         usePathPenStore.setState({ saving: false });

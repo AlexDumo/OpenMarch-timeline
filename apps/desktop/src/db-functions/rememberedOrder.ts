@@ -170,6 +170,28 @@ export function rememberedOrder(
     return left ? back : null;
 }
 
+/**
+ * The remembered order of `ids` for the Follow tool's window `[start, end]` (owner, 2026-11-17):
+ * as `rememberedOrder` reads it at the start flag, except that an order set or cleared by hand
+ * (step 4g) at a beat inside the window, its end flag too, counts as well, the latest winning.
+ * Set order is made at the displayed beat (DL-26), usually the playhead, and the Follow tool
+ * drags the line as it stands at the start flag: the order set while looking at it is the one
+ * meant. The window's own shapes and trails don't count: the drag replaces what's in it (DL-2).
+ */
+export function rememberedOrderInWindow(
+    forms: readonly OrderForm[],
+    ids: readonly number[],
+    window: { readonly start: number; readonly end: number },
+): number[] | null {
+    const counted = forms.filter(
+        (f) =>
+            f.endBeat <= window.start + 1e-9 ||
+            ((f.kind === "set" || f.kind === "unset") &&
+                f.endBeat <= window.end + 1e-9),
+    );
+    return rememberedOrder(counted, ids, Math.max(window.start, window.end));
+}
+
 /** The kinds of placed shape whose spots run in an order along them: a Line and an Arc */
 const LINE_KINDS: ReadonlySet<string> = new Set(["line", "arc"]);
 
@@ -280,6 +302,15 @@ export async function rememberedOrderAt(
     beat: number,
 ): Promise<number[] | null> {
     return rememberedOrder(await readOrderForms(db, ids), ids, beat);
+}
+
+/** `rememberedOrderInWindow` as the show has it now */
+export async function rememberedOrderInWindowAt(
+    db: DbConnection | DbTransaction,
+    ids: readonly number[],
+    window: { readonly start: number; readonly end: number },
+): Promise<number[] | null> {
+    return rememberedOrderInWindow(await readOrderForms(db, ids), ids, window);
 }
 
 /** A line in force at a beat (`ordersInForce`): its marchers in order, leader first */

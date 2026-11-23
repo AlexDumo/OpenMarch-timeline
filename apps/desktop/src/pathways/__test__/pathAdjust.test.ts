@@ -26,8 +26,8 @@ import {
     limitDrag,
     memberWalkOf,
     scheduleOf,
-    type PathShape,
 } from "../pathEdit";
+import { type PathShape } from "@/shapes/pen/penPath";
 import { refitNeeded, type PathTarget } from "../pathTarget";
 import { bigSteps } from "../PathEditor";
 

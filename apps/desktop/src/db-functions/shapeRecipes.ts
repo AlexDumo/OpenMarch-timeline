@@ -1,5 +1,6 @@
 import { and, eq, inArray, isNull, notInArray, sql, ne } from "drizzle-orm";
 import * as schema from "@om-electron/database/migrations/schema";
+import { markOrderModelInTransaction } from "./timelineLanes";
 import type { DbConnection, DbTransaction } from "./types";
 
 /**
@@ -85,6 +86,9 @@ export async function saveShapeRecipeInTransaction({
     keepOrderMarks?: boolean;
 }): Promise<number> {
     const orderMark = isOrderMarkKind(recipe.kind);
+    // An older build reads an order mark as a shape at the starting spots: the file says it's
+    // newer (version 18, #1099)
+    if (orderMark) await markOrderModelInTransaction(tx);
     const own = orderMark ? null : await moveMembersOf(tx, timelineId);
     if (own) placed = placed.filter((m) => own.has(m.marcherId));
     const marcherIds = placed.map((m) => m.marcherId);
