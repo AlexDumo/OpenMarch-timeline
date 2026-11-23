@@ -476,36 +476,38 @@ describe("pasting a shape", () => {
             Math.min(...spots.map((s) => s.y)),
     });
 
-    it("keeps a box's size for a new count: 4 × 4 onto 12 is as wide and deep", () => {
+    it("keeps a box's exact width and depth for any count, off the half steps if it must", () => {
         const tool = drawn(boxTool, 16, { x: 100, y: 100 }, { x: 160, y: 160 });
         expect((tool.params as { files: number }).files).toBe(4);
-        const plan = planPaste({
-            picture: copiedShape(tool),
-            marchers: row(12, { x: 400, y: 300 }),
-            stepPx: STEP,
-        })!;
-        const spots = spotsOf(plan);
-        expect(spots).toHaveLength(12);
-        expect(extent(spots)).toEqual({ width: 60, depth: 60 });
-        // A full block: 4 × 3 or 3 × 4, each interval a whole half step
-        const across = new Set(spots.map((s) => Math.round(s.x))).size;
-        const deep = new Set(spots.map((s) => Math.round(s.y))).size;
-        expect(across * deep).toBe(12);
-        const now = plan.params as { across: number; deep: number };
-        expect((now.across / half) % 1).toBeCloseTo(0);
-        expect((now.deep / half) % 1).toBeCloseTo(0);
+        for (const n of [5, 7, 8, 10, 12, 13, 20, 30]) {
+            const plan = planPaste({
+                picture: copiedShape(tool),
+                marchers: row(n, { x: 400, y: 300 }),
+                stepPx: STEP,
+            })!;
+            const spots = spotsOf(plan);
+            expect(spots).toHaveLength(n);
+            const now = extent(spots);
+            expect(now.width).toBeCloseTo(60);
+            expect(now.depth).toBeCloseTo(60);
+        }
     });
 
-    it("keeps a box's size onto fewer marchers, its files as a drag over it would pick", () => {
-        const tool = drawn(boxTool, 16, { x: 100, y: 100 }, { x: 160, y: 160 });
-        const plan = planPaste({
-            picture: copiedShape(tool),
-            marchers: row(8, { x: 400, y: 300 }),
-            stepPx: STEP,
-        })!;
-        const spots = spotsOf(plan);
-        expect(spots).toHaveLength(8);
-        expect(extent(spots)).toEqual({ width: 60, depth: 60 });
+    it("keeps a wide box's depth onto few marchers: never a single rank", () => {
+        // 8 × 2, 70 wide and 10 deep
+        const tool = drawn(boxTool, 16, { x: 100, y: 100 }, { x: 170, y: 110 });
+        const was = extent(slotsOf(tool, ctx));
+        expect(was.depth).toBeGreaterThan(0);
+        for (const n of [4, 5, 6]) {
+            const plan = planPaste({
+                picture: copiedShape(tool),
+                marchers: row(n, { x: 400, y: 300 }),
+                stepPx: STEP,
+            })!;
+            const now = extent(spotsOf(plan));
+            expect(now.width).toBeCloseTo(was.width);
+            expect(now.depth).toBeCloseTo(was.depth);
+        }
     });
 
     it("keeps an outline box's frame exactly for a new count", () => {

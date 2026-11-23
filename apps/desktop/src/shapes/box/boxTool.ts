@@ -245,8 +245,9 @@ function switched(
 /**
  * The box laid out for `n` marchers in the space it takes with `from` (a paste onto another number
  * of marchers, #961; owner 2026-11-22): its mode and settings, center, turn and flip kept, and its
- * size as near as the mode allows. Files picks the file count a drag over the frame would and
- * spreads the marchers in half steps, Outline keeps the frame exactly, and Spread fills it. The
+ * size exactly (owner 2026-11-22), its intervals off the half steps if they must be. Files picks
+ * the file count a drag over the frame would, never a single rank or file in a frame with both
+ * width and depth; Outline keeps the frame; Spread fills it. The
  * memory of other modes' numbers is for the count it was made at, so it goes.
  */
 function boxAtCount(
