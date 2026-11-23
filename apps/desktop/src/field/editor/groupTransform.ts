@@ -308,6 +308,59 @@ export function scaleFor(
 }
 
 /**
+ * The drag's `delta` adjusted so the handle's side lands on the grid (#585): `snap` is a point
+ * snapped as a marcher's coordinates are (the coordinate rounding setting; an axis with no
+ * rounding comes back unchanged and moves freely). {@link scaleFor} with the delta returned
+ * scales so the outermost marchers on the dragged side or corner sit on the grid, and the
+ * marchers inside keep their proportions: only the box's size is snapped, never each marcher,
+ * which would bend the formation.
+ *
+ * With `keepRatio` on a corner both axes scale together, so only one side can land on the grid:
+ * the one that needs the smaller change from where the pointer put it. A middle handle snaps its
+ * own side and the other axis follows evenly, as without snapping.
+ */
+export function snapScaleDelta(
+    handle: Exclude<HandleId, "rot">,
+    box: FieldRect,
+    delta: FieldPoint,
+    keepRatio: boolean,
+    fromCenter: boolean,
+    snap: (point: FieldPoint) => FieldPoint,
+): FieldPoint {
+    const facing = FACING[handle];
+    const free = scaleFor(handle, box, delta, keepRatio, fromCenter);
+    // The dragged side or corner at the press, and from the anchor to it
+    const side = {
+        x: facing.x < 0 ? box.left : box.right,
+        y: facing.y < 0 ? box.top : box.bottom,
+    };
+    const reach = { x: side.x - free.anchor.x, y: side.y - free.anchor.y };
+    const snapped = snap({
+        x: free.anchor.x + reach.x * free.x,
+        y: free.anchor.y + reach.y * free.y,
+    });
+    const onGrid = { x: snapped.x - side.x, y: snapped.y - side.y };
+
+    if (!keepRatio || facing.x === 0 || facing.y === 0)
+        return {
+            x: facing.x === 0 ? delta.x : onGrid.x,
+            y: facing.y === 0 ? delta.y : onGrid.y,
+        };
+
+    // A kept ratio on a corner: the scale that puts one side on the grid, nearest the pointer's
+    const candidates = [
+        reach.x === 0 ? null : (snapped.x - free.anchor.x) / reach.x,
+        reach.y === 0 ? null : (snapped.y - free.anchor.y) / reach.y,
+    ].filter((s): s is number => s !== null && s >= MIN_SCALE);
+    if (candidates.length === 0) return delta;
+    const uniform = candidates.reduce((best, s) =>
+        Math.abs(s - free.x) < Math.abs(best - free.x) ? s : best,
+    );
+    // Along the diagonal, so scaleFor gives exactly `uniform` on both axes
+    return { x: reach.x * (uniform - 1), y: reach.y * (uniform - 1) };
+}
+
+/**
  * `starts` scaled by `scale`, to three decimal places (as coordinate rounding
  * saves). An axis scaled by 1 is left exactly as it was, so a transform that
  * changes nothing saves nothing.

@@ -1899,6 +1899,8 @@ export class FieldEditor {
                   press.handle,
                   box,
                   keys,
+                  (point) => this.ports.snap?.(point) ?? point,
+                  this.options.snap,
               );
     }
 

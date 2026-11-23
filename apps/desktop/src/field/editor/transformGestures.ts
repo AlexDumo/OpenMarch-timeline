@@ -9,11 +9,12 @@ import {
     scaleFor,
     scalePositions,
     snapRotation,
+    snapScaleDelta,
     turnBetween,
     type HandleId,
 } from "./groupTransform";
 import type { MarcherPosition, MoveGestureHost } from "./moveGesture";
-import { PRECISION_START, precisionDelta } from "./moveRules";
+import { PRECISION_START, anchorAt, precisionDelta } from "./moveRules";
 import type { FieldRect } from "./selectionArea";
 
 /**
@@ -75,14 +76,15 @@ abstract class HandleGesture implements FieldGesture {
 /**
  * A corner scales each axis with the pointer and a middle handle scales one axis, and constrain
  * keeps the ratio while it's held. A box shape's ratio lock is the box's own: a plain selection
- * never reads it (#1037). Either scales from the center with from center. Nothing snaps.
+ * never reads it (#1037). Either scales from the center with from center. The dragged side snaps
+ * to the coordinate rounding grid (#585); fine or the Snap toggle off scales freely.
  */
 const SCALE_HONORS: HonoredRoles = {
     context: "field",
     fine: "fine",
     constrain: "keepRatio",
     fromCenter: "fromCenter",
-    snaps: false,
+    snaps: true,
 };
 
 /** A rotate handle reads fine (whole degrees, at full speed) and snaps to 15°; constrain does nothing */
@@ -92,10 +94,17 @@ export const ROTATE_HONORS: HonoredRoles = {
     snaps: true,
 };
 
-/** A corner or middle handle: scales the selection from the opposite side, or from its center. */
+/**
+ * A corner or middle handle: scales the selection from the opposite side, or from its center.
+ * The dragged side lands on the coordinate rounding grid (`snapScaleDelta`, #585), as a moved
+ * marcher does; fine or the Snap toggle off scales freely.
+ */
 export class ScaleGesture extends HandleGesture {
     readonly kind: FieldTestGesture = "scale";
     private track = PRECISION_START;
+    private fine = false;
+    /** The delta drawn at the last event, snapped or not. */
+    private drawn: FieldPoint = { x: 0, y: 0 };
 
     constructor(
         origin: FieldPointer,
@@ -105,25 +114,43 @@ export class ScaleGesture extends HandleGesture {
         /** The marchers' bounds at the press. */
         private readonly box: FieldRect,
         keys: FieldKeys,
+        /** A point snapped as a marcher's coordinates are; nothing snaps when omitted. */
+        private readonly snapPoint: (point: FieldPoint) => FieldPoint = (p) =>
+            p,
+        /** The Snap toggle, read on every event; on when omitted. */
+        private readonly snap: () => boolean = () => true,
     ) {
         super(origin, starts, host, keys, SCALE_HONORS);
     }
 
     protected positionsAt(at: FieldPoint, roles: Roles) {
-        // Nothing snaps, so fine needs no re-anchoring: the slow drag goes on
-        // from wherever the pointer had taken the marchers
+        // Fine on: the slow drag starts from where the side is drawn, on the grid
+        if (roles.fine && !this.fine)
+            this.track = anchorAt(this.track, this.drawn);
+        this.fine = roles.fine;
         const moved = precisionDelta(
             this.track,
             { x: at.x - this.origin.field.x, y: at.y - this.origin.field.y },
             roles.fine,
         );
         this.track = moved.track;
+        this.drawn =
+            roles.fine || !this.snap()
+                ? moved.delta
+                : snapScaleDelta(
+                      this.handle,
+                      this.box,
+                      moved.delta,
+                      roles.constrain,
+                      roles.fromCenter,
+                      this.snapPoint,
+                  );
         return scalePositions(
             this.starts,
             scaleFor(
                 this.handle,
                 this.box,
-                moved.delta,
+                this.drawn,
                 roles.constrain,
                 roles.fromCenter,
             ),
