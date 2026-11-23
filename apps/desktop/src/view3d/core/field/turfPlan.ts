@@ -1,3 +1,4 @@
+import { blockOverhang } from "./blockDigits";
 import type { Checkpoint } from "@openmarch/core";
 import {
     checkpointWorld,
@@ -507,7 +508,10 @@ function planNumber(
     const dir = x < 0 ? -1 : 1;
     const towardOutside = Math.sign(band.outside - band.inside);
     // The digits' outer edge: past the one digit, or the outer of two.
-    const edge = chars.length === 2 ? offset + w / 2 : w / 2;
+    // The drawings measure the arrow's gap from the 4's slanted tip.
+    const edge =
+        (chars.length === 2 ? offset + w / 2 : w / 2) +
+        h * blockOverhang(chars[0]);
     const length = h * ARROW_LENGTH;
     ctx.items.push({
         type: "arrow",

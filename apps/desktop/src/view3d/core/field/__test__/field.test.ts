@@ -26,6 +26,7 @@ import {
 } from "..";
 import { MARCHER_MARK, OPENMARCH_LOGO } from "../brandMark";
 import { FIVE_YARDS } from "../turfPlan";
+import { blockOverhang } from "../blockDigits";
 
 beforeAll(() => setTexturePainting(false));
 
@@ -256,8 +257,14 @@ describe("turf on football fields", () => {
                 36 * inch,
                 3,
             );
+            // The 40's 4 reaches past its 4 ft cell on its slanted side
+            // (the turf drawings' 4), and the gap is measured from its tip.
             expect(x - arrow.x).toBeCloseTo(
-                6 * inch + 4 * ft + 6 * inch + arrow.length / 2,
+                6 * inch +
+                    4 * ft +
+                    6 * ft * blockOverhang("4") +
+                    6 * inch +
+                    arrow.length / 2,
                 3,
             );
             expect(arrow.dir).toBe(-1);
