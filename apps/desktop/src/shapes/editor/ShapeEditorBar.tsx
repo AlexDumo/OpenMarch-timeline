@@ -1588,6 +1588,7 @@ function CopiesMenu({ target }: { target: ShapeEditTarget }) {
         anchor: { x: 0, y: 0 },
     });
     const copies = target.kind.copies;
+    const said = useRef<string | null>(null);
     const actions = useMemo(() => {
         const base = numberActions(target, run, chips);
         const step = (param: Param, by: -1 | 1) => {
@@ -1608,6 +1609,9 @@ function CopiesMenu({ target }: { target: ShapeEditTarget }) {
     const shown = copies.params.filter((p) => p.shown?.(params, spots) ?? true);
     if (shown.length === 0) return null;
     const summary = copies.summary(params, spots);
+    // The button keeps what it said while its menu is open, so the menu doesn't slide out from
+    // under the pointer as its numbers change the button's width (sim study of #1190)
+    if (!open) said.current = summary;
     const label = tolgee.t("shapes.copies.label", "Copies");
     const env = envFor();
     return (
@@ -1622,7 +1626,7 @@ function CopiesMenu({ target }: { target: ShapeEditTarget }) {
                         className="rounded-4 hover:bg-text/10 flex min-h-24 items-center gap-4 px-4 py-2"
                     >
                         <CopySimpleIcon size={14} />
-                        <span>{summary ?? label}</span>
+                        <span>{said.current ?? label}</span>
                         <CaretDownIcon size={10} />
                     </button>
                 </Popover.Trigger>
