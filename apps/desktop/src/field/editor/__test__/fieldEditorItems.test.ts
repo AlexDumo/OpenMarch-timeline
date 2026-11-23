@@ -525,6 +525,54 @@ describe("FieldEditor with items", () => {
             expect(ports.showPositions).toHaveBeenLastCalledWith(null);
         });
 
+        it("keeps a moved center drawn while its save is pending, when an earlier drop settles first", async () => {
+            const { editor, ports } = setup({ selected: [1] });
+            let settleDrop = (_: DropResult) => {};
+            vi.mocked(ports.drop).mockImplementation(
+                () => new Promise((resolve) => (settleDrop = resolve)),
+            );
+            let settleSave = (_: DropResult) => {};
+            vi.mocked(ports.saveItem!).mockImplementation(
+                () => new Promise((resolve) => (settleSave = resolve)),
+            );
+            drag(editor, { x: 100, y: 100 }, { x: 100, y: 140 });
+            click(editor, 340, 115);
+            drag(editor, { x: 350, y: 100 }, { x: 370, y: 100 });
+            const both = new Map([
+                [1, { x: 100, y: 140 }],
+                [2, { x: 310, y: 100 }],
+            ]);
+            expect(ports.showPositions).toHaveBeenLastCalledWith(both);
+            // The marchers' save answers first: the item's center stays where the resize left it
+            settleDrop("saved");
+            await Promise.resolve();
+            await Promise.resolve();
+            expect(ports.showPositions).toHaveBeenLastCalledWith(both);
+            settleSave("saved");
+            await Promise.resolve();
+            await Promise.resolve();
+            expect(ports.showPositions).toHaveBeenLastCalledWith(null);
+        });
+
+        it("leaves a second resize's size drawn when the first one's save settles", async () => {
+            const { editor, state, ports } = setup({ selected: [2] });
+            let settleSave = (_: DropResult) => {};
+            vi.mocked(ports.saveItem!).mockImplementationOnce(
+                () => new Promise((resolve) => (settleSave = resolve)),
+            );
+            editor.pointerDown(at(350, 100, { alt: true }));
+            editor.pointerMove(at(370, 100, { alt: true }));
+            editor.pointerUp(at(370, 100, { alt: true }));
+            // The handle is where the stored Outline has it
+            editor.pointerDown(at(350, 100, { alt: true }));
+            editor.pointerMove(at(360, 100, { alt: true }));
+            expect(state.preview?.width).toBe(120);
+            settleSave("saved");
+            await Promise.resolve();
+            expect(state.preview?.width).toBe(120);
+            editor.pointerCancel();
+        });
+
         it("still moves it when dragged from inside, away from the handles", () => {
             const { editor, state } = setup({ selected: [2] });
             drag(editor, { x: 320, y: 100 }, { x: 320, y: 140 });

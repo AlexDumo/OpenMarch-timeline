@@ -719,6 +719,11 @@ export class FieldEditor {
      */
     private pending: ReadonlyMap<number, FieldPoint> | null = null;
     private drops = 0;
+    /**
+     * The last handle gesture started on each item: a save that settles after another one started
+     * on the same item leaves that one's size drawn.
+     */
+    private readonly itemTransforms = new Map<number, object>();
     /** Where the marchers being dragged are drawn, or null with no drag. */
     private live: readonly MarcherPosition[] | null = null;
     private typed: TypedRotation | null = null;
@@ -1994,6 +1999,8 @@ export class FieldEditor {
         handle: HandleId,
         { id, frame }: { id: number; frame: ItemFrame },
     ): FieldGesture {
+        const transform = {};
+        this.itemTransforms.set(id, transform);
         const preview = (size: ItemSize | null) => {
             this.ports.previewItem?.(id, size);
             if (size?.center) this.showLive([{ id, ...size.center }]);
@@ -2014,18 +2021,22 @@ export class FieldEditor {
                 }
                 this.ports.previewItem?.(id, size);
                 const center = size.center;
-                // A moved center is drawn as a drop's marchers are, till the save settles
-                const pending = center
-                    ? withPositions(this.pending, [{ id, ...center }])
-                    : null;
-                if (pending) {
+                // A moved center is drawn as a drop's marchers are, till the save settles, and
+                // counts as a drop: only the last drop's answer clears what's pending
+                const drop = center ? ++this.drops : null;
+                if (center) {
                     this.live = null;
-                    this.pending = pending;
-                    this.ports.showPositions(pending);
+                    this.pending = withPositions(this.pending, [
+                        { id, ...center },
+                    ]);
+                    this.ports.showPositions(this.pending);
                 }
                 const settle = () => {
-                    this.ports.previewItem?.(id, null);
-                    if (!pending || this.pending !== pending) return;
+                    if (this.itemTransforms.get(id) === transform) {
+                        this.itemTransforms.delete(id);
+                        this.ports.previewItem?.(id, null);
+                    }
+                    if (drop === null || drop !== this.drops) return;
                     this.pending = null;
                     this.ports.showPositions(
                         this.live && withPositions(null, this.live),
