@@ -698,6 +698,9 @@
             "add": "{count, plural, one {+# marcher} other {+# marchers}}",
             "select": "{count, plural, one {# marcher} other {# marchers}}",
             "subtract": "{count, plural, one {−# marcher} other {−# marchers}}"
+        },
+        "venueUnderlay": {
+            "prototypeLabel": "Venue on field (prototype)"
         }
     },
     "fieldDisplay": {

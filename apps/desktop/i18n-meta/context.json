@@ -3921,5 +3921,6 @@
     "assets.errors.remove": "Error toast when removing the unused imported files fails.",
     "assets.errors.credits": "Error toast when saving an imported file's license and author fails.",
     "props.modelMissing": "Note in a prop's edit panel when the imported 3D model it names isn't in the show any more (it was removed, then an undo brought the prop back). The prop draws as a plain block.",
-    "props.imported.manage": "Small link under the Props panel's Imported group that opens the Assets panel, where imported models' size, use and license are shown."
+    "props.imported.manage": "Small link under the Props panel's Imported group that opens the Assets panel, where imported models' size, use and license are shown.",
+    "field.venueUnderlay.prototypeLabel": "Label on a temporary prototype switcher over the field that picks how the 3D View's venue (turf, stands) is shown under the 2D field."
 }

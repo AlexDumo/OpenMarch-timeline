@@ -134,6 +134,10 @@ import { fieldObstacleSource } from "./fieldObstacles";
 import { createThreeFieldTestApi } from "./threeFieldTestApi";
 import FieldLayer from "./layers/FieldLayer";
 import BackgroundImageLayer from "./layers/BackgroundImageLayer";
+import VenueUnderlayLayer from "./venueUnderlay/VenueUnderlayLayer";
+import UnderlaySwitcher from "./venueUnderlay/UnderlaySwitcher";
+import CameraMarkerLayer from "./venueUnderlay/CameraMarkerLayer";
+import { useUnderlayStore } from "./venueUnderlay/underlayStore";
 import MarchersLayer from "./layers/MarchersLayer";
 import ItemsLayer from "./layers/ItemsLayer";
 import LabelsLayer, { type LabelStyle } from "./layers/LabelsLayer";
@@ -272,6 +276,42 @@ function ThreeFieldView() {
         // `appTheme` is what the dark class follows
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [fieldProperties, fieldImage, fieldImagePlan, appTheme],
+    );
+    // PROTOTYPE: on full-color turf the grid draws in light ink
+    const underlayLook = useUnderlayStore((s) => s.look);
+    const lineFieldProperties = useMemo(
+        () =>
+            fieldProperties && underlayLook === "turf"
+                ? (Object.assign(
+                      Object.create(Object.getPrototypeOf(fieldProperties)),
+                      fieldProperties,
+                      {
+                          theme: {
+                              ...fieldProperties.theme,
+                              primaryStroke: {
+                                  r: 255,
+                                  g: 255,
+                                  b: 255,
+                                  a: 0.95,
+                              },
+                              secondaryStroke: {
+                                  r: 255,
+                                  g: 255,
+                                  b: 255,
+                                  a: 0.55,
+                              },
+                              tertiaryStroke: {
+                                  r: 255,
+                                  g: 255,
+                                  b: 255,
+                                  a: 0.25,
+                              },
+                              fieldLabel: { r: 255, g: 255, b: 255, a: 0.9 },
+                          },
+                      },
+                  ) as typeof fieldProperties)
+                : null,
+        [fieldProperties, underlayLook],
     );
     const appearanceSteps = useMarcherAppearanceSteps(true);
     const { mutateAsync: moveMarchers } = useMutation(
@@ -706,6 +746,7 @@ function ThreeFieldView() {
                     <ClipboardChip />
                 </>
             )}
+            <UnderlaySwitcher />
             <FieldBenchmark
                 frames={benchFrames}
                 view={benchView}
@@ -773,8 +814,12 @@ function ThreeFieldView() {
                             clock={countGrid}
                             appearanceSteps={appearanceSteps}
                         />
+                        <VenueUnderlayLayer fieldProperties={fieldProperties} />
+                        <CameraMarkerLayer fieldProperties={fieldProperties} />
                         <FieldLayer
-                            fieldProperties={fieldProperties}
+                            fieldProperties={
+                                lineFieldProperties ?? fieldProperties
+                            }
                             strips={strips}
                             numberAtlas={atlases.number}
                             labelAtlas={atlases.checkpoint}
