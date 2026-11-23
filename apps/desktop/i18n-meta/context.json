@@ -3934,7 +3934,7 @@
     "toolbar.view.venueAroundStands": "Choice under Around the field: the venue's stands, crowd and track seen from above, shown when zoomed out. Noun (plural), the seating.",
     "toolbar.view.venueCamera": "Toggle in the Venue popover: shows on the 2D field where the 3D View's camera stands and what it sees.",
     "toolbar.view.venueCameraHint": "Hint under the 3D View camera toggle in the Venue popover.",
-    "toolbar.view.venueBlank": "Explains why the Venue choices are greyed out: the show's 3D View venue is the empty one named Blank.",
+    "toolbar.view.venueBlank": "Explains why the Venue choices are greyed out: the show's 3D View venue is Field only (the venue with no stadium or building, just the field), so there is no venue to draw.",
     "toolbar.view.venueEdgeStadiumOnly": "Explains why Turf edge is greyed out when the show's venue is a gym or arena.",
     "actions.ui.toggleFieldVenue": "Name of an action in the command palette and shortcut settings. The \"venue\" is the place the show is set in the 3D View (OpenMarch's window that shows the drill in 3D): a stadium with turf, a gym or arena floor. This option draws that venue faintly under the 2D field's grid.",
     "actions.ui.toggleFieldVenueKeywords": "Extra search words for the Show or hide venue on field action in the command palette. Space-separated words, translate each.",

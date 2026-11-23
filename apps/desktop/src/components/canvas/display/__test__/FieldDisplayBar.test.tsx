@@ -145,7 +145,7 @@ describe("FieldDisplayBar", () => {
         expect(settings().view3dCameraOnField).toBe(true);
     });
 
-    it("greys the venue looks out for a Blank venue and says why", () => {
+    it("greys the venue looks out for the Field only venue and says why", () => {
         venue.kit = "blank";
         open();
         fireEvent.click(screen.getByTestId("field-display-venue"));
@@ -153,7 +153,7 @@ describe("FieldDisplayBar", () => {
             "field-display-venue-faint",
         ) as HTMLButtonElement;
         expect(faint.disabled).toBe(true);
-        expect(screen.getByText(/venue is Blank/)).toBeTruthy();
+        expect(screen.getByText(/venue is Field only/)).toBeTruthy();
         venue.kit = "hs";
     });
 
