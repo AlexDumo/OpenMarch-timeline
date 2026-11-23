@@ -125,9 +125,7 @@ export class OverlayTimeline {
         this.pages = sortedPages;
         this.measures = measures;
         const lastPage = sortedPages[sortedPages.length - 1];
-        this.totalSeconds = lastPage
-            ? lastPage.timestamp + lastPage.duration
-            : 0;
+        this.totalSeconds = lastPage ? pageEndSeconds(lastPage) : 0;
         this.formatBounds = computeFormatBounds(
             sortedPages,
             measures,
@@ -140,12 +138,11 @@ export class OverlayTimeline {
      */
     getState(timeSeconds: number): OverlayState {
         // Advance to the page whose transition covers this time. The first
-        // page has duration 0, so it is skipped immediately.
+        // page has duration 0, so it is skipped immediately. Page ends come
+        // from beat time, like the counts below (#1018).
         while (
             this.pageCursor < this.pages.length - 1 &&
-            timeSeconds >=
-                this.pages[this.pageCursor].timestamp +
-                    this.pages[this.pageCursor].duration
+            timeSeconds >= pageEndSeconds(this.pages[this.pageCursor])
         ) {
             this.pageCursor++;
         }
@@ -206,6 +203,17 @@ export class OverlayTimeline {
             formatBounds: this.formatBounds,
         };
     }
+}
+
+/**
+ * When a page's transition ends, in show time (the time the audio and the
+ * marchers use). `page.timestamp` adds up page durations from 0 and skips
+ * beats that belong to no page, such as a measure before set 1, so it can be
+ * early (#1018). The page's first beat carries the real start time.
+ */
+function pageEndSeconds(page: Page): number {
+    const start = page.beats[0]?.timestamp ?? page.timestamp;
+    return start + page.duration;
 }
 
 export function computeFormatBounds(
