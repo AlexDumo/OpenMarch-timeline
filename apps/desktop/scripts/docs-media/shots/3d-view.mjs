@@ -1359,7 +1359,9 @@ const shots = [
             // No tooltip on the button the menu closed back to
             await ctx.wait(400);
             await page.evaluate(() =>
-                /** @type {HTMLElement | null} */ (document.activeElement)?.blur(),
+                /** @type {HTMLElement | null} */ (
+                    document.activeElement
+                )?.blur(),
             );
             const canvas = page.getByTestId("fieldCanvas").first();
             const c = await canvas.boundingBox();
