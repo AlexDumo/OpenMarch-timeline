@@ -18,6 +18,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parsePageShotsArgs } from "./page-shots-args.mjs";
 
 const WEBSITE = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
@@ -26,16 +27,18 @@ const WEBSITE = path.resolve(
 const require = createRequire(path.resolve(WEBSITE, "../desktop/package.json"));
 const { chromium } = require("playwright");
 
-const args = process.argv.slice(2);
-const valueOf = (flag) => {
-    const index = args.indexOf(flag);
-    return index >= 0 ? args[index + 1] : undefined;
-};
-const out = valueOf("--out")
-    ? path.resolve(valueOf("--out"))
+let parsed;
+try {
+    parsed = parsePageShotsArgs(process.argv.slice(2));
+} catch (error) {
+    console.error(error.message);
+    process.exit(2);
+}
+const out = parsed.out
+    ? path.resolve(parsed.out)
     : fs.mkdtempSync(path.join(os.tmpdir(), "guide-pages-"));
-const themes = valueOf("--theme") ? [valueOf("--theme")] : ["light", "dark"];
-const tiles = args.includes("--tiles");
+const themes = parsed.theme ? [parsed.theme] : ["light", "dark"];
+const tiles = parsed.tiles;
 const TILE_HEIGHT = 1400;
 
 /** Every guide and troubleshooting page's address, from its source file. */
@@ -56,9 +59,7 @@ function allGuidePages() {
         .map((id) => `/${id}/`);
 }
 
-const pages = args.includes("--all")
-    ? allGuidePages()
-    : args.filter((a, i) => a.startsWith("/") && args[i - 1] !== "--out");
+const pages = parsed.all ? allGuidePages() : parsed.pages;
 if (!pages.length) {
     console.error(
         "Name at least one page, for example /guides/timeline/moves/",
