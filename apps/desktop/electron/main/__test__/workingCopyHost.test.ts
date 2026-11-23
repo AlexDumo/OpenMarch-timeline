@@ -110,6 +110,60 @@ describe("createWorkingCopyHost", () => {
         expect(fs.readdirSync(workingRoot)).toEqual([]);
     });
 
+    /** A host whose publishes run `duringRename` just before each rename, as an edit would. */
+    const hostEditingDuringPublish = (duringRename: () => void) =>
+        makeHost({
+            sessionOptions: () => ({
+                workingRoot,
+                debounceMs: 60_000,
+                maxWaitMs: 60_000,
+                pollMs: 60_000,
+                renameOptions: {
+                    rename: async (from, to) => {
+                        duringRename();
+                        await fs.promises.rename(from, to);
+                    },
+                },
+            }),
+        });
+
+    it("publishes again for edits made while the last publish before closing ran", async () => {
+        let session: WorkingCopySession | null = null;
+        let typeDuringPublish = false;
+        const host = hostEditingDuringPublish(() => {
+            if (!typeDuringPublish) return;
+            typeDuringPublish = false;
+            edit(session!, "typed during the publish");
+        });
+        ({ session } = await openThrough(host));
+        edit(session!, "mine");
+        typeDuringPublish = true;
+
+        expect(await host.end("quit", () => undefined)).toBe(true);
+
+        expect(readValues(showPath)).toEqual([
+            "first",
+            "mine",
+            "typed during the publish",
+        ]);
+        expect(fs.readdirSync(workingRoot)).toEqual([]);
+    });
+
+    it("still closes when edits keep coming, and keeps them for recovery", async () => {
+        let session: WorkingCopySession | null = null;
+        let typed = 0;
+        const host = hostEditingDuringPublish(() =>
+            edit(session!, `typed ${++typed}`),
+        );
+        ({ session } = await openThrough(host));
+        edit(session!, "mine");
+
+        expect(await host.end("quit", () => undefined)).toBe(true);
+
+        expect(fs.readdirSync(workingRoot)).toHaveLength(1);
+        expect(readValues(showPath)).not.toContain(`typed ${typed}`);
+    });
+
     it("finishes an open before a quit or update restart ends it", async () => {
         const host = makeHost();
         let ended: Promise<boolean> | undefined;

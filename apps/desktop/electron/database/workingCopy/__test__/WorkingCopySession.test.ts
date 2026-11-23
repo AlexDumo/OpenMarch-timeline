@@ -392,6 +392,47 @@ describe("WorkingCopySession", () => {
         expect(onDisk.unsaved).toBe(true);
     });
 
+    it.skipIf(process.platform === "win32")(
+        "doesn't rename over the show when its pending identity can't be recorded",
+        async () => {
+            let blockManifest = false;
+            let manifestPath = "";
+            const { session } = await openStarted({
+                platform: "darwin",
+                retryDelaysMs: [60_000],
+                // Copying Finder metadata is the first step before the rename: hold the
+                // manifest there (renaming over a folder fails), so the write that records the
+                // file about to be renamed fails, as Defender or an indexer holding it would.
+                exec: async () => {
+                    if (
+                        blockManifest &&
+                        !fs.existsSync(join(manifestPath, "held"))
+                    ) {
+                        fs.rmSync(manifestPath);
+                        fs.mkdirSync(join(manifestPath, "held"), {
+                            recursive: true,
+                        });
+                    }
+                    return { stdout: "", stderr: "" };
+                },
+            });
+            manifestPath = join(session.directory, MANIFEST_FILE_NAME);
+            edit(session, "mine");
+            blockManifest = true;
+            const outcome = await session.flush("test");
+            blockManifest = false;
+            fs.rmSync(manifestPath, { recursive: true });
+
+            expect(outcome).toMatchObject({ ok: false, state: "deferred" });
+            expect(readValues(showPath)).toEqual(["first"]);
+            expect(strayFilesBeside(showPath)).toEqual([]);
+
+            expect(await session.flush("retry")).toMatchObject({ ok: true });
+            expect(readValues(showPath)).toEqual(["first", "mine"]);
+            expect(readManifestOf(session).pendingIdentity).toBeNull();
+        },
+    );
+
     it("recovers a working copy whose process died without closing it", async () => {
         const { session } = await openStarted();
         edit(session, "crash");

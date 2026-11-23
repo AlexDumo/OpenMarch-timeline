@@ -183,6 +183,13 @@ class ChangedDuringPublishError extends Error {
     }
 }
 
+/** The manifest couldn't record the file a publish was about to rename over the show. */
+class ManifestNotRecordedError extends Error {
+    constructor() {
+        super("OpenMarch couldn't update its own record of the save");
+    }
+}
+
 /** Save As moved the show while a publish to the old file was under way. */
 class SavedAsDuringPublishError extends Error {
     constructor() {
@@ -1174,11 +1181,21 @@ export class WorkingCopySession {
                                 );
                                 if (savedAsSince())
                                     throw new SavedAsDuringPublishError();
+                                const previousPending =
+                                    this.manifest.pendingIdentity;
                                 this.manifest.pendingIdentity = {
                                     ...renamed.identity,
                                     sha256: snapshot.snapshot.sha256,
                                 };
                                 this.persistManifest();
+                                // Without this record on disk, a crash right after the rename
+                                // would make recovery take OpenMarch's own save for someone
+                                // else's change. Don't rename: the publish is retried.
+                                if (this.manifestStale) {
+                                    this.manifest.pendingIdentity =
+                                        previousPending;
+                                    throw new ManifestNotRecordedError();
+                                }
                             },
                         },
                     ));

@@ -24,6 +24,12 @@ export const WORKING_COPY_SETTING = "workingCopySaves";
 /** `1` or `0` forces working-copy saves on or off, whatever the setting says. */
 export const WORKING_COPY_ENV = "OPENMARCH_WORKING_COPY";
 
+/**
+ * How many more times closing publishes when edits arrived during the last publish. Past that
+ * the person is still editing as the show closes; those edits are kept for recovery.
+ */
+const MAX_EXTRA_FINAL_PUBLISHES = 3;
+
 /** Whether shows open through a working copy: the env var wins over the setting. */
 export function workingCopySavesEnabled(
     setting: unknown,
@@ -126,6 +132,20 @@ export function createWorkingCopyHost(deps: WorkingCopyHostDeps) {
                 const session = current;
                 if (!session) return true;
                 let outcome = await session.flush(reason);
+                // The window stays usable while it publishes, so edits can arrive during a
+                // publish that then succeeds: publish again for those, a few times at most.
+                for (
+                    let again = 0;
+                    outcome.ok &&
+                    session.hasUnsavedChanges &&
+                    again < MAX_EXTRA_FINAL_PUBLISHES;
+                    again++
+                )
+                    outcome = await session.flush(reason);
+                if (outcome.ok && session.hasUnsavedChanges)
+                    console.warn(
+                        "Edits kept coming while closing the show; they're kept for recovery",
+                    );
                 while (
                     !outcome.ok &&
                     outcome.state !== "closed" &&
