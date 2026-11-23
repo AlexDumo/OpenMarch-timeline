@@ -947,10 +947,15 @@ test("Paste mirrored opens the copy's mirror image across the 50, follows its pi
     await expect(page.getByTestId("shape-editor-flip-across")).toHaveCount(0);
     await expect(
         page.getByTestId("shape-editor-mirror-across"),
-    ).toHaveAttribute("data-state", "on");
+    ).toHaveAttribute("aria-checked", "true");
     // Each way's tooltip opens on keyboard focus too, not only on hover
     await page.getByTestId("shape-editor-mirror-deep").focus();
     await expect(page.getByRole("tooltip")).toContainText("level line");
+    // ...and describes the focused segment to a screen reader
+    await expect(
+        page.getByTestId("shape-editor-mirror-deep"),
+    ).toHaveAccessibleDescription(/level line/);
+    await blur(page);
     // Front to back mirrors it across the level line through the same point
     const point = overlay.mirror!.at;
     await page.getByTestId("shape-editor-mirror-deep").click();
@@ -973,6 +978,15 @@ test("Paste mirrored opens the copy's mirror image across the 50, follows its pi
         y: 2 * point.y - p.y,
     }));
     expect(sorted(overlay.spots)).toEqual(sorted(both));
+    // Clicking a way leaves the arrow keys on the mirror point
+    await page.keyboard.press("ArrowRight");
+    await expect
+        .poll(async () => (await shapeOverlay(page))!.mirror!.at.x)
+        .toBeCloseTo(point.x + S);
+    await page.keyboard.press("ArrowLeft");
+    await expect
+        .poll(async () => (await shapeOverlay(page))!.mirror!.at.x)
+        .toBeCloseTo(point.x);
 
     // A click on the field off the paste puts the point there
     const clickAt = { x: cf.x - 16 * S, y: point.y };

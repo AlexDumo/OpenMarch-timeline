@@ -3,7 +3,7 @@
 # Keep `id` stable: feedback is filed under it.
 id: paste-mirrored
 title: Paste a formation as its mirror image
-summary: Paste mirrored puts the copied formation's mirror image across a pink point you drag anywhere on the field, side to side, front to back or both.
+summary: Paste mirrored puts the copied formation's mirror image across a mirror point you place anywhere on the field (drag it, click or use the arrow keys), side to side, front to back or both. Flip also mirrors a selection about a moved pivot.
 status: open
 questions:
   - Was it clear how to move the mirror point (drag it, click the field, or the arrow keys), and that the paste follows it?

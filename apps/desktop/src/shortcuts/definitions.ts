@@ -881,9 +881,6 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: [],
     },
-    // The floating editor's turn and Recalculate (#429), for the open or selected shape only. While
-    // one is shown, Alt+F and Alt+Shift+F (flipHorizontal/flipVertical) flip the shape instead of
-    // the marchers (shapes/editor/ShapeEditorBar)
     // A mirrored paste's Mirror choice (Paste mirrored): which ways it mirrors through its point.
     // No keys: the flip keys switch each way
     mirrorSideToSide: {
@@ -910,6 +907,9 @@ const STATIC_ACTIONS = {
         defaultBindings: [],
         ignoreRepeat: true,
     },
+    // The floating editor's turn and Recalculate (#429), for the open or selected shape only. While
+    // one is shown, Alt+F and Alt+Shift+F (flipHorizontal/flipVertical) flip the shape instead of
+    // the marchers (shapes/editor/ShapeEditorBar)
     shapeQuarterTurn: {
         labelKey: "actions.shape.quarterTurn",
         keywordsKey: "actions.shape.keywords",

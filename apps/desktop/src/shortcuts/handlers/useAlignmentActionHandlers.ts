@@ -8,22 +8,43 @@ import { useActionHandler } from "../useActionHandler";
 import { useEditorReadiness } from "./useEditorReadiness";
 import { useUpdateCoordinates } from "./useUpdateCoordinates";
 
-// eslint-disable-next-line max-lines-per-function
 /**
  * What Flip mirrors the marchers at `pages` about: the selection's pivot when it was moved off the
  * center (the Arrange section's pivot grid, or dragged onto a marcher or a spot), worked out from
- * the positions being flipped; undefined for their own center
+ * the positions being flipped; undefined for their own center. A marcher outside the selection
+ * stays where the field draws it.
  */
 function pivotOf(
     pages: readonly { marcher_id: number; x: number; y: number }[],
 ): { x: number; y: number } | undefined {
-    const anchor = activeFieldEditor()?.selectionPivotAnchor();
+    const editor = activeFieldEditor();
+    const anchor = editor?.selectionPivotAnchor();
     const box = boundsOf(pages);
-    if (!anchor || !box) return undefined;
+    if (!editor || !anchor || !box) return undefined;
     const byId = new Map(pages.map((p) => [p.marcher_id, p]));
-    return anchorPoint(anchor, box, (id) => byId.get(id));
+    return anchorPoint(
+        anchor,
+        box,
+        (id) => byId.get(id) ?? editor.selectionPivot()?.at,
+    );
 }
 
+/**
+ * After a flip about a point of the selection's box (a pivot grid cell), the cell on the other
+ * side, which is where that point now is: so the pivot stays put on the field, and flipping again
+ * puts the marchers back rather than walking them across the field
+ */
+function keepPivotAfterFlip(axis: "across" | "deep"): void {
+    const editor = activeFieldEditor();
+    const anchor = editor?.selectionPivotAnchor();
+    if (!editor || anchor?.kind !== "box") return;
+    const swap: Record<string, string> =
+        axis === "across" ? { w: "e", e: "w" } : { n: "s", s: "n" };
+    const key = [...anchor.key].map((c) => swap[c] ?? c).join("");
+    if (key !== anchor.key) editor.setSelectionPivot(key as typeof anchor.key);
+}
+
+// eslint-disable-next-line max-lines-per-function
 export function useAlignmentActionHandlers() {
     const { t } = useTranslate();
     const {
@@ -157,6 +178,7 @@ export function useAlignmentActionHandlers() {
                 pivotOf(pages),
             );
             updateCoordinates(flippedCoords);
+            keepPivotAfterFlip("across");
         },
         forSelection,
     );
@@ -170,6 +192,7 @@ export function useAlignmentActionHandlers() {
                 pivotOf(pages),
             );
             updateCoordinates(flippedCoords);
+            keepPivotAfterFlip("deep");
         },
         forSelection,
     );

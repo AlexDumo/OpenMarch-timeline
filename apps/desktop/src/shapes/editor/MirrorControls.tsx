@@ -1,4 +1,5 @@
-import { memo, type ReactElement } from "react";
+import { cloneElement, memo, type ReactElement } from "react";
+import { keepFocus } from "./keepFocus";
 import { SegmentedTextSwitch } from "@openmarch/ui";
 import tolgee from "@/global/singletons/Tolgee";
 import { Tip } from "@/components/ui/Tip";
@@ -17,12 +18,6 @@ const ACTION: Record<MirrorWay, ActionId> = {
     across: "mirrorSideToSide",
     deep: "mirrorFrontToBack",
     both: "mirrorBoth",
-};
-
-/** The flip key that switches each way on and off, shown on its tooltip */
-const KEY: Partial<Record<MirrorWay, ActionId>> = {
-    across: "flipHorizontal",
-    deep: "flipVertical",
 };
 
 /**
@@ -98,11 +93,14 @@ export const MirrorControls = memo(function MirrorControls({
                 {text}
             </span>
         ),
-        // Around the segment, so its focus (which bubbles) opens it as hover does. A span between
-        // them keeps the tooltip's own open state off the segment's on state
+        // The segment itself is the tooltip's trigger: it opens on focus and describes the segment
+        // to screen readers. A press doesn't take the focus, so the arrow keys still move the
+        // mirror point after a click
         wrap: (item: ReactElement) => (
-            <Tip label={tip} action={KEY[way]}>
-                <span className="inline-flex">{item}</span>
+            <Tip label={tip}>
+                {cloneElement(item, {
+                    onPointerDown: keepFocus,
+                } as Partial<unknown>)}
             </Tip>
         ),
     });
