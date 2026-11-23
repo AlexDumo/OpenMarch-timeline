@@ -21,7 +21,7 @@ import {
 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { fieldFootprint, type FieldProperties } from "@openmarch/core";
+import { FieldProperties, fieldFootprint } from "@openmarch/core";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import {
     brandArtReady,
@@ -57,7 +57,34 @@ const FIELDS: Record<string, FieldProperties> = {
         FieldPropertiesTemplates.COLLEGE_FOOTBALL_FIELD_NO_END_ZONES,
     pro: FieldPropertiesTemplates.PRO_FOOTBALL_FIELD_WITH_END_ZONES,
     indoor: FieldPropertiesTemplates.INDOOR_50x80_8to5,
+    /** The pro field drawn 6 to 5: 30 in steps, yard lines 6 steps apart. */
+    pro6to5: sixToFive(
+        FieldPropertiesTemplates.PRO_FOOTBALL_FIELD_WITH_END_ZONES,
+    ),
 };
+
+function sixToFive(fp: FieldProperties): FieldProperties {
+    const k = 22.5 / 30;
+    const y = fp.yardNumberCoordinates;
+    return new FieldProperties({
+        ...fp,
+        stepSizeInches: 30,
+        xCheckpoints: fp.xCheckpoints.map((c) => ({
+            ...c,
+            stepsFromCenterFront: c.stepsFromCenterFront * k,
+        })),
+        yCheckpoints: fp.yCheckpoints.map((c) => ({
+            ...c,
+            stepsFromCenterFront: c.stepsFromCenterFront * k,
+        })),
+        yardNumberCoordinates: y && {
+            homeStepsFromFrontToOutside: y.homeStepsFromFrontToOutside * k,
+            homeStepsFromFrontToInside: y.homeStepsFromFrontToInside * k,
+            awayStepsFromFrontToInside: y.awayStepsFromFrontToInside * k,
+            awayStepsFromFrontToOutside: y.awayStepsFromFrontToOutside * k,
+        },
+    });
+}
 
 /** Which field a kit is shown on unless `field` is given. */
 const KIT_FIELD: Record<string, keyof typeof FIELDS> = {

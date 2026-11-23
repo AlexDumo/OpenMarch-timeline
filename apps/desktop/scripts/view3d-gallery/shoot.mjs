@@ -8,7 +8,7 @@
 // --gpu draws on the machine's GPU (ANGLE over EGL) instead of SwiftShader, the default where
 // `nvidia-smi` works; --software forces SwiftShader;
 // --bench N then also times N frames of each shot (ms per frame, in report.json).
-//     [--field football|footballNoEndZones|college|collegeNoEndZones|pro|indoor] [--image field.png]
+//     [--field football|footballNoEndZones|college|collegeNoEndZones|pro|pro6to5|indoor] [--image field.png]
 // poses.json: [{ "name": "x", "position": [x,y,z], "target": [x,y,z], "fov": 45, "near": 0.5 }]
 // Writes <out>/<kit>/<lighting>--<camera>.png, <out>/<kit>/sheet.png and <out>/report.json.
 import { execSync } from "node:child_process";

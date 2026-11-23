@@ -365,6 +365,30 @@ describe("turf on football fields", () => {
             expect(count(resized, "yardLine")).toBe(23);
         }
 
+        // 6 to 5 at a 30 in step (yard lines 6 steps apart) is still a
+        // 360 by 160 ft field, with or without the grid's end zones
+        const sixToFive = (fp: FieldProperties) =>
+            new FieldProperties({
+                ...fp,
+                stepSizeInches: 30,
+                xCheckpoints: fp.xCheckpoints.map((c) => ({
+                    ...c,
+                    stepsFromCenterFront: (c.stepsFromCenterFront * 3) / 4,
+                })),
+                yCheckpoints: fp.yCheckpoints.map((c) => ({
+                    ...c,
+                    stepsFromCenterFront: (c.stepsFromCenterFront * 3) / 4,
+                })),
+            });
+        for (const fp of [noEz, withEz]) {
+            const six = plan(sixToFive(fp), "turf");
+            expect(count(six, "endZone")).toBe(2);
+            expect(count(six, "yardLine")).toBe(23);
+            expect(six.footprint.maxX - six.footprint.minX).toBeCloseTo(
+                full.footprint.maxX - full.footprint.minX,
+            );
+        }
+
         // hidden end lines count as missing
         const hidden = plan(
             new FieldProperties({
