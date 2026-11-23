@@ -89,6 +89,8 @@ export function boxMembershipEdit({
                 positionOf,
             });
             let wrote = false;
+            // A member dragged by hand keeps an order set by hand (pathways step 4g)
+            const into = { tx, timelineId, keepOrderMarks: true };
             for (const box of boxes) {
                 const change = membershipAfter(box, moved);
                 if (change.type === "none") continue;
@@ -98,8 +100,7 @@ export function boxMembershipEdit({
                     members: readonly ShapeRecipeMember[],
                 ) =>
                     saveShapeRecipeInTransaction({
-                        tx,
-                        timelineId,
+                        ...into,
                         recipe: { ...box.recipe, params },
                         members,
                         replaces: own ? box.recipe.id : undefined,

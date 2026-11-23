@@ -9,11 +9,13 @@ import {
     scaleFor,
     scalePositions,
     snapRotation,
+    snapScaleDelta,
     turnBetween,
     type HandleId,
 } from "./groupTransform";
 import type { MarcherPosition, MoveGestureHost } from "./moveGesture";
-import { PRECISION_START, precisionDelta } from "./moveRules";
+import type { LinePull } from "./linePull";
+import { PRECISION_START, anchorAt, precisionDelta } from "./moveRules";
 import type { FieldRect } from "./selectionArea";
 
 /**
@@ -74,17 +76,18 @@ abstract class HandleGesture implements FieldGesture {
 
 /**
  * A corner scales each axis with the pointer and a middle handle scales one axis, and constrain
- * keeps the ratio; with the box shape's ratio lock on they keep it, and constrain frees it (a box's
- * corner gives equal spacings instead). Either scales from the center with from center. Nothing
- * snaps.
+ * keeps the ratio while it's held. A box shape's ratio lock is the box's own: a plain selection
+ * never reads it (#1037). Either scales from the center with from center. The dragged side lands
+ * on the field's lines or the coordinate rounding grid (#585); the Snap toggle off scales freely.
+ * An item's handles read the same roles but never snap (`itemTransform.ts`).
  */
-const scaleHonors = (ratioLocked: boolean): HonoredRoles => ({
+export const SCALE_HONORS: HonoredRoles = {
     context: "field",
     fine: "fine",
-    constrain: ratioLocked ? "freeRatio" : "keepRatio",
+    constrain: "keepRatio",
     fromCenter: "fromCenter",
-    snaps: false,
-});
+    snaps: true,
+};
 
 /** A rotate handle reads fine (whole degrees, at full speed) and snaps to 15°; constrain does nothing */
 export const ROTATE_HONORS: HonoredRoles = {
@@ -93,10 +96,18 @@ export const ROTATE_HONORS: HonoredRoles = {
     snaps: true,
 };
 
-/** A corner or middle handle: scales the selection from the opposite side, or from its center. */
+/**
+ * A corner or middle handle: scales the selection from the opposite side, or from its center.
+ * The dragged side lands on one of the field's lines within reach, or else on the coordinate
+ * rounding grid (`snapScaleDelta`, #585), as a moved selection does. Fine leaves the grid but
+ * still lands on lines; the Snap toggle off scales freely.
+ */
 export class ScaleGesture extends HandleGesture {
     readonly kind: FieldTestGesture = "scale";
     private track = PRECISION_START;
+    private fine = false;
+    /** The delta drawn at the last event, snapped or not. */
+    private drawn: FieldPoint = { x: 0, y: 0 };
 
     constructor(
         origin: FieldPointer,
@@ -106,29 +117,47 @@ export class ScaleGesture extends HandleGesture {
         /** The marchers' bounds at the press. */
         private readonly box: FieldRect,
         keys: FieldKeys,
-        /** The ratio lock a box shape shares, at the press: on, keeping the ratio is the default. */
-        private readonly ratioLocked = false,
+        /** A point snapped as a marcher's coordinates are; nothing snaps when omitted. */
+        private readonly snapPoint: (point: FieldPoint) => FieldPoint = (p) =>
+            p,
+        /** The Snap toggle, read on every event; on when omitted. */
+        private readonly snap: () => boolean = () => true,
+        /** The field's lines the side lands on, read on every event; none when omitted. */
+        private readonly pull: () => LinePull | null = () => null,
     ) {
-        super(origin, starts, host, keys, scaleHonors(ratioLocked));
+        super(origin, starts, host, keys, SCALE_HONORS);
     }
 
     protected positionsAt(at: FieldPoint, roles: Roles) {
-        // Nothing snaps, so fine needs no re-anchoring: the slow drag goes on
-        // from wherever the pointer had taken the marchers
+        // Fine on: the slow drag starts from where the side is drawn, on the grid
+        if (roles.fine && !this.fine)
+            this.track = anchorAt(this.track, this.drawn);
+        this.fine = roles.fine;
         const moved = precisionDelta(
             this.track,
             { x: at.x - this.origin.field.x, y: at.y - this.origin.field.y },
             roles.fine,
         );
         this.track = moved.track;
-        // Constrain flips the ratio lock for the drag, as on a box shape: one idea, not two
+        // Fine leaves the grid but still lands on lines, as a box shape's handles do (owner on #453)
+        this.drawn = this.snap()
+            ? snapScaleDelta(
+                  this.handle,
+                  this.box,
+                  moved.delta,
+                  roles.constrain,
+                  roles.fromCenter,
+                  roles.fine ? (point) => point : this.snapPoint,
+                  this.pull(),
+              )
+            : moved.delta;
         return scalePositions(
             this.starts,
             scaleFor(
                 this.handle,
                 this.box,
-                moved.delta,
-                this.ratioLocked !== roles.constrain,
+                this.drawn,
+                roles.constrain,
                 roles.fromCenter,
             ),
         );

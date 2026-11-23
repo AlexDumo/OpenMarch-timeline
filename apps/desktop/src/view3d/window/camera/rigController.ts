@@ -24,7 +24,7 @@ import {
     type Spherical,
     type Tween,
 } from "./rigMath";
-import { damp, zoomAbout, zoomRatioLimits } from "./inputMath";
+import { damp, targetOnGround, zoomAbout, zoomRatioLimits } from "./inputMath";
 
 /** A wheel zoom eases in with this half-life (ms): quick, but not a jump. */
 export const ZOOM_HALF_LIFE_MS = 45;
@@ -93,6 +93,7 @@ export class RigController {
     jumpTo(position: Vector3Tuple, target: Vector3Tuple, fovDeg?: number) {
         this.active = null;
         this.stopMotion();
+        this.dropZoom();
         this.setPose(position, target);
         if (fovDeg !== undefined) this.setFov(fovDeg);
         this.apply();
@@ -101,6 +102,7 @@ export class RigController {
     /** Starts a fly-to from wherever the camera is now. */
     flyTo(position: Vector3Tuple, target: Vector3Tuple, options: FlyOptions) {
         this.stopMotion();
+        this.dropZoom();
         const p = this.camera.position;
         const fromFov = this.fov();
         this.active = {
@@ -229,6 +231,12 @@ export class RigController {
         this.samples = [];
     }
 
+    /** Drops a scroll zoom still easing in, so it can't pull a placed pose away. */
+    private dropZoom() {
+        this.pendingZoom = 0;
+        this.zoomAnchor = null;
+    }
+
     /**
      * Grab pan: the ground point that was under the pointer (`from`) moves
      * to where the pointer is now (`to`) by moving the target the other way.
@@ -249,6 +257,52 @@ export class RigController {
             z = focus[2] + (oz / d) * MAX_PAN;
         }
         this.target = [x, this.target[1], z];
+        return true;
+    }
+
+    /**
+     * Moves the whole view by (dx, dy, dz): the orbit target and the camera,
+     * and a fly-to's start and end, so the view keeps up with a performer it
+     * follows, in flight too. Places the camera now.
+     */
+    shift(dx: number, dy: number, dz: number) {
+        if (dx === 0 && dy === 0 && dz === 0) return;
+        const add = (v: Vector3Tuple) => {
+            v[0] += dx;
+            v[1] += dy;
+            v[2] += dz;
+        };
+        add(this.target);
+        const a = this.active;
+        if (a) {
+            add(a.tween.fromPosition);
+            add(a.tween.toPosition);
+            add(a.tween.fromTarget);
+            add(a.tween.toTarget);
+            add(a.currentTarget);
+            this.camera.position.x += dx;
+            this.camera.position.y += dy;
+            this.camera.position.z += dz;
+            this.camera.updateMatrixWorld();
+            return;
+        }
+        // Stepping down off a platform can take a low orbit under the ground.
+        if (this.eyeY() < MIN_EYE_Y)
+            this.spherical.phi = Math.min(
+                this.spherical.phi,
+                maxPhiAboveGround(this.spherical.radius, this.target[1]),
+            );
+        this.apply();
+    }
+
+    /**
+     * Turns the orbit about its target by `radians` (positive toward +X from
+     * +Z), as a chase camera follows its subject round. Not while flying.
+     */
+    turn(radians: number): boolean {
+        if (this.active || radians === 0) return false;
+        this.spherical.theta += radians;
+        this.apply();
         return true;
     }
 
@@ -322,6 +376,12 @@ export class RigController {
      * CAD tools zoom: the view keeps its angle and the point stays where it
      * is on screen, the zoom stopping `MIN_ZOOM_DISTANCE` short of it, with
      * the eye above the ground and within `MAX_RADIUS` of the target.
+     *
+     * Zooming out about a point above the target (a marcher, a seat) lowers
+     * the target: it slides back up the line of sight to the ground, which
+     * doesn't change the view, unless that would bring it nearer than before. About a point above the eye, it lowers the
+     * eye too: once the eye would reach `MIN_EYE_Y`, the rest of the zoom
+     * goes straight back from the target.
      */
     private zoomBy(ratio: number, point: Vector3Tuple | null) {
         if (!point) {
@@ -335,9 +395,23 @@ export class RigController {
             maxRadius: MAX_RADIUS,
         });
         const k = Math.min(hi, Math.max(lo, ratio));
-        if (k === 1) return;
-        const next = zoomAbout(position, this.target, point, k);
-        this.setPose(next.position, next.target);
+        if (k !== 1) {
+            const next = zoomAbout(position, this.target, point, k);
+            const lifted = targetOnGround(next.position, next.target);
+            // Seen at a shallow angle, the ground meets the line of sight
+            // close to the eye: keep the sunken target rather than pull the
+            // orbit center in.
+            const lift =
+                k > 1 &&
+                Math.hypot(
+                    lifted[0] - next.position[0],
+                    lifted[1] - next.position[1],
+                    lifted[2] - next.position[2],
+                ) >= this.spherical.radius;
+            this.setPose(next.position, lift ? lifted : next.target);
+        }
+        if (ratio > k && k >= 1)
+            this.setRadius(clampRadius(this.spherical.radius * (ratio / k)));
     }
 
     private setRadius(radius: number) {

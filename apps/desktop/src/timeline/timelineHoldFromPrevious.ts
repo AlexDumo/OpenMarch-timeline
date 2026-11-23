@@ -71,7 +71,7 @@ const SKIP_WORDS: Record<
 
 /**
  * What the toast after **Hold from last keyframe** says: who is Held now, and who wasn't and why,
- * or null when it has nothing to say.
+ * or null when it has nothing to say (everyone held, on just the page asked for).
  */
 export function holdFromPreviousMessage(
     result: HoldFromPreviousResult,
@@ -105,7 +105,12 @@ export function holdFromPreviousMessage(
             }),
         );
     });
-    if (result.held.length === 0 && reasons.length === 0) return null;
+    // Everyone held on just this page: the field shows it, so there is nothing to say. A hold
+    // that reached back over earlier pages is worth naming, and so are marchers held that weren't
+    // selected (the rest of a shape)
+    const reachedBack = (result.pagesCovered?.length ?? 0) > 1;
+    if (reasons.length === 0 && !reachedBack && !result.alsoHeld?.length)
+        return null;
     const pagesHeld = result.pagesCovered
         ? pagesText(result.pagesCovered)
         : page;
@@ -152,7 +157,13 @@ export async function holdFromPreviousOn(
             marcherIds,
         });
     } catch (error) {
-        toastTimelineError(error, "Error holding marchers");
+        toastTimelineError(
+            error,
+            tolgee.t(
+                "timeline.holdFromPrevious.holdError",
+                "Couldn't hold the marchers",
+            ),
+        );
         return NOTHING;
     }
 }

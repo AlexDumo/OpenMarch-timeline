@@ -224,13 +224,32 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
             from: screen(h.from),
         })),
         rings: (drawing.rings ?? []).map(copy),
+        lanes: (drawing.lanes ?? []).length,
+        laneLines: (drawing.lanes ?? []).map((lane) => lane.map(screen)),
+        adjustHandles: (drawing.adjustHandles ?? []).map((h) => screen(h.at)),
+        memberRings: (drawing.memberRings ?? []).map((r) => ({
+            at: copy(r.at),
+            kind: r.kind,
+            label: r.label,
+        })),
         gaps: (drawing.gaps ?? []).map(copy),
+        emptySpots: (drawing.emptySpots ?? []).map(copy),
         construction: constructionOf(drawing, copy),
         stage: drawing.stage ?? null,
         knob: drawing.knob ? screen(drawing.knob.at) : null,
         centerDot: drawing.centerDot ? screen(drawing.centerDot) : null,
         pivotMark: drawing.pivotMark ? screen(drawing.pivotMark) : null,
         pivotPreview: drawing.pivotPreview ? copy(drawing.pivotPreview) : null,
+        mirror: drawing.mirror
+            ? {
+                  at: copy(drawing.mirror.at),
+                  screen: screen(drawing.mirror.at),
+                  across: drawing.mirror.across,
+                  deep: drawing.mirror.deep,
+                  acrossLabel: drawing.mirror.acrossLabel ?? null,
+                  deepLabel: drawing.mirror.deepLabel ?? null,
+              }
+            : null,
         labels: (drawing.labels ?? []).map((l) => l.text),
         tip: drawing.tip?.text ?? null,
         gliding: drawing.gliding === true,
@@ -293,19 +312,34 @@ function itemsOnScreen(field: ThreeFieldState): FieldTestItem[] {
     const view = field.view();
     return field.items
         .outlines()
-        .map(({ id, center, geometry }): FieldTestItem => {
-            const at = fieldToElement(view, center.x, center.y);
-            return {
+        .map(
+            ({
                 id,
-                outlineType: geometry.outlineType,
-                width: geometry.width,
-                depth: geometry.depth,
-                rotation: geometry.rotation,
-                x: center.x,
-                y: center.y,
-                screen: { x: rect.x + at.x, y: rect.y + at.y },
-            };
-        })
+                center,
+                geometry,
+                locked,
+                playingSpot,
+                plan,
+            }): FieldTestItem => {
+                const at = fieldToElement(view, center.x, center.y);
+                return {
+                    id,
+                    outlineType: geometry.outlineType,
+                    width: geometry.width,
+                    depth: geometry.depth,
+                    rotation: geometry.rotation,
+                    x: center.x,
+                    y: center.y,
+                    screen: { x: rect.x + at.x, y: rect.y + at.y },
+                    locked,
+                    playingSpot: playingSpot && {
+                        x: playingSpot.x,
+                        y: playingSpot.y,
+                    },
+                    drawnAsModel: plan !== null,
+                };
+            },
+        )
         .sort((a, b) => a.id - b.id);
 }
 

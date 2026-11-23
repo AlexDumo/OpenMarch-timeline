@@ -9,6 +9,7 @@ import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import { toolEnvFor } from "../tool/toolEnv";
 import type { BoxLeave } from "./boxMembership";
+import { nameOf } from "./leftOutToast";
 import { closeUp, isPlacedBox, resplit, type BoxRecipe } from "./placedBox";
 import { closedOf } from "../distribute/modes";
 import { oneMoveForShape } from "../tool/shapePlacement";
@@ -26,14 +27,6 @@ export type BoxRewrite = (
         written: readonly number[],
     ) => Promise<void | boolean>,
 ) => Promise<unknown>;
-
-/** A marcher's drill number, else its id */
-function nameOf(marcherId: number): string {
-    const m = currentShapeField()
-        ?.marchers()
-        .find((marcher) => marcher.id === marcherId);
-    return m?.drill_number ?? `#${marcherId}`;
-}
 
 /** The box's remaining members filled in again by `fill`, as one edit */
 async function refill(
@@ -65,6 +58,7 @@ async function refill(
             })),
             async (tx, timelineId, written) => {
                 if (inThisMove(written).length === 0) return false;
+                // No keepOrderMarks: Close up and Re-split lay the shape out again, so it redefines the line's order there, as any later shape does (pathways step 4g)
                 await saveShapeRecipeInTransaction({
                     tx,
                     timelineId,
@@ -80,7 +74,7 @@ async function refill(
     } catch (e) {
         toastTimelineError(
             e,
-            tolgee.t("shapes.placed.fillError", "Error filling the shape"),
+            tolgee.t("shapes.placed.fillError", "Couldn't fill the shape"),
         );
     }
 }

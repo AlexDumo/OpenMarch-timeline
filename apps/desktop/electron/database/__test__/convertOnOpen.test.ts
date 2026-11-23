@@ -62,6 +62,7 @@ import {
     stateOf,
     withDb,
 } from "./convertOnOpenFixtures";
+import { rollBackRoutesSchema } from "./migrationRollback";
 
 /** Where the backup and conversion run: on this thread, or in the app's worker (P9.8). */
 type Mode = "in-thread" | "worker";
@@ -108,6 +109,17 @@ interface TestHooks {
 }
 
 const CONVERTED_AT = "2026-10-01T12:00:00.000Z";
+/** Tables the fork's migrations after the timeline-only one (0018) add, each with undo triggers. */
+const TABLES_AFTER_0018 = [
+    "view3d_silk_artwork",
+    "cues",
+    "cue_marchers",
+] as const;
+/** Tables they add outside the undo history, with no triggers: the show asset store (fork #997). */
+const TABLES_AFTER_0018_WITHOUT_HISTORY = [
+    "show_asset_blobs",
+    "show_assets",
+] as const;
 const fixedNow = () => new Date(CONVERTED_AT);
 
 /** The file's hash just before the convert-on-open step. */
@@ -288,8 +300,8 @@ describe.each(["in-thread", "worker"] as const)("convert on open (%s)", (m) => {
         expect(after.marcherPages).toBeNull();
         expect(after.pageEraTables).toEqual([]);
         // Not an undoable edit; no stale history or change-log rows; the undo triggers of the
-        // tables that are left are kept. The timeline-only migration only drops tables (ADR 0011),
-        // so no table is new.
+        // tables that are left are kept. The timeline-only migration only drops tables (ADR 0011);
+        // the only new tables are those of the fork migrations after it, which have undo triggers.
         expect(after.history).toEqual([]);
         expect(after.historyStats).toMatchObject({
             cur_undo_group: 1,
@@ -325,7 +337,25 @@ describe.each(["in-thread", "worker"] as const)("convert on open (%s)", (m) => {
                 .filter((t) => !tablesBefore.includes(t.tbl_name))
                 .map((t) => t.name),
         );
-        expect(onNewTables).toEqual([]);
+        const newTables = withDb(showPath, (db) =>
+            (
+                db
+                    .prepare(
+                        "SELECT name FROM sqlite_master WHERE type = 'table'",
+                    )
+                    .all() as { name: string }[]
+            )
+                .map((t) => t.name)
+                .filter((name) => !tablesBefore.includes(name)),
+        );
+        expect(newTables.sort()).toEqual(
+            [...TABLES_AFTER_0018, ...TABLES_AFTER_0018_WITHOUT_HISTORY].sort(),
+        );
+        expect(onNewTables.sort()).toEqual(
+            TABLES_AFTER_0018.flatMap((table) =>
+                ["dt", "it", "ut"].map((op) => `${table}_${op}`),
+            ).sort(),
+        );
         expect(after.triggers).toEqual(
             [
                 ...before.triggers.filter((t) => !onPageEraTables.includes(t)),
@@ -615,9 +645,14 @@ describe.each(["in-thread", "worker"] as const)("convert on open (%s)", (m) => {
     );
 
     it("rolls back the page-era migrations too: a file missing one keeps its old schema when the conversion fails", async () => {
-        // A file an older release wrote before `0019_gray_brood` (the 3D View venue table).
+        // A file an older build wrote before the 3D View venue table, missing its newest
+        // migration. This build's open also rebuilt `timeline_transitions` for routes (unrecorded,
+        // `CONVERTER_SCHEMA_MIGRATION_TAGS`), which an older build never did: undo that too, or
+        // the legacy fork repair this file now needs refuses a table 0017 doesn't make.
         withDb(showPath, (db) => {
             db.exec("DROP TABLE view3d_venue");
+            db.exec("PRAGMA foreign_keys = OFF");
+            rollBackRoutesSchema(db);
             db.exec(
                 `DELETE FROM __drizzle_migrations WHERE created_at = (SELECT max(created_at) FROM __drizzle_migrations)`,
             );

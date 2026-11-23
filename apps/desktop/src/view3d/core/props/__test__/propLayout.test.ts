@@ -6,6 +6,7 @@ import {
     type PropInput,
     type PropSolid,
 } from "../propLayout";
+import { liftPlatforms, liftPodiums } from "../platformLift";
 
 const box = (
     beat: number,
@@ -197,6 +198,53 @@ describe("propsAt", () => {
         );
         expect(solids.get(3)!.base).toBe(0);
         expect(solids.get(7)!.base).toBeCloseTo(0.2);
+    });
+
+    it("stands a podium at its standing height, whatever its Outline's height", () => {
+        const podium: PropInput = {
+            ...prop(1, "platform", [box(0, 1.2, 1.5, 0)]),
+            standTop: 1.386,
+            facesAcross: true,
+        };
+        const [solid] = propsAt([podium], 0, at({ 1: { x: 0, z: 0 } }));
+        expect(solid!.height).toBe(1.386);
+        expect(solid!.facesAcross).toBe(true);
+        expect(platformTopAt([solid!], { x: 0.2, z: 0.2 })).toBe(1.386);
+        // Performers stand on it at its stand point (`writePodiumStands`), not up a ramp
+        expect(liftPlatforms([solid!])).toEqual([]);
+        expect(liftPodiums([solid!])[0]!.top).toBe(1.386);
+    });
+
+    it("turns a podium's stand point with it, as its model turns", () => {
+        const podium: PropInput = {
+            ...prop(1, "platform", [box(0, 0.61, 0.97, 0, { rotation: 90 })]),
+            standTop: 1.2192,
+            facesAcross: true,
+            standAt: { x: 0.1, z: 0.2 },
+        };
+        const [solid] = propsAt([podium], 0, at({ 1: { x: 3, z: -2 } }));
+        // writePitModelMatrix at 90°: model +X toward world +Z, model +Z toward world -X
+        expect(solid!.standPoint!.x).toBeCloseTo(3 - 0.2);
+        expect(solid!.standPoint!.z).toBeCloseTo(-2 + 0.1);
+        const [plain] = propsAt(
+            [prop(2, "platform", [box(0, 1, 1, 0.2)])],
+            0,
+            at({ 2: { x: 0, z: 0 } }),
+        );
+        expect(plain!.standPoint).toBeUndefined();
+    });
+
+    it("stands an imported Platform prop at its model's top, scaled with the model", () => {
+        // A 2 × 1 m model whose top over its middle is 0.5 m, drawn at twice its size
+        const stage: PropInput = {
+            ...prop(1, "platform", [box(0, 4, 2, 1.6)]),
+            standTop: 0.5,
+            modelSizeM: { width: 2, depth: 1 },
+        };
+        const [solid] = propsAt([stage], 0, at({ 1: { x: 0, z: 0 } }));
+        expect(solid!.height).toBeCloseTo(1);
+        expect(platformTopAt([solid!], { x: 0.2, z: 0.2 })).toBeCloseTo(1);
+        expect(solid!.facesAcross).toBeUndefined();
     });
 
     it("never stands a prop on an obstacle or a Floor prop", () => {

@@ -71,6 +71,9 @@ phases [26.24].
   after reopening must find the item it used. While a cue uses a
   Library item, the show's copy can't be deleted; deleting it offers "Replace with…" and lists
   the uses [26.10].
+  Amended 2026-11-15 (ADR 0010, fork #996): replaced by one show asset
+  store for any kind, never pruned automatically, with a "Remove unused…"
+  note in Show checks.
 - The item table loads at open; blobs are read lazily by hash for the current
   or a nearby moment, with a small in-memory cache. Rendering never reads
   originals.
@@ -95,6 +98,18 @@ phases [26.24].
   renderer's CSP) and stores a plain normalized GLB plus an OpenMarch
   sidecar. The 3D View keeps loading with bare `GLTFLoader` (three 0.186.1,
   no decoders).
+  Amended 2026-11-15 (ADR 0010, fork #996) and built in fork #998: the model
+  import runs in a renderer Web Worker shared by desktop and web
+  (`src/showAssets/modelImport/`), with its own CSP. It refuses before
+  decoding what can't work (picked files over 200 MB, a URI outside the
+  picked files, a required extension outside the allow-list, an image over
+  8192 px on an edge, more than 4× the triangle cap), then the validator's
+  errors; normalizes to meters, +Y up, the front toward +Z and the pivot at
+  the bottom center; simplifies past the cap; shrinks textures; and stores a
+  model, a distant version and a thumbnail, with the sidecar (real size,
+  facing, the plan from above, stand point, triangles, import notes) and
+  credits prefilled from `KHR_xmp_json_ld`, `asset.copyright` or a
+  Sketchfab-style `asset.extras`.
 - Steps: `gltf-validator` (errors block); reject `extensionsRequired` outside
   the allow-list (r186 `GLTFLoader` only warns); decode Draco and meshopt;
   measure bounds, triangles, texture sizes and joints; read `OM_*` nodes and
@@ -125,6 +140,25 @@ phases [26.24].
   "Models and artwork" (selected), "3D model (glb, gltf)", "Artwork (png,
   jpg, svg, pdf)" and "All Files".
   Drag-and-drop comes later [11].
+  As built in fork #999: the Props panel's Imported group has an **Import…**
+  tile (the `importModel` action), and dropping a `.glb` or `.gltf` with its
+  files on the editor starts an import too. Files are read in the page and
+  passed to the import worker as bytes. The review is a view of the Props panel
+  with the model's picture and a one-click turn, its size with the file's unit,
+  the three groups and the license fields; Add stores the model and lists it
+  under Imported, and its tile places it as a prop (`placeImportedModel`).
+  Since #1084 the turn is one of three buttons, **Rotate X**, **Rotate Y**
+  and **Rotate Z** (owner, 2026-11-17: an imported car lay on its side, and a
+  long model is never guessed Z-up). Y is the turn; X and Z tip the model a
+  quarter turn as the picture shows it, whatever the turn, so the three reach
+  all 24 ways a box can sit (`orientation.ts`; the choice is the `tilt`,
+  applied before the turn). A small X/Y/Z drawing in the picture's corner,
+  drawn from the picture's own viewpoint, lights the button's axis and shows
+  which way it swings while the button is pointed at, focused or just tapped.
+  Since #1200 (owner, 2026-11-23) nothing is guessed: glTF is Y-up by its
+  spec, and a car facing glTF's +Z front is longest along Z, so the Z-up
+  guess stood correct cars on their nose. A model comes in as the file has
+  it, and the "Stand it up" check and the Needs your choice group are gone.
 - **Kind** (Prop, Equipment, Garment, Floor prop, Base floor): a picker sets
   it; a plain Library import asks for it as a required choice, pre-selected
   only from the Starter kit stamp, never from a guess. Size range, caps and
@@ -225,8 +259,8 @@ phases [26.24].
   checks; "Export for OpenMarch" (GLB, Y-up, custom properties on, modifiers
   applied, no quantization on skinned meshes, no Draco).
 - The uniform section (seven v4u bodies, v4 rig, `_PART` palette, an example
-  garment with all seven fits) derives from upstream om-pose and waits for the
-  legal gate (section 10).
+  garment with all seven fits) derives from upstream om-pose and waits for
+  om-pose to adopt a license upstream (section 10).
 - Bundled in the app (Help ‣ Get the Blender starter kit saves a zip) and
   mirrored on the website; extensions.blender.org later. The importer notes an
   outdated `kitVersion`. The minimum Blender is the LTS om-pose exports with
@@ -322,15 +356,37 @@ aliases, never shown as labels [owner, 2026-10-12, Q39–Q41, Q44].
 - Resizing only along declared stretch zones, or by an explicit uniform scale
   with a badge. A pole with a stretch zone along it fits every catalog length.
 - Triangles over the per-kind cap: flagged with one-click simplify and a
-  before/after preview. Over 4× the cap: rejected. Provisional caps:
+  before/after preview. Over 4× the cap: rejected. Since fork #1091
+  (owner, 2026-11-18) imported prop models aren't rejected for triangles
+  below a 5M sanity ceiling: the review offers **Light** (the 20k cap,
+  pre-selected), **Detailed** (100k, past 100k) and **Original**, says what
+  each adds to the show and how many performers one copy draws like, and
+  compares them in a 3D view you can turn. Above Light the show also stores a
+  Light copy (`parts.light`); the 3D View's automatic fallback draws those
+  copies first, then lowers the scene's quality. Provisional caps:
   Equipment 2k, Garment 3k per body type, Prop 20k, Base floor 5k, Floor
   prop 5k. Garment textures cap at 1024; Uniform part artwork caps at 1024
   on the long edge [owner, 2026-10-11, Q34, Q37].
+- **Texture caps per kind** (fork #998), longest edge, kept in each
+  texture's own format (PNG keeps its alpha): imported prop models 1024, and
+  256 in their distant version (at most 2,000 triangles and a quarter of the
+  model's, drawn beyond about 30 m). Equipment, Garments and prop Artwork
+  slots 1024; Floor props and Base floors 2048 (D-19). KTX2 textures aren't
+  imported: a file that requires them is refused, and an optional one is
+  dropped. Draco and meshopt input is decoded, never stored.
+- **As built in fork #1000:** an imported model draws at one factor of its
+  real size, the one that keeps its Outline's footprint area, so a prop
+  stretched one way grows evenly instead of distorting. Since fork #1078 the
+  handles and the Edit Prop fields resize it evenly too, so the stored size
+  stays the model's proportions. Stretch zones and a scale badge are still to
+  come. The distant version switches in beyond about
+  38 m and back inside 30 m, as the built-in equipment does.
 - A missing `OM_grip_R` pre-selects a grip a quarter of the way along the
   longest side; grips live in the sidecar, never re-centering the model. A
-  model is guessed Z-up when Z is its largest side and over 1.25× Y (floors
-  get the rotation offered but unchecked). A Garment with any unrigged mesh
-  is rejected [Q37].
+  model was guessed Z-up when Z was its largest side and over 1.25× Y; since
+  #1200 (owner, 2026-11-23) there is no guess, and Rotate X, Y and Z cover a
+  file that lies on a side. A Garment with any unrigged mesh is rejected
+  [Q37].
 
 ## 4. Items and Placement
 
@@ -466,8 +522,12 @@ deletes the change. It joins undo history and repair like the cue tables.
   wins, eases in over the transition, beat delete cascades; in history and
   repair.
 - A footprint is **width** and **depth**; vertical size is **height**.
-- Independent of moves: a resize never needs a move, and dragging a move
-  doesn't carry its resizes.
+- Independent of moves: an Outline change is stored apart from the moves,
+  and dragging a move doesn't carry its resizes. On the field, a handle resizes as the selection
+  box scales marchers: the opposite side stays put, so the item's center moves
+  and is saved as a drop of it, in the same undo step as the Outline change.
+  With from center (Alt) the center stays and nothing moves; constrain ($mod)
+  keeps the proportions (owner, 2026-11-22).
 - Edited on Visuals mode's Items tab. A drag of an Outline in the 2D editor
   writes a geometry change at the playhead's count, the same data [26.7].
 - **Floor props** get a **rolls out** flag: as the Outline grows over a
@@ -762,11 +822,10 @@ Research basis [14]; policy [16]. Not legal advice.
   Starter kit, om-pose assets) and the per-item `license` field. `SOURCE.json`
   and the om-pose vendor README stop saying "the app's license".
 - **om-pose assets** (correction to ADR 0010 D-7) [16, 26.6]: they don't ship
-  under the app's license. The clips, derived from 2019 Cadets footage, are in
-  the counsel gate: no release that ships them goes out before counsel
-  answers lawyer Q3. The reference bodies and v4 skeleton become CC0 once Q3
-  is answered and om-pose adopts a license upstream (meshes only); `body-v5`
-  (MPFB) sits under the same gate.
+  under the app's license. The om-pose clips, derived from 2019 Cadets
+  footage, stay in the counsel gate: no release that ships them goes out
+  before counsel answers Q3. The reference bodies and v4 skeleton become CC0
+  once om-pose adopts a license upstream (meshes only).
 - **Third-party built-ins:** CC0, or CC-BY 4.0 with a complete attribution
   record. Not BY-SA, NC, ND or store licenses. Each has a manifest entry (SPDX
   license, author, source URL, attribution text, retrieval date) checked in
@@ -794,11 +853,11 @@ Research basis [14]; policy [16]. Not legal advice.
     never "infringing".
   - "Add to my Library" from another show shows a read-only license line with
     the source link.
-- **Legal gate:** nothing built-in ships until counsel answers lawyer Q1 (CC0
-  art beside AGPL code; whether the CLA covers relicensing contributed
-  assets), Q3 (om-pose clips), Q4 (GPL vs AGPL `LICENSE` text) and Q5 (Terms
-  §9.1's reach). The `LICENSE` mismatch and a Terms §9.1 carve-out ship as
-  their own small change, outside this effort, once Q4 and Q5 are answered.
+- **No legal gate for built-ins** (owner, 2026-11-11): built-ins and the
+  Starter kit ship without waiting for counsel. Only the om-pose clips keep
+  their hold (Q3, above). The other lawyer questions (Q1, Q4, Q5 in [16])
+  are taken up later. The `LICENSE` mismatch and a
+  Terms §9.1 carve-out ship as their own small change, outside this effort.
 
 ## 11. Notes
 

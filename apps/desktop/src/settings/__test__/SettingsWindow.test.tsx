@@ -48,7 +48,7 @@ const renderWindow = () =>
     );
 
 describe("SettingsWindow", () => {
-    it("lists the eleven sections in order", () => {
+    it("lists the ten sections in order", () => {
         expect(SETTINGS_SECTIONS.map((section) => section.id)).toEqual([
             "general",
             "appearance",
@@ -56,7 +56,6 @@ describe("SettingsWindow", () => {
             "mouse",
             "timeline",
             "field",
-            "view3d",
             "shortcuts",
             "privacy",
             "developer",
@@ -72,7 +71,10 @@ describe("SettingsWindow", () => {
 
     it("keeps the language in General and the theme in Appearance", async () => {
         renderWindow();
-        expect(await screen.findByRole("combobox")).toBeVisible();
+        // The language picker; General also has the window "Open on" menus
+        expect(
+            await screen.findByRole("combobox", { name: "English" }),
+        ).toBeVisible();
         expect(screen.queryByRole("radio", { name: "Light" })).toBeNull();
 
         const nav = screen.getByRole("navigation");

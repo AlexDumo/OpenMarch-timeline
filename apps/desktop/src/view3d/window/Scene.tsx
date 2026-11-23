@@ -8,7 +8,9 @@
  * uses, and is removed and disposed when those inputs change:
  *
  * - environment: quality;
- * - kit: kit id, field footprint, venue params, quality;
+ * - kit: kit id, field footprint, venue params, quality, and whether the
+ *   show has its own podium item in front of the field (which hides the
+ *   venue's);
  * - field surface: field properties, the kit's surface style, venue params,
  *   field image, renderer limits;
  * - crowd: kit, crowd toggle, team colors, quality;
@@ -20,8 +22,9 @@
  *
  * What it built is published in `useView3dSceneStore` (`sceneStore.ts`) for
  * the camera rig and the overlay. The camera rig (`camera/CameraRig.tsx`,
- * P3.2) places and moves the camera. Performers (`performers/`) and props
- * (`props/PropBlocks.tsx`) follow the editor's playback.
+ * P3.2) places and moves the camera. Performers (`performers/`), props
+ * (`props/PropBlocks.tsx`) and items with a built-in model
+ * (`props/PitModels.tsx`) follow the editor's playback.
  */
 // cspell:ignore frameloop
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -30,7 +33,11 @@ import DrawWhenNeeded from "./DrawWhenNeeded";
 import { requestDraw } from "./drawWake";
 import { frameCapped } from "./drawPolicy";
 import { useQuery } from "@tanstack/react-query";
-import type { FieldProperties } from "@openmarch/core";
+import {
+    fieldFootprint,
+    pixelsToWorld,
+    type FieldProperties,
+} from "@openmarch/core";
 import {
     ACESFilmicToneMapping,
     PCFShadowMap,
@@ -71,11 +78,18 @@ import { useFieldImage } from "./useFieldImage";
 import {
     FALLBACK_LOG_MESSAGE,
     createQualityFallbackState,
+    fallbackStep,
+    LIGHTEN_LOG_MESSAGE,
     stepQualityFallback,
 } from "./qualityFallback";
 import Performers from "./performers/Performers";
 import PropBlocks from "./props/PropBlocks";
+import PitModels from "./props/PitModels";
 import { warmLightingPresets } from "./warmLighting";
+import { allItemsQueryOptions } from "@/hooks/queries/useItems";
+import { allMarcherRowsQueryOptions } from "@/hooks/queries/useMarchers";
+import { hidesVenuePodium } from "@/view3d/core/pit/pitModels";
+import { useView3dSyncStore } from "@/view3d/sync/view3dSyncStore";
 import { maxPixelRatio } from "./renderPrefs";
 
 /** Default vertical field of view, as in the reference demo. */
@@ -251,10 +265,43 @@ function SceneContents({
         useView3dSceneStore.getState()._setSavedCameras(savedCameras);
     }, [savedCameras]);
 
-    // Kit: rebuilt only for a new kit id, footprint, params or quality.
+    // The venue's own podium, which stands in front of the field, hides when
+    // the show has a podium item there (instruments.md §6). Equipment is
+    // locked, so its home is where it stands.
+    const { data: items } = useQuery(allItemsQueryOptions());
+    const { data: rows } = useQuery(allMarcherRowsQueryOptions());
+    const hiddenItemIds = useView3dSyncStore((s) => s.hiddenItemIds);
+    const venuePodium = useMemo(() => {
+        const homes = new Map((rows ?? []).map((m) => [m.id, m]));
+        const footprint = fieldFootprint(fieldProperties);
+        return !hidesVenuePodium(
+            (items ?? []).map((item) => {
+                const home = homes.get(item.marcher_id);
+                return {
+                    id: item.id,
+                    model: item.model,
+                    z: home
+                        ? pixelsToWorld(fieldProperties, {
+                              x: home.home_x,
+                              y: home.home_y,
+                          }).z
+                        : null,
+                };
+            }),
+            hiddenItemIds,
+            (footprint.minZ + footprint.maxZ) / 2,
+        );
+    }, [items, rows, hiddenItemIds, fieldProperties]);
+
+    // Kit: rebuilt only for a new kit id, footprint, params, quality or podium.
     useEffect(() => {
         const footprint = JSON.parse(footprintKey) as FieldFootprint;
-        const built = KIT_BUILDERS[kitId]({ footprint, params, quality });
+        const built = KIT_BUILDERS[kitId]({
+            footprint,
+            params,
+            quality,
+            venuePodium,
+        });
         scene.add(built.root);
         useView3dSceneStore.getState()._setKit(kitId, built);
         return () => {
@@ -263,7 +310,7 @@ function SceneContents({
             if (store.kit === built) store._setKit(null, null);
             built.dispose();
         };
-    }, [scene, kitId, footprintKey, params, quality]);
+    }, [scene, kitId, footprintKey, params, quality, venuePodium]);
 
     // Field surface.
     useEffect(() => {
@@ -389,6 +436,14 @@ function SceneContents({
         if (store.qualityMode !== "auto" || store.quality !== "high") return;
         if (frameCapped(store.onBattery)) return;
         if (stepQualityFallback(fallbackRef.current, dt)) {
+            // Heavy imported models first (#1091): their Light copies, then measure again
+            if (fallbackStep(store) === "lightenHeavyModels") {
+                // eslint-disable-next-line no-console -- like the fallback's own line
+                console.info(LIGHTEN_LOG_MESSAGE);
+                store._lightenHeavyModels();
+                fallbackRef.current = createQualityFallbackState();
+                return;
+            }
             // eslint-disable-next-line no-console -- design.md §9 asks for a log line
             console.info(FALLBACK_LOG_MESSAGE);
             store._autoLower();
@@ -415,6 +470,7 @@ function SceneContents({
         <>
             <Performers fieldProperties={fieldProperties} />
             <PropBlocks fieldProperties={fieldProperties} />
+            <PitModels fieldProperties={fieldProperties} />
         </>
     );
 }

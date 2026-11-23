@@ -15,6 +15,18 @@ import type {
     ItemOutlineChanges,
 } from "@/items/itemOutlineTimeline";
 import type { ItemFrame } from "@/field/editor/itemTransform";
+import { playingSpotOf, type PlayingSpot } from "@/view3d/core/pit/playingSpot";
+import {
+    pitPlanOf,
+    placePitPlan,
+    subscribePitPlans,
+    type PlacedPitPlan,
+} from "@/view3d/core/pit/pitPlan";
+import {
+    hasModelHeight,
+    modelScale,
+    type LibraryModel,
+} from "@/showAssets/libraryModels";
 import type { FieldItemSource, FieldMarchers } from "./fieldMarchers";
 
 /** An item's Outline where the field draws it. */
@@ -30,6 +42,16 @@ export type DrawnItemOutline = {
     readonly center: Pt;
     /** The prop's own color (`items.color`), or null for the theme's line color */
     readonly color: RgbaColor | null;
+    /** Locked to one position for the whole show (`items.locked`): drawn with a lock */
+    readonly locked: boolean;
+    /** Where a player stands to play it, for a pit instrument (`playingSpotOf`), else null */
+    readonly playingSpot: PlayingSpot | null;
+    /**
+     * For an item with a model, the model from above (its silhouette and the edges seen from
+     * above), placed where the item is: a built-in at real size, an imported model sized to the
+     * Outline as the 3D View draws it. Null draws the Outline.
+     */
+    readonly plan: PlacedPitPlan | null;
 };
 
 /**
@@ -50,6 +72,9 @@ export class FieldItems implements FieldItemSource {
     private changes: ItemOutlineChanges = new Map();
     private hidden: ReadonlySet<number> = new Set();
     private colors: ReadonlyMap<number, RgbaColor> = new Map();
+    private locked: ReadonlySet<number> = new Set();
+    private models: ReadonlyMap<number, string> = new Map();
+    private library: ReadonlyMap<string, LibraryModel> = new Map();
     private previews = new Map<number, DrawnItemGeometry>();
     private drawn: {
         version: number;
@@ -62,30 +87,53 @@ export class FieldItems implements FieldItemSource {
         beat: number;
         byId: Map<number, ItemGeometry | null>;
     } | null = null;
+    /** Each item's placed plan, kept while it stands still (a locked pit doesn't move) */
+    private placedPlans = new Map<
+        number,
+        { key: string; plan: PlacedPitPlan | null }
+    >();
     private readonly listeners = new Set<() => void>();
 
-    constructor(private readonly marchers: FieldMarchers) {}
+    constructor(private readonly marchers: FieldMarchers) {
+        // The models' plans load on their own: draw them once they're here
+        subscribePitPlans(() => {
+            this.placedPlans.clear();
+            this.changed();
+        });
+    }
 
     /**
-     * The items by marcher id, their Outline changes, those the user hid, and
-     * the colors of those that have one.
+     * The items by marcher id, their Outline changes, those the user hid, the
+     * colors of those that have one, those locked to one position, the models
+     * of those that name one, and the show's imported models by `items.model`
+     * value.
      */
     set({
         itemIds,
         changes,
         hidden,
         colors = new Map(),
+        locked = new Set(),
+        models = new Map(),
+        library = new Map(),
     }: {
         itemIds: ReadonlySet<number>;
         changes: ItemOutlineChanges;
         hidden: ReadonlySet<number>;
         colors?: ReadonlyMap<number, RgbaColor>;
+        locked?: ReadonlySet<number>;
+        models?: ReadonlyMap<number, string>;
+        library?: ReadonlyMap<string, LibraryModel>;
     }) {
         this.ids = itemIds;
         this.changes = changes;
         this.hidden = hidden;
         this.colors = colors;
+        this.locked = locked;
+        this.models = models;
+        this.library = library;
         this.geometries = null;
+        this.placedPlans.clear();
         // The marchers' marks first, so a listener reads the items as they now are
         this.version++;
         this.marchers.setItems(this);
@@ -94,6 +142,11 @@ export class FieldItems implements FieldItemSource {
 
     isItem(id: number): boolean {
         return this.ids.has(id);
+    }
+
+    /** Whether item `id` is locked to one position for the whole show. */
+    isLocked(id: number): boolean {
+        return this.locked.has(id);
     }
 
     /** Whether item `id` is drawn at `beat`: on field there and not hidden. */
@@ -146,6 +199,17 @@ export class FieldItems implements FieldItemSource {
                     geometry,
                     center,
                     color: this.colors.get(id) ?? null,
+                    locked: this.locked.has(id),
+                    plan: this.planOf(id, center, geometry),
+                    playingSpot: playingSpotOf(
+                        this.models.get(id),
+                        {
+                            center,
+                            depth: geometry.depth,
+                            rotation: geometry.rotation,
+                        },
+                        PIXELS_PER_METER,
+                    ),
                 });
             }
         }
@@ -181,7 +245,35 @@ export class FieldItems implements FieldItemSource {
             width: geometry.width * PIXELS_PER_METER,
             depth: geometry.depth * PIXELS_PER_METER,
             rotation: geometry.rotation,
+            ...(this.keepsProportions(id) ? { keepsProportions: true } : {}),
         };
+    }
+
+    /** Whether item `id` is drawn as an imported model, which resizes evenly (fork #1078). */
+    keepsProportions(id: number): boolean {
+        return this.modelSizeOf(id) !== undefined;
+    }
+
+    /** The real size of the imported model item `id` is drawn as, if it's drawn as one. */
+    modelSizeOf(
+        id: number,
+    ): { width: number; depth: number; height: number } | undefined {
+        const model = this.models.get(id);
+        return model === undefined
+            ? undefined
+            : this.library.get(model)?.sidecar.sizeM;
+    }
+
+    /**
+     * For an imported model that stands up, its stored width at the beat drawn, which a resize
+     * scales its height from (`fieldOutlineWrite`); undefined for anything else. Stored, not
+     * drawn: a handle's preview is drawn until its save settles.
+     */
+    heightScalesFrom(id: number): number | undefined {
+        const sizeM = this.modelSizeOf(id);
+        const beat = this.marchers.drawnBeat;
+        if (!sizeM || !hasModelHeight(sizeM) || beat === null) return undefined;
+        return this.geometryAt(id, beat)?.width;
     }
 
     /** Calls `listener` whenever the items, their Outlines or a preview change. */
@@ -200,6 +292,33 @@ export class FieldItems implements FieldItemSource {
             byId.set(id, geometry);
         }
         return geometry;
+    }
+
+    /**
+     * Item `id`'s model from above, placed at `center` turned as `geometry` is, or null: an
+     * imported model scaled to the Outline as the 3D View scales it (`modelScale`).
+     */
+    private planOf(
+        id: number,
+        center: Pt,
+        geometry: Pick<ItemGeometry, "width" | "depth" | "rotation">,
+    ): PlacedPitPlan | null {
+        const model = this.models.get(id);
+        if (!model) return null;
+        const imported = this.library.get(model);
+        const scale = imported
+            ? modelScale(geometry, imported.sidecar.sizeM)
+            : 1;
+        const { rotation } = geometry;
+        const key = `${model}|${center.x}|${center.y}|${rotation}|${scale}`;
+        const cached = this.placedPlans.get(id);
+        if (cached?.key === key) return cached.plan;
+        const plan = imported ? imported.sidecar.plan : pitPlanOf(model);
+        const placed = plan
+            ? placePitPlan(plan, center, rotation, PIXELS_PER_METER * scale)
+            : null;
+        this.placedPlans.set(id, { key, plan: placed });
+        return placed;
     }
 
     private changed() {

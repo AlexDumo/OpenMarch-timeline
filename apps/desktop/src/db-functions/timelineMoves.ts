@@ -6,6 +6,7 @@ import { pageEndBeat } from "@/timeline/timelineCanvas";
 import { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 import { ensureCountsInTransaction } from "./endlessCounts";
+import { splitLockedItemMovesInTransaction } from "./lockedItems";
 import { updateMarcherHomesInTransaction } from "./marcherHome";
 import {
     setTimelineTransitionDestinationInTransaction,
@@ -20,8 +21,11 @@ import {
 import { deleteTimelinesInTransaction, timelinesWithRange } from "./timelines";
 import { readPageGrid, type PageGrid } from "./timelineRipple";
 import { readBasicRows } from "./basicRows";
-import { marcherSimpleOnBox } from "@/timeline/basicSimple";
-import { TimelineEditRefusedError } from "@/timeline/timelineEditRefusals";
+import { heldArrivalLock } from "@/timeline/basicSimple";
+import {
+    basicLockedRefusal,
+    TimelineEditRefusedError,
+} from "@/timeline/timelineEditRefusals";
 import {
     beatWhere,
     moveInSentence,
@@ -127,6 +131,12 @@ export interface TimelineMoveResult {
      * it (Clear this page)
      */
     cleared?: number[];
+    /**
+     * A Basic edit that re-cut a page's moves: members of the shape placed at its flag whose
+     * positions there ended up in another move than the one the shape followed
+     * (`recipesFollowMembersInTransaction`), so it no longer lists them. By id, for the toast
+     */
+    droppedFromShapes?: number[];
     /**
      * Clear this page on the first page of a Held hold that runs on, or on the page a Held hold
      * arrives from: the marchers whose hold on the later pages went too (its arrival went), and
@@ -1086,7 +1096,7 @@ class NothingWritten extends Error {
  * move together (holds decision 4). Adds what it wrote to `result`.
  *
  * With `basic`, the arrival must be one Basic edits: simple on the page box it ends (Basic's lock,
- * `marcherSimpleOnBox`), else the edit is refused (`notSimple`), naming the marchers. With
+ * `heldArrivalLock`), else the edit is refused (`notSimple`), naming the marchers. With
  * `keepUnchanged`, a marcher left where it is is still written (a shape's members).
  */
 async function moveHeldArrivalsInTransaction(
@@ -1150,30 +1160,22 @@ async function refuseLockedArrivals(
     const rows = await readBasicRows(tx, {
         marcherIds: held.map((h) => h.move.marcherId),
     });
+    const boxes = grid.pages.filter((p) => p.id !== FIRST_PAGE_ID);
     const locked: number[] = [];
-    for (const { move, mark } of held) {
-        // The page its arrival ends on, a mid-page end included
-        const box = grid.pages.find(
-            (p) =>
-                p.id !== FIRST_PAGE_ID &&
-                p.start < mark.start &&
-                mark.start <= p.end,
-        );
-        const own = rows.filter((r) => r.marcherId === move.marcherId);
-        if (box && !marcherSimpleOnBox(own, box).simple)
+    // Basic's lock rule for holds, which the locks draw too (`lockedMarchersByPage`)
+    for (const { move, mark } of held)
+        if (heldArrivalLock(rows, mark, boxes) !== null)
             locked.push(move.marcherId);
-    }
     if (locked.length === 0) return;
     locked.sort((x, y) => x - y);
     const labels: string[] = [];
     for (const id of locked) labels.push(await marcherLabel(tx, id));
-    throw new TimelineEditRefusedError("notSimple", {
-        marcherIds: locked,
-        message:
-            labels.length === 1
-                ? `Marcher ${labels[0]} is Held from an Expert move. Switch to Expert to edit it.`
-                : `Marchers ${labels.join(", ")} are Held from Expert moves. Switch to Expert to edit them.`,
-    });
+    throw basicLockedRefusal(
+        locked,
+        labels.length === 1
+            ? `Marcher ${labels[0]} is Held from an Expert move. Switch to Expert to edit it.`
+            : `Marchers ${labels.join(", ")} are Held from Expert moves. Switch to Expert to edit them.`,
+    );
 }
 
 const wroteSomething = (r: TimelineMoveResult): boolean =>
@@ -1267,7 +1269,7 @@ async function timelineEndingAt(
 export const moveMarchersInTarget = async ({
     db,
     target,
-    moves,
+    moves: allMoves,
     clearPage = false,
     keepLaterPages = false,
     keepUnchanged = false,
@@ -1307,240 +1309,259 @@ export const moveMarchersInTarget = async ({
      */
     afterWrite?: TimelineAfterWrite;
 }): Promise<TimelineMoveResult> => {
-    if (moves.length === 0) return emptyMoveResult();
+    if (allMoves.length === 0) return emptyMoveResult();
     try {
         return await transactionWithHistory(db, "moveMarchers", async (tx) => {
             onStart?.();
-            // Clear this page names a later hold whose arrival it takes away
-            const heldBefore =
-                clearPage && target.kind !== "home"
-                    ? await readHeldArrivalsBefore(tx)
-                    : null;
-            if (target.kind === "timeline") {
-                const result = await moveMarchersInTimelineInTransaction({
-                    tx,
-                    timelineId: target.timelineId,
-                    moves,
-                    ghosts: target.ghosts ?? false,
-                });
-                await afterWrite?.(
-                    tx,
-                    target.timelineId,
-                    moves.map((m) => m.marcherId),
-                );
+            // Locked items have one position for the whole show: wherever the edit was aimed,
+            // theirs is their home and their moves are cleared (`lockedItems.ts`)
+            const { rest: moves, pinned } =
+                await splitLockedItemMovesInTransaction(tx, allMoves);
+            if (moves.length === 0)
+                return { ...emptyMoveResult(), homes: pinned };
+            const withPinned = (result: TimelineMoveResult) => {
+                if (pinned.length > 0)
+                    result.homes = [...pinned, ...result.homes];
                 return result;
-            }
-            if (target.kind === "range" || target.kind === "point") {
-                const pageBox = target.kind === "range" ? target : target.box;
-                // Clear Page N keeps the next page: where everyone stands there before the clear
-                const later =
-                    clearPage && keepLaterPages
-                        ? await readNextPageSpots(
-                              tx,
-                              pageBox.end,
-                              moves.map((m) => m.marcherId),
-                          )
-                        : null;
-                // A marcher Held at the edited count edits the move arriving at its hold
-                // instead, so the whole hold moves (holds decision 4); one whose arrival is a
-                // shape's or follow-the-leader move is skipped and named. An Expert window that
-                // starts inside the hold wins instead (R2, #476): the window becomes a move
-                const { held, homes, skipped, rest } = clearPage
-                    ? { held: [], homes: [], skipped: [], rest: [...moves] }
-                    : await splitHeldEditsInTransaction(
-                          tx,
-                          target.kind === "range" ? target.end : target.beat,
-                          moves,
-                          target.kind === "range"
-                              ? { windowStart: target.start }
-                              : {},
-                      );
-                const result =
-                    rest.length === 0
-                        ? emptyMoveResult()
-                        : target.kind === "range"
-                          ? await moveMarchersInRangeInTransaction({
-                                tx,
-                                range: { start: target.start, end: target.end },
-                                moves: rest,
-                                clearPage,
-                                keepUnchanged,
-                                alsoSkipped: skipped,
-                                ...(target.timelineId === undefined
-                                    ? {}
-                                    : { into: target.timelineId }),
-                            })
-                          : await setPositionsAtBeatInTransaction({
-                                tx,
-                                beat: target.beat,
-                                box: target.box,
-                                moves: rest,
-                                clearPage,
-                                keepUnchanged,
-                            });
-                // The window's move ends a hold it starts inside at the start flag, and takes
-                // away one whose start it covers (holds R2, 01-edit-rules E2; #476)
-                if (target.kind === "range" && !clearPage)
-                    await trimHeldMarksUnderRowsInTransaction(
-                        tx,
-                        rest.map((m) => m.marcherId),
-                    );
-                // The range writer names them with its own skips; otherwise they're named here
-                if (
-                    skipped.length > 0 &&
-                    !(target.kind === "range" && rest.length > 0)
-                ) {
-                    const refusal = await skippedRefusal(tx, skipped);
-                    if (refusal) result.skipped = refusal;
-                }
-                // Clear this page clears a Held hold too: the page becomes Not set (#472)
-                if (clearPage) {
-                    const clearedHolds = await clearHeldMarksOverInTransaction(
-                        tx,
-                        moves.map((m) => m.marcherId),
-                        pageBox,
-                    );
-                    // A hold on a later page whose arrival the clear took away goes too (holds
-                    // decision 17, at the step after the edit): named with the rest (#566 review)
-                    const laterHolds = [
-                        ...clearedHolds.later,
-                        ...(heldBefore
-                            ? await arrivalHoldsLostInTransaction(
-                                  tx,
-                                  heldBefore,
-                              )
-                            : []),
-                    ];
-                    if (clearedHolds.marchers.length > 0)
-                        result.cleared = [
-                            ...new Set([
-                                ...(result.cleared ?? []),
-                                ...clearedHolds.marchers,
-                            ]),
-                        ].sort((x, y) => x - y);
-                    if (laterHolds.length > 0)
-                        result.clearedLaterHolds = await nameHeldConflict(
-                            tx,
-                            laterHolds,
-                        );
-                    // Only the marchers taken out of the page: a skipped one still has its move
-                    const kept = await keepNextPageInTransaction(
-                        tx,
-                        later,
-                        new Set([
-                            ...laterHolds.map((h) => h.marcherId),
-                            ...moves
-                                .map((m) => m.marcherId)
-                                .filter((id) => !result.cleared?.includes(id)),
-                        ]),
-                        // A move left over from the cut that runs through the next page's
-                        // flag is cut there too, so the page keeps its spot
-                        { cutMovesAcross: true },
-                    );
-                    if (kept.length > 0) result.keptLaterPages = kept;
-                }
-                await moveHeldArrivalsInTransaction(tx, held, result, {
-                    basic: target.kind === "point",
-                    keepUnchanged,
-                });
-                await moveHeldHomesInTransaction(tx, homes, result);
-                // App data goes with each move the positions went to: Held marchers' edits to
-                // the moves arriving at their holds, those Held from their starting spots to the
-                // homes (`null`), and the rest to the window's move: the selected move, else the
-                // one they are in, since a move split off the page's shares its counts (UI-25).
-                // One call per move, so a shape whose members' edits went to one move (a Held
-                // shape) is saved with that move, whatever else the edit wrote
-                const writes: { timelineId: number | null; ids: number[] }[] =
-                    [];
-                if (afterWrite) {
-                    const byArrival = new Map<number, number[]>();
-                    for (const h of held)
-                        byArrival.set(h.timelineId, [
-                            ...(byArrival.get(h.timelineId) ?? []),
-                            h.move.marcherId,
-                        ]);
-                    for (const [timelineId, ids] of byArrival)
-                        writes.push({ timelineId, ids });
-                    if (homes.length > 0)
-                        writes.push({
-                            timelineId: null,
-                            ids: homes.map((h) => h.move.marcherId),
-                        });
-                    const marcherIds = rest.map((m) => m.marcherId);
-                    const restTimeline =
-                        marcherIds.length === 0
-                            ? null
-                            : target.kind === "range"
-                              ? (target.timelineId ??
-                                (await timelineHoldingMost(
-                                    tx,
-                                    marcherIds,
-                                    target.end,
-                                    target.start,
-                                )) ??
-                                (await timelineWithRange(tx, target)))
-                              : // Basic edits only moves over the page box (an Expert move is
-                                // refused), so those first, should a file hold others
-                                ((await timelineHoldingMost(
-                                    tx,
-                                    marcherIds,
-                                    target.beat,
-                                    target.box.start,
-                                )) ??
-                                (await timelineHoldingMost(
-                                    tx,
-                                    marcherIds,
-                                    target.beat,
-                                )) ??
-                                (await timelineEndingAt(tx, target.beat)));
-                    // A range with no move to hold their positions has nothing to save beside
-                    if (restTimeline !== null)
-                        writes.push({
-                            timelineId: restTimeline,
-                            ids: marcherIds,
-                        });
-                }
-                // One call per move, should two writes have gone to the same one
-                const merged = new Map<number | null, number[]>();
-                for (const w of writes)
-                    merged.set(w.timelineId, [
-                        ...(merged.get(w.timelineId) ?? []),
-                        ...w.ids,
-                    ]);
-                let wroteAppData = false;
-                for (const [timelineId, ids] of merged)
-                    if ((await afterWrite!(tx, timelineId, ids)) !== false)
-                        wroteAppData = true;
-                // An edit that writes nothing (and no app data beside it) can't be an undo step
-                if (!wroteAppData && !wroteSomething(result))
-                    throw new NothingWritten(result);
-                return result;
-            }
-            refuseDuplicateMarchers(moves);
-            for (const m of moves)
-                assertValid(validateDestination([m.x, m.y]), "position");
-            await updateMarcherHomesInTransaction({
-                tx,
-                modifiedHomes: moves.map((m) => ({
-                    marcherId: m.marcherId,
-                    home: [m.x, m.y],
-                })),
-            });
-            if (afterWrite)
-                await afterWrite(
-                    tx,
-                    null,
-                    moves.map((m) => m.marcherId),
-                );
-            return {
-                homes: moves.map((m) => m.marcherId),
-                slots: [],
-                convertedTransitionIds: [],
             };
+            try {
+                return withPinned(await editInTarget(tx, moves));
+            } catch (e) {
+                // The edit's own marchers wrote nothing, but the locked items moved: still a step
+                if (e instanceof NothingWritten && pinned.length > 0)
+                    return withPinned(e.result);
+                throw e;
+            }
         });
     } catch (e) {
         if (e instanceof NothingWritten) return e.result;
         throw e;
+    }
+
+    // eslint-disable-next-line max-lines-per-function
+    async function editInTarget(
+        tx: DbTransaction,
+        moves: readonly TimelineMarcherMove[],
+    ): Promise<TimelineMoveResult> {
+        // Clear this page names a later hold whose arrival it takes away
+        const heldBefore =
+            clearPage && target.kind !== "home"
+                ? await readHeldArrivalsBefore(tx)
+                : null;
+        if (target.kind === "timeline") {
+            const result = await moveMarchersInTimelineInTransaction({
+                tx,
+                timelineId: target.timelineId,
+                moves,
+                ghosts: target.ghosts ?? false,
+            });
+            await afterWrite?.(
+                tx,
+                target.timelineId,
+                moves.map((m) => m.marcherId),
+            );
+            return result;
+        }
+        if (target.kind === "range" || target.kind === "point") {
+            const pageBox = target.kind === "range" ? target : target.box;
+            // Clear Page N keeps the next page: where everyone stands there before the clear
+            const later =
+                clearPage && keepLaterPages
+                    ? await readNextPageSpots(
+                          tx,
+                          pageBox.end,
+                          moves.map((m) => m.marcherId),
+                      )
+                    : null;
+            // A marcher Held at the edited count edits the move arriving at its hold
+            // instead, so the whole hold moves (holds decision 4); one whose arrival is a
+            // shape's or follow-the-leader move is skipped and named. An Expert window that
+            // starts inside the hold wins instead (R2, #476): the window becomes a move
+            const { held, homes, skipped, rest } = clearPage
+                ? { held: [], homes: [], skipped: [], rest: [...moves] }
+                : await splitHeldEditsInTransaction(
+                      tx,
+                      target.kind === "range" ? target.end : target.beat,
+                      moves,
+                      target.kind === "range"
+                          ? { windowStart: target.start }
+                          : {},
+                  );
+            const result =
+                rest.length === 0
+                    ? emptyMoveResult()
+                    : target.kind === "range"
+                      ? await moveMarchersInRangeInTransaction({
+                            tx,
+                            range: { start: target.start, end: target.end },
+                            moves: rest,
+                            clearPage,
+                            keepUnchanged,
+                            alsoSkipped: skipped,
+                            ...(target.timelineId === undefined
+                                ? {}
+                                : { into: target.timelineId }),
+                        })
+                      : await setPositionsAtBeatInTransaction({
+                            tx,
+                            beat: target.beat,
+                            box: target.box,
+                            moves: rest,
+                            clearPage,
+                            keepUnchanged,
+                        });
+            // The window's move ends a hold it starts inside at the start flag, and takes
+            // away one whose start it covers (holds R2, 01-edit-rules E2; #476)
+            if (target.kind === "range" && !clearPage)
+                await trimHeldMarksUnderRowsInTransaction(
+                    tx,
+                    rest.map((m) => m.marcherId),
+                );
+            // The range writer names them with its own skips; otherwise they're named here
+            if (
+                skipped.length > 0 &&
+                !(target.kind === "range" && rest.length > 0)
+            ) {
+                const refusal = await skippedRefusal(tx, skipped);
+                if (refusal) result.skipped = refusal;
+            }
+            // Clear this page clears a Held hold too: the page becomes Not set (#472)
+            if (clearPage) {
+                const clearedHolds = await clearHeldMarksOverInTransaction(
+                    tx,
+                    moves.map((m) => m.marcherId),
+                    pageBox,
+                );
+                // A hold on a later page whose arrival the clear took away goes too (holds
+                // decision 17, at the step after the edit): named with the rest (#566 review)
+                const laterHolds = [
+                    ...clearedHolds.later,
+                    ...(heldBefore
+                        ? await arrivalHoldsLostInTransaction(tx, heldBefore)
+                        : []),
+                ];
+                if (clearedHolds.marchers.length > 0)
+                    result.cleared = [
+                        ...new Set([
+                            ...(result.cleared ?? []),
+                            ...clearedHolds.marchers,
+                        ]),
+                    ].sort((x, y) => x - y);
+                if (laterHolds.length > 0)
+                    result.clearedLaterHolds = await nameHeldConflict(
+                        tx,
+                        laterHolds,
+                    );
+                // Only the marchers taken out of the page: a skipped one still has its move
+                const kept = await keepNextPageInTransaction(
+                    tx,
+                    later,
+                    new Set([
+                        ...laterHolds.map((h) => h.marcherId),
+                        ...moves
+                            .map((m) => m.marcherId)
+                            .filter((id) => !result.cleared?.includes(id)),
+                    ]),
+                    // A move left over from the cut that runs through the next page's
+                    // flag is cut there too, so the page keeps its spot
+                    { cutMovesAcross: true },
+                );
+                if (kept.length > 0) result.keptLaterPages = kept;
+            }
+            await moveHeldArrivalsInTransaction(tx, held, result, {
+                basic: target.kind === "point",
+                keepUnchanged,
+            });
+            await moveHeldHomesInTransaction(tx, homes, result);
+            // App data goes with each move the positions went to: Held marchers' edits to the
+            // moves arriving at their holds, those Held from their starting spots to the homes
+            // (`null`), and the rest to the window's move: the selected move, else the one they
+            // are in, since a move split off the page's shares its counts (UI-25). One call per
+            // move, so a shape whose members' edits went to one move (a Held shape) is saved with
+            // that move, whatever else the edit wrote
+            const writes: { timelineId: number | null; ids: number[] }[] = [];
+            if (afterWrite) {
+                const byArrival = new Map<number, number[]>();
+                for (const h of held)
+                    byArrival.set(h.timelineId, [
+                        ...(byArrival.get(h.timelineId) ?? []),
+                        h.move.marcherId,
+                    ]);
+                for (const [timelineId, ids] of byArrival)
+                    writes.push({ timelineId, ids });
+                if (homes.length > 0)
+                    writes.push({
+                        timelineId: null,
+                        ids: homes.map((h) => h.move.marcherId),
+                    });
+                const marcherIds = rest.map((m) => m.marcherId);
+                const restTimeline =
+                    marcherIds.length === 0
+                        ? null
+                        : target.kind === "range"
+                          ? (target.timelineId ??
+                            (await timelineHoldingMost(
+                                tx,
+                                marcherIds,
+                                target.end,
+                                target.start,
+                            )) ??
+                            (await timelineWithRange(tx, target)))
+                          : // Basic edits only moves over the page box (an Expert move is
+                            // refused), so those first, should a file hold others
+                            ((await timelineHoldingMost(
+                                tx,
+                                marcherIds,
+                                target.beat,
+                                target.box.start,
+                            )) ??
+                            (await timelineHoldingMost(
+                                tx,
+                                marcherIds,
+                                target.beat,
+                            )) ??
+                            (await timelineEndingAt(tx, target.beat)));
+                // A range with no move to hold their positions has nothing to save beside
+                if (restTimeline !== null)
+                    writes.push({ timelineId: restTimeline, ids: marcherIds });
+            }
+            // One call per move, should two writes have gone to the same one
+            const merged = new Map<number | null, number[]>();
+            for (const w of writes)
+                merged.set(w.timelineId, [
+                    ...(merged.get(w.timelineId) ?? []),
+                    ...w.ids,
+                ]);
+            let wroteAppData = false;
+            for (const [timelineId, ids] of merged)
+                if ((await afterWrite!(tx, timelineId, ids)) !== false)
+                    wroteAppData = true;
+            // An edit that writes nothing (and no app data beside it) can't be an undo step
+            if (!wroteAppData && !wroteSomething(result))
+                throw new NothingWritten(result);
+            return result;
+        }
+        refuseDuplicateMarchers(moves);
+        for (const m of moves)
+            assertValid(validateDestination([m.x, m.y]), "position");
+        await updateMarcherHomesInTransaction({
+            tx,
+            modifiedHomes: moves.map((m) => ({
+                marcherId: m.marcherId,
+                home: [m.x, m.y],
+            })),
+        });
+        if (afterWrite)
+            await afterWrite(
+                tx,
+                null,
+                moves.map((m) => m.marcherId),
+            );
+        return {
+            homes: moves.map((m) => m.marcherId),
+            slots: [],
+            convertedTransitionIds: [],
+        };
     }
 };
 

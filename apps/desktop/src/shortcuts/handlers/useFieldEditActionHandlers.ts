@@ -3,6 +3,8 @@ import { useTranslate } from "@tolgee/react";
 import { useDatabaseReady } from "@/hooks/useDatabaseReady";
 import { useApplyFieldEdits } from "@/hooks/useApplyFieldEdits";
 import type { FieldEditRequest, FieldEditResult } from "@/field/edits";
+import { fieldEditRefusal } from "@/field/edits/refusal";
+import { useFieldProperties } from "@/field/editMode/useApplyFieldEdits";
 import { useActionHandler } from "../useActionHandler";
 import type { ActionArgs } from "../definitions";
 
@@ -22,22 +24,12 @@ export function useFieldEditActionHandlers() {
 
     const apply = (
         edit: FieldEditRequest,
-        done: (result: FieldEditResult) => void,
+        done?: (result: FieldEditResult) => void,
     ) =>
         void applyFieldEdits(edit).then((result) => {
-            if (result?.diff.ok) done(result);
+            if (result?.diff.ok) done?.(result);
         });
 
-    const addedOne = (axis: "x" | "y") => (result: FieldEditResult) => {
-        const added = result.diff.checkpoints.added[0];
-        if (added)
-            toast.success(
-                t("fieldProperties.checkpoint.created", {
-                    axis: axis.toUpperCase(),
-                    steps: added.stepsFromCenterFront,
-                }),
-            );
-    };
     const addedSeries = (axis: "x" | "y") => (result: FieldEditResult) => {
         const count = result.diff.checkpoints.added.length;
         if (count === 0) toast.message(t("fieldEdits.nothingAdded"));
@@ -53,24 +45,7 @@ export function useFieldEditActionHandlers() {
         Number(args?.[key]);
 
     const options = { enabled: databaseReady };
-    useActionHandler(
-        "fieldAddXCheckpoint",
-        () =>
-            apply(
-                { edit: "addCheckpoint", args: { axis: "x", mirror: true } },
-                addedOne("x"),
-            ),
-        options,
-    );
-    useActionHandler(
-        "fieldAddYCheckpoint",
-        () =>
-            apply(
-                { edit: "addCheckpoint", args: { axis: "y" } },
-                addedOne("y"),
-            ),
-        options,
-    );
+    useAddCheckpointActions(apply, databaseReady);
     useActionHandler(
         "fieldAddXCheckpointSeries",
         (args) =>
@@ -106,5 +81,43 @@ export function useFieldEditActionHandlers() {
                 addedSeries("y"),
             ),
         options,
+    );
+}
+
+/**
+ * Add X or Y checkpoint: one more line in the widest gap, greyed out, saying why, when there's no
+ * gap for it (instead of a toast after the press)
+ */
+function useAddCheckpointActions(
+    apply: (edit: FieldEditRequest) => void,
+    databaseReady: boolean,
+) {
+    const { t } = useTranslate();
+    const fp = useFieldProperties();
+    const addX: FieldEditRequest = {
+        edit: "addCheckpoint",
+        args: { axis: "x", mirror: true },
+    };
+    const addY: FieldEditRequest = {
+        edit: "addCheckpoint",
+        args: { axis: "y" },
+    };
+    const refusal = (edit: FieldEditRequest) => () =>
+        databaseReady
+            ? fieldEditRefusal(fp, edit, t, { allowGeometryChange: false })
+            : undefined;
+    const addOptions = (edit: FieldEditRequest) => ({
+        enabled: () => databaseReady && refusal(edit)() === undefined,
+        disabledReason: refusal(edit),
+    });
+    useActionHandler(
+        "fieldAddXCheckpoint",
+        () => apply(addX),
+        addOptions(addX),
+    );
+    useActionHandler(
+        "fieldAddYCheckpoint",
+        () => apply(addY),
+        addOptions(addY),
     );
 }

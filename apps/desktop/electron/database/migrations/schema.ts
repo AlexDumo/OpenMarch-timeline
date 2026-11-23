@@ -9,6 +9,7 @@ import {
     unique,
     customType,
     sqliteView,
+    primaryKey,
 } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
@@ -320,6 +321,100 @@ export const view3d_venue = sqliteTable(
 );
 
 /**
+ * Silk Artwork the show imported (fork #973, ADR 0010 amendment 2026-11-15):
+ * a painted silk template, as the PNG's own bytes. Rows are referenced by
+ * id: the venue settings' `silkArtwork` names the one the guard's flags
+ * start the show with, and Silk cues can name others later. In the undo
+ * history, so an import or a removal is one undo step.
+ */
+export const view3d_silk_artwork = sqliteTable("view3d_silk_artwork", {
+    id: integer().primaryKey(),
+    /** The imported file's name, shown beside the picture. */
+    name: text().notNull(),
+    /** The PNG file, as imported. */
+    data: browserSafeBinaryBlob().notNull(),
+    /** Its size in pixels. */
+    width: integer().notNull(),
+    height: integer().notNull(),
+    ...timestamps,
+});
+
+/* ======================== SHOW ASSETS ======================== */
+
+/** A sha256 as 64 lowercase hex digits. */
+const isSha256Hex = (column: string) =>
+    sql.raw(`length(${column}) = 64 AND ${column} NOT GLOB '*[^0-9a-f]*'`);
+
+/** A JSON object (not an array, string or number). */
+const isJsonObject = (column: string) =>
+    sql.raw(`json_valid(${column}) AND json_type(${column}) = 'object'`);
+
+/**
+ * The bytes of the show's assets (ADR 0010 amendment 2026-11-15, fork #997),
+ * stored once by their sha256 however many assets name them. Not in the undo
+ * history, and nothing removes a row automatically.
+ */
+export const show_asset_blobs = sqliteTable(
+    "show_asset_blobs",
+    {
+        /** sha256 of `data`, lowercase hex */
+        hash: text().primaryKey(),
+        data: browserSafeBinaryBlob().notNull(),
+    },
+    (_table) => [
+        check("show_asset_blobs_hash_check", isSha256Hex("hash")),
+        check("show_asset_blobs_data_check", sql`typeof(data) = 'blob'`),
+    ],
+);
+
+/**
+ * The show's assets, one row per Version (ADR 0010 amendment 2026-11-15, fork
+ * #997): imported prop models first, flags and artwork (fork #985) next. An
+ * item names one as `library:<id>@<version_hash>` in `items.model`.
+ *
+ * - `version_hash` covers the parts and the sidecar (`src/showAssets/hash.ts`),
+ *   never the name or credits, so a Version's bytes never change.
+ * - `kind` has no CHECK: a build that doesn't know a kind keeps its rows and
+ *   ignores them, and a new kind needs no table rebuild.
+ * - Not in the undo history, and nothing removes a row automatically.
+ */
+export const show_assets = sqliteTable(
+    "show_assets",
+    {
+        /** Stable for the asset's life, across its Versions: a UUID */
+        id: text().notNull(),
+        /** Names this Version's parts and sidecar; lowercase hex sha256 */
+        version_hash: text().notNull(),
+        /** What it is, such as `model`; read by the code that uses that kind */
+        kind: text().notNull(),
+        /** What people call it */
+        name: text().notNull(),
+        /** JSON object, part role (`model`, `distant`, `thumbnail`…) to `show_asset_blobs.hash` */
+        parts: text().notNull(),
+        /**
+         * JSON object of what the kind's code reads without the bytes (for a model: real size,
+         * facing, top-down outline, stand point, triangle count, import notes), stored as the
+         * canonical text the Version hash covers
+         */
+        sidecar: text().notNull().default("{}"),
+        /** JSON object: license, author, source. Outside the Version hash. */
+        credits: text().notNull().default("{}"),
+        created_at: text()
+            .notNull()
+            .default(sql`(CURRENT_TIMESTAMP)`),
+    },
+    (table) => [
+        primaryKey({ columns: [table.id, table.version_hash] }),
+        index("show_assets_version_hash_idx").on(table.version_hash),
+        check("show_assets_id_check", sql`length(id) > 0`),
+        check("show_assets_version_hash_check", isSha256Hex("version_hash")),
+        check("show_assets_parts_check", isJsonObject("parts")),
+        check("show_assets_sidecar_check", isJsonObject("sidecar")),
+        check("show_assets_credits_check", isJsonObject("credits")),
+    ],
+);
+
+/**
  * The show's 3D View cameras (ADR 0010 D-5, amended 2026-10-16). A single
  * row with `id = 1` whose `json_data` is validated by `showCamerasSchema` in
  * `src/view3d/core/cameraList.ts`: the show's own camera list for each venue
@@ -409,6 +504,24 @@ export const timeline_shapes = sqliteTable(
     ],
 );
 
+/**
+ * A drawn path (spec v0.9 §5.1 `routes`, ADR 0016, D-19): corner and smooth points in absolute
+ * field coordinates, between the `from` and `to` it was drawn against. No owner column, like
+ * shapes. Since v0.10 (ADR 0017, plan step 24) a slot walks it through a lane
+ * (`timeline_lanes`); every route has a lane whose slot holds a marcher (I-R3′, at commit).
+ */
+export const timeline_routes = sqliteTable(
+    "timeline_routes",
+    {
+        id: integer().primaryKey(),
+        /** JSON geometry `{v, from, to, points}` (spec §5.2, I-R1) */
+        geometry: text().notNull(),
+    },
+    (_table) => [
+        check("timeline_routes_geometry_check", sql`json_valid(geometry)`),
+    ],
+);
+
 /** Motion into a destination over a beat range (spec §5.1 `transitions`). */
 export const timeline_transitions = sqliteTable(
     "timeline_transitions",
@@ -421,10 +534,20 @@ export const timeline_transitions = sqliteTable(
         dest_shape_id: integer().references(() => timeline_shapes.id, {
             onDelete: "restrict",
         }),
-        /** direct, arc or follow_the_leader */
+        /**
+         * direct, arc or follow_the_leader. `route` (v0.9) is retired since v0.10 (I-R2′): no
+         * transition has it, and the CHECK keeps it only so the table isn't rebuilt
+         */
         path_style: text().notNull().default("direct"),
         /** JSON path parameters, by path_style (spec §5.2) */
         path_params: text(),
+        /**
+         * A follow-the-leader transition's trail route (I-R2′, R-9′, pathways step 4), else NULL;
+         * a slot walks a route through a lane instead
+         */
+        route_id: integer().references(() => timeline_routes.id, {
+            onDelete: "restrict",
+        }),
         /** inherit or slot */
         order_mode: text().notNull().default("inherit"),
         slot_count: integer().notNull(),
@@ -439,7 +562,7 @@ export const timeline_transitions = sqliteTable(
         ),
         check(
             "timeline_transitions_path_style_check",
-            sql`path_style IN ('direct', 'arc', 'follow_the_leader')`,
+            sql`path_style IN ('direct', 'arc', 'follow_the_leader', 'route')`,
         ),
         check(
             "timeline_transitions_path_params_check",
@@ -455,18 +578,125 @@ export const timeline_transitions = sqliteTable(
             sql`slot_count BETWEEN 1 AND 10000`,
         ),
         ...beatRangeChecks("timeline_transitions"),
-        // I-T5: follow-the-leader follows a path, so it needs a destination shape
+        // I-T5′ (pathways step 4): follow-the-leader follows a path, so it needs a destination
+        // shape or a trail route (then the line through its slots' destinations, R-13′)
         check(
             "timeline_transitions_ftl_shape_check",
-            sql`dest_shape_id IS NOT NULL OR path_style <> 'follow_the_leader'`,
+            sql`dest_shape_id IS NOT NULL OR route_id IS NOT NULL OR path_style <> 'follow_the_leader'`,
         ),
         // I-T2 (partial): an arc carries a numeric bulge with |bulge| <= 0.5 (minor arcs only)
         check(
             "timeline_transitions_arc_bulge_check",
             sql`path_style <> 'arc' OR (coalesce(json_type(path_params, '$.bulge'), '') IN ('integer', 'real') AND abs(json_extract(path_params, '$.bulge')) <= 0.5)`,
         ),
+        check(
+            "timeline_transitions_route_id_type_check",
+            sql`route_id IS NULL OR typeof(route_id) = 'integer'`,
+        ),
+        // I-R2 (v0.9): a route transition walks a route, has no shape and exactly one slot.
+        // Vacuous since v0.10 (no transition is `route`, I-R2′, checked at commit as E-R2); kept
+        // so the table isn't rebuilt.
+        check(
+            "timeline_transitions_route_check",
+            sql`path_style <> 'route' OR (route_id IS NOT NULL AND dest_shape_id IS NULL AND slot_count = 1)`,
+        ),
         index("timeline_idx_tr_shape").on(table.dest_shape_id),
+        index("timeline_idx_tr_route").on(table.route_id),
         index("timeline_idx_tr_timeline").on(table.timeline_id),
+    ],
+);
+
+/**
+ * A lane (spec v0.10 J.1, D-20, ADR 0017; plan step 24): slot `slot_index` of transition
+ * `transition_id` walks route `route_id`. Whoever occupies the slot walks it, so drawing a path
+ * never moves a marcher out of its move. `offset_x`/`offset_y` are the start offset `o_s` from the
+ * route's `from`: a group path's lane; both NULL for an own lane (one marcher's own path, walked
+ * alone, I-LN4). At most one lane per slot (I-LN3); the slot is one of the transition's (I-LN1,
+ * triggers). `adjust` is this spot's own Adjust profile as JSON (spec J.2, plan step 3b).
+ * `group_adjust_id` comes with step 26, as `ADD COLUMN`.
+ */
+export const timeline_lanes = sqliteTable(
+    "timeline_lanes",
+    {
+        id: integer().primaryKey(),
+        transition_id: integer()
+            .notNull()
+            .references(() => timeline_transitions.id, {
+                onDelete: "restrict",
+            }),
+        slot_index: integer().notNull(),
+        route_id: integer()
+            .notNull()
+            .references(() => timeline_routes.id, { onDelete: "restrict" }),
+        offset_x: real(),
+        offset_y: real(),
+        adjust: text(),
+    },
+    (table) => [
+        integerTypeCheck("timeline_lanes", "transition_id"),
+        integerTypeCheck("timeline_lanes", "slot_index"),
+        integerTypeCheck("timeline_lanes", "route_id"),
+        check("timeline_lanes_slot_index_check", sql`slot_index >= 0`),
+        check(
+            "timeline_lanes_offset_x_check",
+            sql`offset_x IS NULL OR (typeof(offset_x) IN ('integer', 'real') AND offset_x BETWEEN -2000000 AND 2000000)`,
+        ),
+        check(
+            "timeline_lanes_offset_y_check",
+            sql`offset_y IS NULL OR (typeof(offset_y) IN ('integer', 'real') AND offset_y BETWEEN -2000000 AND 2000000)`,
+        ),
+        check(
+            "timeline_lanes_offset_check",
+            sql`(offset_x IS NULL) = (offset_y IS NULL)`,
+        ),
+        check(
+            "timeline_lanes_adjust_check",
+            sql`adjust IS NULL OR json_valid(adjust)`,
+        ),
+        unique("timeline_lanes_transition_slot_unique").on(
+            table.transition_id,
+            table.slot_index,
+        ),
+        index("timeline_idx_lane_route").on(table.route_id),
+    ],
+);
+
+/**
+ * Where a route came from (spec v0.10 J.1, K6): app data beside the routes, never read by the
+ * resolver and outside the change log. Pathways step 3c writes `detached_from` (AP-R9 Detach), so
+ * Rejoin (AP-R10) knows the group path a copy came back from; the other kinds are for later steps
+ * (paste, mirror, split). Both route columns cascade, so a build that doesn't know this table and
+ * deletes a route leaves no link naming it; this build deletes the links itself first (AP-H3).
+ */
+export const timeline_route_sources = sqliteTable(
+    "timeline_route_sources",
+    {
+        id: integer().primaryKey(),
+        route_id: integer()
+            .notNull()
+            .references(() => timeline_routes.id, { onDelete: "cascade" }),
+        kind: text().notNull(),
+        source_route_id: integer().references(() => timeline_routes.id, {
+            onDelete: "cascade",
+        }),
+        data: text(),
+    },
+    (table) => [
+        integerTypeCheck("timeline_route_sources", "route_id"),
+        check(
+            "timeline_route_sources_source_route_id_type_check",
+            sql`source_route_id IS NULL OR typeof(source_route_id) = 'integer'`,
+        ),
+        check(
+            "timeline_route_sources_kind_check",
+            sql`kind IN ('detached_from', 'recipe', 'mirror_of', 'pasted_from', 'split_from', 'continues')`,
+        ),
+        check(
+            "timeline_route_sources_data_check",
+            sql`data IS NULL OR json_valid(data)`,
+        ),
+        index("timeline_idx_route_sources_route").on(table.route_id),
+        index("timeline_idx_route_sources_source").on(table.source_route_id),
     ],
 );
 
@@ -565,6 +795,12 @@ export const timeline_held_marks = sqliteTable(
             .references(() => marchers.id, { onDelete: "cascade" }),
         start_beat: integer().notNull(),
         end_beat: integer().notNull(),
+        /**
+         * What the marcher's feet do over the hold (ADR 0015 D-5): `stand`, `markTime` or
+         * `highMarkTime`. `NULL` uses the show setting. Checked in code (`holdStyleOf`): a value
+         * this build doesn't know reads as `NULL`.
+         */
+        style: text(),
     },
     (table) => [
         unique().on(table.marcher_id, table.start_beat),
@@ -692,6 +928,24 @@ export const items = sqliteTable(
          * it in the field theme's line color (2D) and neutral grey (3D).
          */
         color: text(),
+        /**
+         * A built-in 3D model the item is drawn as, such as `pit/marimba-5.0`: its path under
+         * `apps/desktop/src/view3d/assets/pit/` without `.glb`. Null draws the item as a block.
+         * An imported model is `library:<id>@<version hash>`, naming a row of `show_assets`
+         * (`src/showAssets/ref.ts`; ADR 0010, amendments 2026-11-11 and 2026-11-15); an app that
+         * doesn't know a value draws the block.
+         */
+        model: text(),
+        /**
+         * One position for the whole show: the item has no moves, so dragging it on any page moves
+         * it on every page, and lasso and select-all skip it. Equipment is created locked.
+         */
+        locked: integer({ mode: "boolean" }).notNull().default(false),
+        /**
+         * Placed by a front ensemble preset. Re-applying a preset replaces only these items, so
+         * hand-added ones stay. Renaming or moving the item keeps it; copies don't take it.
+         */
+        from_preset: integer({ mode: "boolean" }).notNull().default(false),
         ...timestamps,
     },
     (_table) => [
@@ -767,6 +1021,84 @@ export const item_geometry = sqliteTable(
                 `(rolls_out = 0 AND leading_edge IS NULL) OR (rolls_out = 1 AND leading_edge IS NOT NULL AND leading_edge IN (${sqlList(LEADING_EDGES)}))`,
             ),
         ),
+    ],
+);
+
+/* =========================== CUES =========================== */
+
+/**
+ * A performer cue (ADR 0015 D-9): one parameter of the performers in `cue_marchers`, set at a
+ * beat. The cue's moment is the beat's click.
+ *
+ * `type` and `value` are checked in code, not by a CHECK constraint (`@openmarch/core`'s cue
+ * library): a build that doesn't know a type keeps its cues and ignores them, so a new type
+ * needs no migration.
+ */
+export const cues = sqliteTable(
+    "cues",
+    {
+        id: integer().primaryKey(),
+        /** The cue type: equipment, position, silk, look, facing, posture, or a later build's */
+        type: text().notNull(),
+        /**
+         * The write paths carry a cue past a deleted beat first (`carryCuesPastDeletedBeats`);
+         * the cascade is the backstop.
+         */
+        beat_id: integer()
+            .notNull()
+            .references(() => beats.id, { onDelete: "cascade" }),
+        /** A value of the type: a built-in id (`builtin:...`) or one the show adds */
+        value: text().notNull(),
+        /** The value's settings, a JSON object */
+        settings_json: text().notNull().default("{}"),
+        /** `NULL` for a lasting cue; a momentary cue's length in counts, at least 1 */
+        length: integer(),
+        /** Counts the change takes, at least 1 (a snap); `NULL` for the value's default */
+        transition: integer(),
+        /** Display only: how the performers were picked, such as "Trumpets" */
+        label: text(),
+        notes: text(),
+        ...timestamps,
+    },
+    (table) => [
+        index("cues_beat_id_idx").on(table.beat_id),
+        index("cues_type_beat_id_idx").on(table.type, table.beat_id),
+        check("cues_settings_json_check", sql`json_valid(settings_json)`),
+        check(
+            "cues_length_check",
+            sql`length IS NULL OR (typeof(length) = 'integer' AND length >= 1)`,
+        ),
+        check(
+            "cues_transition_check",
+            sql`transition IS NULL OR (typeof(transition) = 'integer' AND transition >= 1)`,
+        ),
+    ],
+);
+
+/**
+ * The performers a cue applies to (ADR 0015 D-4): the ones selected when it was made. Every cue
+ * has its performers here; the marcher deletion write path deletes a cue left with none.
+ *
+ * A surrogate `id`, unique on (cue, marcher): history replays by rowid, so undo has to restore
+ * the same rowid (as `marcher_tags` does).
+ */
+export const cue_marchers = sqliteTable(
+    "cue_marchers",
+    {
+        id: integer().primaryKey(),
+        cue_id: integer()
+            .notNull()
+            .references(() => cues.id, { onDelete: "cascade" }),
+        marcher_id: integer()
+            .notNull()
+            .references(() => marchers.id, { onDelete: "cascade" }),
+    },
+    (table) => [
+        unique("cue_marchers_cue_marcher_unique").on(
+            table.cue_id,
+            table.marcher_id,
+        ),
+        index("cue_marchers_marcher_id_idx").on(table.marcher_id),
     ],
 );
 

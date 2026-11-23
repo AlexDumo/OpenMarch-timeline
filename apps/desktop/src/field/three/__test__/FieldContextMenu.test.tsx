@@ -11,6 +11,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import tolgee from "@/global/singletons/Tolgee";
 import type { ActionId } from "@/shortcuts/definitions";
 import { registerActionHandler } from "@/shortcuts/registry";
+import { setFollowTheLeader } from "@/pathways/followTheLeader";
 import type { FieldEditor } from "@/field/editor/fieldEditor";
 import FieldContextMenu, {
     FIELD_MENU_ACTIONS,
@@ -18,6 +19,12 @@ import FieldContextMenu, {
 } from "../FieldContextMenu";
 import type { FieldMarchers } from "../fieldMarchers";
 import { useInputModeStore } from "@/stores/InputModeStore";
+import { PATH_FIELD_MENU } from "@/pathways/pathPenMode";
+import { resetKeyboardSeen } from "@/stores/KeyboardSeenStore";
+import {
+    MENU_CONTENT_CLASS,
+    POINT_MENU_PLACEMENT,
+} from "@/components/ui/popupClasses";
 
 /**
  * The field's right-click menu (#315): registered actions, with their enabled
@@ -31,7 +38,14 @@ function handle(
         enabled = true,
         label,
         checked = false,
-    }: { enabled?: boolean; label?: string; checked?: boolean } = {},
+        reason = "Not now, for a test",
+    }: {
+        enabled?: boolean;
+        label?: string;
+        checked?: boolean;
+        /** Why it's disabled; null for none (then the menu leaves it out) */
+        reason?: string | null;
+    } = {},
 ) {
     const run = vi.fn();
     handlers.push(
@@ -40,6 +54,7 @@ function handle(
             isEnabled: () => enabled,
             label: () => label,
             checked: () => checked,
+            disabledReason: () => reason ?? undefined,
         }),
     );
     return run;
@@ -49,12 +64,14 @@ function open({
     selectedCount = 1,
     timelineMode = true,
     onClose = vi.fn(),
+    actions = null as readonly ActionId[] | null,
     marcher = null as number | null,
 } = {}) {
     render(
         <TolgeeProvider tolgee={tolgee} fallback="Loading...">
             <FieldContextMenu
                 at={{ x: 120, y: 80 }}
+                actions={actions}
                 marcher={marcher}
                 onClose={onClose}
                 selectedCount={selectedCount}
@@ -74,6 +91,7 @@ describe("FieldContextMenu", () => {
     afterEach(() => {
         cleanup();
         handlers.splice(0).forEach((off) => off());
+        setFollowTheLeader(false);
     });
 
     it("shows nothing until it's opened at a point", () => {
@@ -123,6 +141,138 @@ describe("FieldContextMenu", () => {
         expect(onClose).toHaveBeenCalled();
     });
 
+    it("offers only a mode's actions where it gives them: a path's Edit path and Remove path, with icons and no keys", () => {
+        const edit = handle("editPath");
+        handle("removePath");
+        const { onClose } = open({ actions: ["editPath", "removePath"] });
+        expect(item("editPath")?.textContent).toContain("Edit path");
+        expect(item("removePath")?.textContent).toContain("Remove path");
+        // Each with its icon; Remove path has no key, so it can't happen by accident
+        expect(item("editPath")?.querySelector("svg")).not.toBeNull();
+        expect(item("removePath")?.querySelector("svg")).not.toBeNull();
+        expect(item("removePath")?.querySelector("kbd")).toBeNull();
+        // None of the field's own
+        for (const id of FIELD_MENU_ACTIONS)
+            if (id !== "editPath" && id !== "removePath")
+                expect(item(id)).toBeNull();
+        fireEvent.click(item("editPath")!);
+        expect(edit).toHaveBeenCalledTimes(1);
+        expect(onClose).toHaveBeenCalled();
+    });
+
+    it("keeps the path bar's slots in their places, greyed out with the reason; Detach from group path after the line, before Remove path (round 6)", () => {
+        handle("editPath");
+        handle("editLine", {
+            enabled: false,
+            reason: "Click one of them again to pick just that marcher, then edit their line",
+        });
+        const detach = handle("detachPath", {
+            label: "Detach 2 from group path",
+        });
+        handle("rejoinPath", { enabled: false });
+        handle("adjustResetSpot", {
+            enabled: false,
+            reason: "Click one of them again to pick just that marcher, then match it to the group path",
+        });
+        handle("refitPath", { enabled: false, reason: "Already centered" });
+        handle("detachAllPath", { enabled: false });
+        handle("removePath");
+        open({ actions: PATH_FIELD_MENU });
+        const ids = Array.from(
+            screen.getByTestId("field-menu").querySelectorAll("[data-testid]"),
+        )
+            .map((e) => e.getAttribute("data-testid")!)
+            .filter((id) => /^field-menu-[a-zA-Z]+$/.test(id))
+            .map((id) => id.replace("field-menu-", ""));
+        // The bar's order: Edit group path, Edit <name>'s line, Match group (Rejoin only while it
+        // can act); Re-fit only while it can act; Detach all only with the whole group selected
+        expect(ids).toEqual([
+            "editPath",
+            "editLine",
+            "adjustResetSpot",
+            "detachPath",
+            "removePath",
+        ]);
+        // Detach and Remove path after a line, apart from the routine entries, as under ···
+        const separators = screen
+            .getByTestId("field-menu")
+            .querySelectorAll('[role="separator"]');
+        expect(separators).toHaveLength(1);
+        expect(separators[0]!.nextElementSibling).toBe(item("detachPath"));
+        expect(item("detachPath")!.nextElementSibling).toBe(item("removePath"));
+        expect(item("detachPath")!.textContent).toContain(
+            "Detach 2 from group path",
+        );
+        expect(
+            screen.getByTestId("field-menu-detachPath-note").textContent,
+        ).toBe("Stops following group path changes");
+        expect(item("editLine")).toHaveAttribute("aria-disabled", "true");
+        expect(item("adjustResetSpot")).toHaveAttribute(
+            "aria-disabled",
+            "true",
+        );
+        fireEvent.click(item("detachPath")!);
+        expect(detach).toHaveBeenCalledTimes(1);
+    });
+
+    it("detached marchers selected: Rejoin before Match group, no Detach (round 6)", () => {
+        handle("editPath");
+        handle("editLine", { enabled: false, reason: "Own path" });
+        handle("detachPath", { enabled: false });
+        handle("rejoinPath");
+        handle("adjustResetSpot", {
+            enabled: false,
+            reason: "This marcher is detached: Rejoin puts it back on the group path",
+        });
+        handle("refitPath", { enabled: false });
+        handle("detachAllPath", { enabled: false });
+        handle("removePath");
+        open({ actions: PATH_FIELD_MENU });
+        expect(item("detachPath")).toBeNull();
+        expect(item("rejoinPath")!.nextElementSibling).toBe(
+            item("adjustResetSpot"),
+        );
+    });
+
+    it("the whole group selected: no Detach, Detach all after a line beside Remove path, saying what it does (round 5)", () => {
+        handle("editPath");
+        handle("detachPath", {
+            enabled: false,
+            reason: "Select some marchers to detach them. To detach everyone, use ··· › Detach all 16 marchers",
+        });
+        const all = handle("detachAllPath", {
+            label: "Detach all 16 marchers",
+        });
+        handle("removePath");
+        open({ actions: PATH_FIELD_MENU });
+        expect(item("detachPath")).toBeNull();
+        const detachAll = item("detachAllPath")!;
+        expect(detachAll.textContent).toContain("Detach all 16 marchers");
+        expect(
+            screen.getByTestId("field-menu-detachAllPath-note").textContent,
+        ).toBe("Ends the group path; each marcher gets their own copy");
+        const separator = screen
+            .getByTestId("field-menu")
+            .querySelector('[role="separator"]')!;
+        expect(separator.nextElementSibling).toBe(detachAll);
+        expect(detachAll.nextElementSibling).toBe(item("removePath"));
+        fireEvent.click(detachAll);
+        expect(all).toHaveBeenCalledTimes(1);
+    });
+
+    it("on a path's line, shows the Path group's entries only where they apply", () => {
+        handle("editPath");
+        handle("detachPath", { enabled: false });
+        handle("rejoinPath");
+        handle("removePath");
+        open({
+            actions: ["editPath", "detachPath", "rejoinPath", "removePath"],
+        });
+        expect(item("detachPath")).toBeNull();
+        expect(item("rejoinPath")?.textContent).toContain("Rejoin group path");
+        expect(item("rejoinPath")?.querySelector("svg")).not.toBeNull();
+    });
+
     it("previews an entry while highlighted, and stops on leaving it or the menu closing", () => {
         const preview = vi.fn();
         handlers.push(
@@ -143,21 +293,47 @@ describe("FieldContextMenu", () => {
         expect(preview).toHaveBeenLastCalledWith(false);
     });
 
-    it("shows an action without an enabled handler as unavailable, and running it does nothing", () => {
+    it("shows an action that can't run with its reason, and running it does nothing", () => {
         const run = handle("alignHorizontally", { enabled: false });
         open();
         const align = item("alignHorizontally")!;
-        expect(align).toHaveAttribute("data-disabled");
+        expect(align).toHaveAttribute("aria-disabled", "true");
+        expect(item("alignHorizontally-reason-icon")).toBeTruthy();
         fireEvent.click(align);
         expect(run).not.toHaveBeenCalled();
-        expect(item("alignVertically")).toHaveAttribute("data-disabled");
+    });
+
+    it("leaves out an action that can't run and can't say why, or has no handler", () => {
+        handle("alignHorizontally", { enabled: false, reason: null });
+        open();
+        expect(item("alignHorizontally")).toBeNull();
+        expect(item("alignVertically")).toBeNull();
+    });
+
+    it("offers editing the item right-clicked, first, only while one is selected", () => {
+        for (const id of FIELD_MENU_ACTIONS) handle(id);
+        handle("editSelectedItem", { enabled: false });
+        open();
+        expect(screen.queryByTestId("field-menu-editSelectedItem")).toBeNull();
     });
 
     it("lists the actions in groups, with the page state commands together", () => {
         for (const id of FIELD_MENU_ACTIONS) handle(id);
-        handle("shapeGroup", { enabled: false });
-        handle("shapeUngroup", { enabled: false });
-        open();
+        handle("shapeGroup", { enabled: false, reason: null });
+        handle("shapeUngroup", { enabled: false, reason: null });
+        // The Path group shows only what applies: here Edit path, Edit <name>'s line, then after a
+        // line Detach, Detach all and Remove path
+        for (const id of [
+            "rejoinPath",
+            "adjustResetSpot",
+            "reverseTrail",
+            "refitPath",
+        ] as const)
+            handle(id, { enabled: false, reason: null });
+        // Two selected, so Swap can run, and with Follow-the-leader on a line's order shows
+        // (with it off the order group is gone: followTheLeaderSwitch.test.tsx)
+        setFollowTheLeader(true);
+        open({ selectedCount: 2 });
         const content = screen.getByTestId("field-menu");
         const groups: string[][] = [[]];
         for (const el of Array.from(content.children)) {
@@ -168,11 +344,30 @@ describe("FieldContextMenu", () => {
                 );
         }
         expect(groups).toEqual([
+            ["editSelectedItem"],
+            // Copy and paste (#961), and Paste mirrored
+            [
+                "copyFormation",
+                "pasteFormation",
+                "pasteFormationInPlace",
+                "pasteMirrored",
+            ],
+            ["editPath", "editLine"],
+            ["detachPath", "detachAllPath", "removePath"],
             [
                 "timelineHoldFromPrevious",
                 "timelineHoldOverWindow",
                 "setSelectedMarchersToPreviousPage",
             ],
+            [
+                "timelineHoldStyleDefault",
+                "timelineHoldStyleStand",
+                "timelineHoldStyleMarkTime",
+                "timelineHoldStyleHighMarkTime",
+            ],
+            ["splitSelectedIntoNewMove", "timelineSplitMoveAtPlayhead"],
+            // Two selected: a line's order
+            ["setMarcherOrder", "reverseMarcherOrder", "clearMarcherOrder"],
             [
                 "alignHorizontally",
                 "alignVertically",
@@ -184,6 +379,11 @@ describe("FieldContextMenu", () => {
             ["selectAllMarchers"],
             ["fieldEditMode"],
         ]);
+        expect(item("copyFormation")).toHaveTextContent("Copy");
+        expect(item("pasteFormation")).toHaveTextContent("Paste");
+        expect(item("pasteFormationInPlace")).toHaveTextContent(
+            "Paste exactly",
+        );
         expect(item("timelineHoldFromPrevious")).toHaveTextContent(
             "Hold from last keyframe",
         );
@@ -196,6 +396,43 @@ describe("FieldContextMenu", () => {
         expect(item("setSelectedMarchersToNextPage")).toHaveTextContent(
             "Move to next page's spots (selected)",
         );
+    });
+
+    it("shows Hold style as a group while any of it can run, with the style in effect checked (#775)", () => {
+        const styles = [
+            "timelineHoldStyleDefault",
+            "timelineHoldStyleStand",
+            "timelineHoldStyleMarkTime",
+            "timelineHoldStyleHighMarkTime",
+        ] as const;
+        // Nobody Held at the playhead: none can run, and none is in effect
+        for (const id of styles) handle(id, { enabled: false });
+        open();
+        for (const id of styles) expect(item(id)).toBeNull();
+        cleanup();
+        handlers.splice(0).forEach((off) => off());
+
+        // A Held hold on the show setting: that entry is checked (so off), the others run
+        handle("timelineHoldStyleDefault", { enabled: false, checked: true });
+        const markTime = handle("timelineHoldStyleMarkTime");
+        handle("timelineHoldStyleStand");
+        handle("timelineHoldStyleHighMarkTime");
+        open();
+        expect(item("timelineHoldStyleDefault")).toHaveAttribute(
+            "aria-checked",
+            "true",
+        );
+        expect(item("timelineHoldStyleDefault")).toHaveTextContent(
+            "Hold style: Show setting",
+        );
+        expect(item("timelineHoldStyleStand")).toHaveTextContent(
+            "Hold style: Stand",
+        );
+        expect(item("timelineHoldStyleHighMarkTime")).toHaveTextContent(
+            "Hold style: High mark time",
+        );
+        fireEvent.click(item("timelineHoldStyleMarkTime")!);
+        expect(markTime).toHaveBeenCalledTimes(1);
     });
 
     it("keeps room for a check only in front of the page state commands", () => {
@@ -220,20 +457,44 @@ describe("FieldContextMenu", () => {
         expect(item("timelineHoldFromPrevious")).not.toBeNull();
     });
 
+    it("shows a split it can't run greyed out with its reason, before it's tried, and hides splits outside timeline mode", () => {
+        const split = handle("timelineSplitMoveAtPlayhead", {
+            enabled: false,
+            reason: "Can't split at a count while a line follows a trail. Remove the trail first.",
+        });
+        handle("splitSelectedIntoNewMove");
+        open();
+        const entry = item("timelineSplitMoveAtPlayhead")!;
+        expect(entry).toHaveAttribute("aria-disabled", "true");
+        fireEvent.click(entry);
+        expect(split).not.toHaveBeenCalled();
+        expect(screen.getAllByText(/follows a trail/).length).toBeGreaterThan(
+            0,
+        );
+        expect(item("splitSelectedIntoNewMove")).not.toHaveAttribute(
+            "aria-disabled",
+        );
+        cleanup();
+        open({ timelineMode: false });
+        expect(item("timelineSplitMoveAtPlayhead")).toBeNull();
+        expect(item("splitSelectedIntoNewMove")).toBeNull();
+    });
+
     it("runs the hold command through the actions layer, and greys it out where it can't run", () => {
         const blocked = handle("timelineHoldFromPrevious", { enabled: false });
         open();
         fireEvent.click(item("timelineHoldFromPrevious")!);
         expect(blocked).not.toHaveBeenCalled();
         expect(item("timelineHoldFromPrevious")).toHaveAttribute(
-            "data-disabled",
+            "aria-disabled",
+            "true",
         );
         cleanup();
         handlers.splice(0).forEach((off) => off());
         const hold = handle("timelineHoldFromPrevious");
         open();
         expect(item("timelineHoldFromPrevious")).not.toHaveAttribute(
-            "data-disabled",
+            "aria-disabled",
         );
         fireEvent.click(item("timelineHoldFromPrevious")!);
         expect(hold).toHaveBeenCalledTimes(1);
@@ -302,21 +563,34 @@ describe("FieldContextMenu", () => {
     });
 
     it("offers Swap only with two marchers selected", () => {
-        const run = handle("swapMarchers");
+        // Three selected: its handler says it can't, and why
+        const off = handle("swapMarchers", {
+            enabled: false,
+            reason: "Select 2 marchers to swap them",
+        });
         open({ selectedCount: 3 });
-        fireEvent.click(item("swapMarchers")!);
-        expect(run).not.toHaveBeenCalled();
+        expect(item("swapMarchers")).toHaveAttribute("aria-disabled", "true");
         cleanup();
+        handlers.splice(0).forEach((h) => h());
+        void off;
+        const run = handle("swapMarchers");
         open({ selectedCount: 2 });
         fireEvent.click(item("swapMarchers")!);
         expect(run).toHaveBeenCalledTimes(1);
     });
 
-    it("opens below the point with a mouse, and beside it in the touch layout, where it slides to stay on screen (#928)", () => {
+    it("opens like a system's context menu, its top corner at the point, sliding to stay on screen and scrolling past the window's height, with a mouse or a finger (#928; owner, 2026-11-18)", () => {
+        const fits = (menu: HTMLElement) => {
+            expect(menu).toHaveAttribute("data-side", "right");
+            expect(menu).toHaveAttribute("data-align", "start");
+            // Never taller than the room there: it scrolls instead
+            expect(menu.className).toContain(
+                "max-h-[var(--radix-dropdown-menu-content-available-height)]",
+            );
+            expect(menu.className).toContain("overflow-y-auto");
+        };
         open();
-        const menu = screen.getByTestId("field-menu");
-        expect(menu).toHaveAttribute("data-side", "bottom");
-        expect(menu.className).not.toContain("overflow-y-auto");
+        fits(screen.getByTestId("field-menu"));
         cleanup();
         const before = useInputModeStore.getState().preference;
         act(() => {
@@ -324,13 +598,7 @@ describe("FieldContextMenu", () => {
         });
         try {
             open();
-            const touchMenu = screen.getByTestId("field-menu");
-            expect(touchMenu).toHaveAttribute("data-side", "right");
-            // Never taller than the room there: it scrolls instead
-            expect(touchMenu.className).toContain(
-                "max-h-(--radix-dropdown-menu-content-available-height)",
-            );
-            expect(touchMenu.className).toContain("overflow-y-auto");
+            fits(screen.getByTestId("field-menu"));
         } finally {
             act(() => {
                 useInputModeStore.getState().setPreference(before);
@@ -339,9 +607,74 @@ describe("FieldContextMenu", () => {
         }
     });
 
+    it("every menu built on the shared panel is capped to the room Radix finds, and scrolls", () => {
+        expect(MENU_CONTENT_CLASS).toContain(
+            "max-h-[var(--radix-dropdown-menu-content-available-height)]",
+        );
+        expect(MENU_CONTENT_CLASS).toContain("overflow-y-auto");
+        expect(POINT_MENU_PLACEMENT).toMatchObject({
+            side: "right",
+            align: "start",
+            sticky: "always",
+            avoidCollisions: true,
+        });
+        expect(POINT_MENU_PLACEMENT.collisionPadding).toBeGreaterThan(0);
+    });
+
+    describe("shortcut caps (#880)", () => {
+        const caps = () =>
+            screen.getByTestId("field-menu").querySelectorAll("kbd.shortcut");
+
+        afterEach(() => {
+            act(() => {
+                useInputModeStore.getState().setPreference("auto");
+            });
+            localStorage.clear();
+            resetKeyboardSeen();
+        });
+
+        it("shows each entry's cap with a mouse layout", () => {
+            handle("selectAllMarchers");
+            open();
+            expect(caps().length).toBeGreaterThan(0);
+            expect(
+                item("selectAllMarchers")!.querySelector("kbd"),
+            ).not.toBeNull();
+        });
+
+        it("hides them in the touch layout until a hardware key is pressed, keeping the entries", () => {
+            act(() => {
+                useInputModeStore.getState().setPreference("touch");
+            });
+            handle("selectAllMarchers");
+            handle("setSelectedMarchersToPreviousPage", {
+                label: "Clear Page 3",
+            });
+            open();
+            expect(caps()).toHaveLength(0);
+            // The entries, their words and their enabled states are as they were
+            expect(item("selectAllMarchers")).toHaveTextContent("Select all");
+            expect(item("selectAllMarchers")).not.toHaveAttribute(
+                "data-disabled",
+            );
+            expect(item("setSelectedMarchersToPreviousPage")).toHaveTextContent(
+                "Clear Page 3",
+            );
+
+            // A hardware keyboard's key, outside a text field
+            act(() => {
+                fireEvent.keyDown(window, { key: "Shift" });
+            });
+            expect(caps().length).toBeGreaterThan(0);
+            expect(
+                item("selectAllMarchers")!.querySelector("kbd"),
+            ).not.toBeNull();
+        });
+    });
+
     it("lists every action it offers by its label", () => {
         for (const id of FIELD_MENU_ACTIONS) handle(id);
-        open();
+        open({ selectedCount: 2 });
         expect(
             screen.getAllByRole("menuitem").map((el) => el.textContent),
         ).toEqual(

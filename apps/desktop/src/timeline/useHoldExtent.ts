@@ -98,7 +98,7 @@ export function useHoldExtentCommands(
                         error,
                         tolgee.t(
                             "timeline.holdEdge.changeError",
-                            "Error changing the hold",
+                            "Couldn't change the hold",
                         ),
                     );
                 } finally {
@@ -126,7 +126,7 @@ export function useHoldExtentCommands(
                             error,
                             tolgee.t(
                                 "timeline.holdEdge.splitError",
-                                "Error splitting the hold",
+                                "Couldn't split the hold",
                             ),
                         ),
                     );

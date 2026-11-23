@@ -1,6 +1,5 @@
 import type { ComponentType } from "react";
 import {
-    CubeIcon,
     CursorClickIcon,
     DatabaseIcon,
     GearSixIcon,
@@ -20,13 +19,13 @@ import AppearanceSettings from "@/components/launchpage/settings/AppearanceSetti
 import MouseSettings from "@/components/launchpage/settings/MouseSettings";
 import FieldSettings from "@/components/launchpage/settings/FieldSettings";
 import TimelineSettings from "@/components/launchpage/settings/TimelineSettings";
-import View3dSettings from "@/components/launchpage/settings/View3dSettings";
 import InputSettings from "@/components/launchpage/settings/InputSettings";
 import ShortcutSettings from "@/components/launchpage/settings/ShortcutSettings";
 import PrivacySettings from "@/components/launchpage/settings/PrivacySettings";
 import DeveloperSettings from "@/components/launchpage/settings/DeveloperSettings";
 import DatabaseRepairSettings from "@/components/launchpage/settings/DatabaseRepairSettings";
 import { isWebBuild } from "@/utilities/webBuild";
+import { isActionOffByFollowTheLeader } from "@/pathways/followTheLeader";
 
 export type SettingsSectionId =
     | "general"
@@ -35,7 +34,6 @@ export type SettingsSectionId =
     | "mouse"
     | "timeline"
     | "field"
-    | "view3d"
     | "shortcuts"
     | "privacy"
     | "developer"
@@ -84,6 +82,8 @@ export const ALL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
                       "settings.general.checkForUpdates",
                       "settings.general.automaticDownload",
                       "settings.general.openView3dWithShow",
+                      "settings.general.editorDisplay",
+                      "settings.general.view3dDisplay",
                   ]),
         ],
     },
@@ -153,18 +153,7 @@ export const ALL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
             "settings.field.labelSize",
             "settings.field.labelPosition",
             "settings.field.stepSizeWarnings",
-        ],
-    },
-    {
-        id: "view3d",
-        labelKey: "settings.view3d",
-        Icon: CubeIcon,
-        Component: View3dSettings,
-        descriptionKey: "settings.view3d.summary",
-        searchKeys: [
-            "settings.view3d.controls",
-            "settings.view3d.quality",
-            "settings.view3d.resolution",
+            "settings.field.followTheLeader",
         ],
     },
     {
@@ -175,7 +164,9 @@ export const ALL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
         descriptionKey: "settings.shortcuts.description",
         searchKeys: [],
         searchLabels: (t) => [
-            ...ACTION_IDS.map((id) => getActionLabel(id, t)),
+            ...ACTION_IDS.filter((id) => !isActionOffByFollowTheLeader(id)).map(
+                (id) => getActionLabel(id, t),
+            ),
             ...new Set(
                 ACTION_IDS.map((id) =>
                     t(
@@ -194,6 +185,14 @@ export const ALL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
         searchKeys: [
             "settings.privacy.analytics",
             "settings.privacy.analytics.toggle",
+            // Not in the web build, which can't reach the Discord app
+            ...(isWebBuild
+                ? []
+                : [
+                      "settings.privacy.discord",
+                      "settings.privacy.discord.toggle",
+                      "settings.privacy.discord.showName",
+                  ]),
         ],
     },
     {

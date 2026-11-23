@@ -18,7 +18,6 @@ import {
 } from "@openmarch/ui";
 import ActionButton from "@/shortcuts/ActionButton";
 import { PlusIcon, TrashIcon } from "@phosphor-icons/react";
-import { toast } from "sonner";
 import { T, useTranslate } from "@tolgee/react";
 
 export default function AudioSelector() {
@@ -56,18 +55,8 @@ export default function AudioSelector() {
                 }
                 refreshAudioFiles();
             });
-            toast.success(
-                t("music.deleteSuccess", {
-                    fileName: selectedAudioFile?.nickname,
-                }),
-            );
         },
-        [
-            refreshAudioFiles,
-            selectedAudioFile?.nickname,
-            setSelectedAudioFile,
-            t,
-        ],
+        [refreshAudioFiles, setSelectedAudioFile],
     );
 
     useEffect(() => {
@@ -116,7 +105,7 @@ export default function AudioSelector() {
                                 {audioFiles.map((audioFile) => (
                                     <div
                                         key={audioFile.id}
-                                        className="grid grid-cols-2 text-xs text-wrap"
+                                        className="text-sub grid grid-cols-2 text-wrap"
                                     >
                                         <SelectItem value={`${audioFile.id}`}>
                                             {audioFile.nickname}
