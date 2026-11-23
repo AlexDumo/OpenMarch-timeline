@@ -497,6 +497,19 @@ export interface ToolClickPoints<P> {
 }
 
 /**
+ * A kind's copies (spec #1190): rows that repeat the drawn shape, set in the editor's Copies menu.
+ * Its numbers take the whole spot count, as the host gives it.
+ */
+export interface ToolCopies<P> {
+    /** The menu's numbers, in order: how many behind, how many in front, how far apart */
+    readonly params: readonly ToolParam<P>[];
+    /** What the menu's button says: "2 behind · 1 in front", or null with no copies */
+    summary(params: P, n: number): string | null;
+    /** The shape with its copies taken off */
+    clear(params: P): P;
+}
+
+/**
  * How one kind of shape is drawn and edited with the pointer. The tool's state machine
  * (`toolMachine.ts`) owns the gestures and calls these; a kind never sees a pointer event.
  * Everything is pure.
@@ -717,6 +730,12 @@ export interface ToolKind<P> {
     emptySpots?(params: P, n: number): readonly XY[];
     /** The params as placing saves them, when the open shape holds more than a recipe keeps */
     forPlacing?(params: P): P;
+    /** Its copies' menu (spec #1190); absent for a kind without */
+    readonly copies?: ToolCopies<P>;
+    /**
+     * The outlines of its copies, drawn like its own outline (spec #1190). None when absent.
+     */
+    copyOutlines?(params: P, n: number): readonly (readonly XY[])[];
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

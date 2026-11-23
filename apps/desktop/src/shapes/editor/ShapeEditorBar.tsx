@@ -67,7 +67,12 @@ import {
     EyeIcon,
     EyeSlashIcon,
     SelectionSlashIcon,
+    CopySimpleIcon,
+    CaretDownIcon,
 } from "@phosphor-icons/react";
+import * as Popover from "@radix-ui/react-popover";
+import { Tip } from "@/components/ui/Tip";
+import { useEditorMenu, useMenuFocus } from "./menuFocus";
 import {
     fieldToElement,
     useFieldViewStore,
@@ -1492,6 +1497,9 @@ const fillShown = (kind: AnyToolKind, params: unknown, spots: number) => {
         ]),
         flipX,
         flipY,
+        // The Copies menu's button says how many (spec #1190)
+        kind.copies ? kind.copies.summary(params, spots) : null,
+        kind.copies ? (params as { copies?: unknown }).copies : null,
     ]);
 };
 
@@ -1524,6 +1532,8 @@ const FillPill = memo(function FillPill({
         >
             {/* The kind's own menus (a Line's spacing, #523) */}
             <ChoiceMenus target={target} envFor={env} />
+            {/* Rows that copy the shape (spec #1190) */}
+            <CopiesMenu target={target} />
             {/* Who goes where on a Line (#528) */}
             <OrderMenu target={target} />
             <ModeMenu target={target} envFor={env} />
@@ -1555,6 +1565,150 @@ const FillPill = memo(function FillPill({
         </div>
     );
 });
+
+/**
+ * The Copies menu (spec #1190): rows that repeat a Line, Curve or Arc behind or in front of it,
+ * one shape with it. Its button says how many; its numbers are typed, dragged or stepped like the
+ * editor's, each change one undo step (one save for a placed shape). None for a kind without.
+ */
+function CopiesMenu({ target }: { target: ShapeEditTarget }) {
+    const [open, setOpen] = useEditorMenu();
+    const focus = useMenuFocus((el) =>
+        el.querySelector<HTMLElement>("[data-testid^='shape-editor-copies']"),
+    );
+    const run = useRef<SizeRun | null>(null);
+    const chips = useRef<{ layout: ChipLayout; anchor: XY }>({
+        layout: {
+            values: [],
+            intervals: [],
+            groups: null,
+            ratioLock: false,
+            lock: null,
+        },
+        anchor: { x: 0, y: 0 },
+    });
+    const copies = target.kind.copies;
+    const actions = useMemo(() => {
+        const base = numberActions(target, run, chips);
+        const step = (param: Param, by: -1 | 1) => {
+            const env = envFor();
+            const next =
+                env && param.stepper?.by(target.params, target.spots, by, env);
+            if (next) target.apply(next);
+        };
+        return {
+            ...base,
+            less: (param: Param) => step(param, -1),
+            more: (param: Param) => step(param, 1),
+        };
+    }, [target]);
+    if (!copies) return null;
+    const { params, spots } = target;
+    const stepPx = envFor()?.stepPx ?? 1;
+    const shown = copies.params.filter((p) => p.shown?.(params, spots) ?? true);
+    if (shown.length === 0) return null;
+    const summary = copies.summary(params, spots);
+    const label = tolgee.t("shapes.copies.label", "Copies");
+    const env = envFor();
+    return (
+        <Popover.Root open={open} onOpenChange={setOpen}>
+            <Tip label={label}>
+                <Popover.Trigger asChild>
+                    <button
+                        type="button"
+                        aria-label={summary ? `${label}: ${summary}` : label}
+                        {...focus.trigger}
+                        data-testid="shape-copies"
+                        className="rounded-4 hover:bg-text/10 flex min-h-24 items-center gap-4 px-4 py-2"
+                    >
+                        <CopySimpleIcon size={14} />
+                        <span>{summary ?? label}</span>
+                        <CaretDownIcon size={10} />
+                    </button>
+                </Popover.Trigger>
+            </Tip>
+            <Popover.Portal>
+                <Popover.Content
+                    side="bottom"
+                    align="start"
+                    sideOffset={6}
+                    {...focus.content}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal z-50 border p-8"
+                    data-testid="shape-copies-content"
+                >
+                    <div className="grid grid-cols-[auto_auto] items-center gap-x-12 gap-y-4">
+                        {shown.map((param) => (
+                            <Fragment key={param.key}>
+                                <span className="text-text/60">
+                                    {COPY_ROW_WORDS[param.key]?.() ??
+                                        param.label}
+                                </span>
+                                <NumberChip
+                                    param={param}
+                                    display={param.display(
+                                        params,
+                                        spots,
+                                        stepPx,
+                                    )}
+                                    note={null}
+                                    after={
+                                        param.unit === "steps"
+                                            ? tolgee.t(
+                                                  "shapes.edit.steps",
+                                                  "steps",
+                                              )
+                                            : null
+                                    }
+                                    canLess={
+                                        env !== null &&
+                                        (param.stepper?.by(
+                                            params,
+                                            spots,
+                                            -1,
+                                            env,
+                                        ) ?? null) !== null
+                                    }
+                                    canMore={
+                                        env !== null &&
+                                        (param.stepper?.by(
+                                            params,
+                                            spots,
+                                            1,
+                                            env,
+                                        ) ?? null) !== null
+                                    }
+                                    glyph={null}
+                                    actions={actions}
+                                />
+                            </Fragment>
+                        ))}
+                    </div>
+                    {summary !== null && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                target.apply(copies.clear(target.params));
+                                setOpen(false);
+                            }}
+                            data-testid="shape-copies-clear"
+                            className="rounded-4 hover:text-accent mt-6 min-h-24 px-4 py-2"
+                        >
+                            {tolgee.t("shapes.copies.clear", "Remove copies")}
+                        </button>
+                    )}
+                </Popover.Content>
+            </Popover.Portal>
+        </Popover.Root>
+    );
+}
+
+/** The Copies menu's row names, shorter than the numbers' own labels */
+const COPY_ROW_WORDS: Record<string, () => string> = {
+    copiesBehind: () => tolgee.t("shapes.copies.rowBehind", "Behind"),
+    copiesFront: () => tolgee.t("shapes.copies.rowFront", "In front"),
+    copiesApart: () => tolgee.t("shapes.copies.rowApart", "Apart"),
+};
 
 /** The field less the covers over its top (the touch toolbar's panel), in the field's px */
 function visibleField(

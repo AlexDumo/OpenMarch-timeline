@@ -219,6 +219,7 @@ const drawingOf = memoDrawing(
             stage: drawing ? ("drawing" as const) : ("open" as const),
             outline: shapeOutline(tool.kind, tool.params, n),
             openOutline: tool.kind.outlineOpen?.(tool.params, n) ?? false,
+            copies: tool.kind.copyOutlines?.(tool.params, n) ?? [],
             construction: tool.kind.construction?.(tool.params, n) ?? [],
             spots,
             walks: walks

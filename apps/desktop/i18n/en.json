@@ -2603,6 +2603,22 @@
             "restedTip": "Clipboard: {name}, {count} · Show details",
             "shapeAsPositions": "{name} positions",
             "title": "Clipboard"
+        },
+        "copies": {
+            "apart": "Rows apart, in steps",
+            "behind": "Copies behind",
+            "behindLess": "One fewer behind",
+            "behindMore": "One more behind",
+            "clear": "Remove copies",
+            "front": "Copies in front",
+            "frontLess": "One fewer in front",
+            "frontMore": "One more in front",
+            "label": "Copies",
+            "rowApart": "Apart",
+            "rowBehind": "Behind",
+            "rowFront": "In front",
+            "summaryBehind": "{count} behind",
+            "summaryFront": "{count} in front"
         }
     },
     "tags": {

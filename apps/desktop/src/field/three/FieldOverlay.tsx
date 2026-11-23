@@ -1289,6 +1289,21 @@ const ShapeBody = memo(function ShapeBody({
                         vectorEffect="non-scaling-stroke"
                     />
                 ))}
+            {/* The shape's copies (spec #1190): each row drawn as its own line is */}
+            {drawing.copies?.map((row, i) => (
+                <polyline
+                    key={`copy-${i}`}
+                    points={row.map((p) => `${p.x},${p.y}`).join(" ")}
+                    fill="none"
+                    stroke={shape}
+                    strokeWidth={SHAPE_OUTLINE_WIDTH}
+                    strokeDasharray={open ? undefined : SHAPE_OUTLINE_DASH}
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    vectorEffect="non-scaling-stroke"
+                    data-testid="fieldShapeCopy"
+                />
+            ))}
             {/* Over the muted group line: the one heavy line while a lane is worked on */}
             {drawing.lanePicked !== undefined &&
                 drawing.lanes?.[drawing.lanePicked] && (

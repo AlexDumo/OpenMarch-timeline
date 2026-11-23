@@ -3924,5 +3924,19 @@
     "assets.errors.remove": "Error toast when removing the unused imported files fails.",
     "assets.errors.credits": "Error toast when saving an imported file's license and author fails.",
     "props.modelMissing": "Note in a prop's edit panel when the imported 3D model it names isn't in the show any more (it was removed, then an undo brought the prop back). The prop draws as a plain block.",
-    "props.imported.manage": "Small link under the Props panel's Imported group that opens the Assets panel, where imported models' size, use and license are shown."
+    "props.imported.manage": "Small link under the Props panel's Imported group that opens the Assets panel, where imported models' size, use and license are shown.",
+    "shapes.copies.apart": "Tooltip and screen-reader label of the number in the shape editor's Copies menu that sets how far apart the rows of a copied line are, in steps (marching steps).",
+    "shapes.copies.behind": "Tooltip and screen-reader label of the number in the Copies menu that sets how many copies of a drawn line go behind it, toward the back of the field.",
+    "shapes.copies.behindLess": "Tooltip of the minus button beside the Behind number in the Copies menu: removes one copy behind the line.",
+    "shapes.copies.behindMore": "Tooltip of the plus button beside the Behind number in the Copies menu: adds one copy behind the line.",
+    "shapes.copies.clear": "Button in the Copies menu that removes every copy of the line, leaving the drawn line only.",
+    "shapes.copies.front": "Tooltip and screen-reader label of the number in the Copies menu that sets how many copies of a drawn line go in front of it, toward the audience.",
+    "shapes.copies.frontLess": "Tooltip of the minus button beside the In front number in the Copies menu: removes one copy in front of the line.",
+    "shapes.copies.frontMore": "Tooltip of the plus button beside the In front number in the Copies menu: adds one copy in front of the line.",
+    "shapes.copies.label": "Name of the Copies menu under the shape editor of a line, curve or arc. Copies are extra rows that repeat the drawn line behind or in front of it. Noun, very short.",
+    "shapes.copies.rowApart": "Row name in the Copies menu, beside the number of steps between rows. Very short.",
+    "shapes.copies.rowBehind": "Row name in the Copies menu, beside how many copies go behind the line (toward the back of the field). Very short.",
+    "shapes.copies.rowFront": "Row name in the Copies menu, beside how many copies go in front of the line (toward the audience). Very short.",
+    "shapes.copies.summaryBehind": "Part of the Copies menu button's text: {count} is how many copies are behind the line (for example \"2 behind\"). Joined with the in-front part by a middle dot.",
+    "shapes.copies.summaryFront": "Part of the Copies menu button's text: {count} is how many copies are in front of the line (for example \"1 in front\"). Joined with the behind part by a middle dot."
 }

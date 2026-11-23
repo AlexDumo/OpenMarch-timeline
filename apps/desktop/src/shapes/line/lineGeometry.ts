@@ -21,6 +21,7 @@ import {
     storedDistribution,
     type Distribution,
 } from "../distribute/distribution";
+import { isCopies, type LineCopies } from "./copiesParams";
 import type { ToolEnv } from "../tool/toolKind";
 import type { Slot, XY } from "../types";
 
@@ -162,6 +163,11 @@ export interface LineParams {
      * ⟳); editing its points never does. Absent is 0, so a Line saved before reads 0° as it is.
      */
     readonly turn?: number;
+    /**
+     * Rows that copy the line behind or in front of it (spec #1190): only on an open line, every
+     * row following it. None when absent.
+     */
+    readonly copies?: LineCopies;
 }
 
 /** Whether `p` joins its last point to its first */
@@ -262,6 +268,7 @@ const KEYS = new Set([
     "offset",
     "turn",
     "pivot",
+    "copies",
 ]);
 
 /** A stored turn: degrees from 0 up to 360 */
@@ -286,6 +293,9 @@ export function isLineParams(params: unknown): params is LineParams {
     if ((p.measured === "offset") !== (p.offset !== undefined)) return false;
     if (p.offset !== undefined && !isOffset(p.offset)) return false;
     if (p.turn !== undefined && !isTurn(p.turn)) return false;
+    // Copies only on an open line (#1190)
+    if (!isCopies(p.copies) || (p.copies !== undefined && p.closed === true))
+        return false;
     // A closed line has three points, or two joined by a bent segment (an Arc's chord or circle)
     if (
         !Array.isArray(p.points) ||
