@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useShallow } from "zustand/react/shallow";
 import { toast } from "sonner";
+import { followingLockReason, isFollowing } from "./FollowStatus";
 import { translateTimelineText } from "@/timeline/translateTimelineText";
 import { allMarchersQueryOptions } from "@/hooks/queries";
 import { readGroupPaths } from "@/db-functions/timelineGroupRoutes";
@@ -166,6 +167,12 @@ export function usePathPenActions(): void {
         // path again: a path edit by its route, keeping its id, never refused for who holds its
         // spots (AP-O8, J.8 AP-R1, 07 N3)
         const now = usePathPenStore.getState().session;
+        // Follow open: the Path button waits for it, and so does P, saying why rather than
+        // replacing the Follow with a new path
+        if (isFollowing(now)) {
+            toast.error(followingLockReason(), { id: "path-pen" });
+            return;
+        }
         // A trail can't be drawn again with Follow-the-leader off (#1095): said, not ignored
         if (now?.target.trail && now.target.routeId !== null && trailLocked) {
             toast.error(trailOffReason(), { id: "path-pen" });

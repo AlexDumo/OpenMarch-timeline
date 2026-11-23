@@ -95,8 +95,8 @@ describe("the path's floating editor", () => {
         expect(el.className).toContain("bg-bg-1");
         expect(el.className).toContain("text-sub");
         expect(el.textContent).not.toMatch(PICTOGRAPHIC);
-        // Words: only Finish
-        expect(el.textContent?.trim()).toBe("Finish");
+        // Words: Straight | Curved for the next point, and Finish
+        expect(el.textContent?.trim()).toBe("StraightCurvedFinish");
         expect(el.textContent).not.toContain("T4");
         expect(
             screen.getByTestId("path-remove-last").querySelector("svg"),

@@ -10,16 +10,19 @@ import {
     restoreDiscardedShape,
 } from "@/shapes/tool/shapeLeave";
 import { useShapeToolStore } from "@/shapes/tool/shapeToolStore";
+import { followingLockReason, isFollowing } from "./FollowStatus";
 import { cancelOrderSweep } from "./marcherOrderStore";
 import { closePath, usePathPenStore } from "./pathPenStore";
 
 /**
- * Why Set order can't open now, or null: a path being drawn with points placed, which closing
- * would throw away with no undo to bring it back
+ * Why Set order can't open now, or null: Follow open (the top bar waits for it, and Shift+O says
+ * so rather than closing it), or a path being drawn with points placed, which closing would throw
+ * away with no undo to bring it back
  */
 export function orderSweepBlocked(
     session = usePathPenStore.getState().session,
 ): string | null {
+    if (isFollowing(session)) return followingLockReason();
     if (session?.phase === "drawing" && session.points.length > 0)
         return tolgee.t(
             "pathways.order.refuseDrawing",

@@ -1277,5 +1277,27 @@ describeDbTests(
             await dragTrail({ db, window: WINDOW, marcherIds: IDS, leaderId: 4, line: ring, points: [{ at: out }], spacing: { kind: "keep" }, step, ends: "trail" }); // prettier-ignore
             expect((await trailOf(db)).marcherIds).toEqual(ring);
         });
+
+        it("a set order round the circle may be walked the other way (owner, 2026-11-23): 5 follows 4, not 3", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { step, c, at } = await onOutline(db, (c0, st) =>
+                circlePlaces(c0, 5 * st),
+            );
+            const from = at[3]!;
+            const out: XY = [
+                from[0] + (from[0] - c[0]),
+                from[1] + (from[1] - c[1]),
+            ];
+            // set clockwise from 1 (3 behind 4), pulled out leaning the other way
+            await setMarcherOrder(db, {
+                beat: WINDOW.end,
+                order: [1, 8, 7, 6, 5, 4, 3, 2],
+            });
+            const otherWay = [3, 2, 1, 8, 7, 6, 5, 4];
+            await dragTrail({ db, window: WINDOW, marcherIds: IDS, leaderId: 4, line: otherWay, points: [{ at: out }], spacing: { kind: "keep" }, step, ends: "trail" }); // prettier-ignore
+            expect((await trailOf(db)).marcherIds).toEqual(otherWay);
+        });
     },
 );

@@ -1744,8 +1744,13 @@ export async function finishDrawing(
     const carried =
         held.follow?.roundSlide?.loose && held.follow.grabbed !== null;
     if (carried) {
+        // Pulled out with the pointer since gone off the field: the last spot the leader
+        // followed stands in, so the trail isn't thrown away (#1178 review)
+        const at =
+            held.pointer ??
+            (held.follow?.peel ? held.follow.roundSlide!.pointer : null);
         endRoundSlide();
-        if (held.pointer) addPoint(held.pointer);
+        if (at) addPoint(at);
     }
     const session = carried ? usePathPenStore.getState().session! : held;
     // Going round (step 10, AP-T13): nothing is drawn; the line goes round as the bar says. With
