@@ -437,38 +437,6 @@ export function buildDieselTurf(ctx: DieselCtx): DieselPart {
     };
 }
 
-/** A football field with end zones, the field the stadium is built round. */
-const FIELD_LENGTH = 360 * FT;
-const FIELD_WIDTH = 160 * FT;
-
-/**
- * The field the stadium is built round. A show's football field is used as
- * it is; a smaller floor (indoor, SoundSport) gets a regulation football
- * field centered on it, so the bowl never shrinks round a small floor, and
- * `ownField` says the kit paints that field itself (`buildDieselOwnField`).
- */
-export function dieselStadiumFootprint(footprint: FieldFootprint): {
-    footprint: FieldFootprint;
-    ownField: boolean;
-} {
-    const length = footprint.maxX - footprint.minX;
-    const width = footprint.maxZ - footprint.minZ;
-    const tolerance = 0.05;
-    if (length >= FIELD_LENGTH - tolerance && width >= FIELD_WIDTH - tolerance)
-        return { footprint, ownField: false };
-    const cx = (footprint.minX + footprint.maxX) / 2;
-    const cz = (footprint.minZ + footprint.maxZ) / 2;
-    return {
-        footprint: {
-            minX: cx - FIELD_LENGTH / 2,
-            maxX: cx + FIELD_LENGTH / 2,
-            minZ: cz - FIELD_WIDTH / 2,
-            maxZ: cz + FIELD_WIDTH / 2,
-        },
-        ownField: true,
-    };
-}
-
 /**
  * The stadium's own pro football field, painted as the show's would be,
  * under a smaller show floor: the show's floor draws over it at midfield.

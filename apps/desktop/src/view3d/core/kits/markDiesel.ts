@@ -28,11 +28,8 @@ import {
 import { buildDieselLighting, DIESEL_VENUE } from "./markDiesel/lighting";
 import { buildDieselRoof } from "./markDiesel/roof";
 import { buildDieselSite } from "./markDiesel/site";
-import {
-    buildDieselOwnField,
-    buildDieselTurf,
-    dieselStadiumFootprint,
-} from "./markDiesel/turf";
+import { buildDieselOwnField, buildDieselTurf } from "./markDiesel/turf";
+import { fixedFieldFootprint } from "./fixedField";
 
 /**
  * The Mark Diesel kit: Mark Diesel Stadium, a fictional retractable-roof
@@ -83,7 +80,7 @@ export const buildMarkDiesel: KitBuilder = ({
 }) => {
     // A floor smaller than a football field (indoor, SoundSport) lies at
     // midfield of the stadium's own field.
-    const { footprint, ownField } = dieselStadiumFootprint(showFootprint);
+    const { footprint, ownField } = fixedFieldFootprint(showFootprint);
     const shared = createSharedMaterials();
     const frame = dieselFrame(footprint);
     const { CENTER } = frame;

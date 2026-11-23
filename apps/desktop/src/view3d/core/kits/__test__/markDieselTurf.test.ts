@@ -7,11 +7,12 @@ import { dieselFrame } from "../markDiesel/frame";
 import {
     DIESEL_SIDELINE,
     DIESEL_TURF,
-    dieselStadiumFootprint,
     dieselTurfOutline,
     planDieselSideline,
 } from "../markDiesel/turf";
 import { DIESEL_VENUE_PARAMS } from "../markDiesel/brand";
+import { fixedFieldFootprint } from "../fixedField";
+import { kitFieldStyle } from "..";
 import type { FieldFootprint } from "../../types";
 
 const FT = 0.3048;
@@ -168,7 +169,7 @@ describe("Mark Diesel on a small floor", () => {
     );
 
     it("builds the stadium round a football field centered on the floor", () => {
-        const { footprint, ownField } = dieselStadiumFootprint(indoor);
+        const { footprint, ownField } = fixedFieldFootprint(indoor);
         expect(ownField).toBe(true);
         expect((footprint.maxX - footprint.minX) / FT).toBeCloseTo(360);
         expect((footprint.maxZ - footprint.minZ) / FT).toBeCloseTo(160);
@@ -178,10 +179,25 @@ describe("Mark Diesel on a small floor", () => {
         expect(footprint.minZ + footprint.maxZ).toBeCloseTo(
             indoor.minZ + indoor.maxZ,
         );
-        expect(dieselStadiumFootprint(football)).toEqual({
+        expect(fixedFieldFootprint(football)).toEqual({
             footprint: football,
             ownField: false,
         });
+    });
+
+    it("lays a smaller floor on the turf as a tarp, and only in Mark Diesel", () => {
+        const fp = FieldPropertiesTemplates;
+        expect(kitFieldStyle("markDiesel", fp.INDOOR_50x80_8to5)).toBe("tarp");
+        expect(
+            kitFieldStyle("markDiesel", fp.PRO_FOOTBALL_FIELD_WITH_END_ZONES),
+        ).toBe("turf");
+        expect(
+            kitFieldStyle(
+                "markDiesel",
+                fp.HIGH_SCHOOL_FOOTBALL_FIELD_NO_END_ZONES,
+            ),
+        ).toBe("turf");
+        expect(kitFieldStyle("pro", fp.INDOOR_50x80_8to5)).toBe("turf");
     });
 
     it("builds without throwing and paints its own field under the floor", () => {

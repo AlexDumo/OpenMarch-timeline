@@ -1,4 +1,11 @@
-import type { FieldCenterArt, FieldSurfaceStyle, TurfColors } from "../field";
+import type { FieldProperties } from "@openmarch/core";
+import {
+    venueFootprint,
+    type FieldCenterArt,
+    type FieldSurfaceStyle,
+    type TurfColors,
+} from "../field";
+import { fixedFieldFootprint } from "./fixedField";
 import { DIESEL_TURF } from "./markDiesel/turf";
 import type { KitBuilder, VenueKitId } from "../types";
 import { buildArena } from "./arena";
@@ -42,6 +49,32 @@ export const KIT_FIELD_STYLE: Readonly<Record<VenueKitId, FieldSurfaceStyle>> =
         arena: "tarp",
         blank: "theme",
     };
+
+/**
+ * Venues with a field of their own (`fixedFieldFootprint`): they are always
+ * built round a regulation football field and never resize to the show. A
+ * smaller floor lies at midfield as a tarp on their turf.
+ */
+export const KIT_FIXED_FIELD: Readonly<Partial<Record<VenueKitId, true>>> = {
+    markDiesel: true,
+};
+
+/**
+ * The surface style a kit paints the show's field in: `KIT_FIELD_STYLE`,
+ * except that a floor smaller than a fixed-field venue's field is a tarp
+ * (the show's field image, or the generated tarp) laid on the venue's turf.
+ */
+export function kitFieldStyle(
+    kitId: VenueKitId,
+    fieldProperties: FieldProperties,
+): FieldSurfaceStyle {
+    const style = KIT_FIELD_STYLE[kitId];
+    if (!KIT_FIXED_FIELD[kitId]) return style;
+    const { ownField } = fixedFieldFootprint(
+        venueFootprint(fieldProperties, style),
+    );
+    return ownField ? "tarp" : style;
+}
 
 /**
  * Midfield art a kit paints in place of the OpenMarch logo

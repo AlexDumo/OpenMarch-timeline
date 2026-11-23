@@ -36,7 +36,7 @@ import {
     KIT_BUILDERS,
     KIT_FIELD_ART,
     KIT_FIELD_TURF,
-    KIT_FIELD_STYLE,
+    kitFieldStyle,
 } from "@/view3d/core/kits";
 import { defaultVenueForKit } from "@/view3d/core/venueSettings";
 import type {
@@ -134,6 +134,8 @@ export interface LoadOptions {
     field?: keyof typeof FIELDS;
     quality?: "low" | "high";
     crowd?: boolean;
+    /** A field background image (a data URL); none by default. */
+    image?: string;
     /** Credits for the kit's video boards; a sample show by default. */
     credits?: ShowCredits;
 }
@@ -150,6 +152,10 @@ async function load(options: LoadOptions): Promise<LoadResult> {
     const quality = options.quality ?? "high";
     const fp = FIELDS[options.field ?? KIT_FIELD[options.kit] ?? "football"];
     const params = defaultVenueForKit(options.kit).params;
+    const style = kitFieldStyle(options.kit, fp);
+    const image = options.image
+        ? await createImageBitmap(await (await fetch(options.image)).blob())
+        : null;
     renderer.shadowMap.enabled = quality === "high";
     renderer.shadowMap.needsUpdate = true;
 
@@ -157,7 +163,7 @@ async function load(options: LoadOptions): Promise<LoadResult> {
     scene.add(env.root);
     scene.fog = env.fog;
     const built = KIT_BUILDERS[options.kit]({
-        footprint: venueFootprint(fp, KIT_FIELD_STYLE[options.kit]),
+        footprint: venueFootprint(fp, style),
         params,
         quality,
     });
@@ -168,11 +174,11 @@ async function load(options: LoadOptions): Promise<LoadResult> {
     const surface = buildFieldSurface({
         fieldProperties: fp,
         theme: fp.theme,
-        style: KIT_FIELD_STYLE[options.kit],
+        style,
         centerArt: KIT_FIELD_ART[options.kit],
         turf: KIT_FIELD_TURF[options.kit],
         params,
-        image: null,
+        image,
         maxTextureSize: renderer.capabilities.maxTextureSize,
         anisotropy: renderer.capabilities.getMaxAnisotropy(),
     });

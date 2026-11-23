@@ -70,7 +70,7 @@ import {
     KIT_BUILDERS,
     KIT_FIELD_ART,
     KIT_FIELD_TURF,
-    KIT_FIELD_STYLE,
+    kitFieldStyle,
 } from "@/view3d/core/kits";
 import type {
     CameraSeat,
@@ -249,7 +249,10 @@ function SceneContents({
     const paramsKey = JSON.stringify(settings.params);
     const params = useStable<VenueParams>(settings.params, paramsKey);
     const kitId = settings.kit;
-    const fieldStyle = KIT_FIELD_STYLE[kitId];
+    const fieldStyle = useMemo(
+        () => kitFieldStyle(kitId, fieldProperties),
+        [kitId, fieldProperties],
+    );
     const footprintKey = useMemo(
         () => JSON.stringify(venueFootprint(fieldProperties, fieldStyle)),
         [fieldProperties, fieldStyle],
