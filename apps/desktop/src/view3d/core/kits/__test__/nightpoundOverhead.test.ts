@@ -179,7 +179,7 @@ describe("nightpound roof plan", () => {
 
     it("hangs the cans in a grid, closer together over the floor", () => {
         const cans = canLayout();
-        expect(cans.length).toBeGreaterThan(120);
+        expect(cans.length).toBeGreaterThan(100);
         expect(cans.length).toBeLessThan(260);
         for (const { position } of cans) {
             expect(position[1]).toBe(CAN.faceY);

@@ -89,6 +89,8 @@ function onFloor(x: number, z: number): boolean {
 }
 
 describe("nightpound bowl plan", () => {
+    // Heights after the independent size audit (docs/3d/nightpound.md):
+    // the side stands are lower than the first cross-section had them.
     it("matches the cross-section's key offsets and heights", () => {
         expect(tierBack(BOWL.lower)).toBeCloseTo(BOWL.crossAisle.offset, 2);
         expect(tierTop(BOWL.lower)).toBeCloseTo(BOWL.crossAisle.y, 2);
@@ -97,14 +99,14 @@ describe("nightpound bowl plan", () => {
             2,
         );
         expect(tierBack(BOWL.mid)).toBeCloseTo(BOWL.club.offset, 2);
-        expect(tierTop(BOWL.mid)).toBeCloseTo(8.75, 2);
-        expect(tierTop(BOWL.midEnd)).toBeCloseTo(7.67, 2);
+        expect(tierTop(BOWL.mid)).toBeCloseTo(7.85, 2);
+        expect(tierTop(BOWL.midEnd)).toBeCloseTo(6.95, 2);
         expect(tierBack(BOWL.club)).toBeCloseTo(BOWL.concourse.offset, 2);
         expect(BOWL.concourse.offset + BOWL.concourse.width).toBeCloseTo(
             BOWL.upper.offset,
             2,
         );
-        expect(tierTop(BOWL.upper)).toBeCloseTo(22.22, 2);
+        expect(tierTop(BOWL.upper)).toBeCloseTo(18.18, 2);
         expect(tierBack(BOWL.upper)).toBeLessThan(BOWL.rearWall);
         // The back stand's fixed wall is the floor's back edge.
         const [, z] = bankPoint(BANKS.back, BOWL.crossAisle.offset, 0);
@@ -262,8 +264,8 @@ describe("nightpound bowl plan", () => {
         // Row N of the 200s on the center line: the spec's judges' seat.
         expect(z).toBeGreaterThan(33);
         expect(z).toBeLessThan(34.5);
-        expect(y).toBeGreaterThan(8.9);
-        expect(y).toBeLessThan(9.6);
+        expect(y).toBeGreaterThan(8.2);
+        expect(y).toBeLessThan(8.7);
         expect(() => bowlEye("east", "300", 0)).toThrow();
     });
 });

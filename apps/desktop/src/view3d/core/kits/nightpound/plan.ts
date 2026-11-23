@@ -18,8 +18,8 @@ export const ARENA_CENTER_Z = 2.74;
 /** The arena floor, wall to wall, in WGI trim. */
 export const FLOOR = {
     /** The end stands' front walls (row A at both ends). */
-    minX: -17.83,
-    maxX: 17.83,
+    minX: -19,
+    maxX: 19,
     /** The front stand's wall: row A of 110 to 115, 5 ft past the floor. */
     maxZ: 13.41,
     /** The fixed wall under the back stand's cross aisle, behind the folded 100s. */

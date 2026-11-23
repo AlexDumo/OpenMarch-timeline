@@ -44,7 +44,7 @@ const LOWER: BowlTier = {
 const MID: BowlTier = {
     rows: 16,
     depth: 0.76,
-    rise: 0.36,
+    rise: 0.3,
     offset: 9.89,
     base: 3.35,
 };
@@ -53,14 +53,14 @@ const CLUB: BowlTier = {
     depth: 0.9,
     rise: 0.35,
     offset: 22.05,
-    base: 9.1,
+    base: 8.2,
 };
 const UPPER: BowlTier = {
     rows: 34,
     depth: 0.71,
-    rise: 0.34,
+    rise: 0.26,
     offset: 25.45,
-    base: 11,
+    base: 9.6,
 };
 
 /** Where a tier ends, out from the floor wall. */
@@ -92,7 +92,7 @@ export const BOWL = {
     /** The two red club rows at the top of the sides' 200s. */
     club: CLUB,
     /** The concourse level and the sides' aisle along it. */
-    concourse: { offset: 23.85, width: 1.6, y: 9.5 },
+    concourse: { offset: 23.85, width: 1.6, y: 8.6 },
     /** The 300s and 400s: one rake, on the two sides only. */
     upper: UPPER,
     /** The upper decks run this far either side of center. */
@@ -101,7 +101,7 @@ export const BOWL = {
     rearWall: 49.9,
     /** The ends: the fascia the ribbon hangs on, and the concourse's wall. */
     end: {
-        fasciaX: 34.5,
+        fasciaX: 29,
         wallX: 42.5,
         soffit: 12.2,
         ribbon: { y0: 12.4, y1: 13.31, halfZ: 15.25 },

@@ -17,7 +17,7 @@ export const ROOF = {
     /** The deck's underside at the two end walls. */
     eaveY: 27,
     /** The main roof's walls: the two ends, the back and the front. */
-    halfX: 34.5,
+    halfX: 28.8,
     minZ: -57.9,
     maxZ: 63.3,
     /** Thirteen trusses span X, 32 ft apart, one over the arena's center. */
@@ -50,7 +50,7 @@ export function trussStations(): number[] {
  * down to there; the ends have no upper deck, and their wall comes down to
  * the ceiling over the end decks.
  */
-export const ROOF_WALL_FOOT = { sides: 22.2, ends: 17.5 } as const;
+export const ROOF_WALL_FOOT = { sides: 18.2, ends: 17.5 } as const;
 
 /** The can lights: 0.5 m across, their faces 1 m under the bottom chord. */
 export const CAN = {
@@ -96,7 +96,7 @@ export function canLayout(): CanLight[] {
         if (overFloor(z)) {
             row(z, CAN.floorPitch, 0, floorX);
             // The stands at the two ends, beyond the floor's rows.
-            for (const x of [27, 33])
+            for (const x of [ROOF.halfX - 6, ROOF.halfX - 2])
                 for (const sx of [-1, 1])
                     out.push({
                         position: [sx * x, CAN.faceY, z],
