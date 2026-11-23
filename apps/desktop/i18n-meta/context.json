@@ -1330,6 +1330,7 @@
     "settings.privacy.discord.about": "Explanation under the Discord status switch in Settings > Privacy. Keep 'Discord' as is; it's a product name. 'Show' is a marching band show.",
     "settings.privacy.discord.showName": "Label of the on/off switch in Settings > Privacy, under the Discord status switch, that adds the open show's name (a marching band show, named by its file) to the person's Discord status. Off by default. Also matched by the Settings search.",
     "settings.privacy.discord.showName.description": "Explanation under the 'Show the show's name' switch in Settings > Privacy. Keep 'Discord' as is; it's a product name. 'Show' is a marching band show.",
+    "settings.privacy.discord.showName.needsStatus": "Shown under the greyed-out 'Show the show's name' switch in Settings > Privacy while the Discord status switch just above it is off: says why the switch can't be used. Keep 'Discord' as is; it's a product name.",
     "settings.privacy.discord.toggle": "Label of the on/off switch in Settings > Privacy that shows or hides OpenMarch in the person's Discord status. On by default. Also matched by the Settings search.",
     "settings.privacy.description": "One-line subtitle under the 'Privacy' section title in Settings.",
     "settings.repairDotsFile": "Label of the button in Settings > Database that opens the repair confirmation. DOTS is the OpenMarch show file format (.dots); do not translate it.",

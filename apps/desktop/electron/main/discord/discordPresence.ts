@@ -33,9 +33,14 @@ function showNameForStatus(showPath: string): string | undefined {
             : file
     ).trim();
     if (name.length < 2) return undefined;
-    return name.length > STATE_MAX_LENGTH
-        ? `${name.slice(0, STATE_MAX_LENGTH - 1)}…`
-        : name;
+    if (name.length <= STATE_MAX_LENGTH) return name;
+    // Cut by whole characters so an emoji is never split in half, then fit the UTF-16 limit
+    let cut = "";
+    for (const char of name) {
+        if (cut.length + char.length > STATE_MAX_LENGTH - 1) break;
+        cut += char;
+    }
+    return `${cut}…`;
 }
 
 /** What OpenMarch is showing right now, from the main process's point of view */

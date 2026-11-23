@@ -1928,6 +1928,7 @@
         "privacy.discord.about": "While Discord is open on this computer, your Discord status says you're designing a show in OpenMarch, and for how long. Your friends and the people in your servers can see it.",
         "privacy.discord.showName": "Show the show's name",
         "privacy.discord.showName.description": "Adds the name of the open show to your Discord status. Off unless you turn it on.",
+        "privacy.discord.showName.needsStatus": "Turn on the Discord status above first.",
         "privacy.discord.toggle": "Show OpenMarch in my Discord status",
         "privacy.description": "Choose what OpenMarch shares to help improve the app.",
         "repairDotsFile": "Repair DOTS file",

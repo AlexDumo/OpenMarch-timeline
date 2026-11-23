@@ -51,27 +51,30 @@ export default function DiscordPresenceSettings() {
                     }}
                 />
             </SettingRow>
-            {/* Only means something while the status is on */}
-            {enabled && (
-                <SettingRow
-                    label={<T keyName="settings.privacy.discord.showName" />}
-                    description={
+            {/* Only means something while the status is on; greyed out with the reason otherwise */}
+            <SettingRow
+                label={<T keyName="settings.privacy.discord.showName" />}
+                description={
+                    enabled ? (
                         <T keyName="settings.privacy.discord.showName.description" />
-                    }
-                    htmlFor="discord-presence-show-name"
-                >
-                    <Switch
-                        id="discord-presence-show-name"
-                        checked={showName}
-                        onCheckedChange={(checked) => {
-                            setShowName(checked);
-                            window.electron.send("settings:set", {
-                                [DISCORD_SHOW_NAME_SETTING]: checked,
-                            });
-                        }}
-                    />
-                </SettingRow>
-            )}
+                    ) : (
+                        <T keyName="settings.privacy.discord.showName.needsStatus" />
+                    )
+                }
+                htmlFor="discord-presence-show-name"
+            >
+                <Switch
+                    id="discord-presence-show-name"
+                    checked={enabled && showName}
+                    disabled={!enabled}
+                    onCheckedChange={(checked) => {
+                        setShowName(checked);
+                        window.electron.send("settings:set", {
+                            [DISCORD_SHOW_NAME_SETTING]: checked,
+                        });
+                    }}
+                />
+            </SettingRow>
         </SettingsPanel>
     );
 }
