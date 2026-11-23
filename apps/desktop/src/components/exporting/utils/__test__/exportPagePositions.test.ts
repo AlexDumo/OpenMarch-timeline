@@ -162,20 +162,36 @@ describeDbTests("readTimelineExportPositions", (it) => {
         });
         const itemIds = [prop!.marcher_id, equipment!.marcher_id];
         const marchers = await getMarchers({ db });
-        expect(marchers.map((m) => m.id)).not.toContain(itemIds[0]);
+        const byId = (a: number, b: number) => a - b;
+        const performerIds = marchers.map((m) => m.id).sort(byId);
+        for (const id of itemIds) expect(performerIds).not.toContain(id);
 
         const read = await readTimelineExportPositions(db);
-        expect([...read.marcherIds].sort()).toEqual(
-            marchers.map((m) => m.id).sort(),
-        );
+        expect([...read.marcherIds].sort(byId)).toEqual(performerIds);
 
         const positions = await readExportPositions({
             db,
             rendered: { pages, marchers },
+            showChangedMessage: "show changed",
         });
         expect(Object.keys(positions.marcherPagesByPage)).toHaveLength(
             pages.length,
         );
+
+        // A performer added after React read its lists is still caught in a show with items
+        await createMarchers({
+            db,
+            newMarchers: [
+                { section: "Flute", drill_prefix: "N", drill_order: 1 },
+            ],
+        });
+        await expect(
+            readExportPositions({
+                db,
+                rendered: { pages, marchers },
+                showChangedMessage: "show changed",
+            }),
+        ).rejects.toThrow(new ShowChangedDuringExportError("show changed"));
     });
 
     it("readExportPositions rejects lists from before the show changed", async ({
