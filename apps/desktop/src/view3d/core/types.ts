@@ -18,6 +18,7 @@ export type VenueKitId =
     | "college"
     | "pro"
     | "markDiesel"
+    | "nightpound"
     | "gym"
     | "arena"
     | "blank";

@@ -4,14 +4,21 @@
  * `window.view3d.requestVenueChange` with the full, validated settings; the
  * editor saves it with undo, and the relayed invalidation updates the scene.
  */
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useTranslate } from "@tolgee/react";
+import { useQuery } from "@tanstack/react-query";
+import { fieldFootprint } from "@openmarch/core";
+import { fieldPropertiesQueryOptions } from "@/hooks/queries/useFieldProperties";
+import { FT } from "@/view3d/core/environment/units";
 import { useVenueSettings } from "@/hooks/queries/useVenueSettings";
 import type { LightingPreset, VenueKitId } from "@/view3d/core/types";
 import {
+    KIT_FIXED_FLOOR,
+    KIT_FIXED_FLOOR_FALLBACK,
     KIT_LIGHTING,
     VENUE_KIT_IDS,
     fieldLinesFor,
+    kitFitsField,
     lightingForKit,
     type FieldLines,
     type VenueSettings,
@@ -73,22 +80,77 @@ export function useVenueRequest(): {
     return { settings, request };
 }
 
-/** The venue kits, two to a row. */
+/** Meters to whole feet, for floor sizes. */
+const feet = (meters: number) => Math.round(meters / FT);
+
+/**
+ * The venue kits, two to a row. A venue whose fixed floor the show's field
+ * doesn't fit is dimmed; clicking it says why, under the picker. While the
+ * show's own venue is one of those, a note says which venue shows instead.
+ */
 export function VenuePicker() {
     const { t } = useTranslate();
     const { settings, request } = useVenueRequest();
+    const { data: field } = useQuery(fieldPropertiesQueryOptions());
+    const [refused, setRefused] = useState<string | null>(null);
+    const footprint = field ? fieldFootprint(field) : undefined;
+
+    const fieldWidth = footprint ? feet(footprint.maxX - footprint.minX) : 0;
+    const fieldDepth = footprint ? feet(footprint.maxZ - footprint.minZ) : 0;
+    const floorOf = (kit: VenueKitId) => {
+        const floor = KIT_FIXED_FLOOR[kit];
+        return floor
+            ? { width: feet(floor.width), depth: feet(floor.depth) }
+            : undefined;
+    };
+    const reasonFor = (kit: VenueKitId): string | undefined => {
+        if (!footprint || kitFitsField(kit, footprint)) return undefined;
+        return t("view3d.venueFit.tooBig", {
+            venue: t(`view3d.kit.${kit}`),
+            ...floorOf(kit),
+            fieldWidth,
+            fieldDepth,
+        });
+    };
+    const chosen = settings?.kit;
+    const fallback =
+        chosen && footprint && !kitFitsField(chosen, footprint)
+            ? t("view3d.venueFit.fallback", {
+                  venue: t(`view3d.kit.${chosen}`),
+                  ...floorOf(chosen),
+                  fallback: t(`view3d.kit.${KIT_FIXED_FLOOR_FALLBACK}`),
+              })
+            : null;
+    const note = refused ?? fallback;
+
     return (
-        <Segmented
-            value={settings?.kit ?? null}
-            options={VENUE_KIT_IDS.map((kit) => ({
-                value: kit,
-                label: t(`view3d.kit.${kit}`),
-            }))}
-            onChange={(kit: VenueKitId) => request({ kind: "kit", kit })}
-            label={t("view3d.overlay.venue")}
-            testId="view3d-venue-picker"
-            className="grid! grid-cols-2 [&>*]:justify-start"
-        />
+        <div className="flex flex-col gap-6">
+            <Segmented
+                value={chosen ?? null}
+                options={VENUE_KIT_IDS.map((kit) => ({
+                    value: kit,
+                    label: t(`view3d.kit.${kit}`),
+                    unavailable: reasonFor(kit),
+                }))}
+                onChange={(kit: VenueKitId) => {
+                    setRefused(null);
+                    request({ kind: "kit", kit });
+                }}
+                onUnavailable={(_kit, reason) => setRefused(reason)}
+                label={t("view3d.overlay.venue")}
+                testId="view3d-venue-picker"
+                className="grid! grid-cols-2 [&>*]:justify-start"
+            />
+            {note && (
+                <p
+                    className="text-sub text-text/60"
+                    role="status"
+                    data-testid="view3d-venue-fit-note"
+                >
+                    {note}
+                </p>
+            )}
+        </div>
     );
 }
 
