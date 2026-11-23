@@ -28,6 +28,7 @@ import {
     type Document,
     type Material,
     type Node,
+    type Primitive,
     type Scene,
     type Texture,
 } from "@gltf-transform/core";
@@ -633,9 +634,9 @@ async function simplifyTo(
         .getRoot()
         .listMeshes()
         .reduce((n, mesh) => n + mesh.listPrimitives().length, 0);
-    const floor = Math.min(
-        PART_TRIANGLE_FLOOR,
-        Math.floor(target / Math.max(1, parts)),
+    const floor = Math.max(
+        1,
+        Math.min(PART_TRIANGLE_FLOOR, Math.floor(target / Math.max(1, parts))),
     );
     const start = sceneTriangles(scene);
     let now = start;
@@ -649,15 +650,29 @@ async function simplifyTo(
                 // The error is relative to the part's own size, so at a wide limit a thin
                 // part (a pole, a rail) would collapse to nothing (#1169): each part keeps
                 // at least the floor
-                simplifyPrimitive(prim, {
-                    simplifier: MeshoptSimplifier,
-                    ratio: Math.max(ratio, floor / triangles),
+                simplifyKeeping(
+                    prim,
+                    Math.max(ratio, floor / triangles),
                     error,
-                });
+                );
             }
         now = sceneTriangles(scene);
     }
     return now;
+}
+
+/**
+ * Simplifies one part, or leaves it as it was when simplifying would leave nothing of it: the
+ * simplifier's count is a ceiling, so a part asked for a triangle or two can collapse to none,
+ * and an empty part is invalid glTF that won't load. That costs the cap only for models of
+ * hundreds of parts, which keep every part over fitting it.
+ */
+function simplifyKeeping(prim: Primitive, ratio: number, error: number) {
+    // Shares its accessors, so the simplifier keeps them for it
+    const before = prim.clone();
+    simplifyPrimitive(prim, { simplifier: MeshoptSimplifier, ratio, error });
+    if (primitiveTriangles(prim) === 0) prim.copy(before);
+    before.dispose();
 }
 
 /**

@@ -164,6 +164,43 @@ describe("importing a zip", () => {
         expect(zipHasModel(new Uint8Array([0x50, 0x4b, 3, 4, 9]))).toBe(false);
     });
 
+    it("refuses a zip listing more entries than a model download has, before reading them", () => {
+        const entries = Object.fromEntries(
+            Array.from({ length: 5_001 }, (_, i) => [
+                `notes/${i}.txt`,
+                new Uint8Array(0),
+            ]),
+        );
+        const zip = zipOf("many.zip", entries);
+        expect(() => openZips([zip])).toThrow(
+            expect.objectContaining({
+                refusal: expect.objectContaining({ code: "unreadable" }),
+            }),
+        );
+        expect(zipHasModel(zip.bytes)).toBe(false);
+    });
+
+    it("reads entries named from ./ or with Windows separators", () => {
+        const { files } = openZips([
+            zipOf("w.zip", {
+                "./scene.gltf": new Uint8Array([1]),
+                "textures\\wood.png": new Uint8Array([1]),
+            }),
+        ]);
+        expect(files.map((f) => f.name)).toEqual([
+            "scene.gltf",
+            "textures/wood.png",
+        ]);
+    });
+
+    it("leaves a model's buffer alone when it happens to start like a zip", () => {
+        const bin = {
+            name: "scene.bin",
+            bytes: new Uint8Array([0x50, 0x4b, 3, 4]),
+        };
+        expect(openZips([bin]).files).toEqual([bin]);
+    });
+
     it("skips folders, macOS metadata and hidden files", () => {
         const { files } = openZips([
             zipOf("m.zip", {

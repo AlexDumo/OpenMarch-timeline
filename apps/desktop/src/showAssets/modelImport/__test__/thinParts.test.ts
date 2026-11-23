@@ -171,5 +171,26 @@ describe("simplifying keeps every part", () => {
         const parts = await partTriangles(result.model.parts.distant);
         const total = [...parts.values()].reduce((n, t) => n + t, 0);
         expect(total).toBeLessThanOrEqual(DISTANT_TRIANGLE_CAP);
+        expect(Math.min(...parts.values())).toBeGreaterThan(0);
     });
+
+    it("never leaves a part empty, however many parts share the cap", async () => {
+        // A triangle or two each in the distant copy: the simplifier's count is a ceiling, and an
+        // empty part would make the copy invalid glTF
+        const result = await importModel(
+            [picked("fence.glb", await fence(1_500))],
+            {},
+            env,
+        );
+        if (!result.ok)
+            throw new Error(JSON.stringify(result.report.cantImport));
+        for (const part of [
+            result.model.parts.model,
+            result.model.parts.distant,
+        ]) {
+            const parts = await partTriangles(part);
+            expect(parts.size).toBe(1_500);
+            expect(Math.min(...parts.values())).toBeGreaterThan(0);
+        }
+    }, 30_000);
 });

@@ -18,6 +18,14 @@ const json = {
 };
 
 describe("errors in what the import drops", () => {
+    it("keeps errors in a buffer view a picture reads, though an animation reads it too", () => {
+        const withImage = {
+            ...json,
+            images: [{ bufferView: 1, mimeType: "image/png" }],
+        };
+        expect(droppedContent(withImage)("/bufferViews/1")).toBe(false);
+    });
+
     const dropped = droppedContent(json);
 
     it("drops errors in the animations", () => {

@@ -93,10 +93,11 @@ function freezeNode(doc: Document, scene: Scene, node: Node): void {
     // The mesh and its primitives may be shared with another node, skinned or not: pose a
     // copy of each (a mesh's clone shares its primitives)
     const mesh = node.getMesh()!.clone();
+    const posed: Posed = new Map();
     for (const prim of mesh.listPrimitives()) {
         const copy = prim.clone();
         mesh.removePrimitive(prim).addPrimitive(copy);
-        freezePrimitive(doc, copy, pose);
+        freezePrimitive(doc, copy, pose, posed);
     }
     node.setMesh(mesh).setSkin(null);
     // Children keep where they were in the world, read before the node moves
@@ -112,7 +113,47 @@ function freezeNode(doc: Document, scene: Scene, node: Node): void {
     if (!scene.listChildren().includes(node)) scene.addChild(node);
 }
 
-function freezePrimitive(doc: Document, prim: Primitive, pose: Mat4[]): void {
+const SKIN_SEMANTICS = INFLUENCE_SETS.flatMap((set) => [
+    `JOINTS_${set}`,
+    `WEIGHTS_${set}`,
+]);
+
+/** Posed vertices by the accessors they came from, so a node's parts that share them pose once */
+type Posed = Map<string, { position: Accessor; normal: Accessor | null }>;
+
+const accessorIds = new WeakMap<Accessor, number>();
+let nextAccessorId = 0;
+const idOf = (accessor: Accessor | null) => {
+    if (!accessor) return -1;
+    let id = accessorIds.get(accessor);
+    if (id === undefined) accessorIds.set(accessor, (id = nextAccessorId++));
+    return id;
+};
+
+function freezePrimitive(
+    doc: Document,
+    prim: Primitive,
+    pose: Mat4[],
+    posed: Posed,
+): void {
+    const key = ["POSITION", "NORMAL", ...SKIN_SEMANTICS]
+        .map((semantic) => idOf(prim.getAttribute(semantic)))
+        .join();
+    const done = posed.get(key) ?? posePrimitive(doc, prim, pose);
+    posed.set(key, done);
+    prim.setAttribute("POSITION", done.position);
+    if (done.normal) prim.setAttribute("NORMAL", done.normal);
+    for (const semantic of prim.listSemantics())
+        if (/^(JOINTS|WEIGHTS)_\d+$/.test(semantic) || semantic === "TANGENT")
+            prim.setAttribute(semantic, null);
+}
+
+/** A primitive's vertices and normals as the pose places them, as new accessors */
+function posePrimitive(
+    doc: Document,
+    prim: Primitive,
+    pose: Mat4[],
+): { position: Accessor; normal: Accessor | null } {
     const position = prim.getAttribute("POSITION")!;
     const normal = prim.getAttribute("NORMAL");
     const joint = prim.getAttribute("JOINTS_0")!;
@@ -153,12 +194,10 @@ function freezePrimitive(doc: Document, prim: Primitive, pose: Mat4[]): void {
             normals[i * 3 + 2] = nz / length;
         }
     }
-    prim.setAttribute("POSITION", floatAccessor(doc, position, positions));
-    if (normal && normals)
-        prim.setAttribute("NORMAL", floatAccessor(doc, normal, normals));
-    for (const semantic of prim.listSemantics())
-        if (/^(JOINTS|WEIGHTS)_\d+$/.test(semantic) || semantic === "TANGENT")
-            prim.setAttribute(semantic, null);
+    return {
+        position: floatAccessor(doc, position, positions),
+        normal: normal && normals ? floatAccessor(doc, normal, normals) : null,
+    };
 }
 
 /** Adds vertex `i`'s weighted joint matrices into `out`; returns the weights' sum */

@@ -109,6 +109,36 @@ describe("freezing a rig", () => {
         expect(positions(twin)).toEqual([0, 0, 1, 1, 0, 2, 0, 1, 2]);
     });
 
+    it("poses vertices two parts of a mesh share once", () => {
+        const { doc, scene, skinned } = rig([0, 0, 2]);
+        const mesh = skinned.getMesh()!;
+        mesh.addPrimitive(mesh.listPrimitives()[0].clone());
+        freezeSkins(doc, scene);
+        const [a, b] = skinned.getMesh()!.listPrimitives();
+        expect(a.getAttribute("POSITION")).toBe(b.getAttribute("POSITION"));
+        expect(positions(skinned)).toEqual([0, 0, 1, 1, 0, 2, 0, 1, 2]);
+    });
+
+    it("poses each part of a mesh by its own vertices", () => {
+        const { doc, scene, skinned } = rig([0, 0, 2]);
+        const mesh = skinned.getMesh()!;
+        const first = mesh.listPrimitives()[0];
+        const second = first.clone();
+        second.setAttribute(
+            "POSITION",
+            first
+                .getAttribute("POSITION")!
+                .clone()
+                .setArray(new Float32Array([0, 0, 0, 2, 0, 0, 0, 2, 0])),
+        );
+        mesh.addPrimitive(second);
+        freezeSkins(doc, scene);
+        const [, posedSecond] = skinned.getMesh()!.listPrimitives();
+        expect(
+            Array.from(posedSecond.getAttribute("POSITION")!.getArray()!),
+        ).toEqual([0, 0, 1, 2, 0, 2, 0, 2, 2]);
+    });
+
     it("can't freeze a rig whose second joint set names a joint it doesn't have", () => {
         const { doc, scene, skinned } = rig([0, 0, 2]);
         const prim = skinned.getMesh()!.listPrimitives()[0];

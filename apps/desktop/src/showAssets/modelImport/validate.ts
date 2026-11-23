@@ -71,7 +71,21 @@ function animationOnly(json: RawGltf): {
     );
     const accessors = new Set([...animated].filter((i) => !kept.has(i)));
     const animationViews = new Set<number>();
-    const keptViews = new Set<number>();
+    // Pictures and compressed meshes read buffer views directly
+    const keptViews = new Set(
+        indices([
+            ...list(json.images).map((image) => record(image).bufferView),
+            ...list(json.meshes).flatMap((mesh) =>
+                list(record(mesh).primitives).map(
+                    (prim) =>
+                        record(
+                            record(record(prim).extensions)
+                                .KHR_draco_mesh_compression,
+                        ).bufferView,
+                ),
+            ),
+        ]),
+    );
     list(json.accessors).forEach((accessor, i) => {
         const sparse = record(record(accessor).sparse);
         const views = indices([
