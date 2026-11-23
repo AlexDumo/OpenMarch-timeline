@@ -28,7 +28,11 @@ import {
 import { buildDieselLighting, DIESEL_VENUE } from "./markDiesel/lighting";
 import { buildDieselRoof } from "./markDiesel/roof";
 import { buildDieselSite } from "./markDiesel/site";
-import { buildDieselTurf } from "./markDiesel/turf";
+import {
+    buildDieselOwnField,
+    buildDieselTurf,
+    dieselStadiumFootprint,
+} from "./markDiesel/turf";
 
 /**
  * The Mark Diesel kit: Mark Diesel Stadium, a fictional retractable-roof
@@ -72,7 +76,14 @@ type CreditsPart = DieselPart & { setCredits(credits: ShowCredits): void };
 const showsCredits = (part: DieselPart): part is CreditsPart =>
     typeof (part as Partial<CreditsPart>).setCredits === "function";
 
-export const buildMarkDiesel: KitBuilder = ({ footprint, params, quality }) => {
+export const buildMarkDiesel: KitBuilder = ({
+    footprint: showFootprint,
+    params,
+    quality,
+}) => {
+    // A floor smaller than a football field (indoor, SoundSport) lies at
+    // midfield of the stadium's own field.
+    const { footprint, ownField } = dieselStadiumFootprint(showFootprint);
     const shared = createSharedMaterials();
     const frame = dieselFrame(footprint);
     const { CENTER } = frame;
@@ -98,6 +109,8 @@ export const buildMarkDiesel: KitBuilder = ({ footprint, params, quality }) => {
         buildDieselTurf(ctx),
     ];
     parts.forEach((part) => placed.add(part.object));
+    const field = ownField ? buildDieselOwnField(params, CENTER) : null;
+    if (field) root.add(field.mesh);
 
     const fill = dieselCrowdFill(
         frame,
@@ -163,6 +176,7 @@ export const buildMarkDiesel: KitBuilder = ({ footprint, params, quality }) => {
         },
         dispose() {
             parts.forEach((part) => part.dispose());
+            field?.dispose();
             shared.dispose();
             root.clear();
         },

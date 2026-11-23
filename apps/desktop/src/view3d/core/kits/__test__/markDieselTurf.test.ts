@@ -1,10 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
-import { planField } from "../../field";
+import { planField, venueFootprint } from "../../field";
+import { setTexturePainting } from "../../environment";
+import { buildMarkDiesel } from "../markDiesel";
 import { dieselFrame } from "../markDiesel/frame";
 import {
     DIESEL_SIDELINE,
     DIESEL_TURF,
+    dieselStadiumFootprint,
     dieselTurfOutline,
     planDieselSideline,
 } from "../markDiesel/turf";
@@ -154,5 +157,50 @@ describe("Mark Diesel field marks", () => {
         expect(has("border")).toBe(true);
         for (const r of ["goalLine", "accent", "kickoff", "patLine"])
             expect(has(r)).toBe(false);
+    });
+});
+
+describe("Mark Diesel on a small floor", () => {
+    beforeAll(() => setTexturePainting(false));
+    const indoor = venueFootprint(
+        FieldPropertiesTemplates.INDOOR_50x80_8to5,
+        "turf",
+    );
+
+    it("builds the stadium round a football field centered on the floor", () => {
+        const { footprint, ownField } = dieselStadiumFootprint(indoor);
+        expect(ownField).toBe(true);
+        expect((footprint.maxX - footprint.minX) / FT).toBeCloseTo(360);
+        expect((footprint.maxZ - footprint.minZ) / FT).toBeCloseTo(160);
+        expect(footprint.minX + footprint.maxX).toBeCloseTo(
+            indoor.minX + indoor.maxX,
+        );
+        expect(footprint.minZ + footprint.maxZ).toBeCloseTo(
+            indoor.minZ + indoor.maxZ,
+        );
+        expect(dieselStadiumFootprint(football)).toEqual({
+            footprint: football,
+            ownField: false,
+        });
+    });
+
+    it("builds without throwing and paints its own field under the floor", () => {
+        const kit = buildMarkDiesel({
+            footprint: indoor,
+            params: { ...DIESEL_VENUE_PARAMS },
+            quality: "low",
+        });
+        const field = kit.root.getObjectByName("markDiesel.ownField");
+        expect(field).toBeDefined();
+        expect(field!.position.x).toBeCloseTo((indoor.minX + indoor.maxX) / 2);
+        expect(field!.position.z).toBeCloseTo((indoor.minZ + indoor.maxZ) / 2);
+        kit.dispose();
+        const pro = buildMarkDiesel({
+            footprint: football,
+            params: { ...DIESEL_VENUE_PARAMS },
+            quality: "low",
+        });
+        expect(pro.root.getObjectByName("markDiesel.ownField")).toBeUndefined();
+        pro.dispose();
     });
 });

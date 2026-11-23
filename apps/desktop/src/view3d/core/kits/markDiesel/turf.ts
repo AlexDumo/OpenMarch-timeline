@@ -5,10 +5,16 @@ import {
     Group,
     Mesh,
 } from "three";
+import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import { GROUND_LAYER, setGroundLayer } from "../../environment";
-import { FIELD_SURFACE_Y, type TurfColors } from "../../field";
+import {
+    buildFieldSurface,
+    FIELD_SURFACE_Y,
+    type TurfColors,
+} from "../../field";
 import { TURF } from "../../field/turfPlan";
 import { applyTurfSheen } from "../../field/turfSheen";
+import type { FieldFootprint, VenueParams } from "../../types";
 import type { DieselCtx, DieselPart } from "./frame";
 
 const FT = 0.3048;
@@ -429,4 +435,61 @@ export function buildDieselTurf(ctx: DieselCtx): DieselPart {
             paintGeometry.dispose();
         },
     };
+}
+
+/** A football field with end zones, the field the stadium is built round. */
+const FIELD_LENGTH = 360 * FT;
+const FIELD_WIDTH = 160 * FT;
+
+/**
+ * The field the stadium is built round. A show's football field is used as
+ * it is; a smaller floor (indoor, SoundSport) gets a regulation football
+ * field centered on it, so the bowl never shrinks round a small floor, and
+ * `ownField` says the kit paints that field itself (`buildDieselOwnField`).
+ */
+export function dieselStadiumFootprint(footprint: FieldFootprint): {
+    footprint: FieldFootprint;
+    ownField: boolean;
+} {
+    const length = footprint.maxX - footprint.minX;
+    const width = footprint.maxZ - footprint.minZ;
+    const tolerance = 0.05;
+    if (length >= FIELD_LENGTH - tolerance && width >= FIELD_WIDTH - tolerance)
+        return { footprint, ownField: false };
+    const cx = (footprint.minX + footprint.maxX) / 2;
+    const cz = (footprint.minZ + footprint.maxZ) / 2;
+    return {
+        footprint: {
+            minX: cx - FIELD_LENGTH / 2,
+            maxX: cx + FIELD_LENGTH / 2,
+            minZ: cz - FIELD_WIDTH / 2,
+            maxZ: cz + FIELD_WIDTH / 2,
+        },
+        ownField: true,
+    };
+}
+
+/**
+ * The stadium's own pro football field, painted as the show's would be,
+ * under a smaller show floor: the show's floor draws over it at midfield.
+ * Centered on `center` (world meters). One draw call and a 4096 px texture.
+ */
+export function buildDieselOwnField(
+    params: VenueParams,
+    center: { x: number; z: number },
+): { mesh: Mesh; dispose(): void } {
+    const surface = buildFieldSurface({
+        fieldProperties:
+            FieldPropertiesTemplates.PRO_FOOTBALL_FIELD_WITH_END_ZONES,
+        style: "turf",
+        turf: DIESEL_TURF,
+        params,
+        maxTextureSize: 4096,
+    });
+    // Under the show's floor, over the turf round it.
+    setGroundLayer(surface.mesh.material, GROUND_LAYER.decal);
+    surface.mesh.position.x = center.x;
+    surface.mesh.position.z = center.z;
+    surface.mesh.name = "markDiesel.ownField";
+    return { mesh: surface.mesh, dispose: () => surface.dispose() };
 }
