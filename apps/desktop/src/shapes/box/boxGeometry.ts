@@ -715,6 +715,41 @@ function drawnLayout(
 }
 
 /**
+ * A box in Files laid out for `n` marchers in a frame `width` × `depth` (a paste onto another
+ * number of marchers, #961): the file count picked as a drag over that frame would pick it,
+ * starting from the box's own, its layout family, stagger and turn kept, and the intervals
+ * spreading the marchers edge to edge in half steps. An axis with no extent keeps its interval.
+ */
+export function filesAtCount(
+    p: BoxParams,
+    { width, depth }: FrameSize,
+    n: number,
+    env: ToolEnv,
+): BoxParams {
+    const d = boxDistribution(p);
+    if (d.mode !== "files") throw new Error("Not in Files");
+    const drawn = drawnLayout(width, depth, n, env, p);
+    const files = drawn.distribution.layout.files;
+    const next: BoxParams = {
+        ...p,
+        files,
+        distribution: {
+            ...d,
+            // Short back keeps its own settings (by file or by rank) at the new file count
+            layout:
+                d.layout.family === drawn.distribution.layout.family &&
+                d.layout.family === "shortBack"
+                    ? { ...d.layout, files }
+                    : drawn.distribution.layout,
+        },
+    };
+    const across =
+        width > 0 ? spread(width, drawn.block.across, env) : undefined;
+    const deep = depth > 0 ? spread(depth, drawn.block.deep, env) : undefined;
+    return { ...next, across: across ?? p.across, deep: deep ?? p.deep };
+}
+
+/**
  * A box filling `frame`, as if drawn over it: the files suit the frame's proportions and the
  * intervals spread the marchers edge to edge in half steps, turned and flipped like the frame
  */
