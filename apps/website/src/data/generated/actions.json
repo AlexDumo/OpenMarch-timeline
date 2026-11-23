@@ -1724,6 +1724,44 @@
             }
         ]
     },
+    "pasteMirrored": {
+        "label": "Paste mirrored",
+        "category": "edit",
+        "bindings": [
+            {
+                "mac": {
+                    "keys": [
+                        "⌥",
+                        "⌘",
+                        "V"
+                    ]
+                },
+                "other": {
+                    "keys": [
+                        "Ctrl",
+                        "Alt",
+                        "V"
+                    ]
+                }
+            },
+            {
+                "mac": {
+                    "keys": [
+                        "⌃",
+                        "⌥",
+                        "V"
+                    ]
+                },
+                "other": {
+                    "keys": [
+                        "Ctrl",
+                        "Alt",
+                        "V"
+                    ]
+                }
+            }
+        ]
+    },
     "cancelAlignmentUpdates": {
         "label": "Cancel or deselect",
         "category": "cursor",

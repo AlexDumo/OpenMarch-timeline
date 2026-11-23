@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { useQueryClient } from "@tanstack/react-query";
 import type { OrderChoice } from "../assign";
-import type { Pivot } from "../frame/frame";
+import type { FlipAxis, Pivot } from "../frame/frame";
 import { carryPivot } from "../frame/pivot";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import {
@@ -34,6 +34,7 @@ import {
     pickPivot,
     recalculate,
     release,
+    toggleMirror,
 } from "../tool/toolMachine";
 import {
     updateTool,
@@ -98,6 +99,16 @@ export interface ShapeEditTarget {
         readonly keepOffered: boolean;
         pick(choice: OrderChoice): void;
     };
+    /**
+     * A mirrored paste still tied to its mirror point (Paste mirrored): which ways it mirrors,
+     * and switching one, which the Flip buttons and keys do instead of flipping around the pivot.
+     * Absent for any other shape.
+     */
+    readonly mirror?: {
+        readonly across: boolean;
+        readonly deep: boolean;
+        toggle(axis: FlipAxis): void;
+    };
 }
 
 const withField = (run: (ctx: ReturnType<typeof shapeContextFor>) => void) => {
@@ -149,6 +160,14 @@ export function useToolEditTarget(): ShapeEditTarget | null {
                 ? () =>
                       withField((ctx) => updateTool((t) => recalculate(t, ctx)))
                 : null,
+            ...(tool.mirror && {
+                mirror: {
+                    across: tool.mirror.across,
+                    deep: tool.mirror.deep,
+                    toggle: (axis: FlipAxis) =>
+                        updateTool((t) => toggleMirror(t, axis)),
+                },
+            }),
             ...(tool.kind.ordered && {
                 order: {
                     current: tool.order,

@@ -23,6 +23,11 @@ import {
     useShapeToolStore,
 } from "../tool/shapeToolStore";
 import { openDrawn, slotsOf } from "../tool/toolMachine";
+import { mirrorParams, type Mirror } from "../tool/mirror";
+import { toolEnvFor } from "../tool/toolEnv";
+import type { ShapeField } from "../field/shapeField";
+import type { XY } from "../types";
+import { keepMirrorPoint, lastMirrorPoint } from "./mirrorPointStore";
 import {
     pictureOf,
     pictureSummary,
@@ -94,6 +99,36 @@ export async function copyFormation(ids: readonly number[]): Promise<boolean> {
     return true;
 }
 
+/** The open paste's mirror point is kept as it moves, for the next Paste mirrored */
+useShapeToolStore.subscribe((now, before) => {
+    const point = now.tool?.mirror?.point;
+    if (!point || point === before.tool?.mirror?.point) return;
+    const field = currentShapeField();
+    if (!field) return;
+    const { width, height } = field.fieldProperties;
+    keepMirrorPoint(point, width, height);
+});
+
+/**
+ * Where Paste mirrored opens its mirror point: where the last one was, or else on the 50 level
+ * with the copy, between it and its mirror image. On the half-step grid, so the mirrored spots
+ * land on it too.
+ */
+function startingMirrorPoint(field: ShapeField, copied: readonly XY[]): XY {
+    const { width, height, centerFrontPoint } = field.fieldProperties;
+    const ys = copied.map((p) => p.y);
+    return (
+        lastMirrorPoint(width, height) ??
+        toolEnvFor(field).gridSnap({
+            x: centerFrontPoint.xPixels,
+            y:
+                ys.length > 0
+                    ? (Math.min(...ys) + Math.max(...ys)) / 2
+                    : centerFrontPoint.yPixels / 2,
+        })
+    );
+}
+
 /** Whether Paste can open now: something is copied, and no shape is open and showing */
 export const canPaste = (): boolean =>
     copiedPicture() !== null && !isShapeShown();
@@ -105,11 +140,28 @@ export const canPaste = (): boolean =>
  */
 export function pasteFormation(
     ids: readonly number[],
-    { inPlace = false }: { inPlace?: boolean } = {},
+    {
+        inPlace = false,
+        mirrored = false,
+    }: {
+        inPlace?: boolean;
+        /**
+         * Paste mirrored: where it was copied, mirrored side to side through the last mirror
+         * point used (the 50 the first time), tied to that point until it's placed
+         */
+        mirrored?: boolean;
+    } = {},
 ): boolean {
     const field = currentShapeField();
     const picture = copiedPicture();
     if (!field || !picture || isShapeShown()) return false;
+    const mirror = mirrored
+        ? {
+              point: startingMirrorPoint(field, picture.dots),
+              across: true,
+              deep: false,
+          }
+        : undefined;
     const plan = planPaste({
         picture,
         marchers: marchersOnField(field, ids),
@@ -117,8 +169,20 @@ export function pasteFormation(
         inPlace,
         asPositions: useCopiedPictureStore.getState().pasteAs === "positions",
         ctx: shapeContextFor(field),
+        mirror,
     });
     if (!plan) return false;
+    // The mirror it stays tied to: its source is the copy as it was, the image mirrored back
+    const tie: Mirror | undefined = mirror && {
+        ...mirror,
+        source: mirrorParams(
+            plan.kind,
+            plan.params,
+            plan.marchers.length,
+            mirror.point,
+            mirror,
+        ),
+    };
     // One waiting away from its moment is dismissed, as a new shape started there does (#416)
     const startingOver = useShapeToolStore.getState().tool !== null;
     startOverWaitingShape();
@@ -129,6 +193,7 @@ export function pasteFormation(
         plan.params,
         ctx,
         plan.pivotMoved,
+        tie,
     );
     // Marchers already standing on its spots keep them
     const kept =
@@ -169,10 +234,15 @@ export function pasteFormation(
               : null;
     usePasteNoticeStore.setState({ fit });
     // No toast (owner 2026-11-22): the chip warned before the paste, and the editor says it
-    const preview = tolgee.t(
-        "shapes.clipboard.announcePreview",
-        "Paste preview. Enter places it, Escape discards it.",
-    );
+    const preview = mirror
+        ? tolgee.t(
+              "shapes.clipboard.announceMirrorPreview",
+              "Mirrored paste preview. Drag the pink point to move the mirror. Enter places it, Escape discards it.",
+          )
+        : tolgee.t(
+              "shapes.clipboard.announcePreview",
+              "Paste preview. Enter places it, Escape discards it.",
+          );
     const misfit =
         fit?.fit === "leftOut"
             ? tolgee.t(

@@ -482,6 +482,24 @@ export type FieldModeDrawing = {
     pivotPreview?: FieldPoint;
     /** While turning: what it turns around, and the pointer */
     pivot?: { at: FieldPoint; to: FieldPoint };
+    /**
+     * A mirrored paste's mirror point (Paste mirrored): a handle that drags, with a line through
+     * it side to side and front to back across the whole canvas. The lines the paste mirrors
+     * across are drawn solid and named; the others faint.
+     */
+    mirror?: {
+        at: FieldPoint;
+        /** Mirrored side to side: across the line through the point that runs like a yard line */
+        across: boolean;
+        /** Mirrored front to back: across the line through the point that runs like the sidelines */
+        deep: boolean;
+        /** The upright line's name as the coordinate sheet writes it ("On 50"), when it mirrors */
+        acrossLabel?: string;
+        /** The level line's name ("12 BE BH"), when it mirrors */
+        deepLabel?: string;
+        /** The point is being dragged */
+        dragging?: boolean;
+    };
     /** A note by the pointer: the angle, or where the shape is in drill terms */
     tip?: { at: FieldPoint; text: string };
     /** The spots are part way to where they're going: a glide is running (#387) */

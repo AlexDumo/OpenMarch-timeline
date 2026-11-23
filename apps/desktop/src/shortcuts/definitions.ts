@@ -1256,6 +1256,17 @@ const STATIC_ACTIONS = {
         defaultBindings: ["$mod+Shift+V", "Control+Shift+V"],
         ignoreRepeat: true,
     },
+    // Paste mirrored: the copy where it was copied, mirrored side to side through a point the
+    // user drags (the last one used, the 50 the first time); the open paste's Flip buttons and
+    // keys switch side to side and front to back while it's tied to the point (shapes/tool/mirror.ts)
+    pasteMirrored: {
+        labelKey: "actions.edit.pasteMirrored",
+        keywordsKey: "actions.edit.pasteMirroredKeywords",
+        category: "edit",
+        scope: "canvas",
+        defaultBindings: ["$mod+Alt+V", "Control+Alt+V"],
+        ignoreRepeat: true,
+    },
 
     // Cursor mode
     cancelAlignmentUpdates: {

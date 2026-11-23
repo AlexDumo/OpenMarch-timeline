@@ -170,6 +170,9 @@ const EDIT_WINDOW_MS = 1000;
 /** How long the editor stays put before the other layers hear where it settled (#927) */
 const NOTE_SETTLED_MS = 150;
 
+/** Room the floating editor leaves around a mirrored paste's pink point, in CSS px */
+const MIRROR_POINT_CLEAR_PX = 18;
+
 /**
  * The floating editor (08-shape-system-ux.md, "The floating editor"), the main place for editing
  * a shape: a small bar under the open shape, or the selected placed one, with the numbers people
@@ -196,6 +199,7 @@ const NOTE_SETTLED_MS = 150;
  * shape saves each edit on release. While the open shape waits out of sight (#416) the editor
  * hides, and away from its moment a chip goes back to it.
  */
+
 export function ShapeEditor({ stepPx }: { stepPx: number }) {
     const armed = useShapeToolStore((s) =>
         s.tool !== null && s.tool.params === null ? s.tool.kind : null,
@@ -426,10 +430,13 @@ function ShapeEditorBar({
     const numbers = useMemo(() => numberActions(live, run, chips), [live]);
     const frame = kind.frameOf(params, spots);
 
+    // A mirrored paste switches which way it mirrors through its point instead (Paste mirrored)
     const flip = (axis: "across" | "deep") =>
-        updateWith(live, (now, env) =>
-            flipShape(kind, now, spots, axis, pivotOf(now), env),
-        );
+        live.mirror
+            ? live.mirror.toggle(axis)
+            : updateWith(live, (now, env) =>
+                  flipShape(kind, now, spots, axis, pivotOf(now), env),
+              );
     // The keys act on this shape while its editor shows (#429): mounted after the app's own
     // handlers, the flips sit on top of the marchers' flips and go back when it closes. A held
     // key doesn't repeat them (review)
@@ -673,6 +680,7 @@ function ShapeEditorBar({
                         canShrink={canShrink}
                         canExpand={canExpand}
                         asIs={kind.asIs === true}
+                        mirror={target.mirror}
                     />
                     {/* What doesn't change the shape itself, at the end (owner): its pathways */}
                     <Divider />
@@ -733,6 +741,9 @@ function useLiveTarget(target: ShapeEditTarget): ShapeEditTarget {
             },
             get order() {
                 return latest.current.order;
+            },
+            get mirror() {
+                return latest.current.mirror;
             },
             begin: () => latest.current.begin(),
             preview: (params) => latest.current.preview(params),
@@ -1107,6 +1118,7 @@ const TurnControls = memo(function TurnControls({
     canShrink,
     canExpand,
     asIs,
+    mirror,
 }: {
     live: ShapeEditTarget;
     degrees: number;
@@ -1125,14 +1137,25 @@ const TurnControls = memo(function TurnControls({
     canCloseUp: boolean;
     /** Who stands where is part of the shape (a group, #603): no Recalculate */
     asIs: boolean;
+    /** A mirrored paste tied to its point: the flips show which ways it mirrors */
+    mirror?: { readonly across: boolean; readonly deep: boolean };
 }) {
     const base = useRef<unknown>(null);
     const recalculateLook = useActionLook(canRecalculate);
     const evenLook = useActionLook(evenState === "uneven");
     const flip = (axis: "across" | "deep") =>
-        updateWith(target, (now, env) =>
-            flipShape(target.kind, now, target.spots, axis, pivotOf(now), env),
-        );
+        target.mirror
+            ? target.mirror.toggle(axis)
+            : updateWith(target, (now, env) =>
+                  flipShape(
+                      target.kind,
+                      now,
+                      target.spots,
+                      axis,
+                      pivotOf(now),
+                      env,
+                  ),
+              );
     return (
         <span className="flex items-center gap-2">
             {/* The turn: ↻ adds a quarter, and the degrees beside it can be typed or
@@ -1189,18 +1212,38 @@ const TurnControls = memo(function TurnControls({
                 onPick={(key) => pickPivotOf(target, key)}
                 testId="shape-editor-pivot"
             />
+            {/* A mirrored paste's flips are toggles: which ways it mirrors through its point */}
             <IconButton
-                label={tolgee.t("shapes.edit.flipAcross", "Flip side to side")}
+                label={
+                    mirror
+                        ? tolgee.t(
+                              "shapes.edit.mirrorAcross",
+                              "Mirror side to side through the pink point",
+                          )
+                        : tolgee.t(
+                              "shapes.edit.flipAcross",
+                              "Flip side to side",
+                          )
+                }
                 action="flipHorizontal"
                 onClick={() => flip("across")}
+                pressed={mirror ? mirror.across : undefined}
                 testId="shape-editor-flip-across"
             >
                 <FlipHorizontalIcon size={14} />
             </IconButton>
             <IconButton
-                label={tolgee.t("shapes.edit.flipDeep", "Flip front to back")}
+                label={
+                    mirror
+                        ? tolgee.t(
+                              "shapes.edit.mirrorDeep",
+                              "Mirror front to back through the pink point",
+                          )
+                        : tolgee.t("shapes.edit.flipDeep", "Flip front to back")
+                }
                 action="flipVertical"
                 onClick={() => flip("deep")}
+                pressed={mirror ? mirror.deep : undefined}
                 testId="shape-editor-flip-deep"
             >
                 <FlipVerticalIcon size={14} />
@@ -1543,6 +1586,26 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
             hitRadius: HANDLE_REACH_PX / (view.zoom || 1),
             stemUnit: HANDLE_REACH_PX / (view.zoom || 1),
         });
+        // A mirrored paste's pink point (Paste mirrored) is kept clear too: it's what's dragged
+        const mirror = useShapeToolStore.getState().tool;
+        const point =
+            mirror?.mirror && mirror.params === params
+                ? fieldToElement(
+                      view,
+                      mirror.mirror.point.x,
+                      mirror.mirror.point.y,
+                  )
+                : null;
+        const clearOfPoint = point
+            ? [
+                  {
+                      left: point.x - MIRROR_POINT_CLEAR_PX,
+                      top: point.y - MIRROR_POINT_CLEAR_PX,
+                      width: 2 * MIRROR_POINT_CLEAR_PX,
+                      height: 2 * MIRROR_POINT_CLEAR_PX,
+                  },
+              ]
+            : [];
         return clearPlacement(
             {
                 outline: outline.map((p) => fieldToElement(view, p.x, p.y)),
@@ -1562,7 +1625,7 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
                 fieldWidth: room.fieldWidth,
                 fieldHeight: room.fieldHeight,
             },
-            obstacles.current.all,
+            [...obstacles.current.all, ...clearOfPoint],
             obstacles.current.covers,
             // #936, touch layout: never off the field or under the toolbar panel, so Place and
             // Discard can always be tapped

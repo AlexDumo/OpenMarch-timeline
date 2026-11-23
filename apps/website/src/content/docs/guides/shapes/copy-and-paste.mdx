@@ -7,6 +7,7 @@ covers:
   - action:copyFormation
   - action:pasteFormation
   - action:pasteFormationInPlace
+  - action:pasteMirrored
   - i18n:shapes.clipboard
 sidebar:
   order: 6
@@ -51,7 +52,7 @@ Placing is one step you can undo. Each marcher takes a spot by least travel, as 
 
 Once you copy, a small clipboard chip appears in the bottom-left corner of the field, across from the zoom controls. It shows a small picture of the formation, what it is (a shape's name, or <Ui k="shapes.clipboard.positions" plain /> for marchers copied where they stand) and how many marchers it has. On a tablet it also has a <Ui k="actions.edit.paste" /> button. Its second line says how the copy fits the marchers you have selected now, including a warning when some copied spots would stay empty, or why you can't paste yet. The same warning shows under the paste's floating editor while the paste is open. Right after you copy, it says <Ui k="shapes.clipboard.chipCopied" plain /> for a moment. A copied shape is drawn laid out for the marchers you have selected. A few seconds after you last use it, the chip shrinks to its picture, so it stays out of the way while you still know something is copied; point at it to see what (on a tablet, tap it). It shows whole again when you select other marchers, copy or paste. While you drag near it, it fades. To empty the clipboard, point at the chip and select <Ui k="actions.edit.clearClipboard" /> on its corner (on a tablet, it's in the chip itself, at the far end from Paste), or choose <Ui k="actions.edit.clearClipboard" plain /> in the command palette; the chip then goes away until you copy again.
 
-Select the chip, or its picture once it has shrunk, to open the <Ui k="shapes.clipboard.title" /> card. On a tablet, tapping the picture shows the whole chip first. With no marchers selected, the card says whether you can paste onto any number of marchers or need to select a certain number. It has <Ui k="actions.edit.paste" /> and <Ui k="actions.edit.pasteInPlace" /> buttons that do the same as the menu. Select the card's caret, or press <Kbd keys="Escape" /> while you're in it, to fold it back into the chip. It also folds when a paste opens, and it always starts folded.
+Select the chip, or its picture once it has shrunk, to open the <Ui k="shapes.clipboard.title" /> card. On a tablet, tapping the picture shows the whole chip first. With no marchers selected, the card says whether you can paste onto any number of marchers or need to select a certain number. It has <Ui k="actions.edit.paste" />, <Ui k="actions.edit.pasteInPlace" /> and <Ui k="actions.edit.pasteMirrored" /> buttons that do the same as the menu. Select the card's caret, or press <Kbd keys="Escape" /> while you're in it, to fold it back into the chip. It also folds when a paste opens, and it always starts folded.
 
 <Media
   id="shapes-clipboard-card"
@@ -71,6 +72,26 @@ The card then names it with both, such as "Box positions". Every new copy starts
 
 <Ui k="actions.edit.pasteInPlace" /> (<Kbd action="pasteFormationInPlace" />) starts the formation at the exact place on the field it was copied from, not centered on the selected marchers. Use it to bring a formation back on a later page, or to put other marchers exactly where the first group stood. Onto the same number of marchers, a shape pasted this way lands on exactly the spots it was copied from. It brings back the spots, not who stood on each: the selected marchers take them by shortest walk, as with any paste, and marchers already standing on them stay where they are.
 
+## Paste mirrored
+
+<Ui k="actions.edit.pasteMirrored" /> (<Kbd action="pasteMirrored" />) pastes the formation as its mirror image, starting from where it was copied. Use it to put a side 1 picture on side 2, or to mirror the front of a form to the back.
+
+<Steps>
+
+1. Copy the marchers, then select the marchers who should take the mirror image, such as the same section on the other side of the 50.
+
+2. Right-click the field and select <Ui k="actions.edit.pasteMirrored" />. The mirror image appears across a pink point, with a pink line through it. The first time, the point is on the 50; after that, it starts where you last left it.
+
+3. Drag the pink point to where the mirror belongs: the 50, another yard line, a hash or a marcher. The paste follows as you drag, and the line's name shows at the edge of the field. You can also drag the paste itself, and the point follows halfway between.
+
+4. In the floating editor, <Ui k="shapes.edit.flipAcross" /> (<Kbd action="flipHorizontal" />) and <Ui k="shapes.edit.flipDeep" /> (<Kbd action="flipVertical" />) now choose which way it mirrors through the point: side to side, front to back, or both. Both turns it half a turn around the point.
+
+5. Select <Ui k="shapes.edit.place" />, or press <Kbd action="applyShape" />.
+
+</Steps>
+
+With only side to side on, the paste stays level with the copy from front to back, so the two stay exactly symmetric. Turning or resizing the paste, or changing its numbers, makes it an ordinary open shape: the pink point goes away, and undo brings it back.
+
 ## When the numbers differ
 
 You can paste onto more or fewer marchers than you copied.
@@ -89,7 +110,7 @@ You can't yet choose in the pasted formation which spots stay empty. To leave ce
 
 ## On a tablet
 
-Touch and hold the field, then lift, to open the same menu with <Ui k="actions.edit.copy" />, <Ui k="actions.edit.paste" /> and <Ui k="actions.edit.pasteInPlace" />. Once something is copied, the clipboard chip also has a <Ui k="actions.edit.paste" /> button, for pasting in one tap, and its own <Ui k="actions.edit.clearClipboard" /> button. When the chip has shrunk to its picture, tap it first to show them.
+Touch and hold the field, then lift, to open the same menu with <Ui k="actions.edit.copy" />, <Ui k="actions.edit.paste" />, <Ui k="actions.edit.pasteInPlace" /> and <Ui k="actions.edit.pasteMirrored" />. Drag the pink point of a mirrored paste with your finger. Once something is copied, the clipboard chip also has a <Ui k="actions.edit.paste" /> button, for pasting in one tap, and its own <Ui k="actions.edit.clearClipboard" /> button. When the chip has shrunk to its picture, tap it first to show them.
 
 ## Related
 

@@ -879,3 +879,73 @@ test("an open paste that doesn't fit says so under its editor, and one that fits
     await expect(notice).toHaveText("2 marchers have no spot");
     await expect(notice).toHaveAttribute("data-fit", "leftOut");
 });
+
+test("Paste mirrored opens the copy's mirror image across the 50, follows its pink point and the flips, and Enter places it as one undo step", async ({
+    show,
+}) => {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    const copied = asPositions(HOME).filter((p) => p.id <= 4);
+    const across = (x: number) =>
+        copied.map((p) => ({ x: 2 * x - p.x, y: p.y }));
+    await select(page, [1, 2, 3, 4]);
+    await page.keyboard.press("ControlOrMeta+c");
+    await expect(chip(page)).toContainText("4 marchers");
+
+    await select(page, [5, 6, 7, 8]);
+    const steps = await undoSteps(show);
+    await page.keyboard.press("ControlOrMeta+Alt+v");
+    await expect(preview(page)).toBeVisible();
+    let overlay = (await shapeOverlay(page))!;
+    // The first time, through the 50, mirrored side to side
+    expect(overlay.mirror).toMatchObject({ across: true, deep: false });
+    expect(overlay.mirror!.at.x).toBeCloseTo(cf.x);
+    expect(overlay.mirror!.acrossLabel).toContain("50");
+    expect(sorted(overlay.spots)).toEqual(sorted(across(cf.x)));
+    await expect(page.getByTestId("fieldShapeMirrorPoint")).toBeVisible();
+
+    // Dragged onto the side 1 45, the paste follows it
+    const from = overlay.mirror!.screen;
+    const to = await toScreen(page, {
+        x: cf.x - 8 * S + 0.2 * S,
+        y: overlay.mirror!.at.y,
+    });
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(to.x, to.y, { steps: 12 });
+    await page.mouse.up();
+    overlay = (await shapeOverlay(page))!;
+    expect(overlay.mirror!.at.x).toBeCloseTo(cf.x - 8 * S);
+    expect(overlay.mirror!.acrossLabel).toContain("45");
+    expect(sorted(overlay.spots)).toEqual(sorted(across(cf.x - 8 * S)));
+
+    // Flip front to back mirrors it that way too, through the same point
+    const point = overlay.mirror!.at;
+    await page.keyboard.press("Alt+Shift+F");
+    await expect
+        .poll(async () => (await shapeOverlay(page))!.mirror?.deep)
+        .toBe(true);
+    overlay = (await shapeOverlay(page))!;
+    const both = copied.map((p) => ({
+        x: 2 * point.x - p.x,
+        y: 2 * point.y - p.y,
+    }));
+    expect(sorted(overlay.spots)).toEqual(sorted(both));
+    await expect(page.getByTestId("shape-editor-flip-deep")).toHaveAttribute(
+        "aria-pressed",
+        "true",
+    );
+
+    await page.keyboard.press("Enter");
+    await expect(preview(page)).toBeHidden();
+    await expect
+        .poll(async () => sorted(await savedAt(show, [5, 6, 7, 8])))
+        .toEqual(sorted(both));
+    await waitForIdle(page);
+    expect(await undoSteps(show)).toBe(steps + 1);
+    expect(await savedShapes(show)).toBe(0);
+    // The copied marchers stay put
+    expect(await savedAt(show, [1, 2, 3, 4])).toEqual(copied);
+});
