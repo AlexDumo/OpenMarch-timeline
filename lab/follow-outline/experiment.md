@@ -10,6 +10,8 @@ questions:
   - "New (2026-11-22): one Follow tool, one drag. Grab any marcher on the circle and drag it around. Did the line go the way you dragged, with the one you grabbed leading?"
   - "Drag a marcher off the circle. Did it pull out into a trail with the others following, the way you expected?"
   - "Drag around a few spots first, then off the circle, in one drag. Did the trail carry on from where the line had slid to? Is that useful, or would you rather it started from where they stand?"
+  - "New (2026-11-23): click a marcher, let go, and move the mouse without holding the button. Did the line follow, and did the next click keep it? Would you rather it worked another way?"
+  - "New (2026-11-23): while a trail is drawn, the bar has Straight | Curved. Did you find it, and did Curved bend the trail the way you wanted?"
   - "Was it clear when you were sliding around and when you had pulled out? Did it ever switch when you didn't mean it to (too easily, or not easily enough)?"
   - "You never have to set the order now. With no order set, did Follow guess the order you expected (neighbors around the outline)?"
   - "Set an order with Set order, then Shift+L. Did it open going your order's way, with your leader?"
@@ -38,6 +40,14 @@ show.
 - **Around, then out, in one drag.** Slide a few spots around first and then pull off, and the
   trail carries on from where the line had slid to. Come back onto the outline and it slides
   again.
+- **Click, let go, then move (2026-11-23).** You don't have to hold the button. Click a
+  marcher, let go, and move the mouse: the line slides around or pulls out just as it does
+  when you drag. **Click again** to keep it, **Enter** also keeps it, **Esc** puts it back.
+  Holding and dragging still works. On a tablet it stays press and drag.
+- **Straight | Curved (2026-11-23).** While a trail is drawn (also after pulling out of a
+  circle) the bar has **Straight | Curved**: clicks place corners or smooth points, and the
+  points you've placed change with it. Pressing and dragging a point still rounds that one
+  point. After finishing, **Edit path** and a click on a point give Corner | Smooth for it.
 - **No order needed.** Follow no longer asks you to set the march order first. With none set
   it takes their places around the outline, and shows who it would lead with until you grab
   someone.

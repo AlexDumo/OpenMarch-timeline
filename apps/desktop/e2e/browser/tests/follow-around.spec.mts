@@ -359,6 +359,92 @@ test("change: dragging a marcher off the outline pulls it out into a trail the r
     expect(await undoSteps(show)).toBe(steps);
 });
 
+test("change: click a marcher, let go, then move: the line slides with no button held and the next click keeps it; carried off the outline, Straight | Curved is on the bar and Enter writes the trail", async ({
+    show,
+}) => {
+    const { page } = show;
+    await onPageOne(show);
+    const S = (await fieldGrid(show)).pixelsPerStep;
+    const before = await savedPositions(show, 1);
+    await page.keyboard.press("Shift+L");
+    await expect(page.getByTestId("follow-round")).toBeVisible();
+    const steps = await undoSteps(show);
+    const { grabbed, below } = rightSide((await overlay(page))!.memberRings);
+    const from = await toScreen(page, grabbed);
+    const to = await toScreen(page, below);
+    // a click, not a drag: nothing written, and the note says what to do next
+    await page.mouse.click(from.x, from.y);
+    await expect
+        .poll(async () => (await overlay(page))?.tip ?? "")
+        .toBe("Move around the outline or out of it, then click");
+    // no button held: the line slides with the pointer
+    await page.mouse.move(to.x, to.y, { steps: 16 });
+    await expect
+        .poll(async () => (await overlay(page))?.tip ?? "")
+        .toBe("1 spot · click to keep");
+    expect(await savedPositions(show, 1)).toEqual(before);
+    // the next click keeps it: one undo step
+    await page.mouse.click(to.x, to.y);
+    await expect(page.getByTestId("follow-round")).toBeHidden();
+    await expect.poll(() => undoSteps(show)).toBe(steps + 1);
+    await waitForIdle(page);
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(() => undoSteps(show)).toBe(steps);
+    await waitForIdle(page);
+
+    // Again, carried off the outline: the trail follows the pointer with no button held
+    await page.keyboard.press("ControlOrMeta+a");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    await page.keyboard.press("Shift+L");
+    await expect(page.getByTestId("follow-round")).toBeVisible();
+    await page.mouse.click(from.x, from.y);
+    const out = await toScreen(page, { x: grabbed.x + 6 * S, y: grabbed.y });
+    await page.mouse.move(out.x, out.y, { steps: 16 });
+    await expect(page.getByTestId("follow-spacing")).toBeVisible();
+    // Escape puts the line back around the outline, nothing held
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("follow-round")).toBeVisible();
+    await expect(page.getByTestId("follow-round-amount")).toHaveValue("0");
+    // carried out again, and a click places the trail's first point
+    await page.mouse.click(from.x, from.y);
+    await page.mouse.move(out.x, out.y, { steps: 16 });
+    await expect(page.getByTestId("follow-spacing")).toBeVisible();
+    await page.mouse.click(out.x, out.y);
+    expect(await undoSteps(show)).toBe(steps);
+    // Straight | Curved on the bar while the trail is drawn
+    await expect(page.getByTestId("path-drawing-point-type")).toBeVisible();
+    await expect(page.getByTestId("path-point-corner")).toHaveAttribute(
+        "aria-pressed",
+        "true",
+    );
+    await page.getByTestId("path-point-smooth").click();
+    await expect(page.getByTestId("path-point-smooth")).toHaveAttribute(
+        "aria-pressed",
+        "true",
+    );
+    const next = await toScreen(page, {
+        x: grabbed.x + 10 * S,
+        y: grabbed.y + 4 * S,
+    });
+    await page.mouse.click(next.x, next.y);
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("follow-spacing")).toBeHidden();
+    await expect.poll(() => undoSteps(show)).toBe(steps + 1);
+    await waitForIdle(page);
+    // the trail kept its curve: its first point is stored smooth
+    const routes = await show.query<{ geometry: string }>(
+        "SELECT geometry FROM timeline_routes",
+    );
+    const smooth = routes.some((r) =>
+        (
+            JSON.parse(r.geometry) as { points: { tension?: number }[] }
+        ).points.some((pt) => (pt.tension ?? 0) > 0),
+    );
+    expect(smooth).toBe(true);
+});
+
 test("change: an order set on the page (not clockwise) is the one Follow walks: each moves on towards the one ahead of them in it, the leader towards the tail", async ({
     show,
 }) => {
