@@ -34,6 +34,8 @@ import { buildFieldSurface, venueFootprint } from "@/view3d/core/field";
 import {
     DEFAULT_CROWD_DENSITY,
     KIT_BUILDERS,
+    KIT_FIELD_ART,
+    KIT_FIELD_TURF,
     KIT_FIELD_STYLE,
 } from "@/view3d/core/kits";
 import { defaultVenueForKit } from "@/view3d/core/venueSettings";
@@ -167,6 +169,8 @@ async function load(options: LoadOptions): Promise<LoadResult> {
         fieldProperties: fp,
         theme: fp.theme,
         style: KIT_FIELD_STYLE[options.kit],
+        centerArt: KIT_FIELD_ART[options.kit],
+        turf: KIT_FIELD_TURF[options.kit],
         params,
         image: null,
         maxTextureSize: renderer.capabilities.maxTextureSize,
@@ -181,6 +185,7 @@ async function load(options: LoadOptions): Promise<LoadResult> {
                   density: built.crowdDensity ?? DEFAULT_CROWD_DENSITY,
                   palette: defaultCrowdPalette(params),
                   quality,
+                  ...built.crowd,
               });
     if (crowd) built.root.add(crowd.mesh);
     const block = performers(fp);
@@ -215,11 +220,11 @@ function setLighting(preset: LightingPreset): void {
     if (!kit || !current) return;
     // Optional so the gallery also runs on older core code, for comparisons.
     current.env.setSurroundings?.(kit.surroundings !== false);
-    current.env.setLighting(preset, kit.focus);
+    current.env.setLighting(preset, kit.focus, kit.lightingVenue);
     renderer.toneMappingExposure = current.env.exposure;
     kit.setLighting(preset);
     if (renderer.capabilities.isWebGL2) {
-        const map = createEnvironmentMap(renderer, preset);
+        const map = createEnvironmentMap(renderer, preset, kit.lightingVenue);
         scene.environment = map.texture;
         scene.environmentIntensity = 0.6;
         current.setEnvMap(map);

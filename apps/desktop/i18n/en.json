@@ -3422,10 +3422,12 @@
         "camera": {
             "blimp": "Blimp",
             "corner": "Corner",
+            "directors": "Directors' area",
             "endZone": "End zone",
             "floor": "On the floor",
             "frontRow": "Front row",
             "geJudge": "GE judge",
+            "judges": "Judges' level",
             "judgesTable": "Judges' table",
             "lowerBowl": "Lower bowl",
             "podium": "Podium",
@@ -3442,6 +3444,7 @@
             "college": "College bowl",
             "gym": "Indoor gym",
             "hs": "High school",
+            "markDiesel": "Mark Diesel Stadium",
             "pro": "Pro dome"
         },
         "lighting": {

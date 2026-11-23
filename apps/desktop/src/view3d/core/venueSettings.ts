@@ -35,6 +35,7 @@ export const VENUE_KIT_IDS = [
     "bighs",
     "college",
     "pro",
+    "markDiesel",
     "gym",
     "arena",
     "blank",
@@ -127,6 +128,43 @@ export const DEFAULT_VENUE_PARAMS: Readonly<VenueParams> = Object.freeze({
 });
 
 /**
+ * Params a kit starts with instead of `DEFAULT_VENUE_PARAMS`: a venue with
+ * a name of its own paints that name, in its own colors, until the show
+ * chooses otherwise. (Mark Diesel's match `DIESEL_VENUE_PARAMS` in the kit.)
+ */
+export const KIT_VENUE_PARAMS: Readonly<
+    Partial<Record<VenueKitId, Readonly<VenueParams>>>
+> = {
+    markDiesel: Object.freeze({
+        homeColor: "#6442ff",
+        awayColor: "#c23b3b",
+        endZoneText: "OPENMARCH",
+        endZoneColor: "#6442ff",
+    }),
+};
+
+/** The params a kit starts with. */
+export function defaultParamsForKit(kit: VenueKitId): VenueParams {
+    return { ...(KIT_VENUE_PARAMS[kit] ?? DEFAULT_VENUE_PARAMS) };
+}
+
+/**
+ * The params after switching kits: a show that never changed the old kit's
+ * starting params gets the new kit's; one that chose its own keeps them.
+ */
+export function paramsForKitSwitch(
+    from: VenueKitId,
+    to: VenueKitId,
+    params: VenueParams,
+): VenueParams {
+    const start = defaultParamsForKit(from);
+    const untouched = (Object.keys(start) as (keyof VenueParams)[]).every(
+        (key) => params[key] === start[key],
+    );
+    return untouched ? defaultParamsForKit(to) : params;
+}
+
+/**
  * The lighting presets each kit supports and its default (design.md §6).
  * Kit builders should report the same lists in `KitResult.lightingPresets`.
  */
@@ -144,6 +182,10 @@ export const KIT_LIGHTING: Readonly<
     college: { presets: ["day", "dusk", "night"], defaultLighting: "night" },
     pro: {
         presets: ["day", "night", "roofClosed"],
+        defaultLighting: "roofClosed",
+    },
+    markDiesel: {
+        presets: ["roofClosed", "day", "night"],
         defaultLighting: "roofClosed",
     },
     gym: { presets: ["house", "show"], defaultLighting: "house" },
@@ -169,7 +211,7 @@ export function defaultVenueForKit(kit: VenueKitId): VenueSettings {
         kit,
         lighting: KIT_LIGHTING[kit].defaultLighting,
         crowd: true,
-        params: { ...DEFAULT_VENUE_PARAMS },
+        params: defaultParamsForKit(kit),
     };
 }
 
