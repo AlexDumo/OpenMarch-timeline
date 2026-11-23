@@ -9,6 +9,7 @@ import {
     TEXTURE_FONT,
 } from "../../environment";
 import type { FieldCenterArt } from "../../field";
+import { HELMET } from "./helmet";
 import { MARCHER_MARK, OPENMARCH_LOGO } from "../../field/brandMark";
 import type { ShowCredits, VenueParams } from "../../types";
 
@@ -952,18 +953,18 @@ export function paintMonument(g: G, w: number, h: number): void {
     });
 }
 
-/** Width over height of the midfield helmet. */
-const HELMET_ASPECT = 1.1;
+/** The face mask's gray-blue, as the turf drawings color it. */
+const HELMET_MASK = "#a2c2d1";
 
 /**
- * The paint at midfield: a football helmet seen from the side, facing the
- * left end zone, with the OpenMarch marcher on its shell, in the box the
- * turf drawings give the midfield logo (27 ft across, 13 ft 6 in each side
- * of the 50; `FieldSurfaceInput.centerArt`). A plain white shell with a
- * violet edge, stripe and mark, and a gray face mask.
+ * The paint at midfield: the turf drawings' helmet (`helmet.ts`), traced
+ * line for line, with the OpenMarch marcher where the drawings have the
+ * team's horseshoe and OpenMarch violet for its blue, in the box the
+ * drawings give the midfield logo (27 ft across, 13 ft 6 in each side of
+ * the 50; `FieldSurfaceInput.centerArt`).
  */
 export const dieselFieldArt: FieldCenterArt = {
-    aspect: HELMET_ASPECT,
+    aspect: HELMET.aspect,
     maxWidth: 27 * 0.3048,
     paint(g, w, h) {
         paintHelmet(g, w, h);
@@ -972,80 +973,35 @@ export const dieselFieldArt: FieldCenterArt = {
 
 /** Paints the midfield helmet into a `w` x `h` box (`dieselFieldArt`). */
 export function paintHelmet(g: G, w: number, h: number): void {
-    // Drawn in units of the box's height, from the top-left corner.
-    const u = Math.min(h, w / HELMET_ASPECT);
+    const u = Math.min(h, w / HELMET.aspect);
     g.save();
-    g.translate((w - u * HELMET_ASPECT) / 2, (h - u) / 2);
+    g.translate((w - u * HELMET.aspect) / 2, (h - u) / 2);
     g.scale(u, u);
-    g.lineJoin = "round";
-    g.lineCap = "round";
-    const cx = 0.62;
-    const cy = 0.5;
-    const r = 0.44;
-    const deg = Math.PI / 180;
-    const shell = () => {
+    const fill = (rings: typeof HELMET.shell, color: string) => {
         g.beginPath();
-        // Over the crown from the back of the neck to the brow.
-        g.arc(cx, cy, r, 25 * deg, 170 * deg, true);
-        g.lineTo(0.3, 0.62);
-        g.lineTo(0.36, 0.86);
-        g.lineTo(0.7, 0.9);
-        g.quadraticCurveTo(
-            0.98,
-            0.86,
-            cx + r * Math.cos(25 * deg),
-            cy + r * Math.sin(25 * deg),
-        );
-        g.closePath();
+        for (const ring of rings) {
+            ring.forEach(([x, y], i) =>
+                i === 0 ? g.moveTo(x, y) : g.lineTo(x, y),
+            );
+            g.closePath();
+        }
+        g.fillStyle = color;
+        g.fill("evenodd");
     };
-    const mask = () => {
-        g.beginPath();
-        // Two bars from the brow and the jaw, joined by a curved front.
-        g.moveTo(0.31, 0.6);
-        g.lineTo(0.1, 0.6);
-        g.quadraticCurveTo(0.02, 0.6, 0.03, 0.7);
-        g.lineTo(0.06, 0.84);
-        g.quadraticCurveTo(0.09, 0.9, 0.18, 0.9);
-        g.lineTo(0.37, 0.86);
-        g.moveTo(0.04, 0.75);
-        g.lineTo(0.34, 0.74);
-        g.moveTo(0.18, 0.6);
-        g.lineTo(0.18, 0.9);
-    };
-    // The face mask: gray bars edged in violet.
-    mask();
-    g.strokeStyle = OM.violet;
-    g.lineWidth = 0.06;
-    g.stroke();
-    g.strokeStyle = "#b8bcc8";
-    g.lineWidth = 0.032;
-    g.stroke();
-    // The shell, edged in violet.
-    shell();
-    g.fillStyle = OM.white;
-    g.fill();
-    g.strokeStyle = OM.violet;
-    g.lineWidth = 0.04;
-    g.stroke();
-    // A stripe along the crown, clipped to the shell.
-    g.save();
-    shell();
-    g.clip();
-    g.beginPath();
-    g.arc(cx, cy, r - 0.06, 200 * deg, 345 * deg);
-    g.lineWidth = 0.05;
-    g.lineCap = "butt";
-    g.stroke();
-    g.restore();
-    // The ear hole.
-    g.beginPath();
-    g.arc(0.72, 0.68, 0.032, 0, Math.PI * 2);
-    g.fillStyle = OM.violet;
-    g.fill();
-    // The OpenMarch marcher on the shell.
-    const markHeight = 0.4;
+    fill(HELMET.shell, OM.white);
+    fill(HELMET.lines, OM.violet);
+    fill(HELMET.mask, HELMET_MASK);
+    // The OpenMarch marcher, as tall as the horseshoe, centered where it was.
+    const [left, top, right, bottom] = HELMET.logoBox;
+    const markHeight = bottom - top;
     const markWidth = (markHeight * MARCHER_MARK.width) / MARCHER_MARK.height;
-    paintMarcher(g, 0.64 - markWidth / 2, 0.2, markHeight, OM.violet);
+    paintMarcher(
+        g,
+        (left + right) / 2 - markWidth / 2,
+        top,
+        markHeight,
+        OM.violet,
+    );
     g.restore();
 }
 

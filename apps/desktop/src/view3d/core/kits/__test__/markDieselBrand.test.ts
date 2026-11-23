@@ -326,7 +326,7 @@ describe("Mark Diesel midfield art", () => {
         expect(item.z).toBeCloseTo((f.minZ + f.maxZ) / 2);
         // The turf drawings' midfield logo: 27 ft across.
         expect(item.width).toBeCloseTo(27 * 0.3048);
-        expect(item.height).toBeCloseTo(item.width / 1.1);
+        expect(item.height).toBeCloseTo(item.width / 0.9753);
         expect(written((g) => dieselFieldArt.paint(g, 256, 256))).toBe(
             "[marcher]",
         );
