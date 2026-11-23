@@ -7,6 +7,11 @@ import ToolbarSection from "@/components/toolbar/ToolbarSection";
 import { usePathPenStore } from "./pathPenStore";
 import { penRefusal } from "./usePathPen";
 import { useFollowTheLeader } from "./followTheLeader";
+import {
+    FollowStatus,
+    followingLockReason,
+    useFollowing,
+} from "./FollowStatus";
 
 const BUTTON =
     "enabled:hover:text-accent flex items-center gap-6 outline-hidden duration-150 ease-out focus-visible:-translate-y-4 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50";
@@ -24,8 +29,13 @@ export function PathPenButton({ performers }: { performers: number }) {
     const following = usePathPenStore(
         (s) => s.session?.phase === "drawing" && !!s.session.target.trail,
     );
-    const followLabel = tolgee.t("actions.path.follow", "Follow");
-    const refusal = penRefusal(performers);
+    // Following (owner, 2026-11-23): the mode lives here while the Follow tool is open. The
+    // button reads Following, a live line beside it says what's happening, and the Path pen waits
+    const inFollow = useFollowing();
+    const followLabel = inFollow
+        ? tolgee.t("pathways.following.label", "Following")
+        : tolgee.t("actions.path.follow", "Follow");
+    const refusal = inFollow ? followingLockReason() : penRefusal(performers);
     const label = tolgee.t("actions.path.pen", "Path pen");
     const followTheLeader = useFollowTheLeader();
     return (
@@ -60,10 +70,12 @@ export function PathPenButton({ performers }: { performers: number }) {
                                   "pathways.refusals.followTwo",
                                   "Select the marchers of a line (two or more) to follow a trail",
                               )}`
-                            : tolgee.t(
-                                  "pathways.toolbar.followTip",
-                                  "Follow: drag a trail out of an end of the selected line, and where the line stops becomes its next spots",
-                              )
+                            : inFollow
+                              ? followLabel
+                              : tolgee.t(
+                                    "pathways.toolbar.followTip",
+                                    "Follow: drag a trail out of an end of the selected line, and where the line stops becomes its next spots",
+                                )
                     }
                     action={performers < 2 ? undefined : "followTrail"}
                 >
@@ -71,13 +83,15 @@ export function PathPenButton({ performers }: { performers: number }) {
                         <ActionButton
                             action="followTrail"
                             tooltip=""
-                            disabled={performers < 2}
-                            aria-pressed={following}
+                            disabled={performers < 2 && !inFollow}
+                            aria-pressed={following || inFollow}
                             aria-label={followLabel}
                             data-testid="toolbar-follow-trail"
                             className={clsx(
                                 BUTTON,
-                                following ? "text-accent" : "text-text",
+                                following || inFollow
+                                    ? "text-accent font-medium"
+                                    : "text-text",
                             )}
                         >
                             <PathIcon size={22} />
@@ -86,6 +100,7 @@ export function PathPenButton({ performers }: { performers: number }) {
                     </span>
                 </Tip>
             )}
+            {followTheLeader && inFollow && <FollowStatus />}
         </ToolbarSection>
     );
 }

@@ -338,6 +338,8 @@ export type FieldCursor =
     | "crosshair"
     | "move"
     | "grab"
+    /** Something is held: the Follow tool's line picked up, pressed or carried (pathways step 10) */
+    | "grabbing"
     | ReturnType<typeof handleCursor>;
 
 /**
@@ -439,6 +441,8 @@ export type FieldModeDrawing = {
         label: string;
         /** Pulses, asking to be pressed: the Follow tool's ends (pathways step 4b) */
         pulse?: boolean;
+        /** Picked up: the marcher the Follow tool holds, haloed where it's drawn now (pathways step 10) */
+        held?: FieldPoint;
         /** Drawn dashed: a marcher detached from the group path shown (pathways step 3c) */
         dashed?: boolean;
     }[];
@@ -603,6 +607,11 @@ export interface FieldMode {
      * whether a marcher's dot (or an item) is under it, which the editor's rules give the press.
      */
     cursorAt(pointer: FieldPointer, hover?: FieldModeHover): FieldCursor | null;
+    /**
+     * The cursor while the mode holds something, whatever is under the pointer and whether or not
+     * a button is down (the Follow tool's line picked up); null or absent for none
+     */
+    heldCursor?(): FieldCursor | null;
     /** The pointer left the field with no button down. */
     leave?(): void;
     /** What it draws over the field, or null for nothing. */
@@ -1826,6 +1835,8 @@ export class FieldEditor {
     /** The cursor the field shows. */
     cursor(): FieldCursor {
         if (this.propTool) return "crosshair";
+        const held = this.mode?.heldCursor?.();
+        if (held) return held;
         // Over empty field a drag would draw the lasso, unless a field mode takes the press or
         // it's inside the selection's box, where a drag moves the selection
         if (

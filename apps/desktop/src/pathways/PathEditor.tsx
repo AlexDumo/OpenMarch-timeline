@@ -58,6 +58,8 @@ import { selectOnField } from "@/shapes/placed/boxSelection";
 import { setInsideBox } from "@/shapes/placed/boxSelectionStore";
 import { OffCountWarning, TrailCornerCounts } from "./TrailCornerCounts";
 import { trailOffReason, useFollowTheLeader } from "./followTheLeader";
+import { isFollowing } from "./FollowStatus";
+import { useIsTouchMode } from "@/stores/InputModeStore";
 import { offCountTally, trailCornersOf } from "./trailCorners";
 import {
     EVEN_FIRST,
@@ -153,6 +155,7 @@ export function PathEditor({
     const ownLines = usePathPenStore((s) => s.ownLines);
     // A trail's leader mark and corner counts only with Follow-the-leader on (#1095)
     const followTheLeader = useFollowTheLeader();
+    const touch = useIsTouchMode();
     const trailMarks = !!session?.target.trail && followTheLeader;
     if (!session) {
         // Several marchers each on their own path (after Detach all, sim round 3): the bar
@@ -200,7 +203,12 @@ export function PathEditor({
     return (
         <>
             {groupLabel}
-            {session.phase === "drawing" && <PathPenBanner session={session} />}
+            {/* Following says what's happening in the top bar's Paths tab (owner, 2026-11-23); the
+                touch layout keeps the note over the field, its tab panel being closed most of the time */}
+            {session.phase === "drawing" &&
+                !(isFollowing(session) && !touch) && (
+                    <PathPenBanner session={session} />
+                )}
             {trailMarks &&
                 (session.follow?.grabbed !== null ||
                     goingRound(session.follow)) && (
@@ -585,7 +593,10 @@ function PathEditorBar({
     )
         pinned.current = { left: place.left, top: place.top };
     const { left, top } = (drawing && pinned.current) || place;
-    const faded = drawing && session.dragging !== null;
+    // It also steps back while the line is held or carried round an outline (owner, 2026-11-23):
+    // the marchers and the note by the pointer show through it, and it can't take the drop's click
+    const faded =
+        drawing && (session.dragging !== null || !!session.follow?.roundSlide);
     const quiet = session.phase === "closed";
     // Step 6 (TC-7): a trail's turns that fall between counts (Follow-the-leader on, #1095)
     const offCount =

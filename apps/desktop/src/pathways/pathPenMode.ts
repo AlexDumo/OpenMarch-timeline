@@ -1127,9 +1127,7 @@ class PathPenMode implements FieldMode {
             // follows the pointer as a drag would, sliding round or pulled out
             if (s.follow?.roundSlide?.loose) {
                 this.slide(pointer);
-                return this.session?.follow?.grabbed == null
-                    ? "grab"
-                    : "crosshair";
+                return "grabbing";
             }
             // The Follow tool's ends pulse: the hand over an end, nothing elsewhere (DL-4)
             if (s.follow && s.follow.grabbed === null) {
@@ -1171,6 +1169,14 @@ class PathPenMode implements FieldMode {
         );
         if (lane) return lane.index !== null ? "move" : "grab";
         return null;
+    }
+
+    /** The line picked up round an outline, pressed or carried: a closed hand (owner, 2026-11-23) */
+    heldCursor(): FieldCursor | null {
+        const s = this.session;
+        return s?.phase === "drawing" && s.follow?.roundSlide
+            ? "grabbing"
+            : null;
     }
 
     leave(): void {
@@ -1494,6 +1500,9 @@ function followDrawing(session: PathSession): FieldModeDrawing {
                             "Follows the leader",
                         ),
                 ...(!grabbed && end ? { pulse: true } : {}),
+                ...(follow.roundSlide && id === follow.grabbed
+                    ? { held: starts[q]! }
+                    : {}),
             };
         }),
         ...(grabbed ? {} : { pullArrows: pullArrowsOf(follow) }),
@@ -1515,6 +1524,13 @@ function aroundDrawing(session: PathSession): FieldModeDrawing {
     const line = plan ? aroundLine(follow, plan) : [...follow.order];
     const leaderId = line.at(-1);
     const starts = line.map((id) => follow.starts.get(id)!);
+    const held = !!follow.roundSlide;
+    const heldId = follow.roundSlide?.lead ?? leaderId;
+    const heldSpot =
+        held && plan && heldId !== undefined
+            ? plan.spots[line.indexOf(heldId)]
+            : undefined;
+    const heldAt = heldSpot ? { x: heldSpot[0], y: heldSpot[1] } : null;
     const leaderLabel = tolgee.t("pathways.rings.leader", "Leads the line");
     const followerLabel = tolgee.t(
         "pathways.rings.follower",
@@ -1535,8 +1551,11 @@ function aroundDrawing(session: PathSession): FieldModeDrawing {
             marcherId: id,
             kind: id === leaderId ? "own" : "group",
             label: id === leaderId ? leaderLabel : followerLabel,
+            // picked up: haloed, where it's drawn now (its stop)
+            ...(heldAt && id === heldId ? { held: heldAt } : {}),
         })),
-        pullArrows: aroundArrows(follow),
+        // Once someone is held, the move says which way: the guess's arrows go (owner, 2026-11-23)
+        ...(held ? {} : { pullArrows: aroundArrows(follow) }),
         ...roundTip(follow, plan),
         ...realMarchers(session, starts, line, null),
     };
@@ -1571,23 +1590,20 @@ function roundTip(
     if (!follow.roundSlide && !follow.roundTyped) return {};
     const count = roundCountText(a.amount, a.unit);
     // Carried with no button held: the note says how it ends
-    if (follow.roundSlide?.loose && !follow.roundTyped)
+    if (follow.roundSlide?.loose && !follow.roundTyped) {
+        // nobody moved yet: the top bar's line says what to do (one place, not two)
+        if (a.amount === 0) return {};
         return {
             tip: {
                 at,
-                text:
-                    a.amount === 0
-                        ? tolgee.t(
-                              "pathways.round.carryTip",
-                              "Move around the outline or out of it, then click",
-                          )
-                        : tolgee.t(
-                              "pathways.round.carryCount",
-                              "{count} · click to keep",
-                              { count },
-                          ),
+                text: tolgee.t(
+                    "pathways.round.carryCount",
+                    "{count} · click to keep",
+                    { count },
+                ),
             },
         };
+    }
     return { tip: { at, text: count } };
 }
 

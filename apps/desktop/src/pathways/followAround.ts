@@ -522,6 +522,7 @@ export function startRoundSlide(
     const hit = roundPress(f, at, radius);
     if (hit === null) return false;
     const plan = aroundPlanOf(f)!;
+    const lead = hit.member ? aroundLine(f, plan)[hit.q]! : null;
     setRound(s, f, {
         roundSlide: {
             base: f.around,
@@ -529,9 +530,14 @@ export function startRoundSlide(
             last: nearestOnLoop(plan.loop, [at.x, at.y]),
             moved: 0,
             pointer: at,
-            lead: hit.member ? aroundLine(f, plan)[hit.q]! : null,
+            lead,
             band,
         },
+        // the one pressed leads at once, before it moves (owner, 2026-11-23): the Leader mark
+        // jumps to it as the sign that it's held
+        ...(lead !== null && lead !== f.around.leader
+            ? { around: { ...f.around, leader: lead } }
+            : {}),
         // a drag takes over from digits typed
         roundTyped: null,
     });
