@@ -94,6 +94,7 @@ import {
     switchDrawing,
     selectPoint,
     setPathHidden,
+    setDrawingSmooth,
     setPointSmooth,
     showPath,
     startDrawing,
@@ -1056,17 +1057,26 @@ export function PathPenKeys(): null {
     const pickedIndex =
         !drawing && picked !== null ? Number(picked.slice(1)) : -1;
     const pointPicked = phase === "open" && pickedIndex >= 0;
+    // While a path or a trail is drawn they choose what clicks place (owner, 2026-11-23: "switch
+    // between straight and curved"); not round an outline, where nothing is drawn
+    const placing = drawing && !round;
     useActionHandler(
         "pathPointCorner",
-        () => void setPointSmooth(pickedIndex, false),
+        () =>
+            placing
+                ? setDrawingSmooth(false)
+                : void setPointSmooth(pickedIndex, false),
         {},
-        pointPicked,
+        pointPicked || placing,
     );
     useActionHandler(
         "pathPointSmooth",
-        () => void setPointSmooth(pickedIndex, true),
+        () =>
+            placing
+                ? setDrawingSmooth(true)
+                : void setPointSmooth(pickedIndex, true),
         {},
-        pointPicked,
+        pointPicked || placing,
     );
     return null;
 }

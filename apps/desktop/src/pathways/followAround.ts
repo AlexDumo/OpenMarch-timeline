@@ -101,6 +101,11 @@ export interface RoundSlide {
      * Past it the leader is pulled out into a trail; within half of it, it slides again.
      */
     readonly band: number;
+    /**
+     * Carried by the pointer with no button held (owner, 2026-11-23): the marcher was clicked,
+     * not dragged, and the line follows the pointer until the next click, Enter or Escape
+     */
+    readonly loose?: boolean;
 }
 
 /**
@@ -770,6 +775,21 @@ export function letGo(s: PathSession): PathSession {
         dragging: null,
         target: aroundTarget(s.target, follow, drillsOf(s)),
     };
+}
+
+/**
+ * A click on the line (pressed and let go where it was): from here the pointer carries it with
+ * no button held, as a drag would with one (owner, 2026-11-23: "click, release, then move"). The
+ * next click ends it as letting go of a drag does; Enter keeps it and Escape puts it back. False
+ * when the line isn't held.
+ */
+export function carryRoundSlide(): boolean {
+    const s = usePathPenStore.getState().session;
+    const f = s?.follow;
+    const slide = f?.roundSlide;
+    if (!s || !f || !slide) return false;
+    setRound(s, f, { roundSlide: { ...slide, loose: true } });
+    return true;
 }
 
 /**

@@ -7,6 +7,7 @@ import type {
     FieldPointer,
 } from "@/field/editor/fieldEditor";
 import { CLICK_SLOP } from "@/field/editor/fieldEditor";
+import { thresholdsFor } from "@/field/editor/pointerThresholds";
 import {
     placeAdjustKey,
     pruneZeroKeys,
@@ -37,6 +38,7 @@ import {
     aroundOutline,
     aroundPlanOf,
     cancelRoundSlide,
+    carryRoundSlide,
     endRoundSlide,
     goingRound,
     roundHit,
@@ -311,6 +313,11 @@ class PathPenMode implements FieldMode {
         firstLeg?: boolean;
         /** Going round (owner, 2026-11-22): the press that grabbed the line to slide it round */
         round?: boolean;
+        /**
+         * Going round, the click that ends a line carried by the pointer with no button held
+         * (owner, 2026-11-23): let go, it ends as a drag does, never starting another carry
+         */
+        ending?: boolean;
     } | null = null;
     private listeners = new Set<() => void>();
 
@@ -482,9 +489,20 @@ class PathPenMode implements FieldMode {
     }
 
     press(pointer: FieldPointer, { isMac }: { isMac: boolean }): void {
-        const s = this.session;
+        let s = this.session;
         if (!s) return;
         this.endHeld();
+        // Round an outline, the line carried by the pointer with no button held (owner,
+        // 2026-11-23): this click ends it. Sliding, it's kept as letting go of a drag keeps it;
+        // pulled out, the click places the trail's first point as any click while drawing does
+        if (s.phase === "drawing" && s.follow?.roundSlide?.loose) {
+            if (s.follow.grabbed === null) {
+                this.holdRound(s, pointer, isMac, true);
+                return;
+            }
+            endRoundSlide();
+            s = this.session ?? s;
+        }
         // The Follow tool, its ends pulsing: a press on an end grabs it and drags out the first
         // leg; a marcher in the middle of the line, or the empty field, takes no press (DL-4)
         if (s.phase === "drawing" && s.follow && s.follow.grabbed === null) {
@@ -572,6 +590,16 @@ class PathPenMode implements FieldMode {
         if (!env) return;
         const band = Math.max(1.5 * s.follow!.step, 3 * env.hitRadius);
         if (!startRoundSlide(pointer.field, env.hitRadius, band)) return;
+        this.holdRound(s, pointer, isMac, false);
+    }
+
+    /** The press that holds the line round an outline: one that grabs it, or one that ends a carry */
+    private holdRound(
+        s: PathSession,
+        pointer: FieldPointer,
+        isMac: boolean,
+        ending: boolean,
+    ) {
         this.held = {
             start: pointer,
             screen: pointer.screen,
@@ -586,6 +614,7 @@ class PathPenMode implements FieldMode {
             }),
             lane: null,
             round: true,
+            ending,
         };
     }
 
@@ -785,13 +814,20 @@ class PathPenMode implements FieldMode {
         // pointer as one dragged out of a line's end does
         if (p?.round) {
             p.screen = pointer.screen;
-            p.moved = true;
-            if (slideRound(pointer.field) === "out")
-                this.preview(pointer, rolesOf(pointer, "shape"));
-            else this.dropPendingPointer();
+            p.moved ||=
+                Math.hypot(
+                    pointer.screen.x - p.start.screen.x,
+                    pointer.screen.y - p.start.screen.y,
+                ) >= thresholdsFor(p.start.kind).clickSlop;
+            this.slide(pointer);
             return;
         }
         if (!p) {
+            // Carried with no button held (owner, 2026-11-23): the line follows the pointer
+            if (this.session?.follow?.roundSlide?.loose) {
+                this.slide(pointer);
+                return;
+            }
             if (this.session?.phase === "drawing")
                 this.preview(pointer, rolesOf(pointer, "shape"));
             return;
@@ -902,6 +938,13 @@ class PathPenMode implements FieldMode {
         if (point >= 0) selectPoint(p.key);
     }
 
+    /** Round an outline, the line held or carried: it slides to the pointer, or is pulled out to it */
+    private slide(pointer: FieldPointer) {
+        if (slideRound(pointer.field) === "out")
+            this.preview(pointer, rolesOf(pointer, "shape"));
+        else this.dropPendingPointer();
+    }
+
     /**
      * Round an outline, the line let go: written in one undo step when it moved, else put back.
      * Pulled out into a trail, where it's let go is the trail's first point, and clicks go on
@@ -913,6 +956,13 @@ class PathPenMode implements FieldMode {
         pointer: FieldPointer,
         roles: Roles | undefined,
     ) {
+        // A mouse's click on it (let go where it was pressed) isn't the end: the pointer carries
+        // the line from here with no button held, until the next click (owner, 2026-11-23). A
+        // finger or a pencil has no pointer to carry it with: theirs stays press and drag
+        if (!p.moved && !p.ending && p.start.kind === "mouse") {
+            carryRoundSlide();
+            return;
+        }
         const out = s.follow?.grabbed != null;
         if (endRoundSlide()) void finishDrawing();
         else if (out)
@@ -1073,6 +1123,14 @@ class PathPenMode implements FieldMode {
         // Between clicks the next leg follows the pointer with the roles its keys hold, so it
         // lands where a click would, as a Line's does
         if (s.phase === "drawing") {
+            // Round an outline, the line carried with no button held (owner, 2026-11-23): it
+            // follows the pointer as a drag would, sliding round or pulled out
+            if (s.follow?.roundSlide?.loose) {
+                this.slide(pointer);
+                return this.session?.follow?.grabbed == null
+                    ? "grab"
+                    : "crosshair";
+            }
             // The Follow tool's ends pulse: the hand over an end, nothing elsewhere (DL-4)
             if (s.follow && s.follow.grabbed === null) {
                 // Going round: the line and the outline are what's grabbed to slide it round
@@ -1506,12 +1564,31 @@ function roundTip(
                 at,
                 text: tolgee.t(
                     "pathways.round.grabTip",
-                    "Drag any marcher around the outline or out of it, or type how far",
+                    "Click or drag any marcher around the outline or out of it, or type how far",
                 ),
             },
         };
     if (!follow.roundSlide && !follow.roundTyped) return {};
-    return { tip: { at, text: roundCountText(a.amount, a.unit) } };
+    const count = roundCountText(a.amount, a.unit);
+    // Carried with no button held: the note says how it ends
+    if (follow.roundSlide?.loose && !follow.roundTyped)
+        return {
+            tip: {
+                at,
+                text:
+                    a.amount === 0
+                        ? tolgee.t(
+                              "pathways.round.carryTip",
+                              "Move around the outline or out of it, then click",
+                          )
+                        : tolgee.t(
+                              "pathways.round.carryCount",
+                              "{count} · click to keep",
+                              { count },
+                          ),
+            },
+        };
+    return { tip: { at, text: count } };
 }
 
 /** How far round, as the note by the pointer says it: "4 spots", "1 step" */

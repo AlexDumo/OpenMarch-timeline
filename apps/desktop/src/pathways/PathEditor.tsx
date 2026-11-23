@@ -447,7 +447,7 @@ function PathPenBanner({ session }: { session: PathSession }) {
             {goingRound(session.follow) ? (
                 <T
                     keyName="pathways.banner.followOutline"
-                    defaultValue="Follow: drag any marcher around the {shape}, or out of it to lead a trail, and the rest follow · or type how far · <enter></enter> to finish · <esc></esc> to leave"
+                    defaultValue="Follow: click or drag any marcher around the {shape}, or out of it to lead a trail, and the rest follow · or type how far · <enter></enter> to finish · <esc></esc> to leave"
                     params={{
                         shape:
                             session.follow!.around!.outline.kind === "circle"
@@ -686,6 +686,20 @@ function PathEditorBar({
                     {session.follow && session.follow.grabbed !== null && (
                         <FollowControls session={session} />
                     )}
+                    {/* What clicks place while a path or trail is drawn (owner, 2026-11-23):
+                        corners, a straight-legged path, or smooth points, a curved one */}
+                    {!goingRound(session.follow) &&
+                        (!session.follow ||
+                            session.follow.grabbed !== null) && (
+                            <>
+                                <PointTypeButtons
+                                    smooth={!!session.smooth}
+                                    cornerOnly={false}
+                                    drawing
+                                />
+                                <Divider />
+                            </>
+                        )}
                     {/* Going around ends where the outline takes them, so Ends has no say */}
                     {session.follow && !goingRound(session.follow) && (
                         <FollowEndsControls session={session} />
@@ -971,30 +985,47 @@ const SLOT_WIDTH = "min-w-[104px] justify-start";
 function PointTypeButtons({
     smooth,
     cornerOnly,
+    drawing = false,
 }: {
     smooth: boolean;
     cornerOnly: boolean;
+    /** While drawing: what clicks place, named on the buttons so the choice is seen */
+    drawing?: boolean;
 }) {
     return (
         <span
             className="flex items-center gap-2"
             role="group"
             aria-label={tolgee.t("pathways.editor.pointType", "Point type")}
+            data-testid={drawing ? "path-drawing-point-type" : undefined}
         >
             <IconButton
-                label={tolgee.t("actions.path.pointCorner", "Corner point")}
+                label={
+                    drawing
+                        ? tolgee.t(
+                              "pathways.editor.drawCornersTip",
+                              "Straight: clicks place corners, with straight legs between them",
+                          )
+                        : tolgee.t("actions.path.pointCorner", "Corner point")
+                }
                 action="pathPointCorner"
                 pressed={!smooth}
                 onClick={() => runAction("pathPointCorner")}
                 testId="path-point-corner"
             >
                 <LineSegmentsIcon size={14} />
+                {drawing && tolgee.t("pathways.menu.straight", "Straight")}
             </IconButton>
             <IconButton
                 label={
                     cornerOnly
                         ? besideArcReason()
-                        : tolgee.t("actions.path.pointSmooth", "Smooth point")
+                        : drawing
+                          ? tolgee.t(
+                                "pathways.editor.drawSmoothTip",
+                                "Curved: clicks place smooth points, and the path curves through them",
+                            )
+                          : tolgee.t("actions.path.pointSmooth", "Smooth point")
                 }
                 action="pathPointSmooth"
                 disabled={cornerOnly}
@@ -1003,6 +1034,7 @@ function PointTypeButtons({
                 testId="path-point-smooth"
             >
                 <WaveSineIcon size={14} />
+                {drawing && tolgee.t("pathways.menu.curved", "Curved")}
             </IconButton>
         </span>
     );

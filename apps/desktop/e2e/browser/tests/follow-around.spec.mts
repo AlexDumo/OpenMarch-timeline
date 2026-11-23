@@ -206,7 +206,7 @@ test("change: with no march order set, Shift+L opens anyway; any marcher grabbed
         );
         const opened = (await overlay(page))!;
         expect(opened.tip).toBe(
-            "Drag any marcher around the outline or out of it, or type how far",
+            "Click or drag any marcher around the outline or out of it, or type how far",
         );
         const steps = await undoSteps(show);
         // one in the middle of the right side, not the leader the tool guessed
@@ -429,7 +429,7 @@ test("change: with the order set, Shift+L opens with nobody moved; dragging the 
     await expect(page.getByTestId("follow-round-amount")).toHaveValue("0");
     const opened = (await overlay(page))!;
     expect(opened.tip).toBe(
-        "Drag any marcher around the outline or out of it, or type how far",
+        "Click or drag any marcher around the outline or out of it, or type how far",
     );
     const steps = await undoSteps(show);
 

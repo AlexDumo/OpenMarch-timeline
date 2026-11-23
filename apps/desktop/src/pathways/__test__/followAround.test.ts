@@ -12,6 +12,7 @@ import {
     aroundLine,
     aroundPlanOf,
     aroundTarget,
+    carryRoundSlide,
     flipRoundWay,
     goingRound,
     guessAround,
@@ -32,7 +33,13 @@ import {
     startRoundSlide,
     typeRoundDigit,
 } from "../followAround";
-import { addPoint, setPointer, usePathPenStore } from "../pathPenStore";
+import {
+    addPoint,
+    finishDrawing,
+    setDrawingSmooth,
+    setPointer,
+    usePathPenStore,
+} from "../pathPenStore";
 import { offCountTally, trailCornersOf } from "../trailCorners";
 import type { PathTarget } from "../pathTarget";
 
@@ -814,6 +821,94 @@ describe("Follow on a circle: grab any marcher, drag it around or out (owner, 20
         expect(now().follow!.roundSlide!.lead).toBeNull();
         expect(slideRound(onCircle(angle(0.5), R + 6))).toBe("round");
         expect(now().follow!.grabbed).toBeNull();
+    });
+
+    it("click, let go, then move (owner, 2026-11-23): a click carries the line with no button held; the next click keeps it, Escape puts it back", () => {
+        openOn();
+        // a click on 5: pressed and let go where it stands
+        expect(press(5)).toBe(true);
+        expect(carryRoundSlide()).toBe(true);
+        let f = now().follow!;
+        expect(f.roundSlide?.loose).toBe(true);
+        expect(f.around!.amount).toBe(0);
+        // the pointer moves with no button held: the line slides with it, live
+        expect(dragAlong(5, 0, -2)).toBe("round");
+        f = now().follow!;
+        expect(f.around!.leader).toBe(5);
+        expect(f.around!.reversed).toBe(true);
+        expect(f.around!.amount).toBe(2);
+        for (const id of ids) near(stops().get(id)!, placeFrom(id, -2));
+        // the next click ends it as letting go of a drag does: written
+        expect(endRoundSlide()).toBe(true);
+        expect(now().follow!.roundSlide).toBeNull();
+        // carried again, and Escape: back as it was, nothing held
+        press(5);
+        carryRoundSlide();
+        dragAlong(5, 0, 3);
+        expect(cancelRoundSlide()).toBe(true);
+        expect(now().follow!.roundSlide).toBeNull();
+        expect(now().follow!.around!.amount).toBe(2);
+        // nothing held: nothing to carry
+        expect(carryRoundSlide()).toBe(false);
+    });
+
+    it("carried out of the circle with no button held: the trail follows the pointer, and Enter ends it there", async () => {
+        openOn();
+        press(4);
+        carryRoundSlide();
+        const out = onCircle(angle(3) + 0.25, R + 8);
+        expect(slideRound(out)).toBe("out");
+        expect(now().follow!.grabbed).toBe(4);
+        expect(now().follow!.roundSlide?.loose).toBe(true);
+        setPointer(out);
+        near(stops().get(4)!, out);
+        // Enter: the carry ends where the pointer is, the trail's point placed there (the write
+        // itself needs a show, and is refused here: the drawing is what's checked)
+        const done = finishDrawing().catch(() => undefined);
+        const placed = usePathPenStore.getState().session;
+        expect(placed?.follow?.roundSlide ?? null).toBeNull();
+        expect(placed?.points.at(-1)?.at).toEqual(out);
+        await done;
+    });
+
+    it("Straight | Curved while a trail is drawn (owner, 2026-11-23): clicks place corners or smooth points, the outline's arcs kept", () => {
+        openOn();
+        press(1);
+        dragAlong(1, 0, 3);
+        const out = onCircle(angle(3), R + 5);
+        expect(slideRound(out)).toBe("out");
+        endRoundSlide();
+        const carried = now().points.length;
+        expect(carried).toBeGreaterThan(0);
+        // Straight is the default: a click places a corner
+        addPoint(out);
+        expect(now().points.at(-1)!.tension).toBeUndefined();
+        // Curved: the points placed turn smooth, but not the stretch of outline (arcs' ends
+        // stay corners), and the next click places a smooth point
+        setDrawingSmooth(true);
+        expect(now().smooth).toBe(true);
+        now()
+            .points.slice(0, carried)
+            .forEach((p) => {
+                expect(p.bulge).toBeTruthy();
+                expect(p.tension).toBeUndefined();
+            });
+        expect(now().points[carried]!.tension).toBeGreaterThan(0);
+        const next = { x: out.x + 4, y: out.y + 3 };
+        addPoint(next);
+        expect(now().points.at(-1)!.tension).toBeGreaterThan(0);
+        // and the line's plan follows the curve: it still ends at the last point
+        const plan = followDrawnPlanOf(now())!;
+        near({ x: plan.spots.at(-1)![0], y: plan.spots.at(-1)![1] }, next, 6);
+        // Straight again: corners, the arcs untouched
+        setDrawingSmooth(false);
+        expect(now().smooth).toBe(false);
+        expect(now().points.every((p) => !p.tension)).toBe(true);
+        expect(
+            now()
+                .points.slice(0, carried)
+                .every((p) => !!p.bulge),
+        ).toBe(true);
     });
 
     it("outlineStretch: a box's corners passed are points, a circle's arcs keep their bulge", () => {
