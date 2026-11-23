@@ -135,9 +135,15 @@ import { createThreeFieldTestApi } from "./threeFieldTestApi";
 import FieldLayer from "./layers/FieldLayer";
 import BackgroundImageLayer from "./layers/BackgroundImageLayer";
 import VenueUnderlayLayer from "./venueUnderlay/VenueUnderlayLayer";
-import UnderlaySwitcher from "./venueUnderlay/UnderlaySwitcher";
 import CameraMarkerLayer from "./venueUnderlay/CameraMarkerLayer";
-import { useUnderlayStore } from "./venueUnderlay/underlayStore";
+import {
+    styleBaseColor,
+    venueLook,
+    washedColor,
+    withLightLines,
+} from "./venueUnderlay/fieldVenue";
+import { useVenueSettings } from "@/hooks/queries/useVenueSettings";
+import { KIT_FIELD_STYLE } from "@/view3d/core/kits";
 import MarchersLayer from "./layers/MarchersLayer";
 import ItemsLayer from "./layers/ItemsLayer";
 import LabelsLayer, { type LabelStyle } from "./layers/LabelsLayer";
@@ -255,15 +261,37 @@ function ThreeFieldView() {
         [fieldProperties, fieldImage],
     );
     const { theme: appTheme } = useTheme();
-    // How bright the floor is under the order lanes (step 4i): background and field image, read once
+    // The venue on the field (#1207): off unless the View setting picks a look
+    const { fieldVenue, fieldVenueAround } = useUiSettingsStore(
+        useShallow((s) => ({
+            fieldVenue: s.uiSettings.fieldVenue,
+            fieldVenueAround: s.uiSettings.fieldVenueAround ?? "edge",
+        })),
+    );
+    const venue3d = venueLook(fieldVenue);
+    const { data: venue } = useVenueSettings();
+    const venueStyle = KIT_FIELD_STYLE[venue?.kit ?? "hs"];
+    // Full color draws the grid in light ink over the dark turf
+    const lineFieldProperties = useMemo(
+        () =>
+            fieldProperties && venue3d?.keepMarkings
+                ? withLightLines(fieldProperties)
+                : fieldProperties,
+        [fieldProperties, venue3d?.keepMarkings],
+    );
+    // How bright the floor is under the order lanes (step 4i): background (washed with the
+    // venue's color when it shows) and field image, read once
+    const background = fieldProperties?.theme.background;
+    const floorBackground = useMemo(() => {
+        const bg = background ?? { r: 255, g: 255, b: 255 };
+        return venue3d
+            ? washedColor(bg, styleBaseColor(venueStyle, bg), venue3d)
+            : bg;
+    }, [background, venue3d, venueStyle]);
     const orderFloor = useMemo(
         () =>
             makeFloorSampler({
-                background: fieldProperties?.theme.background ?? {
-                    r: 255,
-                    g: 255,
-                    b: 255,
-                },
+                background: floorBackground,
                 image: fieldImage,
                 placement: fieldImagePlan,
                 width: fieldProperties?.width ?? 0,
@@ -275,43 +303,13 @@ function ThreeFieldView() {
             }),
         // `appTheme` is what the dark class follows
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [fieldProperties, fieldImage, fieldImagePlan, appTheme],
-    );
-    // PROTOTYPE: on full-color turf the grid draws in light ink
-    const underlayLook = useUnderlayStore((s) => s.look);
-    const lineFieldProperties = useMemo(
-        () =>
-            fieldProperties && underlayLook === "turf"
-                ? (Object.assign(
-                      Object.create(Object.getPrototypeOf(fieldProperties)),
-                      fieldProperties,
-                      {
-                          theme: {
-                              ...fieldProperties.theme,
-                              primaryStroke: {
-                                  r: 255,
-                                  g: 255,
-                                  b: 255,
-                                  a: 0.95,
-                              },
-                              secondaryStroke: {
-                                  r: 255,
-                                  g: 255,
-                                  b: 255,
-                                  a: 0.55,
-                              },
-                              tertiaryStroke: {
-                                  r: 255,
-                                  g: 255,
-                                  b: 255,
-                                  a: 0.25,
-                              },
-                              fieldLabel: { r: 255, g: 255, b: 255, a: 0.9 },
-                          },
-                      },
-                  ) as typeof fieldProperties)
-                : null,
-        [fieldProperties, underlayLook],
+        [
+            fieldProperties,
+            floorBackground,
+            fieldImage,
+            fieldImagePlan,
+            appTheme,
+        ],
     );
     const appearanceSteps = useMarcherAppearanceSteps(true);
     const { mutateAsync: moveMarchers } = useMutation(
@@ -746,7 +744,6 @@ function ThreeFieldView() {
                     <ClipboardChip />
                 </>
             )}
-            <UnderlaySwitcher />
             <FieldBenchmark
                 frames={benchFrames}
                 view={benchView}
@@ -814,7 +811,11 @@ function ThreeFieldView() {
                             clock={countGrid}
                             appearanceSteps={appearanceSteps}
                         />
-                        <VenueUnderlayLayer fieldProperties={fieldProperties} />
+                        <VenueUnderlayLayer
+                            fieldProperties={fieldProperties}
+                            look={venue3d}
+                            around={fieldVenueAround}
+                        />
                         <CameraMarkerLayer fieldProperties={fieldProperties} />
                         <FieldLayer
                             fieldProperties={
