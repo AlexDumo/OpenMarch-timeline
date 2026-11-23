@@ -1,11 +1,29 @@
 import { useTranslate } from "@tolgee/react";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import * as CoordinateActions from "@/utilities/CoordinateActions";
+import { activeFieldEditor } from "@/field/editor/activeFieldEditor";
+import { anchorPoint } from "@/field/editor/selectionPivot";
+import { boundsOf } from "@/field/editor/groupTransform";
 import { useActionHandler } from "../useActionHandler";
 import { useEditorReadiness } from "./useEditorReadiness";
 import { useUpdateCoordinates } from "./useUpdateCoordinates";
 
 // eslint-disable-next-line max-lines-per-function
+/**
+ * What Flip mirrors the marchers at `pages` about: the selection's pivot when it was moved off the
+ * center (the Arrange section's pivot grid, or dragged onto a marcher or a spot), worked out from
+ * the positions being flipped; undefined for their own center
+ */
+function pivotOf(
+    pages: readonly { marcher_id: number; x: number; y: number }[],
+): { x: number; y: number } | undefined {
+    const anchor = activeFieldEditor()?.selectionPivotAnchor();
+    const box = boundsOf(pages);
+    if (!anchor || !box) return undefined;
+    const byId = new Map(pages.map((p) => [p.marcher_id, p]));
+    return anchorPoint(anchor, box, (id) => byId.get(id));
+}
+
 export function useAlignmentActionHandlers() {
     const { t } = useTranslate();
     const {
@@ -133,8 +151,10 @@ export function useAlignmentActionHandlers() {
     useActionHandler(
         "flipHorizontal",
         () => {
+            const pages = getSelectedMarcherPages();
             const flippedCoords = CoordinateActions.flipHorizontal(
-                getSelectedMarcherPages(),
+                pages,
+                pivotOf(pages),
             );
             updateCoordinates(flippedCoords);
         },
@@ -144,8 +164,10 @@ export function useAlignmentActionHandlers() {
     useActionHandler(
         "flipVertical",
         () => {
+            const pages = getSelectedMarcherPages();
             const flippedCoords = CoordinateActions.flipVertical(
-                getSelectedMarcherPages(),
+                pages,
+                pivotOf(pages),
             );
             updateCoordinates(flippedCoords);
         },

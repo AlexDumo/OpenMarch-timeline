@@ -1,4 +1,5 @@
 import type { XY } from "../types";
+import { mirrorPoint } from "../tool/mirror";
 
 /**
  * Where the last mirrored paste's mirror point was (Paste mirrored), so the next one opens
@@ -54,4 +55,42 @@ export function keepMirrorPoint(
     } catch {
         // Storage full or blocked: the next one opens through the field's center
     }
+}
+
+/**
+ * Where Paste mirrored opens its mirror point (pure): `last`, the point last used, while the copy
+ * mirrored side to side through it stays on the field; otherwise on the 50 (`centerX`) level with
+ * the copy, between it and its mirror image. Through `snap`, so the mirrored spots land on the
+ * half-step grid too.
+ */
+export function startingMirrorPoint({
+    last,
+    copied,
+    width,
+    height,
+    centerX,
+    snap,
+}: {
+    last: XY | null;
+    /** The copied spots, in this field's units */
+    copied: readonly XY[];
+    width: number;
+    height: number;
+    centerX: number;
+    snap: (p: XY) => XY;
+}): XY {
+    const onField = (p: XY) =>
+        p.x >= 0 && p.x <= width && p.y >= 0 && p.y <= height;
+    if (
+        last &&
+        copied.every((p) =>
+            onField(mirrorPoint(p, last, { across: true, deep: false })),
+        )
+    )
+        return last;
+    const ys = copied.map((p) => p.y);
+    return snap({
+        x: centerX,
+        y: ys.length > 0 ? (Math.min(...ys) + Math.max(...ys)) / 2 : height / 2,
+    });
 }

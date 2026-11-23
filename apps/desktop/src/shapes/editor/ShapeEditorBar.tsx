@@ -446,15 +446,56 @@ function ShapeEditorBar({
     useActionHandler("flipVertical", () => flip("deep"), {
         ignoreRepeat: true,
     });
+    // A mirrored paste only mirrors (owner on Paste mirrored): its keys and palette entries for
+    // turning and resizing are off, saying why, and its Mirror choice is on
+    const mirrored = target.mirror !== undefined;
+    const mirrorOnly = () =>
+        mirrored
+            ? tolgee.t(
+                  "actions.shape.mirrorOnlyReason",
+                  "A mirrored paste only mirrors. Place it, then turn or resize it",
+              )
+            : undefined;
     useActionHandler("shapeQuarterTurn", () => turnQuarter(live), {
+        enabled: !mirrored,
+        disabledReason: mirrorOnly,
         ignoreRepeat: true,
     });
+    const mirrorWay = (axes: { across: boolean; deep: boolean }) => () =>
+        live.mirror?.set(axes);
+    const mirrorOpen = {
+        enabled: mirrored,
+        disabledReason: () =>
+            mirrored
+                ? undefined
+                : tolgee.t(
+                      "actions.shape.mirrorNotOpen",
+                      "Paste mirrored first",
+                  ),
+        ignoreRepeat: true,
+    };
+    useActionHandler(
+        "mirrorSideToSide",
+        mirrorWay({ across: true, deep: false }),
+        mirrorOpen,
+    );
+    useActionHandler(
+        "mirrorFrontToBack",
+        mirrorWay({ across: false, deep: true }),
+        mirrorOpen,
+    );
+    useActionHandler(
+        "mirrorBoth",
+        mirrorWay({ across: true, deep: true }),
+        mirrorOpen,
+    );
     // A double-click on the pivot, as the pivot menu's entry (tablet 1.5): back to the center
     useActionHandler(
         "shapeCenterPivot",
         () => pickPivotOf(live, DEFAULT_PIVOT),
         {
-            enabled: pivotOf(params) !== DEFAULT_PIVOT,
+            enabled: !mirrored && pivotOf(params) !== DEFAULT_PIVOT,
+            disabledReason: mirrorOnly,
             ignoreRepeat: true,
         },
     );
@@ -464,10 +505,12 @@ function ShapeEditorBar({
     const canExpand =
         env !== null && scaledOnce(target, params, 1, env) !== null;
     useActionHandler("shapeShrink", () => scaleOnce(live, -1, envFor), {
-        enabled: canShrink,
+        enabled: !mirrored && canShrink,
+        disabledReason: mirrorOnly,
     });
     useActionHandler("shapeExpand", () => scaleOnce(live, 1, envFor), {
-        enabled: canExpand,
+        enabled: !mirrored && canExpand,
+        disabledReason: mirrorOnly,
     });
     useActionHandler("shapeRecalculate", () => target.recalculate?.(), {
         enabled: target.recalculate !== null,
@@ -476,7 +519,8 @@ function ShapeEditorBar({
     // An outline evened out in its frame (owner on #459): none where it doesn't apply
     const evenState = evenStateOf(kind, params, spots);
     useActionHandler("shapeEvenOut", () => evenOut(live), {
-        enabled: evenState === "uneven",
+        enabled: !mirrored && evenState === "uneven",
+        disabledReason: mirrorOnly,
         ignoreRepeat: true,
     });
 
@@ -533,10 +577,7 @@ function ShapeEditorBar({
                         className="flex shrink-0 items-center gap-6"
                         data-editor-row
                     >
-                        <MirrorControls
-                            axes={target.mirror}
-                            onPick={(axes) => live.mirror?.set(axes)}
-                        />
+                        <MirrorControls axes={target.mirror} />
                         {kind.asIs !== true && (
                             <MirrorRecalculate
                                 live={live}

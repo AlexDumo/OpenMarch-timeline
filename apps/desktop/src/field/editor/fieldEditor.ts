@@ -1474,6 +1474,16 @@ export class FieldEditor {
         return this.restingPivot(own, true);
     }
 
+    /**
+     * Where the plain selection's pivot was set, when it was moved off its box's center (a cell
+     * picked, dragged onto a marcher or a spot): what Flip mirrors about too. Null on the center.
+     */
+    selectionPivotAnchor(): PivotAnchor | null {
+        if (this.selectionPivot() === null) return null;
+        const anchor = this.currentOwnPivot()?.anchor ?? null;
+        return anchor && !isCenter(anchor) ? anchor : null;
+    }
+
     /** The pivot where it's set; `resting` with no gesture running, so hints and previews show */
     private restingPivot(
         own: OwnPivot | null,

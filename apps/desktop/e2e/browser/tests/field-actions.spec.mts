@@ -178,6 +178,21 @@ test("flip across and down", async ({ show }) => {
     await expectCanvasMatchesShow(show);
 });
 
+test("flip mirrors about the selection's pivot once it's moved", async ({
+    show,
+}) => {
+    const { page } = show;
+    await selectAll(page);
+    const xs = PAGE_0.map(([, x]) => x);
+    const left = Math.min(...xs);
+    // The pivot on the left side's middle: Flip side to side mirrors across that line
+    await page.getByTestId("arrange-pivot-w").click();
+    await press(page, "Alt+F");
+    for (const [id, x, y] of PAGE_0)
+        await expectAt(show, id, { x: 2 * left - x, y });
+    await expectCanvasMatchesShow(show);
+});
+
 test("set the selected marcher to the next page", async ({ show }) => {
     const { page } = show;
     await selectPage(show, "Page 1");

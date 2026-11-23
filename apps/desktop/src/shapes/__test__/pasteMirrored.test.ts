@@ -30,6 +30,7 @@ import {
     pressTarget,
     setMirrorAxes,
     toggleMirror,
+    nudgeMirrorPoint,
     undo,
     type ToolState,
 } from "../tool/toolMachine";
@@ -331,13 +332,61 @@ describe("the open paste stays tied to its mirror point", () => {
         expect(sorted(spots(t))).toEqual(sorted(mirrored(DOTS, point)));
     });
 
-    it("the flip keys switch one way, but never the last one off", () => {
+    it("the flip keys switch one way; switching off the last one switches to the other", () => {
         let t = open();
-        expect(step(t, (s) => toggleMirror(s, "across"))).toBe(t);
+        const swapped = step(t, (s) => toggleMirror(s, "across"));
+        expect(swapped.mirror).toMatchObject({ across: false, deep: true });
         t = step(t, (s) => toggleMirror(s, "deep"));
         expect(t.mirror).toMatchObject({ across: true, deep: true });
         t = step(t, (s) => toggleMirror(s, "across"));
         expect(t.mirror).toMatchObject({ across: false, deep: true });
+    });
+
+    it("the arrow keys move the mirror point, on the half-step grid, one undo step each", () => {
+        let t = open();
+        t = step(t, (s) => nudgeMirrorPoint(s, { x: STEP, y: 0 }, env));
+        expect(t.mirror?.point).toEqual({ x: 210, y: 50 });
+        expect(sorted(spots(t))).toEqual(
+            sorted(mirrored(DOTS, { x: 210, y: 50 })),
+        );
+        // Off the grid, it lands back on it
+        t = step(t, (s) => nudgeMirrorPoint(s, { x: 1.2, y: 0 }, env));
+        expect(t.mirror?.point).toEqual({ x: 210, y: 50 });
+        t = step(t, (s) => nudgeMirrorPoint(s, { x: 0, y: -STEP }, env));
+        expect(t.mirror?.point).toEqual({ x: 210, y: 40 });
+        t = step(t, undo);
+        t = step(t, undo);
+        expect(t.mirror?.point).toEqual(point);
+    });
+
+    it("a click off the paste puts the mirror point there", () => {
+        let t = open();
+        t = step(t, (s) => press(s, { x: 251, y: 302 }, env));
+        expect(t.gesture?.type).toBe("mirror");
+        t = step(t, (s) => release(s, ctx));
+        expect(t.mirror?.point).toEqual({ x: 250, y: 300 });
+        expect(sorted(spots(t))).toEqual(
+            sorted(mirrored(DOTS, { x: 250, y: 300 })),
+        );
+        t = step(t, undo);
+        expect(t.mirror?.point).toEqual(point);
+    });
+
+    it("a move along a way it doesn't mirror changes nothing and leaves no undo step", () => {
+        const t = open();
+        const kind = t.kind;
+        const frame = kind.frameOf(t.params, t.spots);
+        const nudged = step(t, (s) =>
+            edit(
+                s,
+                kind.withFrame(s.params, s.spots, {
+                    ...frame,
+                    center: { x: frame.center.x, y: frame.center.y + STEP },
+                }),
+                ctx,
+            ),
+        );
+        expect(nudged).toBe(t);
     });
 
     it("only mirrors: a press on one of its handles grabs the whole paste to move it", () => {

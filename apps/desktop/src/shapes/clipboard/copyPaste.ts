@@ -27,12 +27,17 @@ import { mirrorParams, type Mirror } from "../tool/mirror";
 import { toolEnvFor } from "../tool/toolEnv";
 import type { ShapeField } from "../field/shapeField";
 import type { XY } from "../types";
-import { keepMirrorPoint, lastMirrorPoint } from "./mirrorPointStore";
+import {
+    keepMirrorPoint,
+    lastMirrorPoint,
+    startingMirrorPoint,
+} from "./mirrorPointStore";
 import {
     pictureOf,
     pictureSummary,
     planPaste,
     standingOnSpots,
+    type CopiedPicture,
     type PictureFit,
 } from "./picture";
 import {
@@ -100,33 +105,33 @@ export async function copyFormation(ids: readonly number[]): Promise<boolean> {
 }
 
 /** The open paste's mirror point is kept as it moves, for the next Paste mirrored */
-useShapeToolStore.subscribe((now, before) => {
+/** The mirror point last kept, so it's written once per change */
+let keptPoint: XY | null = null;
+useShapeToolStore.subscribe((now) => {
     const point = now.tool?.mirror?.point;
-    if (!point || point === before.tool?.mirror?.point) return;
+    // Once a drag lets go, not on every move of it
+    if (!point || now.tool?.gesture || point === keptPoint) return;
     const field = currentShapeField();
     if (!field) return;
+    keptPoint = point;
     const { width, height } = field.fieldProperties;
     keepMirrorPoint(point, width, height);
 });
 
-/**
- * Where Paste mirrored opens its mirror point: where the last one was, or else on the 50 level
- * with the copy, between it and its mirror image. On the half-step grid, so the mirrored spots
- * land on it too.
- */
-function startingMirrorPoint(field: ShapeField, copied: readonly XY[]): XY {
-    const { width, height, centerFrontPoint } = field.fieldProperties;
-    const ys = copied.map((p) => p.y);
-    return (
-        lastMirrorPoint(width, height) ??
-        toolEnvFor(field).gridSnap({
-            x: centerFrontPoint.xPixels,
-            y:
-                ys.length > 0
-                    ? (Math.min(...ys) + Math.max(...ys)) / 2
-                    : centerFrontPoint.yPixels / 2,
-        })
-    );
+/** Where Paste mirrored opens its mirror point on `field` (`startingMirrorPoint`) */
+function mirrorPointFor(field: ShapeField, picture: CopiedPicture): XY {
+    const { width, height, centerFrontPoint, pixelsPerStep } =
+        field.fieldProperties;
+    // The copy in this field's units, as the paste lays it out
+    const scale = pixelsPerStep / picture.stepPx;
+    return startingMirrorPoint({
+        last: lastMirrorPoint(width, height),
+        copied: picture.dots.map((p) => ({ x: p.x * scale, y: p.y * scale })),
+        width,
+        height,
+        centerX: centerFrontPoint.xPixels,
+        snap: toolEnvFor(field).gridSnap,
+    });
 }
 
 /** Whether Paste can open now: something is copied, and no shape is open and showing */
@@ -157,7 +162,7 @@ export function pasteFormation(
     if (!field || !picture || isShapeShown()) return false;
     const mirror = mirrored
         ? {
-              point: startingMirrorPoint(field, picture.dots),
+              point: mirrorPointFor(field, picture),
               across: true,
               deep: false,
           }
@@ -237,7 +242,7 @@ export function pasteFormation(
     const preview = mirror
         ? tolgee.t(
               "shapes.clipboard.announceMirrorPreview",
-              "Mirrored paste preview. Drag the pink point to move the mirror. Enter places it, Escape discards it.",
+              "Mirrored paste preview. Move the mirror point with the arrow keys, by clicking the field or by dragging it. Enter places it, Escape discards it.",
           )
         : tolgee.t(
               "shapes.clipboard.announcePreview",
