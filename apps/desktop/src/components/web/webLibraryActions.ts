@@ -5,7 +5,7 @@
  */
 import { toast } from "sonner";
 import { WEB_CHANNELS } from "../../../web/protocol";
-import { isAppleTouchDevice } from "../../../web/renderer/filePicking";
+import { appleDeviceName } from "@/utilities/device";
 import type { BackupResult } from "../../../web/renderer/handlers";
 
 import type { Translate } from "@/shortcuts/labels";
@@ -13,8 +13,8 @@ import type { Translate } from "@/shortcuts/labels";
 const invoke = <T>(channel: string, ...args: unknown[]) =>
     window.electron.invoke(channel, ...args) as Promise<T>;
 
-/** "iPad" wording on an iPad, "browser" elsewhere. */
-export const onIpad = isAppleTouchDevice();
+/** "iPad" or "iPhone" wording on that device, "browser" elsewhere. */
+export const appleDevice = appleDeviceName();
 
 export const openStoredShow = (id: string) =>
     invoke<number>(WEB_CHANNELS.openStored, id);

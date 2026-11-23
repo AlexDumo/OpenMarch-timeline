@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { hasOpfs, isAppleTouchDevice } from "../device";
+import { appleDeviceName, hasOpfs, isAppleTouchDevice } from "../device";
 import { touchSafeAccept } from "../fileAccept";
 
 const ipadOs = {
@@ -26,6 +26,27 @@ describe("isAppleTouchDevice", () => {
     it("is the check the file pickers use", () => {
         expect(touchSafeAccept(".csv", ipadOs)).toBe("");
         expect(touchSafeAccept(".csv", android)).toBe(".csv");
+    });
+});
+
+describe("appleDeviceName", () => {
+    it("says iPad on iPadOS Safari and older iPad agents", () => {
+        expect(appleDeviceName(ipadOs)).toBe("ipad");
+        expect(
+            appleDeviceName({ userAgent: "Mozilla/5.0 (iPad; CPU OS 12_0)" }),
+        ).toBe("ipad");
+    });
+    it("says iPhone on an iPhone, not iPad (#1066)", () => {
+        expect(appleDeviceName(iphone)).toBe("iphone");
+    });
+    it("falls back to the browser wording elsewhere", () => {
+        expect(appleDeviceName(mac)).toBeNull();
+        expect(appleDeviceName(android)).toBeNull();
+        expect(
+            appleDeviceName({
+                userAgent: "Mozilla/5.0 (iPod touch; CPU OS 15_0)",
+            }),
+        ).toBeNull();
     });
 });
 
