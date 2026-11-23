@@ -284,6 +284,18 @@ const drawingOf = memoDrawing(
                 ? { labels: [{ at: hover.at, text: hover.text }] }
                 : {}),
             ...(tool.mirror && !drawing ? mirrorDrawing(tool) : {}),
+            // A mirrored paste only mirrors: no knob, handles or pivot to turn or resize it
+            ...(tool.mirror && !drawing
+                ? {
+                      handles: [],
+                      addHandles: [],
+                      selectedHandles: [],
+                      barHandles: [],
+                      knob: undefined,
+                      pivotMark: undefined,
+                      pivotPreview: undefined,
+                  }
+                : {}),
         };
     },
 );

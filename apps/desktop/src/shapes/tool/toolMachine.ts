@@ -29,6 +29,7 @@ import {
     toggledMirror,
     withMirrorPoint,
     type Mirror,
+    type MirrorAxes,
 } from "./mirror";
 
 /**
@@ -285,6 +286,18 @@ export function pressTarget(
     env: ToolEnv,
 ): ShapeTarget | { type: "draw" } {
     if (state.params === null) return { type: "draw" };
+    if (state.mirror) {
+        const target = shapeTargetAt(
+            state.kind,
+            state.params,
+            state.spots,
+            at,
+            env,
+            state.selected,
+            state.pivotMoved ?? false,
+        );
+        return target ? { type: "move" } : { type: "draw" };
+    }
     return (
         shapeTargetAt(
             state.kind,
@@ -325,6 +338,14 @@ export function press(state: ToolState, at: XY, env: ToolEnv): ToolState {
                   state.selected,
                   state.pivotMoved ?? false,
               );
+    // A mirrored paste only mirrors (owner on Paste mirrored): a handle, the knob or the pivot
+    // under the press grabs the whole paste to move it, which moves the point half as far
+    if (state.mirror && onShape && onShape.type !== "move")
+        return {
+            ...state,
+            gesture: { type: "move", base: state.params, grab: at, before },
+            pointer: at,
+        };
     const click =
         onShape?.type === "handle"
             ? (state.kind.clickHandle?.(
@@ -643,6 +664,29 @@ export function onMirrorPoint(state: ToolState, at: XY, env: ToolEnv): boolean {
 export function toggleMirror(state: ToolState, axis: FlipAxis): ToolState {
     if (!state.mirror || state.gesture || state.params === null) return state;
     const mirror = toggledMirror(state.mirror, axis);
+    // It always mirrors some way: the last way on stays on
+    if (!mirror.across && !mirror.deep) return state;
+    return pushHistory(
+        {
+            ...state,
+            mirror,
+            params: mirroredOf(state.kind, state.spots, mirror),
+        },
+        snapshot(state),
+    );
+}
+
+/**
+ * A mirrored paste set to mirror the ways `axes` say (the floating editor's Mirror choice): side
+ * to side, front to back or both, through the same point. One undo step; each marcher keeps their
+ * spot. Unchanged for neither, the ways it mirrors already, or a shape that isn't a mirrored paste.
+ */
+export function setMirrorAxes(state: ToolState, axes: MirrorAxes): ToolState {
+    const was = state.mirror;
+    if (!was || state.gesture || state.params === null) return state;
+    if (!axes.across && !axes.deep) return state;
+    if (was.across === axes.across && was.deep === axes.deep) return state;
+    const mirror: Mirror = { ...was, across: axes.across, deep: axes.deep };
     return pushHistory(
         {
             ...state,

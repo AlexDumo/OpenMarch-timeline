@@ -880,7 +880,7 @@ test("an open paste that doesn't fit says so under its editor, and one that fits
     await expect(notice).toHaveAttribute("data-fit", "leftOut");
 });
 
-test("Paste mirrored opens the copy's mirror image across the 50, follows its pink point and the flips, and Enter places it as one undo step", async ({
+test("Paste mirrored opens the copy's mirror image across the 50, follows its pink point and its Mirror choice, and Enter places it as one undo step", async ({
     show,
 }) => {
     const { page } = show;
@@ -921,11 +921,28 @@ test("Paste mirrored opens the copy's mirror image across the 50, follows its pi
     expect(overlay.mirror!.acrossLabel).toContain("45");
     expect(sorted(overlay.spots)).toEqual(sorted(across(cf.x - 8 * S)));
 
-    // Flip front to back mirrors it that way too, through the same point
+    // Mirror-only: no knob, handles or flips, and the editor's Mirror choice
+    expect(overlay.knob).toBeNull();
+    expect(overlay.handles).toHaveLength(0);
+    await expect(page.getByTestId("shape-editor-flip-across")).toHaveCount(0);
+    await expect(
+        page.getByTestId("shape-editor-mirror-across"),
+    ).toHaveAttribute("data-state", "on");
+    // Front to back mirrors it across the level line through the same point
     const point = overlay.mirror!.at;
-    await page.keyboard.press("Alt+Shift+F");
+    await page.getByTestId("shape-editor-mirror-deep").click();
     await expect
         .poll(async () => (await shapeOverlay(page))!.mirror?.deep)
+        .toBe(true);
+    overlay = (await shapeOverlay(page))!;
+    expect(overlay.mirror!.across).toBe(false);
+    expect(sorted(overlay.spots)).toEqual(
+        sorted(copied.map((p) => ({ x: p.x, y: 2 * point.y - p.y }))),
+    );
+    // Both: half a turn around the point
+    await page.getByTestId("shape-editor-mirror-both").click();
+    await expect
+        .poll(async () => (await shapeOverlay(page))!.mirror?.across)
         .toBe(true);
     overlay = (await shapeOverlay(page))!;
     const both = copied.map((p) => ({
@@ -933,10 +950,6 @@ test("Paste mirrored opens the copy's mirror image across the 50, follows its pi
         y: 2 * point.y - p.y,
     }));
     expect(sorted(overlay.spots)).toEqual(sorted(both));
-    await expect(page.getByTestId("shape-editor-flip-deep")).toHaveAttribute(
-        "aria-pressed",
-        "true",
-    );
 
     await page.keyboard.press("Enter");
     await expect(preview(page)).toBeHidden();

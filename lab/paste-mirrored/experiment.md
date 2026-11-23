@@ -8,7 +8,7 @@ status: open
 questions:
   - Was it clear that dragging the pink point moves the mirror, and that the paste follows it?
   - Did dragging the paste itself (the point follows halfway) feel right, or did you expect something else?
-  - Did using Flip side to side and Flip front to back to choose the mirror's direction make sense?
+  - Was the Mirror choice (Side to side, Front to back, Both) easy to find and understand?
   - Did the point snap where you wanted it (the 50, yard lines, hashes, marchers)?
   - With only side to side on, the paste can't move front to back. Did that help or get in your way?
 ---
@@ -24,10 +24,10 @@ Paste mirrored copies a formation to the other side of a line you choose.
 - Drag the pink point onto another yard line, a hash or a marcher. The
   paste follows, and the line's name shows at the top of the field.
 - Drag the paste itself. The pink point follows halfway between.
-- In the floating editor, turn on **Flip front to back** as well. The
-  paste turns half a turn around the point. Turn **Flip side to side** off
-  to mirror only front to back.
+- In the floating editor, pick **Front to back** under **Mirror**: the
+  paste mirrors across the level line through the point. Pick **Both** and
+  it turns half a turn around the point.
 - Press Enter to place it. Paste mirrored again: it starts at the point
   you left it.
-- Turn or resize the paste: the pink point goes away and it's an ordinary
-  paste. Undo brings the point back.
+- The paste only mirrors: there's no knob or handles, and dragging anywhere
+  on it moves it.

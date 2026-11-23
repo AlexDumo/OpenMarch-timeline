@@ -27,6 +27,8 @@ import {
     press,
     release,
     slotsOf,
+    pressTarget,
+    setMirrorAxes,
     toggleMirror,
     undo,
     type ToolState,
@@ -308,21 +310,51 @@ describe("the open paste stays tied to its mirror point", () => {
         expect(t.mirror?.point).toEqual(point);
     });
 
-    it("the flips switch which ways it mirrors through the same point", () => {
+    it("the Mirror choice sets which ways it mirrors through the same point", () => {
         let t = open();
-        t = step(t, (s) => toggleMirror(s, "deep"));
+        t = step(t, (s) => setMirrorAxes(s, { across: true, deep: true }));
         expect(t.mirror).toMatchObject({ across: true, deep: true });
         expect(sorted(spots(t))).toEqual(
             sorted(mirrored(DOTS, point, true, true)),
         );
-        t = step(t, (s) => toggleMirror(s, "across"));
+        t = step(t, (s) => setMirrorAxes(s, { across: false, deep: true }));
         expect(sorted(spots(t))).toEqual(
             sorted(mirrored(DOTS, point, false, true)),
         );
+        // Neither isn't a choice
+        expect(
+            step(t, (s) => setMirrorAxes(s, { across: false, deep: false })),
+        ).toBe(t);
         t = step(t, undo);
         t = step(t, undo);
         expect(t.mirror).toMatchObject({ across: true, deep: false });
         expect(sorted(spots(t))).toEqual(sorted(mirrored(DOTS, point)));
+    });
+
+    it("the flip keys switch one way, but never the last one off", () => {
+        let t = open();
+        expect(step(t, (s) => toggleMirror(s, "across"))).toBe(t);
+        t = step(t, (s) => toggleMirror(s, "deep"));
+        expect(t.mirror).toMatchObject({ across: true, deep: true });
+        t = step(t, (s) => toggleMirror(s, "across"));
+        expect(t.mirror).toMatchObject({ across: false, deep: true });
+    });
+
+    it("only mirrors: a press on one of its handles grabs the whole paste to move it", () => {
+        let t = open();
+        const handle = t.kind.handles(t.params, t.spots, null)[0];
+        expect(handle).toBeDefined();
+        expect(pressTarget(t, handle!.at, env).type).toBe("move");
+        t = step(t, (s) => press(s, handle!.at, env));
+        expect(t.gesture?.type).toBe("move");
+        t = step(t, (s) =>
+            pointerMove(s, { x: handle!.at.x + 20, y: handle!.at.y }, env),
+        );
+        t = step(t, (s) => release(s, ctx));
+        expect(t.mirror?.point).toEqual({ x: 210, y: 50 });
+        expect(sorted(spots(t))).toEqual(
+            sorted(mirrored(DOTS, { x: 210, y: 50 })),
+        );
     });
 
     it("anything else unties it, and undo ties it again", () => {
@@ -341,7 +373,7 @@ describe("the open paste stays tied to its mirror point", () => {
             ),
         );
         expect(t.mirror).toBeUndefined();
-        // Untied, the flips flip around the pivot and a move moves only the shape
+        // Untied, it's an ordinary open shape: the flip keys flip around its pivot
         expect(step(t, (s) => toggleMirror(s, "deep"))).toBe(t);
         t = step(t, undo);
         expect(t.mirror?.point).toEqual(point);

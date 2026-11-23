@@ -34,8 +34,10 @@ import {
     pickPivot,
     recalculate,
     release,
+    setMirrorAxes,
     toggleMirror,
 } from "../tool/toolMachine";
+import type { MirrorAxes } from "../tool/mirror";
 import {
     updateTool,
     useShapeHidden,
@@ -100,14 +102,16 @@ export interface ShapeEditTarget {
         pick(choice: OrderChoice): void;
     };
     /**
-     * A mirrored paste still tied to its mirror point (Paste mirrored): which ways it mirrors,
-     * and switching one, which the Flip buttons and keys do instead of flipping around the pivot.
+     * A mirrored paste (Paste mirrored): which ways it mirrors through its point, set by the
+     * editor's Mirror choice, and switching one, which the Flip keys do instead of flipping.
      * Absent for any other shape.
      */
     readonly mirror?: {
         readonly across: boolean;
         readonly deep: boolean;
         toggle(axis: FlipAxis): void;
+        /** The Mirror choice: side to side, front to back or both */
+        set(axes: MirrorAxes): void;
     };
 }
 
@@ -166,6 +170,8 @@ export function useToolEditTarget(): ShapeEditTarget | null {
                     deep: tool.mirror.deep,
                     toggle: (axis: FlipAxis) =>
                         updateTool((t) => toggleMirror(t, axis)),
+                    set: (axes: MirrorAxes) =>
+                        updateTool((t) => setMirrorAxes(t, axes)),
                 },
             }),
             ...(tool.kind.ordered && {
