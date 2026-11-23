@@ -331,6 +331,90 @@ export function alongWayAt(way, s, e, turn, straight, spot, p) {
 }
 
 /**
+ * R-13‴ (pathways step 10): a follow-the-leader transition with no shape and `ends: "around"` goes round a closed outline:
+ * the route with `closed: true`, walked by this file's own routeWalk from `from` through its points back to `to` (the same
+ * point), the closing leg an arc by `toBulge`. Null when the route isn't closed, has no point, or has no length. `at(d)` is
+ * the outline at d modulo its length; `nearest(p)` the distance round it (0 ≤ d < L) of the point nearest p, by a linear
+ * scan of its straight legs and its arc legs (exactly, from the circle); places within EPS_GEOM of the nearest are a tie,
+ * which the smaller distance round wins. Written from the spec.
+ */
+export function makeAroundWay(route) {
+  if (!route || route.closed !== true || !(route.points?.length > 0)) return null;
+  const W = routeWalk(route.from, route.points, route.to, route.from, route.to, route.toBulge);
+  if (!(W.L >= EPS_GEOM)) return null;
+  const L = W.L, K = 64;
+  const bez = (P0, c1, c2, P3, t) => { const u = 1 - t, k0 = u * u * u, k1 = 3 * u * u * t, k2 = 3 * u * t * t, k3 = t * t * t;
+    return [k0 * P0[0] + k1 * c1[0] + k2 * c2[0] + k3 * P3[0], k0 * P0[1] + k1 * c1[1] + k2 * c2[1] + k3 * P3[1]]; };
+  const once = (d) => {
+    if (d <= 0) return W.V[0];
+    if (d >= L) return W.V[W.V.length - 1];
+    let j = 0;
+    while (j < W.V.length - 2 && !(d < W.D[j + 1])) j++;
+    const x = d - W.D[j], pc = W.pieces[j];
+    if (!pc) return lerp(W.V[j], W.V[j + 1], x / (W.D[j + 1] - W.D[j]));
+    if ('arc' in pc) return arcPoint(W.V[j], W.V[j + 1], pc.arc, x / (W.D[j + 1] - W.D[j]));
+    let i = 1;
+    while (i <= K && !(x < pc.e[i])) i++;
+    if (i > K) return W.V[j + 1];
+    return bez(W.V[j], pc.c1, pc.c2, W.V[j + 1], (i - 1 + (x - pc.e[i - 1]) / (pc.e[i] - pc.e[i - 1])) / K);
+  };
+  const at = (d) => { let x = d - Math.floor(d / L) * L; if (x >= L) x = 0; return once(x); };
+  const nearest = (p) => {
+    let best = Infinity, d = 0;
+    // nearer by more than EPS_GEOM wins; within it, a tie that the smaller distance round wins
+    const offer = (q, at) => { const dd = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      if (dd < best - EPS_GEOM) { best = dd; d = at; } else if (dd <= best + EPS_GEOM) { if (at < d) d = at; if (dd < best) best = dd; } };
+    for (let j = 0; j < W.V.length - 1; j++) {
+      const P0 = W.V[j], P3 = W.V[j + 1], pc = W.pieces[j], d0 = W.D[j], len = W.D[j + 1] - W.D[j];
+      if (pc && 'arc' in pc) {
+        const f = nearestArcFraction(P0, P3, pc.arc, p);
+        offer(P0, d0); offer(arcPoint(P0, P3, pc.arc, f), d0 + f * len); offer(P3, d0 + len);
+        continue;
+      }
+      const chords = [];
+      if (!pc) chords.push([P0, P3, d0, len]);
+      else { let prev = P0; for (let i = 1; i <= K; i++) { const s = i === K ? P3 : bez(P0, pc.c1, pc.c2, P3, i / K); chords.push([prev, s, d0 + pc.e[i - 1], pc.e[i] - pc.e[i - 1]]); prev = s; } }
+      for (const [a, b, e0, l] of chords) {
+        const dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy;
+        const f = l2 > 0 ? clamp01(((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2) : 0;
+        offer([a[0] + dx * f, a[1] + dy * f], e0 + f * l);
+      }
+    }
+    return d >= L ? 0 : d;
+  };
+  return { L, at, nearest };
+}
+
+/**
+ * R-13‴: each member's walk round the outline: start s = its origin's place on it; end s + ((u − s) mod L) + laps·L with
+ * u its spot's place, a forward distance within EPS_GEOM·max(1, L) of a whole time round being none; a straight leg in
+ * from the origin to the outline and one out from where it leaves to its spot.
+ */
+export function aroundWayEnds(way, origins, spots, laps) {
+  const L = way.L, snap = EPS_GEOM * Math.max(1, L);
+  const startDist = origins.map((o) => way.nearest(o));
+  const enter = startDist.map((d) => way.at(d));
+  const endDist = spots.map((p, q) => {
+    let a = way.nearest(p) - startDist[q];
+    if (a < 0) a += L;
+    if (a > L - snap) a = 0;
+    return startDist[q] + a + laps * L;
+  });
+  const turn = endDist.map((d) => way.at(d));
+  return { startDist, endDist, enter, inStraight: origins.map((o, q) => dist(o, enter[q])), turn, straight: turn.map((t, q) => dist(t, spots[q])) };
+}
+
+/** R-13‴: a founding member at progress p (0 < p < 1): in onto the outline, round it, then out to its spot, at one speed. */
+export function aroundWayAt(way, origin, ends, q, spot, p) {
+  const s = ends.startDist[q], a = ends.endDist[q] - s, i = ends.inStraight[q], o = ends.straight[q];
+  const d = (i + a + o) * p;
+  if (i > 0 && d < i) return lerp(origin, ends.enter[q], d / i);
+  const x = d - (i > 0 ? i : 0);
+  if (x < a || !(o > 0)) return way.at(s + Math.min(x, a));
+  return lerp(ends.turn[q], spot, (x - a) / o);
+}
+
+/**
  * R-14 group schedule (v0.9 step 15): a group path member's walk. `W` is the reference walk from F to G (routeWalk,
  * this file's own code); every member passes its placed copy of W's first and last kept inner points at the moments
  * W reaches them at its steady speed (uFirst, uLast), walks W placed by its offset between them, and walks its own

@@ -5,7 +5,7 @@
 import { makeOracle } from './oracle.mjs';
 import { makeResolver } from './resolver.mjs';
 import { destinationsOf } from './geom.mjs';
-import { randArcRoute, toggleLeg, landOn, randAdjust, hasArc } from './arcroutes.mjs';
+import { randArcRoute, randLoop, toggleLeg, landOn, randAdjust, hasArc } from './arcroutes.mjs';
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const EXPECT_FAIL = process.argv.includes('--expect-fail');
@@ -199,6 +199,19 @@ function makeWorld(seed, withRoutes = false) {
       const t = pick(ts), before = { ...t };
       if (t.route != null && R() < 0.4) delete t.route; else t.route = R() < 0.5 && Object.keys(db.routes).length ? +pick(Object.keys(db.routes)) : newRoute([]);
       return { transitions: [{ id: t.id, before, after: { ...t } }] }; },
+    outline() { // R-13‴ (step 10): a follow-the-leader transition goes round a closed outline, or comes off it
+      const ts = Object.values(db.transitions).filter((t) => t.style === 'follow_the_leader'); if (!ts.length) return null;
+      const t = pick(ts), before = { ...t };
+      if (t.params?.ends === 'around' && R() < 0.3) { t.dest = ri(1, 6); delete t.points; t.params = randParams(t.style); delete t.route; }
+      else {
+        const id = nextRoute++; db.routes[id] = { geometry: randLoop(R, { pt }) };
+        t.dest = null; t.points = Array.from({ length: t.slots }, pt); t.order = 'slot'; t.route = id;
+        t.params = { waypoints: [], ends: 'around', ...(R() < 0.3 ? { laps: 1 + Math.floor(R() * 2) } : {}), ...(R() < 0.2 ? { reverse: true } : {}) };
+      }
+      return { transitions: [{ id: t.id, before, after: { ...t } }], destinations: [t.id] }; },
+    reloop() { // an outline's points redrawn, still closed
+      const rids = Object.keys(db.routes).filter((r) => db.routes[r].geometry.closed); if (!rids.length) return null;
+      const rid = +pick(rids); db.routes[rid] = { geometry: randLoop(R, { pt }) }; return { routes: [rid] }; },
   });
   const opNames = Object.keys(ops);
   const merge = (a, b) => ({ destinations: [...(a.destinations ?? []), ...(b.destinations ?? [])], rows: [...(a.rows ?? []), ...(b.rows ?? [])], transitions: [...(a.transitions ?? []), ...(b.transitions ?? [])],

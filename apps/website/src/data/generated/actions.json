@@ -1523,6 +1523,31 @@
         "category": "path",
         "bindings": []
     },
+    "followGoRound": {
+        "label": "Go around",
+        "category": "path",
+        "bindings": []
+    },
+    "followRoundMore": {
+        "label": "Go around farther",
+        "category": "path",
+        "bindings": []
+    },
+    "followRoundLess": {
+        "label": "Go around less far",
+        "category": "path",
+        "bindings": []
+    },
+    "followRoundSpots": {
+        "label": "Go around by spots",
+        "category": "path",
+        "bindings": []
+    },
+    "followRoundSteps": {
+        "label": "Go around by steps",
+        "category": "path",
+        "bindings": []
+    },
     "followEndsTrail": {
         "label": "Follow: ends from the trail",
         "category": "path",

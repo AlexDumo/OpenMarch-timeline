@@ -26,6 +26,7 @@ import {
     LANE_MODEL_USER_VERSION,
     TRAIL_MODEL_USER_VERSION,
     ARC_MODEL_USER_VERSION,
+    OUTLINE_MODEL_USER_VERSION,
 } from "@om-electron/database/fileVersion";
 import * as schema from "@om-electron/database/migrations/schema";
 import type { DbConnection, DbTransaction } from "./types";
@@ -248,3 +249,10 @@ export const markTrailModelInTransaction = (tx: DbTransaction) =>
 /** Writes the arc file version (14) with a file's first arc leg (pathways step 10a, Appendix L). */
 export const markArcModelInTransaction = (tx: DbTransaction) =>
     raiseFileVersion(tx, ARC_MODEL_USER_VERSION);
+
+/**
+ * Writes the outline file version (17) with a file's first move round a closed outline (pathways
+ * step 10, Appendix L.11).
+ */
+export const markOutlineModelInTransaction = (tx: DbTransaction) =>
+    raiseFileVersion(tx, OUTLINE_MODEL_USER_VERSION);
