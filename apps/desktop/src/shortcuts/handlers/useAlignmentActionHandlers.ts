@@ -30,18 +30,18 @@ function pivotOf(
 }
 
 /**
- * After a flip about a point of the selection's box (a pivot grid cell), the cell on the other
- * side, which is where that point now is: so the pivot stays put on the field, and flipping again
- * puts the marchers back rather than walking them across the field
+ * What Flip mirrors the marchers at `pages` about (`pivotOf`). A pivot set on a cell of the box is
+ * pinned to that spot on the field first, so it stays put: flipping again, or undoing, goes about
+ * the same line rather than the far edge of the flipped box.
  */
-function keepPivotAfterFlip(axis: "across" | "deep"): void {
+function flipPivot(
+    pages: readonly { marcher_id: number; x: number; y: number }[],
+): { x: number; y: number } | undefined {
+    const around = pivotOf(pages);
     const editor = activeFieldEditor();
-    const anchor = editor?.selectionPivotAnchor();
-    if (!editor || anchor?.kind !== "box") return;
-    const swap: Record<string, string> =
-        axis === "across" ? { w: "e", e: "w" } : { n: "s", s: "n" };
-    const key = [...anchor.key].map((c) => swap[c] ?? c).join("");
-    if (key !== anchor.key) editor.setSelectionPivot(key as typeof anchor.key);
+    if (around && editor?.selectionPivotAnchor()?.kind === "box")
+        editor.pinSelectionPivot(around);
+    return around;
 }
 
 // eslint-disable-next-line max-lines-per-function
@@ -175,10 +175,9 @@ export function useAlignmentActionHandlers() {
             const pages = getSelectedMarcherPages();
             const flippedCoords = CoordinateActions.flipHorizontal(
                 pages,
-                pivotOf(pages),
+                flipPivot(pages),
             );
             updateCoordinates(flippedCoords);
-            keepPivotAfterFlip("across");
         },
         forSelection,
     );
@@ -189,10 +188,9 @@ export function useAlignmentActionHandlers() {
             const pages = getSelectedMarcherPages();
             const flippedCoords = CoordinateActions.flipVertical(
                 pages,
-                pivotOf(pages),
+                flipPivot(pages),
             );
             updateCoordinates(flippedCoords);
-            keepPivotAfterFlip("deep");
         },
         forSelection,
     );

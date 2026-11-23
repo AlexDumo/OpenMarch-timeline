@@ -193,6 +193,13 @@ test("flip mirrors about the selection's pivot once it's moved", async ({
     // The pivot stays on that line, so flipping again puts them back
     await press(page, "Alt+F");
     for (const [id, x, y] of PAGE_0) await expectAt(show, id, { x, y });
+    // ...and so does an undo and a flip after it
+    await press(page, "Alt+F");
+    await press(page, "ControlOrMeta+z");
+    for (const [id, x, y] of PAGE_0) await expectAt(show, id, { x, y });
+    await press(page, "Alt+F");
+    for (const [id, x, y] of PAGE_0)
+        await expectAt(show, id, { x: 2 * left - x, y });
     await expectCanvasMatchesShow(show);
 });
 

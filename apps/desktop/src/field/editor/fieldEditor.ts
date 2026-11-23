@@ -1561,6 +1561,21 @@ export class FieldEditor {
      * Sets the pivot to point `key` of the selection's box (the inspector's pivot grid); the
      * center puts it back there.
      */
+    /**
+     * The selection's pivot pinned to field point `at` (a spot of its own), so it stays where it is
+     * whatever the marchers do: Flip pins a pivot set on a cell of the box before it mirrors about
+     * it, so flipping again, or undoing, goes about the same line
+     */
+    pinSelectionPivot(at: FieldPoint): void {
+        if (this.selectionPivot() === null) return;
+        const ids = this.ports.selection.get();
+        this.ownPivot = {
+            ids: [...ids],
+            anchor: { kind: "point", at: { x: at.x, y: at.y } },
+        };
+        this.emit();
+    }
+
     setSelectionPivot(key: BoxPointKey): void {
         // None while a shape owns the selection, or a lone marcher: nothing to set
         if (this.selectionPivot() === null) return;

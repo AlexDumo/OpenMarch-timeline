@@ -909,7 +909,7 @@ const STATIC_ACTIONS = {
     },
     // The floating editor's turn and Recalculate (#429), for the open or selected shape only. While
     // one is shown, Alt+F and Alt+Shift+F (flipHorizontal/flipVertical) flip the shape instead of
-    // the marchers (shapes/editor/ShapeEditorBar)
+    // the marchers, or switch a mirrored paste's Mirror ways (shapes/editor/ShapeEditorBar)
     shapeQuarterTurn: {
         labelKey: "actions.shape.quarterTurn",
         keywordsKey: "actions.shape.keywords",
