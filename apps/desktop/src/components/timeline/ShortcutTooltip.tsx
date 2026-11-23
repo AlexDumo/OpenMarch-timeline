@@ -1,8 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 import * as Tooltip from "@radix-ui/react-tooltip";
-import { TooltipClassName } from "@openmarch/ui";
-import { twMerge } from "tailwind-merge";
+import { TooltipClassName, twMerge } from "@openmarch/ui";
 import Shortcut from "@/components/ui/Shortcut";
 import type { ActionId } from "@/shortcuts/definitions";
 

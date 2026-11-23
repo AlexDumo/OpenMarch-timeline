@@ -5,7 +5,7 @@ import type {
     AlertDialogContentProps as RadixAlertDialogContentProps,
 } from "@radix-ui/react-alert-dialog";
 import { clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "../../utils/cn";
 import { XIcon } from "@phosphor-icons/react";
 
 export type AlertDialogProps = {

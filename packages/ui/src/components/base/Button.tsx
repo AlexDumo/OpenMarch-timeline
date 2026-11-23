@@ -1,7 +1,7 @@
 import React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "../../utils/cn";
 import { TooltipClassName } from "..";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { LongPressBubble, useLongPress } from "./LongPress";

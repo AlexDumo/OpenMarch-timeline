@@ -4,6 +4,7 @@ import {
     SelectContent,
     SelectGroup,
     SelectItem,
+    twMerge,
 } from "@openmarch/ui";
 import {
     CircleIcon,
@@ -24,7 +25,6 @@ import {
     AppearanceComponent,
     AppearanceComponentOptional,
 } from "@/entity-components/appearance";
-import { twMerge } from "tailwind-merge";
 
 const shapeOptions = ["circle", "square", "triangle", "x"] as const;
 type ShapeType = (typeof shapeOptions)[number];

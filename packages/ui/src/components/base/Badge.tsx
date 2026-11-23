@@ -1,6 +1,6 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import { clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "../../utils/cn";
 
 const variants = cva(
     [

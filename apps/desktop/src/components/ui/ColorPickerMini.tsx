@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Button } from "@openmarch/ui";
+import { Button, twMerge } from "@openmarch/ui";
 import {
     CheckIcon,
     TrashSimpleIcon,
@@ -14,7 +14,6 @@ import {
 } from "@uiw/react-color";
 import * as Popover from "@radix-ui/react-popover";
 import { T, useTranslate } from "@tolgee/react";
-import { twMerge } from "tailwind-merge";
 
 interface ColorPickerMiniProps {
     initialColor: RgbaColor | null;

@@ -6,7 +6,7 @@ import type {
 } from "@radix-ui/react-tabs";
 import { clsx } from "clsx";
 import type React from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "../../utils/cn";
 
 export type TabsProps = RadixTabsProps & { children: React.ReactNode };
 export const Tabs = ({ children, className, ...props }: TabsProps) => {

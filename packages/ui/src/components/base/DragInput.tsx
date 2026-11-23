@@ -1,6 +1,6 @@
 import { clsx } from "clsx";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "../../utils/cn";
 import { ArrowsDownUpIcon, ArrowsLeftRightIcon } from "@phosphor-icons/react";
 import type { IconProps } from "@phosphor-icons/react";
 

@@ -9,7 +9,7 @@ import {
     UserIcon,
     SpinnerIcon,
 } from "@phosphor-icons/react";
-import { Button, type ButtonProps } from "@openmarch/ui";
+import { Button, type ButtonProps, twMerge } from "@openmarch/ui";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -17,7 +17,6 @@ import {
     DropdownMenuTrigger,
     DropdownMenuSeparator,
 } from "@radix-ui/react-dropdown-menu";
-import { twMerge } from "tailwind-merge";
 import { isSignInEnabled } from "@/global/auth/constants";
 import { useAuth } from "@/auth/useAuth";
 import { useTranslate } from "@tolgee/react";

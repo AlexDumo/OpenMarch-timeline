@@ -22,7 +22,7 @@ import {
 } from "@/hooks/queries";
 import { AppearanceEditor } from "@/components/marcher/appearance/AppearanceEditor";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@openmarch/ui";
 import { useTimingObjects } from "@/hooks";
 import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 import {

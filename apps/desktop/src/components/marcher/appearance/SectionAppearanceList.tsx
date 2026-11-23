@@ -1,4 +1,4 @@
-import { TabContent, TabItem, Tabs, TabsList } from "@openmarch/ui";
+import { TabContent, TabItem, Tabs, TabsList, twMerge } from "@openmarch/ui";
 import { PlusIcon } from "@phosphor-icons/react";
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import { getSectionObjectByName, SECTIONS } from "@/global/classes/Sections";
@@ -16,7 +16,6 @@ import {
 } from "@/hooks/queries";
 import { AppearanceEditor } from "@/components/marcher/appearance/AppearanceEditor";
 import { useMemo } from "react";
-import { twMerge } from "tailwind-merge";
 
 export default function SectionAppearanceList() {
     const { t } = useTranslate();

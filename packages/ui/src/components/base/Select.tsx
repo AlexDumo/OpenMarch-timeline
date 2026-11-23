@@ -7,7 +7,7 @@ import type {
     SelectTriggerProps as RadixSelectTriggerProps,
 } from "@radix-ui/react-select";
 import { clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "../../utils/cn";
 import { CaretUpIcon, CaretDownIcon, CheckIcon } from "@phosphor-icons/react";
 import { forwardRef } from "react";
 export interface SelectProps extends RadixSelectProps {

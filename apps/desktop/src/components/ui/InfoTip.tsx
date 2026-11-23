@@ -1,9 +1,8 @@
 import * as Tooltip from "@radix-ui/react-tooltip";
 import * as Popover from "@radix-ui/react-popover";
-import { TooltipClassName } from "@openmarch/ui";
+import { TooltipClassName, twMerge } from "@openmarch/ui";
 import { InfoIcon } from "@phosphor-icons/react";
 import { clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
 import { forwardRef, useState, type ReactElement, type ReactNode } from "react";
 import { useTranslate } from "@tolgee/react";
 import { useIsTouchMode } from "@/stores/InputModeStore";

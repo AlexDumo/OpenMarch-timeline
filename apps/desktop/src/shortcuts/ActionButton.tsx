@@ -8,13 +8,12 @@ import {
     useSyncExternalStore,
 } from "react";
 import { useIsTouchMode } from "@/stores/InputModeStore";
-import { LongPressBubble, useLongPress } from "@openmarch/ui";
+import { LongPressBubble, useLongPress, twMerge } from "@openmarch/ui";
 import Shortcut from "@/components/ui/Shortcut";
 import { Tip } from "@/components/ui/Tip";
 import { useShowShortcutHints } from "@/stores/KeyboardSeenStore";
 import clsx from "clsx";
 import { useTranslate } from "@tolgee/react";
-import { twMerge } from "tailwind-merge";
 import { TouchCaption } from "@/components/ui/InfoTip";
 import type { ActionArgs, ActionId } from "./definitions";
 import { getActionLabel } from "./labels";

@@ -1,4 +1,4 @@
-import { Button, Input } from "@openmarch/ui";
+import { Button, Input, twMerge } from "@openmarch/ui";
 import {
     TagIcon,
     SparkleIcon,
@@ -6,7 +6,6 @@ import {
     TrashIcon,
     PaletteIcon,
 } from "@phosphor-icons/react";
-import { twMerge } from "tailwind-merge";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";

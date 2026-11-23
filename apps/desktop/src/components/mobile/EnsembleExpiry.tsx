@@ -1,6 +1,6 @@
 import { HourglassMediumIcon } from "@phosphor-icons/react";
 import { useTranslate } from "@tolgee/react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@openmarch/ui";
 import {
     expiryNoticeDays,
     formatExpiryDate,

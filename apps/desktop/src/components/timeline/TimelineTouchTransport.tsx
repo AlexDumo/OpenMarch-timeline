@@ -34,9 +34,8 @@ import {
     StopIcon,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
-import { twMerge } from "tailwind-merge";
 import { useTranslate } from "@tolgee/react";
-import { useLongPress } from "@openmarch/ui";
+import { useLongPress, twMerge } from "@openmarch/ui";
 import ActionButton from "@/shortcuts/ActionButton";
 import type { ActionId } from "@/shortcuts/definitions";
 import {

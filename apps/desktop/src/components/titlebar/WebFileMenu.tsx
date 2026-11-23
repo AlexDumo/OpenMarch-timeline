@@ -23,7 +23,7 @@ import {
     MENU_ITEM_CLASS,
     MENU_SEPARATOR_CLASS,
 } from "@/components/ui/popupClasses";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@openmarch/ui";
 
 // The shared entry, with its shortcut pushed to the right edge
 const itemClass = twMerge(

@@ -13,12 +13,11 @@ import { useDatabaseReady } from "@/hooks/useDatabaseReady";
 import { isWebBuild } from "@/utilities/webBuild";
 import { useTranslate } from "@tolgee/react";
 import { useEffect, useId, useState } from "react";
-import { twMerge } from "tailwind-merge";
 import {
     queueHistoryAction,
     type HistoryDirection,
 } from "@/shortcuts/handlers/historyQueue";
-import { LongPressBubble } from "@openmarch/ui";
+import { LongPressBubble, twMerge } from "@openmarch/ui";
 
 /**
  * Undo or Redo with nothing to undo: greyed out, saying so on hover and when pressed, instead of

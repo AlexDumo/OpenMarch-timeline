@@ -1,6 +1,6 @@
 import { clsx } from "clsx";
 import React from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "../../utils/cn";
 import { selectNumberOnTouchFocus } from "./touchSelect";
 
 export type UnitInputProps = Omit<
