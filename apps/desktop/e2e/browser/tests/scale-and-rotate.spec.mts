@@ -9,7 +9,7 @@ import {
     setUiSettings,
     waitForIdle,
 } from "../app.mjs";
-import { savedPositions, type Position } from "../positions.mjs";
+import { fieldGrid, savedPositions, type Position } from "../positions.mjs";
 import { seedShowSql, type SeedPosition } from "../seed.mjs";
 import type { FieldTestHandle } from "../../../src/field/fieldTestApi";
 
@@ -590,4 +590,25 @@ test("change: after a rotation is saved the inspector's input starts over at 0, 
     await waitForIdle(page);
     expect(await undoSteps(show)).toBe(steps + 3);
     await expectCanvasMatchesShow(show);
+});
+
+test("a side handle lands its side on the coordinate rounding grid, the marchers inside in proportion (#585)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await setUiSettings(page, {
+        coordinateRounding: { nearestXSteps: 1, nearestYSteps: 1 },
+    });
+    await expectCanvasMatchesShow(show);
+    const grid = await fieldGrid(show);
+    await selectAll(page);
+
+    await dragHandle(page, "e", { x: 97, y: 0 });
+
+    const saved = await savedChange(show);
+    const right = Math.max(...saved.map((p) => p.x));
+    const steps = (right - grid.centerFront.x) / grid.pixelsPerStep;
+    expect(Math.abs(steps - Math.round(steps))).toBeLessThan(0.001);
+    // The left side stays where it was: only the dragged side snaps
+    expect(Math.min(...saved.map((p) => p.x))).toBe(500);
 });
