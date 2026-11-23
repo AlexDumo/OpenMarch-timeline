@@ -259,10 +259,28 @@ export function exactPathOfSegments(
     const N = pieces.length;
     const L = cum[N]!;
     if (!(L >= EXACT_MIN_LENGTH)) return null;
+    const total = Math.max(1, Math.round((end - start) * TICKS_PER_BEAT));
+    // One line or arc across the whole span walks at one speed, so its ends are the only keys
+    // the samples below would keep. Most moves are this, and sampling every tick is the cost.
+    const only = segments.length === 1 ? segments[0]! : null;
+    if (
+        only &&
+        (only.kind === "line" || only.kind === "arc") &&
+        Math.abs(only.start - start) <= 1e-12 &&
+        Math.abs(only.end - end) <= 1e-12
+    )
+        return {
+            v: 1,
+            from: only.from,
+            shapes,
+            keys: [
+                { tick: 0, u: 0 },
+                { tick: total, u: N },
+            ],
+        };
     const distanceAt = distanceFunction(segments, cum);
 
     // samples: every whole tick, plus every place the walk's speed may change (checked only)
-    const total = Math.max(1, Math.round((end - start) * TICKS_PER_BEAT));
     const extra: number[] = [];
     const tickOf = (b: Beat) => (b - start) * TICKS_PER_BEAT;
     for (const seg of segments) {
@@ -315,16 +333,46 @@ export function exactPathsOf(
     resolver: WalkResolver & { marcherIds(): readonly number[] },
     options: ExactPathsOptions = {},
 ): ExactMove[] {
+    const converter = createExactPathConverter(host, resolver, options);
+    const out: ExactMove[] = [];
+    for (const marcherId of options.marcherIds ?? resolver.marcherIds())
+        out.push(...converter.movesOf(marcherId));
+    return out;
+}
+
+/** EP-C one marcher at a time (see {@link createExactPathConverter}). */
+export interface ExactPathConverter {
+    /** The marcher's exact paths, in beat order (EP-C1) */
+    movesOf(marcherId: number): ExactMove[];
+}
+
+/**
+ * {@link exactPathsOf} one marcher at a time, so a caller can yield between marchers or set one
+ * marcher aside when its walk can't be converted. What marchers share (a group's path, a follow
+ * the leader order) is worked out once for all of them. `options.marcherIds` is not used.
+ */
+export function createExactPathConverter(
+    host: TimelineSnapshot,
+    resolver: WalkResolver,
+    options: Pick<ExactPathsOptions, "tolerance"> = {},
+): ExactPathConverter {
     const tolerance = options.tolerance ?? EXACT_DEFAULT_TOLERANCE;
     const walked = createWalkedPaths(host, resolver);
-    const out: ExactMove[] = [];
-    for (const marcherId of options.marcherIds ?? resolver.marcherIds()) {
-        for (const span of resolver.spanInfos(marcherId)) {
-            const move = exactMoveOfSpan(walked, marcherId, span, tolerance);
-            if (move) out.push(move);
-        }
-    }
-    return out;
+    return {
+        movesOf(marcherId) {
+            const out: ExactMove[] = [];
+            for (const span of resolver.spanInfos(marcherId)) {
+                const move = exactMoveOfSpan(
+                    walked,
+                    marcherId,
+                    span,
+                    tolerance,
+                );
+                if (move) out.push(move);
+            }
+            return out;
+        },
+    };
 }
 
 function exactMoveOfSpan(
