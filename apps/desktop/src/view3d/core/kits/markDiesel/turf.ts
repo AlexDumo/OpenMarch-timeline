@@ -15,6 +15,7 @@ import {
 import { TURF } from "../../field/turfPlan";
 import { applyTurfSheen } from "../../field/turfSheen";
 import type { FieldFootprint, VenueParams } from "../../types";
+import { dieselFieldArt } from "./brand";
 import type { DieselCtx, DieselPart } from "./frame";
 
 const FT = 0.3048;
@@ -451,6 +452,7 @@ export function buildDieselOwnField(
             FieldPropertiesTemplates.PRO_FOOTBALL_FIELD_WITH_END_ZONES,
         style: "turf",
         turf: DIESEL_TURF,
+        centerArt: dieselFieldArt,
         params,
         maxTextureSize: 4096,
     });

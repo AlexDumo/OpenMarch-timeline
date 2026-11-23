@@ -166,6 +166,7 @@ async function load(options: LoadOptions): Promise<LoadResult> {
         footprint: venueFootprint(fp, style),
         params,
         quality,
+        fieldStyle: style,
     });
     kit = built;
     built.setShowCredits?.(options.credits ?? SAMPLE_CREDITS);

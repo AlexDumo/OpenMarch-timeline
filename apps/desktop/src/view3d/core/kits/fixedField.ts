@@ -8,30 +8,31 @@ const FIELD_WIDTH = 160 * FT;
 const TOLERANCE = 0.05;
 
 /**
- * The field a fixed-field venue (`KIT_FIXED_FIELD`) is built round. Such a
- * venue never resizes to the show: a show on a football field (or a bigger
- * one) is used as it is, and a smaller floor (indoor, SoundSport) gets a
- * regulation football field centered on it. `ownField` then says the kit
- * paints that field itself, and the show's floor lies on it as a tarp
- * (`kitFieldStyle`).
+ * The field a fixed-field venue (`KIT_FIXED_FIELD`) is built round: the
+ * show's field, grown on each side it falls short to a regulation football
+ * field (360 ft by 160 ft) and centered on it, so the bowl never shrinks
+ * round a small floor (indoor, SoundSport) and never cuts into a long or
+ * wide one. `grown` says it had to grow; the kit then paints the football
+ * field itself under a floor (`kitFieldStyle`).
  */
 export function fixedFieldFootprint(footprint: FieldFootprint): {
     footprint: FieldFootprint;
-    ownField: boolean;
+    grown: boolean;
 } {
     const length = footprint.maxX - footprint.minX;
     const width = footprint.maxZ - footprint.minZ;
-    if (length >= FIELD_LENGTH - TOLERANCE && width >= FIELD_WIDTH - TOLERANCE)
-        return { footprint, ownField: false };
+    const growX = length < FIELD_LENGTH - TOLERANCE;
+    const growZ = width < FIELD_WIDTH - TOLERANCE;
+    if (!growX && !growZ) return { footprint, grown: false };
     const cx = (footprint.minX + footprint.maxX) / 2;
     const cz = (footprint.minZ + footprint.maxZ) / 2;
     return {
         footprint: {
-            minX: cx - FIELD_LENGTH / 2,
-            maxX: cx + FIELD_LENGTH / 2,
-            minZ: cz - FIELD_WIDTH / 2,
-            maxZ: cz + FIELD_WIDTH / 2,
+            minX: growX ? cx - FIELD_LENGTH / 2 : footprint.minX,
+            maxX: growX ? cx + FIELD_LENGTH / 2 : footprint.maxX,
+            minZ: growZ ? cz - FIELD_WIDTH / 2 : footprint.minZ,
+            maxZ: growZ ? cz + FIELD_WIDTH / 2 : footprint.maxZ,
         },
-        ownField: true,
+        grown: true,
     };
 }

@@ -1,11 +1,10 @@
 import type { FieldProperties } from "@openmarch/core";
+import { fieldFamily } from "../venueSettings";
 import {
-    venueFootprint,
     type FieldCenterArt,
     type FieldSurfaceStyle,
     type TurfColors,
 } from "../field";
-import { fixedFieldFootprint } from "./fixedField";
 import { DIESEL_TURF } from "./markDiesel/turf";
 import type { KitBuilder, VenueKitId } from "../types";
 import { buildArena } from "./arena";
@@ -52,8 +51,8 @@ export const KIT_FIELD_STYLE: Readonly<Record<VenueKitId, FieldSurfaceStyle>> =
 
 /**
  * Venues with a field of their own (`fixedFieldFootprint`): they are always
- * built round a regulation football field and never resize to the show. A
- * smaller floor lies at midfield as a tarp on their turf.
+ * built round at least a regulation football field and never shrink to the
+ * show. A floor that isn't a football field lies on their turf as a tarp.
  */
 export const KIT_FIXED_FIELD: Readonly<Partial<Record<VenueKitId, true>>> = {
     markDiesel: true,
@@ -61,19 +60,19 @@ export const KIT_FIXED_FIELD: Readonly<Partial<Record<VenueKitId, true>>> = {
 
 /**
  * The surface style a kit paints the show's field in: `KIT_FIELD_STYLE`,
- * except that a floor smaller than a fixed-field venue's field is a tarp
- * (the show's field image, or the generated tarp) laid on the venue's turf.
+ * except that in a fixed-field venue a field that isn't a football field
+ * (indoor, SoundSport, any grid) is a tarp (the show's field image, or the
+ * generated tarp) laid on the venue's turf. A football field stays turf
+ * whatever its step size.
  */
 export function kitFieldStyle(
     kitId: VenueKitId,
     fieldProperties: FieldProperties,
 ): FieldSurfaceStyle {
     const style = KIT_FIELD_STYLE[kitId];
-    if (!KIT_FIXED_FIELD[kitId]) return style;
-    const { ownField } = fixedFieldFootprint(
-        venueFootprint(fieldProperties, style),
-    );
-    return ownField ? "tarp" : style;
+    if (!KIT_FIXED_FIELD[kitId] || fieldFamily(fieldProperties) === "football")
+        return style;
+    return "tarp";
 }
 
 /**

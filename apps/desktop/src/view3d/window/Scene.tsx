@@ -323,6 +323,7 @@ function SceneContents({
             params,
             quality,
             venuePodium,
+            fieldStyle,
         });
         scene.add(built.root);
         useView3dSceneStore.getState()._setKit(kitId, built);
@@ -332,7 +333,7 @@ function SceneContents({
             if (store.kit === built) store._setKit(null, null);
             built.dispose();
         };
-    }, [scene, kitId, footprintKey, params, quality, venuePodium]);
+    }, [scene, kitId, footprintKey, params, quality, venuePodium, fieldStyle]);
 
     // Field surface.
     useEffect(() => {

@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import { FieldProperties } from "@openmarch/core";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import { planField, venueFootprint } from "../../field";
 import { setTexturePainting } from "../../environment";
@@ -169,8 +170,8 @@ describe("Mark Diesel on a small floor", () => {
     );
 
     it("builds the stadium round a football field centered on the floor", () => {
-        const { footprint, ownField } = fixedFieldFootprint(indoor);
-        expect(ownField).toBe(true);
+        const { footprint, grown } = fixedFieldFootprint(indoor);
+        expect(grown).toBe(true);
         expect((footprint.maxX - footprint.minX) / FT).toBeCloseTo(360);
         expect((footprint.maxZ - footprint.minZ) / FT).toBeCloseTo(160);
         expect(footprint.minX + footprint.maxX).toBeCloseTo(
@@ -181,8 +182,36 @@ describe("Mark Diesel on a small floor", () => {
         );
         expect(fixedFieldFootprint(football)).toEqual({
             footprint: football,
-            ownField: false,
+            grown: false,
         });
+    });
+
+    it("grows only the sides that fall short", () => {
+        // 400 ft long and 100 ft wide: keeps its length, grows to 160 ft wide.
+        const long = { minX: -61, maxX: 61, minZ: -30, maxZ: 0 };
+        const { footprint } = fixedFieldFootprint(long);
+        expect(footprint.minX).toBe(long.minX);
+        expect(footprint.maxX).toBe(long.maxX);
+        expect((footprint.maxZ - footprint.minZ) / FT).toBeCloseTo(160);
+        expect(footprint.minZ + footprint.maxZ).toBeCloseTo(-30);
+    });
+
+    it("keeps a football field with a small step as turf, without a field of its own", () => {
+        const small = new FieldProperties({
+            ...FieldPropertiesTemplates.PRO_FOOTBALL_FIELD_WITH_END_ZONES,
+            stepSizeInches: 22,
+        });
+        expect(kitFieldStyle("markDiesel", small)).toBe("turf");
+        const footprint = venueFootprint(small, "turf");
+        expect((footprint.maxX - footprint.minX) / FT).toBeLessThan(359);
+        const kit = buildMarkDiesel({
+            footprint,
+            params: { ...DIESEL_VENUE_PARAMS },
+            quality: "low",
+            fieldStyle: "turf",
+        });
+        expect(kit.root.getObjectByName("markDiesel.ownField")).toBeUndefined();
+        kit.dispose();
     });
 
     it("lays a smaller floor on the turf as a tarp, and only in Mark Diesel", () => {
@@ -197,6 +226,7 @@ describe("Mark Diesel on a small floor", () => {
                 fp.HIGH_SCHOOL_FOOTBALL_FIELD_NO_END_ZONES,
             ),
         ).toBe("turf");
+        expect(kitFieldStyle("markDiesel", fp.SOUNDSPORT_8to5)).toBe("tarp");
         expect(kitFieldStyle("pro", fp.INDOOR_50x80_8to5)).toBe("turf");
     });
 
@@ -205,6 +235,7 @@ describe("Mark Diesel on a small floor", () => {
             footprint: indoor,
             params: { ...DIESEL_VENUE_PARAMS },
             quality: "low",
+            fieldStyle: "tarp",
         });
         const field = kit.root.getObjectByName("markDiesel.ownField");
         expect(field).toBeDefined();
@@ -215,6 +246,7 @@ describe("Mark Diesel on a small floor", () => {
             footprint: football,
             params: { ...DIESEL_VENUE_PARAMS },
             quality: "low",
+            fieldStyle: "turf",
         });
         expect(pro.root.getObjectByName("markDiesel.ownField")).toBeUndefined();
         pro.dispose();

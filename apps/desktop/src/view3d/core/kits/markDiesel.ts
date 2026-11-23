@@ -77,10 +77,13 @@ export const buildMarkDiesel: KitBuilder = ({
     footprint: showFootprint,
     params,
     quality,
+    fieldStyle,
 }) => {
-    // A floor smaller than a football field (indoor, SoundSport) lies at
-    // midfield of the stadium's own field.
-    const { footprint, ownField } = fixedFieldFootprint(showFootprint);
+    // The stadium never shrinks below a football field. A floor (indoor,
+    // SoundSport) lies at midfield of the stadium's own field; a football
+    // field a little short of regulation (a small step) just gets more apron.
+    const { footprint, grown } = fixedFieldFootprint(showFootprint);
+    const ownField = grown && fieldStyle !== "turf";
     const shared = createSharedMaterials();
     const frame = dieselFrame(footprint);
     const { CENTER } = frame;
