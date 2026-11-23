@@ -15,7 +15,7 @@ import {
 } from "../../field";
 import { TURF } from "../../field/turfPlan";
 import { applyTurfSheen } from "../../field/turfSheen";
-import type { FieldFootprint, VenueParams } from "../../types";
+import type { VenueParams } from "../../types";
 import { dieselFieldArt } from "./brand";
 import type { DieselCtx, DieselPart } from "./frame";
 
