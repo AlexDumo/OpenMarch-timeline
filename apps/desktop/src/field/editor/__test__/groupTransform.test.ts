@@ -829,3 +829,63 @@ describe("snapping the dragged side to the grid (#585)", () => {
         });
     });
 });
+
+describe("landing the dragged side on the field's lines (#585)", () => {
+    const tens = (p: { x: number; y: number }) => ({
+        x: Math.round(p.x / 10) * 10,
+        y: Math.round(p.y / 10) * 10,
+    });
+    /** Lines at these x and y, reached for within 3 field units. */
+    const lines = (x: number[], y: number[] = []) => ({
+        lines: { x, y },
+        radius: { x: 3, y: 3 },
+    });
+    const scaled = (
+        handle: Parameters<typeof scaleFor>[0],
+        delta: { x: number; y: number },
+        pull: ReturnType<typeof lines>,
+        keepRatio = false,
+    ) =>
+        scaleFor(
+            handle,
+            BOX,
+            snapScaleDelta(handle, BOX, delta, keepRatio, false, tens, pull),
+            keepRatio,
+        );
+
+    it("lands the side on a line within reach, over the grid", () => {
+        // The right side would reach 247: the line at 246 wins over the grid's 250
+        expect(scaled("e", { x: 47, y: 0 }, lines([246])).x).toBe(1.46);
+    });
+
+    it("lands on the grid with no line within reach", () => {
+        expect(scaled("e", { x: 47, y: 0 }, lines([260])).x).toBe(1.5);
+    });
+
+    it("keeps a constrained corner's ratio, landing the side that reaches a line", () => {
+        // The corner would reach (246.8, 273.4): the line at y = 274 wins over the grid's 1.5
+        expect(scaled("se", { x: 47, y: 23 }, lines([], [274]), true)).toEqual({
+            anchor: { x: 100, y: 200 },
+            x: 1.48,
+            y: 1.48,
+        });
+    });
+
+    it("still lands on a line with fine, off the grid", () => {
+        const h = host();
+        const gesture = new ScaleGesture(
+            pointer(200, 250),
+            FORMATION,
+            h,
+            "e",
+            BOX,
+            keysAt(pointer(200, 250)),
+            tens,
+            undefined,
+            () => lines([212]),
+        );
+        // 47 at a quarter speed takes the side to 211.75: it lands on the line at 212
+        gesture.move(pointer(247, 250, { shift: true }));
+        expect(last(h.show).map((p) => p.x)).toEqual([100, 212, 156]);
+    });
+});

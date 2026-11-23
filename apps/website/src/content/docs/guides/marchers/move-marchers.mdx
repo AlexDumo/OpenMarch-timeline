@@ -43,7 +43,8 @@ Drag a marcher to move it. To move several together, [select them](/guides/march
 
 While you drag:
 
-- Hold <Kbd keys="Shift" gesture="drag" /> for fine control. The marchers move at a quarter of the pointer's speed and ignore [coordinate rounding](#snap-to-a-grid-of-steps). You can press and release Shift in the middle of a drag; the marchers don't jump.
+- With [coordinate rounding](#snap-to-a-grid-of-steps) off, the marchers land on a yard line, hash or sideline when their edge or center comes within a few pixels of one, and an orange guide names the line, such as "On 50". With rounding on, the grid decides instead.
+- Hold <Kbd keys="Shift" gesture="drag" /> for fine control. The marchers move at a quarter of the pointer's speed and ignore [coordinate rounding](#snap-to-a-grid-of-steps), though they still catch yard lines and hashes. You can press and release Shift in the middle of a drag; the marchers don't jump.
 - Hold <Kbd keys="Mod" gesture="drag" /> to keep the move straight: across the field or front to back, whichever way you've dragged further.
 
 Where the marchers are <Term id="held">Held</Term>, a drag moves the whole hold; see [Drag marchers that are Held](/guides/timeline/defined-held-not-defined/#drag-marchers-that-are-held).
@@ -98,7 +99,7 @@ To put marchers that are off the grid onto it, select them and select <Ui k="too
 
 ## Turn snapping off
 
-To drag without snapping for a moment, hold <Kbd keys="Shift" gesture="drag" />. To turn it off for a while, select <Ui k="toolbar.alignment.snapToggleCaption" /> (the magnet) in the <Ui k="inspector.shape.alignmentTab" /> tab, or press <Kbd action="toggleSnap" />; [Snapping and modifier keys](/guides/shapes/snapping-and-modifier-keys/#turn-snapping-off) says what it turns off and when it comes back on.
+To drag without rounding for a moment, hold <Kbd keys="Shift" gesture="drag" />. To turn all snapping off for a while, yard lines and hashes included, select <Ui k="toolbar.alignment.snapToggleCaption" /> (the magnet) in the <Ui k="inspector.shape.alignmentTab" /> tab, or press <Kbd action="toggleSnap" />; [Snapping and modifier keys](/guides/shapes/snapping-and-modifier-keys/#turn-snapping-off) says what it turns off and when it comes back on.
 
 ## Move in one direction only
 

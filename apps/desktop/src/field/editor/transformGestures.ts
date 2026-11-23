@@ -14,6 +14,7 @@ import {
     type HandleId,
 } from "./groupTransform";
 import type { MarcherPosition, MoveGestureHost } from "./moveGesture";
+import type { LinePull } from "./linePull";
 import { PRECISION_START, anchorAt, precisionDelta } from "./moveRules";
 import type { FieldRect } from "./selectionArea";
 
@@ -76,8 +77,8 @@ abstract class HandleGesture implements FieldGesture {
 /**
  * A corner scales each axis with the pointer and a middle handle scales one axis, and constrain
  * keeps the ratio while it's held. A box shape's ratio lock is the box's own: a plain selection
- * never reads it (#1037). Either scales from the center with from center. The dragged side snaps
- * to the coordinate rounding grid (#585); fine or the Snap toggle off scales freely.
+ * never reads it (#1037). Either scales from the center with from center. The dragged side lands
+ * on the field's lines or the coordinate rounding grid (#585); the Snap toggle off scales freely.
  */
 const SCALE_HONORS: HonoredRoles = {
     context: "field",
@@ -96,8 +97,9 @@ export const ROTATE_HONORS: HonoredRoles = {
 
 /**
  * A corner or middle handle: scales the selection from the opposite side, or from its center.
- * The dragged side lands on the coordinate rounding grid (`snapScaleDelta`, #585), as a moved
- * marcher does; fine or the Snap toggle off scales freely.
+ * The dragged side lands on one of the field's lines within reach, or else on the coordinate
+ * rounding grid (`snapScaleDelta`, #585), as a moved selection does. Fine leaves the grid but
+ * still lands on lines; the Snap toggle off scales freely.
  */
 export class ScaleGesture extends HandleGesture {
     readonly kind: FieldTestGesture = "scale";
@@ -119,6 +121,8 @@ export class ScaleGesture extends HandleGesture {
             p,
         /** The Snap toggle, read on every event; on when omitted. */
         private readonly snap: () => boolean = () => true,
+        /** The field's lines the side lands on, read on every event; none when omitted. */
+        private readonly pull: () => LinePull | null = () => null,
     ) {
         super(origin, starts, host, keys, SCALE_HONORS);
     }
@@ -134,17 +138,18 @@ export class ScaleGesture extends HandleGesture {
             roles.fine,
         );
         this.track = moved.track;
-        this.drawn =
-            roles.fine || !this.snap()
-                ? moved.delta
-                : snapScaleDelta(
-                      this.handle,
-                      this.box,
-                      moved.delta,
-                      roles.constrain,
-                      roles.fromCenter,
-                      this.snapPoint,
-                  );
+        // Fine leaves the grid but still lands on lines, as a box shape's handles do (owner on #453)
+        this.drawn = this.snap()
+            ? snapScaleDelta(
+                  this.handle,
+                  this.box,
+                  moved.delta,
+                  roles.constrain,
+                  roles.fromCenter,
+                  roles.fine ? (point) => point : this.snapPoint,
+                  this.pull(),
+              )
+            : moved.delta;
         return scalePositions(
             this.starts,
             scaleFor(

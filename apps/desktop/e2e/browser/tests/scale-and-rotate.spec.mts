@@ -612,3 +612,27 @@ test("a side handle lands its side on the coordinate rounding grid, the marchers
     // The left side stays where it was: only the dragged side snaps
     expect(Math.min(...saved.map((p) => p.x))).toBe(500);
 });
+
+test("a side handle lands its side on a yard line within a few pixels of it, with rounding off (#585)", async ({
+    show,
+}) => {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    await selectAll(page);
+    const right = Math.max(...PAGE_0.map(([, x]) => x));
+    // The first yard line (every 8 steps from the 50) 30 or more units right of the formation
+    const yard = 8 * grid.pixelsPerStep;
+    const line =
+        grid.centerFront.x +
+        Math.ceil((right + 30 - grid.centerFront.x) / yard) * yard;
+    const scale = await canvasScale(page);
+
+    // Dropped 2 units short of it: within reach at any zoom the field opens at
+    await dragHandle(page, "e", { x: (line - 2 - right) * scale, y: 0 });
+
+    const saved = await savedChange(show);
+    expect(Math.abs(Math.max(...saved.map((p) => p.x)) - line)).toBeLessThan(
+        0.001,
+    );
+    expect(Math.min(...saved.map((p) => p.x))).toBe(500);
+});
