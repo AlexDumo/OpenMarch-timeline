@@ -203,14 +203,16 @@ test("change: with no march order set, Shift+L opens anyway; any marcher grabbed
         await expect(page.getByTestId("follow-round"), way).toBeVisible();
         await expect(page.getByTestId("follow-round-amount")).toHaveValue("0");
         // Following lives in the top bar: the button says so, a live line says what to do, and
-        // no note sits over the field
+        // (with a mouse) no note sits over the field. Touch keeps its note for now, until the
+        // owner decides where the tablet's Following line goes
         await expect(page.getByTestId("toolbar-follow-trail")).toHaveText(
             "Following",
         );
         await expect(page.getByTestId("follow-status")).toContainText(
             "Click or drag a marcher",
         );
-        await expect(page.getByTestId("path-pen-banner")).toBeHidden();
+        if (test.info().project.name !== "browser-touch")
+            await expect(page.getByTestId("path-pen-banner")).toBeHidden();
         const opened = (await overlay(page))!;
         expect(opened.tip).toBe(
             "Click or drag any marcher around the outline or out of it, or type how far",
