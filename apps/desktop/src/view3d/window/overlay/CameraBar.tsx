@@ -4,8 +4,11 @@
  * until the show changes them) with their number keys, then "Edit cameras…",
  * which opens the Cameras panel; then "Pick a seat" and "Follow a performer"
  * (P). While following, the menu button names the performer, and two more
- * buttons switch to their point of view (V) and stop following (Esc). Where
- * the Director is
+ * buttons switch to their point of view (V) and stop following (Esc).
+ * "Seat view" (ui.md UI-3) switches between what a person in the seat sees
+ * and the photo-matched camera at seat and floor cameras; it is a
+ * per-computer choice (`renderPrefs.ts`), checked while on. Where the
+ * Director is
  * available it is the menu's first item: a camera track that follows the
  * show. Camera movement belongs to the rig (P3.2); this only calls its store.
  * In the touch layout the number keys show only once a hardware keyboard has
@@ -60,6 +63,8 @@ export function CameraBar({
     const pickMode = useCameraStore((s) => s.pickMode);
     const setPickMode = useCameraStore((s) => s.setPickMode);
     const directing = useDirectorStore((s) => s.directing);
+    const seatView = useView3dSceneStore((s) => s.seatView);
+    const setSeatView = useView3dSceneStore((s) => s.setSeatView);
     const pickingPerformer = useFollowStore((s) => s.picking);
     const setPickingPerformer = useFollowStore((s) => s.setPicking);
     const follow = useFollowStore((s) => s.follow);
@@ -196,6 +201,23 @@ export function CameraBar({
                         <DropdownMenu.Separator
                             className={MENU_SEPARATOR_CLASS}
                         />
+                        <DropdownMenu.CheckboxItem
+                            checked={seatView}
+                            onCheckedChange={setSeatView}
+                            data-testid="view3d-camera-seat-view"
+                            className={ITEM_CLASS}
+                        >
+                            <CheckIcon
+                                size={14}
+                                className={clsx(
+                                    "shrink-0",
+                                    !seatView && "invisible",
+                                )}
+                            />
+                            <span className="flex-1 truncate">
+                                {t("view3d.overlay.seatView")}
+                            </span>
+                        </DropdownMenu.CheckboxItem>
                         <DropdownMenu.Item
                             onSelect={onEdit}
                             data-testid="view3d-camera-edit"

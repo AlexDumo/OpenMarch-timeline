@@ -11,6 +11,7 @@ import type {
 import {
     brassFinishOf,
     lightingForKit,
+    paramsForKitSwitch,
     parseVenueSettings,
     tubaModelOf,
     type VenueSettings,
@@ -38,7 +39,8 @@ export type VenueChange =
 /**
  * Applies one change to the current settings and validates the result.
  * Switching kits keeps the lighting when the new kit supports it, and
- * otherwise uses the new kit's default. Params are kept.
+ * otherwise uses the new kit's default. Params are kept, unless they are
+ * still the old kit's starting params: then the new kit's take their place.
  *
  * @throws a ZodError if the result isn't valid venue settings
  */
@@ -52,6 +54,11 @@ export function applyVenueChange(
                 ...current,
                 kit: change.kit,
                 lighting: lightingForKit(change.kit, current.lighting),
+                params: paramsForKitSwitch(
+                    current.kit,
+                    change.kit,
+                    current.params,
+                ),
             });
         case "lighting":
             return parseVenueSettings({

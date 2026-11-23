@@ -34,11 +34,14 @@
  *
  * - `controlScheme`: what dragging and scrolling do (`controlScheme.ts`),
  *   saved per computer. Set it with `setControlScheme`.
+ * - `seatView`: at a seat or floor camera, draw what a person there sees
+ *   (`SeatView.tsx`) rather than the photo-matched camera, saved per
+ *   computer (`renderPrefs.ts`). Set it with `setSeatView`.
  * - `pausedPose`: how marchers stand while the show is paused, the closed
  *   position or the actual step (`pausedPose.ts`), saved per computer. The
  *   transport bar toggles it with `setPausedPose`.
  *
- * The quality, resolution and controls choices are saved in local storage;
+ * The quality, resolution, controls and seat view choices are saved in local storage;
  * `startPrefsSync()` picks up a change saved elsewhere while the window is open.
  *
  * Read it in React with `useView3dSceneStore(selector)`, and in `useFrame` or
@@ -69,8 +72,11 @@ import {
 } from "./qualityPreference";
 import {
     RESOLUTION_STORAGE_KEY,
+    SEAT_VIEW_STORAGE_KEY,
     loadResolution,
+    loadSeatView,
     saveResolution,
+    saveSeatView,
     type Resolution,
 } from "./renderPrefs";
 import {
@@ -129,6 +135,9 @@ export interface View3dSceneState {
     controlScheme: ControlScheme;
     /** Saves the choice and applies it. */
     setControlScheme: (scheme: ControlScheme) => void;
+    seatView: boolean;
+    /** Saves the choice and applies it. */
+    setSeatView: (on: boolean) => void;
     pausedPose: PausedPose;
     /** Saves the choice and applies it. */
     setPausedPose: (pose: PausedPose) => void;
@@ -170,6 +179,7 @@ function camerasFor(
     };
 }
 
+// eslint-disable-next-line max-lines-per-function -- one field and setter per choice
 export const useView3dSceneStore = create<View3dSceneState>()((set, get) => ({
     kitId: null,
     kit: null,
@@ -211,6 +221,11 @@ export const useView3dSceneStore = create<View3dSceneState>()((set, get) => ({
         saveControlScheme(controlScheme);
         set({ controlScheme });
     },
+    seatView: loadSeatView(),
+    setSeatView: (seatView) => {
+        saveSeatView(seatView);
+        set({ seatView });
+    },
     pausedPose: loadPausedPose(),
     setPausedPose: (pausedPose) => {
         savePausedPose(pausedPose);
@@ -238,6 +253,8 @@ export const useView3dSceneStore = create<View3dSceneState>()((set, get) => ({
             set({ resolution: loadResolution() });
         if (key === null || key === CONTROL_SCHEME_STORAGE_KEY)
             set({ controlScheme: loadControlScheme() });
+        if (key === null || key === SEAT_VIEW_STORAGE_KEY)
+            set({ seatView: loadSeatView() });
         if (key === null || key === PAUSED_POSE_STORAGE_KEY)
             set({ pausedPose: loadPausedPose() });
     },

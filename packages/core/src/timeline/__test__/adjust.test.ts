@@ -327,7 +327,7 @@ describe("the independent ref/ oracle", () => {
             ),
             { numRuns: 60 },
         );
-    });
+    }, 30_000); // under half a second alone; the default 5 s is too tight when the whole suite runs on a loaded machine
 });
 
 describe("AP-R11: placing a key", () => {

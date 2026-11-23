@@ -21,6 +21,12 @@
  * - in pick-a-seat mode, raycasts the kit's `pickTargets`, snaps to the
  *   nearest seat row and flies to a seated eye looking at the focus; Esc
  *   cancels;
+ * - at a person's eye (a seat or floor camera, or a picked seat) with seat
+ *   view on (`../SeatView.tsx`), holds the eye still: a drag, or a
+ *   trackpad scroll, turns the head (`seatLens.ts` gives the ray each pixel
+ *   shows, so picking matches the wide picture), the wheel or a pinch
+ *   zooms the eye's field of view, and a double-click turns the head to
+ *   face that spot. Choosing another camera leaves the seat;
  * - clears the crowd within `CROWD_CLEAR_RADIUS` of the camera on arrival;
  * - in pick-a-performer mode (`followStore.ts`, key P), follows the clicked
  *   performer: from behind (third person), or out of their eyes (point of
@@ -37,7 +43,7 @@
  *
  * Camera state the overlay reads lives in `cameraStore.ts`.
  */
-// cspell:ignore raycaster
+// cspell:ignore raycaster hfov
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import {
@@ -53,18 +59,28 @@ import { CROWD_CLEAR_RADIUS, useView3dSceneStore } from "../sceneStore";
 import { useCameraStore } from "./cameraStore";
 import { RigController } from "./rigController";
 import { canHold, groundHit, levelHit, wheelPixels } from "./inputMath";
+import {
+    projectToScreen,
+    radiansPerPixel,
+    seatLens,
+    setRayFromScreen,
+} from "./seatLens";
 import { dragAction, wheelAction } from "./controlScheme";
 import { requestDraw } from "../drawWake";
 import { pickAlong } from "../scenePick";
 import {
     cameraIndexForKey,
     FLY_IN_OFFSET,
+    isPersonSeat,
     MIN_EYE_Y,
     openingCamera,
     SEAT_FOV_DEG,
     SEATED_EYE,
     seatAim,
+    lookLimits,
+    ZOOM_PER_WHEEL,
 } from "./rigMath";
+import { seatViewLook } from "@/view3d/core/post/seatViewSource";
 import { snapToSeatRows } from "./seatSnap";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
 import { useView3dSyncStore } from "@/view3d/sync/view3dSyncStore";
@@ -145,7 +161,7 @@ export function pickSeatEye(
 ): Vector3Tuple | null {
     if (kit.pickTargets.length === 0 || kit.seatRows.length === 0) return null;
     kit.root.updateMatrixWorld(true);
-    raycaster.setFromCamera(ndc, camera);
+    setRayFromScreen(raycaster, ndc, camera);
     const hit = raycaster.intersectObjects(kit.pickTargets, true)[0];
     if (!hit) return null;
     const local = kit.root.worldToLocal(hit.point.clone());
@@ -166,6 +182,21 @@ export function pickSeatEye(
 }
 
 // eslint-disable-next-line max-lines-per-function
+/**
+ * Seat view at a seat: the venue's widest field of view (`KitResult.seatView`)
+ * and how far the head turns there (`CameraSeat.look`).
+ */
+function sitOptions(seat?: CameraSeat): {
+    widestDeg: number;
+    limits: ReturnType<typeof lookLimits>;
+} {
+    const kit = useView3dSceneStore.getState().kit;
+    return {
+        widestDeg: seatViewLook(kit?.seatView).hfovDeg,
+        limits: lookLimits(seat?.look),
+    };
+}
+
 export default function CameraRig() {
     const camera = useThree((s) => s.camera);
     const gl = useThree((s) => s.gl);
@@ -222,11 +253,20 @@ export default function CameraRig() {
 
     const flyToSeat = (seat: CameraSeat) => {
         const aim = seatAim(seat);
+        const person = isPersonSeat(seat);
+        // Seat view blends in over the flight, so the flag and the width
+        // it blends toward are set now.
+        useCameraStore.getState()._setSeated(person);
+        const sitAt = sitOptions(seat);
+        if (person) seatLens.hfovDeg = sitAt.widestDeg;
         rig.flyTo(aim.position, aim.target, {
             nowMs: performance.now(),
             instant: prefersReducedMotion(),
             fovDeg: seat.fovDeg ?? SEAT_FOV_DEG,
-            onArrive: clearCrowdAround,
+            onArrive: (position) => {
+                clearCrowdAround(position);
+                if (person) rig.sit(aim.position, aim.target, sitAt);
+            },
         });
     };
     const flyToSeatRef = useRef(flyToSeat);
@@ -313,6 +353,7 @@ export default function CameraRig() {
                 if (state.follow) {
                     useDirectorStore.getState().setDirecting(false);
                     useCameraStore.getState()._setActive(null);
+                    useCameraStore.getState()._setSeated(false);
                 }
                 if (!follow.change(state.follow, performance.now()))
                     state.stop();
@@ -370,7 +411,19 @@ export default function CameraRig() {
             useDirectorStore.getState().setDirecting(false);
             const store = useCameraStore.getState();
             if (store.activeCameraId !== null) store._setActive(null);
+            store._setSeated(false);
         };
+        /** True while drags turn the head: seat view is on and the view is at a seat. */
+        const seatLook = () =>
+            seatLens.available &&
+            rig.seated &&
+            !follow.active &&
+            useView3dSceneStore.getState().seatView;
+        /** A head turn or a seat zoom: the view stays at its camera. */
+        const lookMove = () => requestDraw(INPUT_WAKE_MS);
+        /** Radians a pixel of drag turns the head: the scene follows the pointer. */
+        const lookPerPx = () =>
+            radiansPerPixel(el.getBoundingClientRect().width, camera);
         const focus = () => useView3dSceneStore.getState().focus;
         const scheme = () => useView3dSceneStore.getState().controlScheme;
 
@@ -385,7 +438,7 @@ export default function CameraRig() {
                 -((clientY - rect.top) / rect.height) * 2 + 1,
             );
             rig.sync();
-            raycaster.setFromCamera(ndc, camera);
+            setRayFromScreen(raycaster, ndc, camera);
             const { origin, direction } = raycaster.ray;
             return {
                 o: [origin.x, origin.y, origin.z],
@@ -445,9 +498,10 @@ export default function CameraRig() {
         ): boolean => {
             rig.sync();
             const rect = el.getBoundingClientRect();
-            const v = new Vector3(...point).project(camera);
-            const x = rect.left + ((v.x + 1) / 2) * rect.width;
-            const y = rect.top + ((1 - v.y) / 2) * rect.height;
+            const v = projectToScreen(point, camera);
+            if (!v) return false;
+            const x = rect.left + ((v[0] + 1) / 2) * rect.width;
+            const y = rect.top + ((1 - v[1]) / 2) * rect.height;
             return Math.hypot(x - clientX, y - clientY) <= 1;
         };
         /**
@@ -530,6 +584,7 @@ export default function CameraRig() {
             grab =
                 dragAction(scheme(), e) === "pan" &&
                 !rig.flying &&
+                !seatLook() &&
                 !follow.active
                     ? grabAt(e.clientX, e.clientY)
                     : null;
@@ -558,6 +613,20 @@ export default function CameraRig() {
                     pinch = d;
                 } else changed = follow.lookDrag(dx, dy);
                 if (changed) requestDraw(INPUT_WAKE_MS);
+                return;
+            }
+            if (seatLook()) {
+                // At a seat every drag turns the head, and a pinch zooms the eye.
+                if (pointers.size >= 2) {
+                    const [a, b] = [...pointers.values()];
+                    const d = Math.hypot(a.x - b.x, a.y - b.y);
+                    changed = pinch > 0 && d > 0 && rig.seatZoom(pinch / d);
+                    pinch = d;
+                } else {
+                    const k = lookPerPx();
+                    changed = rig.lookBy(dx * k, dy * k);
+                }
+                if (changed) lookMove();
                 return;
             }
             if (pointers.size >= 2) {
@@ -614,16 +683,25 @@ export default function CameraRig() {
                 ((e.clientX - rect.left) / rect.width) * 2 - 1,
                 -((e.clientY - rect.top) / rect.height) * 2 + 1,
             );
+            rig.sync();
             const eye = pickSeatEye(current, camera, ndc, raycaster);
             if (!eye) return;
             endFollowRef.current();
             store.setPickMode(false);
             store._setActive(null);
+            store._setSeated(true);
             useDirectorStore.getState().setDirecting(false);
-            rig.flyTo(eye, [...current.focus], {
+            // A picked seat is open: the venue's lens, the usual limits.
+            const pickedAt = sitOptions();
+            seatLens.hfovDeg = pickedAt.widestDeg;
+            const focusAt: Vector3Tuple = [...current.focus];
+            rig.flyTo(eye, focusAt, {
                 nowMs: performance.now(),
                 instant: prefersReducedMotion(),
-                onArrive: clearCrowdAround,
+                onArrive: (position) => {
+                    clearCrowdAround(position);
+                    rig.sit(eye, focusAt, pickedAt);
+                },
             });
         };
         const onPointerCancel = (e: PointerEvent) => {
@@ -659,6 +737,33 @@ export default function CameraRig() {
                         -wheelPixels(e.deltaY, e.deltaMode),
                     );
                 if (changed) requestDraw(INPUT_WAKE_MS);
+                return;
+            }
+            if (seatLook()) {
+                lastZoom = null;
+                if (action === "pinch" || action === "zoom") {
+                    const step =
+                        action === "pinch"
+                            ? Math.max(
+                                  -PINCH_MAX_STEP,
+                                  Math.min(
+                                      PINCH_MAX_STEP,
+                                      wheelPixels(e.deltaY, e.deltaMode) *
+                                          PINCH_ZOOM,
+                                  ),
+                              )
+                            : wheelPixels(e.deltaY, e.deltaMode) *
+                              ZOOM_PER_WHEEL;
+                    changed = rig.seatZoom(Math.exp(step));
+                } else {
+                    // A trackpad scroll turns the head as a drag would.
+                    const k = lookPerPx();
+                    changed = rig.lookBy(
+                        -wheelPixels(e.deltaX, e.deltaMode) * k,
+                        -wheelPixels(e.deltaY, e.deltaMode) * k,
+                    );
+                }
+                if (changed) lookMove();
                 return;
             }
             // Following, zoom closes in on the performer, not the cursor.
@@ -705,6 +810,11 @@ export default function CameraRig() {
             if (!hit || rig.flying) return;
             // A new center ends following.
             endFollowRef.current();
+            // At a seat, look at the spot instead of moving there.
+            if (seatLook()) {
+                if (rig.turnHeadTo(hit)) lookMove();
+                return;
+            }
             // The spot itself becomes the center, at its own height (a seat
             // up in the stands too), and the camera shifts with it, keeping
             // its angle and distance, above the ground.
@@ -800,10 +910,12 @@ export default function CameraRig() {
         if (pose) {
             // Also ends a fly-to or a coast the Director interrupted.
             rig.jumpTo(pose.position, pose.target, pose.fovDeg);
+            useCameraStore.getState()._setSeated(false);
             return;
         }
         follow.apply(now);
         rig.update(now);
+        if (rig.seated) seatLens.hfovDeg = rig.seatFovDeg;
         if (rig.moving || follow.easing) requestDraw(100);
     }, -1);
 
@@ -813,6 +925,7 @@ export default function CameraRig() {
             const store = useCameraStore.getState();
             store._setActive(null);
             store.setPickMode(false);
+            store._setSeated(false);
             useDirectorStore.getState().setDirecting(false);
             const followStore = useFollowStore.getState();
             followStore.setPicking(false);

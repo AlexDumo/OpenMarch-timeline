@@ -1,5 +1,7 @@
 # 3D View UI
 
+<!-- cspell:words Panini -->
+
 The 3D View window's look and behavior. It matches the editor: the same
 tokens, primitives, icons and Tolgee strings. The reference demo's overlay
 ([ref/venue-demo.html](ref/venue-demo.html)) is the approved layout. Rebuild it
@@ -75,12 +77,49 @@ replacing the first layout's venue and lighting bars and the wide camera bar.
     clipped;
   - double-click to move the orbit center to the clicked spot.
 
+  At a seat with Seat view on, these give way to looking around (below).
+
   The camera can't go below ground level. Moving manually deselects the camera
   chip.
 
 - **Pick a seat:** shows a crosshair, then clicking a stand moves the camera
   to that seat at a seated eye height (1.2 m above the tread), looking at the
   field center. The mode ends after one pick, or with Esc.
+- **Seat view** (owner, 2026-11-17: "a person in this building, not a
+  camera"): at a seat or floor camera and at a picked seat, the view shows
+  what someone sitting there sees instead of what a phone photo from there
+  shows. It is a check item in the camera menu, saved per computer
+  (`view3d.seatView`) and on by default. Off, those cameras show the
+  photo-matched camera, which is how venues are checked against reference
+  photos. Top-down, the blimp, saved views, free views and the Director
+  always show the plain camera.
+  - The picture is 105° wide (about what both eyes take in, against a
+    phone's 60-70°) through a Panini lens (`d` 1, vertical compression
+    0.25, as in Unreal's and Unity's): verticals stay straight, the middle
+    keeps its scale and the sides compress gently, where a wide rectilinear
+    camera would stretch them. A tall window narrows it so the middle
+    never sees more than 85° top to bottom. A venue may set its own lens:
+    Mark Diesel Stadium, a far bigger bowl, uses 95° and vertical
+    compression 0.5, so the field, small and well below the eye, is larger
+    and its sidelines stay straight.
+  - Shadows are lifted a little, as an adapted eye sees them: the darkest
+    parts by up to 45%, the lit field by under 5%, so roof steel and the
+    upper decks read.
+  - The eye stays put. A drag (or a trackpad scroll) turns the head, up to
+    100° either way from the seat's facing and from 60° down to 45° up,
+    easing there. An enclosed seat declares less, so the view stops before
+    it is the booth's walls (Mark Diesel's press box: 40° either way, 25°
+    up); the scroll wheel or a pinch narrows the view to 30° and
+    back; a double-click turns the head to face that spot. Choosing the
+    camera again faces forward. Choosing another camera, or a seat, leaves.
+  - Going in or out blends over 0.9 s (a jump under reduced motion), along
+    the fly-to.
+  - Clicks pick what the picture shows: the window inverts the lens for
+    every ray (pick-a-seat, zoom and pan targets, double-click).
+  - It draws through the same post pipeline as a venue's bloom: the scene
+    is drawn by the lens's wide source camera, bloom works on that, and
+    the final pass reads both through the lens, so lamps bloom in Seat view
+    too. Lens ghosts stay where a camera puts them in the picture.
 - **When the camera lands**, the crowd within 4.9 m of it is cleared, so a
   seat view isn't blocked by the nearest people.
 - **Top-down** matches the 2D canvas orientation: front at the bottom, side 1
