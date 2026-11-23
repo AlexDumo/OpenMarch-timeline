@@ -7,33 +7,38 @@ import {
 import { AREA, TARP, type NightpoundCtx, type NightpoundPart } from "./frame";
 import { FLOOR } from "./plan";
 
+/** The tarp covers the floor wall to wall, under the drape too. */
+const TARP_EXTENT = FLOOR;
+
 /** Pixels per meter of the tarp's texture. */
 const TARP_PX = 48;
 
 /**
- * The tarp's look: charcoal vinyl strips laid front to back, each a shade
+ * The tarp's look: charcoal vinyl strips laid side to side, each a shade
  * off its neighbors, with taped seams, a little scuffing from the day's
  * floors and props, white tape at the competition area's corners and center
  * marks, and the red interval-timeline marks at center front and back (the
  * line the next group may not cross while the last one is on the floor).
  */
 export function paintTarp(g: CanvasRenderingContext2D, W: number, H: number) {
-    const sx = W / (2 * TARP.halfX);
-    const sz = H / (2 * TARP.halfZ);
+    const { minX, maxX, minZ, maxZ } = TARP_EXTENT;
+    const sx = W / (maxX - minX);
+    const sz = H / (maxZ - minZ);
     g.fillStyle = "#26272b";
     g.fillRect(0, 0, W, H);
-    // Strips front to back, centered on the area's center line.
-    const strip = TARP.strip * sx;
-    const first = W / 2 - Math.ceil(W / 2 / strip) * strip;
-    for (let x = first, i = 0; x < W; x += strip, i++) {
+    // Strips side to side, laid from the front back; the last one, at the
+    // back, takes what's left (WGI's packet).
+    const strip = TARP.strip * sz;
+    for (let y = H, i = 0; y > 0; y -= strip, i++) {
+        const top = Math.max(0, y - strip);
         const k = (i * 7) % 5;
         g.fillStyle = `rgba(255,255,255,${0.008 + 0.006 * k})`;
-        g.fillRect(x, 0, strip, H);
+        g.fillRect(0, top, W, y - top);
         // The taped seam: a darker band with a faint sheen beside it.
         g.fillStyle = "rgba(0,0,0,0.55)";
-        g.fillRect(x - 0.025 * sx, 0, 0.05 * sx, H);
+        g.fillRect(0, y - 0.025 * sz, W, 0.05 * sz);
         g.fillStyle = "rgba(255,255,255,0.035)";
-        g.fillRect(x + 0.025 * sx, 0, 0.06 * sx, H);
+        g.fillRect(0, y - 0.085 * sz, W, 0.06 * sz);
     }
     // Scuffs: soft pale arcs where floors were dragged on and off.
     let seed = 7;
@@ -61,8 +66,8 @@ export function paintTarp(g: CanvasRenderingContext2D, W: number, H: number) {
     }
     // White tape: L marks at the competition area's corners, ticks at the
     // centers of its edges.
-    const X = (x: number) => (x + TARP.halfX) * sx;
-    const Z = (z: number) => (z + TARP.halfZ) * sz;
+    const X = (x: number) => (x - minX) * sx;
+    const Z = (z: number) => (z - minZ) * sz;
     const tape = 0.05 * sx;
     const arm = 0.9 * sx;
     g.fillStyle = "rgba(236,236,232,0.9)";
@@ -133,13 +138,16 @@ export function buildFloor(ctx: NightpoundCtx): NightpoundPart {
     object.add(concrete);
 
     const tarpTex = paintCanvasTexture(
-        Math.round(2 * TARP.halfX * TARP_PX),
-        Math.round(2 * TARP.halfZ * TARP_PX),
+        Math.round((TARP_EXTENT.maxX - TARP_EXTENT.minX) * TARP_PX),
+        Math.round((TARP_EXTENT.maxZ - TARP_EXTENT.minZ) * TARP_PX),
         paintTarp,
         { anisotropy: 8 },
     );
     textures.push(tarpTex);
-    const tarpGeo = new PlaneGeometry(2 * TARP.halfX, 2 * TARP.halfZ);
+    const tarpGeo = new PlaneGeometry(
+        TARP_EXTENT.maxX - TARP_EXTENT.minX,
+        TARP_EXTENT.maxZ - TARP_EXTENT.minZ,
+    );
     geos.push(tarpGeo);
     const tarp = new Mesh(
         tarpGeo,
@@ -150,6 +158,11 @@ export function buildFloor(ctx: NightpoundCtx): NightpoundPart {
     );
     tarp.name = "nightpound.tarp";
     tarp.rotation.x = -Math.PI / 2;
+    tarp.position.set(
+        (TARP_EXTENT.minX + TARP_EXTENT.maxX) / 2,
+        0,
+        (TARP_EXTENT.minZ + TARP_EXTENT.maxZ) / 2,
+    );
     tarp.receiveShadow = true;
     object.add(tarp);
 

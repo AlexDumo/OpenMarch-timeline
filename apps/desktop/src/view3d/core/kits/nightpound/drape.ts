@@ -31,7 +31,19 @@ import {
     type NightpoundCtx,
     type NightpoundPart,
 } from "./frame";
-import { DRAPE_RUN, DRAPE_TOP, DRAPE_Z, FLOOR, TUNNEL_PLAN } from "./plan";
+import {
+    DRAPE_RUN,
+    DRAPE_TOP,
+    DRAPE_Z,
+    FLOOR,
+    STACK,
+    TUNNEL_PLAN,
+} from "./plan";
+
+/** The box's cloth roof runs back over the stack to the cross aisle's edge. */
+const ROOF_BACK = FLOOR.minZ - 1.2;
+/** The folded 100s: eleven rows, each folded seat a nosing on the stack's face. */
+const STACK_ROWS = 11;
 
 /** The event's name on the drape's center banner. */
 export const NIGHTPOUND_EVENT = "WORLD CHAMPIONSHIPS";
@@ -191,7 +203,7 @@ export function buildDrape(ctx: NightpoundCtx): NightpoundPart {
 
     // The box's roof: cloth on the tunnel's pipe, sagging between battens.
     const roofW = DRAPE_RUN.maxX - DRAPE_RUN.minX + (EXIT.width + ENTRY.width);
-    const roofD = DRAPE_Z - TUNNEL_PLAN.back;
+    const roofD = DRAPE_Z - ROOF_BACK;
     const roofGeo = new PlaneGeometry(roofW, roofD, high ? 48 : 12, 4);
     const rp = roofGeo.getAttribute("position");
     for (let i = 0; i < rp.count; i++) {
@@ -212,7 +224,7 @@ export function buildDrape(ctx: NightpoundCtx): NightpoundPart {
     roof.position.set(
         (FLOOR.minX + FLOOR.maxX) / 2,
         DRAPE_TOP,
-        (DRAPE_Z + TUNNEL_PLAN.back) / 2,
+        (DRAPE_Z + ROOF_BACK) / 2,
     );
     object.add(roof);
 
@@ -255,6 +267,22 @@ export function buildDrape(ctx: NightpoundCtx): NightpoundPart {
         0.018,
         TRUSS,
     );
+    // The folded 100s behind the tunnel, seen through the openings: a dark
+    // stack with each row's nosing and folded seats stepping back as it rises.
+    for (let i = 0; i < STACK_ROWS; i++) {
+        const y = 0.35 + (i * (STACK.height - 0.35)) / (STACK_ROWS - 1);
+        const z = STACK.front - 0.04 - i * 0.06;
+        steel.box(
+            at(0, y - 0.12, z - 0.3),
+            [FLOOR.maxX - FLOOR.minX - 0.2, 0.24, 0.6],
+            0x1b2036,
+        );
+        steel.box(
+            at(0, y, z),
+            [FLOOR.maxX - FLOOR.minX - 0.2, 0.05, 0.08],
+            0x8a8782,
+        );
+    }
     const unit = new BoxGeometry(1, 1, 1);
     geos.push(unit);
     const steelMat = shared.std(0xffffff, { metalness: 0.4, roughness: 0.5 });
