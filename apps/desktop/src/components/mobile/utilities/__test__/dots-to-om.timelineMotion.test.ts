@@ -20,7 +20,8 @@ import { readTimelinePageSnapshot } from "@/timeline/timelinePagePositions";
 import { stopTimelineResolver } from "@/timeline/timelineStore";
 import { toOpenMarchSchema } from "../dots-to-om";
 import { hasMotionBetweenPages } from "../pageLines";
-import { toSteps, type StepAxes } from "../exact-paths-export";
+import { stepAxesOf, toSteps } from "../exact-paths-export";
+import { worstGapToApp } from "./exactPathPlayback";
 
 /**
  * Motion only a timeline show has (docs/convergence/inventory.md R1): a move that ends partway
@@ -128,6 +129,21 @@ describeDbTests("dots-to-om timeline-only motion", (it) => {
             9,
         );
         expect(await motionBetweenPages(db)).toBe(true);
+
+        // The file as a reader plays it (EP-R2): the marcher walks to the mid-page spot and holds
+        // there for the rest of the page; everyone else walks straight lines between sets
+        const mover = show.exactPaths!.filter((e) => e.marcherId === "1");
+        expect(mover.length).toBeGreaterThan(0);
+        expect(mover.some((e) => e.endTick === mid * TICKS_PER_BEAT)).toBe(
+            true,
+        );
+        const { worst, at } = worstGapToApp({
+            show,
+            app: resolver,
+            axes: stepAxesOf(await fieldProperties(db)),
+            endTick: Math.max(...pages.map(pageEndBeat)) * TICKS_PER_BEAT,
+        });
+        expect(worst, at).toBeLessThan(0.01);
     });
 
     it("a curved path: the same page positions as the straight move, flagged", async ({
@@ -239,15 +255,3 @@ describeDbTests("dots-to-om timeline-only motion", (it) => {
         expect(safeValidateOpenMarchData(show).success).toBe(true);
     });
 });
-
-/** The export's mapping from canvas pixels to `.om` steps, for `field` */
-function stepAxesOf(field: FieldProperties): StepAxes {
-    const xs = field.xCheckpoints.map((c) => c.stepsFromCenterFront);
-    const ys = field.yCheckpoints.map((c) => c.stepsFromCenterFront);
-    return {
-        centerXPixels:
-            ((Math.max(...xs) - Math.min(...xs)) / 2) * field.pixelsPerStep,
-        fieldHeightSteps: Math.abs(Math.max(...ys) - Math.min(...ys)),
-        pixelsPerStep: field.pixelsPerStep,
-    };
-}

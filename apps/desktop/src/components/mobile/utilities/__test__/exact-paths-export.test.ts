@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+    EXACT_DEFAULT_TOLERANCE,
     TICKS_PER_BEAT,
     exactPlayer,
     type ExactMove,
     type ExactPath,
-    type ExactPathConverter,
 } from "@openmarch/core";
 import {
     ExactPathListSchema,
@@ -12,9 +12,9 @@ import {
     exactPlayer as omExactPlayer,
 } from "@openmarch/schema";
 import {
-    buildExactPathEntries,
-    convertExactMoves,
     exactPathEntryOf,
+    exactToleranceFor,
+    exportExactPaths,
     exactPathInSteps,
     toSteps,
     type StepAxes,
@@ -149,7 +149,7 @@ describe("exactPathEntryOf", () => {
             move(2 + third, 10 + third),
             move(10 + third, 18 + third),
         ];
-        const entries = buildExactPathEntries(moves, AXES);
+        const entries = moves.map((m) => exactPathEntryOf(m, AXES)!);
         expect(entries[0]!.endTick).toBe(entries[1]!.startTick);
         expect(ExactPathListSchema.safeParse(entries).success).toBe(true);
     });
@@ -159,22 +159,83 @@ describe("exactPathEntryOf", () => {
     });
 });
 
-describe("convertExactMoves", () => {
-    it("gives a marcher whose walk can't be converted no paths, and keeps the others", async () => {
-        const errors = vi.spyOn(console, "error").mockImplementation(() => {});
-        const converter: ExactPathConverter = {
-            movesOf(marcherId) {
-                if (marcherId === 2) throw new Error("walk doesn't join");
-                return [{ ...move(0, 8), marcherId }];
-            },
-        };
-        const moves = await convertExactMoves(
+describe("exportExactPaths", () => {
+    /** A walk of `length` canvas pixels to the right, over 8 beats */
+    const walkOf = (length: number): ExactPath => ({
+        v: 1,
+        from: [600, 500],
+        shapes: [{ kind: "points", points: [[600 + length, 500]] }],
+        keys: [
+            { tick: 0, u: 0 },
+            { tick: 8 * TICKS_PER_BEAT, u: 1 },
+        ],
+    });
+    const exportWith = (
+        movesOf: (marcherId: number) => ExactMove[],
+        seen?: { tolerance?: number },
+    ) =>
+        exportExactPaths(
             { host: {} as never, resolver: {} as never },
             [1, 2, 3],
-            () => converter,
+            AXES,
+            {
+                makeConverter: (_host, _resolver, options) => {
+                    if (seen) seen.tolerance = options.tolerance;
+                    return { movesOf };
+                },
+            },
         );
-        expect(moves.map((m) => m.marcherId)).toEqual([1, 3]);
+
+    it("gives a marcher whose walk can't be converted no paths, and keeps the others", async () => {
+        const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+        const entries = await exportWith((marcherId) => {
+            if (marcherId === 2) throw new Error("walk doesn't join");
+            return [{ ...move(0, 8), marcherId }];
+        });
+        expect(entries.map((e) => e.marcherId)).toEqual(["1", "3"]);
         expect(errors).toHaveBeenCalledOnce();
         errors.mockRestore();
+    });
+
+    it("leaves out a walk too short for the file (EP-6 in steps), keeping the marcher's others", async () => {
+        // over the converter's 1e-9 canvas pixels, under the file's 1e-9 steps (12 px a step)
+        const entries = await exportWith((marcherId) => [
+            { ...move(0, 8, walkOf(5e-9)), marcherId },
+            { ...move(8, 16, walkOf(24)), marcherId },
+        ]);
+        expect(entries.map((e) => [e.marcherId, e.startTick])).toEqual([
+            ["1", 8 * TICKS_PER_BEAT],
+            ["2", 8 * TICKS_PER_BEAT],
+            ["3", 8 * TICKS_PER_BEAT],
+        ]);
+        expect(ExactPathListSchema.safeParse(entries).success).toBe(true);
+    });
+
+    it("gives a marcher whose path the file would refuse no paths, so the show still exports", async () => {
+        const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+        const broken: ExactPath = {
+            ...walkOf(24),
+            keys: [
+                { tick: 0, u: 0 },
+                { tick: 480, u: 0.8 },
+                { tick: 960, u: 0.4 },
+                { tick: 3840, u: 1 },
+            ],
+        };
+        const entries = await exportWith((marcherId) => [
+            { ...move(0, 8, marcherId === 3 ? broken : walkOf(24)), marcherId },
+        ]);
+        expect(entries.map((e) => e.marcherId)).toEqual(["1", "2"]);
+        expect(errors).toHaveBeenCalledOnce();
+        errors.mockRestore();
+    });
+
+    it("converts within 1/100 of the show's own step when it's smaller than the default", async () => {
+        const seen: { tolerance?: number } = {};
+        await exportWith(() => [], seen);
+        expect(exactToleranceFor(AXES)).toBe(EXACT_DEFAULT_TOLERANCE);
+        expect(seen.tolerance).toBe(EXACT_DEFAULT_TOLERANCE);
+        const small = { ...AXES, pixelsPerStep: 6 };
+        expect(exactToleranceFor(small)).toBe(0.06);
     });
 });

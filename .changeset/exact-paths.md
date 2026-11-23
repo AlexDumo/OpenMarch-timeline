@@ -10,6 +10,8 @@ shapes (points, arcs, cubics) plus timing keys in ticks, 480 per beat.
   `followExactEnds`, `retimeExactPath` and `splitExactPath` for edits.
 - The converter: `exactPathsOf(snapshot, resolver)` gives one exact path per
   marcher per moving span, within `EXACT_DEFAULT_TOLERANCE` (1/100 of an
-  8-to-5 step) of the resolver.
+  8-to-5 step) of the resolver. `createExactPathConverter(snapshot, resolver)`
+  gives the same paths one marcher and one move at a time, so a caller can
+  yield between moves.
 
 The types are a temporary copy until the `schema` package owns them.

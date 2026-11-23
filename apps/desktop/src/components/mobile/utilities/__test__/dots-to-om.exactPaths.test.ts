@@ -4,7 +4,6 @@ import path from "path";
 import { afterEach, expect } from "vitest";
 import {
     ExactPathListSchema,
-    createExactPathReader,
     fromOpenMarchSchemaFile,
     toOpenMarchFile,
     toOpenMarchJson,
@@ -22,7 +21,8 @@ import { pageEndBeat } from "@/timeline/pageEndBeat";
 import { readTimelinePageSnapshot } from "@/timeline/timelinePagePositions";
 import { stopTimelineResolver } from "@/timeline/timelineStore";
 import { toOpenMarchSchema } from "../dots-to-om";
-import { convertExactMoves, toSteps } from "../exact-paths-export";
+import { exportExactPaths, stepAxesOf } from "../exact-paths-export";
+import { worstGapToApp, type AppPositions } from "./exactPathPlayback";
 
 /**
  * Exact paths in the `.om` export (issue #1163, spec Appendix M.7), on real shows: each show is
@@ -114,34 +114,6 @@ const reports: ShowReport[] = [];
 const gzipBytes = async (show: OpenMarchShowData) =>
     (await toOpenMarchFile(show, { compressed: true })).byteLength;
 
-/**
- * A reader's straight line between sets: in the page holding `tick`, from the set before to the
- * page's own, by share of the page's ticks.
- */
-function straightLines(show: OpenMarchShowData, endTick: number) {
-    const pages = [...show.pages].sort(
-        (a, b) => a.startBeatIndex - b.startBeatIndex,
-    );
-    const starts = pages.map((p) => p.startBeatIndex * TICKS_PER_BEAT);
-    const at = new Map<string, readonly [number, number]>();
-    for (const c of show.coordinates)
-        at.set(`${c.marcherId}:${c.pageId}`, [c.xSteps, c.ySteps]);
-    return (marcherId: string, tick: number): readonly [number, number] => {
-        let k = 0;
-        while (k + 1 < starts.length && starts[k + 1]! <= tick) k++;
-        const to = at.get(`${marcherId}:${pages[k]!.id}`)!;
-        if (k === 0) return to;
-        const from = at.get(`${marcherId}:${pages[k - 1]!.id}`)!;
-        const end = starts[k + 1] ?? endTick;
-        const s =
-            end > starts[k]! ? (tick - starts[k]!) / (end - starts[k]!) : 1;
-        return [
-            from[0] + s * (to[0] - from[0]),
-            from[1] + s * (to[1] - from[1]),
-        ];
-    };
-}
-
 afterEach(() => stopTimelineResolver());
 
 for (const input of [...RELEASE_FILES, ...EXTRA]) {
@@ -177,59 +149,28 @@ for (const input of [...RELEASE_FILES, ...EXTRA]) {
 
         // The app's positions, in steps on the file's axes
         const snapshot = await readTimelinePageSnapshot(db);
+        const fieldRow = await db.query.field_properties.findFirst();
+        const axes = stepAxesOf(
+            new FieldProperties(
+                FieldPropertiesSchema.parse(JSON.parse(fieldRow!.json_data)),
+            ),
+        );
         const convertStarted = performance.now();
-        await convertExactMoves(
+        await exportExactPaths(
             snapshot.walks!,
             data.performers.map((p) => p.id),
+            axes,
         );
         const convertMs = performance.now() - convertStarted;
-        const resolver = snapshot.walks!.resolver as unknown as {
-            marcherIds(): readonly number[];
-            positionsAt(beat: number, out: Float64Array): void;
-        };
-        const fieldRow = await db.query.field_properties.findFirst();
-        const field = new FieldProperties(
-            FieldPropertiesSchema.parse(JSON.parse(fieldRow!.json_data)),
-        );
-        const xs = field.xCheckpoints.map((c) => c.stepsFromCenterFront);
-        const ys = field.yCheckpoints.map((c) => c.stepsFromCenterFront);
-        const axes = {
-            centerXPixels:
-                ((Math.max(...xs) - Math.min(...xs)) / 2) * field.pixelsPerStep,
-            fieldHeightSteps: Math.abs(Math.max(...ys) - Math.min(...ys)),
-            pixelsPerStep: field.pixelsPerStep,
-        };
         const { pages } = await readShowTiming(db);
         const endTick =
             Math.max(...pages.map((p) => pageEndBeat(p))) * TICKS_PER_BEAT;
-
-        const reader = createExactPathReader(data);
-        const straight = straightLines(data, endTick);
-        const ids = resolver.marcherIds();
-        const performerIds = new Set(data.performers.map((p) => p.id));
-        const checked = ids
-            .map((id, i) => [String(id), i] as const)
-            .filter(([id]) => performerIds.has(Number(id)));
-        const buffer = new Float64Array(2 * ids.length);
-        let worst = 0;
-        let worstAt = "";
-        for (let tick = 0; tick <= endTick; tick++) {
-            resolver.positionsAt(tick / TICKS_PER_BEAT, buffer);
-            for (const [id, i] of checked) {
-                const [ax, ay] = toSteps(
-                    axes,
-                    buffer[2 * i]!,
-                    buffer[2 * i + 1]!,
-                );
-                const [x, y] =
-                    reader.positionAt(id, tick) ?? straight(id, tick);
-                const gap = Math.hypot(x - ax, y - ay);
-                if (gap > worst) {
-                    worst = gap;
-                    worstAt = `marcher ${id} beat ${(tick / TICKS_PER_BEAT).toFixed(3)}`;
-                }
-            }
-        }
+        const { worst, at: worstAt } = worstGapToApp({
+            show: data,
+            app: snapshot.walks!.resolver as unknown as AppPositions,
+            axes,
+            endTick,
+        });
 
         const shapes: Record<string, number> = {};
         let keys = 0;

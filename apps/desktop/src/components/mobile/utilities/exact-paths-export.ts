@@ -8,6 +8,7 @@
  * sideline toward the back) and ticks from the start of the show.
  */
 import {
+    EXACT_DEFAULT_TOLERANCE,
     TICKS_PER_BEAT,
     createExactPathConverter,
     retimeExactPath,
@@ -15,13 +16,15 @@ import {
     type ExactPath,
     type ExactPathConverter,
     type ExactShape,
+    type FieldProperties,
     type Resolver,
     type TimelineSnapshot,
 } from "@openmarch/core";
-import type {
-    ExactPath as OmExactPath,
-    ExactPathEntry,
-    ExactShape as OmExactShape,
+import {
+    checkExactPath,
+    type ExactPath as OmExactPath,
+    type ExactPathEntry,
+    type ExactShape as OmExactShape,
 } from "@openmarch/schema";
 
 type XY = readonly [number, number];
@@ -33,6 +36,23 @@ export interface StepAxes {
     /** The field's depth in steps: the front sideline's y in steps from the top of the canvas */
     fieldHeightSteps: number;
     pixelsPerStep: number;
+}
+
+/**
+ * The field's mapping from canvas pixels to `.om` steps: the canvas's left edge is the field's
+ * leftmost x checkpoint and its top the field's back, so the center is half the width in and the
+ * front sideline the field's depth down.
+ */
+export function stepAxesOf(fieldProperties: FieldProperties): StepAxes {
+    const xs = fieldProperties.xCheckpoints.map((c) => c.stepsFromCenterFront);
+    const ys = fieldProperties.yCheckpoints.map((c) => c.stepsFromCenterFront);
+    const { pixelsPerStep } = fieldProperties;
+    return {
+        centerXPixels:
+            ((Math.max(...xs) - Math.min(...xs)) / 2) * pixelsPerStep,
+        fieldHeightSteps: Math.abs(Math.max(...ys) - Math.min(...ys)),
+        pixelsPerStep,
+    };
 }
 
 /** A canvas point in `.om` steps: x from the center, y from the front sideline toward the back. */
@@ -108,56 +128,85 @@ export interface ExactPathSource {
     resolver: Pick<Resolver, "spanInfos" | "positionAt" | "ftlEntry">;
 }
 
+/**
+ * The converter's tolerance (EP-C4) for this field: its default, 1/100 of an 8-to-5 step, or
+ * 1/100 of the show's own step when that is smaller, so every path is within 1/100 of a step.
+ */
+export const exactToleranceFor = (axes: StepAxes) =>
+    Math.min(EXACT_DEFAULT_TOLERANCE, axes.pixelsPerStep / 100);
+
+/**
+ * Why a converted path can't go in the file, or null when it can. A path shorter than the
+ * schema's minimum in steps (EP-6) goes nowhere: leaving it out holds the marcher still, which
+ * is what it does (the converter's minimum is in canvas pixels, so a tiny walk can pass it).
+ */
+function refusal(entry: ExactPathEntry): "too short" | string | null {
+    const problems = checkExactPath(entry.path);
+    if (problems.length === 0) return null;
+    if (problems.every((p) => p.rule === "EP-6")) return "too short";
+    return problems.map((p) => `${p.rule}: ${p.message}`).join("; ");
+}
+
 /** How long converting may hold the main thread before it yields, in milliseconds. */
 const CONVERT_SLICE_MS = 8;
 
 const yieldToEventLoop = () =>
     new Promise<void>((resolve) => setTimeout(resolve, 0));
 
-/**
- * Every move of `marcherIds` as exact paths (EP-C), one marcher at a time, yielding to the event
- * loop every few milliseconds so a large show doesn't freeze the UI. A marcher whose walk can't
- * be converted gets none: the file then gives it straight lines between sets, as before exact
- * paths. Leaving out only the move that failed would make a reader hold the marcher still
- * through it instead (EP-R2).
- */
-export async function convertExactMoves(
-    { host, resolver }: ExactPathSource,
-    marcherIds: readonly number[],
-    makeConverter: (
+export interface ExportExactPathsOptions {
+    /** A stand-in converter, for tests */
+    makeConverter?: (
         host: TimelineSnapshot,
         resolver: ExactPathSource["resolver"],
-    ) => ExactPathConverter = createExactPathConverter,
-): Promise<ExactMove[]> {
-    const converter = makeConverter(host, resolver);
-    const out: ExactMove[] = [];
-    let sliceStart = performance.now();
-    for (const marcherId of marcherIds) {
-        try {
-            out.push(...converter.movesOf(marcherId));
-        } catch (error) {
-            console.error(
-                `Couldn't convert marcher ${marcherId}'s walk to exact paths; the file gives straight lines between sets for this marcher`,
-                error,
-            );
-        }
-        if (performance.now() - sliceStart > CONVERT_SLICE_MS) {
-            await yieldToEventLoop();
-            sliceStart = performance.now();
-        }
-    }
-    return out;
+        options: { tolerance: number },
+    ) => ExactPathConverter;
 }
 
-/** The `.om` file's `exactPaths`: every converted move in steps, placed in the show. */
-export function buildExactPathEntries(
-    moves: readonly ExactMove[],
+/**
+ * The `.om` file's `exactPaths` (spec M.7): every move of `marcherIds` converted (EP-C), in
+ * steps, placed in the show and checked against the file's rules. It yields to the event loop
+ * every few milliseconds, between moves, so a large show doesn't freeze the UI.
+ *
+ * A marcher whose walk can't be converted, or whose path the file would refuse, gets no exact
+ * paths: the file then gives it straight lines between sets, as before exact paths, and the
+ * rest of the show still exports. Leaving out only the move that failed would make a reader hold
+ * the marcher still through it instead (EP-R2).
+ */
+export async function exportExactPaths(
+    { host, resolver }: ExactPathSource,
+    marcherIds: readonly number[],
     axes: StepAxes,
-): ExactPathEntry[] {
+    { makeConverter = createExactPathConverter }: ExportExactPathsOptions = {},
+): Promise<ExactPathEntry[]> {
+    const converter = makeConverter(host, resolver, {
+        tolerance: exactToleranceFor(axes),
+    });
     const out: ExactPathEntry[] = [];
-    for (const move of moves) {
-        const entry = exactPathEntryOf(move, axes);
-        if (entry) out.push(entry);
+    let sliceStart = performance.now();
+    for (const marcherId of marcherIds) {
+        const mine: ExactPathEntry[] = [];
+        try {
+            for (const move of converter.movesOf(marcherId)) {
+                const entry = exactPathEntryOf(move, axes);
+                const why = entry && refusal(entry);
+                if (entry && !why) mine.push(entry);
+                else if (why && why !== "too short")
+                    throw new Error(
+                        `its move at beat ${move.start} breaks the file's rules (${why})`,
+                    );
+                if (performance.now() - sliceStart > CONVERT_SLICE_MS) {
+                    await yieldToEventLoop();
+                    sliceStart = performance.now();
+                }
+            }
+        } catch (error) {
+            console.error(
+                `Couldn't write marcher ${marcherId}'s walk as exact paths; the file gives straight lines between sets for this marcher`,
+                error,
+            );
+            continue;
+        }
+        out.push(...mine);
     }
     return out;
 }

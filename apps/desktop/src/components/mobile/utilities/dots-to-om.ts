@@ -25,10 +25,10 @@ import {
     sampleTimelinePagePositions,
     type TimelinePagePosition,
 } from "@/timeline/timelinePagePositions";
-import type { ExactMove } from "@openmarch/core";
+import type { ExactPathEntry } from "@openmarch/schema";
 import {
-    buildExactPathEntries,
-    convertExactMoves,
+    exportExactPaths,
+    stepAxesOf,
     toSteps,
     type StepAxes,
 } from "./exact-paths-export";
@@ -90,24 +90,8 @@ function fieldPropsToPerformanceArea(fieldProperties: FieldProperties) {
     };
 }
 
-function getFieldExtentsSteps(fieldProperties: FieldProperties) {
-    const minX = Math.min(
-        ...fieldProperties.xCheckpoints.map((c) => c.stepsFromCenterFront),
-    );
-    const maxX = Math.max(
-        ...fieldProperties.xCheckpoints.map((c) => c.stepsFromCenterFront),
-    );
-    const minY = Math.min(
-        ...fieldProperties.yCheckpoints.map((c) => c.stepsFromCenterFront),
-    );
-    const maxY = Math.max(
-        ...fieldProperties.yCheckpoints.map((c) => c.stepsFromCenterFront),
-    );
-    return {
-        fieldWidthSteps: maxX - minX,
-        fieldHeightSteps: Math.abs(maxY - minY),
-    };
-}
+const fieldPropertiesOf = (row: { json_data: string }) =>
+    new FieldProperties(parseStoredFieldProperties(JSON.parse(row.json_data)));
 
 function buildPagesFromTiming({
     timingRows,
@@ -297,8 +281,8 @@ async function readShowRows(db: DB) {
 
 type DotsData = Awaited<ReturnType<typeof readShowRows>> & {
     positionRows: readonly PagePositionRow[];
-    /** Every performer's moves as exact paths, in field units (spec M.7) */
-    exactMoves: readonly ExactMove[];
+    /** Every performer's moves as the file's exact paths (spec M.7) */
+    exactPaths: ExactPathEntry[];
     /** The music offset in effect (tempo/audioOffset.ts), undefined when nothing sets one */
     audioOffsetSeconds: number | undefined;
 };
@@ -324,16 +308,18 @@ async function fetchDotsData(db: DB): Promise<DotsData> {
     );
     const positionRows = await sampleTimelinePagePositions(snapshot);
     // Performers only, as the coordinates; a stand-in snapshot without walks has none
-    const exactMoves = snapshot.walks
-        ? await convertExactMoves(
-              snapshot.walks,
-              rows.marchersRows.map((m) => m.id),
-          )
-        : [];
+    const exactPaths =
+        snapshot.walks && rows.fieldPropsRow
+            ? await exportExactPaths(
+                  snapshot.walks,
+                  rows.marchersRows.map((m) => m.id),
+                  stepAxesOf(fieldPropertiesOf(rows.fieldPropsRow)),
+              )
+            : [];
     return {
         ...rows,
         positionRows,
-        exactMoves,
+        exactPaths,
         // The show's own offset, else the workspace setting; none of either leaves it out
         audioOffsetSeconds:
             showAudioOffset ?? rows.workspaceSettings?.audioOffsetSeconds,
@@ -359,18 +345,9 @@ function buildOpenMarchFromRows(data: DotsData): OpenMarchShowData {
         throw new Error("Field properties not found");
     }
 
-    const fieldProps: FieldProperties = new FieldProperties(
-        parseStoredFieldProperties(JSON.parse(fieldPropsRow.json_data)),
-    );
-    const pixelsPerStep = fieldProps.pixelsPerStep;
+    const fieldProps = fieldPropertiesOf(fieldPropsRow);
     const performanceArea = fieldPropsToPerformanceArea(fieldProps);
-    const { fieldWidthSteps, fieldHeightSteps } =
-        getFieldExtentsSteps(fieldProps);
-    const axes: StepAxes = {
-        centerXPixels: (fieldWidthSteps / 2) * pixelsPerStep,
-        fieldHeightSteps,
-        pixelsPerStep,
-    };
+    const axes = stepAxesOf(fieldProps);
 
     const metadata = {
         performanceArea,
@@ -403,7 +380,7 @@ function buildOpenMarchFromRows(data: DotsData): OpenMarchShowData {
     });
     const tempoSections = buildTempoSections(timingRows);
     const coordinates = buildCoordinates({ positionRows, axes });
-    const exactPaths = buildExactPathEntries(data.exactMoves, axes);
+    const { exactPaths } = data;
     const measures = buildMeasuresFromTiming({ timingRows, measuresById });
 
     const {

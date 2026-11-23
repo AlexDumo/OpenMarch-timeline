@@ -229,6 +229,31 @@ function chooseKeys(
     return out;
 }
 
+/**
+ * One line or arc across the whole span walks at one speed, so its ends are the only keys EP-C3's
+ * samples would keep. Most moves are this, and sampling every tick is the cost. Null otherwise.
+ */
+function oneSpeedKeys(
+    segments: readonly WalkedSegment[],
+    start: Beat,
+    end: Beat,
+    total: number,
+    N: number,
+): ExactKey[] | null {
+    const only = segments.length === 1 ? segments[0]! : null;
+    if (
+        !only ||
+        (only.kind !== "line" && only.kind !== "arc") ||
+        Math.abs(only.start - start) > 1e-12 ||
+        Math.abs(only.end - end) > 1e-12
+    )
+        return null;
+    return [
+        { tick: 0, u: 0 },
+        { tick: total, u: N },
+    ];
+}
+
 /** The exact path of one span's walked segments, or null when it goes nowhere (EP-6). */
 export function exactPathOfSegments(
     segments: readonly WalkedSegment[],
@@ -260,24 +285,8 @@ export function exactPathOfSegments(
     const L = cum[N]!;
     if (!(L >= EXACT_MIN_LENGTH)) return null;
     const total = Math.max(1, Math.round((end - start) * TICKS_PER_BEAT));
-    // One line or arc across the whole span walks at one speed, so its ends are the only keys
-    // the samples below would keep. Most moves are this, and sampling every tick is the cost.
-    const only = segments.length === 1 ? segments[0]! : null;
-    if (
-        only &&
-        (only.kind === "line" || only.kind === "arc") &&
-        Math.abs(only.start - start) <= 1e-12 &&
-        Math.abs(only.end - end) <= 1e-12
-    )
-        return {
-            v: 1,
-            from: only.from,
-            shapes,
-            keys: [
-                { tick: 0, u: 0 },
-                { tick: total, u: N },
-            ],
-        };
+    const steady = oneSpeedKeys(segments, start, end, total, N);
+    if (steady) return { v: 1, from: segments[0]!.from, shapes, keys: steady };
     const distanceAt = distanceFunction(segments, cum);
 
     // samples: every whole tick, plus every place the walk's speed may change (checked only)
@@ -342,14 +351,17 @@ export function exactPathsOf(
 
 /** EP-C one marcher at a time (see {@link createExactPathConverter}). */
 export interface ExactPathConverter {
-    /** The marcher's exact paths, in beat order (EP-C1) */
-    movesOf(marcherId: number): ExactMove[];
+    /**
+     * The marcher's exact paths, in beat order (EP-C1). Each is converted as it's asked for, so a
+     * caller can yield between moves.
+     */
+    movesOf(marcherId: number): Iterable<ExactMove>;
 }
 
 /**
- * {@link exactPathsOf} one marcher at a time, so a caller can yield between marchers or set one
- * marcher aside when its walk can't be converted. What marchers share (a group's path, a follow
- * the leader order) is worked out once for all of them. `options.marcherIds` is not used.
+ * {@link exactPathsOf} one marcher, and one move, at a time, so a caller can yield between moves
+ * or set one marcher aside when its walk can't be converted. What marchers share (a group's path,
+ * a follow the leader order) is worked out once for all of them.
  */
 export function createExactPathConverter(
     host: TimelineSnapshot,
@@ -359,8 +371,7 @@ export function createExactPathConverter(
     const tolerance = options.tolerance ?? EXACT_DEFAULT_TOLERANCE;
     const walked = createWalkedPaths(host, resolver);
     return {
-        movesOf(marcherId) {
-            const out: ExactMove[] = [];
+        *movesOf(marcherId) {
             for (const span of resolver.spanInfos(marcherId)) {
                 const move = exactMoveOfSpan(
                     walked,
@@ -368,9 +379,8 @@ export function createExactPathConverter(
                     span,
                     tolerance,
                 );
-                if (move) out.push(move);
+                if (move) yield move;
             }
-            return out;
         },
     };
 }
