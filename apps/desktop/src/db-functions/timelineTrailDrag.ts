@@ -231,8 +231,13 @@ export async function followOrderAt(
     ids: readonly number[],
     beat: number,
     starts: readonly XY[],
+    /**
+     * The window's end: an order set by hand up to there counts too (`rememberedOrderAt`), as
+     * Set order is made at the playhead
+     */
+    until: number = beat,
 ): Promise<{ order: number[]; leaderFirst: boolean } | null> {
-    const remembered = await rememberedOrderAt(db, ids, beat);
+    const remembered = await rememberedOrderAt(db, ids, beat, until);
     if (remembered && remembered.length === ids.length)
         return {
             order: remembered.map((m) => ids.indexOf(m)),
@@ -511,7 +516,7 @@ async function planDragInTransaction(
         const [x, y] = resolver.positionAt(m, from);
         return [x, y];
     });
-    const along = await followOrderAt(tx, ids, from, starts);
+    const along = await followOrderAt(tx, ids, from, starts, window.end);
     if (!along) refuse(trailDragRefusal.notFitted());
     const order = trailOrderFrom(along.order, ids.indexOf(leaderId));
     if (!order) refuse(trailDragRefusal.notAnEnd());

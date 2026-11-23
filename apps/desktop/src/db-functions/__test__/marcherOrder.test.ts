@@ -495,6 +495,39 @@ describeDbTests("A line's order set by hand", (it) => {
         });
     });
 
+    it("the Follow tool takes an order set at the playhead, on the page it follows into (owner, 2026-11-22)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const ids = await show(db);
+        await inARow(db, ids);
+        // Page 3 is the window [17, 25): they stand in the row at its start flag, and Set order
+        // is made where the playhead stands, page 3's own flag
+        const window = { start: PAGE2.end, end: 25 };
+        const starts = positions(ids, window.start).map(
+            ([x, y]) => [x, y] as [number, number],
+        );
+        const order = [ids[2]!, ids[0]!, ids[3]!, ids[1]!];
+        await setMarcherOrder(db, { beat: window.end, order });
+        expect(
+            await followOrderAt(db, ids, window.start, starts, window.end),
+        ).toEqual({
+            order: order.map((id) => ids.indexOf(id)),
+            leaderFirst: true,
+        });
+        // Asked about the start flag alone, it isn't there yet
+        expect(
+            (await followOrderAt(db, ids, window.start, starts))?.leaderFirst,
+        ).toBe(false);
+        // One set past the window says nothing about it
+        await clearMarcherOrder(db, { beat: window.end, marcherIds: ids });
+        await setMarcherOrder(db, { beat: 33, order });
+        expect(
+            (await followOrderAt(db, ids, window.start, starts, window.end))
+                ?.leaderFirst,
+        ).toBe(false);
+    });
+
     it("redo brings back Set, Reverse and Clear in turn", async ({
         db,
         marchersAndPages: _,

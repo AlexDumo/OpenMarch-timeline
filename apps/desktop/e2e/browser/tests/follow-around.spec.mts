@@ -15,14 +15,15 @@ import { fieldGrid, savedPositions, type Position } from "../positions.mjs";
 import { seedShowSql, type SeedPosition } from "../seed.mjs";
 import type { FieldTestShapeOverlay } from "../../../src/field/fieldTestApi";
 
-// Go around a box outline with Follow (pathways step 10, owner feedback 2026-11-22): fifteen
-// marchers placed with the Box tool in Outline, 4 steps wide and 9 deep. With an odd count the
-// back spreads evenly, which on a box this narrow leaves only its two corners, one gap twice the
-// across spacing: Follow refused it ("Select marchers standing in a line, curve, arc or box")
-// until each gap was judged by its own side's spacing. On the next page Shift+L opens Go around
-// with nobody moved. Dragging the
-// leader around the outline slides the whole line, with the count by the pointer, and letting
-// go writes it in one undo step. Spec Appendix L.11, DO-1.
+// Follow round a box outline in the march order (pathways step 10, owner decision 2026-11-22):
+// fifteen marchers placed with the Box tool in Outline, 4 steps wide and 9 deep. With an odd
+// count the back spreads evenly, which on a box this narrow leaves only its two corners, one gap
+// twice the across spacing. There is one Follow tool: on the next page the designer sets the
+// march order (Set order, Shift+O, clicking them leader first), and Shift+L then follows in that
+// order; the order runs round the outline, so the trail closes the loop and the leader walks on
+// towards the tail's spot. Nobody moves until the leader is dragged round (the count by the
+// pointer, one undo step on letting go) or a count typed. With no order set, Follow says to set
+// one. Spec Appendix L.11.
 
 // Fifteen trumpets scattered, all in view, on three pages
 const HOME: SeedPosition[] = Array.from({ length: 15 }, (_, i) => [
@@ -74,6 +75,54 @@ const undoSteps = async (show: Show) => {
     return row.count;
 };
 
+/** Each marcher's angle about the middle of where they all stand in `about` (else `at`) */
+const anglesOf = (at: readonly Position[], about: readonly Position[] = at) => {
+    const cx = about.reduce((s, p) => s + p.x, 0) / about.length;
+    const cy = about.reduce((s, p) => s + p.y, 0) / about.length;
+    return new Map(at.map((p) => [p.id, Math.atan2(p.y - cy, p.x - cx)]));
+};
+/** `a` to `b` as a turn between −π and π */
+const turn = (a: number, b: number) => {
+    let d = b - a;
+    while (d > Math.PI) d -= 2 * Math.PI;
+    while (d < -Math.PI) d += 2 * Math.PI;
+    return d;
+};
+
+/**
+ * The selected fifteen's march order, set with Set order on page 1 (a click on each where the
+ * field shows them, leader first): counterclockwise round the outline they stand on at its start
+ * flag (home's spots), from three past the one at the far right, so neither clockwise nor the
+ * guess Follow once fell back to
+ */
+async function setOrder(show: Show): Promise<number[]> {
+    const { page } = show;
+    const at = await savedPositions(show, 1);
+    const starts = await savedPositions(show, 0);
+    const angle = anglesOf(starts);
+    const round = [...starts].sort(
+        (a, b) => angle.get(b.id)! - angle.get(a.id)!,
+    );
+    const order = [...round.slice(3), ...round.slice(0, 3)].map((p) => p.id);
+    const steps = await undoSteps(show);
+    // Set order on the Paths tab's toolbar, lit once it's on (a click before then would select)
+    await page.getByRole("tab", { name: "Paths" }).click();
+    await page.getByTestId("toolbar-set-order").click();
+    await expect(page.getByTestId("toolbar-set-order")).toHaveAttribute(
+        "aria-pressed",
+        "true",
+    );
+    for (const id of order) {
+        const p = at.find((q) => q.id === id)!;
+        const s = await toScreen(page, p);
+        await page.mouse.click(s.x, s.y);
+    }
+    // every one picked: kept, one undo step
+    await expect.poll(() => undoSteps(show)).toBe(steps + 1);
+    await waitForIdle(page);
+    return order;
+}
+
 /** Places all fifteen with the Box tool in Outline at home, 4 steps wide and 9 deep */
 async function placeOutline(show: Show, pageId = 0) {
     const { page } = show;
@@ -110,17 +159,91 @@ test.beforeEach(async ({ show }) => {
     await expectCanvasMatchesShow(show);
 });
 
-test("change: Shift+L on a Box tool outline of fifteen opens Go around with nobody moved; dragging the leader slides the line around, and letting go writes it in one undo step", async ({
+test("change: Shift+L round a closed outline with no march order says to set one, and opens nothing", async ({
     show,
 }) => {
     const { page } = show;
     await placeOutline(show);
     await selectPage(show, "Page 1");
-    const before = await savedPositions(show, 1);
     await page.keyboard.press("ControlOrMeta+a");
     await expect
         .poll(async () => (await readField(page)).selection)
         .toEqual(ALL);
+    await page.keyboard.press("Shift+L");
+    await expect(
+        page.locator("[data-sonner-toast]", {
+            hasText:
+                "These marchers stand all the way around a circle or box outline. Set their march order first",
+        }),
+    ).toBeVisible();
+    await expect(page.getByTestId("follow-round")).toBeHidden();
+});
+
+test("change: an order set on the page (not clockwise) is the one Follow walks: each moves on towards the one ahead of them in it, the leader towards the tail", async ({
+    show,
+}) => {
+    const { page } = show;
+    await placeOutline(show);
+    await selectPage(show, "Page 1");
+    await page.keyboard.press("ControlOrMeta+a");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    // Set order is made at the playhead, the end of the move Follow writes
+    const order = await setOrder(show);
+    // they start from home's spots, the outline
+    const before = await savedPositions(show, 0);
+    await page.keyboard.press("Shift+L");
+    await expect(page.getByTestId("follow-round")).toBeVisible();
+    await expect(page.getByTestId("path-pen-banner")).toContainText(
+        "follow in their order",
+    );
+    // the line drawn tail first: the order turned round, its first-clicked leading
+    const rings = (await overlay(page))!.memberRings;
+    expect(rings.at(-1)!.at.x).toBeCloseTo(
+        before.find((p) => p.id === order[0])!.x,
+        3,
+    );
+    const steps = await undoSteps(show);
+    await page.keyboard.press("1");
+    await expect(page.getByTestId("follow-round-amount")).toHaveValue("1");
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("follow-round")).toBeHidden();
+    await expect.poll(() => undoSteps(show)).toBe(steps + 1);
+    await waitForIdle(page);
+    const after = await savedPositions(show, 1);
+    const was = anglesOf(before);
+    const now = anglesOf(after, before);
+    // One spot on: onto the spot of the one ahead in the order, or the empty place on the way
+    // to them (the back's gap); every one turned the order's way, never the other
+    let onto = 0;
+    order.forEach((id, k) => {
+        const ahead = order[(k + order.length - 1) % order.length]!;
+        const to = turn(was.get(id)!, was.get(ahead)!);
+        const went = turn(was.get(id)!, now.get(id)!);
+        expect(Math.sign(went), `${id}`).toBe(Math.sign(to));
+        expect(Math.abs(went), `${id}`).toBeLessThanOrEqual(
+            Math.abs(to) + 1e-6,
+        );
+        const spot = before.find((p) => p.id === ahead)!;
+        const end = after.find((p) => p.id === id)!;
+        if (Math.hypot(spot.x - end.x, spot.y - end.y) < 0.01) onto++;
+    });
+    expect(onto).toBeGreaterThanOrEqual(order.length - 2);
+});
+
+test("change: with the order set, Shift+L opens with nobody moved; dragging the leader slides the line around, and letting go writes it in one undo step", async ({
+    show,
+}) => {
+    const { page } = show;
+    await placeOutline(show);
+    await selectPage(show, "Page 1");
+    await page.keyboard.press("ControlOrMeta+a");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    await setOrder(show);
+    const before = await savedPositions(show, 1);
     await page.keyboard.press("Shift+L");
     await expect(page.getByTestId("follow-round")).toBeVisible();
     await expect(page.getByTestId("follow-round-amount")).toHaveValue("0");
@@ -166,6 +289,7 @@ test("change: Escape while dragging the line around puts it back, and Enter with
     await expect
         .poll(async () => (await readField(page)).selection)
         .toEqual(ALL);
+    await setOrder(show);
     await page.keyboard.press("Shift+L");
     await expect(page.getByTestId("follow-round")).toBeVisible();
     const steps = await undoSteps(show);
@@ -219,6 +343,11 @@ test("change: on a touch screen, a pencil and a finger each drag the leader arou
     const { page } = show;
     await placeOutline(show);
     await selectPage(show, "Page 1");
+    await page.keyboard.press("ControlOrMeta+a");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    await setOrder(show);
     const stopTouch = await emulateTouchScreen(page);
     for (const [how, drag] of [
         ["pencil", penDrag],

@@ -7,10 +7,8 @@ import {
     aroundLine,
     aroundPlanOf,
     aroundTarget,
-    flipRoundWay,
     goingRound,
-    initialAround,
-    setGoRound,
+    loopAround,
     setRoundAmount,
     roundMaxOf,
     setRoundUnit,
@@ -31,9 +29,9 @@ import { offCountTally, trailCornersOf } from "../trailCorners";
 import type { PathTarget } from "../pathTarget";
 
 /**
- * Go round in the Follow tool (pathways step 10, DO-1 to DO-8): the choices, the line round the
- * outline, the drawing's target and marchers, without a database (the write is
- * `timelineTrailAround.test.ts`'s).
+ * The Follow tool's trail closing the loop round an outline (pathways step 10, owner 2026-11-22):
+ * the march order sets who leads and the way round; the choices, the line round the outline, the
+ * drawing's target and marchers, without a database (the write is `timelineTrailAround.test.ts`'s).
  */
 
 /** Eight on a square box outline of side 8 (corners and middles), ids 11 to 18, clockwise from the top left */
@@ -53,24 +51,28 @@ const outline = fitOutline(
     1,
 )!;
 
-function followOn(
-    remembered: number[] | null = null,
-    canDrag = true,
-): FollowDrag {
-    const base = {
-        ids: IDS,
-        starts: new Map(IDS.map((id, i) => [id, PLACES[i]!])),
-        step: 1,
-        window: { start: 9, end: 17 },
-    };
+/** The march order clockwise round the box, tail first: 12 at the back, 11 leading */
+const CLOCKWISE = [12, 13, 14, 15, 16, 17, 18, 11];
+
+const BASE = {
+    ids: IDS,
+    starts: new Map(IDS.map((id, i) => [id, PLACES[i]!])),
+    step: 1,
+    window: { start: 9, end: 17 },
+};
+
+/** The Follow tool opened with the march order `order` (tail first) */
+function followOn(order: readonly number[] = CLOCKWISE): FollowDrag {
+    const around = loopAround(BASE, outline, order);
+    expect(around).not.toBeNull();
     return {
-        ...base,
-        order: IDS,
+        ...BASE,
+        order: [...order],
         grabbed: null,
         spacing: { kind: "keep" },
         ends: "trail",
         keep: null,
-        around: initialAround(base, outline, remembered, canDrag),
+        around,
     };
 }
 
@@ -120,10 +122,29 @@ function open(follow: FollowDrag) {
 }
 const now = () => usePathPenStore.getState().session!;
 
-describe("Go round in the Follow tool (step 10)", () => {
+describe("Follow round a closed outline in the march order (step 10)", () => {
     beforeEach(() => usePathPenStore.setState({ session: null }));
 
-    it("opens going round with nobody moved (owner, 2026-11-22), clockwise, the first round from the top corner leading", () => {
+    /** The point `d` round the square clockwise from the top left (side 8, length 32) */
+    const round = (d: number): XY => {
+        const x = ((d % 32) + 32) % 32;
+        if (x <= 8) return { x, y: 0 };
+        if (x <= 16) return { x: 8, y: x - 8 };
+        if (x <= 24) return { x: 24 - x, y: 8 };
+        return { x: 0, y: 32 - x };
+    };
+    /** Drags the pointer from `from` to `to` round the square in small moves, as a hand does */
+    const dragRound = (from: number, to: number) => {
+        const n = Math.max(1, Math.ceil(Math.abs(to - from)));
+        for (let k = 1; k <= n; k++)
+            slideRound(round(from + ((to - from) * k) / n));
+    };
+    const stops = () => {
+        const shown = followMarchersOf(now())!;
+        return new Map(shown.ids.map((id, q) => [id, shown.spots[q]!]));
+    };
+
+    it("an order running round the outline closes the loop, nobody moved (owner, 2026-11-22), its leader leading", () => {
         const f = followOn();
         expect(goingRound(f)).toBe(true);
         expect(f.around!.amount).toBe(0);
@@ -145,27 +166,43 @@ describe("Go round in the Follow tool (step 10)", () => {
         expect(roundChanged(now().follow!.around)).toBe(false);
     });
 
-    it("a remembered order that runs round the other way sets the way round and the leader", () => {
+    it("a set order that runs round the other way sets the way round and the leader", () => {
         // tail first, counterclockwise from 12, so 13 leads going counterclockwise
-        const remembered = [12, 11, 18, 17, 16, 15, 14, 13];
-        const f = followOn(remembered);
+        const order = [12, 11, 18, 17, 16, 15, 14, 13];
+        const f = followOn(order);
         expect(f.around!.reversed).toBe(true);
         expect(f.around!.leader).toBe(13);
-        expect(aroundLine(f, aroundPlanOf(f)!)).toEqual(remembered);
+        expect(aroundLine(f, aroundPlanOf(f)!)).toEqual(order);
     });
 
-    it("Reverse leader goes the other way round, the one at the back leading; again comes back", () => {
-        open(followOn());
-        flipRoundWay();
+    it("BUG (owner, 2026-11-22): a set order that isn't clockwise is the one walked, each marcher onto the spot of the one ahead of them in it", () => {
+        // counterclockwise, 16 leading: not clockwise, and not the member with most room ahead
+        const order = [15, 14, 13, 12, 11, 18, 17, 16];
+        open(followOn(order));
         const f = now().follow!;
         expect(f.around!.reversed).toBe(true);
-        const line = aroundLine(f, aroundPlanOf(f)!);
-        expect(line.at(-1)).toBe(12);
-        expect(now().target.trail?.members.at(-1)?.marcherId).toBe(12);
-        flipRoundWay();
+        expect(f.around!.leader).toBe(16);
+        expect(now().target.trail?.members.map((m) => m.marcherId)).toEqual(
+            order,
+        );
+        setRoundAmount(1);
+        const at = stops();
+        order.forEach((id, q) => {
+            // the leader walks on towards the tail's spot: the loop closes
+            const ahead = order[(q + 1) % order.length]!;
+            const spot = PLACES[IDS.indexOf(ahead)]!;
+            expect(at.get(id)!.x, `${id}`).toBeCloseTo(spot.x, 9);
+            expect(at.get(id)!.y, `${id}`).toBeCloseTo(spot.y, 9);
+        });
+    });
+
+    it("a set order that doesn't run round the outline makes no loop: never a guessed way round instead", () => {
+        // every other marcher, then the rest: neighbors in the order aren't neighbors on the box
         expect(
-            aroundLine(now().follow!, aroundPlanOf(now().follow!)!).at(-1),
-        ).toBe(11);
+            loopAround(BASE, outline, [11, 13, 15, 17, 12, 14, 16, 18]),
+        ).toBeNull();
+        // round the box but not every member: no loop either
+        expect(loopAround(BASE, outline, CLOCKWISE.slice(1))).toBeNull();
     });
 
     it("how far: +, −, typed, held to 0 and to as far as Finish allows (100 times around); spots to steps keeps the distance", () => {
@@ -191,18 +228,6 @@ describe("Go round in the Follow tool (step 10)", () => {
         expect(now().follow!.around!.amount).toBe(48);
     });
 
-    it("Drag out and back: only when the line can be dragged out", () => {
-        open(followOn());
-        setGoRound(false);
-        expect(goingRound(now().follow)).toBe(false);
-        expect(now().target.trail?.around).toBeUndefined();
-        setGoRound(true);
-        expect(goingRound(now().follow)).toBe(true);
-        open(followOn(null, false));
-        setGoRound(false);
-        expect(goingRound(now().follow)).toBe(true);
-    });
-
     it("▶ Preview walks them round at the plan's own pace", () => {
         const base = followOn();
         const f = {
@@ -220,25 +245,6 @@ describe("Go round in the Follow tool (step 10)", () => {
             expect(half[q]!.y).toBeCloseTo(PLACES[(i + 1) % 8]!.y, 9);
         });
     });
-
-    /** The point `d` round the square clockwise from the top left (side 8, length 32) */
-    const round = (d: number): XY => {
-        const x = ((d % 32) + 32) % 32;
-        if (x <= 8) return { x, y: 0 };
-        if (x <= 16) return { x: 8, y: x - 8 };
-        if (x <= 24) return { x: 24 - x, y: 8 };
-        return { x: 0, y: 32 - x };
-    };
-    /** Drags the pointer from `from` to `to` round the square in small moves, as a hand does */
-    const dragRound = (from: number, to: number) => {
-        const n = Math.max(1, Math.ceil(Math.abs(to - from)));
-        for (let k = 1; k <= n; k++)
-            slideRound(round(from + ((to - from) * k) / n));
-    };
-    const stops = () => {
-        const shown = followMarchersOf(now())!;
-        return new Map(shown.ids.map((id, q) => [id, shown.spots[q]!]));
-    };
 
     it("drag the leader round: the whole line slides, snapped to whole spots, live; let go writes, Escape puts it back", () => {
         open(followOn());
@@ -271,21 +277,16 @@ describe("Go round in the Follow tool (step 10)", () => {
         expect(roundChanged(now().follow!.around)).toBe(true);
     });
 
-    it("dragged back past where it started, the line goes the other way round, the one at the back leading", () => {
+    it("dragged back past where it started, nobody moved: the line only walks forward in its order", () => {
         open(followOn());
         // pressed on 13, the top right corner (8 round)
         expect(startRoundSlide({ x: 8, y: 0.1 }, 0.5)).toBe(true);
         dragRound(8, -0.3);
         const a = now().follow!.around!;
-        expect(a.reversed).toBe(true);
-        expect(a.amount).toBe(2);
-        expect(a.leader).toBe(12);
-        const at = stops();
-        IDS.forEach((id, i) => {
-            expect(at.get(id)!.x).toBeCloseTo(PLACES[(i + 6) % 8]!.x, 9);
-            expect(at.get(id)!.y).toBeCloseTo(PLACES[(i + 6) % 8]!.y, 9);
-        });
-        // and forward again past the start: clockwise, 11 leading
+        expect(a.reversed).toBe(false);
+        expect(a.amount).toBe(0);
+        expect(a.leader).toBe(11);
+        // and forward again past the start
         dragRound(-0.3, 12.2);
         expect(now().follow!.around!.reversed).toBe(false);
         expect(now().follow!.around!.amount).toBe(1);
@@ -373,16 +374,8 @@ describe("Go round in the Follow tool (step 10)", () => {
         expect(now().follow!.around!.amount).toBe(3);
     });
 
-    it("Drag out drops digits typed, so Backspace and Escape are the drawing's again (review)", () => {
+    it("− or + on the bar ends digits typed (review)", () => {
         open(followOn());
-        typeRoundDigit("4");
-        setGoRound(false);
-        expect(goingRound(now().follow)).toBe(false);
-        expect(now().follow!.roundTyped).toBeNull();
-        expect(eraseRoundDigit()).toBe(false);
-        expect(clearRoundTyped()).toBe(false);
-        // and − or + on the bar ends digits typed too
-        setGoRound(true);
         typeRoundDigit("2");
         stepRoundAmount(1);
         expect(now().follow!.roundTyped).toBeNull();
@@ -449,7 +442,8 @@ describe("Go round in the Follow tool (step 10)", () => {
             spacing: { kind: "keep" },
             ends: "trail",
             keep: null,
-            around: initialAround(base, circle, null, true),
+            // the march order round the circle, as placed
+            around: loopAround(base, circle, ids),
         };
         usePathPenStore.setState({
             session: {

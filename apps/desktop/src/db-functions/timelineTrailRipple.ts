@@ -169,7 +169,13 @@ export async function rippleTrailInTransaction(
         const [x, y] = resolver.positionAt(m, timeline.start_beat);
         return [x, y];
     });
-    const along = await followOrderAt(tx, ids, timeline.start_beat, starts);
+    const along = await followOrderAt(
+        tx,
+        ids,
+        timeline.start_beat,
+        starts,
+        timeline.end_beat,
+    );
     if (!along) refuse(trailDragRefusal.notFitted());
     const order = trailOrderFrom(along.order, ids.indexOf(leaderId));
     if (!order) refuse(trailDragRefusal.notAnEnd());

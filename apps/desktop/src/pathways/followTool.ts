@@ -21,7 +21,6 @@ import {
 import {
     aroundTrailOver,
     followShapeRefusal,
-    goRoundRefusal,
     goRoundRefusalFor,
     outlineMiss,
     outlineOf,
@@ -44,10 +43,9 @@ import { groupMoveAt, type PathTarget } from "./pathTarget";
 import { usePathPenStore } from "./pathPenStore";
 import type { FollowDrag, FollowKeep } from "./followDrag";
 import {
-    aroundLine,
     aroundPlanOf,
     aroundTarget,
-    initialAround,
+    loopAround,
     type FollowAround,
 } from "./followAround";
 import type { RippleForm } from "@/db-functions/timelineTrailRipplePlan";
@@ -108,7 +106,13 @@ export async function followKeepAt(
         const [x, y] = resolver.positionAt(m, move.start);
         return [x, y];
     });
-    const along = await followOrderAt(database, sorted, move.start, at);
+    const along = await followOrderAt(
+        database,
+        sorted,
+        move.start,
+        at,
+        move.end,
+    );
     // Each end spot from its slot's stored destination, as Ripple in's write reads it (step 9)
     const stored = await database.transaction((tx) =>
         endSpotsInMove(tx, move.timelineId, sorted),
@@ -183,14 +187,18 @@ async function followFormOf(
  * Opens the Follow tool on the selected marchers `ids`: their ends pulse, ready to drag a trail
  * out of one. `beat` is the playhead, whose move Keep end spots follows into. Resolves to why not
  * (translated), or null when it opened.
+ *
+ * The march order says who follows whom (owner, 2026-11-22): the order set by hand when there is
+ * one (`followOrderAt`, read up to the window's end, where Set order is made), always over a
+ * guess. When it runs round the closed outline they stand on, the trail closes the loop
+ * (`loopAround`); otherwise each follows the trail through the ones ahead of them in it. Round a
+ * closed outline with no order set, it says to set one: the way round is the designer's.
  */
 export async function openFollowTool(
     resolver: Pick<Resolver, "positionAt">,
     ids: readonly number[],
     drills: ReadonlyMap<number, string>,
     beat: number,
-    /** Open going round (the palette's Go around), refused when they stand on no outline */
-    round = false,
 ): Promise<string | null> {
     const window = followWindowNow();
     if (!window) return translateTimelineText(trailDragRefusal.noWindow());
@@ -201,47 +209,33 @@ export async function openFollowTool(
         const [x, y] = resolver.positionAt(m, window.start);
         return [x, y];
     });
-    // The order the show remembers for them, or else the one their positions suggest (step 4f)
-    const along = await followOrderAt(db, sorted, window.start, starts);
+    // The order set by hand (up to the window's end), or else the one their positions suggest
+    const along = await followOrderAt(
+        db,
+        sorted,
+        window.start,
+        starts,
+        window.end,
+    );
     const tailFirst = along ? tailFirstOf(along).map((i) => sorted[i]!) : null;
-    // Said before drawing starts, so no drawing is lost (AP-T8's refusals)
-    const dragRefusal = await dragRefusalOf(window, sorted, tailFirst);
+    const set = along?.leaderFirst ? tailFirst : null;
     const at = new Map<number, XY>(
         sorted.map((m, i) => [m, { x: starts[i]![0], y: starts[i]![1] }]),
     );
     const step = field.fieldProperties.pixelsPerStep;
-    // On a closed outline (step 10, DO-1): Go round, refused only for its own reasons
-    const remembered = along?.leaderFirst ? tailFirst : null;
-    const canDrag = dragRefusal === null;
     const base = { ids: sorted, starts: at, step, window };
-    const offer = await goRoundOffer(resolver, {
-        ...base,
-        remembered,
-        canDrag,
-        round,
-    });
-    const { around } = offer;
-    // No line and no outline: why, when it can be told (owner, 2026-11-22)
-    const shapeless = !around && !offer.refusal && !tailFirst;
-    const why = shapeless
-        ? await whyNoShape(resolver, sorted, window, starts, step)
-        : null;
-    const refusal = around
-        ? null
-        : (why ??
-          (round
-              ? (offer.refusal ?? goRoundRefusal.notOutline())
-              : dragRefusal && (offer.refusal ?? dragRefusal)));
-    if (refusal) return translateTimelineText(refusal);
+    const how = await howItFollows(resolver, base, starts, tailFirst, set);
+    if ("refusal" in how) return translateTimelineText(how.refusal);
+    const { around } = how;
     const keep = await followKeepAt(db, resolver, sorted, beat);
     // Ripple in (step 9, RP-2): the form those end spots make, in its own order, and why not
     const { form, formWhy } = await followFormOf(sorted, keep);
+    // Tail first, so the leader offered before an end is grabbed is the real one (the last)
+    const order = tailFirst!;
     const follow: FollowDrag = {
         window,
         ids: sorted,
-        // Tail first, so the leader offered before an end is grabbed is the real one (the last);
-        // with no line to drag out of, the line round the outline
-        order: tailFirst ?? [],
+        order,
         starts: at,
         grabbed: null,
         spacing: { kind: "keep" },
@@ -252,12 +246,8 @@ export async function openFollowTool(
         step,
         around,
     };
-    const order = tailFirst ?? aroundLine(follow, aroundPlanOf(follow)!);
-    if (!tailFirst) Object.assign(follow, { order });
     const dragging = lineTarget(order, at, window, drills);
-    const target = around?.on
-        ? aroundTarget(dragging, follow, drills)
-        : dragging;
+    const target = around ? aroundTarget(dragging, follow, drills) : dragging;
     usePathPenStore.setState({
         session: {
             phase: "drawing",
@@ -273,6 +263,43 @@ export async function openFollowTool(
         },
     });
     return null;
+}
+
+/**
+ * How the Follow tool opens on the line `base` standing at `starts`, whose order is `tailFirst`
+ * (`set` when it was set by hand): round the closed outline they stand on, the trail closing the
+ * loop, when the set order runs round it (`around`); else dragging a trail out (`around` null).
+ * All the way round a closed outline with no order set, it says to set one (the way round isn't
+ * guessed). Refusals are said before drawing starts, so no drawing is lost.
+ */
+async function howItFollows(
+    resolver: Pick<Resolver, "positionAt">,
+    base: Pick<FollowDrag, "ids" | "starts" | "step" | "window">,
+    starts: readonly [number, number][],
+    tailFirst: readonly number[] | null,
+    set: readonly number[] | null,
+): Promise<{ around: FollowAround | null } | { refusal: TimelineText }> {
+    const { ids, step, window } = base;
+    const outline = outlineOf(starts, step);
+    const closed = outline?.full ? outline : null;
+    if (closed && !set) return { refusal: followShapeRefusal.setOrder() };
+    const loop = closed && set ? loopAround(base, closed, set) : null;
+    if (loop) {
+        const refusal = await db.transaction((tx) =>
+            goRoundRefusalFor(tx, window, ids, step),
+        );
+        if (refusal) return { refusal };
+        const again = await aroundTrailOver(db, window, ids);
+        return {
+            around: again ? againAround(loop, again, resolver, base) : loop,
+        };
+    }
+    // AP-T8's refusals; with no line, why, when it can be told (owner, 2026-11-22)
+    const why = tailFirst
+        ? null
+        : await whyNoShape(resolver, ids, window, starts, step);
+    const refusal = why ?? (await dragRefusalOf(window, ids, tailFirst));
+    return refusal ? { refusal } : { around: null };
 }
 
 /**
@@ -351,45 +378,10 @@ function lineTarget(
 }
 
 /**
- * Go round when the selection stands on a closed outline at the window's start flag (step 10,
- * DO-1): its first choices (`initialAround`), or those of the line's own move round it over the
- * window when there is one ("again"). Null with the reason when it's refused, or with none when
- * they stand on no outline.
- */
-async function goRoundOffer(
-    resolver: Pick<Resolver, "positionAt">,
-    f: Pick<FollowDrag, "ids" | "starts" | "step" | "window"> & {
-        remembered: readonly number[] | null;
-        canDrag: boolean;
-        /** Asked for going around (the palette's Go around): it's on */
-        round: boolean;
-    },
-): Promise<{ around: FollowAround | null; refusal: TimelineText | null }> {
-    const starts = f.ids.map((id): [number, number] => {
-        const p = f.starts.get(id)!;
-        return [p.x, p.y];
-    });
-    const outline = outlineOf(starts, f.step);
-    if (!outline) return { around: null, refusal: null };
-    const refusal = await db.transaction((tx) =>
-        goRoundRefusalFor(tx, f.window, f.ids, f.step),
-    );
-    if (refusal) return { around: null, refusal };
-    // On part of a circle (an arc), dragging a trail out stays the first choice
-    const first = initialAround(f, outline, f.remembered, f.canDrag);
-    const around =
-        outline.full || !f.canDrag || f.round ? first : { ...first, on: false };
-    const again = await aroundTrailOver(db, f.window, f.ids);
-    return {
-        around: again ? againAround(around, again, resolver, f) : around,
-        refusal: null,
-    };
-}
-
-/**
- * Go round's choices for going round again (step 10): the line's own move round the outline over
- * the window, read back. How far it goes (in the outline's spots when that's whole, else steps),
- * which way round (the stored outline's own turn), and who leads.
+ * The loop's choices for following round again (step 10): the line's own move round the outline
+ * over the window, read back. How far it goes (in the outline's spots when that's whole, else
+ * steps). Its way round and leader must be the march order's (`loop`): when the order has changed
+ * since, the order wins, and the move is replaced from nobody moved.
  */
 function againAround(
     around: FollowAround,
@@ -409,6 +401,8 @@ function againAround(
     const leader = again.reverse
         ? again.marcherIds[0]!
         : again.marcherIds.at(-1)!;
+    if (reversed !== around.reversed || leader !== around.leader)
+        return { ...around, again: true };
     const probe = {
         ...base,
         grabbed: null,

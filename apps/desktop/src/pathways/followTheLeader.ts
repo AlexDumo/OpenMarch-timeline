@@ -23,7 +23,6 @@ export const FOLLOW_THE_LEADER_ACTIONS: ReadonlySet<ActionId> =
         "followEndsKeep",
         "followEndsRipple",
         "reverseTrail",
-        "followGoRound",
         "followRoundMore",
         "followRoundLess",
         "followRoundSpots",

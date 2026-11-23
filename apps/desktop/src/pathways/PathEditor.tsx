@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { T } from "@tolgee/react";
 import {
-    ArrowClockwiseIcon,
     ArrowCounterClockwiseIcon,
     ArrowsLeftRightIcon,
     ArrowsMergeIcon,
@@ -75,7 +74,6 @@ import {
     aroundPlanOf,
     goingRound,
     roundMaxOf,
-    setGoRound,
     setRoundAmount,
 } from "./followAround";
 import { rippleArrivalCount } from "@/db-functions/timelineTrailRipplePlan";
@@ -447,8 +445,8 @@ function PathPenBanner({ session }: { session: PathSession }) {
             {/* With the key unbound, only the right-click is said */}
             {goingRound(session.follow) ? (
                 <T
-                    keyName="pathways.banner.goRound"
-                    defaultValue="Go around: drag {marcher} around the {shape} and the {count} marchers follow, or type how far · <enter></enter> to finish · <esc></esc> to leave"
+                    keyName="pathways.banner.followLoop"
+                    defaultValue="Follow: drag {marcher} around the {shape} and the {count} marchers follow in their order, or type how far · <enter></enter> to finish · <esc></esc> to leave"
                     params={{
                         count: session.follow!.ids.length,
                         marcher:
@@ -684,10 +682,6 @@ function PathEditorBar({
                             <Divider />
                         </>
                     )}
-                    {session.follow?.around?.canDrag &&
-                        session.follow.grabbed === null && (
-                            <FollowModeChoice session={session} />
-                        )}
                     {goingRound(session.follow) && (
                         <GoRoundControls session={session} />
                     )}
@@ -1296,58 +1290,9 @@ function countText(count: number): string {
 }
 
 /**
- * The Follow tool on a circle or box outline (step 10, DO-1): Go round, or drag a trail out of
- * the line instead. Each a registered command (`followGoRound` switches).
- */
-function FollowModeChoice({ session }: { session: PathSession }) {
-    const on = goingRound(session.follow);
-    return (
-        <>
-            <span
-                className="flex items-center gap-2"
-                role="group"
-                aria-label={tolgee.t(
-                    "pathways.editor.followMode",
-                    "How the line follows",
-                )}
-                data-testid="follow-mode"
-            >
-                <IconButton
-                    label={tolgee.t(
-                        "pathways.editor.goRoundTip",
-                        "Go around: everyone follows the one ahead around the outline they stand on",
-                    )}
-                    action="followGoRound"
-                    pressed={on}
-                    onClick={() => setGoRound(true)}
-                    testId="follow-go-round"
-                >
-                    <ArrowClockwiseIcon size={14} />
-                    {tolgee.t("actions.path.goRound", "Go around")}
-                </IconButton>
-                <IconButton
-                    label={tolgee.t(
-                        "pathways.editor.dragOutTip",
-                        "Drag out: drag a trail out of an end of the line, and the line follows it",
-                    )}
-                    action="followGoRound"
-                    pressed={!on}
-                    onClick={() => setGoRound(false)}
-                    testId="follow-drag-out"
-                >
-                    <PathIcon size={14} />
-                    {tolgee.t("pathways.editor.dragOut", "Drag out")}
-                </IconButton>
-            </span>
-            <Divider />
-        </>
-    );
-}
-
-/**
- * Go around's choices on the path bar (step 10, DO-3 to DO-5): how far (a number of the outline's
+ * The loop's choices on the path bar (step 10, DO-3 to DO-5): how far (a number of the outline's
  * spots or of steps; − and +, Spots and Steps are commands; the field can be cleared while typing,
- * and goes no further than Finish allows), which way around (Reverse leader turns it), ▶ Preview,
+ * and goes no further than Finish allows; the way round is the march order's), ▶ Preview,
  * a readout from a whole time around, and a note when marchers stand off the outline and step
  * onto it first.
  */
@@ -1358,7 +1303,6 @@ function GoRoundControls({ session }: { session: PathSession }) {
     const max = roundMaxOf(follow);
     const reducedMotion = prefersReducedMotion();
     const turns = plan?.turns ?? 0;
-    const clockwise = !around.reversed;
     // What's typed, kept while it isn't a number yet (an empty field), applied once it is
     const [typed, setTyped] = useState<string | null>(null);
     return (
@@ -1468,38 +1412,6 @@ function GoRoundControls({ session }: { session: PathSession }) {
                     </span>
                 )}
             </span>
-            <Divider />
-            <IconButton
-                label={
-                    clockwise
-                        ? tolgee.t(
-                              "pathways.editor.roundClockwiseTip",
-                              "Going clockwise around. Reverse leader goes the other way around",
-                          )
-                        : tolgee.t(
-                              "pathways.editor.roundCounterTip",
-                              "Going counterclockwise around. Reverse leader goes the other way around",
-                          )
-                }
-                action="reverseTrail"
-                onClick={() => runAction("reverseTrail")}
-                testId="follow-round-way"
-            >
-                {clockwise ? (
-                    <ArrowClockwiseIcon size={14} />
-                ) : (
-                    <ArrowCounterClockwiseIcon size={14} />
-                )}
-                {clockwise
-                    ? tolgee.t(
-                          "pathways.editor.roundClockwise",
-                          "Clockwise around",
-                      )
-                    : tolgee.t(
-                          "pathways.editor.roundCounter",
-                          "Counterclockwise around",
-                      )}
-            </IconButton>
             <Divider />
             <IconButton
                 label={
