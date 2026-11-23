@@ -41,6 +41,7 @@ import {
     usePathPenStore,
 } from "../pathPenStore";
 import { offCountTally, trailCornersOf } from "../trailCorners";
+import { followStatusOf, isFollowing } from "../FollowStatus";
 import type { PathTarget } from "../pathTarget";
 
 /**
@@ -909,6 +910,50 @@ describe("Follow on a circle: grab any marcher, drag it around or out (owner, 20
                 .points.slice(0, carried)
                 .every((p) => !!p.bulge),
         ).toBe(true);
+    });
+
+    it("Following in the top bar (owner, 2026-11-23): the status follows the tool, and the one pressed leads at once", () => {
+        openOn();
+        expect(isFollowing(now())).toBe(true);
+        expect(followStatusOf(now()).key).toBe("pathways.following.pick");
+        const guessed = now().follow!.around!.leader;
+        const other = guessed === 5 ? 6 : 5;
+        // pressed, not yet moved: it leads already (the Leader mark jumps), and it's named as held
+        expect(press(other)).toBe(true);
+        expect(now().follow!.around!.leader).toBe(other);
+        expect(now().follow!.around!.amount).toBe(0);
+        expect(now().target.trail?.leaderId).toBe(other);
+        expect(followStatusOf(now())).toMatchObject({
+            key: "pathways.following.holdingHeld",
+            marcher: `T${other}`,
+        });
+        // a click instead: carried, and the status says how it ends
+        carryRoundSlide();
+        expect(followStatusOf(now()).key).toBe(
+            "pathways.following.holdingLoose",
+        );
+        // pulled out
+        expect(slideRound(onCircle(angle(other - 1) + 0.25, R + 8))).toBe(
+            "out",
+        );
+        expect(followStatusOf(now())).toMatchObject({
+            key: "pathways.following.outLoose",
+            marcher: `T${other}`,
+        });
+        // Escape: back to nobody held, the guess's leader again
+        expect(cancelFollowDrawing()).toBe(true);
+        expect(followStatusOf(now()).key).toBe("pathways.following.pick");
+        expect(now().follow!.around!.leader).toBe(guessed);
+        // the trail being drawn, once its first point is placed
+        press(other);
+        slideRound(onCircle(angle(other - 1) + 0.25, R + 8));
+        endRoundSlide();
+        expect(followStatusOf(now())).toMatchObject({
+            key: "pathways.following.trail",
+            marcher: `T${other}`,
+        });
+        usePathPenStore.setState({ session: null });
+        expect(isFollowing(null)).toBe(false);
     });
 
     it("outlineStretch: a box's corners passed are points, a circle's arcs keep their bulge", () => {

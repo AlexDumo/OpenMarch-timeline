@@ -4,6 +4,7 @@ import {
     drawnMarchers,
     emulateTouchScreen,
     expectCanvasMatchesShow,
+    fieldCursorAt,
     penDrag,
     touchDrag,
     readField,
@@ -201,9 +202,15 @@ test("change: with no march order set, Shift+L opens anyway; any marcher grabbed
         // no refusal for want of an order: it opens with nobody moved
         await expect(page.getByTestId("follow-round"), way).toBeVisible();
         await expect(page.getByTestId("follow-round-amount")).toHaveValue("0");
-        await expect(page.getByTestId("path-pen-banner")).toContainText(
-            "drag any marcher around the box outline, or out of it",
+        // Following lives in the top bar: the button says so, a live line says what to do, and
+        // no note sits over the field
+        await expect(page.getByTestId("toolbar-follow-trail")).toHaveText(
+            "Following",
         );
+        await expect(page.getByTestId("follow-status")).toContainText(
+            "Click or drag a marcher",
+        );
+        await expect(page.getByTestId("path-pen-banner")).toBeHidden();
         const opened = (await overlay(page))!;
         expect(opened.tip).toBe(
             "Click or drag any marcher around the outline or out of it, or type how far",
@@ -292,7 +299,9 @@ test("change: dragging a marcher off the outline pulls it out into a trail the r
     // pulled out: the trail's controls, not the count around
     await expect(page.getByTestId("follow-round")).toBeHidden();
     await expect(page.getByTestId("follow-spacing")).toBeVisible();
-    await expect(page.getByTestId("path-pen-banner")).toContainText("leading");
+    await expect(page.getByTestId("follow-status")).toContainText(
+        "pulled out",
+    );
     // the one grabbed leads the trail
     await expect
         .poll(
@@ -372,11 +381,34 @@ test("change: click a marcher, let go, then move: the line slides with no button
     const { grabbed, below } = rightSide((await overlay(page))!.memberRings);
     const from = await toScreen(page, grabbed);
     const to = await toScreen(page, below);
-    // a click, not a drag: nothing written, and the note says what to do next
+    // While Following the other tabs wait: a click on one says why and doesn't switch
+    // (it's marked as waiting, aria-disabled, so the click is forced as a hand's is)
+    await page.getByRole("tab", { name: "Alignment" }).click({ force: true });
+    await expect(
+        page.locator("[data-sonner-toast]", {
+            hasText: "Finish or press Esc to leave Follow",
+        }),
+    ).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Paths" })).toHaveAttribute(
+        "data-state",
+        "active",
+    );
+    await expect(page.getByTestId("toolbar-path-pen")).toBeDisabled();
+    await expect(page.getByTestId("toolbar-set-order")).toBeDisabled();
+    // a click, not a drag: nothing written; the top bar says it's held, the marcher is haloed
+    // and leads at once, and the guess's arrows are gone
     await page.mouse.click(from.x, from.y);
-    await expect
-        .poll(async () => (await overlay(page))?.tip ?? "")
-        .toBe("Move around the outline or out of it, then click");
+    await expect(page.getByTestId("follow-status")).toContainText(
+        "Holding T",
+    );
+    await expect(page.getByTestId("follow-status")).toContainText(
+        "click to drop",
+    );
+    await expect(page.getByTestId("pathHeldHalo")).toHaveCount(1);
+    expect(
+        (await overlay(page))!.memberRings.find((r) => r.kind === "own")!.at,
+    ).toEqual(grabbed);
+    expect(await fieldCursorAt(page, from)).toBe("grabbing");
     // no button held: the line slides with the pointer
     await page.mouse.move(to.x, to.y, { steps: 16 });
     await expect
@@ -461,8 +493,8 @@ test("change: an order set on the page (not clockwise) is the one Follow walks: 
     const before = await savedPositions(show, 0);
     await page.keyboard.press("Shift+L");
     await expect(page.getByTestId("follow-round")).toBeVisible();
-    await expect(page.getByTestId("path-pen-banner")).toContainText(
-        "drag any marcher around the box outline",
+    await expect(page.getByTestId("follow-status")).toContainText(
+        "Click or drag a marcher",
     );
     // the line drawn tail first: the order turned round, its first-clicked leading
     const rings = (await overlay(page))!.memberRings;

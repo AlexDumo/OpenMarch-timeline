@@ -12,6 +12,8 @@ questions:
   - "Drag around a few spots first, then off the circle, in one drag. Did the trail carry on from where the line had slid to? Is that useful, or would you rather it started from where they stand?"
   - "New (2026-11-23): click a marcher, let go, and move the mouse without holding the button. Did the line follow, and did the next click keep it? Would you rather it worked another way?"
   - "New (2026-11-23): while a trail is drawn, the bar has Straight | Curved. Did you find it, and did Curved bend the trail the way you wanted?"
+  - "New (2026-11-23): the mode now shows in the top bar (Following, with a live line). Did you see it, and did you miss the note over the field? Was not being able to switch tabs fine, or in the way?"
+  - "New (2026-11-23): after clicking a marcher, could you tell at once that you were holding the line?"
   - "Was it clear when you were sliding around and when you had pulled out? Did it ever switch when you didn't mean it to (too easily, or not easily enough)?"
   - "You never have to set the order now. With no order set, did Follow guess the order you expected (neighbors around the outline)?"
   - "Set an order with Set order, then Shift+L. Did it open going your order's way, with your leader?"
@@ -40,6 +42,13 @@ show.
 - **Around, then out, in one drag.** Slide a few spots around first and then pull off, and the
   trail carries on from where the line had slid to. Come back onto the outline and it slides
   again.
+- **Following, in the top bar (2026-11-23, a prototype).** The note over the field is gone.
+  While Follow is open, the Paths tab's Follow button reads **Following**, and a short line
+  beside it says what's happening ("Holding T9 · move along to slide, away to pull out ·
+  click to drop · Esc put back"). The other tabs and tools wait until you finish or press
+  Esc; hover or click one and it says so.
+- **You can see the pickup.** Click or press a marcher and the Leader flag jumps to it, the
+  orange arrows disappear, a purple halo sits on it and the cursor closes into a fist.
 - **Click, let go, then move (2026-11-23).** You don't have to hold the button. Click a
   marcher, let go, and move the mouse: the line slides around or pulls out just as it does
   when you drag. **Click again** to keep it, **Enter** also keeps it, **Esc** puts it back.
