@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it as plainIt } from "vitest";
 import { DbConnection, describeDbTests } from "@/test/base";
 import { createMarchers, getMarchers } from "@/db-functions/marcher";
+import { createItems } from "@/db-functions/items";
 import { deletePages } from "@/db-functions/page";
 import { moveMarchersOnPage } from "@/db-functions/timelineMoves";
 import type Page from "@/global/classes/Page";
@@ -141,6 +142,39 @@ describeDbTests("readTimelineExportPositions", (it) => {
         expect(positions.marcherPagesByPage[page.id]![1]!.x).toBeCloseTo(
             x + 24,
             9,
+        );
+    });
+
+    // App triage reports #6 and #7 (#1177): every export of a show with an item failed
+    it("leaves items out of the ids it checks, so a show with props exports", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const pages = await sortedPages(db);
+        const [prop, equipment] = await createItems({
+            db,
+            newItems: (["prop", "equipment"] as const).map((kind) => ({
+                kind,
+                home: [0, 0],
+                beatId: pages[0]!.beats[0]!.id,
+                geometry: { outlineType: "rectangle", width: 1, depth: 1 },
+            })),
+        });
+        const itemIds = [prop!.marcher_id, equipment!.marcher_id];
+        const marchers = await getMarchers({ db });
+        expect(marchers.map((m) => m.id)).not.toContain(itemIds[0]);
+
+        const read = await readTimelineExportPositions(db);
+        expect([...read.marcherIds].sort()).toEqual(
+            marchers.map((m) => m.id).sort(),
+        );
+
+        const positions = await readExportPositions({
+            db,
+            rendered: { pages, marchers },
+        });
+        expect(Object.keys(positions.marcherPagesByPage)).toHaveLength(
+            pages.length,
         );
     });
 

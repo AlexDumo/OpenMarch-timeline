@@ -1,3 +1,5 @@
+import { eq } from "drizzle-orm";
+import * as schema from "@om-electron/database/migrations/schema";
 import type { DbConnection } from "@/db-functions/types";
 import { withTimelineWriteLock } from "@/db-functions/history";
 import {
@@ -79,7 +81,11 @@ export interface TimelineExportPositions {
     positions: PagePositionMap;
     /** Every page id in the snapshot */
     pageIds: readonly number[];
-    /** Every marcher id the snapshot's resolver knows */
+    /**
+     * Every performer id the snapshot's resolver knows. Items (props and equipment) are left
+     * out: the exports render performers only (`getMarchers`), so the check against the
+     * rendered list must not count them. Their positions are still in `positions`.
+     */
     marcherIds: readonly number[];
     /** The same snapshot's walked paths between pages, for the drill charts (pathways step 18) */
     walkedPaths?: ExportWalkedPaths;
@@ -138,15 +144,25 @@ export function assertExportMatchesSnapshot(
 export async function readTimelineExportPositions(
     db: DbConnection,
 ): Promise<TimelineExportPositions> {
-    const snapshot = await withTimelineWriteLock(() =>
-        readTimelinePageSnapshot(db),
-    );
+    const { snapshot, itemIds } = await withTimelineWriteLock(async () => ({
+        snapshot: await readTimelinePageSnapshot(db),
+        itemIds: new Set(
+            (
+                await db
+                    .select({ id: schema.marchers.id })
+                    .from(schema.marchers)
+                    .where(eq(schema.marchers.type, "item"))
+            ).map((row) => row.id),
+        ),
+    }));
     return {
         positions: pagePositionMapFromRows(
             await sampleTimelinePagePositions(snapshot),
         ),
         pageIds: snapshot.pages.map((page) => page.id),
-        marcherIds: [...snapshot.resolver.marcherIds()],
+        marcherIds: snapshot.resolver
+            .marcherIds()
+            .filter((id) => !itemIds.has(id)),
         walkedPaths:
             snapshot.walks && exportWalkedPaths(snapshot.walks, snapshot.pages),
     };
