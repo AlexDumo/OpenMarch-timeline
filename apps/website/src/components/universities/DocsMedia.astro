@@ -1,0 +1,93 @@
+---
+/**
+ * A real 0.2 capture from `public/docs/media`, in the theme the reader is using.
+ * Images are lazy. Clips load nothing until they are on screen, then play muted
+ * on a loop; readers who ask for reduced motion get the still poster and controls.
+ */
+interface Props {
+    /** Path under /docs/media without theme or extension, e.g. "3d-view/3d-window". */
+    base: string;
+    alt: string;
+    width: number;
+    height: number;
+    clip?: boolean;
+    eager?: boolean;
+    class?: string;
+}
+const {
+    base,
+    alt,
+    width,
+    height,
+    clip = false,
+    eager = false,
+    class: className = "",
+} = Astro.props;
+const themes = [
+    { theme: "dark", show: "hidden dark:block" },
+    { theme: "light", show: "block dark:hidden" },
+];
+---
+
+{
+    themes.map(({ theme, show }) =>
+        clip ? (
+            <video
+                class:list={["uni-clip", show, className]}
+                width={width}
+                height={height}
+                poster={`/docs/media/${base}.${theme}.webp`}
+                preload="none"
+                muted
+                loop
+                playsinline
+                aria-label={alt}
+            >
+                <source
+                    src={`/docs/media/${base}.${theme}.mp4`}
+                    type="video/mp4"
+                />
+            </video>
+        ) : (
+            <img
+                class:list={[show, className]}
+                src={`/docs/media/${base}.${theme}.webp`}
+                alt={alt}
+                width={width}
+                height={height}
+                loading={eager ? "eager" : "lazy"}
+                decoding="async"
+            />
+        ),
+    )
+}
+
+<script>
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)");
+    const clips = [
+        ...document.querySelectorAll<HTMLVideoElement>("video.uni-clip"),
+    ];
+    const shown = (v: HTMLVideoElement) => v.offsetParent !== null;
+    const seen = new IntersectionObserver(
+        (entries) => {
+            for (const e of entries) {
+                const v = e.target as HTMLVideoElement;
+                if (e.isIntersecting && shown(v) && !reduce.matches)
+                    void v.play().catch(() => {});
+                else v.pause();
+            }
+        },
+        { threshold: 0.35 },
+    );
+    for (const v of clips) {
+        if (reduce.matches) v.controls = true;
+        seen.observe(v);
+    }
+    // A clip inside a tab that just opened is on screen without having scrolled.
+    document.addEventListener("uni:shown", () => {
+        for (const v of clips) {
+            seen.unobserve(v);
+            seen.observe(v);
+        }
+    });
+</script>

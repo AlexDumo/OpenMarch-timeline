@@ -1,0 +1,227 @@
+---
+import { Badge } from "@openmarch/ui";
+import ThemedMedia from "./ThemedMedia.astro";
+
+const cams = [
+    {
+        label: "Press box",
+        name: "3d-view/3d-orbit-view",
+        video: true,
+        width: 1280,
+        height: 780,
+        alt: "The 3D View orbiting a high school stadium from the press box",
+    },
+    {
+        label: "Any seat",
+        name: "3d-view/3d-pick-seat",
+        video: true,
+        width: 1280,
+        height: 768,
+        alt: "Picking a seat in the stands to watch the show from",
+    },
+    {
+        label: "Field level",
+        name: "3d-view/3d-uniforms",
+        width: 1600,
+        height: 640,
+        alt: "Performers in uniforms with plumes, seen from field level",
+    },
+    {
+        label: "Front ensemble",
+        name: "3d-view/3d-front-ensemble-3d",
+        width: 1400,
+        height: 538,
+        alt: "The front ensemble in 3D with keyboards and speakers",
+    },
+    {
+        label: "Indoor arena",
+        name: "3d-view/3d-venue-arena",
+        width: 1280,
+        height: 640,
+        alt: "A winter show under the lights of an indoor arena",
+    },
+];
+
+const facts = [
+    {
+        title: "Four venues",
+        body: "A high school stadium, a college stadium, a pro dome and an indoor arena.",
+    },
+    {
+        title: "Your ensemble",
+        body: "Uniforms with plumes, rebuilt instruments, drum major podiums and the pit.",
+    },
+    {
+        title: "Flags and props",
+        body: "Paint artwork onto silks and import your own 3D props.",
+    },
+    {
+        title: "Ready to share",
+        body: "A Director camera cuts the show like a broadcast. Export it as video.",
+    },
+];
+---
+
+<section class="flex w-full min-w-0 flex-col gap-8" id="stadium">
+    <Badge>3D View</Badge>
+    <h1
+        class="text-text text-[3.5rem] leading-[115%] max-[768px]:text-h1 max-[520px]:text-h2"
+    >
+        See the show before the first rehearsal
+    </h1>
+    <p class="text-body leading-relaxed text-text-subtitle max-w-[640px]">
+        Every dot becomes a performer. Sit in the press box, walk the sideline
+        or pick any seat in the stands, and switch cameras while the drill
+        plays.
+    </p>
+
+    <div
+        class="bg-fg-1 border border-stroke rounded-6 p-8 mt-8 flex flex-col gap-8"
+        data-switcher
+    >
+        <div
+            class="relative w-full overflow-clip rounded-6 border border-stroke aspect-2/1 max-[640px]:aspect-4/3 bg-bg-1"
+        >
+            {
+                cams.map((cam, i) => (
+                    <div
+                        class="absolute inset-0 opacity-0 transition-opacity duration-300 ease-out motion-reduce:transition-none data-active:opacity-100"
+                        data-cam={i}
+                        data-active={i === 0 ? "" : undefined}
+                    >
+                        <ThemedMedia
+                            name={cam.name}
+                            alt={cam.alt}
+                            width={cam.width}
+                            height={cam.height}
+                            video={cam.video}
+                            autoplay={false}
+                            class="size-full object-cover"
+                        />
+                    </div>
+                ))
+            }
+            <div
+                class="absolute top-12 left-12 z-10 flex items-center gap-6 rounded-full border border-stroke bg-modal px-12 py-6 font-mono text-sub text-text backdrop-blur-md"
+            >
+                <span class="size-6 rounded-full bg-red"></span>
+                <span data-cam-readout>CAM 1 · {cams[0].label}</span>
+            </div>
+        </div>
+
+        <div
+            class="grid grid-cols-5 gap-8 max-[850px]:grid-cols-3 max-[520px]:grid-cols-2"
+            role="group"
+            aria-label="Camera"
+        >
+            {
+                cams.map((cam, i) => (
+                    <button
+                        type="button"
+                        class="group flex flex-col gap-4 rounded-6 border border-stroke bg-fg-2 px-12 py-8 text-left duration-150 ease-out hover:border-accent aria-pressed:border-accent max-[520px]:last:col-span-2"
+                        data-cam-button={i}
+                        data-label={cam.label}
+                        aria-pressed={i === 0 ? "true" : "false"}
+                    >
+                        <span class="flex items-center gap-6 font-mono text-sub text-text-subtitle">
+                            <span class="size-6 rounded-full bg-text-disabled group-aria-pressed:bg-red" />
+                            CAM {i + 1}
+                        </span>
+                        <span class="text-body leading-none">{cam.label}</span>
+                    </button>
+                ))
+            }
+        </div>
+    </div>
+
+    <div
+        class="grid grid-cols-4 gap-16 mt-8 max-[850px]:grid-cols-2 max-[520px]:grid-cols-1"
+    >
+        {
+            facts.map((fact) => (
+                <div class="flex flex-col gap-6 border-t border-stroke pt-12">
+                    <h3 class="text-h5 leading-none">{fact.title}</h3>
+                    <p class="text-body leading-relaxed text-text-subtitle">
+                        {fact.body}
+                    </p>
+                </div>
+            ))
+        }
+    </div>
+</section>
+
+<script>
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+    document
+        .querySelectorAll<HTMLElement>("[data-switcher]")
+        .forEach((root) => {
+            const cams = [...root.querySelectorAll<HTMLElement>("[data-cam]")];
+            const buttons = [
+                ...root.querySelectorAll<HTMLButtonElement>(
+                    "[data-cam-button]",
+                ),
+            ];
+            const readout = root.querySelector("[data-cam-readout]");
+            let active = 0;
+            let inView = false;
+            let timer: number | undefined;
+
+            const visibleVideo = (cam: HTMLElement) =>
+                [...cam.querySelectorAll("video")].find(
+                    (video) => video.offsetParent !== null,
+                );
+
+            const sync = () => {
+                cams.forEach((cam, i) => {
+                    cam.toggleAttribute("data-active", i === active);
+                    cam.querySelectorAll("video").forEach((video) =>
+                        video.pause(),
+                    );
+                });
+                buttons.forEach((button, i) =>
+                    button.setAttribute("aria-pressed", String(i === active)),
+                );
+                if (readout)
+                    readout.textContent = `CAM ${active + 1} · ${buttons[active].dataset.label}`;
+                if (inView && !reduced.matches)
+                    void visibleVideo(cams[active])
+                        ?.play()
+                        .catch(() => {});
+            };
+
+            const stopCutting = () => {
+                window.clearInterval(timer);
+                timer = undefined;
+            };
+
+            // Cuts between cameras on its own until the visitor picks one.
+            const startCutting = () => {
+                if (timer !== undefined || reduced.matches) return;
+                timer = window.setInterval(() => {
+                    active = (active + 1) % cams.length;
+                    sync();
+                }, 6000);
+            };
+
+            let picked = false;
+            buttons.forEach((button, i) =>
+                button.addEventListener("click", () => {
+                    picked = true;
+                    stopCutting();
+                    active = i;
+                    sync();
+                }),
+            );
+
+            new IntersectionObserver(
+                ([entry]) => {
+                    inView = entry.isIntersecting;
+                    if (inView && !picked) startCutting();
+                    else stopCutting();
+                    sync();
+                },
+                { threshold: 0.35 },
+            ).observe(root);
+        });
+</script>

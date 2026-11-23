@@ -1,0 +1,460 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import { Badge, Button, getButtonClassName } from "@openmarch/ui";
+import { ArrowRightIcon } from "@phosphor-icons/react";
+import MorphField from "@/components/designers/MorphField.astro";
+import SetMarker from "@/components/designers/SetMarker.astro";
+import Shot from "@/components/designers/Shot.astro";
+import KeyWall from "@/components/designers/KeyWall.astro";
+import actions from "@/data/generated/actions.json";
+
+const EDITOR = "https://editor.openmarch.com";
+const actionCount = Object.keys(actions).length;
+
+const card =
+    "bg-fg-1 border border-stroke rounded-6 p-24 flex flex-col gap-16 overflow-clip max-[520px]:p-16";
+const tall = `${card} h-435 max-[850px]:h-auto`;
+const cardTitle = "text-h3 leading-none max-[520px]:text-h4";
+const cardText = "text-body leading-relaxed text-text-subtitle";
+const shot = "border border-stroke rounded-6 w-full";
+const crop = "mt-auto aspect-[16/10] object-cover object-left";
+const heading =
+    "text-text text-[3.5rem] leading-[115%] max-[768px]:text-h1 max-[520px]:text-h2";
+const grid2 = "grid grid-cols-2 gap-16 max-[850px]:grid-cols-1";
+const grid3 = "grid grid-cols-3 gap-16 max-[850px]:grid-cols-1";
+const section = "flex w-full min-w-0 flex-col gap-16";
+
+// The page's own dot sheet: one row per set, written the way a coordinate sheet is.
+const sheet = [
+    [
+        "1",
+        "Shapes",
+        "Lines, curves, arcs, boxes, circles and fills",
+        "Snaps to yard lines, hashes and grid",
+    ],
+    [
+        "2",
+        "Timeline",
+        "Pages, moves, holds and counts that don't run out",
+        "Tempo curves, tap tempo, MusicXML",
+    ],
+    [
+        "3",
+        "Keys",
+        `${actionCount} actions, each one a command`,
+        "Shortcuts you can change",
+    ],
+    [
+        "4",
+        "3D View",
+        "Uniforms, instruments, pit, flags and props",
+        "Director camera, video export",
+    ],
+    ["5", "Anywhere", "Desktop app and web editor", "Tablet with Apple Pencil"],
+];
+---
+
+<Layout title="For designers">
+    <script>
+        import { Observer } from "tailwindcss-intersect";
+
+        Observer.start();
+
+        // Clips load and play only while on screen. With reduced motion they stay on
+        // their poster and get controls instead.
+        const reduce = matchMedia("(prefers-reduced-motion: reduce)");
+        const clips = document.querySelectorAll<HTMLVideoElement>(
+            "video[data-designer-clip]",
+        );
+        const seen = new IntersectionObserver(
+            (entries) => {
+                for (const e of entries) {
+                    const v = e.target as HTMLVideoElement;
+                    if (e.isIntersecting) void v.play().catch(() => {});
+                    else v.pause();
+                }
+            },
+            { threshold: 0.35 },
+        );
+        for (const v of clips) {
+            if (reduce.matches) v.controls = true;
+            else seen.observe(v);
+        }
+    </script>
+
+    <!-- Hero -->
+    <section
+        class="border-stroke rounded-16 relative flex h-fit w-full min-w-0 flex-col items-center justify-center gap-16 border px-32 pt-32 pb-32 max-[640px]:px-12 max-[640px]:pb-12"
+    >
+        <Badge variant="secondary"
+            ><span class="text-accent">0.2</span> For drill designers</Badge
+        >
+        <h1
+            class="text-h1 max-[580px]:text-h2 motion-preset-slide-up motion-delay-150 w-[640px] text-center leading-[130%] tracking-tighter max-[720px]:w-full"
+        >
+            Draw the form. The block walks onto it.
+        </h1>
+        <p class="text-body text-text-subtitle max-w-[560px] text-center">
+            OpenMarch is a free, open-source drill writing app. Shapes that
+            place your marchers, a timeline that counts with the music, and a 3D
+            View to check it from the stands.
+        </p>
+        <div class="flex flex-wrap justify-center gap-8">
+            <a href="/download"><Button>Download</Button></a>
+            <a href={EDITOR}
+                ><Button variant="secondary">Open the web editor</Button></a
+            >
+        </div>
+
+        <div
+            class="motion-preset-slide-up-sm motion-delay-300 mt-16 w-full max-w-[960px]"
+        >
+            <MorphField />
+        </div>
+        <div
+            class="motion-preset-fade-lg motion-delay-300 absolute top-0 left-1/2 -z-50 size-[900px] -translate-x-1/2 max-[640px]:size-[300px]"
+            style="background: radial-gradient(circle, var(--color-accent) 0%, transparent 65%); opacity: 0.4;"
+        >
+        </div>
+    </section>
+
+    <!-- Set 1: shapes -->
+    <section class={section} id="shapes">
+        <SetMarker set={1} label="Shapes" />
+        <h2 class={heading}>Write forms, not dots</h2>
+        <div class={grid2}>
+            <div class={tall}>
+                <h3 class={cardTitle}>Draw it, place it</h3>
+                <p class={cardText}>
+                    Lines, curves, arcs, boxes and circles. Pick your marchers,
+                    draw the shape, and they are on it.
+                </p>
+                <Shot
+                    id="shapes-draw-arc"
+                    alt="An arc is drawn across the field and twelve trumpets are placed along it"
+                    class={shot}
+                />
+            </div>
+            <div class={tall}>
+                <h3 class={cardTitle}>Then bend it</h3>
+                <p class={cardText}>
+                    A placed shape is still a shape. Pull a point and the whole
+                    line follows.
+                </p>
+                <Shot
+                    id="shapes-curve-bend"
+                    alt="A point on a curve is dragged and the marchers on the curve move with it"
+                    class={shot}
+                />
+            </div>
+            <div class={tall}>
+                <h3 class={cardTitle}>Fill the box</h3>
+                <p class={cardText}>
+                    Grid, outline or an even spread. Change the rows and columns
+                    and the block rebuilds itself.
+                </p>
+                <Shot
+                    id="shapes-fills"
+                    alt="A 4 × 3 box of trumpets changes from a grid to an outline to an even spread"
+                    class={shot}
+                />
+            </div>
+            <div class={tall}>
+                <h3 class={cardTitle}>Mirror it across the 50</h3>
+                <p class={cardText}>
+                    Copy a formation and paste it onto other marchers, or mirror
+                    it around any point you choose.
+                </p>
+                <div
+                    class="border-stroke rounded-6 flex min-h-0 flex-1 items-end overflow-clip border"
+                >
+                    <Shot
+                        id="shapes-paste-mirrored"
+                        alt="A copied arc is pasted mirrored on the other side of the 50 yard line"
+                        class="w-full"
+                    />
+                </div>
+            </div>
+        </div>
+        <div
+            class={`${card} flex-row items-center gap-32 max-[850px]:flex-col max-[850px]:items-stretch max-[850px]:gap-16`}
+        >
+            <div class="flex flex-1 flex-col gap-16">
+                <h3 class={cardTitle}>Follow the leader, on exact paths</h3>
+                <p class={cardText}>
+                    Pathways show where every marcher walks to reach the next
+                    set, and you can draw the path yourself. Snap keeps
+                    everything on yard lines, hashes and the grid.
+                </p>
+            </div>
+            <div class="-mb-[120px] flex-1 max-[850px]:mb-[-80px]">
+                <Shot
+                    id="shapes-pathways"
+                    alt="A box of marchers with lines showing each marcher's path from the previous set"
+                    class={shot}
+                />
+            </div>
+        </div>
+    </section>
+
+    <!-- Set 2: timeline and music -->
+    <section class={section} id="timeline">
+        <SetMarker set={2} label="Timeline and music" />
+        <h2 class={heading}>A timeline that counts like you do</h2>
+        <div class={card}>
+            <h3 class={cardTitle}>Pages and moves, laid out like a DAW</h3>
+            <p class={cardText}>
+                Split a move, merge two, hold for a phrase. Counts run as long
+                as the music does.
+            </p>
+            <Shot
+                id="timeline-parts"
+                alt="The timeline: transport buttons, page flags, counts and the audio waveform with one move selected"
+                class={shot}
+            />
+        </div>
+        <div class="grid grid-cols-3 gap-16 max-[850px]:grid-cols-1">
+            <div class="col-span-2 flex flex-col gap-16 max-[850px]:col-span-1">
+                <div class={`${card} flex-1`}>
+                    <h3 class={cardTitle}>Tempo on a lane</h3>
+                    <p class={cardText}>
+                        Drag the tempo, or draw a gradual change across the
+                        bars.
+                    </p>
+                    <Shot
+                        id="music-gradual"
+                        alt="A tempo change is dragged into a gradual ramp between two bars"
+                        class={`${shot} mt-auto`}
+                    />
+                </div>
+                <div class={`${card} flex-1`}>
+                    <h3 class={cardTitle}>Hold, then go</h3>
+                    <p class={cardText}>
+                        Drag the end of a hold and the move after it starts
+                        later.
+                    </p>
+                    <Shot
+                        id="timeline-hold-end"
+                        alt="The end of a hold is dragged along the timeline"
+                        class={`${shot} mt-auto`}
+                    />
+                </div>
+            </div>
+            <div class={card}>
+                <h3 class={cardTitle}>Start from the score</h3>
+                <p class={cardText}>
+                    Import MusicXML for measures and tempos, or tap the tempo
+                    in. A metronome keeps the count honest.
+                </p>
+                <Shot
+                    id="music-tap-tempo"
+                    alt="The Tap tempo panel reading 116 beats per minute after eight taps"
+                    class={`${shot} mt-auto`}
+                />
+            </div>
+        </div>
+    </section>
+
+    <!-- Set 3: keyboard -->
+    <section class={section} id="keys">
+        <SetMarker set={3} label="Keys and commands" />
+        <h2 class={heading}>Keep your hands on the show</h2>
+        <KeyWall />
+        <div class={grid2}>
+            <div class={card}>
+                <h3 class={cardTitle}>Every action is a command</h3>
+                <p class={cardText}>
+                    Open the command palette, type what you want, press Enter.
+                    If it can't run yet, it tells you why.
+                </p>
+                <Shot
+                    id="window-command-palette"
+                    alt="The command palette with “split” typed and the command Split the move at the playhead"
+                    class={`${shot} mt-auto`}
+                />
+            </div>
+            <div class={card}>
+                <h3 class={cardTitle}>Basic today, Expert when you want</h3>
+                <p class={cardText}>
+                    Basic mode keeps the workspace small while you learn it.
+                    Expert mode puts every tool one key away.
+                </p>
+                <Shot
+                    id="shapes-ring"
+                    alt="The favorites ring open on the field: Box, Arc, Circle, Curve and Line around the pointer"
+                    class={`${shot} mx-auto mt-auto -mb-[140px] max-w-[320px]`}
+                />
+            </div>
+        </div>
+    </section>
+
+    <!-- Set 4: 3D -->
+    <section class={section} id="three-d">
+        <SetMarker set={4} label="3D View" />
+        <h2 class={heading}>Check it from the press box</h2>
+        <div class={card}>
+            <h3 class={cardTitle}>Your show, in uniform</h3>
+            <p class={cardText}>
+                Uniforms, instruments, the pit and the guard in a venue, moving
+                on your counts. Fly the Director camera and export the video.
+            </p>
+            <Shot
+                id="3d-window"
+                alt="The 3D View window: a band in uniform on a football field, seen from the press box, with stands and trees behind"
+                class={shot}
+            />
+        </div>
+        <div class={grid3}>
+            <div class={card}>
+                <h3 class={cardTitle}>Paint the silks</h3>
+                <p class={cardText}>Flags carry your own artwork.</p>
+                <Shot
+                    id="3d-silk-artwork"
+                    alt="A color guard in the 3D View with flags showing custom artwork"
+                    class={`${shot} ${crop}`}
+                />
+            </div>
+            <div class={card}>
+                <h3 class={cardTitle}>Bring your props</h3>
+                <p class={cardText}>Draw them, or import a 3D model.</p>
+                <Shot
+                    id="3d-props-imported"
+                    alt="Imported 3D props standing on the field behind two guard members"
+                    class={`${shot} ${crop}`}
+                />
+            </div>
+            <div class={card}>
+                <h3 class={cardTitle}>Indoors too</h3>
+                <p class={cardText}>Pick the venue the show is for.</p>
+                <Shot
+                    id="3d-venue-arena"
+                    alt="A winter guard floor in an arena with a full crowd in the 3D View"
+                    class={`${shot} ${crop}`}
+                />
+            </div>
+        </div>
+    </section>
+
+    <!-- Set 5: craft, anywhere -->
+    <section class={section} id="craft">
+        <SetMarker set={5} label="Craft" />
+        <h2 class={heading}>It flags the big step before rehearsal does</h2>
+        <div class={grid3}>
+            <div class={card}>
+                <h3 class={cardTitle}>Step-size warnings</h3>
+                <p class={cardText}>
+                    Paths that ask for too big a step turn red while you are
+                    still writing.
+                </p>
+                <Shot
+                    id="field-step-warnings"
+                    alt="Marcher paths on the field: most are green and two with too large a step size are red"
+                    class={`${shot} ${crop}`}
+                />
+            </div>
+            <div class={card}>
+                <h3 class={cardTitle}>Box or lasso</h3>
+                <p class={cardText}>
+                    See who you are about to pick before you let go, then turn
+                    or arrange them around any point.
+                </p>
+                <Shot
+                    id="marchers-select-lasso"
+                    alt="A lasso is drawn around part of a formation and the marchers inside are selected"
+                    class={`${shot} ${crop}`}
+                />
+            </div>
+            <div class={card}>
+                <h3 class={cardTitle}>Desk, browser or tablet</h3>
+                <p class={cardText}>
+                    The desktop app, the web editor, and a tablet layout that
+                    works with Apple Pencil.
+                </p>
+                <Shot
+                    id="workspace-tablet-layout"
+                    alt="OpenMarch in its tablet layout: the field, a slim sidebar and the timeline underneath"
+                    class={`${shot} ${crop}`}
+                />
+            </div>
+        </div>
+    </section>
+
+    <!-- The dot sheet and the close -->
+    <section class={section} id="start">
+        <div class={`${card} gap-0 p-0 max-[520px]:p-0`}>
+            <div
+                class="border-stroke text-sub text-text-subtitle flex flex-wrap justify-between gap-x-24 gap-y-4 border-b px-24 py-12 font-mono leading-none max-[520px]:px-16"
+            >
+                <span>Performer: you</span>
+                <span>Show: OpenMarch 0.2</span>
+                <span>Price: free, open source</span>
+            </div>
+            <table class="text-body w-full border-collapse text-left">
+                <thead class="max-[640px]:hidden">
+                    <tr class="text-sub text-text-subtitle font-mono">
+                        <th class="px-24 py-8 font-normal">Set</th>
+                        <th class="px-8 py-8 font-normal">Title</th>
+                        <th class="px-8 py-8 font-normal">Side to side</th>
+                        <th class="px-24 py-8 font-normal">Front to back</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {
+                        sheet.map(([n, title, a, b]) => (
+                            <tr class="border-stroke border-t max-[640px]:flex max-[640px]:flex-col max-[640px]:gap-4 max-[640px]:px-16 max-[640px]:py-12">
+                                <td class="text-accent px-24 py-12 font-mono max-[640px]:hidden">
+                                    {n}
+                                </td>
+                                <td class="px-8 py-12 max-[640px]:p-0">
+                                    <span class="text-accent mr-8 hidden font-mono max-[640px]:inline">
+                                        {n}
+                                    </span>
+                                    {title}
+                                </td>
+                                <td class="text-text-subtitle px-8 py-12 max-[640px]:p-0">
+                                    {a}
+                                </td>
+                                <td class="text-text-subtitle px-24 py-12 max-[640px]:p-0">
+                                    {b}
+                                </td>
+                            </tr>
+                        ))
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div
+            class="border-accent flex items-center justify-between gap-16 rounded-full border p-32 max-[850px]:rounded-6 max-[850px]:flex-col max-[850px]:items-stretch max-[640px]:p-16"
+        >
+            <h2 class="text-h1 max-[640px]:text-h2">Write your next show</h2>
+            <div class="flex gap-8 max-[520px]:flex-col">
+                <a
+                    href={EDITOR}
+                    class={getButtonClassName({
+                        variant: "secondary",
+                        className: "max-[850px]:flex-1",
+                    })}
+                >
+                    Open the web editor
+                </a>
+                <a
+                    href="/download"
+                    class={getButtonClassName({
+                        variant: "primary",
+                        className: "max-[850px]:flex-1",
+                    })}
+                >
+                    Download
+                </a>
+            </div>
+        </div>
+        <a
+            href="/band-directors"
+            class="text-body text-text-subtitle hover:text-accent flex w-fit items-center gap-6 self-center duration-150"
+        >
+            Just received drill? OpenMarch for band directors
+            <ArrowRightIcon size={16} />
+        </a>
+    </section>
+</Layout>

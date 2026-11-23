@@ -5,7 +5,10 @@ import Merch from "@/components/home/Merch.astro";
 import Blogs from "@/components/home/Blogs.astro";
 import Testimonials from "@/components/home/Testimonials.astro";
 import Partners from "@/components/home/Partners.astro";
-import Desktop from "@/components/home/Desktop.astro";
+import Stadium from "@/components/home/Stadium.astro";
+import ShowField from "@/components/home/ShowField.astro";
+import Features from "@/components/home/Features.astro";
+import Audiences from "@/components/home/Audiences.astro";
 import Mobile from "@/components/home/Mobile.astro";
 ---
 
@@ -14,12 +17,32 @@ import Mobile from "@/components/home/Mobile.astro";
         import { Observer } from "tailwindcss-intersect";
 
         Observer.start();
+
+        // Videos stay as posters until they scroll into view, and never play
+        // for visitors who asked for reduced motion.
+        const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+        const videos = new IntersectionObserver(
+            (entries) =>
+                entries.forEach(({ target, isIntersecting }) => {
+                    const video = target as HTMLVideoElement;
+                    if (isIntersecting && !reduced.matches)
+                        void video.play().catch(() => {});
+                    else video.pause();
+                }),
+            { threshold: 0.4 },
+        );
+        document
+            .querySelectorAll<HTMLVideoElement>("video[data-autoplay]")
+            .forEach((video) => videos.observe(video));
     </script>
 
     <Landing />
     <Partners />
+    <Stadium />
+    <ShowField />
+    <Features />
     <Testimonials />
-    <Desktop />
+    <Audiences />
     <Mobile />
     <Merch />
     <Blogs />

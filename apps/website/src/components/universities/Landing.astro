@@ -1,0 +1,58 @@
+---
+import { Badge, Button } from "@openmarch/ui";
+import DocsMedia from "./DocsMedia.astro";
+import { EDITOR_URL } from "@/data/universities";
+---
+
+<section
+    id="landing"
+    class="relative flex h-fit w-full min-w-0 flex-col items-center justify-center gap-16 rounded-6 border border-stroke px-8 pt-32 pb-8"
+>
+    <Badge variant="secondary"
+        ><span class="text-accent">For universities:</span> methods courses</Badge
+    >
+    <h1
+        class="text-h1 leading-[130%] max-[580px]:text-h2 max-[580px]:w-full w-[640px] tracking-tighter text-center motion-preset-slide-up motion-delay-150"
+    >
+        Teach drill design on the tool your students keep
+    </h1>
+    <p
+        class="text-body w-full max-w-[36rem] text-center leading-loose motion-delay-250"
+    >
+        OpenMarch is free, open-source drill writing software. It opens in a
+        browser tab on a lab computer, and it is still theirs when they write
+        for a band of their own.
+    </p>
+    <div class="flex flex-wrap justify-center gap-8 motion-delay-250">
+        <a href={EDITOR_URL}>
+            <Button>Open the editor</Button>
+        </a>
+        <a href="#add-your-program">
+            <Button variant="secondary">Add your program</Button>
+        </a>
+    </div>
+
+    <div class="flex flex-col items-center">
+        <DocsMedia
+            base="3d-view/3d-marchers"
+            alt="A marching band in uniform, seen up close in 3D View"
+            width={1360}
+            height={500}
+            eager
+            class="border border-stroke rounded-6 h-auto w-[80%] z-20 motion-preset-slide-up-sm motion-delay-300"
+        />
+        <DocsMedia
+            base="workspace/window-overview"
+            alt="The OpenMarch editor with a field, performers and the timeline"
+            width={1600}
+            height={1000}
+            eager
+            class="border border-stroke rounded-6 h-auto w-full mt-[-110px] max-[950px]:mt-[-70px] max-[560px]:mt-[-30px] z-30 motion-preset-slide-up-sm motion-delay-[400ms]"
+        />
+    </div>
+    <div
+        class="absolute top-0 motion-preset-fade-lg motion-delay-300 left-1/2 -translate-x-1/2 -z-50 size-[900px] max-[640px]:size-[300px]"
+        style="background: radial-gradient(circle, var(--color-accent) 0%, transparent 65%); opacity: 0.4;"
+    >
+    </div>
+</section>

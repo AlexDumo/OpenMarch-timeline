@@ -1,0 +1,91 @@
+---
+import { Badge } from "@openmarch/ui";
+import Shot from "@/components/directors/Shot.astro";
+
+const days = [
+    {
+        day: "Mon",
+        when: "Roster change",
+        title: "A trumpet quits.",
+        body: "Move them off their spot and choose Close up. A box lays itself out again for the marchers left, and a circle spreads round. Undo puts them back if they change their mind.",
+        shot: "shapes-take-out",
+        alt: "A 4 × 3 box of trumpets with one spot empty. Close up is clicked and the eleven trumpets left fill the box again.",
+    },
+    {
+        day: "Tue",
+        when: "Sectionals",
+        title: "The set doesn’t fit your band.",
+        body: "Drag a box or a lasso round a section, then move it, turn it or line it up. Lines, curves and arcs snap to yard lines and hashes, so every fix lands somewhere a student can find.",
+        shot: "marchers-select-lasso",
+        alt: "A lasso drawn round a group of marchers on the field selects them.",
+    },
+    {
+        day: "Wed",
+        when: "Before you teach it",
+        title: "Can they actually march that?",
+        body: "Turn on step size warnings and any move with steps longer than your limit draws red. You find the eight-to-five that became a four-to-five before the kids do.",
+        shot: "field-step-warnings",
+        alt: "Marchers on the field with their paths to the next page. Two paths are red and dashed because their steps are over the limit.",
+    },
+    {
+        day: "Thu",
+        when: "On the field",
+        title: "Fix it where you see it.",
+        body: "OpenMarch has a tablet layout with finger-sized controls, and works with a pen such as Apple Pencil. Move the dot from the 40, not from your desk after rehearsal.",
+        shot: "workspace-tablet-layout",
+        alt: "OpenMarch in its tablet layout: large sidebar buttons, a row of touch buttons over the field, and a short playback row above the timeline.",
+    },
+];
+---
+
+<section class="flex w-full min-w-0 flex-col gap-8" id="week">
+    <Badge>The week after the drill arrives</Badge>
+    <h1
+        class="text-text text-[3.5rem] leading-[115%] max-[768px]:text-h1 max-[520px]:text-h2"
+    >
+        Four rehearsals, no calls to the drill writer
+    </h1>
+    <p class="text-body text-text-subtitle max-w-[40rem] leading-relaxed">
+        You don’t need to write a show to need a drill app. You need to change
+        twelve dots on a Monday and have it printed by the bell.
+    </p>
+    <ol class="mt-8 flex flex-col">
+        {
+            days.map((item, i) => (
+                <li class="grid grid-cols-[96px_minmax(0,1fr)] gap-16 max-[850px]:grid-cols-1 max-[850px]:gap-8">
+                    <div class="flex flex-col items-start gap-8 max-[850px]:flex-row max-[850px]:items-baseline">
+                        <span class="text-accent text-h4 font-mono leading-none uppercase">
+                            {item.day}
+                        </span>
+                        <span class="text-sub text-text-subtitle font-mono uppercase">
+                            {item.when}
+                        </span>
+                        <span
+                            class:list={[
+                                "bg-text-disabled mb-8 ml-px w-px flex-1 max-[850px]:hidden",
+                                i === days.length - 1 && "invisible",
+                            ]}
+                        />
+                    </div>
+                    <article class="bg-fg-1 border-stroke rounded-6 mb-16 grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] overflow-clip border max-[850px]:grid-cols-1">
+                        <div class="flex flex-col gap-16 p-24 max-[520px]:p-16">
+                            <h3 class="text-h3 leading-none max-[520px]:text-h4">
+                                {item.title}
+                            </h3>
+                            <p class="text-body text-text-subtitle leading-relaxed">
+                                {item.body}
+                            </p>
+                        </div>
+                        <div class="self-end pt-24 max-[850px]:pt-0 max-[850px]:pl-24 max-[520px]:pl-16">
+                            <Shot
+                                id={item.shot}
+                                alt={item.alt}
+                                class="border-stroke rounded-tl-6 h-auto w-full border-t border-l"
+                            />
+                        </div>
+                    </article>
+                </li>
+            ))
+        }
+    </ol>
+</section>

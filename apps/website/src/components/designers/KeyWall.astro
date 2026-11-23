@@ -1,0 +1,283 @@
+---
+/**
+ * A keyboard lit by the app's real default shortcuts (src/data/generated/actions.json,
+ * written from the desktop app's action registry). Point at a key to read what it does,
+ * with and without modifiers. Field-editing shortcuts are left out: they only apply
+ * inside Edit field, where the same keys mean other things.
+ */
+import actions from "@/data/generated/actions.json";
+
+type Combo = { keys: string[]; gesture?: string };
+type Action = {
+    label: string;
+    category: string;
+    bindings: { mac: Combo; other: Combo }[];
+};
+type Entry = { label: string; mac: string; other: string; mods: number };
+
+const all = Object.entries(actions as Record<string, Action>);
+const totalActions = all.length;
+const withShortcut = all.filter(([, a]) => a.bindings.length > 0).length;
+
+// Short captions for the caps; each is the action's own label, shortened to fit.
+const SHORT: Record<string, string> = {
+    previousPage: "Prev page",
+    nextPage: "Next page",
+    moveSelectedMarchersUp: "Nudge up",
+    moveSelectedMarchersLeft: "Nudge left",
+    moveSelectedMarchersDown: "Nudge down",
+    moveSelectedMarchersRight: "Nudge right",
+    openShapeRing: "Shape ring",
+    shapeBlock: "Box",
+    shapeCircle: "Circle",
+    shapeLine: "Line",
+    shapeHideMarchers: "Hide",
+    applyShape: "Place",
+    shapeRemoveLastPoint: "Undo point",
+    pathPen: "Path pen",
+    timelineCreatePageAtPlayhead: "New page",
+    timelineGoTo: "Go to",
+    toggleLassoSelect: "Lasso",
+    toggleLoop: "Loop",
+    toggleStartFlagPositions: "Start flag",
+    toggleNextPagePaths: "Paths",
+    lockX: "Lock X",
+    lockY: "Lock Y",
+    snapToNearestCustomFraction: "Snap",
+    playPause: "Play / stop",
+    holdSlowerPlayback: "½ speed",
+    holdFasterPlayback: "2× speed",
+    openCommandBar: "Command bar",
+    cancelAlignmentUpdates: "Deselect",
+    performUndo: "Undo",
+    openCommandPalette: "Palette",
+    copyFormation: "Copy",
+    shapeGroup: "Group",
+    swapMarchers: "Swap",
+    openSettings: "Settings",
+    selectAllMarchers: "Select all",
+    toggleMetronome: "Metronome",
+    timelineHoldFromPrevious: "Hold",
+};
+
+const byKey = new Map<string, (Entry & { id: string })[]>();
+for (const [id, a] of all) {
+    if (a.category === "field") continue;
+    for (const b of a.bindings) {
+        const key = b.other.keys[b.other.keys.length - 1];
+        // One row per action and modifier set (W and ↑ both nudge up; keep each on its key)
+        const list = byKey.get(key) ?? [];
+        if (list.some((e) => e.id === id)) continue;
+        list.push({
+            id,
+            label: a.label,
+            mac: b.mac.keys.join(""),
+            other: b.other.keys.join("+"),
+            mods: b.other.keys.length - 1,
+        });
+        byKey.set(key, list);
+    }
+}
+for (const list of byKey.values()) list.sort((a, b) => a.mods - b.mods);
+
+type Key = { k: string; w?: number; mac?: string; other?: string };
+const letters = (s: string): Key[] => s.split("").map((k) => ({ k }));
+const rows: Key[][] = [
+    [
+        { k: "Esc" },
+        ...letters("1234567890-="),
+        { k: "Backspace", w: 2, mac: "⌫", other: "⌫" },
+    ],
+    [{ k: "Tab", w: 1.5 }, ...letters("QWERTYUIOP[]"), { k: "\\", w: 1.5 }],
+    [
+        { k: "Caps", w: 1.75, mac: "", other: "" },
+        ...letters("ASDFGHJKL;'"),
+        { k: "Enter", w: 2.25, mac: "↩", other: "Enter" },
+    ],
+    [
+        { k: "Shift", w: 2.25, mac: "⇧", other: "Shift" },
+        ...letters("ZXCVBNM,./"),
+        { k: "Shift", w: 2.75, mac: "⇧", other: "Shift" },
+    ],
+    [
+        { k: "Ctrl", w: 1.5, mac: "⌃", other: "Ctrl" },
+        { k: "Alt", w: 1.5, mac: "⌥", other: "Alt" },
+        { k: "Mod", w: 1.5, mac: "⌘", other: "" },
+        { k: "Space", w: 6.5 },
+        ...letters("←↑↓→"),
+    ],
+];
+
+const featured = byKey.get("K")!;
+---
+
+<div class="keywall flex w-full min-w-0 flex-col gap-16">
+    <div
+        class="bg-fg-1 border-stroke rounded-6 flex min-h-[124px] flex-col border max-[640px]:min-h-[148px]"
+        aria-live="polite"
+    >
+        <div
+            class="border-stroke flex items-center gap-12 border-b px-16 py-12"
+        >
+            <kbd
+                class="keywall-cap bg-fg-2 border-accent text-text text-body rounded-6 flex h-28 min-w-28 items-center justify-center border px-8 font-sans leading-none"
+                >K</kbd
+            >
+            <span class="text-text-subtitle text-body leading-none">
+                <span class="max-[640px]:hidden"
+                    >Point at a lit key to see what it does.</span
+                >
+                <span class="hidden max-[640px]:inline">Tap a lit key.</span>
+            </span>
+        </div>
+        <ul class="keywall-list m-0 flex list-none flex-col gap-8 px-16 py-12">
+            {
+                featured.map((e) => (
+                    <li class="text-body flex items-baseline justify-between gap-16 leading-tight">
+                        <span>{e.label}</span>
+                        <span class="text-text-subtitle font-mono whitespace-nowrap">
+                            <span class="keywall-mac">{e.mac}</span>
+                            <span class="keywall-other">{e.other}</span>
+                        </span>
+                    </li>
+                ))
+            }
+        </ul>
+    </div>
+
+    <div
+        class="flex w-full flex-col gap-6 max-[850px]:gap-4 max-[520px]:gap-[3px]"
+        role="group"
+        aria-label="Keyboard with OpenMarch's default shortcuts"
+    >
+        {
+            rows.map((row) => (
+                <div class="flex w-full gap-6 max-[850px]:gap-4 max-[520px]:gap-[3px]">
+                    {row.map((key) => {
+                        const entries = byKey.get(key.k);
+                        const glyph = (os: "mac" | "other") => key[os] ?? key.k;
+                        const face = (
+                            <span class="keywall-glyph text-body leading-none max-[520px]:text-sub">
+                                {key.mac === undefined &&
+                                key.other === undefined ? (
+                                    key.k
+                                ) : (
+                                    <>
+                                        <span class="keywall-mac">
+                                            {glyph("mac")}
+                                        </span>
+                                        <span class="keywall-other">
+                                            {glyph("other")}
+                                        </span>
+                                    </>
+                                )}
+                            </span>
+                        );
+                        const shape =
+                            "rounded-6 flex h-64 min-w-0 flex-col items-start justify-between overflow-hidden border p-6 text-left max-[850px]:h-44 max-[850px]:items-center max-[850px]:justify-center max-[850px]:p-0 max-[520px]:h-32 max-[520px]:rounded-4";
+                        if (!entries)
+                            return (
+                                <span
+                                    class:list={[
+                                        shape,
+                                        "border-stroke text-text-disabled",
+                                    ]}
+                                    style={`flex:${key.w ?? 1}`}
+                                    aria-hidden="true"
+                                >
+                                    {face}
+                                </span>
+                            );
+                        const plain = entries[0].mods === 0;
+                        return (
+                            <button
+                                type="button"
+                                class:list={[
+                                    shape,
+                                    "keywall-key bg-fg-2 text-text hover:border-accent focus-visible:border-accent cursor-pointer outline-none",
+                                    plain
+                                        ? "border-accent/50"
+                                        : "border-stroke",
+                                    key.k === "K" && "is-on",
+                                ]}
+                                style={`flex:${key.w ?? 1}`}
+                                data-key={key.k}
+                                data-entries={JSON.stringify(
+                                    entries.map(({ label, mac, other }) => ({
+                                        label,
+                                        mac,
+                                        other,
+                                    })),
+                                )}
+                                aria-label={`${key.k}: ${entries.map((e) => `${e.label} (${e.other})`).join(", ")}`}
+                            >
+                                {face}
+                                <span
+                                    class:list={[
+                                        "text-micro w-full truncate leading-none max-[850px]:hidden",
+                                        plain
+                                            ? "text-accent"
+                                            : "text-text-subtitle",
+                                    ]}
+                                >
+                                    {SHORT[entries[0].id] ??
+                                        entries[0].label.split(":").pop()}
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
+            ))
+        }
+    </div>
+
+    <p class="text-sub text-text-subtitle m-0 leading-relaxed">
+        The app's own defaults: {withShortcut} of its {totalActions} actions ship
+        with a shortcut, and you can change any of them. A purple edge means the key
+        works on its own; the rest need a modifier.
+    </p>
+</div>
+
+<style>
+    .keywall-key.is-on {
+        border-color: var(--color-accent);
+        box-shadow: inset 0 0 0 1px var(--color-accent);
+    }
+    .keywall:not([data-os="mac"]) .keywall-mac,
+    .keywall[data-os="mac"] .keywall-other {
+        display: none;
+    }
+</style>
+
+<script>
+    for (const wall of document.querySelectorAll<HTMLElement>(".keywall")) {
+        if (/Mac|iPhone|iPad/.test(navigator.platform)) wall.dataset.os = "mac";
+        const cap = wall.querySelector<HTMLElement>(".keywall-cap")!;
+        const list = wall.querySelector<HTMLElement>(".keywall-list")!;
+        const keys = [
+            ...wall.querySelectorAll<HTMLButtonElement>(".keywall-key"),
+        ];
+
+        function show(key: HTMLButtonElement) {
+            for (const k of keys) k.classList.toggle("is-on", k === key);
+            cap.textContent = key.dataset.key!;
+            const entries: { label: string; mac: string; other: string }[] =
+                JSON.parse(key.dataset.entries!);
+            const template = list.firstElementChild!;
+            list.replaceChildren(
+                ...entries.slice(0, 4).map((e) => {
+                    const li = template.cloneNode(true) as HTMLElement;
+                    li.children[0].textContent = e.label;
+                    li.querySelector(".keywall-mac")!.textContent = e.mac;
+                    li.querySelector(".keywall-other")!.textContent = e.other;
+                    return li;
+                }),
+            );
+        }
+        for (const key of keys) {
+            key.addEventListener("pointerenter", () => show(key));
+            key.addEventListener("focus", () => show(key));
+            key.addEventListener("click", () => show(key));
+        }
+    }
+</script>

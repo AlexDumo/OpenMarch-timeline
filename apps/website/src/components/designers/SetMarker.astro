@@ -1,0 +1,46 @@
+---
+/**
+ * A section opener drawn like the app's timeline: a page flag, then a ruler of
+ * the counts this "set" of the page covers. Counts run on from set to set.
+ */
+interface Props {
+    set: number;
+    label: string;
+    /** Counts in this set */
+    counts?: number;
+}
+
+const { set, label, counts = 16 } = Astro.props;
+const first = (set - 1) * counts + 1;
+const ticks = Array.from({ length: counts }, (_, i) => first + i);
+---
+
+<div class="flex w-full min-w-0 flex-col gap-6" aria-hidden="true">
+    <div class="flex items-end gap-8">
+        <span
+            class="bg-accent text-text-invert text-sub rounded-tr-6 rounded-br-6 relative flex h-20 items-center px-8 font-mono leading-none"
+        >
+            Set {set}
+            <span class="bg-accent absolute top-0 left-0 h-32 w-[2px]"></span>
+        </span>
+        <span class="text-sub text-text-subtitle font-mono leading-none">
+            {label} · cts {first}–{first + counts - 1}
+        </span>
+    </div>
+    <div class="border-stroke flex w-full border-t pl-[2px]">
+        {
+            ticks.map((n, i) => (
+                <span
+                    class:list={[
+                        "border-stroke text-micro text-text-subtitle flex-1 border-l pl-4 font-mono leading-none",
+                        i % 4 === 0 ? "h-16 pt-4" : "h-6",
+                        i % 2 === 1 && "max-[640px]:hidden",
+                    ]}
+                >
+                    {i % 4 === 0 ? n : ""}
+                </span>
+            ))
+        }
+    </div>
+</div>
+<span class="sr-only">{label}</span>

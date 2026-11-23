@@ -1,0 +1,48 @@
+---
+import { Badge, Button } from "@openmarch/ui";
+import CloseUpField from "@/components/directors/CloseUpField.astro";
+---
+
+<section
+    id="landing"
+    class="relative flex h-fit w-full min-w-0 flex-col items-center justify-center gap-16 rounded-[14px] border border-stroke px-8 pt-32 pb-8"
+>
+    <Badge variant="secondary"
+        ><span class="text-accent">For band directors</span> OpenMarch 0.2</Badge
+    >
+    <h1
+        class="text-h1 leading-[130%] max-[580px]:text-h2 max-[580px]:w-full w-[720px] max-w-full tracking-tighter text-center motion-preset-slide-up motion-delay-150"
+    >
+        Someone else wrote the drill. You make it work on Tuesday.
+    </h1>
+    <p
+        class="text-body w-full max-w-[36rem] text-center leading-loose motion-delay-250"
+    >
+        A trumpet quits in week three. The block is two short. Set 14 doesn’t
+        fit the kids you have. OpenMarch is the free drill app for fixing the
+        show you were handed, printing it, and getting it in front of every
+        student.
+    </p>
+    <div class="flex flex-wrap justify-center gap-8 motion-delay-250">
+        <a href="https://editor.openmarch.com">
+            <Button>Open in your browser</Button>
+        </a>
+        <a href="/download">
+            <Button variant="secondary">Download</Button>
+        </a>
+    </div>
+
+    <CloseUpField />
+    <p class="text-sub text-text-subtitle max-w-[36rem] pb-8 text-center">
+        An illustration of Close up, which works on boxes and outlines in the
+        app. <a href="#week" class="text-accent underline"
+            >See the real thing below</a
+        >.
+    </p>
+
+    <div
+        class="absolute top-0 motion-preset-fade-lg motion-delay-300 left-1/2 -translate-x-1/2 -z-50 size-[900px] max-[640px]:size-[300px]"
+        style="background: radial-gradient(circle, var(--color-accent) 0%, transparent 65%); opacity: 0.4;"
+    >
+    </div>
+</section>

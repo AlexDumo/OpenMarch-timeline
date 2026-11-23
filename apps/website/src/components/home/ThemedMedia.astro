@@ -1,0 +1,62 @@
+---
+/**
+ * A real app capture from /docs/media in both themes. Videos never preload:
+ * they show their poster until the page script plays them in view.
+ */
+interface Props {
+    /** Path under /docs/media without the theme and extension. */
+    name: string;
+    alt: string;
+    width: number;
+    height: number;
+    video?: boolean;
+    /** Let the page script play this video while it is on screen. */
+    autoplay?: boolean;
+    eager?: boolean;
+    class?: string;
+}
+const {
+    name,
+    alt,
+    width,
+    height,
+    video = false,
+    autoplay = true,
+    eager = false,
+    class: className = "",
+} = Astro.props;
+const themes = [
+    { theme: "dark", show: "hidden dark:block" },
+    { theme: "light", show: "block dark:hidden" },
+];
+---
+
+{
+    themes.map(({ theme, show }) =>
+        video ? (
+            <video
+                class:list={[show, className]}
+                width={width}
+                height={height}
+                poster={`/docs/media/${name}.${theme}.webp`}
+                src={`/docs/media/${name}.${theme}.mp4`}
+                preload="none"
+                muted
+                loop
+                playsinline
+                aria-label={alt}
+                data-autoplay={autoplay ? "" : undefined}
+            />
+        ) : (
+            <img
+                class:list={[show, className]}
+                src={`/docs/media/${name}.${theme}.webp`}
+                alt={alt}
+                width={width}
+                height={height}
+                loading={eager ? "eager" : "lazy"}
+                decoding="async"
+            />
+        ),
+    )
+}

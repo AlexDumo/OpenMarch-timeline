@@ -1,0 +1,541 @@
+---
+import { Badge } from "@openmarch/ui";
+import {
+    MetronomeIcon,
+    MusicNotesIcon,
+    PauseIcon,
+    PlayIcon,
+    WaveSineIcon,
+} from "@phosphor-icons/react";
+
+/**
+ * A small show the visitor can play and scrub: 48 dots march through four
+ * sets on a chart drawn the way the editor draws it. Ten units are one yard.
+ */
+type Point = [number, number];
+
+const W = 1000;
+const H = 533;
+const CX = W / 2;
+const DOTS = 48;
+
+const byColumn = (points: Point[]) =>
+    [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+
+const block: Point[] = [];
+for (let col = 0; col < 12; col++)
+    for (let row = 0; row < 4; row++)
+        block.push([CX - 165 + col * 30, 190 + row * 30]);
+
+const arcs: Point[] = [];
+for (const radius of [215, 275])
+    for (let i = 0; i < 24; i++) {
+        const angle = ((18 + (144 * i) / 23) * Math.PI) / 180;
+        arcs.push([
+            CX - radius * Math.cos(angle),
+            130 + radius * Math.sin(angle),
+        ]);
+    }
+
+const front: Point[] = Array.from({ length: DOTS }, (_, i) => [
+    CX - 376 + i * 16,
+    340,
+]);
+
+/** Evenly spaced points along a polyline. */
+const along = (line: Point[], count: number): Point[] => {
+    const lengths = line
+        .slice(1)
+        .map(([x, y], i) => Math.hypot(x - line[i][0], y - line[i][1]));
+    const total = lengths.reduce((sum, length) => sum + length, 0);
+    return Array.from({ length: count }, (_, n) => {
+        let distance = (total * n) / (count - 1);
+        let i = 0;
+        while (i < lengths.length - 1 && distance > lengths[i])
+            distance -= lengths[i++];
+        const t = lengths[i] === 0 ? 0 : distance / lengths[i];
+        return [
+            line[i][0] + (line[i + 1][0] - line[i][0]) * t,
+            line[i][1] + (line[i + 1][1] - line[i][1]) * t,
+        ];
+    });
+};
+
+// The last set spells the release: "0.2".
+const zero: Point[] = Array.from({ length: 20 }, (_, i) => {
+    const angle = (i / 20) * Math.PI * 2;
+    return [CX - 160 + 72 * Math.cos(angle), 266 + 112 * Math.sin(angle)];
+});
+const point: Point[] = [
+    [CX - 38, 354],
+    [CX - 14, 354],
+    [CX - 38, 378],
+    [CX - 14, 378],
+];
+const twoTop: Point[] = Array.from({ length: 13 }, (_, i) => {
+    const angle = ((190 + (200 * i) / 12) * Math.PI) / 180;
+    return [CX + 150 + 72 * Math.cos(angle), 226 + 72 * Math.sin(angle)];
+});
+const two = along(
+    [...twoTop, [CX + 78, 378] as Point, [CX + 232, 378] as Point],
+    24,
+);
+
+const sets = [block, arcs, front, [...zero, ...point, ...two]].map(byColumn);
+
+// Counts: hold, move, hold, move, hold, move, hold.
+const segments = [
+    { kind: "hold", counts: 4, from: 0, to: 0 },
+    { kind: "move", counts: 16, from: 0, to: 1 },
+    { kind: "hold", counts: 4, from: 1, to: 1 },
+    { kind: "move", counts: 16, from: 1, to: 2 },
+    { kind: "hold", counts: 4, from: 2, to: 2 },
+    { kind: "move", counts: 16, from: 2, to: 3 },
+    { kind: "hold", counts: 8, from: 3, to: 3 },
+];
+const totalCounts = segments.reduce((sum, s) => sum + s.counts, 0);
+
+const sectionColors = ["#E8A33D", "#58B368", "#5B8DEF", "#E25C5C"];
+const yardLines = Array.from({ length: 21 }, (_, i) => i * 50);
+const yardNumbers = [10, 20, 30, 40, 50, 40, 30, 20, 10];
+const hashes = [H / 3, (H * 2) / 3];
+
+const features = [
+    {
+        Icon: WaveSineIcon,
+        title: "Tempo that curves",
+        body: "Accelerandos and ritardandos are drawn as curves, so counts land where the music does.",
+    },
+    {
+        Icon: MetronomeIcon,
+        title: "Tap it in",
+        body: "Tap the tempo along with a recording and march to a built-in metronome.",
+    },
+    {
+        Icon: MusicNotesIcon,
+        title: "Bring the score",
+        body: "Import MusicXML and the measures, time signatures and tempos come with it.",
+    },
+];
+---
+
+<section class="flex w-full min-w-0 flex-col gap-8" id="timeline">
+    <Badge>Timeline</Badge>
+    <h1
+        class="text-text text-[3.5rem] leading-[115%] max-[768px]:text-h1 max-[520px]:text-h2"
+    >
+        Every count, on the field
+    </h1>
+    <p class="text-body leading-relaxed text-text-subtitle max-w-[640px]">
+        OpenMarch runs on a timeline like the one in a music editor. Press play,
+        or drag the playhead and march the band yourself.
+    </p>
+
+    <div
+        class="bg-fg-1 border border-stroke rounded-6 mt-8 flex flex-col overflow-clip"
+        data-show
+        data-sets={JSON.stringify(sets)}
+        data-segments={JSON.stringify(segments)}
+    >
+        <div
+            class="flex flex-wrap items-center justify-between gap-12 p-16 max-[520px]:p-12"
+        >
+            <div class="flex items-center gap-12">
+                <button
+                    type="button"
+                    class="flex size-32 items-center justify-center rounded-full border border-stroke bg-fg-2 text-text duration-150 ease-out hover:border-accent hover:text-accent"
+                    aria-label="Play or pause the show"
+                    data-show-play
+                >
+                    <span data-show-icon="play"
+                        ><PlayIcon size={16} weight="fill" /></span
+                    >
+                    <span data-show-icon="pause" hidden
+                        ><PauseIcon size={16} weight="fill" /></span
+                    >
+                </button>
+                <p class="font-mono text-body text-text" data-show-readout>
+                    Set 1
+                </p>
+            </div>
+            <div
+                class="flex rounded-full border border-stroke bg-fg-2 p-2 text-body"
+                role="group"
+                aria-label="View"
+            >
+                <button
+                    type="button"
+                    class="rounded-full px-12 py-4 leading-none text-text-subtitle duration-150 ease-out aria-pressed:bg-accent aria-pressed:text-text-invert"
+                    aria-pressed="true"
+                    data-show-view="chart">Chart</button
+                >
+                <button
+                    type="button"
+                    class="rounded-full px-12 py-4 leading-none text-text-subtitle duration-150 ease-out aria-pressed:bg-accent aria-pressed:text-text-invert"
+                    aria-pressed="false"
+                    data-show-view="pressbox">Press box</button
+                >
+            </div>
+        </div>
+
+        <div
+            class="relative isolate overflow-clip border-y border-stroke bg-bg-1 px-16 py-16 max-[520px]:px-0 max-[520px]:py-8"
+            style="perspective: 1400px;"
+        >
+            <div
+                class="pointer-events-none absolute inset-x-0 top-0 -z-10 h-full opacity-0 transition-opacity duration-500 motion-reduce:transition-none"
+                style="background: radial-gradient(ellipse at 50% 0%, var(--color-accent) 0%, transparent 60%);"
+                data-show-glow
+            >
+            </div>
+            <svg
+                viewBox={`0 0 ${W} ${H}`}
+                class="show-field block h-auto w-full text-text max-[520px]:w-[130%] max-[520px]:max-w-none max-[520px]:-ml-[15%]"
+                role="img"
+                aria-label="A drill chart where 48 performers march from a block to two arcs, a company front, and the number 0.2"
+                data-show-field
+            >
+                <rect
+                    x="1"
+                    y="1"
+                    width={W - 2}
+                    height={H - 2}
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-opacity="0.5"
+                    stroke-width="2"></rect>
+                {
+                    yardLines.map((x) => (
+                        <line
+                            x1={x}
+                            x2={x}
+                            y1="0"
+                            y2={H}
+                            stroke="currentColor"
+                            stroke-opacity={x % 100 === 0 ? 0.32 : 0.16}
+                            stroke-width="1.5"
+                        />
+                    ))
+                }
+                {
+                    yardLines
+                        .slice(1, -1)
+                        .map((x) =>
+                            hashes.map((y) => (
+                                <line
+                                    x1={x - 7}
+                                    x2={x + 7}
+                                    y1={y}
+                                    y2={y}
+                                    stroke="currentColor"
+                                    stroke-opacity="0.6"
+                                    stroke-width="2"
+                                />
+                            )),
+                        )
+                }
+                {
+                    // Like a real field, each number straddles its yard line,
+                    // and the far side reads upside down from the press box.
+                    yardNumbers.map((number, i) =>
+                        [0, 180].map((turn) => (
+                            <g
+                                font-size="44"
+                                fill="currentColor"
+                                fill-opacity="0.22"
+                                transform={`rotate(${turn} ${(i + 1) * 100} ${H / 2})`}
+                            >
+                                <text
+                                    x={(i + 1) * 100 - 9}
+                                    y={H - 48}
+                                    text-anchor="end"
+                                >
+                                    {Math.floor(number / 10)}
+                                </text>
+                                <text
+                                    x={(i + 1) * 100 + 9}
+                                    y={H - 48}
+                                    text-anchor="start"
+                                >
+                                    0
+                                </text>
+                            </g>
+                        )),
+                    )
+                }
+                <g data-show-paths>
+                    {
+                        sets[0].map(() => (
+                            <line
+                                stroke="var(--color-accent)"
+                                stroke-opacity="0"
+                                stroke-width="1.5"
+                            />
+                        ))
+                    }
+                </g>
+                <g data-show-dots>
+                    {
+                        sets[3].map(([x, y], i) => (
+                            <circle
+                                cx={x}
+                                cy={y}
+                                r="6.5"
+                                fill={sectionColors[Math.floor(i / 12)]}
+                                stroke="var(--color-bg-1)"
+                                stroke-width="1.5"
+                            />
+                        ))
+                    }
+                </g>
+            </svg>
+        </div>
+
+        <div class="flex flex-col gap-6 p-16 max-[520px]:p-12">
+            <div class="relative">
+                <div
+                    class="flex h-20 items-end font-mono text-sub text-text-subtitle"
+                >
+                    {
+                        segments.map((segment, i) => (
+                            <div
+                                class="relative h-full min-w-0"
+                                style={`flex: ${segment.counts} 0 0;`}
+                            >
+                                {segment.kind === "hold" && (
+                                    <span class="absolute left-0 top-0 flex h-16 items-center rounded-t-6 rounded-br-6 bg-accent px-6 leading-none text-text-invert">
+                                        {segment.from + 1}
+                                    </span>
+                                )}
+                            </div>
+                        ))
+                    }
+                </div>
+                <div class="flex h-40 gap-2">
+                    {
+                        segments.map((segment) => (
+                            <div
+                                class:list={[
+                                    "flex min-w-0 items-center overflow-clip rounded-6 border px-8 font-mono text-sub leading-none",
+                                    segment.kind === "move"
+                                        ? "border-stroke bg-fg-2 text-text"
+                                        : "border-dashed border-stroke text-text-disabled",
+                                ]}
+                                style={`flex: ${segment.counts} 0 0;`}
+                            >
+                                <span class="truncate max-[640px]:hidden">
+                                    {segment.kind === "move"
+                                        ? `${segment.counts} counts`
+                                        : "Hold"}
+                                </span>
+                            </div>
+                        ))
+                    }
+                </div>
+                <div
+                    class="h-12 mt-4 opacity-40"
+                    style={`background-image: repeating-linear-gradient(to right, var(--color-text) 0 1px, transparent 1px calc(100% / ${totalCounts}));`}
+                >
+                </div>
+                <div
+                    class="pointer-events-none absolute inset-y-0 w-2 -translate-x-1/2 rounded-full bg-accent"
+                    style="left: 100%;"
+                    data-show-playhead
+                >
+                    <span
+                        class="absolute -top-2 left-1/2 size-10 -translate-x-1/2 rounded-full bg-accent"
+                    ></span>
+                </div>
+                <input
+                    type="range"
+                    min="0"
+                    max={totalCounts}
+                    step="0.05"
+                    value={totalCounts}
+                    class="absolute inset-0 size-full cursor-ew-resize opacity-0"
+                    aria-label="Scrub through the show, in counts"
+                    data-show-scrub
+                />
+            </div>
+        </div>
+
+        <div
+            class="grid grid-cols-3 border-t border-stroke max-[850px]:grid-cols-1"
+        >
+            {
+                features.map(({ Icon, title, body }) => (
+                    <div class="flex flex-col gap-8 p-24 not-last:border-r border-stroke max-[850px]:not-last:border-r-0 max-[850px]:not-last:border-b max-[520px]:p-16">
+                        <span class="text-accent">
+                            <Icon size={24} />
+                        </span>
+                        <h3 class="text-h5 leading-none">{title}</h3>
+                        <p class="text-body leading-relaxed text-text-subtitle">
+                            {body}
+                        </p>
+                    </div>
+                ))
+            }
+        </div>
+    </div>
+</section>
+
+<style>
+    .show-field {
+        transform-origin: 50% 100%;
+        transition: transform 500ms ease-out;
+    }
+    .show-field[data-view="pressbox"] {
+        transform: translateY(-14%) rotateX(48deg) scale(0.9);
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .show-field {
+            transition: none;
+        }
+    }
+</style>
+
+<script>
+    type Point = [number, number];
+    type Segment = { kind: string; counts: number; from: number; to: number };
+
+    const COUNTS_PER_SECOND = 3;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+    document.querySelectorAll<HTMLElement>("[data-show]").forEach((root) => {
+        const sets: Point[][] = JSON.parse(root.dataset.sets!);
+        const segments: Segment[] = JSON.parse(root.dataset.segments!);
+        const total = segments.reduce((sum, s) => sum + s.counts, 0);
+
+        const dots = [
+            ...root.querySelectorAll<SVGCircleElement>(
+                "[data-show-dots] circle",
+            ),
+        ];
+        const paths = [
+            ...root.querySelectorAll<SVGLineElement>("[data-show-paths] line"),
+        ];
+        const field = root.querySelector<SVGElement>("[data-show-field]")!;
+        const glow = root.querySelector<HTMLElement>("[data-show-glow]")!;
+        const readout = root.querySelector("[data-show-readout]")!;
+        const playhead = root.querySelector<HTMLElement>(
+            "[data-show-playhead]",
+        )!;
+        const scrub =
+            root.querySelector<HTMLInputElement>("[data-show-scrub]")!;
+        const playButton = root.querySelector("[data-show-play]")!;
+        const icons = [
+            ...root.querySelectorAll<HTMLElement>("[data-show-icon]"),
+        ];
+
+        let count = reduced.matches ? total : 0;
+        let playing = false;
+        let wantsToPlay = !reduced.matches;
+        let inView = false;
+        let last = 0;
+        let pathsFor = -1;
+
+        const draw = () => {
+            let start = 0;
+            let index = 0;
+            while (
+                index < segments.length - 1 &&
+                count >= start + segments[index].counts
+            )
+                start += segments[index++].counts;
+            const segment = segments[index];
+            const t = Math.min(1, (count - start) / segment.counts);
+            const from = sets[segment.from];
+            const to = sets[segment.to];
+            const moving = segment.kind === "move";
+
+            dots.forEach((dot, i) => {
+                dot.setAttribute(
+                    "cx",
+                    String(from[i][0] + (to[i][0] - from[i][0]) * t),
+                );
+                dot.setAttribute(
+                    "cy",
+                    String(from[i][1] + (to[i][1] - from[i][1]) * t),
+                );
+            });
+
+            if (pathsFor !== index) {
+                pathsFor = index;
+                paths.forEach((path, i) => {
+                    path.setAttribute("x1", String(from[i][0]));
+                    path.setAttribute("y1", String(from[i][1]));
+                    path.setAttribute("x2", String(to[i][0]));
+                    path.setAttribute("y2", String(to[i][1]));
+                    path.setAttribute("stroke-opacity", moving ? "0.35" : "0");
+                });
+            }
+
+            readout.textContent = moving
+                ? `Set ${segment.from + 1} → ${segment.to + 1} · count ${Math.min(segment.counts, Math.floor(count - start) + 1)} of ${segment.counts}`
+                : `Set ${segment.from + 1} · hold`;
+            playhead.style.left = `${(count / total) * 100}%`;
+            scrub.value = String(count);
+        };
+
+        const setPlaying = (next: boolean) => {
+            playing = next;
+            icons.forEach(
+                (icon) =>
+                    (icon.hidden =
+                        icon.dataset.showIcon === (playing ? "play" : "pause")),
+            );
+            if (playing) {
+                last = performance.now();
+                requestAnimationFrame(tick);
+            }
+        };
+
+        const tick = (now: number) => {
+            if (!playing) return;
+            count += ((now - last) / 1000) * COUNTS_PER_SECOND;
+            last = now;
+            if (count >= total) count = 0;
+            draw();
+            requestAnimationFrame(tick);
+        };
+
+        playButton.addEventListener("click", () => {
+            wantsToPlay = !playing;
+            setPlaying(wantsToPlay);
+        });
+
+        scrub.addEventListener("input", () => {
+            wantsToPlay = false;
+            setPlaying(false);
+            count = Math.min(total, Number(scrub.value));
+            draw();
+        });
+
+        root.querySelectorAll<HTMLButtonElement>("[data-show-view]").forEach(
+            (button, _, buttons) =>
+                button.addEventListener("click", () => {
+                    const view = button.dataset.showView!;
+                    buttons.forEach((other) =>
+                        other.setAttribute(
+                            "aria-pressed",
+                            String(other === button),
+                        ),
+                    );
+                    field.dataset.view = view;
+                    glow.style.opacity = view === "pressbox" ? "0.35" : "0";
+                }),
+        );
+
+        // Only march while the chart is on screen.
+        new IntersectionObserver(
+            ([entry]) => {
+                inView = entry.isIntersecting;
+                if (inView && wantsToPlay && !playing) setPlaying(true);
+                if (!inView && playing) setPlaying(false);
+            },
+            { threshold: 0.3 },
+        ).observe(root);
+
+        draw();
+    });
+</script>

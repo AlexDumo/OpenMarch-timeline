@@ -1,76 +1,54 @@
 ---
-import { Image } from "astro:assets";
 import { Badge, Button } from "@openmarch/ui";
-import fullscreenDark from "@/assets/desktop/perdark.png";
-import fullscreenLight from "@/assets/desktop/perlight.png";
-import editorDark from "@/assets/desktop/landerdark.png";
-import editorLight from "@/assets/desktop/landerlight.png";
+import ThemedMedia from "./ThemedMedia.astro";
 ---
 
 <section
     id="landing"
     class="relative flex h-fit flex-col min-w-0 w-full items-center justify-center gap-16 border border-stroke pt-32 pb-8 px-8 rounded-[14px]"
 >
-    <a href="/mobile"
+    <a href="/#stadium"
         ><Badge variant="secondary"
-            ><span class="text-accent">New:</span> On The Move Mobile App</Badge
+            ><span class="text-accent">New in 0.2:</span> 3D View</Badge
         ></a
     >
     <h1
         class="text-h1 leading-[130%] max-[580px]:text-h2 max-[580px]:w-full w-[512px] tracking-tighter text-center motion-preset-slide-up motion-delay-150"
     >
-        Free & open-source drill writing software
+        Write the drill.<br />Watch the show.
     </h1>
-    <p class="text-body text-center motion-delay-250">
-        OpenMarch is a free, open-source & intuitive drill writing app for the
-        marching arts.
+    <p class="text-body text-center max-w-[512px] motion-delay-250">
+        OpenMarch is free, open-source drill writing software for the marching
+        arts. Chart every count, then see it performed in a stadium.
     </p>
-    <div class="flex flex-wrap gap-8 motion-delay-250">
+    <div class="flex flex-wrap justify-center gap-8 motion-delay-250">
         <a href="/download">
             <Button>Download</Button>
         </a>
-        <a href="/#desktop">
-            <Button variant="secondary">Learn More</Button>
+        <a href="https://editor.openmarch.com">
+            <Button variant="secondary">Open the web editor</Button>
         </a>
     </div>
+    <p class="text-sub text-text-subtitle text-center">
+        Mac, Windows and Linux · Web · Tablet
+    </p>
 
     <div class="flex flex-col items-center">
-        <Image
-            src={fullscreenDark}
-            alt="Fullscreen Screenshot"
-            width={1578}
-            height={950}
-            format="webp"
-            quality={80}
-            class="hidden dark:block border border-stroke rounded-6 aspect-1578/950 h-auto w-[80%] z-20 motion-preset-slide-up-sm motion-delay-300"
+        <ThemedMedia
+            name="3d-view/3d-marchers"
+            alt="A marching band in uniform on a stadium field in the 3D View"
+            width={1360}
+            height={500}
+            eager
+            class="border border-stroke rounded-6 aspect-1360/500 h-auto w-[86%] z-20 motion-preset-slide-up-sm motion-delay-300"
         />
-        <Image
-            src={fullscreenLight}
-            alt="Fullscreen Screenshot"
-            width={1578}
-            height={950}
-            format="webp"
-            quality={80}
-            class="block dark:hidden border border-stroke rounded-6 aspect-1578/950 h-auto w-[80%] z-20 motion-preset-slide-up-sm motion-delay-300"
-        />
-
-        <Image
-            src={editorDark}
-            alt="Editor Screenshot"
-            width={1578}
-            height={950}
-            format="webp"
-            quality={80}
-            class="hidden dark:block border border-stroke rounded-6 aspect-1578/950 mt-[-210px] max-[950px]:mt-[-110px] max-[560px]:mt-[-50px] z-30 motion-preset-slide-up-sm motion-delay-[400ms]"
-        />
-        <Image
-            src={editorLight}
-            alt="Editor Screenshot"
-            width={1578}
-            height={950}
-            format="webp"
-            quality={80}
-            class="block dark:hidden border border-stroke rounded-6 aspect-1578/950 mt-[-210px] max-[950px]:mt-[-110px] max-[560px]:mt-[-50px] z-30 motion-preset-slide-up-sm motion-delay-[400ms]"
+        <ThemedMedia
+            name="workspace/window-overview"
+            alt="The same show as a drill chart in the OpenMarch editor"
+            width={1600}
+            height={1000}
+            eager
+            class="border border-stroke rounded-6 aspect-1600/1000 h-auto w-full mt-[-110px] max-[950px]:mt-[-60px] max-[560px]:mt-[-24px] z-30 motion-preset-slide-up-sm motion-delay-[400ms]"
         />
     </div>
     <div

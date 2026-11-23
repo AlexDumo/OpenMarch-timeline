@@ -1,0 +1,83 @@
+---
+import { ArrowRightIcon } from "@phosphor-icons/react";
+import { Image } from "astro:assets";
+import carolineHs from "@/assets/testimonials/caroline.jpg";
+import citrusHs from "@/assets/testimonials/citrus.png";
+
+const stories = [
+    {
+        href: "/blog/2025-11-10-caroline-hss-visit",
+        image: carolineHs,
+        school: "Caroline HS",
+        who: "Carter King, Outdoor",
+        quote: "OpenMarch suited every need I had. It was easy to use, free to use, and powerful enough for my program.",
+    },
+    {
+        href: "/blog/2026-2-1_citrus-hs",
+        image: citrusHs,
+        school: "Citrus Hill HS",
+        who: "Randy Nguyen, Outdoor",
+        quote: "I am deeply thankful for the platform, the community, and the impact OpenMarch has had on our program. I cannot recommend it enough to any educator looking to empower themselves and their students.",
+    },
+];
+---
+
+<section
+    id="directors-say"
+    class="grid w-full min-w-0 grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-16 max-[920px]:grid-cols-1"
+>
+    <figure
+        class="bg-fg-1 border-stroke rounded-6 relative flex flex-col justify-between gap-32 overflow-clip border p-32 max-[520px]:p-16"
+    >
+        <div
+            class="text-text-subtitle text-sub flex flex-wrap gap-x-16 gap-y-4 font-mono uppercase"
+        >
+            <span>K-12 school</span>
+            <span>About 470 students</span>
+            <span class="text-accent">25 in the band</span>
+        </div>
+        <blockquote class="text-h2 leading-[125%] max-[768px]:text-h3">
+            “I’ve tried every program we could afford, and OpenMarch has been
+            the most accessible and easy to use. It’s been a lifesaver.”
+        </blockquote>
+        <figcaption class="flex flex-col gap-4">
+            <span class="text-h4">Brandon Wright</span>
+            <span class="text-body text-text-subtitle"
+                >Marching Band, Sunbright HS</span
+            >
+        </figcaption>
+        <div
+            class="pointer-events-none absolute -right-200 -bottom-200 -z-10 size-[500px]"
+            style="background: radial-gradient(circle, var(--color-accent) 0%, transparent 65%); opacity: 0.25;"
+        >
+        </div>
+    </figure>
+    <div class="flex flex-col gap-16">
+        {
+            stories.map((story) => (
+                <a
+                    href={story.href}
+                    class="bg-fg-1 border-accent rounded-20 flex h-full flex-col justify-center gap-6 border p-16 duration-150 ease-out hover:brightness-110 active:scale-95"
+                >
+                    <div class="flex w-full items-start justify-between">
+                        <Image
+                            src={story.image}
+                            alt={story.school}
+                            class="rounded-6 object-cover"
+                            width={144}
+                            height={72}
+                        />
+                        <div class="flex items-center gap-6">
+                            Read more <ArrowRightIcon size={24} />
+                        </div>
+                    </div>
+                    <h2 class="text-h4">{story.school}</h2>
+                    <p class="text-body font-medium">{story.who}</p>
+                    <p class="text-body text-text-subtitle leading-[165%]">
+                        {story.quote}
+                    </p>
+                </a>
+            ))
+        }
+    </div>
+</section>

@@ -1,0 +1,86 @@
+---
+/**
+ * A real capture from the 0.2 guides (public/docs/media), in the reader's theme.
+ * Stills load lazily. Clips load nothing until they scroll into view, then loop
+ * silently; with reduced motion they stay on their poster and get controls.
+ */
+import manifest from "@/data/docs-media.json";
+
+interface Props {
+    id: string;
+    alt: string;
+    class?: string;
+}
+
+const { id, alt, class: className = "" } = Astro.props;
+const entry = (
+    manifest as Record<
+        string,
+        {
+            chapter: string;
+            kind: "still" | "clip";
+            width: number;
+            height: number;
+        }
+    >
+)[id];
+if (!entry) throw new Error(`<Shot id="${id}">: no such capture`);
+const base = `/docs/media/${entry.chapter}/${id}`;
+const themes = [
+    { theme: "dark", show: "hidden dark:block" },
+    { theme: "light", show: "block dark:hidden" },
+];
+---
+
+{
+    themes.map(({ theme, show }) =>
+        entry.kind === "still" ? (
+            <img
+                src={`${base}.${theme}.webp`}
+                alt={alt}
+                width={entry.width}
+                height={entry.height}
+                loading="lazy"
+                decoding="async"
+                class={`${show} ${className}`}
+            />
+        ) : (
+            <video
+                data-dir-clip
+                src={`${base}.${theme}.mp4`}
+                poster={`${base}.${theme}.webp`}
+                width={entry.width}
+                height={entry.height}
+                aria-label={alt}
+                muted
+                loop
+                playsinline
+                preload="none"
+                class={`${show} ${className}`}
+            />
+        ),
+    )
+}
+
+<script>
+    const clips = document.querySelectorAll<HTMLVideoElement>(
+        "video[data-dir-clip]",
+    );
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (still) {
+        clips.forEach((clip) => (clip.controls = true));
+    } else {
+        const observer = new IntersectionObserver(
+            (entries) => {
+                for (const entry of entries) {
+                    const clip = entry.target as HTMLVideoElement;
+                    // The other theme's copy is display: none and never intersects
+                    if (entry.isIntersecting) void clip.play().catch(() => {});
+                    else clip.pause();
+                }
+            },
+            { threshold: 0.35 },
+        );
+        clips.forEach((clip) => observer.observe(clip));
+    }
+</script>

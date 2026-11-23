@@ -1,0 +1,39 @@
+---
+import { getButtonClassName } from "@openmarch/ui";
+import { ArrowRightIcon } from "@phosphor-icons/react";
+---
+
+<section id="start" class="flex w-full min-w-0 flex-col gap-16">
+    <div
+        class="p-32 flex justify-between items-center gap-16 border border-accent rounded-full max-[850px]:rounded-6 max-[850px]:p-16 max-[850px]:flex-col max-[850px]:items-stretch"
+    >
+        <h1 class="text-h1 max-[640px]:text-h2">Try it before the bell</h1>
+        <div class="flex gap-8 max-[520px]:flex-col">
+            <a
+                href="https://editor.openmarch.com"
+                class={getButtonClassName({
+                    variant: "primary",
+                    className: "max-[850px]:flex-1",
+                })}
+            >
+                Open in your browser
+            </a>
+            <a
+                href="/download"
+                class={getButtonClassName({
+                    variant: "secondary",
+                    className: "max-[850px]:flex-1",
+                })}
+            >
+                Download
+            </a>
+        </div>
+    </div>
+    <a
+        href="/designers"
+        class="text-body text-text-subtitle hover:text-text flex items-center justify-center gap-6 duration-150"
+    >
+        Writing your own show? See OpenMarch for designers
+        <ArrowRightIcon size={16} />
+    </a>
+</section>

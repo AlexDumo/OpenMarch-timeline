@@ -26,6 +26,12 @@ const primaryLinks = [
     { href: "/guides", label: "Guides" },
 ];
 
+const audienceLinks = [
+    { href: "/designers", label: "Drill designers" },
+    { href: "/band-directors", label: "Band directors" },
+    { href: "/universities", label: "Universities" },
+];
+
 const companyLinks = [
     { href: "/about", label: "About" },
     { href: "/blog", label: "Blog" },
@@ -62,6 +68,10 @@ export default function Nav({ pathname }: { pathname: string }) {
             "text-accent!": pathname === href,
         });
 
+    const isAudiencePage = audienceLinks.some(
+        (link) => pathname.replace(/\/$/, "") === link.href,
+    );
+
     return (
         <nav className="sticky top-8 z-99 flex h-56 w-full min-w-full flex-col gap-8">
             <nav className="border-stroke bg-modal shadow-modal relative flex w-full min-w-full items-center justify-between rounded-full border px-32 py-12 pr-17 backdrop-blur-md max-[750px]:px-24 max-[520px]:px-16 max-[520px]:pr-12">
@@ -78,6 +88,32 @@ export default function Nav({ pathname }: { pathname: string }) {
                             {link.label}
                         </a>
                     ))}
+                    <Dropdown.Root modal={false}>
+                        <Dropdown.Trigger asChild>
+                            <button
+                                className={clsx(
+                                    "text-body text-text hover:text-accent duration-150 ease-out",
+                                    { "text-accent!": isAudiencePage },
+                                )}
+                                aria-label="Who OpenMarch is for"
+                            >
+                                For
+                            </button>
+                        </Dropdown.Trigger>
+                        <Dropdown.Portal>
+                            <Dropdown.Content className="bg-modal rounded-6 border-stroke shadow-modal backdrop-blur-32 z-100 flex flex-col gap-12 border px-16 py-12">
+                                {audienceLinks.map((link) => (
+                                    <a
+                                        key={link.href}
+                                        href={link.href}
+                                        className={linkClassName(link.href)}
+                                    >
+                                        {link.label}
+                                    </a>
+                                ))}
+                            </Dropdown.Content>
+                        </Dropdown.Portal>
+                    </Dropdown.Root>
                     <Dropdown.Root modal={false}>
                         <Dropdown.Trigger asChild>
                             <button
@@ -173,6 +209,30 @@ export default function Nav({ pathname }: { pathname: string }) {
                                             {link.label}
                                         </a>
                                     ))}
+                                </div>
+                                <div className="border-stroke flex flex-col gap-24 border-t pt-16">
+                                    <p className="text-h4">For</p>
+                                    <div className="grid grid-cols-1 gap-32">
+                                        {audienceLinks.map((link) => (
+                                            <a
+                                                key={link.href}
+                                                href={link.href}
+                                                onClick={() => setIsOpen(false)}
+                                                className={clsx(
+                                                    "text-h3 text-text hover:text-accent leading-none duration-150 ease-out",
+                                                    {
+                                                        "text-accent!":
+                                                            pathname.replace(
+                                                                /\/$/,
+                                                                "",
+                                                            ) === link.href,
+                                                    },
+                                                )}
+                                            >
+                                                {link.label}
+                                            </a>
+                                        ))}
+                                    </div>
                                 </div>
                                 <div className="border-stroke flex flex-col gap-24 border-t pt-16">
                                     <p className="text-h4">Us</p>

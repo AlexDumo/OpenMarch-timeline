@@ -1,0 +1,295 @@
+---
+/**
+ * A sample semester laid out on a timeline like a show's: weeks along the ruler,
+ * one "set" per unit, a playhead on the unit being read. Each set opens a real
+ * capture of what students do that week.
+ */
+import { Badge } from "@openmarch/ui";
+import DocsMedia from "./DocsMedia.astro";
+
+const WEEKS = 15;
+const sets = [
+    {
+        name: "First show",
+        from: 1,
+        to: 2,
+        lead: "Everyone opens the editor in a browser tab, on a lab computer or their own laptop. By the end of the first session each student has a field, a block of performers and a show that plays.",
+        steps: [
+            "Start a new show and add performers",
+            "Place a block and move it to a second page",
+            "Press play and watch it march",
+        ],
+        handIn: "A first 16-count move, as a .dots file.",
+        media: {
+            base: "start/start-first-show-play",
+            width: 1280,
+            height: 1162,
+            alt: "A first show playing in the editor",
+        },
+    },
+    {
+        name: "Forms",
+        from: 3,
+        to: 5,
+        lead: "Lines, arcs, boxes and filled shapes. Students draw a form and the performers space themselves along it, so class time goes to intervals and balance instead of nudging dots.",
+        steps: [
+            "Draw lines, arcs, circles and boxes",
+            "Fill a shape and change its spacing",
+            "Edit a form after it is placed",
+        ],
+        handIn: "Three forms for the same ensemble, exported as drill charts.",
+        media: {
+            base: "shapes/shapes-fills",
+            width: 1280,
+            height: 852,
+            alt: "Filling a box shape with performers",
+        },
+    },
+    {
+        name: "Motion",
+        from: 6,
+        to: 8,
+        lead: "Forms become moves on the timeline. Students set how many counts a move takes, add holds, send a line down a follow-the-leader pathway, and scrub the playhead to check every transition.",
+        steps: [
+            "Make moves and holds on the timeline",
+            "Draw a pathway for follow-the-leader",
+            "Scrub and loop a transition to check it",
+        ],
+        handIn: "A 32-count transition between two forms.",
+        media: {
+            base: "timeline/timeline-make-move",
+            width: 1080,
+            height: 1056,
+            alt: "Dragging on the timeline to make a move",
+        },
+    },
+    {
+        name: "Music",
+        from: 9,
+        to: 11,
+        lead: "The show gets its music. Students add the audio, bring in a score's tempos and measures, and write drill that lands on the phrase.",
+        steps: [
+            "Add audio and see its waveform under the pages",
+            "Use a score's tempos, measures and rehearsal marks",
+            "Line pages up with the phrases",
+        ],
+        handIn: "One minute of drill written to music.",
+        media: {
+            base: "music/music-tempo-drag",
+            width: 1280,
+            height: 800,
+            alt: "Dragging a tempo change on the timeline",
+        },
+    },
+    {
+        name: "The show",
+        from: 12,
+        to: 15,
+        lead: "The final project. Students watch their own show in 3D View from the Director camera, in a stadium with uniforms and a crowd, then export what a real staff would need.",
+        steps: [
+            "Watch the show in 3D from the press box",
+            "Export a video of the performance",
+            "Export drill charts and coordinate sheets",
+        ],
+        handIn: "A portfolio piece: the video, the charts and the coordinate sheets.",
+        media: {
+            base: "3d-view/3d-orbit-view",
+            width: 1280,
+            height: 780,
+            alt: "Orbiting around a show in 3D View",
+        },
+    },
+];
+const pct = (week: number) => ((week - 1) / WEEKS) * 100;
+---
+
+<section id="semester" class="uni-semester flex w-full min-w-0 flex-col gap-8">
+    <Badge>Teaching kit</Badge>
+    <h1
+        class="text-text text-[3.5rem] leading-[115%] max-[768px]:text-h1 max-[520px]:text-h2"
+    >
+        A semester, set by set
+    </h1>
+    <p class="text-body leading-relaxed text-text-subtitle max-w-[40rem]">
+        A sample outline for a techniques course, laid out the way OpenMarch
+        lays out a show. Reorder it, stretch it or cut it like you would a
+        drill.
+    </p>
+
+    <div
+        class="bg-fg-1 border border-stroke rounded-6 mt-8 flex flex-col overflow-clip"
+    >
+        <!-- Timeline -->
+        <div
+            class="relative border-b border-stroke bg-fg-2 px-24 pt-12 pb-16 max-[520px]:px-12"
+        >
+            <div class="relative">
+                <div
+                    class="grid font-mono text-micro text-text-subtitle"
+                    style={`grid-template-columns: repeat(${WEEKS}, minmax(0, 1fr))`}
+                    aria-hidden="true"
+                >
+                    {
+                        Array.from({ length: WEEKS }, (_, i) => (
+                            <span class="border-l border-stroke pl-4 pb-6">
+                                <span class="max-[520px]:hidden">Wk </span>
+                                {i + 1}
+                            </span>
+                        ))
+                    }
+                </div>
+                <div
+                    class="grid gap-y-4"
+                    style={`grid-template-columns: repeat(${WEEKS}, minmax(0, 1fr))`}
+                    role="tablist"
+                    aria-label="Sets of the sample semester"
+                >
+                    {
+                        sets.map((s, i) => (
+                            <button
+                                type="button"
+                                role="tab"
+                                id={`uni-set-tab-${i}`}
+                                aria-controls={`uni-set-${i}`}
+                                aria-selected={i === 0 ? "true" : "false"}
+                                tabindex={i === 0 ? 0 : -1}
+                                class="uni-set-tab relative flex min-w-0 cursor-pointer flex-col items-start gap-2 rounded-6 border border-stroke bg-fg-1 px-8 py-8 text-left duration-150 max-[520px]:px-6"
+                                style={`grid-column: ${s.from} / ${s.to + 1}`}
+                                data-set={i}
+                                data-left={pct(s.from)}
+                            >
+                                <span class="font-mono text-micro text-accent">
+                                    Set {i + 1}
+                                </span>
+                                <span class="w-full truncate text-body text-text max-[520px]:text-sub">
+                                    {s.name}
+                                </span>
+                            </button>
+                        ))
+                    }
+                </div>
+                <div
+                    class="uni-playhead pointer-events-none absolute inset-y-0 -bottom-16 w-px bg-accent"
+                    style={`left: ${pct(sets[0].from)}%`}
+                    aria-hidden="true"
+                >
+                    <span
+                        class="absolute -top-4 -left-4 size-8 rotate-45 rounded-[2px] bg-accent"
+                    ></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sets -->
+        {
+            sets.map((s, i) => (
+                <div
+                    role="tabpanel"
+                    id={`uni-set-${i}`}
+                    aria-labelledby={`uni-set-tab-${i}`}
+                    class="uni-set grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] gap-32 p-24 pb-0 max-[850px]:grid-cols-1 max-[850px]:gap-16 max-[520px]:p-16 max-[520px]:pb-0"
+                    hidden={i !== 0}
+                >
+                    <div class="flex flex-col gap-16 pb-24 max-[850px]:pb-0">
+                        <p class="font-mono text-sub text-accent">
+                            Set {i + 1} · Weeks {s.from}–{s.to}
+                        </p>
+                        <h3 class="text-h3 leading-none max-[520px]:text-h4">
+                            {s.name}
+                        </h3>
+                        <p class="text-body leading-relaxed text-text-subtitle">
+                            {s.lead}
+                        </p>
+                        <ol class="flex flex-col gap-8">
+                            {s.steps.map((step, k) => (
+                                <li class="flex items-baseline gap-12 text-body text-text">
+                                    <span class="font-mono text-sub text-text-subtitle">
+                                        {k + 1}
+                                    </span>
+                                    {step}
+                                </li>
+                            ))}
+                        </ol>
+                        <p class="mt-auto rounded-6 border border-stroke bg-fg-2 px-12 py-8 text-body text-text">
+                            <span class="font-mono text-sub text-accent">
+                                Hand in
+                            </span>
+                            <br />
+                            {s.handIn}
+                        </p>
+                    </div>
+                    <div class="h-380 overflow-clip rounded-t-6 border border-b-0 border-stroke max-[850px]:h-auto max-[850px]:aspect-16/10">
+                        <DocsMedia
+                            base={s.media.base}
+                            alt={s.media.alt}
+                            width={s.media.width}
+                            height={s.media.height}
+                            clip
+                            class="size-full object-cover object-top"
+                        />
+                    </div>
+                </div>
+            ))
+        }
+    </div>
+    <p class="text-sub text-text-subtitle">
+        A suggested outline, not a fixed curriculum. Every clip is the real 0.2
+        editor.
+    </p>
+</section>
+
+<style>
+    .uni-set-tab[aria-selected="true"] {
+        border-color: var(--color-accent);
+        background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+    }
+    .uni-set-tab:hover {
+        border-color: var(--color-accent);
+    }
+    .uni-playhead {
+        transition: left 500ms cubic-bezier(0.3, 0, 0.2, 1);
+    }
+    .uni-set[hidden] {
+        display: none;
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .uni-playhead {
+            transition: none;
+        }
+    }
+</style>
+
+<script>
+    const root = document.querySelector<HTMLElement>(".uni-semester");
+    if (root) {
+        const tabs = [
+            ...root.querySelectorAll<HTMLButtonElement>(".uni-set-tab"),
+        ];
+        const panels = [...root.querySelectorAll<HTMLElement>(".uni-set")];
+        const playhead = root.querySelector<HTMLElement>(".uni-playhead");
+        const select = (index: number, focus = false) => {
+            tabs.forEach((tab, i) => {
+                const on = i === index;
+                tab.setAttribute("aria-selected", String(on));
+                tab.tabIndex = on ? 0 : -1;
+                panels[i].hidden = !on;
+                if (on && focus) tab.focus();
+            });
+            if (playhead) playhead.style.left = `${tabs[index].dataset.left}%`;
+            for (const v of root.querySelectorAll("video")) v.pause();
+            document.dispatchEvent(new CustomEvent("uni:shown"));
+        };
+        tabs.forEach((tab, i) => {
+            tab.addEventListener("click", () => select(i));
+            tab.addEventListener("keydown", (e) => {
+                const step =
+                    e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+                if (!step) return;
+                e.preventDefault();
+                select((i + step + tabs.length) % tabs.length, true);
+            });
+        });
+        const asked = Number(new URLSearchParams(location.search).get("set"));
+        if (asked >= 1 && asked <= tabs.length) select(asked - 1);
+    }
+</script>

@@ -1,0 +1,83 @@
+---
+import { Badge } from "@openmarch/ui";
+import {
+    FileCsvIcon,
+    MusicNotesIcon,
+    MagicWandIcon,
+    ClockCountdownIcon,
+} from "@phosphor-icons/react";
+import NewsletterForm from "@/components/ui/NewsletterForm";
+
+const today = [
+    {
+        icon: FileCsvIcon,
+        title: "Your roster, from a CSV",
+        body: "Bring the whole band in at once, by section or by drill number. The form lists any row it can’t read before it imports the rest.",
+    },
+    {
+        icon: MusicNotesIcon,
+        title: "Your counts, from the score",
+        body: "Import MusicXML from Finale, Sibelius, Dorico or MuseScore and OpenMarch reads the tempos, time signatures, measures and rehearsal marks.",
+    },
+    {
+        icon: MagicWandIcon,
+        title: "A new show, step by step",
+        body: "The new show steps set up the field, the performers and the tempo, so you start on a field that matches yours.",
+    },
+];
+---
+
+<section
+    id="pyware"
+    class="grid w-full min-w-0 grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-32 max-[850px]:grid-cols-1 max-[520px]:gap-16"
+>
+    <div class="flex flex-col items-start gap-16">
+        <Badge variant="secondary">Switching</Badge>
+        <h2 class="text-h1 leading-[115%] max-[580px]:text-h2">
+            Coming from Pyware?
+        </h2>
+        <p class="text-body text-text-subtitle leading-relaxed">
+            The honest answer first: OpenMarch can’t open Pyware files yet.
+            Import is planned, and we’d rather you hear that here than find out
+            in August. If your drill writer works in OpenMarch, they send you
+            one <span class="text-text font-mono">.dots</span> file and you’re editing.
+        </p>
+        <div
+            class="border-accent rounded-6 flex w-full flex-col gap-12 border p-16"
+        >
+            <p class="text-body flex items-center gap-8">
+                <ClockCountdownIcon
+                    size={20}
+                    className="text-accent shrink-0"
+                />
+                Pyware import: planned, not here yet
+            </p>
+            <p class="text-body text-text-subtitle leading-relaxed">
+                We announce new features in the newsletter. Need it sooner?
+                <a
+                    href="https://discord.gg/eTsQ98uZzq"
+                    class="text-accent underline">Tell us on Discord</a
+                >.
+            </p>
+            <NewsletterForm client:visible />
+        </div>
+    </div>
+    <div class="flex flex-col gap-8">
+        <p class="text-sub text-text-subtitle font-mono uppercase">
+            What carries over today
+        </p>
+        {
+            today.map((item) => (
+                <div class="bg-fg-1 border-stroke rounded-6 flex gap-16 border p-24 max-[520px]:p-16">
+                    <item.icon size={32} className="text-accent shrink-0" />
+                    <div class="flex flex-col gap-8">
+                        <h3 class="text-h4 leading-none">{item.title}</h3>
+                        <p class="text-body text-text-subtitle leading-relaxed">
+                            {item.body}
+                        </p>
+                    </div>
+                </div>
+            ))
+        }
+    </div>
+</section>

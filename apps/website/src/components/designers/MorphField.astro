@@ -1,0 +1,449 @@
+---
+/**
+ * The hero: 48 marchers on a yard-lined field, walking through five forms the way a
+ * show is written in OpenMarch: the next shape is drawn, then the block moves onto it,
+ * eight counts at a time. An illustration (not a capture of the app); every position
+ * is worked out at build time and the script only plays it.
+ *
+ * Field units: 10 per yard, so the field is 1000 × 533.
+ */
+type Pt = [number, number];
+const N = 48;
+const W = 1000;
+const H = 533;
+
+const dist = (a: Pt, b: Pt) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+
+/** n points evenly spaced along a polyline (ends included, or around a closed one) */
+function along(poly: Pt[], n: number, closed = false): Pt[] {
+    const pts = closed ? [...poly, poly[0]] : poly;
+    const lens = [0];
+    for (let i = 1; i < pts.length; i++)
+        lens.push(lens[i - 1] + dist(pts[i - 1], pts[i]));
+    const total = lens[lens.length - 1];
+    const out: Pt[] = [];
+    for (let k = 0; k < n; k++) {
+        const d = closed ? (total * k) / n : (total * k) / (n - 1);
+        let i = 1;
+        while (i < pts.length - 1 && lens[i] < d) i++;
+        const t = (d - lens[i - 1]) / (lens[i] - lens[i - 1] || 1);
+        out.push([
+            pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * t,
+            pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * t,
+        ]);
+    }
+    return out;
+}
+const sample = (f: (t: number) => Pt, steps = 96): Pt[] =>
+    Array.from({ length: steps + 1 }, (_, i) => f(i / steps));
+const pathOf = (poly: Pt[], closed = false) =>
+    "M" +
+    poly.map((p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join("L") +
+    (closed ? "Z" : "");
+const rad = (deg: number) => (deg * Math.PI) / 180;
+
+type Form = { name: string; pts: Pt[]; outline: string[] };
+
+const blockRows = [0, 1, 2, 3].map((r) => 232.5 + r * 25);
+const arc = (R: number) =>
+    sample((t) => {
+        const a = rad(140 - 100 * t);
+        return [500 + R * Math.cos(a), 40 + R * Math.sin(a)];
+    });
+const curve = sample((t) => [
+    140 + 720 * t,
+    272 + 88 * Math.sin(t * Math.PI * 2),
+]);
+const ring = (R: number) =>
+    sample(
+        (t) => [
+            500 + R * Math.cos(t * Math.PI * 2),
+            268 + R * Math.sin(t * Math.PI * 2),
+        ],
+        95,
+    );
+const wedge: Pt[] = [
+    [230, 385],
+    [500, 160],
+    [770, 385],
+];
+
+const forms: Form[] = [
+    {
+        name: "Box",
+        pts: blockRows.flatMap((y) =>
+            along(
+                [
+                    [362.5, y],
+                    [637.5, y],
+                ],
+                12,
+            ),
+        ),
+        outline: ["M362.5 232.5H637.5V307.5H362.5Z"],
+    },
+    {
+        name: "Arc",
+        pts: [...along(arc(300), 24), ...along(arc(338), 24)],
+        outline: [pathOf(arc(300)), pathOf(arc(338))],
+    },
+    {
+        name: "Curve",
+        pts: along(curve, N),
+        outline: [pathOf(curve)],
+    },
+    {
+        name: "Circle",
+        pts: [...along(ring(140), 32, true), ...along(ring(70), 16, true)],
+        outline: [pathOf(ring(140), true), pathOf(ring(70), true)],
+    },
+    {
+        name: "Line",
+        pts: along(wedge, N),
+        outline: [pathOf(wedge)],
+    },
+];
+
+/** Reorder `to` so marcher i walks to to[i] with little crossing (greedy, then swaps) */
+function assign(from: Pt[], to: Pt[]): Pt[] {
+    const order = (pts: Pt[]) =>
+        pts.map((_, i) => i).sort((a, b) => pts[a][0] - pts[b][0]);
+    const fo = order(from);
+    const tO = order(to);
+    const out: Pt[] = new Array(from.length);
+    fo.forEach((fi, k) => (out[fi] = to[tO[k]]));
+    const cost = (i: number, p: Pt) => dist(from[i], p) ** 2;
+    for (let pass = 0; pass < 12; pass++) {
+        let changed = false;
+        for (let i = 0; i < out.length; i++)
+            for (let j = i + 1; j < out.length; j++)
+                if (
+                    cost(i, out[j]) + cost(j, out[i]) <
+                    cost(i, out[i]) + cost(j, out[j]) - 0.01
+                ) {
+                    [out[i], out[j]] = [out[j], out[i]];
+                    changed = true;
+                }
+        if (!changed) break;
+    }
+    return out;
+}
+
+// Keyframes: each form matched to the one before; the last is the first form again
+// (matched to the fifth), so the loop restarts on the same picture.
+const frames: Pt[][] = [forms[0].pts];
+for (let i = 1; i <= forms.length; i++)
+    frames.push(assign(frames[i - 1], forms[i % forms.length].pts));
+const data = frames.map((f) =>
+    f.map((p) => [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10]),
+);
+
+const yardLines = Array.from({ length: 21 }, (_, i) => i * 50);
+const numbers = [10, 20, 30, 40, 50, 40, 30, 20, 10];
+const hashes = [H / 3, (H * 2) / 3];
+const HOLD = 4;
+const MOVE = 8;
+---
+
+<figure
+    class="morph bg-fg-1 border-stroke rounded-6 relative z-20 m-0 flex w-full flex-col overflow-clip border"
+    data-frames={JSON.stringify(data)}
+    data-names={JSON.stringify(forms.map((f) => f.name))}
+    data-hold={HOLD}
+    data-move={MOVE}
+>
+    <svg
+        viewBox={`0 0 ${W} ${H}`}
+        class="block h-auto w-full"
+        role="img"
+        aria-label="A block of 48 marchers on a football field moving through a box, two arcs, a curve, two circles and a wedge, eight counts at a time"
+    >
+        <g class="morph-lines">
+            {
+                yardLines.map((x) => (
+                    <line
+                        x1={x}
+                        x2={x}
+                        y1="0"
+                        y2={H}
+                        class:list={[x % 100 === 0 && "major"]}
+                    />
+                ))
+            }
+            {
+                hashes.flatMap((y) =>
+                    yardLines.map((x) => (
+                        <line
+                            class="hash"
+                            x1={x - 7}
+                            x2={x + 7}
+                            y1={y}
+                            y2={y}
+                        />
+                    )),
+                )
+            }
+        </g>
+        <g class="morph-numbers">
+            {
+                numbers.map((n, i) => (
+                    <>
+                        <text x={(i + 1) * 100} y={H - 34}>
+                            {n}
+                        </text>
+                        <text
+                            x={(i + 1) * 100}
+                            y={34}
+                            transform={`rotate(180 ${(i + 1) * 100} 34)`}
+                        >
+                            {n}
+                        </text>
+                    </>
+                ))
+            }
+        </g>
+        {
+            forms.map((f, i) => (
+                <g class="morph-shape" data-shape={i} opacity={i === 1 ? 1 : 0}>
+                    {f.outline.map((d) => (
+                        <path d={d} pathLength="1" />
+                    ))}
+                </g>
+            ))
+        }
+        <g class="morph-dots">
+            {frames[0].map((p) => <circle cx={p[0]} cy={p[1]} r="5.5" />)}
+        </g>
+    </svg>
+
+    <figcaption
+        class="border-stroke flex flex-col gap-8 border-t p-12 max-[520px]:p-8"
+    >
+        <div class="flex items-center gap-12 max-[520px]:gap-8">
+            <button
+                type="button"
+                class="morph-toggle border-stroke bg-fg-2 text-text rounded-6 hover:border-accent focus-visible:border-accent flex size-28 shrink-0 cursor-pointer items-center justify-center border outline-none"
+                aria-label="Pause the formation"
+                aria-pressed="false"
+            >
+                <svg
+                    class="morph-icon-pause"
+                    width="12"
+                    height="12"
+                    viewBox="0 0 12 12"
+                    fill="currentColor"
+                    aria-hidden="true"
+                    ><rect x="2" y="1" width="3" height="10" rx="1"></rect><rect
+                        x="7"
+                        y="1"
+                        width="3"
+                        height="10"
+                        rx="1"></rect></svg
+                >
+                <svg
+                    class="morph-icon-play hidden"
+                    width="12"
+                    height="12"
+                    viewBox="0 0 12 12"
+                    fill="currentColor"
+                    aria-hidden="true"><path d="M3 1.2v9.6L10.5 6z"></path></svg
+                >
+            </button>
+            <span
+                class="text-sub text-text-subtitle font-mono leading-none whitespace-nowrap"
+                aria-hidden="true"
+            >
+                <span class="morph-readout text-text">Pg 1 · ct 1/4</span>
+                <span class="max-[520px]:hidden"> · ♩ 132</span>
+            </span>
+            <span
+                class="morph-tool border-accent text-accent text-sub ml-auto rounded-full border px-8 py-[2px] leading-none whitespace-nowrap"
+                aria-hidden="true">Arc</span
+            >
+        </div>
+        <div class="morph-track relative flex h-28 w-full" aria-hidden="true">
+            {
+                forms.map((f, i) => (
+                    <div class="border-stroke flex h-full flex-1 flex-col gap-[3px] border-l pl-4">
+                        <span class="text-micro text-text-subtitle font-mono leading-none">
+                            {i + 1}
+                        </span>
+                        <div class="flex min-h-0 flex-1 gap-[2px] pr-[2px]">
+                            <span
+                                class="morph-hold border-stroke rounded-4 border"
+                                style={`flex:${HOLD}`}
+                            />
+                            <span
+                                class="bg-accent/30 text-micro text-text rounded-4 flex items-center overflow-hidden px-4 leading-none whitespace-nowrap"
+                                style={`flex:${MOVE}`}
+                            >
+                                {forms[(i + 1) % forms.length].name}
+                            </span>
+                        </div>
+                    </div>
+                ))
+            }
+            <span
+                class="morph-playhead bg-accent absolute inset-y-0 left-0 w-[2px]"
+            ></span>
+        </div>
+    </figcaption>
+</figure>
+
+<style>
+    .morph-lines line {
+        stroke: var(--color-text);
+        stroke-opacity: 0.1;
+        stroke-width: 1;
+        vector-effect: non-scaling-stroke;
+    }
+    .morph-lines line.major {
+        stroke-opacity: 0.2;
+    }
+    .morph-lines line.hash {
+        stroke-opacity: 0.45;
+        stroke-width: 1.5;
+    }
+    .morph-numbers text {
+        fill: var(--color-text);
+        fill-opacity: 0.16;
+        font-family: var(--font-sans);
+        font-size: 34px;
+        text-anchor: middle;
+        letter-spacing: -0.02em;
+    }
+    .morph-shape path {
+        fill: none;
+        stroke: var(--color-accent);
+        stroke-width: 1.5;
+        stroke-dasharray: 1;
+        stroke-dashoffset: var(--draw, 0);
+        vector-effect: non-scaling-stroke;
+    }
+    .morph-dots circle {
+        fill: var(--color-accent);
+        stroke: var(--color-bg-1);
+        stroke-width: 1.5;
+    }
+    .morph-hold {
+        background: repeating-linear-gradient(
+            -45deg,
+            transparent 0 3px,
+            var(--color-stroke) 3px 4px
+        );
+    }
+</style>
+
+<script>
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)");
+
+    for (const root of document.querySelectorAll<HTMLElement>(".morph")) {
+        const frames: [number, number][][] = JSON.parse(root.dataset.frames!);
+        const names: string[] = JSON.parse(root.dataset.names!);
+        const HOLD = Number(root.dataset.hold);
+        const MOVE = Number(root.dataset.move);
+        const PAGE = HOLD + MOVE;
+        const pages = names.length;
+        const COUNT_MS = 60000 / 132;
+
+        const dots = [...root.querySelectorAll<SVGCircleElement>("circle")];
+        const shapes = [...root.querySelectorAll<SVGGElement>(".morph-shape")];
+        const readout = root.querySelector<HTMLElement>(".morph-readout")!;
+        const tool = root.querySelector<HTMLElement>(".morph-tool")!;
+        const playhead = root.querySelector<HTMLElement>(".morph-playhead")!;
+        const toggle = root.querySelector<HTMLButtonElement>(".morph-toggle")!;
+        const iconPause = root.querySelector(".morph-icon-pause")!;
+        const iconPlay = root.querySelector(".morph-icon-play")!;
+
+        /** Draw the show at `c` counts from the top (0 ≤ c < pages × PAGE) */
+        function draw(c: number) {
+            const page = Math.floor(c / PAGE) % pages;
+            const inPage = c - Math.floor(c / PAGE) * PAGE;
+            const moving = inPage >= HOLD;
+            const t = moving ? (inPage - HOLD) / MOVE : 0;
+            const a = frames[page];
+            const b = frames[page + 1];
+            for (let i = 0; i < dots.length; i++) {
+                dots[i].setAttribute(
+                    "cx",
+                    (a[i][0] + (b[i][0] - a[i][0]) * t).toFixed(1),
+                );
+                dots[i].setAttribute(
+                    "cy",
+                    (a[i][1] + (b[i][1] - a[i][1]) * t).toFixed(1),
+                );
+            }
+            const next = (page + 1) % pages;
+            shapes.forEach((g, i) => {
+                // The next shape is drawn during the hold and stays while they walk onto
+                // it; the one they are standing on fades as they leave.
+                let opacity = 0;
+                let offset = 0;
+                if (i === next) {
+                    opacity = 1;
+                    offset = moving ? 0 : 1 - Math.min(1, inPage / (HOLD - 1));
+                } else if (i === page)
+                    opacity = moving ? 0 : 0.35 * (1 - inPage / HOLD);
+                g.setAttribute("opacity", opacity.toFixed(2));
+                g.style.setProperty("--draw", offset.toFixed(3));
+            });
+            const count = Math.floor(moving ? inPage - HOLD : inPage) + 1;
+            readout.textContent = `Pg ${page + 1} · ct ${count}/${moving ? MOVE : HOLD}`;
+            tool.textContent = names[next];
+            playhead.style.left = `${(c / (pages * PAGE)) * 100}%`;
+        }
+
+        let playing = false;
+        let wanted = !reduce.matches;
+        let visible = false;
+        let at = 0; // counts
+        let last = 0;
+        let raf = 0;
+
+        function frame(now: number) {
+            // rAF time can be just before performance.now(): never step backwards
+            at = (at + Math.max(0, now - last) / COUNT_MS) % (pages * PAGE);
+            last = now;
+            draw(at);
+            raf = requestAnimationFrame(frame);
+        }
+        function sync() {
+            const should = wanted && visible && !document.hidden;
+            if (should && !playing) {
+                playing = true;
+                last = performance.now();
+                raf = requestAnimationFrame(frame);
+            } else if (!should && playing) {
+                playing = false;
+                cancelAnimationFrame(raf);
+            }
+            toggle.setAttribute("aria-pressed", String(!wanted));
+            toggle.setAttribute(
+                "aria-label",
+                wanted ? "Pause the formation" : "Play the formation",
+            );
+            iconPause.classList.toggle("hidden", !wanted);
+            iconPlay.classList.toggle("hidden", wanted);
+        }
+
+        toggle.addEventListener("click", () => {
+            wanted = !wanted;
+            sync();
+        });
+        new IntersectionObserver(
+            ([e]) => {
+                visible = e.isIntersecting;
+                sync();
+            },
+            { threshold: 0.1 },
+        ).observe(root);
+        document.addEventListener("visibilitychange", sync);
+
+        // Reduced motion: stand still on the second form with its shape drawn, until
+        // the reader presses play.
+        at = reduce.matches ? PAGE - 0.001 : 0;
+        draw(at);
+        if (reduce.matches) at = PAGE;
+        sync();
+    }
+</script>

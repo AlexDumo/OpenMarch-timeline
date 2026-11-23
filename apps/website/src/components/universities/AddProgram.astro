@@ -1,0 +1,72 @@
+---
+import { Badge, getButtonClassName } from "@openmarch/ui";
+import { ADD_PROGRAM_MAILTO, CONTACT_EMAIL } from "@/data/universities";
+
+const send = [
+    {
+        what: "School and course",
+        why: "The name and number as your catalog lists them.",
+    },
+    {
+        what: "First term",
+        why: "The first semester the course used OpenMarch.",
+    },
+    {
+        what: "Who teaches it",
+        why: "So we can check the listing with you before it goes up.",
+    },
+    {
+        what: "Optional extras",
+        why: "A logo you may share, and a sentence about how the class went.",
+    },
+];
+---
+
+<section id="add-your-program" class="flex w-full min-w-0 flex-col gap-8">
+    <Badge>Join the form</Badge>
+    <h1
+        class="text-text text-[3.5rem] leading-[115%] max-[768px]:text-h1 max-[520px]:text-h2"
+    >
+        Add your program
+    </h1>
+    <p class="text-body leading-relaxed text-text-subtitle max-w-[40rem]">
+        If your course teaches drill design with OpenMarch, tell us and we will
+        put it on the field. Send us:
+    </p>
+    <ul
+        class="grid grid-cols-4 gap-16 mt-8 max-[920px]:grid-cols-2 max-[520px]:grid-cols-1"
+    >
+        {
+            send.map((s, i) => (
+                <li class="bg-fg-1 border border-stroke rounded-6 p-24 flex flex-col gap-8 max-[520px]:p-16">
+                    <span class="font-mono text-sub text-accent">
+                        {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <h3 class="text-h5 leading-tight">{s.what}</h3>
+                    <p class="text-body leading-relaxed text-text-subtitle">
+                        {s.why}
+                    </p>
+                </li>
+            ))
+        }
+    </ul>
+    <div
+        class="p-32 flex justify-between items-center gap-16 border border-accent rounded-full max-[640px]:rounded-6 max-[640px]:p-16 max-[640px]:flex-col max-[640px]:items-stretch"
+    >
+        <a
+            href={ADD_PROGRAM_MAILTO}
+            class="text-h1 text-text underline decoration-accent underline-offset-8 max-[900px]:text-h2 max-[640px]:text-h4 break-all"
+        >
+            {CONTACT_EMAIL}
+        </a>
+        <a
+            href={ADD_PROGRAM_MAILTO}
+            class={getButtonClassName({
+                variant: "primary",
+                className: "max-[640px]:w-full",
+            })}
+        >
+            Add your program
+        </a>
+    </div>
+</section>

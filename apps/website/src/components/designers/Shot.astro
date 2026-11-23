@@ -1,0 +1,64 @@
+---
+/**
+ * A real capture from the app (the docs' media set), in the page's theme.
+ * Stills are lazy images; clips are short silent loops that load only when
+ * they scroll into view (see the script in designers.astro).
+ */
+import manifest from "@/data/docs-media.json";
+
+interface Props {
+    id: string;
+    alt: string;
+    class?: string;
+}
+
+const { id, alt, class: className = "" } = Astro.props;
+const entry = (
+    manifest as Record<
+        string,
+        {
+            chapter: string;
+            kind: "still" | "clip";
+            width: number;
+            height: number;
+        }
+    >
+)[id];
+if (!entry) throw new Error(`<Shot id="${id}">: no such capture`);
+const base = `/docs/media/${entry.chapter}/${id}`;
+const themes = [
+    { name: "dark", show: "hidden dark:block" },
+    { name: "light", show: "block dark:hidden" },
+];
+---
+
+{
+    themes.map((t) =>
+        entry.kind === "still" ? (
+            <img
+                src={`${base}.${t.name}.webp`}
+                alt={alt}
+                width={entry.width}
+                height={entry.height}
+                loading="lazy"
+                decoding="async"
+                class:list={[t.show, "h-auto", className]}
+            />
+        ) : (
+            <video
+                data-designer-clip
+                poster={`${base}.${t.name}.webp`}
+                width={entry.width}
+                height={entry.height}
+                muted
+                loop
+                playsinline
+                preload="none"
+                aria-label={alt}
+                class:list={[t.show, "h-auto", className]}
+            >
+                <source src={`${base}.${t.name}.mp4`} type="video/mp4" />
+            </video>
+        ),
+    )
+}

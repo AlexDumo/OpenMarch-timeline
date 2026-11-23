@@ -1,0 +1,19 @@
+---
+import DirectorsFAQ from "@/components/directors/DirectorsFAQ";
+---
+
+<section
+    id="faq"
+    class="grid w-full min-w-0 grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-32 max-[850px]:grid-cols-1 max-[520px]:gap-16"
+>
+    <div class="flex flex-col gap-8">
+        <h2 class="text-h1 max-[580px]:text-h2">
+            Questions your IT and budget people will ask
+        </h2>
+        <p class="text-body text-text-subtitle leading-relaxed">
+            Plain answers you can forward.
+        </p>
+    </div>
+
+    <DirectorsFAQ client:visible />
+</section>

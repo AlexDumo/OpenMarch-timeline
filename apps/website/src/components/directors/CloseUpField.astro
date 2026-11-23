@@ -1,0 +1,319 @@
+---
+/**
+ * An illustration (not an app screenshot) of Close up: take a marcher out of a
+ * circle, their spot stays empty, and Close up spreads the marchers left round
+ * again. The real thing is in guides/shapes/place-marchers.
+ */
+import { getButtonClassName } from "@openmarch/ui";
+
+const COUNT = 12;
+const CENTER = { x: 320, y: 160 };
+const RADIUS = 105;
+const dots = Array.from({ length: COUNT }, (_, i) => {
+    const angle = -Math.PI / 2 + (i * 2 * Math.PI) / COUNT;
+    return {
+        id: i + 1,
+        x: Math.round(CENTER.x + RADIUS * Math.cos(angle)),
+        y: Math.round(CENTER.y + RADIUS * Math.sin(angle)),
+    };
+});
+const yardLines = [20, 120, 220, 320, 420, 520, 620];
+const yardNumbers = [
+    { x: 120, label: "40" },
+    { x: 320, label: "50" },
+    { x: 520, label: "40" },
+];
+---
+
+<div
+    data-close-up
+    data-cx={CENTER.x}
+    data-cy={CENTER.y}
+    data-r={RADIUS}
+    class="border-stroke bg-bg-1 rounded-6 z-20 flex w-full max-w-[760px] flex-col overflow-clip border motion-preset-slide-up-sm motion-delay-300"
+>
+    <div
+        class="border-stroke text-text-subtitle text-sub flex items-center justify-between gap-8 border-b px-16 py-8 font-mono uppercase"
+    >
+        <span>Set 14 · trumpets</span>
+        <span
+            ><span data-count class="text-text">{COUNT}</span> in the circle</span
+        >
+    </div>
+    <svg
+        viewBox="0 0 640 360"
+        class="h-auto w-full select-none max-[520px]:-ml-[25%] max-[520px]:w-[150%] max-[520px]:max-w-none"
+        role="group"
+        aria-label="A circle of twelve trumpets on a field. Choose a trumpet to take them out, then Close up."
+    >
+        {
+            yardLines.map((x) => (
+                <line
+                    x1={x}
+                    x2={x}
+                    y1="0"
+                    y2="318"
+                    class="stroke-text-disabled"
+                    stroke-width={x % 200 === 120 ? 1.5 : 0.75}
+                />
+            ))
+        }
+        {
+            yardLines.flatMap((x) =>
+                [50, 270].map((y) => (
+                    <line
+                        x1={x - 7}
+                        x2={x + 7}
+                        y1={y}
+                        y2={y}
+                        class="stroke-text-subtitle"
+                        stroke-width="2"
+                    />
+                )),
+            )
+        }
+        {
+            yardNumbers.map(({ x, label }) => (
+                <text
+                    x={x}
+                    y="308"
+                    text-anchor="middle"
+                    class="fill-text-disabled font-mono"
+                    font-size="26"
+                >
+                    {label}
+                </text>
+            ))
+        }
+        <line
+            x1="0"
+            x2="640"
+            y1="318"
+            y2="318"
+            class="stroke-text-subtitle"
+            stroke-width="2"></line>
+        <g data-ghosts></g>
+        {
+            dots.map((dot) => (
+                <g
+                    data-dot={dot.id}
+                    class="dir-dot cursor-pointer outline-none"
+                    style={`transform: translate(${dot.x}px, ${dot.y}px)`}
+                    role="button"
+                    tabindex="0"
+                    aria-label={`Take T${dot.id} out`}
+                >
+                    <circle r="24" fill="transparent" />
+                    <circle r="9" class="dir-dot-mark fill-accent" />
+                    <text
+                        y="-15"
+                        text-anchor="middle"
+                        class="fill-text font-mono"
+                        font-size="13"
+                    >
+                        T{dot.id}
+                    </text>
+                </g>
+            ))
+        }
+    </svg>
+    <div
+        class="border-stroke flex min-h-64 flex-wrap items-center justify-between gap-8 border-t px-16 py-12"
+    >
+        <p data-status aria-live="polite" class="text-body text-left">
+            Tap a trumpet to take them out of the show.
+        </p>
+        <div class="flex gap-8">
+            <button
+                type="button"
+                data-reset
+                hidden
+                class={getButtonClassName({
+                    variant: "secondary",
+                    size: "compact",
+                })}
+            >
+                Put everyone back
+            </button>
+            <button
+                type="button"
+                data-close
+                hidden
+                class={getButtonClassName({
+                    variant: "primary",
+                    size: "compact",
+                })}
+            >
+                Close up
+            </button>
+        </div>
+    </div>
+</div>
+
+<style is:global>
+    .dir-dot {
+        transition:
+            transform 700ms cubic-bezier(0.3, 1.25, 0.5, 1),
+            opacity 300ms ease-out;
+    }
+    .dir-dot:hover .dir-dot-mark,
+    .dir-dot:focus-visible .dir-dot-mark {
+        stroke: var(--color-text);
+        stroke-width: 3px;
+    }
+    .dir-dot[data-out] {
+        pointer-events: none;
+        opacity: 0.45;
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .dir-dot {
+            transition: none;
+        }
+    }
+</style>
+
+<script>
+    const SVG_NS = "http://www.w3.org/2000/svg";
+    const MIN_LEFT = 5;
+
+    document
+        .querySelectorAll<HTMLElement>("[data-close-up]")
+        .forEach((root) => {
+            const center = { x: +root.dataset.cx!, y: +root.dataset.cy! };
+            const radius = +root.dataset.r!;
+            const dots = [...root.querySelectorAll<SVGGElement>("[data-dot]")];
+            const ghosts = root.querySelector<SVGGElement>("[data-ghosts]")!;
+            const status = root.querySelector<HTMLElement>("[data-status]")!;
+            const count = root.querySelector<HTMLElement>("[data-count]")!;
+            const closeButton =
+                root.querySelector<HTMLButtonElement>("[data-close]")!;
+            const resetButton =
+                root.querySelector<HTMLButtonElement>("[data-reset]")!;
+
+            const name = (dot: SVGGElement) => `T${dot.dataset.dot}`;
+            // Marchers in the circle, in order round it, and where each one stands
+            let inCircle = [...dots];
+            const spots = new Map<SVGGElement, { x: number; y: number }>();
+            // Marchers who left since the circle was last closed up
+            let justLeft: SVGGElement[] = [];
+            let benched: SVGGElement[] = [];
+            let touched = false;
+
+            const place = (dot: SVGGElement, x: number, y: number) => {
+                dot.style.transform = `translate(${x}px, ${y}px)`;
+            };
+
+            const spread = () => {
+                inCircle.forEach((dot, i) => {
+                    const angle =
+                        -Math.PI / 2 + (i * 2 * Math.PI) / inCircle.length;
+                    const spot = {
+                        x: center.x + radius * Math.cos(angle),
+                        y: center.y + radius * Math.sin(angle),
+                    };
+                    spots.set(dot, spot);
+                    place(dot, spot.x, spot.y);
+                });
+                count.textContent = String(inCircle.length);
+            };
+
+            const takeOut = (dot: SVGGElement) => {
+                if (!inCircle.includes(dot)) return;
+                if (inCircle.length <= MIN_LEFT) {
+                    status.textContent = `That's a small band. Put everyone back to keep going.`;
+                    return;
+                }
+                const spot = spots.get(dot)!;
+                const ghost = document.createElementNS(SVG_NS, "circle");
+                ghost.setAttribute("cx", String(spot.x));
+                ghost.setAttribute("cy", String(spot.y));
+                ghost.setAttribute("r", "9");
+                ghost.setAttribute("fill", "none");
+                ghost.setAttribute("stroke-width", "1.5");
+                ghost.setAttribute("stroke-dasharray", "3 3");
+                ghost.setAttribute("class", "stroke-text-subtitle");
+                ghosts.append(ghost);
+
+                inCircle = inCircle.filter((other) => other !== dot);
+                justLeft.push(dot);
+                benched.push(dot);
+                dot.dataset.out = "";
+                dot.tabIndex = -1;
+                // Past the front sideline, off the field
+                place(dot, 500 - (benched.length - 1) * 34, 342);
+                count.textContent = String(inCircle.length);
+
+                const empty = justLeft.length;
+                status.textContent =
+                    empty === 1
+                        ? `${name(dot)} is out. Their spot stays empty.`
+                        : `${empty} spots are empty.`;
+                closeButton.hidden = false;
+                resetButton.hidden = false;
+            };
+
+            const closeUp = () => {
+                if (justLeft.length === 0) return;
+                ghosts.replaceChildren();
+                justLeft = [];
+                spread();
+                status.textContent = `${inCircle.length} trumpets, evenly round the circle again.`;
+                closeButton.hidden = true;
+            };
+
+            const reset = () => {
+                ghosts.replaceChildren();
+                for (const dot of benched) {
+                    delete dot.dataset.out;
+                    dot.tabIndex = 0;
+                }
+                inCircle = [...dots];
+                justLeft = [];
+                benched = [];
+                spread();
+                status.textContent =
+                    "Tap a trumpet to take them out of the show.";
+                closeButton.hidden = true;
+                resetButton.hidden = true;
+            };
+
+            spread();
+
+            for (const dot of dots) {
+                dot.addEventListener("click", () => {
+                    touched = true;
+                    takeOut(dot);
+                });
+                dot.addEventListener("keydown", (event) => {
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
+                    touched = true;
+                    takeOut(dot);
+                });
+            }
+            closeButton.addEventListener("click", () => {
+                touched = true;
+                closeUp();
+            });
+            resetButton.addEventListener("click", () => {
+                touched = true;
+                reset();
+            });
+
+            // Show it once, unless the reader got there first or asked for less motion
+            if (
+                !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+            ) {
+                window.setTimeout(() => {
+                    if (touched) return;
+                    takeOut(dots[3]);
+                    window.setTimeout(() => {
+                        if (touched) return;
+                        closeUp();
+                        status.textContent =
+                            "T4 quit. Eleven trumpets close up. Now you try: tap one.";
+                    }, 1500);
+                }, 1800);
+            }
+        });
+</script>

@@ -1,0 +1,182 @@
+---
+import { Badge, getButtonClassName } from "@openmarch/ui";
+import { Image } from "astro:assets";
+import ThemedMedia from "./ThemedMedia.astro";
+
+import viewVertDark from "@/assets/otm/viewvertdark.png";
+import viewVertLight from "@/assets/otm/viewvertlight.png";
+import drillchart from "@/assets/desktop/drillchart.png";
+
+const card =
+    "bg-fg-1 border border-stroke rounded-6 p-24 flex flex-col gap-16 h-435 overflow-clip max-[850px]:h-auto max-[520px]:p-16";
+const title = "text-h3 leading-none max-[520px]:text-h4";
+const body = "text-body leading-relaxed text-text-subtitle";
+const shot =
+    "border border-stroke h-auto w-full rounded-6 object-cover object-top";
+---
+
+<section class="flex w-full min-w-0 flex-col gap-8" id="desktop">
+    <Badge>New in 0.2</Badge>
+    <h1
+        class="text-text text-[3.5rem] leading-[115%] max-[768px]:text-h1 max-[520px]:text-h2"
+    >
+        The free, modern drill writing app
+    </h1>
+    <section class="grid grid-cols-2 gap-16 max-[850px]:grid-cols-1">
+        <div class={card}>
+            <h3 class={title}>Shapes that find the yard line</h3>
+            <p class={body}>
+                Draw lines, curves and arcs and the performers space themselves
+                along them. Shapes snap to yard lines and hashes.
+            </p>
+            <ThemedMedia
+                name="shapes/shapes-draw-arc"
+                alt="Drawing an arc of performers on the field"
+                width={1280}
+                height={800}
+                video
+                class={`${shot} aspect-1280/800`}
+            />
+        </div>
+        <div class={card}>
+            <h3 class={title}>Follow the leader</h3>
+            <p class={body}>
+                Give a line a pathway and every performer marches the same route
+                behind the one in front.
+            </p>
+            <ThemedMedia
+                name="shapes/shapes-pathways"
+                alt="A line of performers following a pathway"
+                width={1424}
+                height={892}
+                class={`${shot} aspect-1424/892`}
+            />
+        </div>
+        <div class={card}>
+            <h3 class={title}>Copy a formation, paste its mirror</h3>
+            <p class={body}>
+                Copy any formation to another set or the other side of the 50,
+                flipped side to side or front to back.
+            </p>
+            <ThemedMedia
+                name="shapes/shapes-paste-mirrored"
+                alt="Pasting a mirrored formation across the 50 yard line"
+                width={1600}
+                height={1278}
+                class={`${shot} aspect-1600/1278`}
+            />
+        </div>
+        <div class:list={[card, "relative"]}>
+            <h3 class={title}>Every action, one shortcut away</h3>
+            <p class={body}>
+                Press ⌘K and type what you want to do. Then give it a shortcut
+                of your own.
+            </p>
+            <div class="relative">
+                <ThemedMedia
+                    name="workspace/window-overview"
+                    alt="The OpenMarch editor"
+                    width={1600}
+                    height={1000}
+                    class={`${shot} aspect-1600/1000 opacity-60`}
+                />
+                <ThemedMedia
+                    name="workspace/window-command-palette"
+                    alt="The command palette finding “Split the move at the playhead”"
+                    width={1320}
+                    height={352}
+                    class="absolute top-24 left-1/2 h-auto w-[88%] -translate-x-1/2 rounded-6 border border-stroke shadow-modal max-[520px]:top-12"
+                />
+            </div>
+        </div>
+        <div class={card}>
+            <h3 class={title}>Desk, browser or tablet</h3>
+            <p class={body}>
+                The same editor runs on Mac, Windows and Linux, in a browser at
+                <a
+                    href="https://editor.openmarch.com"
+                    class="text-accent hover:underline">editor.openmarch.com</a
+                >, and on a tablet with touch and Apple Pencil.
+            </p>
+            <ThemedMedia
+                name="workspace/workspace-tablet-layout"
+                alt="The tablet layout of the editor"
+                width={1600}
+                height={1000}
+                class={`${shot} aspect-1600/1000`}
+            />
+        </div>
+        <div
+            class="bg-fg-1 border border-stroke rounded-6 p-24 flex h-435 flex-col gap-16 relative overflow-clip max-[850px]:h-auto max-[850px]:min-h-380 max-[520px]:min-h-320 max-[520px]:p-16"
+        >
+            <h3 class={title}>To your rehearsal</h3>
+            <p class={body}>
+                Export drill charts and coordinate sheets as PDF, catch steps
+                that are too big before the band does, and send the show to
+                every phone with OpenMarch: On The Move.
+            </p>
+
+            <span
+                class="inset-x-0 -bottom-72 flex items-center w-full justify-center max-[520px]:-bottom-48"
+            >
+                <span class="z-3">
+                    <Image
+                        src={viewVertDark}
+                        alt="OTM Screenshot"
+                        width={384}
+                        height={786}
+                        format="webp"
+                        quality={80}
+                        class="hidden dark:block aspect-384/786 h-393 w-auto object-center object-contain max-[950px]:h-340 max-[520px]:h-280"
+                    />
+                    <Image
+                        src={viewVertLight}
+                        alt="OTM Screenshot"
+                        width={384}
+                        height={786}
+                        format="webp"
+                        quality={80}
+                        class="block dark:hidden aspect-384/786 h-393 w-auto object-center object-contain max-[950px]:h-340 max-[520px]:h-280"
+                    />
+                </span>
+
+                <Image
+                    src={drillchart}
+                    alt="drill chart Screenshot"
+                    width={576}
+                    height={444}
+                    format="webp"
+                    quality={80}
+                    class="aspect-288/222 h-222 -ml-48 z-2 w-auto object-center object-contain max-[950px]:h-190 max-[520px]:h-150 max-[520px]:-ml-32"
+                />
+            </span>
+        </div>
+    </section>
+    <div
+        class="p-32 flex justify-between items-center gap-16 border border-accent rounded-full max-[640px]:rounded-6 max-[640px]:p-16 max-[640px]:flex-col max-[640px]:items-stretch"
+    >
+        <h1 class="text-h1 max-[640px]:text-h2">Free and open source</h1>
+        <div class="flex gap-8 max-[640px]:flex-col">
+            <a
+                href="https://github.com/OpenMarch/OpenMarch"
+                target="_blank"
+                rel="noopener noreferrer"
+                class={getButtonClassName({
+                    variant: "secondary",
+                    className: "max-[640px]:w-full",
+                })}
+            >
+                View the source
+            </a>
+            <a
+                href="/download"
+                class={getButtonClassName({
+                    variant: "primary",
+                    className: "max-[640px]:w-full",
+                })}
+            >
+                Download
+            </a>
+        </div>
+    </div>
+</section>

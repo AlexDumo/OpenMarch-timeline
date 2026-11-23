@@ -1,0 +1,510 @@
+---
+/**
+ * The roster: every program is a performer on the field, and the same list is
+ * written out underneath like a coordinate sheet. Works from three programs to
+ * thirty: the form on the field re-spaces itself, featured programs (those with
+ * a quote) get cards, and the rest go in the sheet.
+ */
+import { Badge, getButtonClassName } from "@openmarch/ui";
+import { ArrowRightIcon } from "@phosphor-icons/react";
+import {
+    programs,
+    PROGRAMS_ARE_PLACEHOLDERS,
+    PREVIEW_COUNTS,
+    ADD_PROGRAM_MAILTO,
+    CONTACT_EMAIL,
+} from "@/data/universities";
+
+const counts: number[] = PROGRAMS_ARE_PLACEHOLDERS
+    ? PREVIEW_COUNTS.filter((c) => c <= programs.length)
+    : [programs.length];
+const initial = counts[0];
+const label = (i: number) => `U${i + 1}`;
+
+// ---- Field geometry (SVG user units) ----
+const W = 1000;
+const H = 400;
+const LEFT = 40;
+const RIGHT = 960;
+const TOP = 30;
+const BOTTOM = 370;
+const yard = (RIGHT - LEFT) / 20;
+const yardLines = Array.from({ length: 21 }, (_, i) => LEFT + i * yard);
+const hashes = [143, 257];
+const numbers = [10, 20, 30, 40, 50, 40, 30, 20, 10].map((n, i) => ({
+    n,
+    x: LEFT + (i + 1) * 2 * yard,
+}));
+
+/** Open spots drawn beside the programs, so the form always has room in it. */
+const openSpots = (n: number) => (n <= 5 ? 6 : 4);
+const MAX_DOTS = Math.max(...counts.map((n) => n + openSpots(n)));
+
+/** Slots for a form of `total` performers: bowed rows, ordered centre out. */
+function form(total: number) {
+    const perRow = 12;
+    const rows = Math.ceil(total / perRow);
+    const slots: { x: number; y: number }[] = [];
+    let left = total;
+    for (let r = 0; r < rows; r++) {
+        const c = Math.ceil(left / (rows - r));
+        left -= c;
+        const span = Math.min(770, (c - 1) * 70);
+        const rowY = H / 2 + (r - (rows - 1) / 2) * 78 - 14;
+        for (let k = 0; k < c; k++) {
+            const dx = c === 1 ? 0 : -span / 2 + (span * k) / (c - 1);
+            const bow = 46 * (dx / 385) ** 2;
+            slots.push({ x: W / 2 + dx, y: rowY + bow });
+        }
+    }
+    return slots.sort(
+        (a, b) =>
+            Math.abs(a.x - W / 2) - Math.abs(b.x - W / 2) ||
+            a.y - b.y ||
+            a.x - b.x,
+    );
+}
+
+type DotState = "program" | "open" | "off";
+const layout: Record<number, [number, number, DotState][]> = {};
+for (const n of counts) {
+    const slots = form(n + openSpots(n));
+    layout[n] = Array.from({ length: MAX_DOTS }, (_, i) => {
+        const s = slots[i];
+        if (!s) return [W / 2, H + 40, "off"];
+        return [Math.round(s.x), Math.round(s.y), i < n ? "program" : "open"];
+    });
+}
+
+const featured = programs.filter((p) => p.quote).slice(0, 3);
+const indexOf = (id: string) => programs.findIndex((p) => p.id === id);
+const sheet = programs.filter((p) => !featured.includes(p));
+/** Past this many lines the sheet runs in two columns on wide screens. */
+const DENSE_FROM = 12;
+---
+
+<section
+    id="programs"
+    class="uni-roster flex w-full min-w-0 flex-col gap-8"
+    data-count={initial}
+>
+    <Badge>Programs</Badge>
+    <h1
+        class="text-text text-[3.5rem] leading-[115%] max-[768px]:text-h1 max-[520px]:text-h2"
+    >
+        On the field this year
+    </h1>
+    <p class="text-body leading-relaxed text-text-subtitle max-w-[40rem]">
+        University programs that teach drill design with OpenMarch. Each one
+        holds a spot in the form, and there are open spots.
+    </p>
+
+    {
+        PROGRAMS_ARE_PLACEHOLDERS && (
+            <div class="flex flex-wrap items-center gap-8 rounded-6 border border-dashed border-yellow px-12 py-8 mt-8">
+                <span class="text-sub font-mono text-yellow">
+                    Concept preview
+                </span>
+                <span class="text-sub text-text-subtitle">
+                    Placeholder programs, not real schools. See the page with
+                </span>
+                <div
+                    class="flex gap-4"
+                    role="group"
+                    aria-label="Number of placeholder programs to preview"
+                >
+                    {counts.map((c) => (
+                        <button
+                            type="button"
+                            class="uni-count text-sub font-mono rounded-6 border border-stroke bg-fg-2 px-8 py-2 cursor-pointer"
+                            data-set-count={c}
+                            aria-pressed={c === initial ? "true" : "false"}
+                        >
+                            {c}
+                        </button>
+                    ))}
+                </div>
+                <span class="text-sub text-text-subtitle">programs.</span>
+            </div>
+        )
+    }
+
+    <div
+        class="uni-field bg-fg-1 border border-stroke rounded-6 overflow-x-auto overflow-y-clip mt-8"
+    >
+        <svg
+            viewBox={`0 0 ${W} ${H}`}
+            class="block h-auto w-full min-w-[640px]"
+            aria-hidden="true"
+        >
+            <g class="text-text" stroke="currentColor" fill="none">
+                <rect
+                    x={LEFT}
+                    y={TOP}
+                    width={RIGHT - LEFT}
+                    height={BOTTOM - TOP}
+                    stroke-opacity="0.25"></rect>
+                {
+                    yardLines.map((x, i) => (
+                        <>
+                            <line
+                                x1={x}
+                                x2={x}
+                                y1={TOP}
+                                y2={BOTTOM}
+                                stroke-opacity={i % 2 === 0 ? 0.2 : 0.09}
+                            />
+                            {hashes.map((y) => (
+                                <line
+                                    x1={x - 5}
+                                    x2={x + 5}
+                                    y1={y}
+                                    y2={y}
+                                    stroke-opacity="0.35"
+                                />
+                            ))}
+                        </>
+                    ))
+                }
+            </g>
+            <g
+                class="text-text font-mono"
+                fill="currentColor"
+                fill-opacity="0.22"
+                font-size="20"
+                text-anchor="middle"
+            >
+                {
+                    numbers.map(({ n, x }) => (
+                        <>
+                            <text x={x} y={BOTTOM - 22}>
+                                {n}
+                            </text>
+                            <text
+                                x={x}
+                                y={TOP + 22}
+                                transform={`rotate(180 ${x} ${TOP + 22}) translate(0 14)`}
+                            >
+                                {n}
+                            </text>
+                        </>
+                    ))
+                }
+            </g>
+            {
+                Array.from({ length: MAX_DOTS }, (_, i) => {
+                    const [x, y, state] = layout[initial][i];
+                    return (
+                        <g
+                            class="uni-dot"
+                            data-i={i}
+                            data-state={state}
+                            style={`transform: translate(${x}px, ${y}px); transition-delay: ${i * 18}ms`}
+                        >
+                            <circle r="9" />
+                            <text
+                                y="-15"
+                                text-anchor="middle"
+                                font-size="13"
+                                class="font-mono"
+                            >
+                                {label(i)}
+                            </text>
+                        </g>
+                    );
+                })
+            }
+        </svg>
+    </div>
+
+    <ul
+        class="grid grid-cols-3 gap-16 mt-8 max-[920px]:grid-cols-1"
+        aria-label="Featured programs"
+    >
+        {
+            featured.map((p) => {
+                const i = indexOf(p.id);
+                return (
+                    <li
+                        class="uni-row bg-fg-1 border border-stroke rounded-6 p-24 flex flex-col gap-12 max-[520px]:p-16"
+                        data-i={i}
+                    >
+                        <div class="flex items-center justify-between gap-8">
+                            <span class="flex items-center gap-8 font-mono text-sub text-accent">
+                                <span class="size-10 rounded-full bg-accent" />
+                                {label(i)}
+                            </span>
+                            {PROGRAMS_ARE_PLACEHOLDERS && (
+                                <Badge variant="secondary">Placeholder</Badge>
+                            )}
+                        </div>
+                        <div class="flex flex-col gap-4">
+                            <h2 class="text-h4 leading-tight">
+                                {p.url ? (
+                                    <a href={p.url} class="hover:text-accent">
+                                        {p.school}
+                                    </a>
+                                ) : (
+                                    p.school
+                                )}
+                            </h2>
+                            <p class="text-body font-medium">{p.course}</p>
+                            <p class="text-sub font-mono text-text-subtitle">
+                                Since {p.since}
+                                {p.location && ` · ${p.location}`}
+                            </p>
+                        </div>
+                        {p.quote && (
+                            <figure class="flex flex-col gap-8 border-t border-stroke pt-12">
+                                <blockquote class="text-body leading-[165%] text-text-subtitle">
+                                    {p.quote.text}
+                                </blockquote>
+                                <figcaption class="text-sub text-text">
+                                    {p.quote.name}, {p.quote.role}
+                                </figcaption>
+                            </figure>
+                        )}
+                    </li>
+                );
+            })
+        }
+    </ul>
+
+    {
+        sheet.length > 0 && (
+            <div
+                class="uni-sheet bg-fg-1 border border-stroke rounded-6 mt-8 overflow-clip"
+                data-dense={sheet.length > DENSE_FROM ? "" : undefined}
+            >
+                <div class="uni-sheet-head grid border-b border-stroke bg-fg-2 font-mono text-sub text-text-subtitle max-[700px]:hidden">
+                    {[0, 1].map(() => (
+                        <div class="grid grid-cols-[48px_minmax(0,1fr)_minmax(0,1.2fr)_88px] gap-12 px-24 py-8">
+                            <span>Spot</span>
+                            <span>School</span>
+                            <span>Course</span>
+                            <span>Since</span>
+                        </div>
+                    ))}
+                </div>
+                <ul class="uni-sheet-rows" aria-label="All programs">
+                    {sheet.map((p) => {
+                        const i = indexOf(p.id);
+                        return (
+                            <li
+                                class="uni-row grid grid-cols-[48px_minmax(0,1fr)_minmax(0,1.2fr)_88px] items-baseline gap-12 border-b border-stroke px-24 py-10 max-[700px]:grid-cols-[44px_minmax(0,1fr)] max-[700px]:gap-x-8 max-[700px]:gap-y-2 max-[700px]:px-16"
+                                data-i={i}
+                            >
+                                <span class="font-mono text-sub text-accent max-[700px]:row-span-2">
+                                    {label(i)}
+                                </span>
+                                <span class="text-body text-text">
+                                    {p.url ? (
+                                        <a
+                                            href={p.url}
+                                            class="hover:text-accent"
+                                        >
+                                            {p.school}
+                                        </a>
+                                    ) : (
+                                        p.school
+                                    )}
+                                </span>
+                                <span class="text-body text-text-subtitle">
+                                    {p.course}
+                                    <span class="hidden font-mono text-sub max-[700px]:inline">
+                                        {" "}
+                                        · {p.since}
+                                    </span>
+                                </span>
+                                <span class="font-mono text-sub text-text-subtitle max-[700px]:hidden">
+                                    {p.since}
+                                </span>
+                            </li>
+                        );
+                    })}
+                </ul>
+            </div>
+        )
+    }
+
+    <a
+        href={ADD_PROGRAM_MAILTO}
+        class="uni-open group mt-8 flex items-center gap-16 rounded-6 border border-dashed border-accent px-24 py-16 duration-150 hover:bg-fg-1 max-[700px]:flex-wrap max-[700px]:px-16"
+    >
+        <span class="flex items-center gap-8 font-mono text-sub text-accent">
+            <span
+                class="size-10 rounded-full border border-dashed border-accent"
+            ></span>
+            <span data-open-label>{label(initial)}</span>
+        </span>
+        <span class="flex min-w-0 flex-1 flex-col gap-2">
+            <span class="text-h5 text-text">Open spot: your program</span>
+            <span class="text-body text-text-subtitle">
+                Teaching a course with OpenMarch? Write to
+                <span class="text-accent underline">{CONTACT_EMAIL}</span>
+                and we will add it.
+            </span>
+        </span>
+        <span
+            class={getButtonClassName({
+                variant: "secondary",
+                className: "max-[700px]:w-full",
+            })}
+        >
+            Add your program <ArrowRightIcon size={16} />
+        </span>
+    </a>
+</section>
+
+<script
+    type="application/json"
+    id="uni-roster-layout"
+    set:html={JSON.stringify(layout)}
+/>
+
+<style>
+    .uni-dot {
+        transition:
+            transform 900ms cubic-bezier(0.3, 0, 0.2, 1),
+            opacity 400ms ease;
+    }
+    .uni-dot circle {
+        stroke: var(--color-accent);
+        stroke-width: 1.5;
+        transition:
+            fill 400ms ease,
+            r 150ms ease;
+    }
+    .uni-dot text {
+        fill: var(--color-text);
+        fill-opacity: 0.75;
+    }
+    .uni-dot[data-state="program"] circle {
+        fill: var(--color-accent);
+    }
+    .uni-dot[data-state="open"] circle {
+        fill: transparent;
+        stroke-dasharray: 3 3;
+    }
+    .uni-dot[data-state="open"] text {
+        fill-opacity: 0.35;
+    }
+    .uni-dot[data-state="off"] {
+        opacity: 0;
+    }
+    .uni-dot[data-hot] circle {
+        r: 13;
+        stroke: var(--color-text);
+    }
+    .uni-row {
+        transition:
+            border-color 150ms ease,
+            background-color 150ms ease;
+    }
+    .uni-row[data-hot] {
+        border-color: var(--color-accent);
+    }
+    .uni-sheet-head > :last-child {
+        display: none;
+    }
+    .uni-sheet-rows {
+        margin-bottom: -1px;
+    }
+    @media (min-width: 1000px) {
+        .uni-sheet[data-dense] .uni-sheet-head {
+            grid-template-columns: 1fr 1fr;
+        }
+        .uni-sheet[data-dense] .uni-sheet-head > :last-child {
+            display: grid;
+        }
+        .uni-sheet[data-dense] .uni-sheet-rows {
+            columns: 2;
+            column-gap: 0;
+        }
+        .uni-sheet[data-dense] .uni-row {
+            break-inside: avoid;
+        }
+    }
+    .uni-row[hidden],
+    .uni-sheet[hidden] {
+        display: none;
+    }
+    .uni-count[aria-pressed="true"] {
+        background: var(--color-accent);
+        color: var(--color-text-invert);
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .uni-dot,
+        .uni-dot circle {
+            transition: none;
+        }
+    }
+</style>
+
+<script>
+    const root = document.querySelector<HTMLElement>(".uni-roster");
+    const data = document.getElementById("uni-roster-layout");
+    if (root && data) {
+        const layout: Record<string, [number, number, string][]> = JSON.parse(
+            data.textContent ?? "{}",
+        );
+        const dots = [...root.querySelectorAll<SVGGElement>(".uni-dot")];
+        const rows = [...root.querySelectorAll<HTMLElement>(".uni-row")];
+        const sheet = root.querySelector<HTMLElement>(".uni-sheet");
+        const openLabel = root.querySelector("[data-open-label]");
+        const buttons = [
+            ...root.querySelectorAll<HTMLButtonElement>("[data-set-count]"),
+        ];
+
+        const show = (count: number) => {
+            const spots = layout[count];
+            if (!spots) return;
+            root.dataset.count = String(count);
+            dots.forEach((dot, i) => {
+                const [x, y, state] = spots[i];
+                dot.style.transform = `translate(${x}px, ${y}px)`;
+                dot.dataset.state = state;
+            });
+            for (const row of rows) row.hidden = Number(row.dataset.i) >= count;
+            if (sheet) {
+                const lines = sheet.querySelectorAll(
+                    ".uni-row:not([hidden])",
+                ).length;
+                sheet.hidden = lines === 0;
+                sheet.toggleAttribute("data-dense", lines > 12);
+            }
+            if (openLabel) openLabel.textContent = `U${count + 1}`;
+            for (const b of buttons)
+                b.setAttribute(
+                    "aria-pressed",
+                    String(Number(b.dataset.setCount) === count),
+                );
+        };
+
+        for (const b of buttons)
+            b.addEventListener("click", () => show(Number(b.dataset.setCount)));
+
+        // A dot and its line in the list light up together.
+        const heat = (i: string | undefined, on: boolean) => {
+            if (i === undefined) return;
+            for (const el of root.querySelectorAll(`[data-i="${i}"]`))
+                el.toggleAttribute("data-hot", on);
+        };
+        for (const el of [...dots, ...rows]) {
+            el.addEventListener("pointerenter", () => heat(el.dataset.i, true));
+            el.addEventListener("pointerleave", () =>
+                heat(el.dataset.i, false),
+            );
+        }
+
+        // On a phone the field is wider than the screen: start on the 50.
+        const field = root.querySelector<HTMLElement>(".uni-field");
+        if (field)
+            field.scrollLeft = (field.scrollWidth - field.clientWidth) / 2;
+
+        const asked = Number(
+            new URLSearchParams(location.search).get("programs"),
+        );
+        show(layout[asked] ? asked : Number(root.dataset.count));
+    }
+</script>

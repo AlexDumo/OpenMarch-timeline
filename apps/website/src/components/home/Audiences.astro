@@ -1,0 +1,99 @@
+---
+import { ArrowRightIcon } from "@phosphor-icons/react";
+
+/**
+ * Routes each kind of visitor to their page. Every card wears a performer
+ * label the way a drill chart does (D1, B1, U1) and a small formation.
+ */
+const audiences = [
+    {
+        href: "/designers",
+        label: "D1",
+        color: "#5B8DEF",
+        title: "Drill designers",
+        body: "Write faster with shapes, pathways and a timeline that follows the music. Check every set from the press box.",
+        // An arc
+        dots: Array.from({ length: 9 }, (_, i) => {
+            const angle = ((200 + i * 17.5) * Math.PI) / 180;
+            return [60 + 52 * Math.cos(angle), 62 + 52 * Math.sin(angle)];
+        }),
+    },
+    {
+        href: "/band-directors",
+        label: "B1",
+        color: "#E8A33D",
+        title: "Band directors",
+        body: "Free for you and your whole staff. Print charts and coordinate sheets, and put the drill on every performer's phone.",
+        // A block
+        dots: Array.from({ length: 15 }, (_, i) => [
+            20 + (i % 5) * 20,
+            14 + Math.floor(i / 5) * 18,
+        ]),
+    },
+    {
+        href: "/universities",
+        label: "U1",
+        color: "#58B368",
+        title: "Universities",
+        body: "Open-source software students can install on their own computer or open in a browser, for drill design and marching band techniques.",
+        // A wedge
+        dots: Array.from({ length: 9 }, (_, i) => [
+            12 + i * 12,
+            12 + Math.abs(i - 4) * 9,
+        ]),
+    },
+];
+---
+
+<section class="flex w-full min-w-0 flex-col gap-8" id="who-its-for">
+    <h1
+        class="text-text text-[3.5rem] leading-[115%] max-[768px]:text-h1 max-[520px]:text-h2"
+    >
+        Find your spot
+    </h1>
+    <div class="grid grid-cols-3 gap-16 mt-8 max-[920px]:grid-cols-1">
+        {
+            audiences.map((audience) => (
+                <a
+                    href={audience.href}
+                    class="group bg-fg-1 border border-stroke rounded-6 p-24 flex flex-col gap-12 hover:border-accent duration-150 ease-out max-[520px]:p-16"
+                >
+                    <div class="flex items-start justify-between">
+                        <span class="flex flex-col items-center gap-4 font-mono text-body leading-none text-text-subtitle">
+                            {audience.label}
+                            <span
+                                class="size-12 rounded-full"
+                                style={`background: ${audience.color};`}
+                            />
+                        </span>
+                        <svg
+                            viewBox="0 0 120 56"
+                            class="h-56 w-auto"
+                            aria-hidden="true"
+                        >
+                            {audience.dots.map(([x, y]) => (
+                                <circle
+                                    cx={x}
+                                    cy={y}
+                                    r="3.5"
+                                    fill={audience.color}
+                                    fill-opacity="0.55"
+                                />
+                            ))}
+                        </svg>
+                    </div>
+                    <h2 class="text-h3 leading-none max-[520px]:text-h4">
+                        {audience.title}
+                    </h2>
+                    <p class="text-body leading-relaxed text-text-subtitle">
+                        {audience.body}
+                    </p>
+                    <div class="mt-auto flex items-center gap-6 pt-8 group-hover:text-accent duration-150">
+                        OpenMarch for {audience.title.toLowerCase()}
+                        <ArrowRightIcon size={20} />
+                    </div>
+                </a>
+            ))
+        }
+    </div>
+</section>
