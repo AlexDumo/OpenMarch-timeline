@@ -38,6 +38,7 @@ import {
 import { readHeldMarks } from "../timelineHeldMarks";
 import { holdFromPreviousPage } from "../timelineHoldFromPrevious";
 import { holdOverWindow } from "../timelineHoldOverWindow";
+import { splitMarchersIntoNewMove } from "../timelineSplitMoves";
 import { setHoldEdge, splitHoldAt } from "../timelineHoldExtent";
 import { setAsShownOnPage } from "../timelineSetAsShown";
 import { unsetMarchersAt } from "../timelineUnset";
@@ -2442,6 +2443,92 @@ describeDbTests(
             expect(await recipeTables(db)).not.toEqual(recipesBefore);
             expect((await performUndo(db)).success).toBe(true);
             expect(await recipeTables(db)).toEqual(recipesBefore);
+        });
+
+        it("a page with an ordinary move for everyone (a show with drill on every page): one member holds the whole box", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b } = await show(db);
+            const page2 = await moveEndingAt(db, a, PAGE3.start);
+            await boxOn(db, page2, [
+                { marcherId: a, xy: UP },
+                { marcherId: b, xy: UP2 },
+            ]);
+            // Page 3's own move, no shape in it (fork #1015 owner report)
+            await move(db, PAGE3, [
+                { marcherId: a, xy: FAR },
+                { marcherId: b, xy: LEFT },
+            ]);
+            const before = await snapshot(db);
+            const result = await holdFromPreviousPage({
+                db,
+                pageBox: PAGE3,
+                marcherIds: [a],
+            });
+            expect(result).toEqual({
+                held: [a, b].sort((x, y) => x - y),
+                skipped: [],
+                alsoHeld: [b],
+            });
+            expect((await atFlags(db, a)).slice(2, 4)).toEqual([UP, UP]);
+            expect((await atFlags(db, b)).slice(2, 4)).toEqual([UP2, UP2]);
+            for (const id of [a, b])
+                expect(
+                    (await rowsOf(db, id)).filter(
+                        (r) =>
+                            r.start_beat < PAGE3.end &&
+                            r.end_beat > PAGE3.start,
+                    ),
+                ).toEqual([]);
+            await roundTrip(db, before, await snapshot(db));
+
+            // Then a drag on page 3 edits page 2 for the whole box
+            const moved: XY = [UP[0] + 40, UP[1] + 40];
+            const moved2: XY = [UP2[0] + 40, UP2[1] + 40];
+            await edit(db, { kind: "range", ...PAGE3 }, [
+                { marcherId: a, xy: moved },
+                { marcherId: b, xy: moved2 },
+            ]);
+            expect((await atFlags(db, a)).slice(2, 4)).toEqual([moved, moved]);
+            expect((await atFlags(db, b)).slice(2, 4)).toEqual([
+                moved2,
+                moved2,
+            ]);
+        });
+
+        it("a member split into a move of its own on the page keeps it, and is named", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b } = await show(db);
+            const page2 = await moveEndingAt(db, a, PAGE3.start);
+            await boxOn(db, page2, [
+                { marcherId: a, xy: UP },
+                { marcherId: b, xy: UP2 },
+            ]);
+            await move(db, PAGE3, [
+                { marcherId: a, xy: FAR },
+                { marcherId: b, xy: LEFT },
+            ]);
+            // b walks out alone on page 3, in a move of its own
+            await splitMarchersIntoNewMove({
+                db,
+                timelineId: await moveEndingAt(db, b, PAGE3.end),
+                marcherIds: [b],
+            });
+            await timelineResolverSettled();
+            const result = await holdFromPreviousPage({
+                db,
+                pageBox: PAGE3,
+                marcherIds: [a],
+            });
+            expect(result).toEqual({
+                held: [a],
+                skipped: [{ marcherId: b, reason: "shapeOwnMove" }],
+            });
+            expect(await marksOf(db, b)).toEqual([]);
+            expect((await atFlags(db, b))[3]).toEqual(LEFT);
         });
 
         it("a member that walked off since, or that a hold can't take, stays as it is; the page's copy keeps it with holes", async ({

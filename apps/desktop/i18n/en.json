@@ -2712,6 +2712,7 @@
             "done": "{names} {held} on {page}",
             "doneWithShape": "{names} and the rest of their shape {held} on {page}",
             "endsWithoutArriving": "{names}: a move ends at {page} without arriving there",
+            "shapeOwnMove": "{names}: in the same shape, but moving on their own on {page}",
             "expertMoves": "{names}: Expert moves on this page",
             "followLeader": "{names}: follows the leader on this page",
             "held": "{names}: already {held} here",
@@ -3249,6 +3250,7 @@
             "arrivalShape": "{names}: the hold would start where a shape ends",
             "arrivalFollowLeader": "{names}: the hold would start where a follow-the-leader move ends",
             "endsWithoutArriving": "{names}: the last move before the start flag ends without arriving there",
+            "shapeOwnMove": "{names}: in the same shape, but moving on their own between the start flag and the playhead",
             "count": "{count, plural, one {# marcher} other {# marchers}}",
             "notHeld": "{count, plural, one {# marcher} other {# marchers}} not {heldLower}"
         },

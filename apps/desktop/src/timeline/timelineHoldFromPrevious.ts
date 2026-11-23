@@ -67,6 +67,11 @@ const SKIP_WORDS: Record<
         key: "timeline.holdFromPrevious.arrivalFollowLeader",
         defaultValue: "{names}: the move before {page} follows the leader",
     },
+    shapeOwnMove: {
+        key: "timeline.holdFromPrevious.shapeOwnMove",
+        defaultValue:
+            "{names}: in the same shape, but moving on their own on {page}",
+    },
 };
 
 /**

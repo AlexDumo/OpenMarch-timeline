@@ -24,12 +24,26 @@ import {
  * - on its own moves inside the stretch, which the hold takes away (a later page's own copy of
  *   the shape).
  *
- * Another member comes along only when it is carried there with the selected one: its own hold
- * would grow out of the same move (or the starting spots), from the same count, and its only rows
- * inside the stretch are in that shape's own move, which the hold takes away anyway. A member that
- * walked off since, or moves on its own inside the stretch, is left as it is, as are members a
- * hold can't be made for (the caller's own reasons, which it doesn't report for them).
+ * Another member comes along when it is carried there with the selected ones: its own hold would
+ * grow out of the same move (or the starting spots), from the same count, and its rows inside the
+ * stretch are only in that shape's own move or in moves the selected members of the shape are in
+ * there too (a page's own move, which the hold takes away from them anyway). So in a show where
+ * every page has a move, holding one member of a box holds the box (owner report, fork #1015).
+ * A member that walked off since is left as it is, and so is one in a move of its own inside the
+ * stretch (`ownMove`, for the caller to name), as are members a hold can't be made for (the
+ * caller's own reasons).
  */
+
+/** What `carriedShapeMates` found: who comes along, and who stays out on a move of their own */
+export interface CarriedShapeMates {
+    /** Members held with the selected ones, ascending */
+    readonly mates: number[];
+    /**
+     * Members that would come along but have rows inside the stretch in a move of their own (none
+     * of the shape's, none the selected members share there), so they stay as they are, ascending
+     */
+    readonly ownMove: number[];
+}
 
 /** What a marcher's hold over the stretch would grow out of: a move, or the starting spots (`null`) */
 export interface HoldSource {
@@ -39,8 +53,8 @@ export interface HoldSource {
 }
 
 /**
- * The members of the placed shapes `selected` bring along to a hold over `range` (see the module
- * comment), ascending, none of `selected`.
+ * The members of the placed shapes `selected` bring along to a hold over `range`, and those left
+ * on a move of their own (see the module comment), none of `selected`.
  *
  * @param sourceOf what a marcher's hold over `range` would grow out of, or null when nothing
  */
@@ -55,8 +69,9 @@ export async function carriedShapeMates(
         range: { readonly start: number; readonly end: number };
         sourceOf: (marcherId: number) => Promise<HoldSource | null>;
     },
-): Promise<number[]> {
-    if (selected.length === 0 || !(await hasShapeRecipes(tx))) return [];
+): Promise<CarriedShapeMates> {
+    const none: CarriedShapeMates = { mates: [], ownMove: [] };
+    if (selected.length === 0 || !(await hasShapeRecipes(tx))) return none;
     const sources = new Map<number, HoldSource | null>();
     const source = async (id: number) => {
         if (!sources.has(id)) sources.set(id, await sourceOf(id));
@@ -108,7 +123,7 @@ export async function carriedShapeMates(
         else arrivalMoves.add(s.timelineId);
     }
     const wanted = [...new Set([...arrivalMoves, ...ownMoves])];
-    if (wanted.length === 0 && !fromHome) return [];
+    if (wanted.length === 0 && !fromHome) return none;
 
     const memberRows = await tx
         .select({
@@ -143,16 +158,19 @@ export async function carriedShapeMates(
         recipes.set(row.recipeId, recipe);
     }
 
-    // Each candidate with the source it must share and the shape moves its rows inside may be in
+    // Each candidate with the source it must share and the moves its rows inside may be in: the
+    // shape's own, and those its linked selected members are in there (whose rows the hold takes
+    // away anyway). Per shape, so an unrelated selected marcher changes nothing
     const candidates = new Map<
         number,
-        { sources: HoldSource[]; shapeMoves: Set<number> }
+        { sources: HoldSource[]; allowedMoves: Set<number> }
     >();
     for (const recipe of recipes.values()) {
         const mates = recipe.members.filter((id) => selectedSet.has(id));
         // Linked through the selected members this shape carries: by its move being their
         // arrival, or by being their own move inside the stretch
         const links: HoldSource[] = [];
+        const shared = new Set<number>();
         for (const id of mates) {
             const s = await source(id);
             if (!s) continue;
@@ -160,37 +178,48 @@ export async function carriedShapeMates(
             const own =
                 recipe.timelineId !== null &&
                 (selectedInside.get(id)?.has(recipe.timelineId) ?? false);
-            if (arrives || own) links.push(s);
+            if (!arrives && !own) continue;
+            links.push(s);
+            for (const move of selectedInside.get(id) ?? []) shared.add(move);
         }
         if (links.length === 0) continue;
         for (const id of recipe.members) {
             if (selectedSet.has(id)) continue;
             const c = candidates.get(id) ?? {
                 sources: [],
-                shapeMoves: new Set<number>(),
+                allowedMoves: new Set<number>(),
             };
             c.sources.push(...links);
-            if (recipe.timelineId !== null) c.shapeMoves.add(recipe.timelineId);
+            if (recipe.timelineId !== null)
+                c.allowedMoves.add(recipe.timelineId);
+            for (const move of shared) c.allowedMoves.add(move);
             candidates.set(id, c);
         }
     }
-    if (candidates.size === 0) return [];
+    if (candidates.size === 0) return none;
 
     const candidateInside = await movesInside([...candidates.keys()]);
     const out: number[] = [];
+    const ownMove: number[] = [];
     for (const [id, c] of candidates) {
-        const inside = candidateInside.get(id) ?? new Set<number>();
-        if ([...inside].some((move) => !c.shapeMoves.has(move))) continue;
         const own = await source(id);
+        // Walked off since: no longer carried there with them
         if (
-            own &&
-            c.sources.some(
+            !own ||
+            !c.sources.some(
                 (s) => s.timelineId === own.timelineId && s.from === own.from,
             )
         )
-            out.push(id);
+            continue;
+        const inside = candidateInside.get(id) ?? new Set<number>();
+        if ([...inside].some((move) => !c.allowedMoves.has(move)))
+            ownMove.push(id);
+        else out.push(id);
     }
-    return out.sort((x, y) => x - y);
+    return {
+        mates: out.sort((x, y) => x - y),
+        ownMove: ownMove.sort((x, y) => x - y),
+    };
 }
 
 /**

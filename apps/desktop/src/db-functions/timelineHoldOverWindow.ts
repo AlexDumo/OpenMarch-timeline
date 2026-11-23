@@ -50,7 +50,9 @@ import { joinedHoldStyle } from "@/timeline/holdStyle";
  *   a move crossing `S`: after the cut it is the arrival (`arrivalRowSql`), so it is checked
  *   before anything is cut;
  * - `endsWithoutArriving`: the row the hold would grow out of ends without arriving there (a lower
- *   layer's row, or its part of a move that runs on), so it has nothing to grow out of.
+ *   layer's row, or its part of a move that runs on), so it has nothing to grow out of;
+ * - `shapeOwnMove`: the rest of a shape held with the selected marchers, but in a move of its own
+ *   in the window (`carriedShapeMates`).
  *
  * A placed shape is Held whole, as by Hold from last keyframe (owner, 2026-11-15): the rest of a
  * shape carried into the window with the selected marchers is Held too (`carriedShapeMates`).
@@ -66,7 +68,9 @@ export type HoldOverWindowSkipReason =
     | "followLeaderOrder"
     | "arrivalShape"
     | "arrivalFollowLeader"
-    | "endsWithoutArriving";
+    | "endsWithoutArriving"
+    /** In a shape held with the selected marchers, but in a move of its own in the window */
+    | "shapeOwnMove";
 
 /** A marcher a hold command left alone, with why. */
 export interface HoldSkip<R extends string> {
@@ -213,7 +217,7 @@ export async function holdOverWindowInTransaction({
     if (!window) return { held: [], skipped: [] };
     const chosen = [...new Set(marcherIds)].sort((x, y) => x - y);
     // The rest of a shape carried into the window with them is Held too
-    const mates = await carriedShapeMates(tx, {
+    const { mates, ownMove } = await carriedShapeMates(tx, {
         selected: chosen,
         range: window,
         sourceOf: async (marcherId) =>
@@ -232,7 +236,14 @@ export async function holdOverWindowInTransaction({
     const ids = [...chosen, ...mates].sort((x, y) => x - y);
     const rows = await readBasicRows(tx, { marcherIds: ids });
     const marks = await readHeldMarks(tx, ids);
-    const result: HoldOverWindowResult = { held: [], skipped: [] };
+    const result: HoldOverWindowResult = {
+        held: [],
+        // The rest of a shape that stays out, on a move of its own there, is named
+        skipped: ownMove.map((marcherId) => ({
+            marcherId,
+            reason: "shapeOwnMove" as const,
+        })),
+    };
     const planned = new Map<number, PlannedSource>();
     for (const marcherId of ids) {
         const own = marks.filter((m) => m.marcherId === marcherId);

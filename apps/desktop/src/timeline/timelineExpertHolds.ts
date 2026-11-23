@@ -60,6 +60,11 @@ const SKIP_WORDS: Record<SkipReason, { key: string; defaultValue: string }> = {
         defaultValue:
             "{names}: the last move before the start flag ends without arriving there",
     },
+    shapeOwnMove: {
+        key: "timeline.expertHolds.shapeOwnMove",
+        defaultValue:
+            "{names}: in the same shape, but moving on their own between the start flag and the playhead",
+    },
 };
 
 /**

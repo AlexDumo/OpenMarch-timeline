@@ -629,11 +629,14 @@ passages of the 2026-10-30 amendment:
   placed shape sets. Only a transition into a stored shape (`dest_shape_id`) and a
   follow-the-leader move are still skipped and named, since the write would rewrite them. Placing
   a shape at the starting spots no longer drops holds from the starting spots.
-- **A shape is Held whole.** Holding some of a placed shape's members holds the rest of it where
-  it is carried there with them: their own hold would grow out of the same move (or the starting
-  spots) from the same count, and their only rows in the stretch are in that shape's own move.
-  Members that walked off since, or move on their own in the stretch, stay as they are. The
-  results list them as `alsoHeld`.
+- **A shape is Held whole.** Holding some of a placed shape's members holds every other member
+  whose own hold would grow out of the same move (or the starting spots) from the same count, and
+  whose rows in the stretch are only in that shape's own move or in moves the held members share
+  there (a page's ordinary move, in a show with drill on every page); those rows are removed for
+  them as for the held ones. The results list them as `alsoHeld`. A member that walked off since
+  stays as it is, and so does one in a move of its own in the stretch, which the result names
+  (`shapeOwnMove`). (Clarified 2026-11-23, fork #1015: holding one member of a box on a page that
+  had drill of its own held that member alone, leaving the shape partly Held.)
 - **It stops being Held whole too.** Shortening a hold's end, Split hold here and Clear this page
   change the same hold of the rest of the shape (its other members' marks starting at the same
   count and growing out of the same move or starting spots) the same way: each past the new end

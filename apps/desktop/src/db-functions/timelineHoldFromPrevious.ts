@@ -85,7 +85,9 @@ export type HoldFromPreviousSkipReason =
     | "shape"
     | "followLeader"
     | "arrivalShape"
-    | "arrivalFollowLeader";
+    | "arrivalFollowLeader"
+    /** In a shape held with the selected marchers, but in a move of its own on the page */
+    | "shapeOwnMove";
 
 /** A marcher Hold from last keyframe left alone, with why. */
 export interface HoldFromPreviousSkip {
@@ -168,7 +170,7 @@ export async function holdFromPreviousPageInTransaction({
     const asked = [...new Set(marcherIds)].sort((x, y) => x - y);
     const showStart = showStartBeat(grid);
     // The rest of a shape carried here with them is Held too
-    const mates = await carriedShapeMates(tx, {
+    const { mates, ownMove } = await carriedShapeMates(tx, {
         selected: asked,
         range: pageBox,
         sourceOf: async (marcherId) =>
@@ -199,7 +201,14 @@ export async function holdFromPreviousPageInTransaction({
             }),
         );
 
-    const result: HoldFromPreviousResult = { held: [], skipped: [] };
+    const result: HoldFromPreviousResult = {
+        held: [],
+        // The rest of a shape that stays out, on a move of its own there, is named
+        skipped: ownMove.map((marcherId) => ({
+            marcherId,
+            reason: "shapeOwnMove" as const,
+        })),
+    };
     const toRemove: number[] = [];
     const replaced: number[] = [];
     const newMarks: {
