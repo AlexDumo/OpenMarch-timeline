@@ -953,20 +953,17 @@ export function paintMonument(g: G, w: number, h: number): void {
 }
 
 /**
- * The paint at midfield: the OpenMarch logo in white, keylined in violet,
- * 18 yards across (`FieldSurfaceInput.centerArt`).
+ * The paint at midfield: the OpenMarch app icon, ringed in white, in the
+ * box the turf drawings give the midfield logo (27 ft across, 13 ft 6 in
+ * each side of the 50; `FieldSurfaceInput.centerArt`).
  */
 export const dieselFieldArt: FieldCenterArt = {
-    aspect: LOGO_ASPECT,
-    maxWidth: 16.46,
+    aspect: 1,
+    maxWidth: 27 * 0.3048,
     paint(g, w, h) {
-        // Inset so the keyline stays on the canvas.
-        const keyline = h * 0.012;
-        const height = Math.min(h, w / LOGO_ASPECT) - 2 * keyline;
-        paintLogo(g, w / 2, h / 2, height, OM.white, {
-            color: OM.violet,
-            width: keyline,
-        });
+        const size = Math.min(w, h);
+        // Inset so the white ring stays on the canvas.
+        paintAppIcon(g, w / 2, h / 2, size / 1.1, OM.white);
     },
 };
 

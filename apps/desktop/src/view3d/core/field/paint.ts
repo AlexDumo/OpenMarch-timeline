@@ -87,6 +87,15 @@ function paintItem(
                 (item.maxZ - item.minZ) * sz,
             );
             return;
+        case "poly":
+            g.fillStyle = item.color;
+            g.beginPath();
+            item.points.forEach(([x, z], i) =>
+                i === 0 ? g.moveTo(X(x), Y(z)) : g.lineTo(X(x), Y(z)),
+            );
+            g.closePath();
+            g.fill();
+            return;
         case "image":
             if (!image) return;
             g.save();

@@ -783,9 +783,10 @@ describe("Mark Diesel kit", () => {
                 // Far under design.md's cap of 300 draw calls a kit. The pro
                 // dome draws 28 at high and 15 at low; this hall has the
                 // drape, the boards, the ribbons and the seats the pro dome
-                // lacks. The crowd is two of them, and the glass rails one.
+                // lacks. The crowd is two of them, the glass rails one, and
+                // the turf past the field and its paint two.
                 expect(draws).toBe(bare.draws);
-                expect(draws).toBeLessThanOrEqual(quality === "low" ? 45 : 57);
+                expect(draws).toBeLessThanOrEqual(quality === "low" ? 46 : 58);
                 // The pro dome draws about 360k at high and 190k at low. A
                 // full house is about 46,000 people (23,000 at low): 2
                 // triangles each as cards, and up to 2,100 full figures of

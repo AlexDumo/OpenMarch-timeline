@@ -28,7 +28,7 @@ import {
 import { buildDieselLighting, DIESEL_VENUE } from "./markDiesel/lighting";
 import { buildDieselRoof } from "./markDiesel/roof";
 import { buildDieselSite } from "./markDiesel/site";
-import { buildDieselFieldBorder } from "./markDiesel/turf";
+import { buildDieselTurf } from "./markDiesel/turf";
 
 /**
  * The Mark Diesel kit: Mark Diesel Stadium, a fictional retractable-roof
@@ -95,7 +95,7 @@ export const buildMarkDiesel: KitBuilder = ({ footprint, params, quality }) => {
         buildDieselDrape(ctx),
         buildDieselBoards(ctx),
         buildDieselLighting(ctx),
-        buildDieselFieldBorder(ctx),
+        buildDieselTurf(ctx),
     ];
     parts.forEach((part) => placed.add(part.object));
 

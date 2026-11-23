@@ -57,6 +57,10 @@ export type FieldRole =
     | "endZoneHatch"
     | "endZoneFade"
     | "endZoneBorder"
+    | "goalLine"
+    | "accent"
+    | "kickoff"
+    | "patLine"
     | "grain";
 
 export interface PlanRect {
@@ -66,6 +70,15 @@ export interface PlanRect {
     maxX: number;
     minZ: number;
     maxZ: number;
+    color: string;
+}
+
+/** A filled polygon in world meters, for marks that aren't square to the field. */
+export interface PlanPoly {
+    type: "poly";
+    role: FieldRole;
+    /** Corners as [x, z] pairs, in order. */
+    points: [number, number][];
     color: string;
 }
 
@@ -227,6 +240,7 @@ export interface PlanTarpArt {
 
 export type PlanItem =
     | PlanRect
+    | PlanPoly
     | PlanText
     | PlanArrow
     | PlanImage
@@ -265,6 +279,47 @@ export interface TurfColors {
      * `grass`, the shared turf's look.
      */
     surface?: TurfSurface;
+    /** The venue's own field markings, on top of the shared turf's. */
+    marks?: TurfMarks;
+}
+
+/**
+ * Field markings a venue paints differently from the shared turf, such as a
+ * pro field's (Mark Diesel). Lengths are in meters. Every mark that depends
+ * on a yard line is placed from the goal lines, so it only shows on a
+ * football field with end zones.
+ */
+export interface TurfMarks {
+    /**
+     * Paint the shared turf's thin frame just inside the field's edges.
+     * Defaults to true; false when the venue paints its own border outside
+     * the field instead.
+     */
+    insetBorder?: boolean;
+    /** How far in from each sideline the 1-yard marks start. */
+    tickInset?: number;
+    /**
+     * Goal line width. Its field side stays where a 4 in line's would be;
+     * the extra width goes into the end zone.
+     */
+    goalLine?: number;
+    /** 4 in colored lines either side of each 20-yard line. */
+    twenties?: { goalSide: string; fieldSide: string };
+    /** An X on each 35-yard line, at the middle of the field. */
+    kickoffMarks?: boolean;
+    /** A 1-yard line on each 2-yard line, at the middle of the field. */
+    patLines?: boolean;
+    /** From a yard line's center to the inner edge of each digit. */
+    digitGap?: number;
+    /** From a number's inside edge to the axis of its arrow. */
+    arrowAxis?: number;
+    /**
+     * End-zone lettering: cap height, and the clear space between it and
+     * each sideline. Painted without a drop shadow.
+     */
+    endZoneText?: { height: number; margin: number };
+    /** Paint the white border line inside each end zone. Defaults to true. */
+    endZoneBorder?: boolean;
 }
 
 /** Natural grass, or synthetic turf laid in 5-yard rolls. */
