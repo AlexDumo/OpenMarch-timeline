@@ -34,7 +34,7 @@ import {
 import {
     followOrderAt,
     trailDragRefusal,
-    trailOrderFrom,
+    trailOrderIn,
     windowMoveOf,
     type TrailWindow,
 } from "./timelineTrailDrag";
@@ -84,6 +84,13 @@ export interface RippleInput {
     keepMove?: number | null;
     /** The marcher whose spot is the entrance, when the finish was on it (RP-4) */
     enter?: number | null;
+    /**
+     * A leader pulled out of a closed outline (step 10), who needn't be an end of the line: the
+     * line as the tool shows it, tail first and the leader last, with `step` (one step, in field
+     * units) for the outline's fit
+     */
+    line?: readonly number[] | null;
+    step?: number;
 }
 
 export interface RippleResult extends FollowTrailResult {
@@ -169,16 +176,15 @@ export async function rippleTrailInTransaction(
         const [x, y] = resolver.positionAt(m, timeline.start_beat);
         return [x, y];
     });
-    const along = await followOrderAt(
-        tx,
+    const order = await trailOrderIn(tx, {
         ids,
-        timeline.start_beat,
+        from: timeline.start_beat,
+        until: timeline.end_beat,
         starts,
-        timeline.end_beat,
-    );
-    if (!along) refuse(trailDragRefusal.notFitted());
-    const order = trailOrderFrom(along.order, ids.indexOf(leaderId));
-    if (!order) refuse(trailDragRefusal.notAnEnd());
+        leaderId,
+        line: input.line,
+        step: input.step ?? 1,
+    });
     const line = order.map((i) => ids[i]!);
     // Each member's end spot there, its slot's stored destination (as AP-T1 reads it)
     const spots = await endSpotsInMove(tx, move, ids);

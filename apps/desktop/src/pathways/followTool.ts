@@ -43,8 +43,10 @@ import { groupMoveAt, type PathTarget } from "./pathTarget";
 import { usePathPenStore } from "./pathPenStore";
 import type { FollowDrag, FollowKeep } from "./followDrag";
 import {
+    aroundLine,
     aroundPlanOf,
     aroundTarget,
+    guessAround,
     loopAround,
     type FollowAround,
 } from "./followAround";
@@ -188,11 +190,11 @@ async function followFormOf(
  * out of one. `beat` is the playhead, whose move Keep end spots follows into. Resolves to why not
  * (translated), or null when it opened.
  *
- * The march order says who follows whom (owner, 2026-11-22): the order set by hand when there is
- * one (`followOrderAt`, read up to the window's end, where Set order is made), always over a
- * guess. When it runs round the closed outline they stand on, the trail closes the loop
- * (`loopAround`); otherwise each follows the trail through the ones ahead of them in it. Round a
- * closed outline with no order set, it says to set one: the way round is the designer's.
+ * Who follows whom (owner, 2026-11-22): the march order set by hand when there is one
+ * (`followOrderAt`, read up to the window's end, where Set order is made), always over a guess;
+ * with none set, the order their places suggest, along the line or round the outline. All the
+ * way round a closed outline (`around`), anyone can be grabbed to lead, slid round it or pulled
+ * out of it. An order set that doesn't run round the outline is followed as any trail is.
  */
 export async function openFollowTool(
     resolver: Pick<Resolver, "positionAt">,
@@ -230,12 +232,11 @@ export async function openFollowTool(
     const keep = await followKeepAt(db, resolver, sorted, beat);
     // Ripple in (step 9, RP-2): the form those end spots make, in its own order, and why not
     const { form, formWhy } = await followFormOf(sorted, keep);
-    // Tail first, so the leader offered before an end is grabbed is the real one (the last)
-    const order = tailFirst!;
     const follow: FollowDrag = {
         window,
         ids: sorted,
-        order,
+        // Tail first, so the leader offered before an end is grabbed is the real one (the last)
+        order: tailFirst ?? [],
         starts: at,
         grabbed: null,
         spacing: { kind: "keep" },
@@ -246,6 +247,11 @@ export async function openFollowTool(
         step,
         around,
     };
+    // Round an outline, the line is the ring as it's walked, whatever line their places suggest
+    const order = around
+        ? aroundLine(follow, aroundPlanOf(follow)!)
+        : tailFirst!;
+    Object.assign(follow, { order });
     const dragging = lineTarget(order, at, window, drills);
     const target = around ? aroundTarget(dragging, follow, drills) : dragging;
     usePathPenStore.setState({
@@ -267,10 +273,11 @@ export async function openFollowTool(
 
 /**
  * How the Follow tool opens on the line `base` standing at `starts`, whose order is `tailFirst`
- * (`set` when it was set by hand): round the closed outline they stand on, the trail closing the
- * loop, when the set order runs round it (`around`); else dragging a trail out (`around` null).
- * All the way round a closed outline with no order set, it says to set one (the way round isn't
- * guessed). Refusals are said before drawing starts, so no drawing is lost.
+ * (`set` when it was set by hand). All the way round a closed outline (`around`): in the set
+ * order when it runs round it, else, with none set, in their places round it (a guess the first
+ * grab replaces; never a refusal for want of an order). Otherwise a trail is dragged out of an
+ * end of the line (`around` null): a line, curve or arc, or a set order that doesn't run round
+ * the outline. Refusals are said before drawing starts, so no drawing is lost.
  */
 async function howItFollows(
     resolver: Pick<Resolver, "positionAt">,
@@ -282,8 +289,11 @@ async function howItFollows(
     const { ids, step, window } = base;
     const outline = outlineOf(starts, step);
     const closed = outline?.full ? outline : null;
-    if (closed && !set) return { refusal: followShapeRefusal.setOrder() };
-    const loop = closed && set ? loopAround(base, closed, set) : null;
+    const loop = !closed
+        ? null
+        : set
+          ? loopAround(base, closed, set)
+          : guessAround(base, closed);
     if (loop) {
         const refusal = await db.transaction((tx) =>
             goRoundRefusalFor(tx, window, ids, step),
@@ -291,7 +301,9 @@ async function howItFollows(
         if (refusal) return { refusal };
         const again = await aroundTrailOver(db, window, ids);
         return {
-            around: again ? againAround(loop, again, resolver, base) : loop,
+            around: again
+                ? againAround(loop, again, resolver, base, set !== null)
+                : loop,
         };
     }
     // AP-T8's refusals; with no line, why, when it can be told (owner, 2026-11-22)
@@ -379,15 +391,17 @@ function lineTarget(
 
 /**
  * The loop's choices for following round again (step 10): the line's own move round the outline
- * over the window, read back. How far it goes (in the outline's spots when that's whole, else
- * steps). Its way round and leader must be the march order's (`loop`): when the order has changed
- * since, the order wins, and the move is replaced from nobody moved.
+ * over the window, read back: how far it goes (in the outline's spots when that's whole, else
+ * steps), which way round and who leads. With a march order set (`strict`), its way round and
+ * leader must be the order's (`around`): when the order has changed since, the order wins, and
+ * the move is replaced from nobody moved.
  */
 function againAround(
     around: FollowAround,
     again: MoveTrail,
     resolver: Pick<Resolver, "positionAt">,
     base: Pick<FollowDrag, "ids" | "starts" | "step" | "window">,
+    strict: boolean,
 ): FollowAround {
     const g = again.geometry;
     const corners = [g.from, ...g.points.map((p) => p.at)];
@@ -401,7 +415,7 @@ function againAround(
     const leader = again.reverse
         ? again.marcherIds[0]!
         : again.marcherIds.at(-1)!;
-    if (reversed !== around.reversed || leader !== around.leader)
+    if (strict && (reversed !== around.reversed || leader !== around.leader))
         return { ...around, again: true };
     const probe = {
         ...base,
@@ -437,6 +451,6 @@ function againAround(
         amount,
         again: true,
         // Finish with nothing changed writes nothing (owner, 2026-11-22)
-        stored: { amount, unit, reversed },
+        stored: { amount, unit, reversed, leader },
     };
 }

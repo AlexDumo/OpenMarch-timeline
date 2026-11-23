@@ -27,6 +27,7 @@ import {
     setFollowPreview,
 } from "./followDrag";
 import {
+    flipRoundWay,
     goingRound,
     roundMaxOf,
     setRoundUnit,
@@ -439,21 +440,22 @@ export function usePathPenActions(): void {
         },
         { enabled: canPreview && !prefersReducedMotion() },
     );
-    useActionHandler("reverseTrail", () => void reverseShownTrail(), {
-        enabled: !round && trailShown && phase !== "drawing" && !trailAlong,
-        // The loop goes the march order's way round: the order is what turns it
-        disabledReason: round
-            ? tolgee.t(
-                  "pathways.refusals.reverseLoop",
-                  "The line goes around in its march order. To go the other way around, use Reverse order, then Follow",
-              )
-            : trailAlong
-              ? tolgee.t(
-                    "timeline.refusals.trail.reverseAlong",
-                    "Reverse leader is off for a trail dragged out of a line. Drag the trail out of the other end instead.",
-                )
-              : undefined,
-    });
+    // Reverse leader: a stored trail turned round; round an outline in the Follow tool, the other
+    // way round, the one at the back leading (a drag along the outline sets the way too)
+    useActionHandler(
+        "reverseTrail",
+        () => (round ? flipRoundWay() : void reverseShownTrail()),
+        {
+            enabled:
+                round || (trailShown && phase !== "drawing" && !trailAlong),
+            disabledReason: trailAlong
+                ? tolgee.t(
+                      "timeline.refusals.trail.reverseAlong",
+                      "Reverse leader is off for a trail dragged out of a line. Drag the trail out of the other end instead.",
+                  )
+                : undefined,
+        },
+    );
 
     // The selected marchers' paths always show, whatever start flag positions' paths level says:
     // that level is for the marchers not selected (interaction round 2: with Paths Off, testers

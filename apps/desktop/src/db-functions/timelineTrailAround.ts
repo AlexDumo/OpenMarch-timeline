@@ -85,11 +85,6 @@ export const followShapeRefusal = {
     gap: () => text.t("timeline.refusals.trail.notFittedGap"),
     /** Some stand too far off the shape the rest make */
     off: () => text.t("timeline.refusals.trail.notFittedOff"),
-    /**
-     * All the way round a closed outline with no march order set: who leads and which way round
-     * are the designer's to set, never guessed (owner, 2026-11-22)
-     */
-    setOrder: () => text.t("timeline.refusals.trail.loopNeedsOrder"),
 };
 
 // ---------------------------------------------------------------------------

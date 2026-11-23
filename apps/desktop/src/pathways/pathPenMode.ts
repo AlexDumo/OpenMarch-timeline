@@ -561,10 +561,17 @@ class PathPenMode implements FieldMode {
         if (s.phase === "drawing") this.preview(pointer, keys.roles());
     }
 
-    /** Going round: a press on the line or the outline grabs it to slide it round (owner, 2026-11-22) */
+    /**
+     * Round an outline (owner, 2026-11-22): a press on a marcher or the outline grabs the line.
+     * Dragged along the outline it slides round; dragged off it, past a step and a half (three
+     * handle reaches when that's more, so it holds zoomed out), the marcher grabbed is pulled
+     * out into a trail
+     */
     private pressRound(s: PathSession, pointer: FieldPointer, isMac: boolean) {
         const env = envOf();
-        if (!env || !startRoundSlide(pointer.field, env.hitRadius)) return;
+        if (!env) return;
+        const band = Math.max(1.5 * s.follow!.step, 3 * env.hitRadius);
+        if (!startRoundSlide(pointer.field, env.hitRadius, band)) return;
         this.held = {
             start: pointer,
             screen: pointer.screen,
@@ -773,11 +780,15 @@ class PathPenMode implements FieldMode {
 
     move(pointer: FieldPointer): void {
         const p = this.held;
-        // Going round, the line grabbed: it slides round with the pointer, snapped, live
+        // Round an outline, the line grabbed: it slides round with the pointer, snapped, live;
+        // off the outline the one grabbed is pulled out, and the trail's first leg follows the
+        // pointer as one dragged out of a line's end does
         if (p?.round) {
             p.screen = pointer.screen;
             p.moved = true;
-            slideRound(pointer.field);
+            if (slideRound(pointer.field) === "out")
+                this.preview(pointer, rolesOf(pointer, "shape"));
+            else this.dropPendingPointer();
             return;
         }
         if (!p) {
@@ -807,9 +818,8 @@ class PathPenMode implements FieldMode {
         this.dropPendingPointer();
         const s = this.session;
         if (!p || !s) return;
-        // Going round, the line let go: written in one undo step when it moved, else put back
         if (p.round) {
-            if (endRoundSlide()) void finishDrawing();
+            this.releaseRound(s, p, pointer, roles);
             return;
         }
         if (s.phase === "drawing") {
@@ -890,6 +900,23 @@ class PathPenMode implements FieldMode {
             return;
         }
         if (point >= 0) selectPoint(p.key);
+    }
+
+    /**
+     * Round an outline, the line let go: written in one undo step when it moved, else put back.
+     * Pulled out into a trail, where it's let go is the trail's first point, and clicks go on
+     * from there (as the first leg dragged out of a line's end)
+     */
+    private releaseRound(
+        s: PathSession,
+        p: NonNullable<PathPenMode["held"]>,
+        pointer: FieldPointer,
+        roles: Roles | undefined,
+    ) {
+        const out = s.follow?.grabbed != null;
+        if (endRoundSlide()) void finishDrawing();
+        else if (out)
+            this.releaseFirstLeg(this.session ?? s, p, pointer, roles);
     }
 
     /** A lane or key let go: saved once it moved (one undo step), otherwise a click that picks it */
@@ -1478,8 +1505,8 @@ function roundTip(
             tip: {
                 at,
                 text: tolgee.t(
-                    "pathways.round.dragTip",
-                    "Drag around the outline, or type how far",
+                    "pathways.round.grabTip",
+                    "Drag any marcher around the outline or out of it, or type how far",
                 ),
             },
         };

@@ -1,35 +1,50 @@
 /**
- * Follow round a closed outline, pathways step 10 (spec Appendix L.11): there is one Follow tool
- * (owner, 2026-11-22). The designer sets the march order (Set order), and each marcher follows
- * the ones ahead of them in it. When that order runs round the closed outline they stand on (a
- * circle or a box outline), its last and first marchers neighbors on it, the trail closes the
- * loop: the leader walks on towards the tail's spot, everyone the same N of the outline's spots
- * (or steps). The drawing shows the outline, its way round and where everyone stops, and Finish
- * writes it (`goRound`, AP-T13). The order sets the way round and the leader; nothing here
- * guesses or turns them (a set order always wins).
+ * Follow on a closed outline, pathways step 10 (spec Appendix L.11): one Follow tool and one
+ * gesture (owner, 2026-11-22: "I wanted the spread-out tool and wrap-around tool to be
+ * effectively the same thing. I should be able to drag it around the circle or drag it out of
+ * the circle … It should let me pretty much pick any marker I want").
  *
- * Going round is a move you make, not one made for you (owner, 2026-11-22: "I should be forced to
- * drag or do something so I can tangibly feel the change"). The tool opens with nobody moved
- * (N = 0). Dragging the leader, or any marcher of the line, or the outline itself, slides the
- * whole line round it, snapped to whole spots (or steps), with the count by the pointer; the
- * release writes it in one undo step, and Escape puts it back. Digits typed while the tool is
- * open set N exactly, and Enter writes it. With N still 0 nothing is written.
+ * When the selected marchers stand all the way round a circle or a box outline, any of them can
+ * be grabbed, and the one grabbed leads. Dragged along the outline, the whole line slides round
+ * it, either way, snapped to whole spots (or steps), the count by the pointer; let go, it is
+ * written in one undo step (`goRound`, AP-T13). Dragged off the outline, the leader is pulled out
+ * into a trail (`pullOut`): the line follows it off the outline, first round it as far as it had
+ * slid; the release places the trail's first point, and the drawing goes on as any dragged trail
+ * does (AP-T8). Back on the outline, it slides again.
+ *
+ * Who follows whom: the march order set by hand when it runs round the outline (`loopAround`),
+ * always over a guess; with none set, their places round the outline (`guessAround`), clockwise
+ * with the member who has most room ahead leading until a drag says otherwise. Never a refusal
+ * for want of an order.
+ *
+ * The tool opens with nobody moved (N = 0; owner, 2026-11-22: "I should be forced to drag or do
+ * something so I can tangibly feel the change"). Digits typed while it is open set N exactly, and
+ * Enter writes it. With N still 0 nothing is written.
  */
 import {
     goRoundPreview,
+    lineRound,
     planGoRound,
+    walkingOutline,
     type GoRoundPlan,
     type Outline,
     type RoundUnit,
 } from "@/db-functions/timelineTrailAround";
 import {
     loopPoint,
+    loopSnap,
     nearestOnLoop,
     routePolyline,
+    type RoutePath,
     type XY as CoreXY,
 } from "@openmarch/core";
 import type { XY } from "@/shapes/types";
-import type { FollowDrag, FollowMarchers } from "./followDrag";
+import {
+    followTarget,
+    type FollowDrag,
+    type FollowMarchers,
+} from "./followDrag";
+import type { PathPoint } from "./pathEdit";
 import { usePathPenStore, type PathSession } from "./pathPenStore";
 import type { PathTarget } from "./pathTarget";
 
@@ -40,9 +55,12 @@ export interface FollowAround {
     /** How far (DO-4): this many of the outline's spots, or steps */
     readonly amount: number;
     readonly unit: RoundUnit;
-    /** The order runs the other way round from the outline's own (clockwise on the field) */
+    /** The line goes the other way round from the outline's own (clockwise on the field) */
     readonly reversed: boolean;
-    /** Who leads (a marcher id): the march order's leader */
+    /**
+     * Who leads (a marcher id): the one grabbed; before that the march order's leader, or with no
+     * order set the member with most room ahead
+     */
     readonly leader: number;
     /** The line's own move round this outline over the window, which Finish replaces ("again") */
     readonly again: boolean;
@@ -54,6 +72,7 @@ export interface FollowAround {
         readonly amount: number;
         readonly unit: RoundUnit;
         readonly reversed: boolean;
+        readonly leader: number;
     };
 }
 
@@ -72,6 +91,31 @@ export interface RoundSlide {
     readonly moved: number;
     /** Where the pointer is, for the count by it */
     readonly pointer: XY;
+    /**
+     * The marcher pressed, who leads from here on; null when the outline itself was pressed, which
+     * slides the line as it is
+     */
+    readonly lead: number | null;
+    /**
+     * How far off the outline the pointer may stray and still slide the line, in field units.
+     * Past it the leader is pulled out into a trail; within half of it, it slides again.
+     */
+    readonly band: number;
+}
+
+/**
+ * The leader pulled out of the outline into a trail (a session's `follow.peel`): what letting go
+ * of it goes back to, and how the line was turned to follow it
+ */
+export interface FollowPeel {
+    /** The line's order before the leader was pulled out */
+    readonly order: readonly number[];
+    /** The loop's choices when the line was pressed */
+    readonly around: FollowAround;
+    /** The way round the line follows its leader off the outline */
+    readonly reversed: boolean;
+    /** How many of the trail's first points run round the outline, as far as the line had slid */
+    readonly carried: number;
 }
 
 /**
@@ -95,7 +139,7 @@ export const goingRound = (f: FollowDrag | null | undefined): boolean =>
     !!f?.around && f.grabbed === null;
 
 /** The starts in `follow.ids` order, as the plan reads them */
-const startsOf = (f: FollowDrag): [number, number][] =>
+const startsOf = (f: Pick<FollowDrag, "ids" | "starts">): [number, number][] =>
     f.ids.map((id) => {
         const p = f.starts.get(id)!;
         return [p.x, p.y];
@@ -133,7 +177,7 @@ export const aroundLine = (f: FollowDrag, plan: GoRoundPlan): number[] =>
  * (owner, 2026-11-22). The way round is the order's own: the leader walks on towards the tail.
  * Null when the order doesn't run round the outline, each marcher's neighbor on it the next in
  * the order and the last and first neighbors too; the line then follows its order as any trail
- * does. Never a guessed way round or leader in place of the order's.
+ * does. Never a guessed way round or leader in place of a set order's.
  */
 export function loopAround(
     f: Pick<FollowDrag, "ids" | "starts" | "step" | "window">,
@@ -156,6 +200,44 @@ export function loopAround(
         if (line.every((id, q) => id === order[q])) return tried;
     }
     return null;
+}
+
+/**
+ * The loop's choices when the Follow tool opens on `outline` with no march order set (owner,
+ * 2026-11-22: "it should guess in order first or at least in a circle"): the marchers in their
+ * places round the outline, nobody moved, clockwise on the field with the member who has most
+ * room ahead leading. A guess the drawing shows, and the first grab replaces: the one grabbed
+ * leads, the way it's dragged.
+ */
+export function guessAround(
+    f: Pick<FollowDrag, "ids" | "starts">,
+    outline: Outline,
+): FollowAround {
+    const line = lineRound(outline.loop, startsOf(f));
+    return {
+        outline,
+        amount: 0,
+        unit: "spots",
+        reversed: false,
+        leader: f.ids[line.at(-1)!]!,
+        again: false,
+    };
+}
+
+/**
+ * The line round `outline` led by `lead`, walking the way `reversed` says, by id: the tail first
+ * (the one the leader walks towards), the leader last
+ */
+export function ringLine(
+    f: Pick<FollowDrag, "ids" | "starts">,
+    outline: Outline,
+    lead: number,
+    reversed: boolean,
+): number[] {
+    const { loop } = walkingOutline(outline, reversed);
+    return lineRound(loop, startsOf(f), f.ids.indexOf(lead)).map(
+        (i) => f.ids[i]!,
+    );
 }
 
 /** The target the drawing shows while going round: the line in walking order, each to its spot */
@@ -254,6 +336,17 @@ export function setRoundUnit(unit: RoundUnit): void {
     });
 }
 
+/**
+ * The other way round (DO-3, Reverse leader and the bar's Clockwise | Counterclockwise): the line
+ * turns round, so the one at its back leads
+ */
+export function flipRoundWay(): void {
+    updateAround((a, f) => {
+        const plan = aroundPlanOf(f)!;
+        return { ...a, reversed: !a.reversed, leader: f.ids[plan.line[0]!]! };
+    });
+}
+
 /** The real marchers going round (DL-16's rule): at their end spots, or walking with ▶ Preview */
 export function aroundMarchersOf(f: FollowDrag): FollowMarchers | null {
     const plan = aroundPlanOf(f);
@@ -342,12 +435,24 @@ export function snapRound(
 }
 
 /**
- * The choices `n` places (or steps) on from `base`, signed: the line only walks forward in its
- * order, so back past where it started is nobody moved (the order says who leads; Reverse the
- * order to go the other way round)
+ * The choices `n` places (or steps) on from `base`, signed, with `lead` grabbed (null: the outline
+ * itself): the one grabbed leads whichever way it's dragged, back past where the line started
+ * being the other way round. With the outline grabbed the line keeps its leader going on, and
+ * going back the one at its back leads (`back`, as Reverse leader turns it).
  */
-export function aroundSlidTo(base: FollowAround, n: number): FollowAround {
-    return { ...base, amount: Math.max(0, n) };
+export function aroundSlidTo(
+    base: FollowAround,
+    n: number,
+    lead: number | null,
+    back: number,
+): FollowAround {
+    const leader = lead ?? (n < 0 ? back : base.leader);
+    return {
+        ...base,
+        leader,
+        reversed: n < 0 ? !base.reversed : base.reversed,
+        amount: Math.abs(n),
+    };
 }
 
 /**
@@ -356,6 +461,15 @@ export function aroundSlidTo(base: FollowAround, n: number): FollowAround {
  * it's drawn: at its stop.
  */
 export function roundHit(f: FollowDrag, at: XY, radius: number): number | null {
+    return roundPress(f, at, radius)?.q ?? null;
+}
+
+/** {@link roundHit}, and whether a member was pressed (`member`) or only the outline */
+function roundPress(
+    f: FollowDrag,
+    at: XY,
+    radius: number,
+): { q: number; member: boolean } | null {
     if (!goingRound(f)) return null;
     const plan = aroundPlanOf(f);
     if (!plan) return null;
@@ -364,11 +478,11 @@ export function roundHit(f: FollowDrag, at: XY, radius: number): number | null {
         const d = Math.hypot(x - at.x, y - at.y);
         if (d <= radius && (!best || d < best.d)) best = { q, d };
     });
-    if (best) return (best as { q: number }).q;
+    if (best) return { q: (best as { q: number }).q, member: true };
     const p: CoreXY = [at.x, at.y];
     const on = loopPoint(plan.loop, nearestOnLoop(plan.loop, p));
     return Math.hypot(on[0] - at.x, on[1] - at.y) <= radius
-        ? plan.line.length - 1
+        ? { q: plan.line.length - 1, member: false }
         : null;
 }
 
@@ -380,7 +494,7 @@ function setRound(
 ): void {
     const follow: FollowDrag = { ...f, ...patch };
     const target =
-        follow.around && follow.around !== f.around
+        follow.around && follow.around !== f.around && follow.grabbed === null
             ? aroundTarget(s.target, follow, drillsOf(s))
             : s.target;
     usePathPenStore.setState({ session: { ...s, follow, target } });
@@ -388,22 +502,30 @@ function setRound(
 
 /**
  * A press at `at` while going round: on a member or the outline, the line is grabbed and slides
- * round with the pointer from here. False when the press is on neither.
+ * round with the pointer from here; a member pressed leads from here on. False when the press is
+ * on neither. `band` is how far off the outline the pointer may stray before the leader is
+ * pulled out into a trail (none by default: the line only slides).
  */
-export function startRoundSlide(at: XY, radius: number): boolean {
+export function startRoundSlide(
+    at: XY,
+    radius: number,
+    band: number = Infinity,
+): boolean {
     const s = usePathPenStore.getState().session;
     const f = s?.follow;
     if (!s || !f?.around || !goingRound(f)) return false;
-    const q = roundHit(f, at, radius);
-    if (q === null) return false;
+    const hit = roundPress(f, at, radius);
+    if (hit === null) return false;
     const plan = aroundPlanOf(f)!;
     setRound(s, f, {
         roundSlide: {
             base: f.around,
-            q,
+            q: hit.q,
             last: nearestOnLoop(plan.loop, [at.x, at.y]),
             moved: 0,
             pointer: at,
+            lead: hit.member ? aroundLine(f, plan)[hit.q]! : null,
+            band,
         },
         // a drag takes over from digits typed
         roundTyped: null,
@@ -411,49 +533,270 @@ export function startRoundSlide(at: XY, radius: number): boolean {
     return true;
 }
 
-/** The pointer at `at` while the line slides: how far round, snapped, live */
-export function slideRound(at: XY): void {
+const sameAround = (a: FollowAround, b: FollowAround | null | undefined) =>
+    !!b &&
+    a.amount === b.amount &&
+    a.reversed === b.reversed &&
+    a.leader === b.leader;
+
+/**
+ * The pointer at `at` while the line is held: on the outline it slides round, how far snapped and
+ * live (`"round"`); past the slide's band off it, the marcher grabbed is pulled out and leads a
+ * trail (`"out"`, the caller draws its leg to the pointer). Null when the line isn't held.
+ */
+export function slideRound(at: XY): "round" | "out" | null {
     const s = usePathPenStore.getState().session;
     const f = s?.follow;
     const slide = f?.roundSlide;
-    if (!s || !f || !slide) return;
+    if (!s || !f || !slide) return null;
     // digits typed while held set how far: the pointer no longer does
     if (f.roundTyped) {
         setRound(s, f, { roundSlide: { ...slide, pointer: at } });
-        return;
+        return "round";
     }
     const base = slide.base;
-    const plan = aroundPlanOf({ ...f, around: base })!;
+    const plan = aroundPlanOf({ ...f, grabbed: null, around: base })!;
     const L = plan.loop.L;
     // round the outline from where it was last seen, the short way: a lap is many small moves
     const now = nearestOnLoop(plan.loop, [at.x, at.y]);
     let delta = now - slide.last;
     delta -= Math.round(delta / L) * L;
     const moved = slide.moved + delta;
+    const held: RoundSlide = { ...slide, last: now, moved, pointer: at };
+    // Off the outline (owner, 2026-11-22: "drag it around the circle or drag it out of the
+    // circle"): the one grabbed is pulled out into a trail; nearer again, the line slides again
+    const on = loopPoint(plan.loop, now);
+    const off = Math.hypot(on[0] - at.x, on[1] - at.y);
+    const out = f.grabbed !== null;
+    if (slide.lead !== null && off > (out ? slide.band / 2 : slide.band)) {
+        // Pulled out already, the session stays the same one unless the line turns: the trail's
+        // leg to the pointer is the caller's, a frame at a time (so where the pointer went round
+        // meanwhile isn't counted: back on the outline it's the short way from where it left)
+        const session = out
+            ? pulledOn(s, f, at)
+            : pullOut(s, { ...f, roundSlide: held }, at);
+        if (session !== s) usePathPenStore.setState({ session });
+        return "out";
+    }
     const q = slide.q;
     // from where member q stood when pressed (its stop then), round from where it starts
     const offset = plan.ends[q]! - plan.startDist[q]! + moved;
     const n = snapRound(plan, base.unit, f.step, q, offset, plan.maxAmount);
-    const around = aroundSlidTo(base, n);
-    const same =
-        f.around &&
-        around.amount === f.around.amount &&
-        around.reversed === f.around.reversed;
-    setRound(s, f, {
-        around: same ? f.around : around,
-        roundSlide: { ...slide, last: now, moved, pointer: at },
+    const around = aroundSlidTo(base, n, slide.lead, f.ids[plan.line[0]!]!);
+    const back = out ? letGo(s) : s;
+    const was = back.follow!;
+    setRound(back, was, {
+        around: sameAround(around, was.around) ? was.around! : around,
+        roundSlide: held,
     });
+    return "round";
+}
+
+// ---------------------------------------------------------------------------
+// Pulled out of the outline into a trail (owner, 2026-11-22)
+// ---------------------------------------------------------------------------
+
+/**
+ * The stretch of `loop` from `from` round it for `len` (less than once round), as a trail's
+ * points: each of the outline's corners passed, an arc leg kept an arc (its bulge for the part
+ * walked), and where it stops
+ */
+export function outlineStretch(
+    loop: RoutePath,
+    from: number,
+    len: number,
+): PathPoint[] {
+    const L = loop.L;
+    const eps = loopSnap(L);
+    const out: PathPoint[] = [];
+    let d = from - Math.floor(from / L) * L;
+    let left = Math.min(len, L - eps);
+    let j = loop.pieces.findIndex((_, i) => d < loop.D[i + 1]! - eps);
+    if (j < 0) {
+        j = 0;
+        d = 0;
+    }
+    // each piece of the outline at most twice: the one it starts in, again when it ends there
+    for (let guard = 0; left > eps && guard <= loop.pieces.length; guard++) {
+        const start = loop.D[j]!;
+        const end = loop.D[j + 1]!;
+        const take = Math.min(left, end - d);
+        if (take > eps) {
+            const whole = d + take >= end - eps;
+            const [x, y] = whole ? loop.V[j + 1]! : loopPoint(loop, d + take);
+            const piece = loop.pieces[j]!;
+            // R-8's arc: its half-angle is 2·atan(2k), and the part walked has its share of it
+            const bulge =
+                piece.kind === "arc"
+                    ? Math.tan(
+                          (2 * Math.atan(2 * piece.k) * take) /
+                              (end - start) /
+                              2,
+                      ) / 2
+                    : 0;
+            out.push({ at: { x, y }, ...(bulge ? { bulge } : {}) });
+        }
+        left -= take;
+        j = (j + 1) % loop.pieces.length;
+        d = loop.D[j]!;
+    }
+    return out;
+}
+
+/**
+ * Which way round the line follows a leader pulled straight out of the outline to `at`: the way
+ * the pull leans along the outline at the leader's start (the leader goes that way, the line
+ * behind it); `keep` when it's pulled squarely out
+ */
+function pulledWay(
+    f: FollowDrag,
+    outline: Outline,
+    lead: number,
+    at: XY,
+    keep: boolean,
+): boolean {
+    const p = f.starts.get(lead)!;
+    const loop = outline.loop;
+    const d = nearestOnLoop(loop, [p.x, p.y]);
+    const e = Math.min(loop.L / 200, 0.5);
+    const a = loopPoint(loop, d - e);
+    const b = loopPoint(loop, d + e);
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    const vx = at.x - p.x;
+    const vy = at.y - p.y;
+    const along = (vx * (b[0] - a[0]) + vy * (b[1] - a[1])) / len;
+    // squarely out (within about 20° of it): the way it was going
+    if (Math.abs(along) < 0.35 * Math.hypot(vx, vy)) return keep;
+    return along < 0;
+}
+
+/** The session with its leader `lead` pulled out, the line turned to follow it `reversed`'s way */
+function pulled(
+    s: PathSession,
+    f: FollowDrag,
+    lead: number,
+    reversed: boolean,
+    points: readonly PathPoint[],
+): PathSession {
+    const a = f.around!;
+    const follow: FollowDrag = {
+        ...f,
+        grabbed: lead,
+        // all the way round, anyone leads: the line is the ring from the one behind them
+        order: a.outline.full
+            ? ringLine(f, a.outline, lead, reversed)
+            : (f.peel?.order ?? f.order),
+        hover: null,
+        peel: {
+            order: f.peel?.order ?? f.order,
+            around: f.peel?.around ?? f.roundSlide?.base ?? a,
+            reversed,
+            carried: points.length,
+        },
+    };
+    // The trail is drawn from the leader's start: nothing of the outline's stays on the target
+    const { toBulge: _toBulge, ...rest } = s.target;
+    return {
+        ...s,
+        follow,
+        target: followTarget(
+            { ...rest, points: [], ends: null },
+            follow,
+            drillsOf(s),
+        ),
+        points: [...points],
+        pointer: null,
+        dragging: null,
+    };
+}
+
+/**
+ * The marcher grabbed pulled out of the outline towards `at`: it leads a trail from where it
+ * starts. Slid round first, the trail runs round the outline as far as its leader had gone
+ * (`outlineStretch`), so the line goes on from where the slide showed it; pulled straight out,
+ * the line follows the way the pull leans.
+ */
+function pullOut(s: PathSession, f: FollowDrag, at: XY): PathSession {
+    const lead = f.roundSlide!.lead!;
+    // The line as it stands, led by the one grabbed (grabbed where a typed count or a stored
+    // move had put it, without sliding, it leads from there too)
+    const a =
+        f.around!.leader === lead ? f.around! : { ...f.around!, leader: lead };
+    const plan = aroundPlanOf({ ...f, grabbed: null, around: a })!;
+    const gone = plan.ends.at(-1)! - plan.startDist.at(-1)!;
+    const L = plan.loop.L;
+    // whole times round end where they started: only the part past them is walked
+    const len = gone - Math.floor(gone / L + 1e-9) * L;
+    const carried =
+        len > loopSnap(L)
+            ? outlineStretch(plan.loop, plan.startDist.at(-1)!, len)
+            : [];
+    const reversed = carried.length
+        ? a.reversed
+        : pulledWay(f, a.outline, lead, at, f.roundSlide!.base.reversed);
+    return pulled(s, f, lead, reversed, carried);
+}
+
+/** Pulled out already, the pointer on at `at`: pulled straight out, the line's way follows the pull's lean */
+function pulledOn(s: PathSession, f: FollowDrag, at: XY): PathSession {
+    const peel = f.peel;
+    const a = f.around;
+    const lead = f.roundSlide?.lead;
+    if (!peel || !a || lead == null || peel.carried > 0 || !a.outline.full)
+        return s;
+    const reversed = pulledWay(f, a.outline, lead, at, peel.reversed);
+    return reversed === peel.reversed ? s : pulled(s, f, lead, reversed, []);
+}
+
+/**
+ * The session with a leader pulled out of the outline let go: the line as it was round the
+ * outline, nothing drawn (the same session when nobody was pulled out)
+ */
+export function letGo(s: PathSession): PathSession {
+    const f = s.follow;
+    const peel = f?.peel;
+    if (!f || !peel) return s;
+    const follow: FollowDrag = {
+        ...f,
+        grabbed: null,
+        order: peel.order,
+        peel: null,
+    };
+    return {
+        ...s,
+        follow,
+        points: [],
+        pointer: null,
+        dragging: null,
+        target: aroundTarget(s.target, follow, drillsOf(s)),
+    };
 }
 
 /**
  * The line let go: true when it now goes round differently from when it was pressed, so the
- * caller writes it (one undo step); otherwise it's put back as it was, and nothing is written
+ * caller writes it (one undo step); otherwise it's put back as it was, and nothing is written.
+ * A marcher pressed and let go where the line started leads from here on. Pulled out into a
+ * trail, nothing is written either: the caller places the trail's first point where it was let go.
  */
 export function endRoundSlide(): boolean {
     const s = usePathPenStore.getState().session;
     const f = s?.follow;
     const slide = f?.roundSlide;
     if (!s || !f || !slide) return false;
+    if (f.grabbed !== null) {
+        // the drawing is the trail's from here: the loop's choices wait as they were pressed
+        usePathPenStore.setState({
+            session: {
+                ...s,
+                follow: {
+                    ...f,
+                    roundSlide: null,
+                    around: f.peel?.around ?? slide.base,
+                },
+            },
+        });
+        return false;
+    }
     // digits typed while held wait for Enter
     if (f.roundTyped) {
         setRound(s, f, { roundSlide: null });
@@ -462,20 +805,31 @@ export function endRoundSlide(): boolean {
     const a = f.around!;
     const changed =
         a.amount !== slide.base.amount || a.reversed !== slide.base.reversed;
+    const picked =
+        slide.lead !== null && slide.lead !== slide.base.leader
+            ? { ...slide.base, leader: slide.lead }
+            : slide.base;
     setRound(s, f, {
         roundSlide: null,
-        ...(changed ? {} : { around: slide.base }),
+        ...(changed ? {} : { around: picked }),
     });
     return changed && a.amount > 0;
 }
 
-/** Escape (or a lost press) while the line slides: back as it was when pressed; false with no slide */
+/**
+ * Escape (or a lost press) while the line is held: back as it was when pressed, a leader pulled
+ * out let go; false with nothing held
+ */
 export function cancelRoundSlide(): boolean {
     const s = usePathPenStore.getState().session;
-    const f = s?.follow;
-    const slide = f?.roundSlide;
-    if (!s || !f || !slide) return false;
-    setRound(s, f, { roundSlide: null, around: slide.base, roundTyped: null });
+    const slide = s?.follow?.roundSlide;
+    if (!s || !slide) return false;
+    const back = letGo(s);
+    setRound(back, back.follow!, {
+        roundSlide: null,
+        around: slide.base,
+        roundTyped: null,
+    });
     return true;
 }
 
@@ -540,6 +894,7 @@ export function roundChanged(a: FollowAround | null | undefined): boolean {
         was &&
         was.amount === a.amount &&
         was.unit === a.unit &&
-        was.reversed === a.reversed
+        was.reversed === a.reversed &&
+        was.leader === a.leader
     );
 }

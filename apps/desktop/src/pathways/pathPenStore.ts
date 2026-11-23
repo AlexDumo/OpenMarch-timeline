@@ -63,6 +63,7 @@ import {
     intoEndSpots,
     rippleDrawnPlanOf,
     ripplesIn,
+    trailLine,
     type FollowDrag,
 } from "./followDrag";
 import { goRound } from "@/db-functions/timelineTrailAround";
@@ -1393,6 +1394,8 @@ async function saveFollow(
     session: PathSession,
     enter: number | null,
 ): Promise<void> {
+    // A leader pulled out of a closed outline needn't be an end of the line: the ring as shown
+    const line = follow.peel ? trailLine(follow) : null;
     if (ripplesIn(follow))
         await rippleTrail({
             db,
@@ -1402,6 +1405,8 @@ async function saveFollow(
             points,
             keepMove: follow.keep?.timelineId ?? null,
             enter,
+            line,
+            step: follow.step,
         });
     else
         await dragTrail({
@@ -1409,6 +1414,7 @@ async function saveFollow(
             window: follow.window,
             marcherIds: follow.ids,
             leaderId,
+            line,
             points,
             spacing: followSpacingOf(session),
             step: follow.step,
