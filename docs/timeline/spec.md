@@ -4038,3 +4038,23 @@ Validation applies EP-1 to EP-6 to each path and EP-P1 to EP-P3 to the list. Eve
 names its id. The package's tests cover these rules and EP-R2, and check that its copy of EP-R
 matches `packages/core`'s on shared paths. Not checked: whether a path's ends match the marcher's
 spots, and whether `marcherId` names a performer. The export keeps both right.
+
+**The export** (`dots-to-om.ts`, #1163) writes one entry per performer per move the converter
+gives (EP-C1), and leaves `exactPaths` out when there are none, so a show that never moves exports
+as before. `startTick` and `endTick` are the span's start and end beats × 480, each rounded on its
+own, so moves that meet share a tick; when rounding changes a move's length, its keys are retimed
+(EP-T). A performer whose walk the converter can't convert gets no exact paths, and so straight
+lines between sets: leaving out only the failing move would make a reader hold the performer still
+through it (EP-R2).
+
+**Measured (export, 2026-11-23).** The three v0.1.7 release files and the 42 parity shows, each
+exported, written, read back with `@openmarch/schema` 0.5.0 and played with its reader (straight
+lines between sets where it has none), against `positionAt` at every tick of the show: worst gap
+under `10⁻¹²` steps on every show. `@openmarch/schema` 0.4.2 reads the same files, drops
+`exactPaths`, and gets the same show as before. The parity shows walk only lines (43,264 paths)
+and 8 arcs; cubics are checked by a drawn smooth path in the export's tests and by QA-EP-8. The
+largest file, `perf-heavy` (180 performers, 9,000 paths, two keys each), grows from 827 KB to
+2.98 MB as JSON and from 110 KB to 289 KB gzipped (the phone gets it gzipped); a real 178-marcher
+show grows from 111 KB to 248 KB gzipped. Nearly all of it is one entry of about 230 bytes per
+straight move, which repeats two sets the coordinates already give. Converting `perf-heavy` takes
+about 70 ms.

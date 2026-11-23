@@ -25,6 +25,13 @@ import {
     sampleTimelinePagePositions,
     type TimelinePagePosition,
 } from "@/timeline/timelinePagePositions";
+import type { ExactMove } from "@openmarch/core";
+import {
+    buildExactPathEntries,
+    convertExactMoves,
+    toSteps,
+    type StepAxes,
+} from "./exact-paths-export";
 import {
     buildPerformerAppearanceShowData,
     fetchPerformerAppearanceExportData,
@@ -174,26 +181,25 @@ function buildTempoSections(
 
 function buildCoordinates({
     positionRows,
-    centerXPixels,
-    fieldHeightSteps,
-    pixelsPerStep,
+    axes,
 }: {
     positionRows: readonly PagePositionRow[];
-    centerXPixels: number;
-    fieldHeightSteps: number;
-    pixelsPerStep: number;
+    axes: StepAxes;
 }): {
     marcherId: string;
     pageId: string;
     xSteps: number;
     ySteps: number;
 }[] {
-    return positionRows.map((mp) => ({
-        marcherId: String(mp.marcher_id),
-        pageId: String(mp.page_id),
-        xSteps: (mp.x - centerXPixels) / pixelsPerStep,
-        ySteps: fieldHeightSteps - mp.y / pixelsPerStep,
-    }));
+    return positionRows.map((mp) => {
+        const [xSteps, ySteps] = toSteps(axes, mp.x, mp.y);
+        return {
+            marcherId: String(mp.marcher_id),
+            pageId: String(mp.page_id),
+            xSteps,
+            ySteps,
+        };
+    });
 }
 
 function buildMeasuresFromTiming({
@@ -291,6 +297,8 @@ async function readShowRows(db: DB) {
 
 type DotsData = Awaited<ReturnType<typeof readShowRows>> & {
     positionRows: readonly PagePositionRow[];
+    /** Every performer's moves as exact paths, in field units (spec M.7) */
+    exactMoves: readonly ExactMove[];
     /** The music offset in effect (tempo/audioOffset.ts), undefined when nothing sets one */
     audioOffsetSeconds: number | undefined;
 };
@@ -302,8 +310,8 @@ type DotsData = Awaited<ReturnType<typeof readShowRows>> & {
  *
  * Every read and the resolver build happen inside one `withTimelineWriteLock`, so the pages,
  * marchers and positions all come from the same committed state: a write started before the
- * export has committed, and none can start until the reads finish. Sampling runs after the lock
- * is released, on the private resolver.
+ * export has committed, and none can start until the reads finish. Sampling and converting the
+ * moves to exact paths run after the lock is released, on the private resolver.
  */
 async function fetchDotsData(db: DB): Promise<DotsData> {
     const { rows, snapshot, showAudioOffset } = await withTimelineWriteLock(
@@ -315,9 +323,17 @@ async function fetchDotsData(db: DB): Promise<DotsData> {
         }),
     );
     const positionRows = await sampleTimelinePagePositions(snapshot);
+    // Performers only, as the coordinates; a stand-in snapshot without walks has none
+    const exactMoves = snapshot.walks
+        ? await convertExactMoves(
+              snapshot.walks,
+              rows.marchersRows.map((m) => m.id),
+          )
+        : [];
     return {
         ...rows,
         positionRows,
+        exactMoves,
         // The show's own offset, else the workspace setting; none of either leaves it out
         audioOffsetSeconds:
             showAudioOffset ?? rows.workspaceSettings?.audioOffsetSeconds,
@@ -350,7 +366,11 @@ function buildOpenMarchFromRows(data: DotsData): OpenMarchShowData {
     const performanceArea = fieldPropsToPerformanceArea(fieldProps);
     const { fieldWidthSteps, fieldHeightSteps } =
         getFieldExtentsSteps(fieldProps);
-    const centerXPixels = (fieldWidthSteps / 2) * pixelsPerStep;
+    const axes: StepAxes = {
+        centerXPixels: (fieldWidthSteps / 2) * pixelsPerStep,
+        fieldHeightSteps,
+        pixelsPerStep,
+    };
 
     const metadata = {
         performanceArea,
@@ -382,12 +402,8 @@ function buildOpenMarchFromRows(data: DotsData): OpenMarchShowData {
         pageNumberOffset: workspaceSettings?.pageNumberOffset ?? 0,
     });
     const tempoSections = buildTempoSections(timingRows);
-    const coordinates = buildCoordinates({
-        positionRows,
-        centerXPixels,
-        fieldHeightSteps,
-        pixelsPerStep,
-    });
+    const coordinates = buildCoordinates({ positionRows, axes });
+    const exactPaths = buildExactPathEntries(data.exactMoves, axes);
     const measures = buildMeasuresFromTiming({ timingRows, measuresById });
 
     const {
@@ -416,6 +432,8 @@ function buildOpenMarchFromRows(data: DotsData): OpenMarchShowData {
         tempoSections,
         coordinates,
         measures: measures.length > 0 ? measures : undefined,
+        // Left out when nothing moves, so such a file is the same as before exact paths
+        ...(exactPaths.length > 0 && { exactPaths }),
     };
 }
 
