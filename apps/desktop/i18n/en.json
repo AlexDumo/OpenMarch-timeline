@@ -2557,7 +2557,7 @@
             "announceCopied": "{count, plural, one {Copied {name}, # marcher} other {Copied {name}, # marchers}}",
             "announcePreview": "Paste preview. Enter places it, Escape discards it.",
             "announceMirrorPreview": "Mirrored paste preview. Drag the pink point to move the mirror. Enter places it, Escape discards it.",
-            "anyNumber": "Pastes onto any number of marchers, keeping its spacing",
+            "anyNumber": "Pastes onto any number of marchers, keeping its size",
             "asShape": "Shape",
             "chipCopied": "Copied",
             "chipEmptySpots": "{count, plural, one {# spot stays empty} other {# spots stay empty}}",
