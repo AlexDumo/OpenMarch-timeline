@@ -1,6 +1,6 @@
 import tolgee from "@/global/singletons/Tolgee";
 import { COUNT_RATE, scrubValue, spacingRate } from "../editor/scrub";
-import { formatSteps, parseSteps } from "../editor/format";
+import { formatSignedSteps, formatSteps, parseSteps } from "../editor/format";
 import type {
     ToolCopies,
     ToolEnv,
@@ -9,18 +9,19 @@ import type {
 } from "../tool/toolKind";
 import type { ShapeKind, Slot, XY } from "../types";
 import {
+    columnsOf,
     copiesOf,
+    copyCount,
+    lineSpotCount,
     MAX_COPIES,
-    rowOffsets,
-    rowSpots,
     type LineCopies,
 } from "./copiesParams";
 import { lineOutline, type LineParams } from "./lineGeometry";
 import { lineFillSpots } from "./lineFill";
 
 /**
- * Copies of a Line, Curve or Arc (spec #1190, step 1 #1191): the drawn line and rows that repeat
- * it behind or in front, one shape. The kind itself knows nothing of them: {@link withCopies}
+ * Copies of a Line, Curve or Arc (spec #1190, steps #1191 and #1192): the drawn line and copies
+ * that repeat it behind, in front, to the left and to the right, one shape. The kind itself knows nothing of them: {@link withCopies}
  * hands it the drawn line's own spot count wherever the host gives the whole shape's, so its
  * numbers, handles and spacing read the drawn line, and lays the rows out from its spots. Pure.
  */
@@ -31,14 +32,52 @@ const add = (a: XY, b: XY): XY => ({ x: a.x + b.x, y: a.y + b.y });
 const sub = (a: XY, b: XY): XY => ({ x: a.x - b.x, y: a.y - b.y });
 
 /** The drawn line's own spot count, for the shape's `n` */
-const per = (p: P, n: number) => (copiesOf(p) ? rowSpots(p, n) : n);
+const per = (p: P, n: number) => (copiesOf(p) ? lineSpotCount(p, n) : n);
 
 /** `p` with `copies` set, or taken off when there are none left */
 export function withCopiesSet(p: P, copies: LineCopies | undefined): P {
-    if (copies && copies.behind + copies.front > 0) return { ...p, copies };
+    if (copies && copyCount(copies) > 0) return { ...p, copies };
     if (p.copies === undefined) return p;
     const { copies: _gone, ...rest } = p;
     return rest;
+}
+
+/** How wide `line` is along `axis` (a unit vector) */
+function widthAlong(line: readonly XY[], axis: XY): number {
+    const at = line.map((q) => q.x * axis.x + q.y * axis.y);
+    return at.length ? Math.max(...at) - Math.min(...at) : 0;
+}
+
+/**
+ * Where each copy sits from the drawn line, row by row from the front, each row from the left
+ * (the order the spots run in), the drawn line `{0, 0}` among them. Rows go toward a sideline and
+ * columns side to side, the field's way or, `direction: "shape"`, the line's own as turned since
+ * drawn (#1192). Columns are the line's width apart plus the gap, so they follow its length; each
+ * row behind sits `stagger` further right than the one in front of it.
+ */
+export function copyOffsets(p: P): XY[] {
+    const c = copiesOf(p);
+    if (!c) return [{ x: 0, y: 0 }];
+    const turn = c.direction === "shape" ? ((p.turn ?? 0) * Math.PI) / 180 : 0;
+    // Clockwise on the field, whose y runs toward the front sideline
+    const across = { x: Math.cos(turn), y: Math.sin(turn) };
+    const deep = { x: -Math.sin(turn), y: Math.cos(turn) };
+    const columns = (c.left ?? 0) + (c.right ?? 0) > 0;
+    const step = columns
+        ? widthAlong(lineOutline(p), across) + (c.gap ?? 0)
+        : 0;
+    const out: XY[] = [];
+    for (let r = c.front; r >= -c.behind; r--)
+        for (let col = -(c.left ?? 0); col <= (c.right ?? 0); col++) {
+            const side = col * step - r * (c.stagger ?? 0);
+            const toward = r * c.apart;
+            out.push({
+                // + 0: never −0, so the drawn line reads {0, 0}
+                x: across.x * side + deep.x * toward + 0,
+                y: across.y * side + deep.y * toward + 0,
+            });
+        }
+    return out;
 }
 
 /**
@@ -121,41 +160,42 @@ export function copiesShape(shape: ShapeKind<P>): ShapeKind<P> {
         ...shape,
         outline: (p, n, ctx) => {
             const own = shape.outline(p, per(p, n), ctx);
-            return rowOffsets(p).flatMap((o) =>
+            return copyOffsets(p).flatMap((o) =>
                 own.map((line) => line.map((q) => add(q, o))),
             );
         },
         generate: (p, n, ctx) => {
             if (!copiesOf(p)) return shape.generate(p, n, ctx);
             const row = shape.generate(p, per(p, n), ctx);
-            return rowOffsets(p)
-                .flatMap((o, r) =>
+            return copyOffsets(p)
+                .flatMap((o, i) =>
                     row.map(
                         (slot): Slot => ({
                             ...add(slot, o),
                             s: slot.s,
-                            row: r,
+                            row: Math.floor(i / columnsOf(copiesOf(p))),
+                            col: i % columnsOf(copiesOf(p)),
                         }),
                     ),
                 )
                 .slice(0, n);
         },
-        // Row by row from the front, each along the line the way its spots go
+        // Copy by copy from the front row's left, each along the line the way its spots go
         orderKey: (p, point, ctx, n) => {
             if (!copiesOf(p)) return shape.orderKey(p, point, ctx, n);
-            const r = nearestRow(p, point);
-            const o = rowOffsets(p)[r]!;
+            const r = nearestCopy(p, point);
+            const o = copyOffsets(p)[r]!;
             return [r, ...shape.orderKey(p, sub(point, o), ctx, per(p, n))];
         },
     };
 }
 
-/** The row whose line passes nearest `point` */
-function nearestRow(p: P, point: XY): number {
+/** The copy (or the drawn line) passing nearest `point` */
+function nearestCopy(p: P, point: XY): number {
     const line = lineOutline(p);
     let best = 0;
     let bestDistance = Infinity;
-    rowOffsets(p).forEach((o, r) => {
+    copyOffsets(p).forEach((o, r) => {
         const d = distanceToLine(line, sub(point, o));
         if (d < bestDistance) {
             bestDistance = d;
@@ -192,37 +232,39 @@ function distanceToLine(line: readonly XY[], q: XY): number {
     return best;
 }
 
-/** How far apart a first copy's rows start: 2 steps, the usual gap between ranks */
-const FIRST_APART_STEPS = 2;
+/** How far apart a first copy's rows and columns start: 2 steps, the usual gap between ranks */
+const FIRST_STEPS = 2;
 
-const countOf = (p: P, way: "behind" | "front") => p.copies?.[way] ?? 0;
+type Way = "behind" | "front" | "left" | "right";
+
+const countOf = (p: P, way: Way) => p.copies?.[way] ?? 0;
 
 /** The shape with `way`'s count set, a first copy starting 2 steps from the line */
-function setCount(
-    p: P,
-    way: "behind" | "front",
-    count: number,
-    env: ToolEnv,
-): P {
+function setCount(p: P, way: Way, count: number, env: ToolEnv): P {
     const c = Math.max(0, Math.min(MAX_COPIES, Math.round(count)));
     if (c === countOf(p, way)) return p;
+    const was = p.copies;
     const copies: LineCopies = {
-        behind: p.copies?.behind ?? 0,
-        front: p.copies?.front ?? 0,
-        apart: p.copies?.apart ?? FIRST_APART_STEPS * env.stepPx,
+        ...was,
+        behind: was?.behind ?? 0,
+        front: was?.front ?? 0,
+        apart: was?.apart ?? FIRST_STEPS * env.stepPx,
         [way]: c,
     };
+    // Columns start 2 steps clear of each other
+    if ((way === "left" || way === "right") && copies.gap === undefined)
+        return withCopiesSet(p, { ...copies, gap: FIRST_STEPS * env.stepPx });
     return withCopiesSet(p, copies);
 }
 
 function countParam(
-    way: "behind" | "front",
+    way: Way,
     label: () => string,
     less: () => string,
     more: () => string,
 ): ToolParam<P> {
     return {
-        key: way === "behind" ? "copiesBehind" : "copiesFront",
+        key: `copies${way[0]!.toUpperCase()}${way.slice(1)}`,
         get label() {
             return label();
         },
@@ -279,67 +321,157 @@ const FRONT = countParam(
     () => tolgee.t("shapes.copies.frontLess", "One fewer in front"),
     () => tolgee.t("shapes.copies.frontMore", "One more in front"),
 );
+const LEFT = countParam(
+    "left",
+    () => tolgee.t("shapes.copies.left", "Copies to the left"),
+    () => tolgee.t("shapes.copies.leftLess", "One fewer to the left"),
+    () => tolgee.t("shapes.copies.leftMore", "One more to the left"),
+);
+const RIGHT = countParam(
+    "right",
+    () => tolgee.t("shapes.copies.right", "Copies to the right"),
+    () => tolgee.t("shapes.copies.rightLess", "One fewer to the right"),
+    () => tolgee.t("shapes.copies.rightMore", "One more to the right"),
+);
 
-/** How far apart the rows are, in steps; shown once there are copies */
-const APART: ToolParam<P> = {
-    key: "copiesApart",
-    get label() {
-        return tolgee.t("shapes.copies.apart", "Rows apart, in steps");
-    },
-    unit: "steps",
-    primary: false,
-    drag: "x",
-    interval: false,
-    blends: false,
-    shown: (p) => copiesOf(p) !== null,
-    display: (p, _n, stepPx) =>
-        p.copies ? formatSteps(p.copies.apart / stepPx) : "",
-    value: (p, _n, stepPx) => (p.copies ? p.copies.apart / stepPx : 0),
-    type: (p, _n, text, env) => {
-        const steps = parseSteps(text);
-        return steps === null || !p.copies
-            ? null
-            : withCopiesSet(p, { ...p.copies, apart: steps * env.stepPx });
-    },
-    set: (p, _n, value, env) =>
-        value > 0 && p.copies
-            ? withCopiesSet(p, { ...p.copies, apart: value * env.stepPx })
-            : null,
-    scrub: (base, _n, move, env) => {
-        if (!base.copies) return base;
-        const steps = scrubValue(
-            base.copies.apart / env.stepPx,
-            move.dx,
-            move.dy,
-            spacingRate(env.snap, "x"),
-        );
-        return steps > 0
-            ? withCopiesSet(base, { ...base.copies, apart: steps * env.stepPx })
-            : base;
-    },
+const hasRows = (p: P) => {
+    const c = copiesOf(p);
+    return c !== null && c.behind + c.front > 0;
 };
+const hasColumns = (p: P) => {
+    const c = copiesOf(p);
+    return c !== null && (c.left ?? 0) + (c.right ?? 0) > 0;
+};
+
+/**
+ * A distance of the copies' own, in steps: how far apart the rows are, how much clear space
+ * between columns, or how far each row is staggered (which can go below 0)
+ */
+function stepsParam(
+    field: "apart" | "gap" | "stagger",
+    label: () => string,
+    shown: (p: P) => boolean,
+): ToolParam<P> {
+    const signed = field === "stagger";
+    const min = field === "apart" ? 1e-9 : field === "gap" ? 0 : -Infinity;
+    const read = (p: P) => p.copies?.[field] ?? 0;
+    const write = (p: P, units: number): P | null =>
+        p.copies && units >= min
+            ? withCopiesSet(p, { ...p.copies, [field]: units })
+            : null;
+    const readSigned = (text: string): number | null => {
+        const t = text.trim().replace(/^[−–]/, "-");
+        const negative = t.startsWith("-");
+        if (t.replace(/^-/, "").trim() === "0") return 0;
+        const steps = parseSteps(t.replace(/^-/, ""));
+        return steps === null ? null : negative ? -steps : steps;
+    };
+    return {
+        key: `copies${field[0]!.toUpperCase()}${field.slice(1)}`,
+        get label() {
+            return label();
+        },
+        unit: "steps",
+        primary: false,
+        drag: "x",
+        interval: false,
+        blends: false,
+        shown,
+        display: (p, _n, stepPx) =>
+            p.copies
+                ? signed
+                    ? formatSignedSteps(read(p) / stepPx)
+                    : formatSteps(read(p) / stepPx)
+                : "",
+        value: (p, _n, stepPx) => read(p) / stepPx,
+        type: (p, _n, text, env) => {
+            const steps =
+                signed || field === "gap" ? readSigned(text) : parseSteps(text);
+            return steps === null ? null : write(p, steps * env.stepPx);
+        },
+        set: (p, _n, value, env) => write(p, value * env.stepPx),
+        scrub: (base, _n, move, env) => {
+            if (!base.copies) return base;
+            const steps = scrubValue(
+                read(base) / env.stepPx,
+                move.dx,
+                move.dy,
+                spacingRate(env.snap, "x"),
+            );
+            return write(base, steps * env.stepPx) ?? base;
+        },
+    };
+}
+
+/** How far apart the rows are; shown with rows */
+const APART = stepsParam(
+    "apart",
+    () => tolgee.t("shapes.copies.apart", "Rows apart, in steps"),
+    hasRows,
+);
+/** Clear space between columns; shown with columns */
+const GAP = stepsParam(
+    "gap",
+    () => tolgee.t("shapes.copies.gap", "Space between columns, in steps"),
+    hasColumns,
+);
+/** How much further right each row sits than the one in front; shown with rows */
+const STAGGER = stepsParam(
+    "stagger",
+    () =>
+        tolgee.t(
+            "shapes.copies.stagger",
+            "How far each row sits to the right of the row in front, in steps",
+        ),
+    hasRows,
+);
 
 /** The Copies menu (spec #1190) */
 export const LINE_COPIES: ToolCopies<P> = {
-    params: [BEHIND, FRONT, APART],
+    params: [BEHIND, FRONT, APART, STAGGER, LEFT, RIGHT, GAP],
     summary: (p) => {
         const c = copiesOf(p);
         if (!c) return null;
-        const parts = [
-            c.behind > 0
-                ? tolgee.t("shapes.copies.summaryBehind", "{count} behind", {
-                      count: c.behind,
-                  })
-                : null,
-            c.front > 0
-                ? tolgee.t("shapes.copies.summaryFront", "{count} in front", {
-                      count: c.front,
-                  })
-                : null,
-        ].filter((x): x is string => x !== null);
-        return parts.join(" · ");
+        const part = (count: number | undefined, words: () => string) =>
+            count ? words() : null;
+        return [
+            part(c.behind, () =>
+                tolgee.t("shapes.copies.summaryBehind", "{count} behind", {
+                    count: c.behind,
+                }),
+            ),
+            part(c.front, () =>
+                tolgee.t("shapes.copies.summaryFront", "{count} in front", {
+                    count: c.front,
+                }),
+            ),
+            part(c.left, () =>
+                tolgee.t("shapes.copies.summaryLeft", "{count} left", {
+                    count: c.left,
+                }),
+            ),
+            part(c.right, () =>
+                tolgee.t("shapes.copies.summaryRight", "{count} right", {
+                    count: c.right,
+                }),
+            ),
+        ]
+            .filter((x): x is string => x !== null)
+            .join(" · ");
     },
     clear: (p) => withCopiesSet(p, undefined),
+    direction: {
+        shown: (p) => copiesOf(p) !== null,
+        current: (p) => (p.copies?.direction === "shape" ? "shape" : "field"),
+        pick: (p, way) => {
+            if (!p.copies) return p;
+            const { direction: _was, ...rest } = p.copies;
+            return withCopiesSet(
+                p,
+                way === "shape" ? { ...rest, direction: "shape" } : rest,
+            );
+        },
+    },
 };
 
 /**
@@ -498,7 +630,7 @@ export function withCopies(kind: ToolKind<P>): ToolKind<P> {
               }
             : {}),
         contains: (p, n, at, env) =>
-            rowOffsets(p).some((o) =>
+            copyOffsets(p).some((o) =>
                 kind.contains(p, per(p, n), sub(at, o), env),
             ),
         move: (b, n, delta, env) =>
@@ -545,7 +677,7 @@ export function withCopies(kind: ToolKind<P>): ToolKind<P> {
             if (!copiesOf(p)) return kind.emptySpots?.(p, n) ?? [];
             const k = per(p, n);
             const row = lineFillSpots(p, k);
-            return rowOffsets(p)
+            return copyOffsets(p)
                 .flatMap((o) => row.map((slot) => add(slot, o)))
                 .slice(n);
         },
@@ -553,7 +685,7 @@ export function withCopies(kind: ToolKind<P>): ToolKind<P> {
         copyOutlines: (p, n) => {
             if (!copiesOf(p) || !kind.outline) return [];
             const own = kind.outline(p, per(p, n));
-            return rowOffsets(p)
+            return copyOffsets(p)
                 .filter((o) => o.x !== 0 || o.y !== 0)
                 .map((o) => own.map((q) => add(q, o)));
         },

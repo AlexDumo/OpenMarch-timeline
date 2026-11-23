@@ -501,12 +501,21 @@ export interface ToolClickPoints<P> {
  * Its numbers take the whole spot count, as the host gives it.
  */
 export interface ToolCopies<P> {
-    /** The menu's numbers, in order: how many behind, how many in front, how far apart */
+    /** The menu's numbers, in order: behind, in front and their spacing, then left and right */
     readonly params: readonly ToolParam<P>[];
     /** What the menu's button says: "2 behind · 1 in front", or null with no copies */
     summary(params: P, n: number): string | null;
     /** The shape with its copies taken off */
     clear(params: P): P;
+    /**
+     * Which way behind and left are (#1192): the field's, or the shape's own, turning with it.
+     * Absent for a kind whose copies only go the field's way.
+     */
+    readonly direction?: {
+        shown(params: P): boolean;
+        current(params: P): "field" | "shape";
+        pick(params: P, way: "field" | "shape"): P;
+    };
 }
 
 /**

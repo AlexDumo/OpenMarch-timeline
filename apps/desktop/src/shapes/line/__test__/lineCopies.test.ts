@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { lineTool, lineToolBase } from "../lineTool";
+import { copyOffsets } from "../lineCopies";
 import { arcTool } from "../../arc/arcTool";
 import { isLineParams, type LineParams } from "../lineGeometry";
 import { boxesAt, type PlacedRecipe } from "../../placed/placedBox";
@@ -187,7 +188,7 @@ describe("a line's copies stored", () => {
         expect(
             isLineParams({
                 ...paramsOf(t),
-                copies: { ...paramsOf(t).copies, left: 1 },
+                copies: { ...paramsOf(t).copies, diagonal: 1 },
             }),
         ).toBe(false);
         expect(
@@ -253,5 +254,106 @@ describe("copies of an arc", () => {
             expect(s.y).toBeCloseTo(row[i]!.y, 6);
         });
         expect(one).toHaveLength(6);
+    });
+});
+
+describe("copies to the side (#1192)", () => {
+    /** 80 wide from x 100, so a column is 80 + gap from the next */
+    const line = (n: number) =>
+        drawn(n, { x: 100, y: 200 }, { x: 180, y: 200 });
+
+    it("stand the line's width plus 2 steps apart, left first", () => {
+        let t = line(9);
+        t = typedCopies(t, "copiesLeft", "1");
+        t = typedCopies(t, "copiesRight", "1");
+        expect(paramsOf(t).copies).toMatchObject({
+            left: 1,
+            right: 1,
+            gap: 2 * STEP,
+        });
+        expect(copyOffsets(paramsOf(t))).toEqual([
+            { x: -100, y: 0 },
+            { x: 0, y: 0 },
+            { x: 100, y: 0 },
+        ]);
+        const spots = spotsOf(t);
+        expect(spots).toHaveLength(9);
+        expect(Math.min(...spots.map((s) => s.x))).toBe(0);
+        expect(Math.max(...spots.map((s) => s.x))).toBe(280);
+        expect(lineTool.copies!.summary(t.params, 9)).toBe("1 left · 1 right");
+    });
+
+    it("follow the line's length as it's reshaped", () => {
+        let t = typedCopies(line(6), "copiesRight", "1");
+        t = edit(
+            t,
+            lineTool
+                .copies!.params.find((p) => p.key === "copiesGap")!
+                .type(t.params, t.spots, "0", env),
+            ctx,
+        );
+        expect(copyOffsets(paramsOf(t))[1]).toEqual({ x: 80, y: 0 });
+        const longer: LineParams = {
+            ...paramsOf(t),
+            points: [paramsOf(t).points[0]!, { x: 220, y: 200, tension: 0 }],
+        };
+        expect(copyOffsets(longer)[1]).toEqual({ x: 120, y: 0 });
+    });
+
+    it("make a grid with rows, front row first", () => {
+        let t = typedCopies(line(12), "copiesBehind", "1");
+        t = typedCopies(t, "copiesRight", "1");
+        expect(copyOffsets(paramsOf(t))).toEqual([
+            { x: 0, y: 0 },
+            { x: 100, y: 0 },
+            { x: 0, y: -20 },
+            { x: 100, y: -20 },
+        ]);
+        expect(slotsOf(t, ctx)).toHaveLength(12);
+    });
+
+    it("stagger each row further right than the one in front", () => {
+        let t = typedCopies(line(9), "copiesBehind", "1");
+        t = typedCopies(t, "copiesFront", "1");
+        t = typedCopies(t, "copiesStagger", "1");
+        expect(copyOffsets(paramsOf(t))).toEqual([
+            { x: -10, y: 20 },
+            { x: 0, y: 0 },
+            { x: 10, y: -20 },
+        ]);
+        t = typedCopies(t, "copiesStagger", "-½");
+        expect(copyOffsets(paramsOf(t))[2]).toEqual({ x: -5, y: -20 });
+        expect(param("copiesStagger").display(t.params, 9, STEP)).toBe("−½");
+    });
+
+    it("go the field's way, or the line's own as turned", () => {
+        const t = typedCopies(line(6), "copiesBehind", "1");
+        const turned: LineParams = { ...paramsOf(t), turn: 90 };
+        // The field's way: behind is toward the back sideline whatever the turn
+        expect(copyOffsets(turned)[1]).toEqual({ x: 0, y: -20 });
+        const shape = lineTool.copies!.direction!.pick(turned, "shape");
+        expect(lineTool.copies!.direction!.current(shape)).toBe("shape");
+        // Turned a quarter clockwise, its front faces stage left, so behind is to the right
+        const [, behind] = copyOffsets(shape);
+        expect(behind!.x).toBeCloseTo(20, 9);
+        expect(behind!.y).toBeCloseTo(0, 9);
+        expect(
+            lineTool.copies!.direction!.pick(shape, "field").copies?.direction,
+        ).toBeUndefined();
+        expect(isLineParams(shape)).toBe(true);
+    });
+
+    it("hide the row numbers without rows and the gap without columns", () => {
+        const t = typedCopies(line(6), "copiesRight", "1");
+        const shown = lineTool
+            .copies!.params.filter((p) => p.shown?.(t.params, 6) ?? true)
+            .map((p) => p.key);
+        expect(shown).toEqual([
+            "copiesBehind",
+            "copiesFront",
+            "copiesLeft",
+            "copiesRight",
+            "copiesGap",
+        ]);
     });
 });

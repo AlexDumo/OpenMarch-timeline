@@ -1684,6 +1684,16 @@ function CopiesMenu({ target }: { target: ShapeEditTarget }) {
                             </Fragment>
                         ))}
                     </div>
+                    {copies.direction?.shown(params) && (
+                        <CopiesDirection
+                            current={copies.direction.current(params)}
+                            pick={(way) =>
+                                target.apply(
+                                    copies.direction!.pick(target.params, way),
+                                )
+                            }
+                        />
+                    )}
                     {summary !== null && (
                         <button
                             type="button"
@@ -1708,7 +1718,75 @@ const COPY_ROW_WORDS: Record<string, () => string> = {
     copiesBehind: () => tolgee.t("shapes.copies.rowBehind", "Behind"),
     copiesFront: () => tolgee.t("shapes.copies.rowFront", "In front"),
     copiesApart: () => tolgee.t("shapes.copies.rowApart", "Apart"),
+    copiesStagger: () => tolgee.t("shapes.copies.rowStagger", "Stagger"),
+    copiesLeft: () => tolgee.t("shapes.copies.rowLeft", "Left"),
+    copiesRight: () => tolgee.t("shapes.copies.rowRight", "Right"),
+    copiesGap: () => tolgee.t("shapes.copies.rowGap", "Gap"),
 };
+
+/**
+ * Which way the copies go (#1192): the field's (behind is toward the back sideline) or the
+ * shape's own, turning with it. Two buttons, the one in use lit; a press is one change.
+ */
+function CopiesDirection({
+    current,
+    pick,
+}: {
+    current: "field" | "shape";
+    pick: (way: "field" | "shape") => void;
+}) {
+    const label = tolgee.t("shapes.copies.direction", "Direction");
+    const ways = [
+        {
+            value: "field" as const,
+            text: tolgee.t("shapes.copies.directionField", "Field"),
+            tip: tolgee.t(
+                "shapes.copies.directionFieldTip",
+                "Behind is toward the back sideline, however the line is turned",
+            ),
+        },
+        {
+            value: "shape" as const,
+            text: tolgee.t("shapes.copies.directionShape", "Shape"),
+            tip: tolgee.t(
+                "shapes.copies.directionShapeTip",
+                "Behind is behind the line as drawn: turning the line turns its copies",
+            ),
+        },
+    ];
+    return (
+        <div className="mt-6 flex items-center gap-12">
+            <span className="text-text/60">{label}</span>
+            <div
+                role="radiogroup"
+                aria-label={label}
+                className="rounded-4 border-stroke flex border"
+            >
+                {ways.map((way) => (
+                    <Tip key={way.value} label={way.tip}>
+                        <button
+                            type="button"
+                            role="radio"
+                            aria-checked={current === way.value}
+                            onClick={() =>
+                                current !== way.value && pick(way.value)
+                            }
+                            data-testid={`shape-copies-direction-${way.value}`}
+                            className={clsx(
+                                "min-h-24 px-8 py-2",
+                                current === way.value
+                                    ? "bg-fg-2 text-accent"
+                                    : "hover:text-accent",
+                            )}
+                        >
+                            {way.text}
+                        </button>
+                    </Tip>
+                ))}
+            </div>
+        </div>
+    );
+}
 
 /** The field less the covers over its top (the touch toolbar's panel), in the field's px */
 function visibleField(
