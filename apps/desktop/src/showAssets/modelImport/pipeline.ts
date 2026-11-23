@@ -53,6 +53,7 @@ import {
     DETAILED_TRIANGLE_CAP,
     DISTANT_SIMPLIFY_FROM,
     DISTANT_TEXTURE_CAP,
+    DISTANT_SIMPLIFY_ERRORS,
     DISTANT_TRIANGLE_CAP,
     DISTANT_TRIANGLE_RATIO,
     FLAT_RATIO,
@@ -619,12 +620,13 @@ async function makeLight(
 
 /**
  * meshoptimizer's simplifier toward `target` triangles: the ratio first, then a wider error
- * limit until it gets there (spike #995). Returns the triangles left.
+ * limit until it gets there (spike #995), up to the last of `errors`. Returns the triangles left.
  */
 async function simplifyTo(
     doc: Document,
     scene: Scene,
     target: number,
+    errors: readonly number[] = [0.01, 0.05, 0.2, 1],
 ): Promise<number> {
     await MeshoptSimplifier.ready;
     await doc.transform(weld({ overwrite: false }));
@@ -640,7 +642,7 @@ async function simplifyTo(
     );
     const start = sceneTriangles(scene);
     let now = start;
-    for (const error of [0.01, 0.05, 0.2, 1]) {
+    for (const error of errors) {
         if (now <= target) break;
         const ratio = Math.min(1, (target / now) * 0.95);
         for (const mesh of doc.getRoot().listMeshes())
@@ -735,7 +737,10 @@ async function shrinkTextures(
 const textureName = (texture: Texture, index: number) =>
     texture.getName() || texture.getURI() || `texture ${index + 1}`;
 
-/** The distant version: simplified hard, with small textures. */
+/**
+ * The distant version: simplified as far as keeps its shape, with small textures. It may keep
+ * more than its target: a far copy that caves in looks broken from the stands (#1180).
+ */
 async function makeDistant(
     io: WebIO,
     doc: Document,
@@ -752,7 +757,7 @@ async function makeDistant(
                 Math.floor(triangles * DISTANT_TRIANGLE_RATIO),
             ),
         );
-        await simplifyTo(distant, scene, target);
+        await simplifyTo(distant, scene, target, DISTANT_SIMPLIFY_ERRORS);
     }
     await shrinkTextures(distant, DISTANT_TEXTURE_CAP, images, null);
     await distant.transform(

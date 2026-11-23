@@ -372,6 +372,8 @@ export default function PitModels({ fieldProperties }: PitModelsProps) {
                             scratch.z,
                             cam,
                             g.near.get(track.marcherId),
+                            // An imported model's drawn size; the pit's own are its default
+                            g.sizeM ? Math.max(at.width, at.depth) : 0,
                         );
                         g.near.set(track.marcherId, near);
                         tier = near ? 0 : 1;
