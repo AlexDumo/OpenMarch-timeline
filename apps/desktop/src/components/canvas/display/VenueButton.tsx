@@ -13,7 +13,7 @@ import {
     type UiSettings,
 } from "@/stores/UiSettingsStore";
 import { useVenueSettings } from "@/hooks/queries/useVenueSettings";
-import { KIT_FIELD_STYLE } from "@/view3d/core/kits";
+import { KIT_FIELD_STYLE } from "@/view3d/core/kits/fieldStyle";
 import { setFieldVenue } from "@/field/three/venueUnderlay/fieldVenue";
 import { DISPLAY_BUTTON_CLASS, DisplayCaption } from "./displayButton";
 

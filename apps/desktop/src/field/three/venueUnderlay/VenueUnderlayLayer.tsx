@@ -33,10 +33,13 @@ import {
     venueFootprint,
     type FieldPlan,
 } from "@/view3d/core/field";
-import { KIT_BUILDERS, KIT_FIELD_STYLE } from "@/view3d/core/kits";
-import { buildCrowd, defaultCrowdPalette } from "@/view3d/core/environment";
+import { KIT_FIELD_STYLE } from "@/view3d/core/kits/fieldStyle";
 import { DEFAULT_VENUE_PARAMS } from "@/view3d/core/venueSettings";
-import type { VenueKitId, VenueParams } from "@/view3d/core/types";
+import type { KitBuilder, VenueKitId, VenueParams } from "@/view3d/core/types";
+import type {
+    buildCrowd as BuildCrowd,
+    defaultCrowdPalette as DefaultCrowdPalette,
+} from "@/view3d/core/environment";
 import { useTheme } from "@/context/ThemeContext";
 import type { FieldVenueAround } from "@/stores/UiSettingsStore";
 import { planBaseColor, venuePasses, type VenueLook } from "./fieldVenue";
@@ -158,8 +161,29 @@ function feather(
  * The venue kit (stands, crowd, buildings) from straight above, rendered
  * into a texture by the field's own renderer, so the field never needs a
  * second WebGL context. Kits load nothing asynchronously, so one render does.
+ * The kits' code loads the first time the stands show (`loadKits`).
  */
+interface KitModules {
+    builders: Readonly<Record<VenueKitId, KitBuilder>>;
+    buildCrowd: typeof BuildCrowd;
+    defaultCrowdPalette: typeof DefaultCrowdPalette;
+}
+
+/** The venue kits, loaded only when the stands are first shown. */
+async function loadKits(): Promise<KitModules> {
+    const [kits, environment] = await Promise.all([
+        import("@/view3d/core/kits"),
+        import("@/view3d/core/environment"),
+    ]);
+    return {
+        builders: kits.KIT_BUILDERS,
+        buildCrowd: environment.buildCrowd,
+        defaultCrowdPalette: environment.defaultCrowdPalette,
+    };
+}
+
 function renderAround(
+    { builders, buildCrowd, defaultCrowdPalette }: KitModules,
     gl: WebGLRenderer,
     kitId: VenueKitId,
     fieldProperties: FieldProperties,
@@ -169,7 +193,7 @@ function renderAround(
         fieldProperties,
         KIT_FIELD_STYLE[kitId],
     );
-    const kit = KIT_BUILDERS[kitId]({
+    const kit = builders[kitId]({
         footprint: fieldFootprint,
         params,
         quality: "low",
@@ -450,19 +474,27 @@ export default function VenueUnderlayLayer({
             setStands(null);
             return;
         }
+        let live = true;
         let surface: Surface | null = null;
-        try {
-            surface = renderAround(
-                gl,
-                kitId,
-                fieldProperties,
-                JSON.parse(paramsKey) as VenueParams,
+        void loadKits()
+            .then((modules) => {
+                if (!live) return;
+                surface = renderAround(
+                    modules,
+                    gl,
+                    kitId,
+                    fieldProperties,
+                    JSON.parse(paramsKey) as VenueParams,
+                );
+                setStands(surface);
+            })
+            .catch((error: unknown) =>
+                console.warn("The venue's stands couldn't be drawn", error),
             );
-        } catch (error) {
-            console.warn("The venue's stands couldn't be drawn", error);
-        }
-        setStands(surface);
-        return () => surface?.dispose();
+        return () => {
+            live = false;
+            surface?.dispose();
+        };
     }, [gl, wantStands, kitId, fieldProperties, paramsKey]);
 
     const fieldBackground = fieldProperties.theme.background;

@@ -143,7 +143,7 @@ import {
     withLightLines,
 } from "./venueUnderlay/fieldVenue";
 import { useVenueSettings } from "@/hooks/queries/useVenueSettings";
-import { KIT_FIELD_STYLE } from "@/view3d/core/kits";
+import { KIT_FIELD_STYLE } from "@/view3d/core/kits/fieldStyle";
 import MarchersLayer from "./layers/MarchersLayer";
 import ItemsLayer from "./layers/ItemsLayer";
 import LabelsLayer, { type LabelStyle } from "./layers/LabelsLayer";

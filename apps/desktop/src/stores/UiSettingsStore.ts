@@ -208,8 +208,8 @@ const clampZoomSensitivity = (value: number): number =>
     Math.min(4.0, Math.max(0.5, value));
 
 // Helper function to parse settings from a JSON string
-// Throws on bad JSON or invalid structure
-const parseSettings = (raw: string): UiSettings => {
+// Throws on bad JSON or invalid structure. Exported for tests
+export const parseSettings = (raw: string): UiSettings => {
     // Dropped: `previousPaths` (Previous paths) gave way to start flag positions (#331), and
     // `focussedComponent` went with the old timeline focus (beat editor)
     const {
