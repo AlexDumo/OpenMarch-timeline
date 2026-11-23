@@ -79,8 +79,9 @@ abstract class HandleGesture implements FieldGesture {
  * keeps the ratio while it's held. A box shape's ratio lock is the box's own: a plain selection
  * never reads it (#1037). Either scales from the center with from center. The dragged side lands
  * on the field's lines or the coordinate rounding grid (#585); the Snap toggle off scales freely.
+ * An item's handles read the same roles but never snap (`itemTransform.ts`).
  */
-const SCALE_HONORS: HonoredRoles = {
+export const SCALE_HONORS: HonoredRoles = {
     context: "field",
     fine: "fine",
     constrain: "keepRatio",

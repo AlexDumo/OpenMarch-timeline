@@ -205,8 +205,10 @@ export type FieldEditorPorts = {
     /** Draws item `id` at this size and turn while a handle drags it; null draws it as stored. */
     previewItem?(id: number, size: ItemSize | null): void;
     /**
-     * Saves item `id`'s new size and turn at the playhead. Resolves "saved"
-     * once the field can draw it, or "refused" when nothing was saved.
+     * Saves item `id`'s new size and turn at the playhead, and its new center
+     * when the resize moved it (`size.center`), as a drop of the item there, in
+     * the same edit. Resolves "saved" once the field can draw it, or "refused"
+     * when nothing was saved.
      */
     saveItem?(id: number, size: ItemSize): Promise<DropResult>;
     /** A point snapped as a marcher's coordinates are (the prop tool's corners). */
@@ -490,6 +492,24 @@ export type FieldModeDrawing = {
     pivotPreview?: FieldPoint;
     /** While turning: what it turns around, and the pointer */
     pivot?: { at: FieldPoint; to: FieldPoint };
+    /**
+     * A mirrored paste's mirror point (Paste mirrored): a handle that drags, with a line through
+     * it side to side and front to back across the whole canvas. The lines the paste mirrors
+     * across are drawn solid and named; the others faint.
+     */
+    mirror?: {
+        at: FieldPoint;
+        /** Mirrored side to side: across the line through the point that runs like a yard line */
+        across: boolean;
+        /** Mirrored front to back: across the line through the point that runs like the sidelines */
+        deep: boolean;
+        /** The upright line's name as the coordinate sheet writes it ("On 50"), when it mirrors */
+        acrossLabel?: string;
+        /** The level line's name ("12 BE BH"), when it mirrors */
+        deepLabel?: string;
+        /** The point is being dragged */
+        dragging?: boolean;
+    };
     /** A note by the pointer: the angle, or where the shape is in drill terms */
     tip?: { at: FieldPoint; text: string };
     /** The spots are part way to where they're going: a glide is running (#387) */
@@ -725,6 +745,11 @@ export class FieldEditor {
      */
     private pending: ReadonlyMap<number, FieldPoint> | null = null;
     private drops = 0;
+    /**
+     * The last handle gesture started on each item: a save that settles after another one started
+     * on the same item leaves that one's size drawn.
+     */
+    private readonly itemTransforms = new Map<number, object>();
     /** Where the marchers being dragged are drawn, or null with no drag. */
     private live: readonly MarcherPosition[] | null = null;
     /**
@@ -1469,6 +1494,16 @@ export class FieldEditor {
         return this.restingPivot(own, true);
     }
 
+    /**
+     * Where the plain selection's pivot was set, when it was moved off its box's center (a cell
+     * picked, dragged onto a marcher or a spot): what Flip mirrors about too. Null on the center.
+     */
+    selectionPivotAnchor(): PivotAnchor | null {
+        if (this.selectionPivot() === null) return null;
+        const anchor = this.currentOwnPivot()?.anchor ?? null;
+        return anchor && !isCenter(anchor) ? anchor : null;
+    }
+
     /** The pivot where it's set; `resting` with no gesture running, so hints and previews show */
     private restingPivot(
         own: OwnPivot | null,
@@ -1546,6 +1581,21 @@ export class FieldEditor {
      * Sets the pivot to point `key` of the selection's box (the inspector's pivot grid); the
      * center puts it back there.
      */
+    /**
+     * The selection's pivot pinned to field point `at` (a spot of its own), so it stays where it is
+     * whatever the marchers do: Flip pins a pivot set on a cell of the box before it mirrors about
+     * it, so flipping again, or undoing, goes about the same line
+     */
+    pinSelectionPivot(at: FieldPoint): void {
+        if (this.selectionPivot() === null) return;
+        const ids = this.ports.selection.get();
+        this.ownPivot = {
+            ids: [...ids],
+            anchor: { kind: "point", at: { x: at.x, y: at.y } },
+        };
+        this.emit();
+    }
+
     setSelectionPivot(key: BoxPointKey): void {
         // None while a shape owns the selection, or a lone marcher: nothing to set
         if (this.selectionPivot() === null) return;
@@ -2000,15 +2050,21 @@ export class FieldEditor {
 
     /**
      * Resizing or turning the selected item from a handle. Drawn at the size
-     * given until its save settles, as a drop's marchers are.
+     * given, and at its new center when the resize moved it, until its save
+     * settles, as a drop's marchers are.
      */
     private startItemTransform(
         press: FieldPress,
         handle: HandleId,
         { id, frame }: { id: number; frame: ItemFrame },
     ): FieldGesture {
-        const preview = (size: ItemSize | null) =>
+        const transform = {};
+        this.itemTransforms.set(id, transform);
+        const preview = (size: ItemSize | null) => {
             this.ports.previewItem?.(id, size);
+            if (size?.center) this.showLive([{ id, ...size.center }]);
+            else if (this.live) this.endLive();
+        };
         const host = {
             show: (size: ItemSize) => preview(size),
             cancel: () => preview(null),
@@ -2016,16 +2072,36 @@ export class FieldEditor {
                 const unchanged =
                     size.width === frame.width &&
                     size.depth === frame.depth &&
-                    size.rotation === frame.rotation;
+                    size.rotation === frame.rotation &&
+                    !size.center;
                 if (unchanged || !this.ports.saveItem) {
                     preview(null);
                     return;
                 }
-                preview(size);
-                this.ports.saveItem(id, size).then(
-                    () => preview(null),
-                    () => preview(null),
-                );
+                this.ports.previewItem?.(id, size);
+                const center = size.center;
+                // A moved center is drawn as a drop's marchers are, till the save settles, and
+                // counts as a drop: only the last drop's answer clears what's pending
+                const drop = center ? ++this.drops : null;
+                if (center) {
+                    this.live = null;
+                    this.pending = withPositions(this.pending, [
+                        { id, ...center },
+                    ]);
+                    this.ports.showPositions(this.pending);
+                }
+                const settle = () => {
+                    if (this.itemTransforms.get(id) === transform) {
+                        this.itemTransforms.delete(id);
+                        this.ports.previewItem?.(id, null);
+                    }
+                    if (drop === null || drop !== this.drops) return;
+                    this.pending = null;
+                    this.ports.showPositions(
+                        this.live && withPositions(null, this.live),
+                    );
+                };
+                this.ports.saveItem(id, size).then(settle, settle);
             },
         };
         const keys = this.keysFor(press.start);
