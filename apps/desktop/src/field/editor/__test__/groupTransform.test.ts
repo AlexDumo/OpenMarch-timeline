@@ -785,6 +785,23 @@ describe("snapping the dragged side to the grid (#585)", () => {
         ).toEqual({ x: 50, y: 23 });
     });
 
+    it("lands a constrained corner on the one axis that has rounding", () => {
+        const acrossOnly = (p: { x: number; y: number }) => ({
+            x: Math.round(p.x / 10) * 10,
+            y: p.y,
+        });
+        // Free, the corner scales by 1.468: the right side at 246.8 lands on 250, so 1.5
+        const delta = snapScaleDelta(
+            "se",
+            BOX,
+            { x: 47, y: 23 },
+            true,
+            false,
+            acrossOnly,
+        );
+        expect(scaleFor("se", BOX, delta, true, false).x).toBe(1.5);
+    });
+
     it("doesn't flip the formation when the nearest grid line is past the anchor", () => {
         // The right side dragged to 103 would land on 100, the left side: it stops at the smallest
         expect(snapped("e", { x: -97, y: 0 }).x).toBe(MIN_SCALE);

@@ -308,6 +308,9 @@ export function scaleFor(
     return { anchor, x: uniform, y: uniform };
 }
 
+/** A nudge, in field units, smaller than any coordinate rounding grid's spacing */
+const GRID_PROBE = 0.01;
+
 /**
  * The drag's `delta` adjusted so the handle's side lands on one of the field's lines or on the
  * grid (#585). `pull`, when given, is the field's lines and how far the side reaches for one: a
@@ -373,10 +376,22 @@ export function snapScaleDelta(
     const usable = (list: (number | null)[]) =>
         list.filter((s): s is number => s !== null && s >= MIN_SCALE);
     const onLines = usable([scaleTo("x", lines.x), scaleTo("y", lines.y)]);
+    // An axis with no rounding comes back unchanged wherever it is: it has no grid to land on.
+    // Unchanged at two spots (closer than any grid's spacing) means it has none.
+    const probe = snap({
+        x: landed.x + GRID_PROBE,
+        y: landed.y + GRID_PROBE,
+    });
+    const rounds = (axis: "x" | "y") =>
+        gridded[axis] !== landed[axis] ||
+        probe[axis] !== landed[axis] + GRID_PROBE;
     const candidates =
         onLines.length > 0
             ? onLines
-            : usable([scaleTo("x", gridded.x), scaleTo("y", gridded.y)]);
+            : usable([
+                  rounds("x") ? scaleTo("x", gridded.x) : null,
+                  rounds("y") ? scaleTo("y", gridded.y) : null,
+              ]);
     if (candidates.length === 0) return delta;
     const uniform = candidates.reduce((best, s) =>
         Math.abs(s - free.x) < Math.abs(best - free.x) ? s : best,
