@@ -306,7 +306,7 @@ describe("Mark Diesel midfield art", () => {
         FieldPropertiesTemplates.HIGH_SCHOOL_FOOTBALL_FIELD_NO_END_ZONES;
     const params: VenueParams = { ...DIESEL_VENUE_PARAMS };
 
-    it("paints the app icon at the drawings' 27 ft, between the hashes", () => {
+    it("paints the helmet at the drawings' 27 ft, between the hashes", () => {
         const plain = planField({ fieldProperties, style: "turf", params });
         expect(plain.items.filter((i) => i.type === "logo")).toHaveLength(1);
 
@@ -324,9 +324,9 @@ describe("Mark Diesel midfield art", () => {
         const f = plan.footprint;
         expect(item.x).toBe(0);
         expect(item.z).toBeCloseTo((f.minZ + f.maxZ) / 2);
-        // The turf drawings' midfield logo: 27 ft across, as tall.
+        // The turf drawings' midfield logo: 27 ft across.
         expect(item.width).toBeCloseTo(27 * 0.3048);
-        expect(item.height).toBeCloseTo(item.width);
+        expect(item.height).toBeCloseTo(item.width / 1.1);
         expect(written((g) => dieselFieldArt.paint(g, 256, 256))).toBe(
             "[marcher]",
         );

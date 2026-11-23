@@ -3395,6 +3395,12 @@
             "homeColor": "Home",
             "awayColor": "Visitors",
             "endZones": "End zones",
+            "fieldLines": "Field lines",
+            "fieldLinesOption": {
+                "show": "Show's field",
+                "stadium": "Stadium's field"
+            },
+            "fieldLinesStadiumNote": "The stadium's own yard numbers and hashes, as on its turf. Marchers stay where you wrote them.",
             "endZoneText": "End-zone lettering",
             "endZoneTextPlaceholder": "No lettering",
             "endZoneColor": "Color",

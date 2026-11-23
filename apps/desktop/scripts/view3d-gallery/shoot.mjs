@@ -9,6 +9,7 @@
 // `nvidia-smi` works; --software forces SwiftShader;
 // --bench N then also times N frames of each shot (ms per frame, in report.json).
 //     [--field football|footballNoEndZones|college|collegeNoEndZones|pro|pro6to5|indoor] [--image field.png]
+//     [--field-lines show|stadium]
 // poses.json: [{ "name": "x", "position": [x,y,z], "target": [x,y,z], "fov": 45, "near": 0.5 }]
 // Writes <out>/<kit>/<lighting>--<camera>.png, <out>/<kit>/sheet.png and <out>/report.json.
 import { execSync } from "node:child_process";
@@ -47,6 +48,7 @@ const gpu =
     args.includes("--gpu") || (!args.includes("--software") && hasNvidiaGpu());
 const benchFrames = Number(opt("bench", "0"));
 const field = opt("field");
+const fieldLines = opt("field-lines");
 const image = opt("image")
     ? `data:image/${path.extname(opt("image")).slice(1).replace("jpg", "jpeg")};base64,${fs.readFileSync(opt("image")).toString("base64")}`
     : undefined;
@@ -115,6 +117,7 @@ try {
             quality,
             crowd,
             field,
+            fieldLines,
             image,
         });
         const lightings =

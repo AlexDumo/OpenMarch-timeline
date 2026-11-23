@@ -952,20 +952,102 @@ export function paintMonument(g: G, w: number, h: number): void {
     });
 }
 
+/** Width over height of the midfield helmet. */
+const HELMET_ASPECT = 1.1;
+
 /**
- * The paint at midfield: the OpenMarch app icon, ringed in white, in the
- * box the turf drawings give the midfield logo (27 ft across, 13 ft 6 in
- * each side of the 50; `FieldSurfaceInput.centerArt`).
+ * The paint at midfield: a football helmet seen from the side, facing the
+ * left end zone, with the OpenMarch marcher on its shell, in the box the
+ * turf drawings give the midfield logo (27 ft across, 13 ft 6 in each side
+ * of the 50; `FieldSurfaceInput.centerArt`). A plain white shell with a
+ * violet edge, stripe and mark, and a gray face mask.
  */
 export const dieselFieldArt: FieldCenterArt = {
-    aspect: 1,
+    aspect: HELMET_ASPECT,
     maxWidth: 27 * 0.3048,
     paint(g, w, h) {
-        const size = Math.min(w, h);
-        // Inset so the white ring stays on the canvas.
-        paintAppIcon(g, w / 2, h / 2, size / 1.1, OM.white);
+        paintHelmet(g, w, h);
     },
 };
+
+/** Paints the midfield helmet into a `w` x `h` box (`dieselFieldArt`). */
+export function paintHelmet(g: G, w: number, h: number): void {
+    // Drawn in units of the box's height, from the top-left corner.
+    const u = Math.min(h, w / HELMET_ASPECT);
+    g.save();
+    g.translate((w - u * HELMET_ASPECT) / 2, (h - u) / 2);
+    g.scale(u, u);
+    g.lineJoin = "round";
+    g.lineCap = "round";
+    const cx = 0.62;
+    const cy = 0.5;
+    const r = 0.44;
+    const deg = Math.PI / 180;
+    const shell = () => {
+        g.beginPath();
+        // Over the crown from the back of the neck to the brow.
+        g.arc(cx, cy, r, 25 * deg, 170 * deg, true);
+        g.lineTo(0.3, 0.62);
+        g.lineTo(0.36, 0.86);
+        g.lineTo(0.7, 0.9);
+        g.quadraticCurveTo(
+            0.98,
+            0.86,
+            cx + r * Math.cos(25 * deg),
+            cy + r * Math.sin(25 * deg),
+        );
+        g.closePath();
+    };
+    const mask = () => {
+        g.beginPath();
+        // Two bars from the brow and the jaw, joined by a curved front.
+        g.moveTo(0.31, 0.6);
+        g.lineTo(0.1, 0.6);
+        g.quadraticCurveTo(0.02, 0.6, 0.03, 0.7);
+        g.lineTo(0.06, 0.84);
+        g.quadraticCurveTo(0.09, 0.9, 0.18, 0.9);
+        g.lineTo(0.37, 0.86);
+        g.moveTo(0.04, 0.75);
+        g.lineTo(0.34, 0.74);
+        g.moveTo(0.18, 0.6);
+        g.lineTo(0.18, 0.9);
+    };
+    // The face mask: gray bars edged in violet.
+    mask();
+    g.strokeStyle = OM.violet;
+    g.lineWidth = 0.06;
+    g.stroke();
+    g.strokeStyle = "#b8bcc8";
+    g.lineWidth = 0.032;
+    g.stroke();
+    // The shell, edged in violet.
+    shell();
+    g.fillStyle = OM.white;
+    g.fill();
+    g.strokeStyle = OM.violet;
+    g.lineWidth = 0.04;
+    g.stroke();
+    // A stripe along the crown, clipped to the shell.
+    g.save();
+    shell();
+    g.clip();
+    g.beginPath();
+    g.arc(cx, cy, r - 0.06, 200 * deg, 345 * deg);
+    g.lineWidth = 0.05;
+    g.lineCap = "butt";
+    g.stroke();
+    g.restore();
+    // The ear hole.
+    g.beginPath();
+    g.arc(0.72, 0.68, 0.032, 0, Math.PI * 2);
+    g.fillStyle = OM.violet;
+    g.fill();
+    // The OpenMarch marcher on the shell.
+    const markHeight = 0.4;
+    const markWidth = (markHeight * MARCHER_MARK.width) / MARCHER_MARK.height;
+    paintMarcher(g, 0.64 - markWidth / 2, 0.2, markHeight, OM.violet);
+    g.restore();
+}
 
 type Paint = (g: G, width: number, height: number) => void;
 

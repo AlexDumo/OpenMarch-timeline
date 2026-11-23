@@ -70,6 +70,7 @@ import {
     KIT_BUILDERS,
     KIT_FIELD_ART,
     KIT_FIELD_TURF,
+    kitFieldProperties,
     kitFieldStyle,
 } from "@/view3d/core/kits";
 import type {
@@ -253,6 +254,12 @@ function SceneContents({
         () => kitFieldStyle(kitId, fieldProperties),
         [kitId, fieldProperties],
     );
+    // The show's field, or the stadium's own lines when the show asks.
+    const fieldLines = settings.fieldLines;
+    const surfaceField = useMemo(
+        () => kitFieldProperties(kitId, fieldProperties, fieldLines),
+        [kitId, fieldProperties, fieldLines],
+    );
     const footprintKey = useMemo(
         () => JSON.stringify(venueFootprint(fieldProperties, fieldStyle)),
         [fieldProperties, fieldStyle],
@@ -338,7 +345,7 @@ function SceneContents({
     // Field surface.
     useEffect(() => {
         const surface = buildFieldSurface({
-            fieldProperties,
+            fieldProperties: surfaceField,
             theme: fieldProperties.theme,
             style: fieldStyle,
             centerArt: KIT_FIELD_ART[kitId],
@@ -353,7 +360,16 @@ function SceneContents({
             scene.remove(surface.mesh);
             surface.dispose();
         };
-    }, [scene, gl, fieldProperties, fieldStyle, kitId, params, image]);
+    }, [
+        scene,
+        gl,
+        fieldProperties,
+        surfaceField,
+        fieldStyle,
+        kitId,
+        params,
+        image,
+    ]);
 
     // Crowd: one instanced mesh from the kit's seat rows.
     useEffect(() => {

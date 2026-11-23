@@ -5,6 +5,7 @@ import {
     Group,
     Mesh,
 } from "three";
+import { FieldProperties } from "@openmarch/core";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import { GROUND_LAYER, setGroundLayer } from "../../environment";
 import {
@@ -439,6 +440,28 @@ export function buildDieselTurf(ctx: DieselCtx): DieselPart {
 }
 
 /**
+ * The stadium's own field, as its turf drawings lay it out: the pro
+ * template, with the hashes at the drawings' 70 ft 9 in from each sideline
+ * (the template rounds them to whole steps).
+ */
+export const DIESEL_FIELD: FieldProperties = (() => {
+    const pro = FieldPropertiesTemplates.PRO_FOOTBALL_FIELD_WITH_END_ZONES;
+    const hash = (70.75 * 12) / pro.stepSizeInches;
+    const back = ((160 - 70.75) * 12) / pro.stepSizeInches;
+    return new FieldProperties({
+        ...pro,
+        name: "Mark Diesel Stadium football field",
+        yCheckpoints: pro.yCheckpoints.map((c) =>
+            c.terseName === "FH"
+                ? { ...c, stepsFromCenterFront: -hash }
+                : c.terseName === "BH"
+                  ? { ...c, stepsFromCenterFront: -back }
+                  : c,
+        ),
+    });
+})();
+
+/**
  * The stadium's own pro football field, painted as the show's would be,
  * under a smaller show floor: the show's floor draws over it at midfield.
  * Centered on `center` (world meters). One draw call and a 4096 px texture.
@@ -448,8 +471,7 @@ export function buildDieselOwnField(
     center: { x: number; z: number },
 ): { mesh: Mesh; dispose(): void } {
     const surface = buildFieldSurface({
-        fieldProperties:
-            FieldPropertiesTemplates.PRO_FOOTBALL_FIELD_WITH_END_ZONES,
+        fieldProperties: DIESEL_FIELD,
         style: "turf",
         turf: DIESEL_TURF,
         centerArt: dieselFieldArt,

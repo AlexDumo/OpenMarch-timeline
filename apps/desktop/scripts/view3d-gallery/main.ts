@@ -36,6 +36,7 @@ import {
     KIT_BUILDERS,
     KIT_FIELD_ART,
     KIT_FIELD_TURF,
+    kitFieldProperties,
     kitFieldStyle,
 } from "@/view3d/core/kits";
 import { defaultVenueForKit } from "@/view3d/core/venueSettings";
@@ -161,6 +162,8 @@ export interface LoadOptions {
     field?: keyof typeof FIELDS;
     quality?: "low" | "high";
     crowd?: boolean;
+    /** Whose lines a venue with its own field paints; the show's by default. */
+    fieldLines?: "show" | "stadium";
     /** A field background image (a data URL); none by default. */
     image?: string;
     /** Credits for the kit's video boards; a sample show by default. */
@@ -200,7 +203,11 @@ async function load(options: LoadOptions): Promise<LoadResult> {
     await brandArtReady();
     scene.add(built.root);
     const surface = buildFieldSurface({
-        fieldProperties: fp,
+        fieldProperties: kitFieldProperties(
+            options.kit,
+            fp,
+            options.fieldLines,
+        ),
         theme: fp.theme,
         style,
         centerArt: KIT_FIELD_ART[options.kit],

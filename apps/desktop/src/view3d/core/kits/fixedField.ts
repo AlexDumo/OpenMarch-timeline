@@ -8,7 +8,7 @@ const FIELD_WIDTH = 160 * FT;
 const TOLERANCE = 0.05;
 
 /**
- * The field a fixed-field venue (`KIT_FIXED_FIELD`) is built round: the
+ * The field a venue with its own field (`KITS_WITH_OWN_FIELD`) is built round: the
  * show's field, grown on each side it falls short to a regulation football
  * field (360 ft by 160 ft) and centered on it, so the bowl never shrinks
  * round a small floor (indoor, SoundSport) and never cuts into a long or

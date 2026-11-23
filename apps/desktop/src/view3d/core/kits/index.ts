@@ -1,11 +1,16 @@
 import type { FieldProperties } from "@openmarch/core";
-import { fieldFamily } from "../venueSettings";
+import {
+    KITS_WITH_OWN_FIELD,
+    fieldFamily,
+    fieldLinesFor,
+    type FieldLines,
+} from "../venueSettings";
 import {
     type FieldCenterArt,
     type FieldSurfaceStyle,
     type TurfColors,
 } from "../field";
-import { DIESEL_TURF } from "./markDiesel/turf";
+import { DIESEL_FIELD, DIESEL_TURF } from "./markDiesel/turf";
 import type { KitBuilder, VenueKitId } from "../types";
 import { buildArena } from "./arena";
 import { buildBighs } from "./bighs";
@@ -50,29 +55,51 @@ export const KIT_FIELD_STYLE: Readonly<Record<VenueKitId, FieldSurfaceStyle>> =
     };
 
 /**
- * Venues with a field of their own (`fixedFieldFootprint`): they are always
- * built round at least a regulation football field and never shrink to the
- * show. A floor that isn't a football field lies on their turf as a tarp.
+ * The field a venue with a field of its own (`KITS_WITH_OWN_FIELD`) paints
+ * under a floor, or in place of the show's lines (`fieldLines`).
  */
-export const KIT_FIXED_FIELD: Readonly<Partial<Record<VenueKitId, true>>> = {
-    markDiesel: true,
-};
+export const KIT_OWN_FIELD: Readonly<
+    Partial<Record<VenueKitId, FieldProperties>>
+> = { markDiesel: DIESEL_FIELD };
 
 /**
  * The surface style a kit paints the show's field in: `KIT_FIELD_STYLE`,
- * except that in a fixed-field venue a field that isn't a football field
- * (indoor, SoundSport, any grid) is a tarp (the show's field image, or the
- * generated tarp) laid on the venue's turf. A football field stays turf
- * whatever its step size.
+ * except that in a venue with its own field a field that isn't a football
+ * field (indoor, SoundSport, any grid) is a tarp (the show's field image,
+ * or the generated tarp) laid on the venue's turf. A football field stays
+ * turf whatever its step size.
  */
 export function kitFieldStyle(
     kitId: VenueKitId,
     fieldProperties: FieldProperties,
 ): FieldSurfaceStyle {
     const style = KIT_FIELD_STYLE[kitId];
-    if (!KIT_FIXED_FIELD[kitId] || fieldFamily(fieldProperties) === "football")
+    if (
+        !KITS_WITH_OWN_FIELD.includes(kitId) ||
+        fieldFamily(fieldProperties) === "football"
+    )
         return style;
     return "tarp";
+}
+
+/**
+ * The field a kit paints: the show's, or, when the show asks for the
+ * stadium's lines (`fieldLines`) and its field is turf, the venue's own
+ * field (`KIT_OWN_FIELD`). Marchers keep the show's coordinates either way.
+ */
+export function kitFieldProperties(
+    kitId: VenueKitId,
+    fieldProperties: FieldProperties,
+    fieldLines: FieldLines | undefined,
+): FieldProperties {
+    const own = KIT_OWN_FIELD[kitId];
+    if (
+        !own ||
+        fieldLinesFor(kitId, fieldLines) !== "stadium" ||
+        kitFieldStyle(kitId, fieldProperties) !== "turf"
+    )
+        return fieldProperties;
+    return own;
 }
 
 /**

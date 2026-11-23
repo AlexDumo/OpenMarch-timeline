@@ -6,6 +6,7 @@ import { setTexturePainting } from "../../environment";
 import { buildMarkDiesel } from "../markDiesel";
 import { dieselFrame } from "../markDiesel/frame";
 import {
+    DIESEL_FIELD,
     DIESEL_SIDELINE,
     DIESEL_TURF,
     dieselTurfOutline,
@@ -13,7 +14,8 @@ import {
 } from "../markDiesel/turf";
 import { DIESEL_VENUE_PARAMS } from "../markDiesel/brand";
 import { fixedFieldFootprint } from "../fixedField";
-import { kitFieldStyle } from "..";
+import { kitFieldProperties, kitFieldStyle } from "..";
+import { blockOverhang } from "../../field/blockDigits";
 import type { FieldFootprint } from "../../types";
 
 const FT = 0.3048;
@@ -250,5 +252,44 @@ describe("Mark Diesel on a small floor", () => {
         });
         expect(pro.root.getObjectByName("markDiesel.ownField")).toBeUndefined();
         pro.dispose();
+    });
+});
+
+describe("Mark Diesel's own lines", () => {
+    const T = FieldPropertiesTemplates;
+
+    it("puts the hashes 70 ft 9 in from each sideline and the numbers 36 to 42 ft", () => {
+        const feet = (steps: number) =>
+            (Math.abs(steps) * DIESEL_FIELD.stepSizeInches) / 12;
+        const hash = (t: string) =>
+            DIESEL_FIELD.yCheckpoints.find((c) => c.terseName === t)!;
+        expect(feet(hash("FH").stepsFromCenterFront)).toBeCloseTo(70.75, 3);
+        expect(160 - feet(hash("BH").stepsFromCenterFront)).toBeCloseTo(
+            70.75,
+            3,
+        );
+        const y = DIESEL_FIELD.yardNumberCoordinates;
+        expect(feet(y.homeStepsFromFrontToOutside)).toBeCloseTo(36, 1);
+        expect(feet(y.homeStepsFromFrontToInside)).toBeCloseTo(42, 1);
+    });
+
+    it("paints them in place of the show's only when asked, on turf, in Mark Diesel", () => {
+        const hs = T.HIGH_SCHOOL_FOOTBALL_FIELD_WITH_END_ZONES;
+        expect(kitFieldProperties("markDiesel", hs, "stadium")).toBe(
+            DIESEL_FIELD,
+        );
+        expect(kitFieldProperties("markDiesel", hs, "show")).toBe(hs);
+        expect(kitFieldProperties("markDiesel", hs, undefined)).toBe(hs);
+        // A floor stays a tarp; other stadiums have no lines of their own.
+        const indoor = T.INDOOR_50x80_8to5;
+        expect(kitFieldProperties("markDiesel", indoor, "stadium")).toBe(
+            indoor,
+        );
+        expect(kitFieldProperties("pro", hs, "stadium")).toBe(hs);
+    });
+
+    it("measures the arrow from the 4's slanted tip", () => {
+        expect(blockOverhang("4")).toBeGreaterThan(0.05);
+        for (const c of "012356789") expect(blockOverhang(c)).toBe(0);
     });
 });
