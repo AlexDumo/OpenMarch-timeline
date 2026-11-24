@@ -59,6 +59,7 @@ export function Tip({
     shortcut,
     action,
     hint,
+    hintText,
     disabled,
     side,
     children,
@@ -68,8 +69,13 @@ export function Tip({
     shortcut?: string;
     /** The action whose shortcut the tooltip shows */
     action?: ActionId;
-    /** A second, quieter line: the whole of a description shown cut short */
-    hint?: string;
+    /**
+     * A second, quieter line: the whole of a description shown cut short. Rich content (a
+     * keycap in it) shows on hover only: the long press reads `hintText` instead
+     */
+    hint?: ReactNode;
+    /** What the long press reads for a rich `hint` */
+    hintText?: string;
     /** Never opens, while keeping the control's place in the tree */
     disabled?: boolean;
     /** Where it opens; above the control by default */
@@ -83,7 +89,7 @@ export function Tip({
         ? children
         : cloneElement(children, {
               [TIP_DATA.label]: label,
-              [TIP_DATA.hint]: hint,
+              [TIP_DATA.hint]: typeof hint === "string" ? hint : hintText,
               [TIP_DATA.action]: action,
               [TIP_DATA.shortcut]: shortcut,
           } as Record<string, string | undefined>);

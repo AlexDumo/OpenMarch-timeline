@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import clsx from "clsx";
 import { getButtonClassName } from "@openmarch/ui";
 import { Tip } from "@/components/ui/Tip";
@@ -27,13 +27,21 @@ export function Divider() {
 export function EditorButton({
     onClick,
     testId,
+    tip,
     children,
 }: {
-    onClick: () => void;
+    onClick: (event: MouseEvent) => void;
     testId?: string;
+    /** Its tooltip: a name, the action whose shortcut it shows, and a second line */
+    tip?: {
+        readonly label: string;
+        readonly action?: ActionId;
+        readonly hint?: ReactNode;
+        readonly hintText?: string;
+    };
     children: ReactNode;
 }) {
-    return (
+    const button = (
         <button
             type="button"
             // text-body after twMerge, which drops it (docs/conventions/ui-styling.md)
@@ -48,6 +56,7 @@ export function EditorButton({
             {children}
         </button>
     );
+    return tip ? <Tip {...tip}>{button}</Tip> : button;
 }
 
 /** An icon with no outline, its name and shortcut in its tooltip; lit in the accent while `pressed` */

@@ -799,6 +799,9 @@ function useLiveTarget(target: ShapeEditTarget): ShapeEditTarget {
             get place() {
                 return latest.current.place;
             },
+            get placeLoose() {
+                return latest.current.placeLoose;
+            },
             get drawnOn() {
                 return latest.current.drawnOn;
             },
@@ -1403,6 +1406,18 @@ const TurnControls = memo(function TurnControls({
     );
 });
 
+/** Place's second tooltip line: Shift+Enter (or Shift-click) places the marchers, keeping no shape */
+function PlaceLooseHint() {
+    return (
+        <span className="text-text-subtitle text-sub flex max-w-320 items-center gap-4">
+            <T
+                keyName="shapes.edit.placeLoose"
+                params={{ keys: () => <Shortcut action="applyShapeLoose" /> }}
+            />
+        </span>
+    );
+}
+
 /**
  * The eye, Guides (#634), Snap and Pathways, then Place for a new shape or Ungroup for a placed one
  */
@@ -1442,8 +1457,19 @@ const EndControls = memo(function EndControls({
                         </ActionButton>
                     )}
                     <EditorButton
-                        onClick={() => target.place?.()}
+                        // Shift-click is Shift+Enter: the marchers placed, no shape kept
+                        onClick={(e) =>
+                            e.shiftKey
+                                ? target.placeLoose?.()
+                                : target.place?.()
+                        }
                         testId="shape-editor-place"
+                        tip={{
+                            label: tolgee.t("shapes.edit.place", "Place"),
+                            action: "applyShape",
+                            hint: <PlaceLooseHint />,
+                            hintText: tolgee.t("actions.shape.applyLoose"),
+                        }}
                     >
                         {tolgee.t("shapes.edit.place", "Place")}
                     </EditorButton>
