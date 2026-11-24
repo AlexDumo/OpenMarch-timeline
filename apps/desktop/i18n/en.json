@@ -208,6 +208,8 @@
             "groupKeywords": "group shape freeze as is keep together combine",
             "ungroup": "Shape: Ungroup",
             "ungroupKeywords": "ungroup shape break apart release separate",
+            "join": "Join into one line",
+            "joinKeywords": "join merge connect combine link line curve arc pieces figure",
             "enterBox": "Select only this marcher",
             "centerPivot": "Shape: Move the pivot back to the center",
             "centerPivotKeywords": "pivot center centre reset turn flip around",
@@ -2227,6 +2229,13 @@
             "groupNeedsTwo": "Select 2 or more marchers to group them",
             "ungroupError": "Couldn't ungroup the shape",
             "ungroupIsolated": "Ungroup this shape outside isolation: it comes from an earlier page",
+            "joinNeedsTwo": "Select two shapes to join: lines, curves or arcs",
+            "joinBoxOrCircle": "Only lines, curves and arcs can be joined",
+            "joinNotLine": "Only lines, curves and arcs can be joined",
+            "joinClosed": "A closed line has no ends to join",
+            "joinOtherMoves": "These shapes were placed on different moves: join shapes from the same move",
+            "joinError": "Couldn't join the shapes",
+            "joinIsolated": "Join these shapes outside isolation: they come from an earlier page",
             "droppedAtFlag": {
                 "many": "{count, plural, one {# marcher isn't part of the shape at this flag anymore} other {# marchers aren't part of the shape at this flag anymore}}",
                 "one": "{name} isn't part of the shape at this flag anymore"

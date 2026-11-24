@@ -44,6 +44,7 @@ import {
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { useIsTouchMode } from "@/stores/InputModeStore";
 import { useShowShortcutHints } from "@/stores/KeyboardSeenStore";
+import { useJoinOfferStore } from "@/shapes/placed/useJoinShapes";
 import type { FieldMarchers } from "./fieldMarchers";
 import { fieldToElement, useFieldViewStore } from "./fieldView";
 import {
@@ -68,6 +69,8 @@ import {
  *   more marchers selected that aren't one placed shape (#603), Ungroup with one selected whole.
  *   With one selected whole and the menu opened on one of its marchers, **Select only this
  *   marcher** goes inside it there, as a double-click on that marcher does (tablet 1.5).
+ * - **Join into one line** (#1220) while the selection is placed shapes: two lines, curves or
+ *   arcs selected whole join; otherwise it's greyed out with the reason (a Box, another move).
  * - The **Path** group (pathways, interaction system rule 4), in the path bar's order: **Edit
  *   group path** (Edit path), **Edit <name>'s line**, **Rejoin group path**, **Match group**,
  *   **Re-fit path** (Re-center group path), then after a line, as under the bar's ···, **Detach
@@ -161,7 +164,7 @@ const GROUPS: readonly (readonly ActionId[])[] = [
         "pasteFormationInPlace",
         "pasteMirrored",
     ],
-    ["shapeGroup", "shapeUngroup", "shapeEnterBox"],
+    ["shapeGroup", "shapeUngroup", "shapeJoin", "shapeEnterBox"],
     PATH,
     PATH_END,
     STATE_GROUP,
@@ -213,6 +216,12 @@ const WHILE_AVAILABLE: ReadonlySet<ActionId> = new Set([
     "shapeEnterBox",
     "timelineHoldOverWindow",
 ]);
+
+/**
+ * Shown while the selection is placed shapes (`useJoinOfferStore`), greyed with its reason when it
+ * can't run there: Join into one line (#1220)
+ */
+const ON_SHAPES: ReadonlySet<ActionId> = new Set(["shapeJoin"]);
 
 /** Entries about the marcher the menu was opened on: shown only when it was opened on one */
 const ON_A_MARCHER: ReadonlySet<ActionId> = new Set(["shapeEnterBox"]);
@@ -286,6 +295,7 @@ export default function FieldContextMenu({
     const touch = useIsTouchMode();
     // A finger-only tablet has no keys to press: the caps wait for a hardware keyboard (#880)
     const showHints = useShowShortcutHints();
+    const onShapes = useJoinOfferStore((s) => s.offered);
     const open = at !== null;
     useSyncExternalStore(
         subscribeToActionHandlers,
@@ -315,20 +325,22 @@ export default function FieldContextMenu({
             ? pathShown(id)
             : ON_A_MARCHER.has(id) && marcher === null
               ? false
-              : HOLD_STYLES.has(id)
-                ? holdStyles
-                : WHILE_AVAILABLE.has(id)
-                  ? isActionEnabled(id)
-                  : HOLDS.has(id)
-                    ? timelineMode
-                    : MOVES.has(id)
-                      ? timelineMode && hasActionHandler(id)
-                      : ORDER.has(id)
-                        ? // Gone with Follow-the-leader off (#1095): no handler then
-                          timelineMode &&
-                          selectedCount >= 2 &&
-                          hasActionHandler(id)
-                        : true;
+              : ON_SHAPES.has(id)
+                ? isActionEnabled(id) || onShapes
+                : HOLD_STYLES.has(id)
+                  ? holdStyles
+                  : WHILE_AVAILABLE.has(id)
+                    ? isActionEnabled(id)
+                    : HOLDS.has(id)
+                      ? timelineMode
+                      : MOVES.has(id)
+                        ? timelineMode && hasActionHandler(id)
+                        : ORDER.has(id)
+                          ? // Gone with Follow-the-leader off (#1095): no handler then
+                            timelineMode &&
+                            selectedCount >= 2 &&
+                            hasActionHandler(id)
+                          : true;
     // Swap's handler counts the marchers (props aren't swapped), so its own state is the answer
     const enabled = (id: ActionId) => isActionEnabled(id);
     // An entry that can't run and can't say why isn't shown: with nobody selected, that's every

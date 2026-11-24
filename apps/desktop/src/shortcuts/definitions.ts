@@ -996,6 +996,18 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
     },
 
+    // Join two placed lines, curves or arcs on the same move into one line (#1220): their nearest
+    // ends meet and their marchers spread evenly along it. No key until one is asked for
+    // (shapes/placed/joinShapes)
+    shapeJoin: {
+        labelKey: "actions.shape.join",
+        keywordsKey: "actions.shape.joinKeywords",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+
     // Pathways step 1 (ADR 0016): the Path pen draws a cornered path for one selected marcher's
     // move at the playhead. P as in design tools' pen. While it draws, Enter (applyShape) finishes,
     // Backspace (shapeRemoveLastPoint) takes the last corner back and Escape

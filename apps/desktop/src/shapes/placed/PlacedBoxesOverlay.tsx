@@ -31,8 +31,13 @@ export interface PlacedBoxDrawing {
         readonly right: number;
         readonly bottom: number;
     };
-    /** Its outline as drawn, half a step out, turned with it: a box's back-left corner first */
+    /**
+     * Its outline as drawn, turned with it: a closed shape's half a step out, a box's back-left
+     * corner first; an open line's path, from its first point to its last
+     */
     readonly corners: readonly { readonly x: number; readonly y: number }[];
+    /** The outline is an open line's path, drawn without joining its ends */
+    readonly open: boolean;
     readonly label: string;
 }
 
@@ -99,6 +104,33 @@ function boundsOf(box: PlacedBox) {
     };
 }
 
+/** How the field outlines placed shape `box`, `stepPx` field units a step */
+export function placedBoxDrawing(
+    box: PlacedBox,
+    stepPx: number,
+): PlacedBoxDrawing {
+    const pad = stepPx / 2;
+    // An open line is drawn along its path, as the selected one is (`LiveBoxMode`): its frame
+    // runs straight from its first point to its last, through no bend or corner of it
+    const open = box.kind.outlineOpen?.(box.params, box.spots) ?? false;
+    const corners = open
+        ? shapeOutline(box.kind, box.params, box.spots)
+        : outlineOut(box, pad);
+    const f = boundsOf(box);
+    return {
+        id: box.recipe.id,
+        rect: {
+            left: f.left - pad,
+            top: f.top - pad,
+            right: f.right + pad,
+            bottom: f.bottom + pad,
+        },
+        corners,
+        open,
+        label: boxLabel(box, stepPx),
+    };
+}
+
 let drawn: readonly PlacedBoxDrawing[] = [];
 
 /** The placed boxes outlined on the field now, for the field test API */
@@ -107,8 +139,8 @@ export const drawnPlacedBoxes = (): readonly PlacedBoxDrawing[] => drawn;
 /**
  * Placed shapes on the field (docs/timeline/research/shapes/07-placed-boxes.md), by the View tab's
  * **Shapes** setting: while any member is selected (the default), always, or never. A thin
- * outline through each shape's edge marchers, half a step out, and its label above it, in the
- * theme's shape color. Hidden during playback and while the Shape tool is open, which draws its
+ * outline through each shape's edge marchers, half a step out (an open line's own path), and its
+ * label above it, in the theme's shape color. Hidden during playback and while the Shape tool is open, which draws its
  * own; the selected box draws its own outline and handles (`LiveBoxMode`). Few boxes, so SVG
  * over the field, like the editor's overlay. It takes no pointer events, and exports don't draw
  * it.
@@ -142,7 +174,6 @@ export function PlacedBoxesOverlay({
     const drawings = useMemo(() => {
         if (mode === "off" || isPlaying || toolOpen) return [];
         const ids = new Set((selected ?? []).map((m) => m.id));
-        const pad = stepPx / 2;
         return placedBoxesAt(beat, recipes)
             .filter(
                 (box) =>
@@ -150,21 +181,7 @@ export function PlacedBoxesOverlay({
                     (mode === "always" ||
                         box.recipe.members.some((m) => ids.has(m.marcherId))),
             )
-            .map((box): PlacedBoxDrawing => {
-                const corners = outlineOut(box, pad);
-                const f = boundsOf(box);
-                return {
-                    id: box.recipe.id,
-                    rect: {
-                        left: f.left - pad,
-                        top: f.top - pad,
-                        right: f.right + pad,
-                        bottom: f.bottom + pad,
-                    },
-                    corners,
-                    label: boxLabel(box, stepPx),
-                };
-            });
+            .map((box) => placedBoxDrawing(box, stepPx));
         // placedBoxesAt reads the resolver and the move end beats, which these stand for
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
@@ -193,15 +210,16 @@ export function PlacedBoxesOverlay({
             className="pointer-events-none absolute inset-0 h-full w-full"
             data-testid="placedBoxes"
         >
-            {drawings.map(({ id, corners, label }) => {
+            {drawings.map(({ id, corners, open, label }) => {
                 const points = corners.map((c) =>
                     fieldToElement(view, c.x, c.y),
                 );
                 // The label sits over the corner highest on screen
                 const a = points.reduce((top, p) => (p.y < top.y ? p : top));
+                const Outline = open ? "polyline" : "polygon";
                 return (
                     <g key={id} data-testid="placedBox">
-                        <polygon
+                        <Outline
                             points={points
                                 .map((p) => `${p.x},${p.y}`)
                                 .join(" ")}
