@@ -153,6 +153,7 @@ import { KIT_FIELD_STYLE, kitFieldStyle } from "@/view3d/core/kits/fieldStyle";
 import MarchersLayer from "./layers/MarchersLayer";
 import ItemsLayer from "./layers/ItemsLayer";
 import LabelsLayer, { type LabelStyle } from "./layers/LabelsLayer";
+import { useEquipmentIcons } from "@/cues/useEquipmentIcons";
 import OverlayLayer from "./layers/OverlayLayer";
 import StartFlagLayers from "./StartFlagLayers";
 import { ModeMarchers } from "./ModeMarchers";
@@ -351,6 +352,11 @@ function ThreeFieldView() {
         })),
     );
     const numbersOnly = labelForm === "numbers";
+    // What a performer holds, by their drill number, when it isn't their section's usual (#992)
+    const equipmentIcons = useEquipmentIcons();
+    const equipmentIconPlace = useUiSettingsStore(
+        (s) => s.uiSettings.equipmentIconPlace ?? "beside",
+    );
     const items = useMemo(() => new FieldItems(marchers), [marchers]);
     const itemLabels = useFieldItems(items, beats);
     const { strips, loaded: itemsLoaded } = useFieldStrips(fieldProperties);
@@ -484,6 +490,7 @@ function ThreeFieldView() {
         fieldImage: fieldImagePlan,
         theme: fieldProperties?.theme,
         fieldProperties,
+        equipmentIcons,
     });
     latest.current = {
         saveItem,
@@ -496,6 +503,7 @@ function ThreeFieldView() {
         setSelectedMarchers,
         moveMarchers,
         fieldProperties,
+        equipmentIcons,
     };
     // #315: where a right-click opens the field's menu (`useFieldMenu`, below
     // the editor), and the press that closes it, which does nothing more
@@ -615,6 +623,15 @@ function ThreeFieldView() {
             ),
         [marchers, items, dimming],
     );
+    // The marcher under the pointer: an equipment icon in place of the number gives way to it
+    const hoveredMarcher = useMemo(
+        () => ({
+            get: () => editor.hoveredMarcher(),
+            subscribe: (changed: () => void) =>
+                editor.subscribeHoveredMarcher(changed),
+        }),
+        [editor],
+    );
     useEffect(() => {
         setActiveFieldEditor(editor);
         return () => setActiveFieldEditor(null);
@@ -666,6 +683,9 @@ function ThreeFieldView() {
             createThreeFieldTestApi({
                 marchers,
                 labels: () => latest.current.labels,
+                equipmentIcons: () =>
+                    latest.current.equipmentIcons?.at(marchers.drawnBeat)
+                        .icons ?? new Map(),
                 view: () => useFieldViewStore.getState(),
                 element: () => element.current,
                 pageId: () => latest.current.pageId,
@@ -872,6 +892,8 @@ function ThreeFieldView() {
                             dimming={dimming}
                             look={look}
                             theme={fieldProperties.theme}
+                            icons={equipmentIcons}
+                            iconPlace={equipmentIconPlace}
                         />
                         <LabelsLayer
                             marchers={marchers}
@@ -882,6 +904,9 @@ function ThreeFieldView() {
                             atlas={atlases.label}
                             style={labelStyle}
                             holdAutoSize={isPlaying}
+                            icons={equipmentIcons}
+                            iconPlace={equipmentIconPlace}
+                            hovered={hoveredMarcher}
                         />
                         <OverlayLayer
                             plan={timeline.collisions}

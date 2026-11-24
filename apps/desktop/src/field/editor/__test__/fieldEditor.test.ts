@@ -148,6 +148,13 @@ describe("FieldEditor click selection", () => {
         expect(state.selected).toEqual([3]);
     });
 
+    it("adds a marcher when Shift comes up just before the mouse", () => {
+        const { editor, state } = setup({ selected: [1] });
+        editor.pointerDown(at(300, 100, { shift: true }));
+        editor.pointerUp(at(300, 100));
+        expect(state.selected).toEqual([1, 3]);
+    });
+
     it("clears the selection on a click on empty field", () => {
         const { editor, state } = setup({ selected: [1, 2] });
         click(editor, EMPTY.x, EMPTY.y);
@@ -935,6 +942,21 @@ describe("FieldEditor hover", () => {
         unsubscribe();
         editor.pointerMove(at(EMPTY.x, EMPTY.y));
         expect(listener).toHaveBeenCalledTimes(1);
+    });
+    it("reports the marcher under the pointer, and tells only its own subscribers (#992)", () => {
+        const { editor } = setup();
+        const hovered = vi.fn();
+        editor.subscribeHoveredMarcher(hovered);
+        editor.pointerMove(at(100, 100));
+        expect(editor.hoveredMarcher()).not.toBeNull();
+        editor.pointerMove(at(101, 100));
+        expect(hovered).toHaveBeenCalledTimes(1);
+        editor.pointerMove(at(EMPTY.x, EMPTY.y));
+        expect(editor.hoveredMarcher()).toBeNull();
+        editor.pointerMove(at(100, 100));
+        editor.pointerLeave();
+        expect(editor.hoveredMarcher()).toBeNull();
+        expect(hovered).toHaveBeenCalledTimes(4);
     });
 });
 
