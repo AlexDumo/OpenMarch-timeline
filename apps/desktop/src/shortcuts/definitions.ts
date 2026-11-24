@@ -1723,7 +1723,7 @@ const NON_EDIT_CATEGORIES: ReadonlySet<ActionCategory> = new Set([
 const NON_EDIT_ACTIONS: ReadonlySet<string> = new Set([
     "timelineZoomIn",
     "timelineZoomOut",
-    "timelineZoomFit",
+    "timelineFit",
     "toggleSnap",
     "toggleEditorMode",
     "toggleTempoMode",
