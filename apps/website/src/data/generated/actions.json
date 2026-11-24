@@ -673,6 +673,141 @@
         "category": "timeline",
         "bindings": []
     },
+    "toggleFacingLane": {
+        "label": "Show or hide the Facing lane",
+        "category": "timeline",
+        "bindings": []
+    },
+    "facingFront": {
+        "label": "Facing: Front",
+        "category": "batchEdit",
+        "bindings": [
+            {
+                "mac": {
+                    "keys": [
+                        "⌥",
+                        "0"
+                    ]
+                },
+                "other": {
+                    "keys": [
+                        "Alt",
+                        "0"
+                    ]
+                }
+            }
+        ]
+    },
+    "facingBack": {
+        "label": "Facing: Back",
+        "category": "batchEdit",
+        "bindings": [
+            {
+                "mac": {
+                    "keys": [
+                        "⌥",
+                        "B"
+                    ]
+                },
+                "other": {
+                    "keys": [
+                        "Alt",
+                        "B"
+                    ]
+                }
+            }
+        ]
+    },
+    "facingSide1": {
+        "label": "Facing: Side 1",
+        "category": "batchEdit",
+        "bindings": [
+            {
+                "mac": {
+                    "keys": [
+                        "⌥",
+                        "1"
+                    ]
+                },
+                "other": {
+                    "keys": [
+                        "Alt",
+                        "1"
+                    ]
+                }
+            }
+        ]
+    },
+    "facingSide2": {
+        "label": "Facing: Side 2",
+        "category": "batchEdit",
+        "bindings": [
+            {
+                "mac": {
+                    "keys": [
+                        "⌥",
+                        "2"
+                    ]
+                },
+                "other": {
+                    "keys": [
+                        "Alt",
+                        "2"
+                    ]
+                }
+            }
+        ]
+    },
+    "facingTurnLeft": {
+        "label": "Facing: Turn left 45°",
+        "category": "batchEdit",
+        "bindings": [
+            {
+                "mac": {
+                    "keys": [
+                        "⌥",
+                        "["
+                    ]
+                },
+                "other": {
+                    "keys": [
+                        "Alt",
+                        "["
+                    ]
+                }
+            }
+        ]
+    },
+    "facingTurnRight": {
+        "label": "Facing: Turn right 45°",
+        "category": "batchEdit",
+        "bindings": [
+            {
+                "mac": {
+                    "keys": [
+                        "⌥",
+                        "]"
+                    ]
+                },
+                "other": {
+                    "keys": [
+                        "Alt",
+                        "]"
+                    ]
+                }
+            }
+        ]
+    },
+    "facingAngle": {
+        "label": "Facing: Angle…",
+        "category": "batchEdit",
+        "bindings": []
+    },
+    "cueEditTurn": {
+        "label": "Edit turn…",
+        "category": "batchEdit",
+        "bindings": []
+    },
     "setAllMarchersToNextPage": {
         "label": "Move to next page's spots (all marchers)",
         "category": "batchEdit",

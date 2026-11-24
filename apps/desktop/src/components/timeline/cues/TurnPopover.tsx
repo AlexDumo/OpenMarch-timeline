@@ -151,7 +151,7 @@ export function TurnPopover({
                     onOpenAutoFocus={(e) => e.preventDefault()}
                     className={clsx(
                         POPOVER_CLASS,
-                        "z-50 flex w-240 flex-col gap-8",
+                        "z-50 flex w-280 flex-col gap-8",
                     )}
                 >
                     <div className="text-body font-medium">

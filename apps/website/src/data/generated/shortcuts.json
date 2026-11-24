@@ -1225,6 +1225,120 @@
                     ]
                 },
                 {
+                    "label": "Facing: Front",
+                    "other": [
+                        {
+                            "keys": [
+                                "Alt",
+                                "0"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "0"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Facing: Back",
+                    "other": [
+                        {
+                            "keys": [
+                                "Alt",
+                                "B"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "B"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Facing: Side 1",
+                    "other": [
+                        {
+                            "keys": [
+                                "Alt",
+                                "1"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "1"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Facing: Side 2",
+                    "other": [
+                        {
+                            "keys": [
+                                "Alt",
+                                "2"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "2"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Facing: Turn left 45°",
+                    "other": [
+                        {
+                            "keys": [
+                                "Alt",
+                                "["
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "["
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Facing: Turn right 45°",
+                    "other": [
+                        {
+                            "keys": [
+                                "Alt",
+                                "]"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "]"
+                            ]
+                        }
+                    ]
+                },
+                {
                     "label": "Move to next page's spots (all marchers)",
                     "other": [
                         {
@@ -2980,6 +3094,120 @@
                             "keys": [
                                 "⌘",
                                 "H"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Facing: Front",
+                    "other": [
+                        {
+                            "keys": [
+                                "Alt",
+                                "0"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "0"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Facing: Back",
+                    "other": [
+                        {
+                            "keys": [
+                                "Alt",
+                                "B"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "B"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Facing: Side 1",
+                    "other": [
+                        {
+                            "keys": [
+                                "Alt",
+                                "1"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "1"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Facing: Side 2",
+                    "other": [
+                        {
+                            "keys": [
+                                "Alt",
+                                "2"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "2"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Facing: Turn left 45°",
+                    "other": [
+                        {
+                            "keys": [
+                                "Alt",
+                                "["
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "["
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Facing: Turn right 45°",
+                    "other": [
+                        {
+                            "keys": [
+                                "Alt",
+                                "]"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "]"
                             ]
                         }
                     ]
