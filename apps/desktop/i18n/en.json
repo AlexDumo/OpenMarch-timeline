@@ -2620,6 +2620,8 @@
             "clear": "Remove rows",
             "clearNone": "No rows yet",
             "clearTip": "Back to the one line you drew",
+            "colMarchers": "Marchers",
+            "colOffset": "Offset",
             "count": "Marchers in this row",
             "countLess": "One fewer here: to the shortest other row",
             "countMore": "One more here: from the longest other row",

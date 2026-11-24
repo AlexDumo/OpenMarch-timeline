@@ -1678,7 +1678,7 @@ function RowsMenu({ target }: { target: ShapeEditTarget }) {
                     sideOffset={6}
                     {...focus.content}
                     onPointerDown={(e) => e.stopPropagation()}
-                    className="rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal z-50 flex w-[340px] flex-col gap-2 border p-8"
+                    className="rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal z-50 flex w-[360px] flex-col gap-2 border p-8"
                     data-testid="shape-rows-content"
                 >
                     <div className="flex min-h-24 items-center justify-between gap-8 px-4">
@@ -1840,162 +1840,203 @@ function RowsMenu({ target }: { target: ShapeEditTarget }) {
                             ))}
                         </span>
                     </div>
-                    {view.rows.map((row, i) => {
-                        const param = rows.count(row.index);
-                        const name = rowName(row, across);
-                        // Any row moves along once there are others to move against: a full one
-                        // staggers as a short one does (owner on #1190)
-                        const moves = view.rows.length > 1;
-                        return (
-                            <div
-                                key={row.index}
-                                className="rounded-4 hover:bg-text/5 grid min-h-24 grid-cols-[52px_minmax(0,1fr)_auto_44px_24px] items-center gap-4 pl-4"
-                                data-testid={`shape-rows-row-${i}`}
-                            >
-                                <span
-                                    className={clsx(
-                                        "truncate",
-                                        row.side === null && "text-accent",
-                                    )}
+                    {/* One grid for every row and its headings, so the columns line up */}
+                    <div className="grid grid-cols-[52px_minmax(0,1fr)_auto_72px_24px] gap-x-4">
+                        <div
+                            className="text-text/60 col-span-full grid grid-cols-subgrid items-end pl-4 text-center"
+                            data-testid="shape-rows-columns"
+                        >
+                            <span />
+                            <span />
+                            <span className="truncate">
+                                {tolgee.t(
+                                    "shapes.rows.colMarchers",
+                                    "Marchers",
+                                )}
+                            </span>
+                            <span className="truncate">
+                                {many &&
+                                    tolgee.t("shapes.rows.colOffset", "Offset")}
+                            </span>
+                            <span />
+                        </div>
+                        {view.rows.map((row, i) => {
+                            const param = rows.count(row.index);
+                            const name = rowName(row, across);
+                            // Any row moves along once there are others to move against: a full one
+                            // staggers as a short one does (owner on #1190)
+                            const moves = view.rows.length > 1;
+                            return (
+                                <div
+                                    key={row.index}
+                                    className="rounded-4 hover:bg-text/5 col-span-full grid min-h-24 grid-cols-subgrid items-center pl-4"
+                                    data-testid={`shape-rows-row-${i}`}
                                 >
-                                    {name}
-                                </span>
-                                <span
-                                    className="flex items-center justify-center overflow-hidden"
-                                    style={{
-                                        transform: `translateX(${(row.shift * (dot + 2)) / 2}px)`,
-                                    }}
-                                >
-                                    {row.spots.map((filled, j) => (
-                                        <button
-                                            key={j}
-                                            type="button"
-                                            aria-label={
-                                                filled
-                                                    ? tolgee.t(
-                                                          "shapes.rows.leaveEmpty",
-                                                          "Leave this spot empty",
-                                                      )
-                                                    : tolgee.t(
-                                                          "shapes.rows.fillSpot",
-                                                          "Empty spot: press to take it out",
-                                                      )
-                                            }
-                                            title={
-                                                filled
-                                                    ? tolgee.t(
-                                                          "shapes.rows.leaveEmpty",
-                                                          "Leave this spot empty",
-                                                      )
-                                                    : tolgee.t(
-                                                          "shapes.rows.fillSpot",
-                                                          "Empty spot: press to take it out",
-                                                      )
-                                            }
-                                            onClick={() =>
-                                                env &&
-                                                apply(
-                                                    rows.toggleSpot(
-                                                        target.params,
-                                                        target.spots,
-                                                        row.index,
-                                                        j,
-                                                        env,
-                                                    ),
-                                                )
-                                            }
-                                            data-testid={`shape-rows-dot-${i}-${j}`}
-                                            className={clsx(
-                                                "group flex h-24 items-center justify-center px-1",
-                                                row.side === null
-                                                    ? "text-accent"
-                                                    : "text-text",
-                                            )}
-                                        >
-                                            <span
-                                                className={clsx(
-                                                    "block rounded-full group-hover:scale-125",
+                                    <span
+                                        className={clsx(
+                                            "truncate",
+                                            row.side === null && "text-accent",
+                                        )}
+                                    >
+                                        {name}
+                                    </span>
+                                    <span
+                                        className="flex items-center justify-center overflow-hidden"
+                                        style={{
+                                            transform: `translateX(${(row.shift * (dot + 2)) / 2}px)`,
+                                        }}
+                                    >
+                                        {row.spots.map((filled, j) => (
+                                            <button
+                                                key={j}
+                                                type="button"
+                                                aria-label={
                                                     filled
-                                                        ? "bg-current"
-                                                        : "border border-current opacity-60",
-                                                )}
-                                                style={{
-                                                    width: dot,
-                                                    height: dot,
-                                                }}
-                                            />
-                                        </button>
-                                    ))}
-                                </span>
-                                <NumberChip
-                                    param={param}
-                                    display={param.display(
-                                        params,
-                                        spots,
-                                        stepPx,
-                                    )}
-                                    note={null}
-                                    canLess={can(param, -1)}
-                                    canMore={can(param, 1)}
-                                    glyph={null}
-                                    actions={actions}
-                                />
-                                <span className="flex items-center justify-center">
-                                    {moves &&
-                                        ([-1, 1] as const).map((by) => (
-                                            <IconButton
-                                                key={by}
-                                                label={sitsTip(
-                                                    row.shift,
-                                                    by,
-                                                    across,
-                                                )}
+                                                        ? tolgee.t(
+                                                              "shapes.rows.leaveEmpty",
+                                                              "Leave this spot empty",
+                                                          )
+                                                        : tolgee.t(
+                                                              "shapes.rows.fillSpot",
+                                                              "Empty spot: press to take it out",
+                                                          )
+                                                }
+                                                title={
+                                                    filled
+                                                        ? tolgee.t(
+                                                              "shapes.rows.leaveEmpty",
+                                                              "Leave this spot empty",
+                                                          )
+                                                        : tolgee.t(
+                                                              "shapes.rows.fillSpot",
+                                                              "Empty spot: press to take it out",
+                                                          )
+                                                }
                                                 onClick={() =>
+                                                    env &&
                                                     apply(
-                                                        rows.shift(
+                                                        rows.toggleSpot(
                                                             target.params,
                                                             target.spots,
                                                             row.index,
-                                                            by,
+                                                            j,
+                                                            env,
                                                         ),
                                                     )
                                                 }
-                                                testId={`shape-rows-sits-${by < 0 ? "less" : "more"}-${i}`}
-                                            >
-                                                {by < 0 ? (
-                                                    <CaretLeftIcon size={10} />
-                                                ) : (
-                                                    <CaretRightIcon size={10} />
+                                                data-testid={`shape-rows-dot-${i}-${j}`}
+                                                className={clsx(
+                                                    "group flex h-24 items-center justify-center px-1",
+                                                    row.side === null
+                                                        ? "text-accent"
+                                                        : "text-text",
                                                 )}
-                                            </IconButton>
+                                            >
+                                                <span
+                                                    className={clsx(
+                                                        "block rounded-full group-hover:scale-125",
+                                                        filled
+                                                            ? "bg-current"
+                                                            : "border border-current opacity-60",
+                                                    )}
+                                                    style={{
+                                                        width: dot,
+                                                        height: dot,
+                                                    }}
+                                                />
+                                            </button>
                                         ))}
-                                </span>
-                                {row.side === null ? (
-                                    <span />
-                                ) : (
-                                    <IconButton
-                                        label={tolgee.t(
-                                            "shapes.rows.remove",
-                                            "Remove {name}: its marchers go to the shortest rows",
-                                            { name },
+                                    </span>
+                                    <NumberChip
+                                        param={param}
+                                        display={param.display(
+                                            params,
+                                            spots,
+                                            stepPx,
                                         )}
-                                        onClick={() =>
-                                            apply(
-                                                rows.remove(
-                                                    target.params,
-                                                    target.spots,
-                                                    row.index,
-                                                ),
-                                            )
-                                        }
-                                        testId={`shape-rows-remove-${i}`}
-                                    >
-                                        <XIcon size={10} />
-                                    </IconButton>
-                                )}
-                            </div>
-                        );
-                    })}
+                                        note={null}
+                                        canLess={can(param, -1)}
+                                        canMore={can(param, 1)}
+                                        glyph={null}
+                                        actions={actions}
+                                    />
+                                    <span className="flex items-center justify-center">
+                                        {moves &&
+                                            ([-1, 1] as const).map((by) => (
+                                                <Fragment key={by}>
+                                                    {by > 0 && (
+                                                        <span
+                                                            className={clsx(
+                                                                "min-w-20 text-center tabular-nums",
+                                                                row.shift ===
+                                                                    0 &&
+                                                                    "text-text/60",
+                                                            )}
+                                                            data-testid={`shape-rows-offset-${i}`}
+                                                        >
+                                                            {offsetText(
+                                                                row.shift,
+                                                            )}
+                                                        </span>
+                                                    )}
+                                                    <IconButton
+                                                        label={sitsTip(
+                                                            row.shift,
+                                                            by,
+                                                            across,
+                                                        )}
+                                                        onClick={() =>
+                                                            apply(
+                                                                rows.shift(
+                                                                    target.params,
+                                                                    target.spots,
+                                                                    row.index,
+                                                                    by,
+                                                                ),
+                                                            )
+                                                        }
+                                                        testId={`shape-rows-sits-${by < 0 ? "less" : "more"}-${i}`}
+                                                    >
+                                                        {by < 0 ? (
+                                                            <CaretLeftIcon
+                                                                size={10}
+                                                            />
+                                                        ) : (
+                                                            <CaretRightIcon
+                                                                size={10}
+                                                            />
+                                                        )}
+                                                    </IconButton>
+                                                </Fragment>
+                                            ))}
+                                    </span>
+                                    {row.side === null ? (
+                                        <span />
+                                    ) : (
+                                        <IconButton
+                                            label={tolgee.t(
+                                                "shapes.rows.remove",
+                                                "Remove {name}: its marchers go to the shortest rows",
+                                                { name },
+                                            )}
+                                            onClick={() =>
+                                                apply(
+                                                    rows.remove(
+                                                        target.params,
+                                                        target.spots,
+                                                        row.index,
+                                                    ),
+                                                )
+                                            }
+                                            testId={`shape-rows-remove-${i}`}
+                                        >
+                                            <XIcon size={10} />
+                                        </IconButton>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
                     <span className="text-text/60 px-4">
                         {tolgee.t(
                             "shapes.rows.dotHint",
@@ -2093,6 +2134,14 @@ function rowName(row: RowView, across: boolean): string {
     return across
         ? tolgee.t("shapes.rows.frontN", "Front {count}", count)
         : tolgee.t("shapes.rows.rightN", "Right {count}", count);
+}
+
+/** Where a row sits along the line, in spots: 0, or ±½, ±1, ±1½… (a shift counts half spots) */
+function offsetText(shift: number): string {
+    if (shift === 0) return "0";
+    const whole = Math.floor(Math.abs(shift) / 2);
+    const half = Math.abs(shift) % 2 === 1 ? "½" : "";
+    return `${shift < 0 ? "−" : "+"}${whole || !half ? whole : ""}${half}`;
 }
 
 /** What a row's arrow does, and where the row sits now */
