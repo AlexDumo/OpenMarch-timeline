@@ -20,6 +20,8 @@ import {
     insidePolygon,
     itemDraw,
     uniformArtworkOf,
+    flatsArtworkOf,
+    SAMPLE_FLATS,
     type FlatsLayout,
     type FlatsRegions,
 } from "../uniformArtwork";
@@ -393,6 +395,17 @@ describe("uniform flats math", () => {
         expect(uniformArtworkOf("later-pack")).toBeNull();
         expect(uniformArtworkOf(undefined)).toBeNull();
     });
+
+    it("reads a show's imported uniform and falls back to the preset for anything else", () => {
+        const pack = `library:3f2b1c9e-0000-4000-8000-000000000001@${"a".repeat(64)}`;
+        expect(flatsArtworkOf("sample")).toBe("sample");
+        expect(flatsArtworkOf(pack)).toBe(pack);
+        // a number an earlier preview wrote, an unknown id, a malformed reference
+        expect(flatsArtworkOf(7)).toBeNull();
+        expect(flatsArtworkOf("later-pack")).toBeNull();
+        expect(flatsArtworkOf("library:abc@not-a-hash")).toBeNull();
+        expect(flatsArtworkOf(undefined)).toBeNull();
+    });
 });
 
 describe("a look with flats", () => {
@@ -406,7 +419,7 @@ describe("a look with flats", () => {
             "westPoint",
             "sash",
             {},
-            "sample",
+            { key: "sample", look: SAMPLE_FLATS.look },
         );
         expect(band.options.artwork).toBe("sample");
         const guard = sectionUniform(
@@ -418,7 +431,7 @@ describe("a look with flats", () => {
             "westPoint",
             "sash",
             {},
-            "sample",
+            { key: "sample", look: SAMPLE_FLATS.look },
         );
         expect(guard.options.artwork).toBeUndefined();
         // a look without flats has no artwork key, so its body key (and material) is as before

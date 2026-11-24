@@ -173,6 +173,7 @@ const fromJob = (error: unknown): never => {
 async function importPackFile(
     bytes: Uint8Array,
     regions: PageRegions,
+    runJob: typeof runUniformPackJob,
 ): Promise<UniformImport> {
     if (bytes.byteLength > UNIFORM_PACK_MAX_BYTES)
         throw new UniformImportError("tooLarge", `${bytes.byteLength} bytes`);
@@ -185,7 +186,7 @@ async function importPackFile(
     // decode the first layer in the worker, for the same notes a picked page gets
     const notes: UniformImportNote[] = [];
     try {
-        const result = await runUniformPackJob({
+        const result = await runJob({
             type: "png",
             bytes: pack.layers[0].png.slice(),
             regions,
@@ -206,6 +207,15 @@ export async function importUniformFile(
     file: { name: string; size: number; arrayBuffer(): Promise<ArrayBuffer> },
     look: PresetLook,
     regions: PageRegions,
+    {
+        runJob = runUniformPackJob,
+        drawSvg = drawSvgPage,
+    }: {
+        /** Runs a worker job; tests stand in for the worker */
+        runJob?: typeof runUniformPackJob;
+        /** Draws an SVG page; tests stand in for the browser */
+        drawSvg?: (text: string) => Promise<Uint8ClampedArray>;
+    } = {},
 ): Promise<UniformImport> {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const kind = uniformFileKind(file.name, bytes.subarray(0, 4));
@@ -218,7 +228,7 @@ export async function importUniformFile(
             throw new UniformImportError("unsupported", file.name);
     }
 
-    if (kind === "pack") return await importPackFile(bytes, regions);
+    if (kind === "pack") return await importPackFile(bytes, regions, runJob);
 
     const name = uniformNameFromFile(file.name);
     let png: Uint8Array;
@@ -226,10 +236,9 @@ export async function importUniformFile(
     let scaledFrom: UniformImport["scaledFrom"] = null;
     try {
         if (kind === "png") {
-            const result = await runUniformPackJob(
-                { type: "png", bytes, regions },
-                [bytes.buffer],
-            );
+            const result = await runJob({ type: "png", bytes, regions }, [
+                bytes.buffer,
+            ]);
             if (result.type !== "page")
                 throw new UniformImportError("unreadable", "no page");
             png = result.png;
@@ -246,8 +255,8 @@ export async function importUniformFile(
             if (!/<svg\b/i.test(text))
                 throw new UniformImportError("notSvg", file.name);
             if (!isPageViewBox(svgViewBox(text))) notes.push("svgViewBox");
-            const pixels = await drawSvgPage(text);
-            const result = await runUniformPackJob(
+            const pixels = await drawSvg(text);
+            const result = await runJob(
                 {
                     type: "pixels",
                     width: FLATS_PAGE_PX.width,
