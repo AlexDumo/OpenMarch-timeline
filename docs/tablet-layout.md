@@ -150,7 +150,7 @@ Other field behavior:
 
 ### Web editor (iPad, Android)
 
-- Page pinch-zoom, double-tap zoom, rubber-banding and the tap highlight are off
+- Page pinch-zoom (trackpad pinch and Ctrl + scroll too), double-tap zoom, rubber-banding and the tap highlight are off
   (`styles/index.css`, `web/renderer/touchGestures.ts`).
 - Home-screen app: manifest and icons in `web/public/`, tags injected by
   `vite.web.config.mts`.

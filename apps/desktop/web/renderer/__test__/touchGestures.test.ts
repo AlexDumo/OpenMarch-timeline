@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
     ownsGestures,
     shouldBlockTouchMove,
+    shouldBlockWheel,
     startTouchGestureGuard,
 } from "../touchGestures";
 
@@ -45,6 +46,22 @@ describe("shouldBlockTouchMove", () => {
     });
 });
 
+describe("shouldBlockWheel", () => {
+    it("blocks pinches and Ctrl + wheel", () => {
+        expect(shouldBlockWheel({ ctrlKey: true, cancelable: true })).toBe(
+            true,
+        );
+    });
+    it("leaves plain scrolling and uncancelable wheels alone", () => {
+        expect(shouldBlockWheel({ ctrlKey: false, cancelable: true })).toBe(
+            false,
+        );
+        expect(shouldBlockWheel({ ctrlKey: true, cancelable: false })).toBe(
+            false,
+        );
+    });
+});
+
 describe("startTouchGestureGuard", () => {
     it("cancels Safari's gesture events until stopped", () => {
         const stop = startTouchGestureGuard();
@@ -54,6 +71,32 @@ describe("startTouchGestureGuard", () => {
         stop();
         const after = new Event("gesturestart", { cancelable: true });
         document.dispatchEvent(after);
+        expect(after.defaultPrevented).toBe(false);
+    });
+    it("cancels a pinch over a panel but not a plain scroll", () => {
+        document.body.innerHTML = `<div id="panel"></div>`;
+        const stop = startTouchGestureGuard();
+        const panel = document.getElementById("panel")!;
+        const pinch = new WheelEvent("wheel", {
+            ctrlKey: true,
+            bubbles: true,
+            cancelable: true,
+        });
+        panel.dispatchEvent(pinch);
+        expect(pinch.defaultPrevented).toBe(true);
+        const scroll = new WheelEvent("wheel", {
+            bubbles: true,
+            cancelable: true,
+        });
+        panel.dispatchEvent(scroll);
+        expect(scroll.defaultPrevented).toBe(false);
+        stop();
+        const after = new WheelEvent("wheel", {
+            ctrlKey: true,
+            bubbles: true,
+            cancelable: true,
+        });
+        panel.dispatchEvent(after);
         expect(after.defaultPrevented).toBe(false);
     });
 });
