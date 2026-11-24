@@ -88,6 +88,23 @@ show.
   on the finished move goes the other way around as far. Remove trail walks everyone straight
   to the same spots.
 
+**Make a bean and go around it (2026-11-24, each step checked in the app)**
+
+1. Click **Page 1** on the timeline and select the marchers (Ctrl/Cmd+A).
+2. In the top bar open the **Shapes** tab and click the fourth tool, **Curve**.
+3. Click five or six points on the field around the outline you want.
+4. **Click the first point again.** The curve closes and the marchers spread around it. (If
+   you finished it open instead, the shape bar's first menu says **Open**: change it to
+   **Closed**.)
+5. Press **Enter** to place them.
+6. Go to the next page (or right-click the playhead and choose **Create page at playhead**,
+   then click the new page).
+7. Click any marcher of the shape (they all select) and press **Shift+L**.
+8. Drag any marcher along the curve: the note counts the spots. Let go to keep it.
+
+Follow on the page where you placed the shape acts on where they stood before it, so go to
+the next page first.
+
 **Try it**
 
 1. Turn on **Settings › Field › Follow-the-leader (preview)**.

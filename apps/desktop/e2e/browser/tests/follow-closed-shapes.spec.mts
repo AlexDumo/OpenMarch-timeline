@@ -252,3 +252,116 @@ test("change: marchers placed with the Line tool on a closed five-sided shape go
         expect(offShape(p), `T${p.id}`).toBeLessThan(0.05);
     }
 });
+
+test("change: marchers placed with the Curve tool on a closed curve (its first point clicked again) go around the curve itself: one clicked, the whole shape selected, dragged around, on the drawn curve between counts", async ({
+    show,
+}) => {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    await selectAll(page);
+    // Curve, in the Shapes tab: five points around a bean, closed by a click on the first one
+    await page.getByRole("tab", { name: "Shapes" }).click();
+    await page.getByTestId("shapes-tab-curve").click();
+    const at = (dx: number, dy: number) => ({
+        x: cf.x + dx * S,
+        y: cf.y + dy * S,
+    });
+    const points = [
+        at(-30, -30),
+        at(-18, -36),
+        at(-6, -30),
+        at(-10, -20),
+        at(-24, -18),
+    ];
+    const click = async (to: Point) => {
+        const on = await toScreen(page, to);
+        await page.mouse.move(on.x, on.y, { steps: 4 });
+        await page.mouse.click(on.x, on.y);
+    };
+    for (const point of points) await click(point);
+    await click(points[0]!);
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    await expect(page.getByTestId("shape-choice-ends")).toHaveAttribute(
+        "data-value",
+        "closed",
+    );
+    // the curve as drawn, to measure against
+    const drawn = (await overlay(page))!.outline!;
+    expect(drawn.length).toBeGreaterThan(20);
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await waitForIdle(page);
+    await page.keyboard.press("Escape");
+    const placed = await savedPositions(show, 0);
+    /** How far `p` is from the curve as drawn */
+    const offCurve = (p: Point) =>
+        Math.min(
+            ...drawn.map((a, i) => {
+                const b = drawn[(i + 1) % drawn.length]!;
+                const dx = b.x - a.x;
+                const dy = b.y - a.y;
+                const f = Math.max(
+                    0,
+                    Math.min(
+                        1,
+                        ((p.x - a.x) * dx + (p.y - a.y) * dy) /
+                            (dx * dx + dy * dy || 1),
+                    ),
+                );
+                return Math.hypot(a.x + f * dx - p.x, a.y + f * dy - p.y);
+            }),
+        );
+    for (const p of placed)
+        expect(offCurve(p), `T${p.id}`).toBeLessThan(0.05 * S);
+
+    await selectPage(show, "Page 1");
+    await selectAll(page);
+    await page.keyboard.press("Shift+L");
+    await expect(page.getByTestId("follow-round")).toBeVisible();
+    await expect(page.getByTestId("follow-round-amount")).toHaveValue("0");
+    const steps = await undoSteps(show);
+    // one marcher dragged along the curve, past two of its neighbors' spots
+    const rings = (await overlay(page))!.memberRings;
+    const grabbed = rings[4]!.at;
+    const from = await toScreen(page, grabbed);
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    let k = drawn.reduce(
+        (best, p, i) =>
+            near(p, grabbed) < near(drawn[best]!, grabbed) ? i : best,
+        0,
+    );
+    const spacing = Math.min(
+        ...placed
+            .filter((p) => near(p, grabbed) > 0.01)
+            .map((p) => near(p, grabbed)),
+    );
+    for (let gone = 0; gone < 2 * spacing; ) {
+        const next = (k + 1) % drawn.length;
+        gone += near(drawn[k]!, drawn[next]!);
+        k = next;
+        const on = await toScreen(page, drawn[k]!);
+        await page.mouse.move(on.x, on.y);
+    }
+    await expect
+        .poll(async () => (await overlay(page))?.tip ?? "")
+        .toMatch(/^[1-9]\d* spots?$/);
+    await expect(page.getByTestId("follow-status")).toContainText("Holding T");
+    await page.mouse.up();
+    await expect(page.getByTestId("follow-round")).toBeHidden();
+    await expect.poll(() => undoSteps(show)).toBe(steps + 1);
+    await waitForIdle(page);
+    // everyone moved on, still on the curve, and on the curve between counts too
+    const after = await savedPositions(show, 1);
+    for (const p of after) {
+        const was = placed.find((q) => q.id === p.id)!;
+        expect(near(p, was), `T${p.id}`).toBeGreaterThan(S);
+        expect(offCurve(p), `T${p.id}`).toBeLessThan(0.05 * S);
+    }
+    const mid = await positionsAt(page, [17, 19.5, 22, 24, 26.5, 29, 31]);
+    for (const id of ALL)
+        for (const [x, y] of mid[id]!)
+            expect(offCurve({ x: x!, y: y! }), `T${id}`).toBeLessThan(0.05 * S);
+});
