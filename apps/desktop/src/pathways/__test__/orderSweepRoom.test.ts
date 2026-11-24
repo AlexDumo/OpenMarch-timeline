@@ -112,6 +112,16 @@ describe("making room for Set order", () => {
         expect(useShapeToolStore.getState().tool).not.toBeNull();
     });
 
+    it("refuses while Follow is open, even with nothing drawn, saying why", () => {
+        penAt("drawing", 0);
+        usePathPenStore.setState((st) => ({
+            session: { ...st.session!, follow: {} } as unknown as PathSession,
+        }));
+        expect(orderSweepBlocked()).toMatch(/leave Follow/i);
+        expect(makeRoomForOrderSweep()).toBe(false);
+        expect(usePathPenStore.getState().session?.phase).toBe("drawing");
+    });
+
     it("leaves a closed path alone, and opens over nothing at all", () => {
         penAt("closed", 2);
         expect(makeRoomForOrderSweep()).toBe(true);

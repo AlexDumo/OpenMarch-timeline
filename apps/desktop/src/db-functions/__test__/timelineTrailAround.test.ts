@@ -23,7 +23,8 @@ import {
     removeTrail,
     reverseTrail,
 } from "../timelineTrails";
-import { dragTrail } from "../timelineTrailDrag";
+import { dragTrail, ringTrailOrder } from "../timelineTrailDrag";
+import { setMarcherOrder } from "../marcherOrder";
 import {
     boxOutline,
     circleOutline,
@@ -34,6 +35,7 @@ import {
     goRoundPreview,
     goRoundRefusalFor,
     lineRound,
+    closedOutlineOf,
     outlineMiss,
     planGoRound,
     reverseOutline,
@@ -1115,3 +1117,237 @@ describeDbTests("Go round an outline (AP-T13 to AP-T15)", (it) => {
         expect(onIt).toBe(true);
     });
 });
+
+/**
+ * A leader pulled out of a closed outline (step 10, owner 2026-11-22: "I should be able to drag it
+ * around the circle or drag it out of the circle … It should let me pretty much pick any marker I
+ * want"): AP-T8 with the ring as the tool shows it, whoever leads.
+ */
+describe("ringTrailOrder (pure)", () => {
+    const at = circlePlaces([0, 0], 5 * STEP);
+    plainIt(
+        "any marcher leads the ring round a circle, either way; nothing else passes",
+        () => {
+            // 4 leading clockwise: the one counterclockwise of it right behind, the one ahead the tail
+            expect(
+                ringTrailOrder(at, [4, 5, 6, 7, 0, 1, 2, 3], 3, STEP),
+            ).toEqual([4, 5, 6, 7, 0, 1, 2, 3]);
+            // and counterclockwise
+            expect(
+                ringTrailOrder(at, [2, 1, 0, 7, 6, 5, 4, 3], 3, STEP),
+            ).toEqual([2, 1, 0, 7, 6, 5, 4, 3]);
+            // not the ring: two swapped
+            expect(
+                ringTrailOrder(at, [4, 6, 5, 7, 0, 1, 2, 3], 3, STEP),
+            ).toBeNull();
+            // the leader isn't its last
+            expect(
+                ringTrailOrder(at, [4, 5, 6, 7, 0, 1, 2, 3], 2, STEP),
+            ).toBeNull();
+            // an open line isn't a ring
+            const row: XY[] = at.map((_, i) => [i * 2 * STEP, 0]);
+            expect(
+                ringTrailOrder(row, [0, 1, 2, 3, 4, 5, 6, 7], 7, STEP),
+            ).toBeNull();
+        },
+    );
+    plainIt(
+        "with an order set by hand, only that order's ring: one that crosses the circle keeps its two ends",
+        () => {
+            // set round the circle, 0 leading clockwise: any rotation of it, either way
+            const set = [1, 2, 3, 4, 5, 6, 7, 0];
+            expect(
+                ringTrailOrder(at, [4, 5, 6, 7, 0, 1, 2, 3], 3, STEP, set),
+            ).not.toBeNull();
+            expect(
+                ringTrailOrder(at, [2, 1, 0, 7, 6, 5, 4, 3], 3, STEP, set),
+            ).not.toBeNull();
+            // set zigzagging across it: no ring to turn
+            expect(
+                ringTrailOrder(
+                    at,
+                    [4, 5, 6, 7, 0, 1, 2, 3],
+                    3,
+                    STEP,
+                    [0, 2, 4, 6, 1, 3, 5, 7],
+                ),
+            ).toBeNull();
+        },
+    );
+});
+
+describeDbTests(
+    "A leader pulled out of a circle (AP-T8 from a closed outline)",
+    (it) => {
+        it("no order set: any marcher of the circle leads a trail out of it, the ring behind it; one undo step", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { step, c, at } = await onOutline(db, (c0, st) =>
+                circlePlaces(c0, 5 * st),
+            );
+            const original = await dataOf(db);
+            // 4 (at the right of the circle... its fourth place) pulled straight out, 6 steps
+            const from = at[3]!;
+            const d = Math.hypot(from[0] - c[0], from[1] - c[1]);
+            const out: XY = [
+                from[0] + ((from[0] - c[0]) / d) * 6 * step,
+                from[1] + ((from[1] - c[1]) / d) * 6 * step,
+            ];
+            // the line as the tool shows it, the ring clockwise behind 4: 3 right behind, 5 the tail
+            const line = [5, 6, 7, 8, 1, 2, 3, 4];
+            await dragTrail({ db, window: WINDOW, marcherIds: IDS, leaderId: 4, line, points: [{ at: out }], spacing: { kind: "keep" }, step, ends: "trail" }); // prettier-ignore
+            const r = await resolverOf(db);
+            // the leader ends out there; everyone left their spot, going the same distance
+            expect(near(r.positionAt(4, 17), out)).toBe(true);
+            for (const m of IDS)
+                expect(
+                    Math.hypot(
+                        r.positionAt(m, 17)[0] - at[m - 1]![0],
+                        r.positionAt(m, 17)[1] - at[m - 1]![1],
+                    ),
+                ).toBeGreaterThan(step);
+            // the one right behind the leader has come round to where the leader stood
+            const three = r.positionAt(3, 17);
+            expect(
+                Math.hypot(three[0] - from[0], three[1] - from[1]),
+            ).toBeLessThan(2.5 * step);
+            const trail = await trailOf(db);
+            expect(trail.around).toBeFalsy();
+            expect(trail.marcherIds).toEqual(line);
+            await expectOneUndoStep(db, original);
+        });
+
+        it("the other way round the ring, and a marcher who isn't on the ring's line refused", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { step, c, at } = await onOutline(db, (c0, st) =>
+                circlePlaces(c0, 5 * st),
+            );
+            const from = at[3]!;
+            const out: XY = [
+                from[0] + (from[0] - c[0]),
+                from[1] + (from[1] - c[1]),
+            ];
+            // a line that isn't the ring, led by a marcher who is no end of the fitted line: refused
+            await expectRefused(
+                db,
+                () => dragTrail({ db, window: WINDOW, marcherIds: IDS, leaderId: 4, line: [5, 7, 6, 8, 1, 2, 3, 4], points: [{ at: out }], spacing: { kind: "keep" }, step, ends: "trail" }), // prettier-ignore
+                /end of the line|line, curve or arc/,
+            );
+            // counterclockwise behind 4: 5 right behind, 3 the tail
+            const line = [3, 2, 1, 8, 7, 6, 5, 4];
+            await dragTrail({ db, window: WINDOW, marcherIds: IDS, leaderId: 4, line, points: [{ at: out }], spacing: { kind: "keep" }, step, ends: "trail" }); // prettier-ignore
+            expect((await trailOf(db)).marcherIds).toEqual(line);
+            const r = await resolverOf(db);
+            const five = r.positionAt(5, 17);
+            expect(
+                Math.hypot(five[0] - from[0], five[1] - from[1]),
+            ).toBeLessThan(2.5 * step);
+        });
+
+        it("a set order wins: set across the circle, only its own ends lead; set round it, anyone does", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { step, c, at } = await onOutline(db, (c0, st) =>
+                circlePlaces(c0, 5 * st),
+            );
+            const from = at[3]!;
+            const out: XY = [
+                from[0] + (from[0] - c[0]),
+                from[1] + (from[1] - c[1]),
+            ];
+            const ring = [5, 6, 7, 8, 1, 2, 3, 4];
+            // leader first: 1 leads, then every other one, across the circle
+            await setMarcherOrder(db, {
+                beat: WINDOW.end,
+                order: [1, 3, 5, 7, 2, 4, 6, 8],
+            });
+            await expectRefused(
+                db,
+                () => dragTrail({ db, window: WINDOW, marcherIds: IDS, leaderId: 4, line: ring, points: [{ at: out }], spacing: { kind: "keep" }, step, ends: "trail" }), // prettier-ignore
+                /end of the line/,
+            );
+            // set round the circle instead (1 leading, clockwise): 4 pulled out leads its ring
+            await setMarcherOrder(db, {
+                beat: WINDOW.end,
+                order: [1, 8, 7, 6, 5, 4, 3, 2],
+            });
+            await dragTrail({ db, window: WINDOW, marcherIds: IDS, leaderId: 4, line: ring, points: [{ at: out }], spacing: { kind: "keep" }, step, ends: "trail" }); // prettier-ignore
+            expect((await trailOf(db)).marcherIds).toEqual(ring);
+        });
+
+        it("a set order round the circle may be walked the other way (owner, 2026-11-23): 5 follows 4, not 3", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { step, c, at } = await onOutline(db, (c0, st) =>
+                circlePlaces(c0, 5 * st),
+            );
+            const from = at[3]!;
+            const out: XY = [
+                from[0] + (from[0] - c[0]),
+                from[1] + (from[1] - c[1]),
+            ];
+            // set clockwise from 1 (3 behind 4), pulled out leaning the other way
+            await setMarcherOrder(db, {
+                beat: WINDOW.end,
+                order: [1, 8, 7, 6, 5, 4, 3, 2],
+            });
+            const otherWay = [3, 2, 1, 8, 7, 6, 5, 4];
+            await dragTrail({ db, window: WINDOW, marcherIds: IDS, leaderId: 4, line: otherWay, points: [{ at: out }], spacing: { kind: "keep" }, step, ends: "trail" }); // prettier-ignore
+            expect((await trailOf(db)).marcherIds).toEqual(otherWay);
+        });
+
+        it("review of #1215: a leader pulled out of a narrow placed oval is written round the oval the tool went round, which their places alone don't give back", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            // eight round an oval 12 steps long and 1.6 deep, one on each tip
+            const ovalAt = (c0: XY, a: number, b: number, n: number): XY[] =>
+                Array.from({ length: n }, (_v, i) => {
+                    const t = (2 * Math.PI * i) / n;
+                    return [c0[0] + a * Math.cos(t), c0[1] + b * Math.sin(t)];
+                });
+            const { step, c, at } = await onOutline(db, (c0, st) =>
+                ovalAt(c0, 6 * st, 0.8 * st, 8),
+            );
+            // as the shape tools draw the placed oval
+            const drawn = ovalAt(c, 6 * step, 0.8 * step, 128);
+            const placed = closedOutlineOf(at, step, [drawn])!;
+            expect(placed.kind).toBe("loop");
+            // from their places alone there is no outline: the two sides are nearer each other
+            // than the marchers along them
+            expect(closedOutlineOf(at, step)).toBeNull();
+            const original = await dataOf(db);
+            // M4 pulled out, the ring behind it as the tool shows it
+            const line = lineRound(placed.loop, at, 3).map((i) => IDS[i]!);
+            expect(line.at(-1)).toBe(4);
+            const out: XY = [at[3]![0], at[3]![1] + 6 * step];
+            const input = { db, window: WINDOW, marcherIds: IDS, leaderId: 4, line, points: [{ at: out }], spacing: { kind: "keep" as const }, step, ends: "trail" as const }; // prettier-ignore
+            // without the outline shown the write can't find the ring (what refused the drawn trail)
+            await expectRefused(
+                db,
+                () => dragTrail(input),
+                /end of the line|line, curve or arc/,
+            );
+            // an outline they don't stand on is refused too, nothing written
+            const far = closedOutlineOf(
+                ovalAt(c, 14 * step, 9 * step, 12),
+                step,
+            )!;
+            await expectRefused(
+                db,
+                () => dragTrail({ ...input, outline: far.geometry }),
+                /end of the line|line, curve or arc/,
+            );
+            await dragTrail({ ...input, outline: placed.geometry });
+            expect((await trailOf(db)).marcherIds).toEqual(line);
+            const r = await resolverOf(db);
+            expect(near(r.positionAt(4, 17), out)).toBe(true);
+            await expectOneUndoStep(db, original);
+        });
+    },
+);

@@ -69,12 +69,14 @@ import {
     rippleDrawnPlanOf,
     ripplesIn,
     snakeByOf,
+    trailLine,
     type FollowDrag,
 } from "./followDrag";
 import { goRound } from "@/db-functions/timelineTrailAround";
 import {
     aroundLine,
     aroundPlanOf,
+    endRoundSlide,
     goingRound,
     roundChanged,
 } from "./followAround";
@@ -1470,6 +1472,12 @@ async function saveFollow(
     session: PathSession,
     enter: number | null,
 ): Promise<void> {
+    // A leader pulled out of a closed outline needn't be an end of the line: the ring as shown
+    const line = follow.peel ? trailLine(follow) : null;
+    // ... round the outline the tool went round, when it is a placed shape's own (fork #1213):
+    // the write reads the ring round that one, as going round is written (`saveAround`)
+    const shown = follow.peel?.around.outline;
+    const outline = shown?.kind === "loop" ? shown.geometry : null;
     if (ripplesIn(follow))
         await rippleTrail({
             db,
@@ -1480,6 +1488,9 @@ async function saveFollow(
             keepMove: follow.keep?.timelineId ?? null,
             enter,
             snake: snakeByOf(follow),
+            line,
+            outline,
+            step: follow.step,
         });
     else
         await dragTrail({
@@ -1487,6 +1498,8 @@ async function saveFollow(
             window: follow.window,
             marcherIds: follow.ids,
             leaderId,
+            line,
+            outline,
             points,
             spacing: followSpacingOf(session),
             step: follow.step,
@@ -1754,6 +1767,9 @@ async function saveAround(follow: FollowDrag): Promise<boolean> {
             amount: around.amount,
             unit: around.unit,
             step: follow.step,
+            // any other closed outline (fork #1213) is written as the tool shows it
+            outline:
+                around.outline.kind === "loop" ? around.outline.geometry : null,
         });
         invalidatePlacedBoxes();
         return true;
@@ -1777,8 +1793,22 @@ export async function finishDrawing(
     /** Ripple in: the marcher whose spot the finish was on (RP-4) */
     enter: number | null = null,
 ): Promise<void> {
-    const { session } = usePathPenStore.getState();
-    if (!session || session.phase !== "drawing") return;
+    const held = usePathPenStore.getState().session;
+    if (!held || held.phase !== "drawing") return;
+    // A leader carried out of the outline by the pointer, no button held (owner, 2026-11-23):
+    // Enter ends it where the pointer is, the trail's last point, as a click there would
+    const carried =
+        held.follow?.roundSlide?.loose && held.follow.grabbed !== null;
+    if (carried) {
+        // Pulled out with the pointer since gone off the field: the last spot the leader
+        // followed stands in, so the trail isn't thrown away (#1178 review)
+        const at =
+            held.pointer ??
+            (held.follow?.peel ? held.follow.roundSlide!.pointer : null);
+        endRoundSlide();
+        if (at) addPoint(at);
+    }
+    const session = carried ? usePathPenStore.getState().session! : held;
     // Going round (step 10, AP-T13): nothing is drawn; the line goes round as the bar says. With
     // nobody moved (not dragged round, no count typed), or just what's stored, nothing is
     // written: it closes as Escape does (owner, 2026-11-22)

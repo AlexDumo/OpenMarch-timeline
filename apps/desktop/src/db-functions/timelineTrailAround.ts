@@ -57,6 +57,7 @@ import {
     windowMoveOf,
     type TrailWindow,
 } from "./timelineTrailDrag";
+import { loopAlong, loopThrough, ringOrder } from "./closedOutline";
 
 /** The refusals' texts of step 10, translated where they are shown. */
 export const goRoundRefusal = {
@@ -93,7 +94,11 @@ export const followShapeRefusal = {
 
 /** A closed outline the marchers stand on (DO-2), stored clockwise on the field */
 export interface Outline {
-    kind: "circle" | "box";
+    /**
+     * A circle, a box outline, or any other closed outline (`loop`, fork #1213): a placed
+     * shape's own outline, or the smooth loop through the marchers
+     */
+    kind: "circle" | "box" | "loop";
     /** A closed route (R-13‴): from its top (a circle) or its top corner (a box), clockwise */
     geometry: RouteGeometry;
     /** The outline as walked once round, clockwise */
@@ -425,6 +430,66 @@ export function outlineOf(starts: readonly XY[], step: number): Outline | null {
     if (onALine(starts, tol)) return null;
     const circle = circleCandidate(starts, usual, tol);
     return circle ? { ...circle, full: false } : null;
+}
+
+/**
+ * `geometry`, a closed route, as the outline the marchers at `starts` stand on (fork #1213): every
+ * one within the fit's tolerance of it, all the way round. Null when it isn't a closed route, or
+ * they don't.
+ */
+export function loopOutline(
+    geometry: RouteGeometry,
+    starts: readonly XY[],
+    step: number,
+): Outline | null {
+    if (starts.length < 4) return null;
+    const loop = makeLoop(geometry);
+    if (!loop) return null;
+    const usual = median(nearestGaps(starts));
+    if (!(usual > EPS_GEOM)) return null;
+    const residual = Math.max(
+        ...starts.map((p) => {
+            const on = loopPoint(loop, nearestOnLoop(loop, p));
+            return Math.hypot(on[0] - p[0], on[1] - p[1]);
+        }),
+    );
+    if (residual > fitTolerance(usual, step) || !allRound(loop, starts))
+        return null;
+    return { kind: "loop", geometry, loop, residual, full: true };
+}
+
+/**
+ * The closed outline a line can go round, any closed shape included (fork #1213; owner,
+ * 2026-11-23: "if I have a bunch of curves and then it goes back to the original point, I can't
+ * have it follow around that shape like I can with a circle"). In this order:
+ *
+ * 1. a circle or a box outline, as before ({@link fitOutline});
+ * 2. a placed closed shape's own outline (`shapes`: each a closed run of points, as the shape
+ *    tools draw it), when every marcher stands on it, all the way round;
+ * 3. the smooth closed loop through the marchers in their order round it (`ringOrder`), as
+ *    Curved draws a trail through its points.
+ *
+ * Otherwise what {@link outlineOf} has: part of a circle (`full` false), or null.
+ */
+export function closedOutlineOf(
+    starts: readonly XY[],
+    step: number,
+    shapes: readonly (readonly XY[])[] = [],
+): Outline | null {
+    const fitted = outlineOf(starts, step);
+    if (fitted?.full) return fitted;
+    for (const shape of shapes) {
+        const geometry = loopAlong(shape);
+        const outline = geometry && loopOutline(geometry, starts, step);
+        if (outline) return outline;
+    }
+    const ring = ringOrder(starts);
+    if (ring) {
+        const geometry = loopThrough(ring.map((i) => starts[i]!));
+        const outline = geometry && loopOutline(geometry, starts, step);
+        if (outline) return outline;
+    }
+    return fitted;
 }
 
 /** The circle through `starts` (the Arc kind's fit), every one within `tol` of it; null otherwise */
@@ -767,6 +832,12 @@ export interface GoRoundInput {
     unit: RoundUnit;
     /** One step, in field units */
     step: number;
+    /**
+     * The outline as the tool shows it, when it is a placed shape's own (fork #1213), which the
+     * marchers' places alone don't give: a closed route, checked again at the write (every marcher
+     * on it, all the way round). Absent: fitted from where they stand ({@link closedOutlineOf}).
+     */
+    outline?: RouteGeometry | null;
 }
 
 export interface GoRoundResult extends FollowTrailResult {
@@ -814,7 +885,9 @@ async function planInTransaction(
         const [x, y] = resolver.positionAt(m, window.start);
         return [x, y];
     });
-    const outline = outlineOf(starts, input.step);
+    const outline = input.outline
+        ? loopOutline(input.outline, starts, input.step)
+        : closedOutlineOf(starts, input.step);
     if (!outline) refuse(goRoundRefusal.notOutline());
     const leader = input.leaderId === null ? null : ids.indexOf(input.leaderId);
     const plan = planGoRound(starts, outline, {
@@ -873,6 +946,8 @@ export async function goRoundRefusalFor(
     marcherIds: readonly number[],
     /** One step, in field units: the fit's tolerance is at most half of it */
     step: number,
+    /** The outline the tool shows, when it's a placed shape's own (`GoRoundInput.outline`) */
+    outline?: RouteGeometry | null,
 ): Promise<TimelineText | null> {
     try {
         await planInTransaction(tx, {
@@ -883,6 +958,7 @@ export async function goRoundRefusalFor(
             amount: 1,
             unit: "spots",
             step,
+            outline,
         });
         return null;
     } catch (error) {

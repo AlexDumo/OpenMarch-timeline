@@ -1094,17 +1094,8 @@ const STATIC_ACTIONS = {
         defaultBindings: [],
         ignoreRepeat: true,
     },
-    // Pathways step 10 (Appendix L.11): Go around (opens the Follow tool going around a circle or
-    // box outline, or switches it from Drag out), how far around, and in spots or steps. No keys:
-    // the path bar's buttons and the palette. Reverse leader (Alt+L) turns the way around
-    followGoRound: {
-        labelKey: "actions.path.goRound",
-        keywordsKey: "actions.path.goRoundKeywords",
-        category: "path",
-        scope: "canvas",
-        defaultBindings: [],
-        ignoreRepeat: true,
-    },
+    // Pathways step 10 (Appendix L.11): how far a line following round a closed outline goes,
+    // and in spots or steps. No keys: the path bar's buttons and the palette
     followRoundMore: {
         labelKey: "actions.path.roundMore",
         keywordsKey: "actions.path.goRoundKeywords",

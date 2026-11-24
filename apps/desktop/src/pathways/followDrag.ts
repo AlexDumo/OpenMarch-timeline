@@ -31,7 +31,9 @@ import {
     aroundMarchersOf,
     aroundPlanOf,
     goingRound,
+    letGo,
     type FollowAround,
+    type FollowPeel,
     type RoundSlide,
     type RoundTyped,
 } from "./followAround";
@@ -139,8 +141,9 @@ export interface FollowDrag {
      */
     readonly hoverEnd?: number | null;
     /**
-     * Go round (step 10, DO-1): the line stands on a closed outline, so it can follow its leader
-     * round it. Absent or null when it doesn't.
+     * Round an outline (step 10, DO-1): the line stands all the way round a circle or box
+     * outline, so anyone can lead it round, or be pulled out of it into a trail. Absent or null
+     * when it doesn't.
      */
     readonly around?: FollowAround | null;
     /**
@@ -164,6 +167,11 @@ export interface FollowDrag {
          */
         readonly form?: TrailFormGrab;
     } | null;
+    /**
+     * The leader pulled out of the outline into a trail (owner, 2026-11-22): what letting go of
+     * it goes back to. Absent or null otherwise.
+     */
+    readonly peel?: FollowPeel | null;
     /**
      * Going round, the line grabbed and slid round the outline by hand (owner, 2026-11-22).
      * Absent or null otherwise.
@@ -197,6 +205,10 @@ export function lineOf(follow: FollowDrag): {
     box?: BoxCells | null;
 } {
     const kept = intoEndSpots(follow) ? follow.keep?.line : undefined;
+    // A leader pulled out of an outline leads the ring as it was turned to follow them, whatever
+    // order the kept move's start suggests
+    if (follow.peel && follow.grabbed !== null)
+        return { starts: kept?.starts ?? follow.starts, order: follow.order };
     return (
         kept ?? { starts: follow.starts, order: follow.order, box: follow.box }
     );
@@ -563,6 +575,16 @@ export function cancelFollowDrawing(): boolean {
     // A trail's head dragged (AP-T16): the trail as it was, shown, nothing written
     if (f.head) {
         usePathPenStore.setState({ session: f.head.restore });
+        return true;
+    }
+    // A leader pulled out of an outline: back round it as it was, any press still held dropped
+    if (f.peel) {
+        usePathPenStore.setState({
+            session: letGo({
+                ...session,
+                follow: { ...f, around: f.peel.around, roundSlide: null },
+            }),
+        });
         return true;
     }
     usePathPenStore.setState({

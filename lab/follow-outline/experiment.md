@@ -2,95 +2,137 @@
 # The lab reads this file when this branch's test build is published.
 # Keep `id` stable: feedback is filed under it.
 id: follow-outline
-title: "Go around a circle or a box outline (pathways, step 10)"
-summary: "Step 10 of pathways: select marchers standing on a circle or the outline of a box, press Shift+L, then drag the leader around it and the whole line follows. Let go to keep it (one undo step), or type how far and press Enter."
+title: "Follow: drag any marcher around a circle or box outline, or out of it (pathways, step 10)"
+summary: "Step 10 of pathways: select marchers standing on a circle or a box outline, press Shift+L, then grab any marcher. Drag it around the outline and everyone slides around with it; drag it off the outline and it leads the rest out along a trail. Set order (Shift+O) is honored when you've set one, and isn't needed."
 status: open
 variants: []
 questions:
-  - "New (2026-11-22): Shift+L no longer moves anyone. Drag the leader around the circle and let go. Did that feel like you moved the line yourself? Was the count by the pointer clear?"
-  - "Drag back past where they started: the line goes the other way around, the one at the back leading. Is that what you expected?"
+  - "New (2026-11-22): one Follow tool, one drag. Grab any marcher on the circle and drag it around. Did the line go the way you dragged, with the one you grabbed leading?"
+  - "Drag a marcher off the circle. Did it pull out into a trail with the others following, the way you expected?"
+  - "Drag around a few spots first, then off the circle, in one drag. Did the trail carry on from where the line had slid to? Is that useful, or would you rather it started from where they stand?"
+  - "New (2026-11-23): click a marcher, let go, and move the mouse without holding the button. Did the line follow, and did the next click keep it? Would you rather it worked another way?"
+  - "New (2026-11-23): while a trail is drawn, the bar has Straight | Curve. Did you find it, and did Curve bend the trail the way you wanted?"
+  - "New (2026-11-23): put marchers on a closed shape that isn't a circle or box (a closed Curve, or by hand in a loop) and press Shift+L. Did they go around the shape you expected? Anywhere the loop cut a corner or bulged?"
+  - "New (2026-11-23): the mode now shows in the top bar (Following, with a live line). Did you see it, and did you miss the note over the field? Was not being able to switch tabs fine, or in the way?"
+  - "New (2026-11-23): after clicking a marcher, could you tell at once that you were holding the line?"
+  - "Was it clear when you were sliding around and when you had pulled out? Did it ever switch when you didn't mean it to (too easily, or not easily enough)?"
+  - "You never have to set the order now. With no order set, did Follow guess the order you expected (neighbors around the outline)?"
+  - "Set an order with Set order, then Shift+L. Did it open going your order's way, with your leader?"
   - "Type a number (say 4) and press Enter instead of dragging. Was that easy to find from the note by the leader?"
-  - "On a tablet, drag the leader with a finger or pencil. Did it work as with a mouse?"
-  - "New (2026-11-22): place fifteen with the Box tool in Outline, go to the next page, select them and press Shift+L. Did Go around open? If Follow ever refuses, did the message tell you what to change?"
-  - "New (2026-11-22): a circle shows no corner chips and no 'Turns between counts' warning any more; a box outline shows chips only at its four corners. Is that right?"
-  - "Put eight marchers on a circle (the Circle tool), go to the next page, select them and press Shift+L. Was it clear which way they'll go and who leads?"
-  - "Try Spots, then Steps. Which did you want? Did ending between spots with Steps ever make sense for you?"
-  - "Go once around (as many spots as there are places, or more). Everyone ends where they started, and the bar says '1 × around'. Was that clear while you were setting it up?"
-  - "Press Clockwise around (or Reverse leader, Alt+L) to go the other way. The one at the back becomes the leader. Is that who you expected to lead?"
-  - "Should Go around be what the Follow tool opens with on a circle or box outline, or should dragging a trail out stay first, with Go around beside it?"
-  - "After finishing, select the line again and press Shift+L to change how far. It reopens with what you chose. Was that how you expected to change it?"
-  - "Make a box outline with a gap in it and go around. The gap goes around with the line. Is that right, or should marchers close up the gap?"
-  - "Put marchers on a slightly squashed circle (within half a step of a true one). The bar says some step onto the outline first. Was that note clear, and is half a step the right limit?"
-  - "Anything else about going around you'd change?"
+  - "On a tablet, drag a marcher with a finger or pencil, around and out. Did it work as with a mouse?"
+  - "A box outline shows corner chips only at its four corners; a circle shows none. Is that right?"
+  - "Anything else about following around or out of an outline you'd change?"
 ---
 
 **First, turn it on:** Follow-the-leader is a preview, off by default. Open **Settings ›
-Field** and turn on **Follow-the-leader (preview)**. Without it, Follow and Go around don't
+Field** and turn on **Follow-the-leader (preview)**. Without it, Follow and Set order don't
 show.
 
 **What's new (2026-11-22, from your feedback)**
 
-- **Follow feels like a move.** Shift+L (or Go around) no longer moves anyone. **Drag the
-  leader** (or any marcher of the line, or the outline) around it: the whole line slides with
-  you, snapped to whole spots, and a count by the pointer says how far ("4 spots"). **Let go**
-  to keep it, one undo step. **Esc** while dragging puts it back. Drag back past where they
-  started to go the other way around. Or **type a number** and press **Enter** for an exact
-  count. With nothing dragged or typed, Enter writes nothing.
-- **Box outlines from the Box tool go around.** An odd count in a narrow outline box (say
-  fifteen, 4 steps wide and 9 deep) was refused; it works now.
-- **Refusals say why.** If Follow can't find a line or outline, it tells you the reason: you're
-  a page early (they only stand in the shape at the end of this move), only part of a shape
-  is selected, there's a gap too wide or the spacing is too uneven, or some marchers stand too
-  far off the shape.
-- **No corner warnings on curves.** "Turns between counts" is for sharp corners, where a
-  marcher plants and turns. It now shows only at real corners: a box's corners and corner
-  points you draw. A circle, an arc or a curved leg never shows it.
+- **One Follow tool, one drag.** Going around and spreading out are the same gesture now.
+  Press **Shift+L** on marchers standing all the way around a circle or box outline, then
+  press **any marcher** and drag. The one you grab leads.
+- **Drag along the outline** and the whole line slides around it, the way you drag, snapped
+  to whole spots, with a count by the pointer ("4 spots"). **Let go** to keep it, one undo
+  step.
+- **Drag off the outline** and the marcher you grabbed is pulled out into a trail: the others
+  follow it around the outline and off it. Let go to place the trail's first point, click for
+  more corners if you want them, then **Enter** (or double-click) to keep it. Spacing and Ends
+  are on the bar, as for any trail.
+- **Around, then out, in one drag.** Slide a few spots around first and then pull off, and the
+  trail carries on from where the line had slid to. Come back onto the outline and it slides
+  again.
+- **Any closed shape (2026-11-23, a prototype).** Follow now goes around any closed shape the
+  marchers stand all the way around, not only a circle or a box. Placed with a shape tool (a
+  closed Line or Curve, a polygon), they go around that shape's own outline, corners and all.
+  Placed by hand, they go around a smooth loop through them.
+- **Following, in the top bar (2026-11-23, a prototype).** The note over the field is gone.
+  While Follow is open, the Paths tab's Follow button reads **Following**, and a short line
+  beside it says what's happening ("Holding T9 · move along to slide, away to pull out ·
+  click to drop · Esc put back"). The other tabs and tools wait until you finish or press
+  Esc; hover or click one and it says so.
+- **You can see the pickup.** Click or press a marcher and the Leader flag jumps to it, the
+  orange arrows disappear, a purple halo sits on it and the cursor closes into a fist.
+- **Click, let go, then move (2026-11-23).** You don't have to hold the button. Click a
+  marcher, let go, and move the mouse: the line slides around or pulls out just as it does
+  when you drag. **Click again** to keep it, **Enter** also keeps it, **Esc** puts it back.
+  Holding and dragging still works. On a tablet it stays press and drag.
+- **Straight | Curve (2026-11-23).** While a trail is drawn (also after pulling out of a
+  circle) the bar has **Straight | Curve**: the next click places a corner or a smooth point,
+  Alt + Click the other kind, and the choice is kept for the next drawing. Points you've
+  already placed keep their kind. Pressing and dragging a point still rounds that one point.
+  After finishing, **Edit path** and a click on a point give Corner | Smooth for it.
+- **No order needed.** Follow no longer asks you to set the march order first. With none set
+  it takes their places around the outline, and shows who it would lead with until you grab
+  someone.
+- **Your order still wins when you set one.** With **Set order** (Paths tab, Shift+O), Follow
+  opens going your order's way with your leader, including an order set on the page you're on
+  (it used to be ignored there). Dragging the other way still goes the other way: the drag is
+  the last word.
+- **Which way, without dragging:** the bar's **Clockwise | Counterclockwise** button, or
+  Reverse leader (Alt+L), turns it for a typed count.
 
-**From before**
+**Still here**
 
-- **Go around a circle or a box outline.** Select marchers standing all the way around a
-  circle or the outline of a box (the Circle tool, or the Box tool with Outline) and press
-  **Shift+L** (or the Follow button by the Path pen, or **Go around** in the command
-  palette). The Follow tool opens in **Go around**: the outline is drawn with arrows
-  showing the way around, and the marchers stand where they'll stop.
-- **How far:** a number of **spots** (the places around the outline) or **steps**: drag, type,
-  or use **−** and **+** on the bar. It starts at 0. It can be more than once around, up to
-  100 times; the bar then says how many times around.
+- **Esc** while dragging puts everything back. Or **type a number** and press **Enter** for
+  an exact count around. With nothing dragged or typed, Enter writes nothing. Dragging back
+  past where they started goes the other way around.
+- **How far:** a number of **spots** (the places around the outline) or **steps**, from the
+  bar's **−**, **+** and the number. It can be more than once around, up to 100 times.
 - **By spots, each marcher moves on to the place that many ahead,** so everyone lands on a
-  spot even when the spacing is uneven, nobody passes anyone, and a gap goes around with the
-  line. **By steps** everyone goes the same distance. The one behind the widest gap leads.
-- **Which way:** clockwise as the field is shown, unless the line has an order the show
-  remembers that runs the other way. **Clockwise around | Counterclockwise around** on the
-  bar, or **Reverse leader** (Alt+L), turns it; the one at the back then leads.
-- **Close enough counts:** marchers within half a step of a circle or box are fitted to it,
-  and the bar says how many step onto it first; ▶ Preview shows that short step. Anything
-  farther off (an oval, a hexagon) is refused, with the reason.
-- **▶ Preview** loops the walk around. **Enter** (or Finish) writes it in one undo step; the
-  next page's spots are where they stop.
-- **A line standing on part of a circle** (an arc) opens as before, dragging a trail out;
-  **Go around** on the bar takes it around the rest of that circle.
-- **After finishing:** Reverse leader goes the other way around as far, for everyone,
-  including a marcher taken over at the start. **Shift+L** on the same line reopens Go
-  around with its settings, to change how far. Remove trail walks everyone straight to the
-  same spots.
+  spot even when the spacing is uneven, and a gap goes around with the line.
+- **Corner chips only at real corners:** a box's four corners; a circle shows none.
+- **Refusals say why:** a page early, only part of a shape selected, a gap too wide, or some
+  standing too far off the shape.
+- **After finishing:** Shift+L on the same line reopens it with how far it went. Reverse leader
+  on the finished move goes the other way around as far. Remove trail walks everyone straight
+  to the same spots.
+
+**Make a bean and go around it (2026-11-24, each step checked in the app)**
+
+1. Click **Page 1** on the timeline and select the marchers (Ctrl/Cmd+A).
+2. In the top bar open the **Shapes** tab and click the fourth tool, **Curve**.
+3. Click five or six points on the field around the outline you want.
+4. **Click the first point again.** The curve closes and the marchers spread around it. (If
+   you finished it open instead, the shape bar's first menu says **Open**: change it to
+   **Closed**.)
+5. Press **Enter** to place them.
+6. Go to the next page (or right-click the playhead and choose **Create page at playhead**,
+   then click the new page).
+7. Click any marcher of the shape (they all select) and press **Shift+L**.
+8. Drag any marcher along the curve: the note counts the spots. Let go to keep it.
+
+Follow on the page where you placed the shape acts on where they stood before it, so go to
+the next page first.
 
 **Try it**
 
-1. On page 1, select eight marchers and draw a circle with the Circle tool (O).
-2. Go to page 2, select the eight, press **Shift+L**.
-3. Drag the leader a quarter of the way around and let go. Then **Space** to watch it.
-4. Undo, press **Shift+L** again, type **4**, press **Enter**.
-5. Do the same with twelve marchers on a box outline (Box tool, then Outline).
-6. Try it with a finger or pencil on a tablet: drag the leader, or use − and + on the bar.
+1. Turn on **Settings › Field › Follow-the-leader (preview)**.
+2. On page 1, select twelve marchers and draw a circle with the Circle tool (O).
+3. Go to page 2, select the twelve, and press **Shift+L**. No order needed.
+4. Grab any marcher and drag it counterclockwise a few spots along the circle, then let go.
+   Press **Space** to watch: they walk counterclockwise behind the one you grabbed. Undo, and
+   try clockwise.
+5. Shift+L again, grab a marcher and drag it straight out of the circle, let go, then press
+   **Enter**. Space: it leads the others out along the trail.
+6. Shift+L once more: drag a marcher a quarter of the way around, then off the circle, all in
+   one drag.
+7. Do the same with marchers on a box outline (Box tool, then Outline).
 
 **Good to know**
 
-- Go around needs marchers all the way around a circle or box outline (four or more), or
-  three or more on part of a circle. It says why before anything is drawn.
+- Grabbing anyone needs marchers all the way around a closed shape (four or more): a circle,
+  a box outline, a placed closed Line or Curve, or any loop of marchers with no big gap.
+  A line on part of a circle (an arc) has two ends: drag a trail out of either, as before.
+- An order you set that zigzags across the circle instead of going around it is followed as
+  a trail from its two ends, each marcher through the ones ahead of them.
+- Followers walk straight from place to place around a circle on their way to the trail, so
+  after "around, then out" they can end a hair off the places the slide showed (about a tenth
+  of a step in a quarter circle).
 - The outline is fitted from where they stand. If you reshape the circle on page 1
   afterwards, the move still goes around the circle as it was, and anyone off it walks
-  straight onto it first. A start moved past its end spot goes almost once around to reach
-  it: spots are reached going forward, never backward.
+  straight onto it first.
 
 **Not in this step, on purpose**
 
@@ -98,5 +140,4 @@ show.
 - **Drawing your own closed outline** (a block letter) with the pen.
 - Reading the placed shape itself instead of fitting one, so the move follows the shape
   when it's reshaped.
-- A line on part of a box outline: a line alone doesn't say where the box is.
 - Editing the outline's points. Reverse leader and Shift+L are the ways to change it.

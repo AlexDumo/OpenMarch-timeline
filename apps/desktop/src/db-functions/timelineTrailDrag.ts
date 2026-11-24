@@ -21,6 +21,7 @@ import {
     EPS_GEOM,
     makeAlongTrail,
     type FtlTrail,
+    type RouteGeometry,
     type XY,
 } from "@openmarch/core";
 import { schema } from "@/global/database/db";
@@ -35,6 +36,12 @@ import { marcherName, type RoutePointInput } from "./timelineRoutes";
 import { moveMarchersInRangeInTransaction } from "./timelineMoves";
 import { readPageGrid } from "./timelinePageGrid";
 import { addPageFlagInTransaction } from "./pageFlags";
+import {
+    closedOutlineOf,
+    loopOutline,
+    lineRound,
+    walkingOutline,
+} from "./timelineTrailAround";
 import {
     rememberedOrderAt,
     rememberedOrderInWindowAt,
@@ -326,6 +333,53 @@ export function trailOrderFrom(
     return null;
 }
 
+/**
+ * The trail order (tail first, leader last, as indexes into `starts`) for a leader pulled out of
+ * a closed outline (step 10, owner 2026-11-22: all the way round a circle or box outline anyone
+ * leads): `line` when the starts stand all the way round an outline and `line` is the ring round
+ * it, one way or the other, from the one behind its leader `leader`. With an order set by hand
+ * (`set`, tail first), the ring must be that order's, turned to its leader. Null otherwise.
+ *
+ * `shown` is the outline the tool went round when it is a placed shape's own (fork #1213), which
+ * the marchers' places alone may not give back (a narrow oval, its two sides nearer each other
+ * than the marchers along them): the ring is then read round that outline, once every marcher is
+ * found on it, all the way round. Without it the outline is fitted from where they stand.
+ */
+export function ringTrailOrder(
+    starts: readonly XY[],
+    line: readonly number[],
+    leader: number,
+    step: number,
+    set: readonly number[] | null = null,
+    shown: RouteGeometry | null = null,
+): number[] | null {
+    if (line.length !== starts.length || line.at(-1) !== leader) return null;
+    // any closed outline they stand all the way round (fork #1213)
+    const outline = shown
+        ? loopOutline(shown, starts, step)
+        : closedOutlineOf(starts, step);
+    if (!outline?.full) return null;
+    const same = (a: readonly number[], b: readonly number[]) =>
+        a.length === b.length && a.every((x, i) => x === b[i]);
+    for (const reversed of [false, true]) {
+        const ring = lineRound(
+            walkingOutline(outline, reversed).loop,
+            starts,
+            leader,
+        );
+        if (!same(ring, line)) continue;
+        if (!set) return ring;
+        // the set order runs round the outline too: the same ring from its own leader, either way
+        const from = set.at(-1)!;
+        return [false, true].some((r) =>
+            same(lineRound(walkingOutline(outline, r).loop, starts, from), set),
+        )
+            ? ring
+            : null;
+    }
+    return null;
+}
+
 // ---------------------------------------------------------------------------
 // Pure: the ends (AP-T8)
 // ---------------------------------------------------------------------------
@@ -522,6 +576,17 @@ export interface TrailDragInput {
     marcherIds: readonly number[];
     /** The end of the line the trail was dragged out of: the leader (DL-1) */
     leaderId: number;
+    /**
+     * A leader pulled out of a closed outline (step 10), who needn't be an end of the line: the
+     * line as the tool shows it, tail first and the leader last (`ringTrailOrder` checks it)
+     */
+    line?: readonly number[] | null;
+    /**
+     * With `line`: the outline the tool went round when it is a placed shape's own (fork #1213),
+     * a closed route, checked again at the write as `GoRoundInput.outline` is. Absent: fitted
+     * from where they stand.
+     */
+    outline?: RouteGeometry | null;
     /** The drawn points, in walking order from the leader; the last is the trail's end */
     points: readonly RoutePointInput[];
     spacing: TrailSpacing;
@@ -563,6 +628,61 @@ async function keptMoveStart(
     return row?.start ?? input.window.start;
 }
 
+/**
+ * The trail order (tail first, leader last, as indexes into `ids`) of the line `ids` standing at
+ * `starts` at beat `from`, led by `leaderId`: the line's order (`followOrderAt`) from the end the
+ * leader is, or, for a leader pulled out of a closed outline (`line`, by id), the ring round it
+ * (`ringTrailOrder`). Refused when they stand in no line, or the leader isn't an end of it.
+ */
+export async function trailOrderIn(
+    tx: DbTransaction,
+    args: {
+        ids: readonly number[];
+        from: number;
+        /** The window's end: an order set by hand up to there counts (`rememberedOrderInWindow`) */
+        until: number;
+        starts: readonly XY[];
+        leaderId: number;
+        line?: readonly number[] | null;
+        /** With `line`: the placed shape's outline the tool went round (`TrailDragInput.outline`) */
+        outline?: RouteGeometry | null;
+        /** One step, in field units (the outline fit's tolerance) */
+        step: number;
+        /** A box with no remembered order snakes row by row (the default) or column by column */
+        snake?: SnakeBy;
+    },
+): Promise<number[]> {
+    const { ids, starts } = args;
+    const leader = ids.indexOf(args.leaderId);
+    const along = await followOrderAt(
+        tx,
+        ids,
+        args.until > args.from
+            ? { start: args.from, end: args.until }
+            : args.from,
+        starts,
+        { by: args.snake, leader },
+    );
+    if (args.line) {
+        // A box's default snake (step 11) runs leader first too, but isn't an order set by hand
+        const set =
+            along?.leaderFirst && !along.box ? tailFirstOf(along) : null;
+        const ring = ringTrailOrder(
+            starts,
+            args.line.map((m) => ids.indexOf(m)),
+            leader,
+            args.step,
+            set,
+            args.outline ?? null,
+        );
+        if (ring) return ring;
+    }
+    if (!along) refuse(trailDragRefusal.notFitted());
+    const order = trailOrderFrom(along.order, leader);
+    if (!order) refuse(trailDragRefusal.notAnEnd());
+    return order;
+}
+
 /** AP-T8's reads and refusals, with nothing written. */
 async function planDragInTransaction(
     tx: DbTransaction,
@@ -584,20 +704,17 @@ async function planDragInTransaction(
         const [x, y] = resolver.positionAt(m, from);
         return [x, y];
     });
-    // The window's own line counts an order set by hand inside it (`rememberedOrderInWindow`)
-    const along = await followOrderAt(
-        tx,
+    const order = await trailOrderIn(tx, {
         ids,
-        input.ends === "keep" ? from : window,
+        from,
+        until: window.end,
         starts,
-        {
-            by: input.snake,
-            leader: ids.indexOf(leaderId),
-        },
-    );
-    if (!along) refuse(trailDragRefusal.notFitted());
-    const order = trailOrderFrom(along.order, ids.indexOf(leaderId));
-    if (!order) refuse(trailDragRefusal.notAnEnd());
+        leaderId,
+        line: input.line,
+        outline: input.outline,
+        step,
+        snake: input.snake,
+    });
     const plan = planTrailDrag(
         order.map((i) => starts[i]!),
         points,

@@ -11,7 +11,7 @@
  *   then the move's shape recipes re-dealt so they agree.
  */
 import { and, eq, inArray } from "drizzle-orm";
-import { createResolver, type XY } from "@openmarch/core";
+import { createResolver, type RouteGeometry, type XY } from "@openmarch/core";
 import { schema } from "@/global/database/db";
 import { readTimelineTables } from "@/timeline/timelineRows";
 import type { DbConnection, DbTransaction } from "./types";
@@ -35,7 +35,7 @@ import {
 import {
     followOrderAt,
     trailDragRefusal,
-    trailOrderFrom,
+    trailOrderIn,
     windowMoveOf,
     type TrailWindow,
 } from "./timelineTrailDrag";
@@ -97,6 +97,15 @@ export interface RippleInput {
     enter?: number | null;
     /** A box with no remembered order snakes row by row (the default) or column by column (SN-2) */
     snake?: SnakeBy;
+    /**
+     * A leader pulled out of a closed outline (step 10), who needn't be an end of the line: the
+     * line as the tool shows it, tail first and the leader last, with `step` (one step, in field
+     * units) for the outline's fit
+     */
+    line?: readonly number[] | null;
+    step?: number;
+    /** With `line`: the placed shape's outline the tool went round (`TrailDragInput.outline`) */
+    outline?: RouteGeometry | null;
 }
 
 export interface RippleResult extends FollowTrailResult {
@@ -182,13 +191,17 @@ export async function rippleTrailInTransaction(
         const [x, y] = resolver.positionAt(m, timeline.start_beat);
         return [x, y];
     });
-    const along = await followOrderAt(tx, ids, timeline.start_beat, starts, {
-        by: input.snake,
-        leader: ids.indexOf(leaderId),
+    const order = await trailOrderIn(tx, {
+        ids,
+        from: timeline.start_beat,
+        until: timeline.end_beat,
+        starts,
+        leaderId,
+        line: input.line,
+        outline: input.outline,
+        step: input.step ?? 1,
+        snake: input.snake,
     });
-    if (!along) refuse(trailDragRefusal.notFitted());
-    const order = trailOrderFrom(along.order, ids.indexOf(leaderId));
-    if (!order) refuse(trailDragRefusal.notAnEnd());
     const line = order.map((i) => ids[i]!);
     // Each member's end spot there, its slot's stored destination (as AP-T1 reads it)
     const spots = await endSpotsInMove(tx, move, ids);

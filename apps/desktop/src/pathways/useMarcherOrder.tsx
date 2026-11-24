@@ -39,6 +39,7 @@ import {
     undoInOrderSweep,
 } from "./orderSweepRoom";
 import { usePathPenStore } from "./pathPenStore";
+import { followingLockReason, isFollowing } from "./FollowStatus";
 import { useFollowTheLeader } from "./followTheLeader";
 
 /** Where each of `ids` stands at `beat` as the field edits it, skipping any the resolver lacks */
@@ -87,7 +88,14 @@ export function useMarcherOrderActions(): void {
     );
     const key = ids.join(",");
     const beat = useTimelineSelectionStore(displayedBeat);
-    const refusal = ready ? orderRefusal(ids.length, isPlaying) : "";
+    // Follow open: Reverse and Clear wait for it, as their buttons do, so the order it shows
+    // never goes out of date under it
+    const following = usePathPenStore((s) => isFollowing(s.session));
+    const refusal = following
+        ? followingLockReason()
+        : ready
+          ? orderRefusal(ids.length, isPlaying)
+          : "";
     const options = {
         enabled: refusal === null,
         disabledReason: refusal || undefined,
