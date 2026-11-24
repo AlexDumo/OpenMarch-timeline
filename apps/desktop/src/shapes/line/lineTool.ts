@@ -35,6 +35,7 @@ import type {
 } from "../tool/toolKind";
 import { withPivot } from "../frame/pivot";
 import { curveShape, lineShape } from "./lineShape";
+import { linkClicked } from "./lineLinks";
 import {
     cornersPictures,
     endsPictures,
@@ -1394,6 +1395,8 @@ export const lineTool: ToolKind<LineParams> = {
             const p = drawPoints(points, env);
             return p && closeLine(p, n, env);
         },
+        // Its first and last points link to placed shapes' free ends they land on (#1235)
+        link: linkClicked,
     },
     handles(params, _n, selected) {
         const frame = lineFrame(params);
@@ -1538,6 +1541,8 @@ export const curveTool: ToolKind<LineParams> = {
             const p = drawPoints(points, env, SMOOTH);
             return p && closeLine(p, n, env);
         },
+        // Its first and last points link to placed shapes' free ends they land on (#1235)
+        link: linkClicked,
     },
     fromFrame: (frame, n, env) => pivoted(curveInFrame(frame, n, env)),
     pictureParams: (_n, env) => wave(env),

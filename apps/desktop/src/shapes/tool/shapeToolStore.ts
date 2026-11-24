@@ -5,6 +5,7 @@ import { usePreviewModeStore } from "@/stores/PreviewModeStore";
 import { keepMirror, type ToolState } from "./toolMachine";
 import { isAwayFrom, momentOf, type ShapeMoment } from "./shapeMoment";
 import { keepToolLinks, toolBeat } from "./drawnLinks";
+import { clearLinkDrag } from "../placed/linkDragStore";
 
 /**
  * The open shape tool, if any. Every change goes through the pure functions in `toolMachine.ts`;
@@ -75,6 +76,8 @@ export function useShapeShown(): boolean {
 }
 
 export function closeShapeTool(): void {
+    // The ring of a link a click would make (#1235) goes with the tool
+    clearLinkDrag();
     if (useShapeToolStore.getState().tool)
         useShapeToolStore.setState({
             tool: null,

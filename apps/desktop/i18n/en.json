@@ -2607,6 +2607,7 @@
             "detachFrom": "Detach from {shape}",
             "detachCount": "Detach {count} linked shapes",
             "releaseTip": "Release to link to {shape}",
+            "clickTip": "Click to link to {shape}",
             "dropTip": "Drop on another shape's end to link"
         }
     },

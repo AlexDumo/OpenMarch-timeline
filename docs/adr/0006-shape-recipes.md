@@ -700,7 +700,9 @@ id and end only, so it doesn't depend on how a recipe is anchored to its move.
    don't attach. A new Line, Curve or Arc drawn with the shape tool attaches the same way, before
    it's placed: the drag that draws it starting (by the press) or ending (by the pointer) within
    that reach of a free end, or one of its end handles or the whole shape dragged there before
-   Place. Its end lands exactly on that end, and the attachment is in the recipe Place saves, in
+   Place. A Line or Curve drawn by clicking points attaches the same way by its first point or the
+   point that is last when it's finished, clicked within that reach of a free end (a middle point
+   doesn't, nor a line closed by clicking its first point). Its end lands exactly on that end, and the attachment is in the recipe Place saves, in
    the same edit. Until then, any change that takes the end off that end, or a change to the
    other shape that leaves it no longer free, drops the attachment. The new shape goes into the
    move placing it at that beat picks; on another move than the shape it's attached to, the

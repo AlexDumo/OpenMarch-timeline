@@ -40,6 +40,24 @@ export function withAttach(
     return Object.keys(now).length > 0 ? { ...rest, attach: now } : rest;
 }
 
+/**
+ * A line drawn through clicked points (#1235) with its start attached to `start` and its end to
+ * `end` (each an {@link AttachRef}, or undefined for none). A closed line, which has no ends, as
+ * it is.
+ */
+export function linkClicked(
+    p: LineParams,
+    start: unknown,
+    end: unknown,
+): LineParams {
+    if (!hasEnds(p)) return p;
+    return withAttach(
+        withAttach(p, "start", start as AttachRef | undefined),
+        "end",
+        end as AttachRef | undefined,
+    );
+}
+
 const close = (a: XY, b: XY) => Math.hypot(a.x - b.x, a.y - b.y) < 1e-9;
 
 /**

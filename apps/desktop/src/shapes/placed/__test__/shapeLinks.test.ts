@@ -31,7 +31,13 @@ import { bendOf } from "../../arc/arcGeometry";
 import type { ToolEnv } from "../../tool/toolKind";
 import { curveTool, lineTool } from "../../line/lineTool";
 import { boxTool } from "../../box/boxTool";
-import { openTool, pointerMove, press, release } from "../../tool/toolMachine";
+import {
+    finishPoints,
+    openTool,
+    pointerMove,
+    press,
+    release,
+} from "../../tool/toolMachine";
 import { placementOf } from "../../tool/shapePlacement";
 import { jointsShown } from "../PlacedBoxesOverlay";
 import {
@@ -47,6 +53,7 @@ import {
     keepDrawnAttach,
     linksKind,
     liveLinks,
+    nearestEnd,
     withoutDeadLinks,
 } from "../shapeLinks";
 
@@ -841,91 +848,119 @@ describeDbTests("linked shapes saved", (it) => {
         expect(liveLinks(placed(redone), 0)).toHaveLength(1);
     });
 
-    it("places a curve drawn from the line's end linked, one undo step that undo and redo keep whole", async ({
-        db,
-        marchersAndPages: _,
-    }) => {
-        // The line alone, its bottom end at (200, 260); the arc's marchers draw the new shape
-        const { ids, lineId } = await placeJ(db);
-        const arcRecipe = (await readAllShapeRecipes(db)).find(
-            (r) => r.id !== lineId,
-        )!;
-        await performUndo(db);
-        await timelineResolverSettled();
-        const lineOnly = await readAllShapeRecipes(db);
-        expect(lineOnly.map((r) => r.id)).toEqual([lineId]);
-        const boxes = placed(lineOnly);
-        const env: ToolEnv = {
-            stepPx: STEP,
-            snap: false,
-            pull: false,
-            constrain: false,
-            gridSnap: (p) => p,
-            hitRadius: 3,
-        };
-        const marchers = ids.slice(4).map((id) => {
-            const m = arcRecipe.members.find((a) => a.marcherId === id)!;
-            return { id, at: { x: m.x, y: m.y } };
-        });
-        // A Curve drawn by a drag from just off the line's bottom end out to the left, linked as
-        // the field mode does it each move
-        const pressed = { x: 201, y: 261 };
-        const pointer = { x: 150, y: 270 };
-        let tool = press(openTool(curveTool, marchers), pressed, env);
-        tool = pointerMove(tool, pointer, env);
-        const out = drawnAttach({
-            params: tool.params as LineParams,
-            pressed,
-            pointer,
-            targets: drawnFreeEnds(boxes, 0),
-            radius: 5,
-        });
-        tool = release({ ...tool, params: out.params }, ctx);
-        const placement = placementOf(tool, ctx)!;
-        const params = placement.recipe.params as LineParams;
-        expect(params.attach).toEqual({
-            start: { recipe: lineId, end: "end" },
-        });
-        expect(endPoint(params, "start")).toEqual({ x: 200, y: 260 });
+    for (const how of ["drag", "clicked points"] as const)
+        it(`places a curve drawn from the line's end linked (by ${how}), one undo step that undo and redo keep whole`, async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            // The line alone, its bottom end at (200, 260); the arc's marchers draw the new shape
+            const { ids, lineId } = await placeJ(db);
+            const arcRecipe = (await readAllShapeRecipes(db)).find(
+                (r) => r.id !== lineId,
+            )!;
+            await performUndo(db);
+            await timelineResolverSettled();
+            const lineOnly = await readAllShapeRecipes(db);
+            expect(lineOnly.map((r) => r.id)).toEqual([lineId]);
+            const boxes = placed(lineOnly);
+            const env: ToolEnv = {
+                stepPx: STEP,
+                snap: false,
+                pull: false,
+                constrain: false,
+                gridSnap: (p) => p,
+                hitRadius: 3,
+            };
+            const marchers = ids.slice(4).map((id) => {
+                const m = arcRecipe.members.find((a) => a.marcherId === id)!;
+                return { id, at: { x: m.x, y: m.y } };
+            });
+            // A Curve drawn from just off the line's bottom end out to the left, linked as the field
+            // mode does it: by a drag, each move; by clicked points, where each lands
+            const pressed = { x: 201, y: 261 };
+            const pointer = { x: 150, y: 270 };
+            const targets = drawnFreeEnds(boxes, 0);
+            let tool = openTool(curveTool, marchers);
+            if (how === "drag") {
+                tool = press(tool, pressed, env);
+                tool = pointerMove(tool, pointer, env);
+                const out = drawnAttach({
+                    params: tool.params as LineParams,
+                    pressed,
+                    pointer,
+                    targets,
+                    radius: 5,
+                });
+                tool = release({ ...tool, params: out.params }, ctx);
+            } else {
+                const linking: ToolEnv = {
+                    ...env,
+                    linkPoint: (at) => {
+                        const t = nearestEnd(targets, at, 5);
+                        return t
+                            ? {
+                                  at: t.at,
+                                  to: {
+                                      recipe: t.owner.recipe.id,
+                                      end: t.ownerEnd,
+                                  },
+                              }
+                            : null;
+                    },
+                };
+                for (const at of [pressed, pointer]) {
+                    tool = press(tool, at, linking);
+                    tool = release(tool, ctx, { double: false });
+                }
+                tool = finishPoints(tool, ctx);
+            }
+            const placement = placementOf(tool, ctx)!;
+            const params = placement.recipe.params as LineParams;
+            expect(params.attach).toEqual({
+                start: { recipe: lineId, end: "end" },
+            });
+            expect(endPoint(params, "start")).toEqual({ x: 200, y: 260 });
 
-        const steps = await undoSteps(db);
-        expect(
-            await writePlacement(
-                placement,
-                new QueryClient(),
-                "Couldn't place",
-                PAGE2_PLAN,
-            ),
-        ).toBe(true);
-        await timelineResolverSettled();
-        expect(await undoSteps(db)).toBe(steps + 1);
-        const after = await readAllShapeRecipes(db);
-        const links = liveLinks(placed(after), 0);
-        expect(links).toHaveLength(1);
-        expect(links[0]!.owner.recipe.id).toBe(lineId);
-        const joint = links[0]!.at;
-        const onJoint = (recipes: readonly PlacedRecipe[]) =>
-            recipes.flatMap((r) =>
-                r.members.filter(
-                    (m) => Math.hypot(m.x - joint.x, m.y - joint.y) < 1e-6,
+            const steps = await undoSteps(db);
+            expect(
+                await writePlacement(
+                    placement,
+                    new QueryClient(),
+                    "Couldn't place",
+                    PAGE2_PLAN,
                 ),
+            ).toBe(true);
+            await timelineResolverSettled();
+            expect(await undoSteps(db)).toBe(steps + 1);
+            const after = await readAllShapeRecipes(db);
+            const links = liveLinks(placed(after), 0);
+            expect(links).toHaveLength(1);
+            expect(links[0]!.owner.recipe.id).toBe(lineId);
+            const joint = links[0]!.at;
+            const onJoint = (recipes: readonly PlacedRecipe[]) =>
+                recipes.flatMap((r) =>
+                    r.members.filter(
+                        (m) => Math.hypot(m.x - joint.x, m.y - joint.y) < 1e-6,
+                    ),
+                );
+            // The line's marcher alone on the joint
+            expect(onJoint(after)).toHaveLength(1);
+
+            await performUndo(db);
+            await timelineResolverSettled();
+            const undone = await readAllShapeRecipes(db);
+            expect(undone.map((r) => r.id)).toEqual([lineId]);
+            expect(liveLinks(placed(undone), 0)).toEqual([]);
+
+            await performRedo(db);
+            await timelineResolverSettled();
+            const redone = await readAllShapeRecipes(db);
+            expect(redone.map((r) => r.params)).toEqual(
+                after.map((r) => r.params),
             );
-        // The line's marcher alone on the joint
-        expect(onJoint(after)).toHaveLength(1);
-
-        await performUndo(db);
-        await timelineResolverSettled();
-        const undone = await readAllShapeRecipes(db);
-        expect(undone.map((r) => r.id)).toEqual([lineId]);
-        expect(liveLinks(placed(undone), 0)).toEqual([]);
-
-        await performRedo(db);
-        await timelineResolverSettled();
-        const redone = await readAllShapeRecipes(db);
-        expect(redone.map((r) => r.params)).toEqual(after.map((r) => r.params));
-        expect(liveLinks(placed(redone), 0)).toHaveLength(1);
-        expect(onJoint(redone)).toHaveLength(1);
-    });
+            expect(liveLinks(placed(redone), 0)).toHaveLength(1);
+            expect(onJoint(redone)).toHaveLength(1);
+        });
 
     it("detaches: the arc's end holds its own marcher again", async ({
         db,
