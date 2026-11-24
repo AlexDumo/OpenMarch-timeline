@@ -420,9 +420,11 @@ function angleDelta(a: number, b: number): number {
 }
 
 /**
- * The heading at count clock `c` from headings at each count boundary. A
- * turn spanning part of its count (a snap) holds, then eases into the
- * boundary over that last part.
+ * The heading at count clock `c` from headings at each count boundary. The
+ * headings are unwrapped (#993): a turn across a count goes evenly by their
+ * plain difference, so 0 to 2pi is a full spin. A turn spanning part of its
+ * count (an instant turn, a snap) holds, then eases into the boundary over
+ * that last part, the short way round: an instant spin doesn't whirl.
  */
 function headingFrom(
     headings: Float64Array,
@@ -436,17 +438,11 @@ function headingFrom(
     const k = Math.floor(c);
     const h0 = headings[k];
     const span = turnSpan?.[k + 1] ?? 1;
-    let u = c - k;
-    if (span < 1) {
-        const x = Math.min(Math.max((u - (1 - span)) / span, 0), 1);
-        u = x * x * (3 - 2 * x);
-    }
-    return h0 + angleDelta(h0, headings[k + 1]) * u;
+    const u = c - k;
+    if (span >= 1) return h0 + (headings[k + 1] - h0) * u;
+    const x = Math.min(Math.max((u - (1 - span)) / span, 0), 1);
+    return h0 + angleDelta(h0, headings[k + 1]) * x * x * (3 - 2 * x);
 }
-
-/** A heading this close to 0 is the front facing, where slides face the 50. */
-const FRONT_EPS = 1e-6;
-const facesFront = (h: number) => Math.abs(angleDelta(0, h)) <= FRONT_EPS;
 
 /**
  * The marcher's steps: the counts split or joined by pace. Step i runs
@@ -556,9 +552,12 @@ function buildSteps(input: PlanInput, headings: Float64Array): Steps {
  * Which way each step's slide goes relative to the 50 (x = 0): decided per
  * run of consecutive slide steps in the same lateral direction, by whether
  * the run ends nearer the 50 than it started. One gait per run, so a slide
- * across the 50 doesn't flip halfway. Only with the front facing
- * (technique.md, "Slides"); any other facing leaves the legs to
- * `pickDirection`.
+ * across the 50 doesn't flip halfway (technique.md, "Slides"). Any facing
+ * (#993): the legs follow the path whichever way the body faces, so a
+ * performer facing the backfield slides toward the 50 forward and away from
+ * it backward, as one facing front does. A slide with no sideline-to-sideline
+ * travel (facing a side, traveling up or down the field) gets no answer from
+ * the 50, and `pickDirection` decides.
  */
 function slideSenses(steps: Steps): SlideSense[] {
     const { pos: positions, heading, n: K } = steps;
@@ -568,7 +567,6 @@ function slideSenses(steps: Steps): SlideSense[] {
         const dz = positions[(k + 1) * 2 + 1] - positions[k * 2 + 1];
         return (
             Math.hypot(dx, dz) > REST_EPS &&
-            facesFront(heading[k]) &&
             (side === 0 ? Math.sign(dx) !== 0 : Math.sign(dx) === side) &&
             isSlide(travelDirection(dx, dz, heading[k]))
         );
