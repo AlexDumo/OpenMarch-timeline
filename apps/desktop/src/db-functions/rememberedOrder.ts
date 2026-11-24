@@ -295,13 +295,31 @@ export async function readOrderForms(
     return forms;
 }
 
-/** The remembered order of `ids` at `beat` as the show has it now (`rememberedOrder`), or null */
+/**
+ * The remembered order of `ids` at `beat` as the show has it now (`rememberedOrder`), or null.
+ * With `until` past `beat` (a follow window's end), an order set or cleared by hand there or
+ * before counts too: Set order is made where the playhead stands, which is the window's end
+ * while the line follows from its start (owner, 2026-11-22: a set order always wins). Other
+ * forms made in the window (the window's own move, a shape placed at its end) still don't.
+ */
 export async function rememberedOrderAt(
     db: DbConnection | DbTransaction,
     ids: readonly number[],
     beat: number,
+    until: number = beat,
 ): Promise<number[] | null> {
-    return rememberedOrder(await readOrderForms(db, ids), ids, beat);
+    const forms = await readOrderForms(db, ids);
+    if (!(until > beat)) return rememberedOrder(forms, ids, beat);
+    return rememberedOrder(
+        forms.filter(
+            (f) =>
+                f.endBeat <= beat + 1e-9 ||
+                ((f.kind === "set" || f.kind === "unset") &&
+                    f.endBeat <= until + 1e-9),
+        ),
+        ids,
+        until,
+    );
 }
 
 /** `rememberedOrderInWindow` as the show has it now */

@@ -12,6 +12,7 @@ import { Tip } from "@/components/ui/Tip";
 import ToolbarSection from "@/components/toolbar/ToolbarSection";
 import { useMarcherOrderStore } from "./marcherOrderStore";
 import { orderRefusal } from "./useMarcherOrder";
+import { followingLockReason, useFollowing } from "./FollowStatus";
 
 const BUTTON =
     "enabled:hover:text-accent flex items-center gap-6 outline-hidden duration-150 ease-out focus-visible:-translate-y-4 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50";
@@ -22,7 +23,11 @@ const BUTTON =
  */
 export function OrderButtons({ performers }: { performers: number }) {
     const sweeping = useMarcherOrderStore((s) => s.sweep !== null);
-    const refusal = orderRefusal(performers, false);
+    // While Following the top bar's other tools wait (owner, 2026-11-23), saying why
+    const inFollow = useFollowing();
+    const refusal = inFollow
+        ? followingLockReason()
+        : orderRefusal(performers, false);
     const label = tolgee.t("pathways.toolbar.order", "Order");
     return (
         <ToolbarSection aria-label={label}>

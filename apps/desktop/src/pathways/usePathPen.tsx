@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useShallow } from "zustand/react/shallow";
 import { toast } from "sonner";
+import { followingLockReason, isFollowing } from "./FollowStatus";
 import { translateTimelineText } from "@/timeline/translateTimelineText";
 import { allMarchersQueryOptions } from "@/hooks/queries";
 import { readGroupPaths } from "@/db-functions/timelineGroupRoutes";
@@ -32,7 +33,6 @@ import {
     flipRoundWay,
     goingRound,
     roundMaxOf,
-    setGoRound,
     setRoundUnit,
     stepRoundAmount,
     cancelRoundSlide,
@@ -40,13 +40,11 @@ import {
     eraseRoundDigit,
     typeRoundDigit,
 } from "./followAround";
-import { followWindowNow, isTrailLineAt, openFollowTool } from "./followTool";
+import { isTrailLineAt, openFollowTool } from "./followTool";
 import { usePenKeys, usePenKindActions } from "@/shapes/pen/usePenKeys";
 import { currentPenSubject } from "./penSubjects";
 import { toggleTrailShapeControls, useTrailEndShape } from "./trailShape";
 import { trailOffReason, useFollowTheLeader } from "./followTheLeader";
-import { outlineOf } from "@/db-functions/timelineTrailAround";
-import { currentShapeField } from "@/shapes/field/shapeField";
 import {
     closeShapeTool,
     useShapeToolStore,
@@ -173,6 +171,12 @@ export function usePathPenActions(): void {
         // path again: a path edit by its route, keeping its id, never refused for who holds its
         // spots (AP-O8, J.8 AP-R1, 07 N3)
         const now = usePathPenStore.getState().session;
+        // Follow open: the Path button waits for it, and so does P, saying why rather than
+        // replacing the Follow with a new path
+        if (isFollowing(now)) {
+            toast.error(followingLockReason(), { id: "path-pen" });
+            return;
+        }
         // A trail can't be drawn again with Follow-the-leader off (#1095): said, not ignored
         if (now?.target.trail && now.target.routeId !== null && trailLocked) {
             toast.error(trailOffReason(), { id: "path-pen" });
@@ -394,74 +398,12 @@ export function usePathPenActions(): void {
                 (!!s.session?.follow && ripplesIn(s.session.follow))) &&
             followMarchersOf(s.session) !== null,
     );
-    // Go round (step 10): the Follow tool on a circle or box outline
+    // The loop (step 10): the Follow tool's trail closing round a circle or box outline
     const round = usePathPenStore((s) => goingRound(s.session?.follow));
-    const roundOffered = usePathPenStore(
-        (s) =>
-            !!s.session?.follow?.around?.canDrag &&
-            s.session.follow.grabbed === null,
-    );
     const roundAmount = usePathPenStore(
         (s) => s.session?.follow?.around?.amount ?? 0,
     );
     const roundMax = usePathPenStore((s) => roundMaxOf(s.session?.follow));
-    // Go around (step 10): switches Go around | Drag out in the Follow tool; with the tool shut,
-    // opens it going around when the selection stands on a circle or box outline
-    const selection = useTimelineSelectionStore((s) => s.selection);
-    // Whether the selection stands on a circle or box outline at the window's start flag: the fit
-    // the Follow tool would open with, worked out once per selection, edit or window
-    const onOutline = useMemo(() => {
-        if (performers.length < 2) return false;
-        const resolver = useTimelineResolverStore.getState().resolver;
-        const window = followWindowNow();
-        const field = currentShapeField();
-        if (!resolver || !window || !field) return false;
-        const starts = performers.map((m): [number, number] => {
-            const [x, y] = resolver.positionAt(m.id, window.start);
-            return [x, y];
-        });
-        return outlineOf(starts, field.fieldProperties.pixelsPerStep) !== null;
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectionKey, version, ready, selection]);
-    const canOpenRound = phase !== "drawing" && !isPlaying && onOutline;
-    useActionHandler(
-        "followGoRound",
-        () => {
-            const a = usePathPenStore.getState().session?.follow?.around;
-            if (a) {
-                setGoRound(!a.on);
-                return;
-            }
-            const resolver = useTimelineResolverStore.getState().resolver;
-            if (!resolver) return;
-            const beat = useTimelineSelectionStore.getState().playheadBeat;
-            void openFollowTool(
-                resolver,
-                performers.map((m) => m.id),
-                drills,
-                beat,
-                true,
-            ).then((refused) => {
-                if (refused) toast.error(refused, { id: "path-pen" });
-                else if (useShapeToolStore.getState().tool) closeShapeTool();
-            });
-        },
-        {
-            enabled: roundOffered || canOpenRound,
-            label: round
-                ? tolgee.t("actions.path.dragOut", "Drag a trail out instead")
-                : undefined,
-            disabledReason: round
-                ? tolgee.t(
-                      "pathways.refusals.goAroundOnly",
-                      "This line can only go around: it has no ends to drag a trail out of",
-                  )
-                : tolgee.t(
-                      "pathways.refusals.goAroundSelect",
-                      "Select marchers on a circle or box outline",
-                  ),
-        },
-    );
     useActionHandler("followRoundMore", () => stepRoundAmount(1), {
         enabled: round && roundAmount < roundMax,
     });
@@ -531,6 +473,8 @@ export function usePathPenActions(): void {
         },
         { enabled: canPreview && !prefersReducedMotion() },
     );
+    // Reverse leader: a stored trail turned round; round an outline in the Follow tool, the other
+    // way round, the one at the back leading (a drag along the outline sets the way too)
     useActionHandler(
         "reverseTrail",
         () => (round ? flipRoundWay() : void reverseShownTrail()),

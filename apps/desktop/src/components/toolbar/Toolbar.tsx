@@ -20,6 +20,21 @@ import {
     useToolbarPanelStore,
 } from "@/stores/ToolbarPanelStore";
 import { usePanelInsets } from "./touchPanelInsets";
+import { toast } from "sonner";
+import { Tip } from "@/components/ui/Tip";
+import { followingLockReason, useFollowing } from "@/pathways/FollowStatus";
+
+/**
+ * While Following (owner, 2026-11-23) the Follow tool's mode lives in the Paths tab, and the
+ * other tabs wait: greyed, the reason on hover, and a click on one says it instead of switching
+ * (never a dead click).
+ */
+const refuseTab = () =>
+    toast.info(followingLockReason(), { id: "following-locked" });
+const LOCKED_TAB = {
+    "aria-disabled": true,
+    style: { opacity: 0.4, cursor: "not-allowed" },
+} as const;
 
 /**
  * Touch layout: each tab's controls wrap onto another line where the panel is too narrow for
@@ -53,15 +68,30 @@ function ToolbarTabsList({
     touch?: boolean;
 }) {
     const { t } = useTranslate();
-    const props = (value: ToolbarTab) =>
-        tabProps ? tabProps(value) : undefined;
+    const following = useFollowing();
+    const props = (value: ToolbarTab) => ({
+        ...(tabProps ? tabProps(value) : {}),
+        ...(following && value !== "paths" ? LOCKED_TAB : {}),
+    });
+    // A waiting tab says why on hover; the tab row's own layout is kept (no wrapper) on touch
+    const lock = (value: ToolbarTab, tab: React.ReactElement) =>
+        following && value !== "paths" && !touch ? (
+            <Tip key={value} label={followingLockReason()}>
+                <span className="flex">{tab}</span>
+            </Tip>
+        ) : (
+            tab
+        );
     return (
         <TabsList
             className={clsx("gap-0 border-none", touch && narrowTabsClassName)}
         >
-            <TabItem value="file" {...props("file")}>
-                <T keyName="inspector.shape.fileTab" />
-            </TabItem>
+            {lock(
+                "file",
+                <TabItem value="file" {...props("file")}>
+                    <T keyName="inspector.shape.fileTab" />
+                </TabItem>,
+            )}
             {touch ? (
                 // The short name only where the row is narrow; the tab keeps its full name
                 <TabItem
@@ -77,17 +107,23 @@ function ToolbarTabsList({
                     </span>
                 </TabItem>
             ) : (
-                <TabItem value="alignment" {...props("alignment")}>
-                    <T keyName="inspector.shape.alignmentTab" />
-                </TabItem>
+                lock(
+                    "alignment",
+                    <TabItem value="alignment" {...props("alignment")}>
+                        <T keyName="inspector.shape.alignmentTab" />
+                    </TabItem>,
+                )
             )}
-            <TabItem
-                value="shapes"
-                data-testid="toolbar-shapes-tab"
-                {...props("shapes")}
-            >
-                <T keyName="inspector.shape.shapesTab" />
-            </TabItem>
+            {lock(
+                "shapes",
+                <TabItem
+                    value="shapes"
+                    data-testid="toolbar-shapes-tab"
+                    {...props("shapes")}
+                >
+                    <T keyName="inspector.shape.shapesTab" />
+                </TabItem>,
+            )}
             {/* Pathways: how a marcher walks its move, apart from shapes */}
             <TabItem
                 value="paths"
@@ -96,9 +132,12 @@ function ToolbarTabsList({
             >
                 <T keyName="toolbar.pathsTab" defaultValue="Paths" />
             </TabItem>
-            <TabItem value="select" {...props("select")}>
-                <T keyName="inspector.shape.selectTab" />
-            </TabItem>
+            {lock(
+                "select",
+                <TabItem value="select" {...props("select")}>
+                    <T keyName="inspector.shape.selectTab" />
+                </TabItem>,
+            )}
         </TabsList>
     );
 }
@@ -211,6 +250,12 @@ export function PreviewToolbar() {
 
 function MouseToolbar() {
     const [activeTab, setActiveTab] = useState("alignment");
+    // Following: its mode shows in the Paths tab, so that tab comes forward when Follow opens
+    // (Shift+L from any tab), and the others wait until it's finished or left
+    const following = useFollowing();
+    useEffect(() => {
+        if (following) setActiveTab("paths");
+    }, [following]);
     // The Collisions tab (CollisionsTab.tsx) is hidden for now, with collision detection
     // unmounted (TimelineResolverHost): the field never drew the markers it reviews.
 
@@ -219,7 +264,11 @@ function MouseToolbar() {
             <ToolbarEnd className="absolute top-0 right-0 z-10 flex items-center gap-8" />
             <Tabs
                 value={activeTab}
-                onValueChange={setActiveTab}
+                onValueChange={(value) =>
+                    following && value !== "paths"
+                        ? void refuseTab()
+                        : setActiveTab(value)
+                }
                 className="flex flex-col gap-0 overflow-hidden"
             >
                 <ToolbarTabsList />
@@ -247,6 +296,10 @@ function TouchToolbar({
     const tab = useToolbarPanelStore((s) => s.tab);
     const open = useToolbarPanelStore((s) => s.open);
     const { setTab, setOpen, pressTab } = useToolbarPanelStore.getState();
+    const following = useFollowing();
+    useEffect(() => {
+        if (following) useToolbarPanelStore.getState().setTab("paths");
+    }, [following]);
     const [root, setRoot] = useState<HTMLDivElement | null>(null);
     const insets = usePanelInsets(root, open);
     const panelLayerRef = useFieldLayerRef<HTMLDivElement>();
@@ -268,6 +321,12 @@ function TouchToolbar({
             pressedOpenTab.current = null;
         },
         onClick: () => {
+            // While Following the other tabs wait, and say why
+            if (following && value !== "paths") {
+                pressedOpenTab.current = null;
+                refuseTab();
+                return;
+            }
             // A keyboard click (Enter, Space) has no press before it
             pressTab(value, pressedOpenTab.current ?? isOpenOn(value));
             pressedOpenTab.current = null;
@@ -289,6 +348,7 @@ function TouchToolbar({
             <Tabs
                 value={tab}
                 onValueChange={(value) => {
+                    if (following && value !== "paths") return;
                     if (isToolbarTab(value)) setTab(value);
                 }}
                 className="gap-0"

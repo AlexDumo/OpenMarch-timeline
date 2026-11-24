@@ -65,12 +65,14 @@ import {
     rippleDrawnPlanOf,
     ripplesIn,
     snakeByOf,
+    trailLine,
     type FollowDrag,
 } from "./followDrag";
 import { goRound } from "@/db-functions/timelineTrailAround";
 import {
     aroundLine,
     aroundPlanOf,
+    endRoundSlide,
     goingRound,
     roundChanged,
 } from "./followAround";
@@ -1439,6 +1441,8 @@ async function saveFollow(
     session: PathSession,
     enter: number | null,
 ): Promise<void> {
+    // A leader pulled out of a closed outline needn't be an end of the line: the ring as shown
+    const line = follow.peel ? trailLine(follow) : null;
     if (ripplesIn(follow))
         await rippleTrail({
             db,
@@ -1449,6 +1453,8 @@ async function saveFollow(
             keepMove: follow.keep?.timelineId ?? null,
             enter,
             snake: snakeByOf(follow),
+            line,
+            step: follow.step,
         });
     else
         await dragTrail({
@@ -1456,6 +1462,7 @@ async function saveFollow(
             window: follow.window,
             marcherIds: follow.ids,
             leaderId,
+            line,
             points,
             spacing: followSpacingOf(session),
             step: follow.step,
@@ -1746,8 +1753,22 @@ export async function finishDrawing(
     /** Ripple in: the marcher whose spot the finish was on (RP-4) */
     enter: number | null = null,
 ): Promise<void> {
-    const { session } = usePathPenStore.getState();
-    if (!session || session.phase !== "drawing") return;
+    const held = usePathPenStore.getState().session;
+    if (!held || held.phase !== "drawing") return;
+    // A leader carried out of the outline by the pointer, no button held (owner, 2026-11-23):
+    // Enter ends it where the pointer is, the trail's last point, as a click there would
+    const carried =
+        held.follow?.roundSlide?.loose && held.follow.grabbed !== null;
+    if (carried) {
+        // Pulled out with the pointer since gone off the field: the last spot the leader
+        // followed stands in, so the trail isn't thrown away (#1178 review)
+        const at =
+            held.pointer ??
+            (held.follow?.peel ? held.follow.roundSlide!.pointer : null);
+        endRoundSlide();
+        if (at) addPoint(at);
+    }
+    const session = carried ? usePathPenStore.getState().session! : held;
     // Going round (step 10, AP-T13): nothing is drawn; the line goes round as the bar says. With
     // nobody moved (not dragged round, no count typed), or just what's stored, nothing is
     // written: it closes as Escape does (owner, 2026-11-22)
