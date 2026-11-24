@@ -659,8 +659,11 @@ function inflateEntry(bytes: Uint8Array, entry: ZipEntry): Uint8Array {
     return out;
 }
 
-/** Checks a parsed manifest's head, then the whole of it */
-function parseManifest(json: unknown): UniformPackManifest {
+/**
+ * Checks a parsed manifest's head, then the whole of it. `newest` is the newest version taken:
+ * this build's, or an older build's when a test reads as that build would.
+ */
+function parseManifest(json: unknown, newest: number): UniformPackManifest {
     const head = z
         .object({
             format: z.literal(ASSET_FILE_FORMAT),
@@ -675,10 +678,10 @@ function parseManifest(json: unknown): UniformPackManifest {
             "notPack",
             `an asset of kind ${head.data.kind}, not a uniform`,
         );
-    if (head.data.formatVersion > UNIFORM_PACK_VERSION)
+    if (head.data.formatVersion > newest)
         throw new UniformPackError(
             "newer",
-            `format version ${head.data.formatVersion} is newer than ${UNIFORM_PACK_VERSION}`,
+            `format version ${head.data.formatVersion} is newer than ${newest}`,
         );
     const parsed = uniformPackManifestSchema.safeParse(json);
     if (!parsed.success)
@@ -692,7 +695,15 @@ function parseManifest(json: unknown): UniformPackManifest {
  * inflated, each stopped at its declared size (see the module comment). Throws
  * {@link UniformPackError}. The app calls it only in `uniformPack.worker`.
  */
-export function readUniformPack(bytes: Uint8Array): UniformPack {
+export function readUniformPack(
+    bytes: Uint8Array,
+    {
+        newest = UNIFORM_PACK_VERSION,
+    }: {
+        /** The newest format version to take; tests set an older one to read as an older build */
+        newest?: number;
+    } = {},
+): UniformPack {
     if (bytes.byteLength > UNIFORM_PACK_MAX_BYTES)
         throw new UniformPackError(
             "tooLarge",
@@ -713,7 +724,7 @@ export function readUniformPack(bytes: Uint8Array): UniformPack {
         if (error instanceof UniformPackError) throw error;
         throw damaged("manifest.json isn't JSON");
     }
-    const manifest = parseManifest(json);
+    const manifest = parseManifest(json, newest);
     let total = manifestEntry.originalSize;
     const png = (file: string, what: string, maxPixels: number) => {
         const entry = entries.get(file);

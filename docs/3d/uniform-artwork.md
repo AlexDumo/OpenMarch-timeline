@@ -238,10 +238,10 @@ The internal form is one **uniform pack**, stored as a show asset (ADR 0010, ame
 - **modes:** named lists of layers, plus palette and option overrides
 - **attachments:** built-in hanging pieces with their own art (see below)
 
-### The pack file (format versions 1 and 2, a preview)
+### The pack file (format versions 1 to 3, a preview)
 
-Built in step 3 (fork #1257), with items added in step 4 (fork #1258); ADR 0010's amendment of
-2026-11-24 has the full contract.
+Built in step 3 (fork #1257), with items added in step 4 (fork #1258) and modes in step 5 (fork
+#1257); ADR 0010's amendment of 2026-11-24 has the full contract.
 
 - **One file:** a zip with the extension `.omasset`. It holds `manifest.json`, one transparent
   page-size PNG per layer under `layers/` and one PNG per item image under `items/`, and names
@@ -255,11 +255,16 @@ Built in step 3 (fork #1257), with items added in step 4 (fork #1258); ADR 0010'
     its centre `at` in panel inches, a `width` or `height`, `rotate`, `opacity` and a `grade`
     (proportional, fixed, stretch, tile or line). A tile also lists its `regions`, on its panel;
     its width and height are one tile's size, at least 1 in.
-  - `modes`, `variants` and `attachments`, reserved for later steps. Both versions refuse anything
-    in them and any key they don't know; a later field that changes what is drawn bumps the format
+  - `modes` (version 3): each with an `id`, a `name`, its `layers` (ids, bottom first, at least
+    one), the `items` (ids) that show in it, and optional `palette` and `options` changes. The
+    first mode is the default. Up to 8.
+  - `variants` and `attachments`, reserved for later steps. Every version refuses anything in
+    them and any key it doesn't know; a later field that changes what is drawn bumps the format
     version.
-- **Versions.** Version 2 adds only `items`, so a pack is written as version 1 while it has no
-  items: a step 3 build still reads it. A version 1 reader refuses a version 2 pack as newer.
+- **Versions.** Version 2 adds only `items` and version 3 only `modes`, so a pack is written as the
+  lowest version that holds it: a step 3 build still reads a pack with neither, and a step 4 build
+  one without modes. An older reader refuses a newer pack as newer (checked against the step 4
+  reader).
 - **The same bytes in a show.** A show stores the file as its asset of kind `uniform`, unchanged,
   and Save uniform file writes it back out. This is the first kind of the portable asset file in
   fork #1262.
@@ -288,6 +293,23 @@ Every way in produces the same pack. Nothing downstream knows which way a pack c
   The layer for a mode holds only what changes in that mode; it is not a full copy of the sheet.
   A mode is what a Uniform cue switches to (fork #976), so to a cue each mode of a pack is one
   uniform, as in props-spec §6.
+
+  Built in step 5 (fork #1257), format version 3. In the 3D View settings, a **Modes** section
+  shows while the band wears a uniform imported into the show:
+  - **Add mode…** names a mode and can import an overlay: a transparent page-size PNG or SVG,
+    decoded like any layer, drawn on top of the default mode's layers. Without one, the new mode
+    is a copy of the default, so it can change only colors or parts. Adding the first mode also
+    adds the default, called Default, holding everything the uniform drew.
+  - Each mode can be renamed, moved (the first is the default) and removed, and has toggles for
+    its images, logos and numbers, five colors (main, second, accent, trim, pants) and parts.
+    Removing a mode drops overlays no other mode shows; removing the last keeps what it drew.
+  - A new logo shows in every mode. Edits share the logos' draft, so a burst of edits is one undo
+    step.
+  - **Band wears** picks one mode for the whole show (the venue's `uniformMode`). No Look cue
+    exists yet, so switching during the show waits for fork #976.
+  - Each (uniform, mode, body type) is its own atlas: about 24 MB at High quality and 6 MB at Low
+    per body type in use. A switch keeps the previous mode's art until the new one is composed,
+    so for a moment both are held.
 
 - **Variant.** A variant is a separate uniform in the same pack, assigned to performers rather than
   switched by a cue. Guard, percussion and a full drum-major costume are variants. A pack shares

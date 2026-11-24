@@ -148,7 +148,7 @@ export function useMarcherFlats(
  * keep it while the new art composes: the same artwork's entry, or else the
  * same body type's when the previous set had one artwork.
  */
-function stillShown(
+export function stillShown(
     previous: FlatsResources,
     wantedKey: string,
 ): FlatsResources {

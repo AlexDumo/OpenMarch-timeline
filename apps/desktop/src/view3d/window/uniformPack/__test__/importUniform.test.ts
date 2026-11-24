@@ -24,6 +24,7 @@ vi.mock("@/view3d/uniformPack/runUniformPackJob", () => ({
 
 const {
     UniformImportError,
+    importLayerFile,
     importUniformFile,
     isPageViewBox,
     sizedSvg,
@@ -200,5 +201,62 @@ describe("reading SVG text", () => {
         expect(uniformFileKind("a", new Uint8Array([0x50, 0x4b]))).toBe("pack");
         expect(uniformFileKind("a", new Uint8Array([0x25, 0x50]))).toBe("pdf");
         expect(uniformFileKind("a", new Uint8Array([0x89, 0x50]))).toBe("png");
+    });
+});
+
+describe("importing a mode's overlay and a uniform with modes (#1257 step 5)", () => {
+    it("reads an overlay like a page, keeping only the size notes", async () => {
+        const stored = fakePng(3360, 2816, 7);
+        const { runJob, requests } = worker(stored, ["empty", "template"], {
+            width: 1680,
+            height: 1408,
+        });
+        const page = await importLayerFile(
+            fileOf("Sash.png", fakePng(1680, 1408)),
+            regions,
+            { runJob },
+        );
+        expect(requests.map((r) => r.type)).toEqual(["png"]);
+        expect(page.name).toBe("Sash");
+        expect(page.png).toBe(stored);
+        // an overlay is meant to be mostly clear: no page notes about that
+        expect(page.notes).toEqual(["scaled"]);
+        await expect(
+            importLayerFile(fileOf("cadets.omasset", fakePng()), regions, {
+                runJob,
+            }),
+        ).rejects.toBeInstanceOf(UniformImportError);
+    });
+
+    it("keeps a uniform file with modes exactly as it is", async () => {
+        const base = sampleManifest("Cadets 2019");
+        const bytes = writeUniformPack(
+            {
+                ...base,
+                modes: [
+                    { id: "plain", name: "Plain", layers: ["base"], items: [] },
+                ],
+            },
+            { "layers/base.png": fakePng(3360, 2816, 1) },
+        );
+        const runJob = vi.fn(async (request: UniformPackRequest) => {
+            const read = readUniformPack(
+                (request as { bytes: Uint8Array }).bytes,
+            );
+            return {
+                type: "pack",
+                manifest: read.manifest,
+                notes: [],
+                itemSizes: {},
+            } as Exclude<UniformPackResponse, { type: "refused" }>;
+        });
+        const result = await importUniformFile(
+            fileOf("Cadets 2019.omasset", bytes),
+            look,
+            regions,
+            { runJob },
+        );
+        expect(Array.from(result.pack)).toEqual(Array.from(bytes));
+        expect(readUniformPack(result.pack).manifest.modes).toHaveLength(1);
     });
 });
