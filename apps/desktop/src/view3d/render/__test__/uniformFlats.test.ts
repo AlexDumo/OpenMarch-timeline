@@ -1,0 +1,78 @@
+/**
+ * The flats patch on the uniform shader (render/uniform-flats.js): it finds
+ * the lines it replaces in the real shader, and a look without flats keeps
+ * its program.
+ */
+import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
+import * as THREE from "three";
+import { createUniformMaterial } from "../uniform-shader.js";
+import { withFlats } from "../uniform-flats.js";
+import type { FlatsLayout } from "@/view3d/core/marchers/uniformArtwork";
+
+const layout = JSON.parse(
+    fs.readFileSync(
+        path.resolve(__dirname, "../../assets/uniform-flats/layout.json"),
+        "utf8",
+    ),
+) as FlatsLayout;
+
+/** Runs a material's onBeforeCompile on three's standard shader. */
+function compile(material: THREE.Material) {
+    const shader = {
+        uniforms: {} as Record<string, { value: unknown }>,
+        vertexShader: THREE.ShaderLib.standard.vertexShader,
+        fragmentShader: THREE.ShaderLib.standard.fragmentShader,
+    };
+    material.onBeforeCompile(
+        shader as unknown as THREE.WebGLProgramParametersWithUniforms,
+        {} as THREE.WebGLRenderer,
+    );
+    return shader;
+}
+
+describe("withFlats", () => {
+    const params = {
+        layout,
+        lut: new THREE.DataTexture(),
+        atlas: new THREE.Texture(),
+        atlasRect: {
+            w: 68,
+            h: 61,
+            front: [0, -16] as const,
+            back: [34, -16] as const,
+            cape: null,
+        },
+    };
+
+    it("mixes the art over the palette and draws the arm wedge and glove slivers as sleeve", () => {
+        const shader = compile(
+            withFlats(THREE, createUniformMaterial(THREE), params),
+        );
+        const fs = shader.fragmentShader;
+        expect(fs).toContain("vec4 omArt = omFlatArt();");
+        expect(fs).toContain("uniformColor() * (1.0 - omArt.a) + omArt.rgb");
+        // uniformColor() takes its part from omFlatPart(), declared before it
+        const body = fs.slice(fs.indexOf("vec3 uniformColor() {"));
+        expect(body).toContain("int part = omFlatPart();");
+        expect(fs.indexOf("int omFlatPart()")).toBeLessThan(
+            fs.indexOf("vec3 uniformColor() {"),
+        );
+        expect(shader.uniforms.uFlatLut.value).toBe(params.lut);
+        expect(shader.uniforms.uFlatArt.value).toBe(params.atlas);
+        expect((shader.uniforms.uFlatSeg.value as THREE.Vector4[]).length).toBe(
+            10,
+        );
+    });
+
+    it("leaves a look without flats on its own program", () => {
+        const plain = createUniformMaterial(THREE);
+        const flats = withFlats(THREE, createUniformMaterial(THREE), params);
+        expect(plain.customProgramCacheKey()).toBe("om-uniform-v1");
+        expect(flats.customProgramCacheKey()).toBe("om-uniform-v1|flats");
+        const fs = compile(plain).fragmentShader;
+        expect(fs).not.toContain("omFlat");
+        expect(fs).toContain("int part = int(vPart + 0.5);");
+    });
+});
