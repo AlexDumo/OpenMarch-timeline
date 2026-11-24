@@ -1,3 +1,4 @@
+// cspell:ignore hyperfocal
 /**
  * The numbers behind a camera's advanced settings, and the cameras file.
  *
@@ -85,6 +86,49 @@ export function targetFromAim(position: Vector3Tuple, aim: Aim): Vector3Tuple {
     ];
 }
 
+// ------------------------------------------------------------------ focus
+
+/**
+ * The blur circle a full-frame camera accepts as sharp, mm: the usual
+ * 0.03 mm (about 1/1440 of the frame's diagonal).
+ */
+export const SHARP_CIRCLE_MM = 0.03;
+
+/**
+ * Blur at depth: a point at distance z (m) from a lens of focal length
+ * `focalMm` at f-number `fStop`, focused at `focusM`, blurs into a circle
+ * `scale * |z − focus| / z` pixels across, on a picture `heightPx` tall
+ * (the thin-lens circle of confusion, scaled from a 24 mm sensor).
+ */
+export function blurScalePx(
+    focalMm: number,
+    fStop: number,
+    focusM: number,
+    heightPx: number,
+): number {
+    const focusMm = Math.max(focusM * 1000, focalMm * 1.001);
+    const cocMm = (focalMm * focalMm) / (fStop * (focusMm - focalMm));
+    return (cocMm / SENSOR_HEIGHT_MM) * heightPx;
+}
+
+/**
+ * The nearest and farthest distances (m) that look sharp around a focus
+ * distance; `far` is Infinity past the hyperfocal distance.
+ */
+export function depthOfField(
+    focalMm: number,
+    fStop: number,
+    focusM: number,
+): { near: number; far: number } {
+    const f = focalMm / 1000;
+    const hyperfocal = (f * f) / (fStop * (SHARP_CIRCLE_MM / 1000)) + f;
+    const s = Math.max(focusM, f * 1.001);
+    const near = (s * (hyperfocal - f)) / (hyperfocal + s - 2 * f);
+    const far =
+        s >= hyperfocal ? Infinity : (s * (hyperfocal - f)) / (hyperfocal - s);
+    return { near, far };
+}
+
 // ------------------------------------------------------------------ file
 
 export const CAMERAS_FILE_FORMAT = "openmarch.cameras";
@@ -130,6 +174,7 @@ export function camerasFile(
             };
             if (camera.rollDeg) view.rollDeg = camera.rollDeg;
             if (camera.follow) view.follow = { ...camera.follow };
+            if (camera.focus) view.focus = structuredClone(camera.focus);
             return view;
         }),
     };

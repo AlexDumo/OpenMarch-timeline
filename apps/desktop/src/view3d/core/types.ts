@@ -91,6 +91,14 @@ export interface CameraSeat {
     rollDeg?: number;
     /** Saved views only: follow this performer instead of staying put. */
     follow?: { marcherId: number; mode: "third" | "pov" };
+    /** Saved views only: what is sharp, and the f-number (see `cameraList.ts`). */
+    focus?: {
+        fStop: number;
+        on:
+            | { kind: "lookAt" }
+            | { kind: "distance"; meters: number }
+            | { kind: "performer"; marcherId: number };
+    };
 }
 
 /**

@@ -1,15 +1,22 @@
 // cspell:ignore tonemapping Jimenez prefilter prefiltered Cineon CINEON OETF Reinhard REINHARD AGX multisampling highp fract
 /**
  * The 3D View's post pass: bloom and lens ghosts for venues whose lighting
- * asks for them (`LightingValues.bloom`), at high quality only. Framework-free
- * three.js (ADR 0010 D-1); the window mounts it (`window/PostFx.tsx`).
+ * asks for them (`LightingValues.bloom`), at high quality only, and depth of
+ * field for a camera that focuses. Framework-free three.js (ADR 0010 D-1);
+ * the window mounts it (`window/PostFx.tsx`).
  *
- * A venue without bloom never builds this, so its frame costs what it always
- * did. With it, a frame is:
+ * A venue without bloom, seen through a camera that doesn't focus, never
+ * builds this, so its frame costs what it always did. With it, a frame is:
  *
  * 1. the scene, drawn in linear light into a half-float target with 4x
  *    multisampling, so a lamp keeps its real brightness instead of clipping
  *    at white;
+ *    1b. with focus, the depth of field: each pixel gathers the pixels
+ *    around it whose blur circle reaches it (a thin lens's circle of
+ *    confusion from the depth buffer), along a golden-angle spiral, in
+ *    linear light so bright lamps turn into discs. Nearer blur spreads over
+ *    sharp things behind it; farther blur doesn't spread over sharp things
+ *    in front;
  * 2. a bright pass at half resolution: what is over the threshold after
  *    exposure, with a soft knee;
  * 3. a mip chain down (13 taps a step) and back up (a 3x3 tent a step),
@@ -29,6 +36,7 @@ import {
     Color,
     ColorManagement,
     CustomToneMapping,
+    DepthTexture,
     Float32BufferAttribute,
     HalfFloatType,
     LinearFilter,
@@ -37,6 +45,7 @@ import {
     NeutralToneMapping,
     NoToneMapping,
     OrthographicCamera,
+    PerspectiveCamera,
     RawShaderMaterial,
     ReinhardToneMapping,
     SRGBTransfer,
@@ -44,9 +53,11 @@ import {
     WebGLRenderTarget,
     type Camera,
     type Scene,
+    type Texture,
     type ToneMapping,
     type WebGLRenderer,
 } from "three";
+import { blurScalePx } from "../cameraSettings";
 
 /** How a venue's lamps bloom. Every field can change between frames. */
 export interface BloomSettings {
@@ -75,6 +86,14 @@ export interface BloomSettings {
     ghostTint: number;
 }
 
+/** A frame's depth of field: what the camera focuses on, and its lens. */
+export interface FocusFrame {
+    /** Meters from the camera to what is sharp. */
+    focusM: number;
+    focalMm: number;
+    fStop: number;
+}
+
 export interface PostPipeline {
     /** Live: change a field and the next frame uses it. */
     settings: BloomSettings;
@@ -84,8 +103,8 @@ export interface PostPipeline {
      * a target than for the canvas.
      */
     readonly sceneTarget: WebGLRenderTarget;
-    /** Draws one frame to the canvas. */
-    render(scene: Scene, camera: Camera): void;
+    /** Draws one frame to the canvas, with depth of field when `focus` is given. */
+    render(scene: Scene, camera: Camera, focus?: FocusFrame | null): void;
     dispose(): void;
 }
 
@@ -197,6 +216,62 @@ void main() {
 `;
 
 /** Scene plus bloom plus ghosts, then tone mapping and the color space. */
+/** The most gather taps a pixel takes (the spiral stops at the widest blur first). */
+const DOF_MAX_TAPS = 256;
+/** The widest blur, as a share of the picture's height, and at most this many pixels. */
+const DOF_MAX_SHARE = 0.02;
+const DOF_MAX_PX = 32;
+
+/**
+ * Depth of field: gathers along a golden-angle spiral out to the widest
+ * blur. A sample counts where its own blur circle reaches this pixel; one
+ * behind a sharper pixel only spreads as far as twice this pixel's blur, so
+ * the background doesn't spill over a sharp performer.
+ */
+const DEPTH_OF_FIELD = /* glsl */ `
+precision highp float;
+uniform sampler2D tScene;
+uniform sampler2D tDepth;
+uniform vec2 uTexel;
+uniform float uNear;
+uniform float uFar;
+uniform float uFocus;
+uniform float uScale;
+uniform float uMaxRadius;
+varying vec2 vUv;
+const float GOLDEN_ANGLE = 2.39996323;
+const float STEP = 1.5;
+float viewZ(vec2 uv) {
+    float z = texture2D(tDepth, uv).x * 2.0 - 1.0;
+    return 2.0 * uNear * uFar / (uFar + uNear - z * (uFar - uNear));
+}
+float blur(float z) {
+    return min(uMaxRadius, uScale * abs(z - uFocus) / z);
+}
+void main() {
+    float z = viewZ(vUv);
+    float size = blur(z);
+    vec3 color = texture2D(tScene, vUv).rgb;
+    float total = 1.0;
+    float radius = STEP;
+    float angle = 0.0;
+    for (int i = 0; i < ${DOF_MAX_TAPS}; i++) {
+        if (radius >= uMaxRadius) break;
+        vec2 uv = vUv + vec2(cos(angle), sin(angle)) * uTexel * radius;
+        vec3 tap = texture2D(tScene, uv).rgb;
+        float sz = viewZ(uv);
+        float sampleSize = blur(sz);
+        if (sz > z) sampleSize = clamp(sampleSize, 0.0, size * 2.0);
+        float m = smoothstep(radius - 0.5, radius + 0.5, sampleSize);
+        color += mix(color / total, tap, m);
+        total += 1.0;
+        radius += STEP / radius;
+        angle += GOLDEN_ANGLE;
+    }
+    gl_FragColor = vec4(color / total, 1.0);
+}
+`;
+
 const COMPOSITE = /* glsl */ `
 precision highp float;
 uniform sampler2D tScene;
@@ -304,9 +379,13 @@ export function createPostPipeline(
         samples: 4,
         depthBuffer: true,
         stencilBuffer: false,
-        resolveDepthBuffer: false,
+        // The depth of field reads the resolved depth.
+        resolveDepthBuffer: true,
+        depthTexture: new DepthTexture(size.x, size.y),
     });
     sceneTarget.texture.name = "view3d.post.scene";
+    // The scene with depth of field, made only once a camera focuses.
+    let focusTarget: WebGLRenderTarget | null = null;
 
     const blurTarget = () =>
         new WebGLRenderTarget(1, 1, {
@@ -323,6 +402,7 @@ export function createPostPipeline(
     let sizes: [number, number][] = [];
     const resize = (width: number, height: number) => {
         sceneTarget.setSize(width, height);
+        focusTarget?.setSize(width, height);
         sizes = bloomLevelSizes(width, height);
         [...down, ...up].forEach((t) => t.dispose());
         down = sizes.map(blurTarget);
@@ -356,6 +436,16 @@ export function createPostPipeline(
         uTexel: new Vector2(),
         uSpread: 1,
     });
+    const depthOfField = pass(DEPTH_OF_FIELD, {
+        tScene: null,
+        tDepth: null,
+        uTexel: new Vector2(),
+        uNear: 0.1,
+        uFar: 1000,
+        uFocus: 10,
+        uScale: 0,
+        uMaxRadius: 1,
+    });
     const composite = pass(COMPOSITE, {
         tScene: null,
         tBloom: null,
@@ -377,6 +467,42 @@ export function createPostPipeline(
         gl.render(quad, camera);
     };
 
+    /** Draws the scene with depth of field; returns it, or the plain scene when nothing blurs. */
+    const applyFocus = (sceneCamera: Camera, focus: FocusFrame): Texture => {
+        if (!(sceneCamera instanceof PerspectiveCamera))
+            return sceneTarget.texture;
+        const width = sceneTarget.width;
+        const height = sceneTarget.height;
+        const scale = blurScalePx(
+            focus.focalMm,
+            focus.fStop,
+            focus.focusM,
+            height,
+        );
+        if (scale <= 0.05) return sceneTarget.texture;
+        if (!focusTarget) {
+            focusTarget = new WebGLRenderTarget(width, height, {
+                type: HalfFloatType,
+                minFilter: LinearFilter,
+                magFilter: LinearFilter,
+                depthBuffer: false,
+                stencilBuffer: false,
+            });
+            focusTarget.texture.name = "view3d.post.focus";
+        }
+        const u = depthOfField.uniforms;
+        u.tScene.value = sceneTarget.texture;
+        u.tDepth.value = sceneTarget.depthTexture;
+        u.uTexel.value.set(1 / width, 1 / height);
+        u.uNear.value = sceneCamera.near;
+        u.uFar.value = sceneCamera.far;
+        u.uFocus.value = focus.focusM;
+        u.uScale.value = scale;
+        u.uMaxRadius.value = Math.min(DOF_MAX_PX, height * DOF_MAX_SHARE);
+        draw(depthOfField, focusTarget);
+        return focusTarget.texture;
+    };
+
     let toneMapping: ToneMapping | null = null;
     let colorSpace: string | null = null;
     let ghosts: boolean | null = null;
@@ -385,7 +511,7 @@ export function createPostPipeline(
     const pipeline: PostPipeline = {
         settings,
         sceneTarget,
-        render(scene, sceneCamera) {
+        render(scene, sceneCamera, focus) {
             const s = pipeline.settings;
             gl.getDrawingBufferSize(bufferSize);
             if (
@@ -399,12 +525,17 @@ export function createPostPipeline(
             gl.setRenderTarget(sceneTarget);
             gl.render(scene, sceneCamera);
 
+            // 1b. Depth of field.
+            const source = focus
+                ? applyFocus(sceneCamera, focus)
+                : sceneTarget.texture;
+
             const exposure = gl.toneMappingExposure;
             const glowing = s.strength > 0 || s.ghost > 0;
             if (glowing) {
                 // 2. The bright pass.
                 const u = prefilter.uniforms;
-                u.tSource.value = sceneTarget.texture;
+                u.tSource.value = source;
                 u.uTexel.value.set(
                     1 / sceneTarget.width,
                     1 / sceneTarget.height,
@@ -462,7 +593,7 @@ export function createPostPipeline(
             // Each level adds `radius` of the next: keep the sum's weight 1.
             let weight = 0;
             for (let i = 0; i < down.length; i++) weight += s.radius ** i;
-            c.tScene.value = sceneTarget.texture;
+            c.tScene.value = source;
             c.tBloom.value = bloom.texture;
             c.tGhost.value = ghost.texture;
             c.uStrength.value = glowing ? s.strength / weight : 0;
@@ -472,11 +603,13 @@ export function createPostPipeline(
             draw(composite, null);
         },
         dispose() {
+            sceneTarget.depthTexture?.dispose();
             sceneTarget.dispose();
+            focusTarget?.dispose();
             [...down, ...up].forEach((t) => t.dispose());
             geometry.dispose();
-            [prefilter, downsample, upsample, composite].forEach((m) =>
-                m.dispose(),
+            [prefilter, downsample, upsample, depthOfField, composite].forEach(
+                (m) => m.dispose(),
             );
         },
     };

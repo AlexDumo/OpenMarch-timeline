@@ -1,6 +1,7 @@
 /**
  * Mounts the post pass (`core/post/pipeline.ts`) on the canvas: bloom and
- * lens ghosts for a venue whose lighting asks for them, at high quality.
+ * lens ghosts for a venue whose lighting asks for them, at high quality, and
+ * depth of field while the view focuses (`cameraStore.focus`).
  *
  * While this is mounted it draws every frame itself (a `useFrame` with a
  * priority takes rendering over from the canvas), so the scene is drawn
@@ -9,7 +10,9 @@
  */
 import { useEffect, useMemo } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import type { WebGLRenderTarget } from "three";
+import { PerspectiveCamera, type WebGLRenderTarget } from "three";
+import { focalLengthFromFov } from "@/view3d/core/cameraSettings";
+import { useCameraStore } from "./camera/cameraStore";
 import {
     createPostPipeline,
     type BloomSettings,
@@ -55,6 +58,30 @@ export default function PostFx({ settings }: { settings: BloomSettings }) {
             requestDraw(1000);
         };
     }, [gl, pipeline]);
-    useFrame(({ scene, camera }) => pipeline.render(scene, camera), 1);
+    // A new focus draws once to show it.
+    useEffect(
+        () =>
+            useCameraStore.subscribe((state, prev) => {
+                if (state.focus !== prev.focus) requestDraw(300);
+            }),
+        [],
+    );
+    useFrame(({ scene, camera }) => {
+        const store = useCameraStore.getState();
+        const focusM = store.focus ? store.focusDistance() : null;
+        pipeline.render(
+            scene,
+            camera,
+            store.focus &&
+                focusM !== null &&
+                camera instanceof PerspectiveCamera
+                ? {
+                      focusM,
+                      fStop: store.focus.fStop,
+                      focalMm: focalLengthFromFov(camera.fov),
+                  }
+                : null,
+        );
+    }, 1);
     return null;
 }

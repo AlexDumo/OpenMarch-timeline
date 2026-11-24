@@ -3827,7 +3827,18 @@
             "focalLengthTooltip": "As on a full-frame camera. Higher zooms in. Drag to change.",
             "fieldOfView": "Field of view",
             "fieldOfViewTooltip": "How much the camera takes in, top to bottom. Smaller zooms in. Drag to change.",
-            "mm": "mm"
+            "mm": "mm",
+            "focus": "Focus",
+            "focusOff": "Off",
+            "focusLookAt": "Look-at",
+            "focusPerformer": "Performer",
+            "focusDistance": "Distance",
+            "focusDistanceField": "Focus distance",
+            "focusDistanceTooltip": "How far from the camera things are sharp. Drag to change.",
+            "fStop": "f-stop",
+            "fStopTooltip": "Lower blurs more of what's nearer and farther, as on a real lens. Drag to change.",
+            "sharpRange": "Looks sharp from {near} to {far} {unit}",
+            "sharpBeyond": "Looks sharp from {near} {unit} to the far distance"
         }
     },
     "web": {

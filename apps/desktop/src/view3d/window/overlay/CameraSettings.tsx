@@ -1,3 +1,4 @@
+// cspell:ignore fstop
 /**
  * A camera's exact settings, opened from its row in the Cameras panel.
  *
@@ -8,6 +9,9 @@
  *   drill terms; then pan, tilt and roll.
  * - Lens: focal length (full-frame equivalent) and field of view, one
  *   setting shown both ways.
+ * - Focus: off, or sharp at the look-at point, a performer, or a distance,
+ *   with the f-number setting how soft the rest gets, and the range that
+ *   looks sharp.
  *
  * Typing a number and pressing Enter (or leaving the field) saves it and
  * puts the view there. Dragging a field's label scrubs the value and moves
@@ -29,16 +33,20 @@ import {
 } from "@openmarch/ui";
 import { worldToPixels } from "@openmarch/core";
 import {
+    MAX_F_STOP,
     MAX_FOV_DEG,
     MAX_ROLL_DEG,
+    MIN_F_STOP,
     MIN_FOV_DEG,
     normalizeRoll,
+    type CameraFocus,
     type CameraFollow,
     type ViewCamera,
     type ViewPose,
 } from "@/view3d/core/cameraList";
 import {
     aimOf,
+    depthOfField,
     focalLengthFromFov,
     fovFromFocalLength,
     MAX_FOCAL_MM,
@@ -65,7 +73,15 @@ interface Settings {
     fovDeg: number;
     rollDeg: number;
     follow: CameraFollow | null;
+    focus: CameraFocus | null;
 }
+
+type FocusChoice = "off" | CameraFocus["on"]["kind"];
+
+/** A new focus starts at f/2.8, a fast lens's usual setting. */
+const DEFAULT_F_STOP = 2.8;
+/** A new set focus distance, meters. */
+const DEFAULT_FOCUS_M = 10;
 
 function settingsOf(camera: ViewCamera): Settings {
     const aim = seatAim(camera);
@@ -75,6 +91,7 @@ function settingsOf(camera: ViewCamera): Settings {
         fovDeg: camera.fovDeg ?? SEAT_FOV_DEG,
         rollDeg: camera.rollDeg ?? 0,
         follow: camera.follow ?? null,
+        focus: camera.focus ?? null,
     };
 }
 
@@ -109,9 +126,12 @@ export function CameraSettings({
     const aim = aimOf(saved.position, saved.target);
 
     const save = (next: Settings) =>
-        list.setExact(camera.id, poseOf(next), next.follow);
+        list.setExact(camera.id, poseOf(next), {
+            follow: next.follow,
+            focus: next.focus,
+        });
     const show = (next: Settings) =>
-        useCameraStore.getState().showPose(poseOf(next));
+        useCameraStore.getState().showPose(poseOf(next), next.focus);
 
     /** Settings with one axis of the camera or look-at point changed. */
     const withPoint =
@@ -139,6 +159,39 @@ export function CameraSettings({
             save({ ...saved, follow: null });
         else save({ ...saved, follow: { marcherId, mode: choice } });
     };
+
+    const focusChoice: FocusChoice = saved.focus?.on.kind ?? "off";
+    const setFocus = (choice: FocusChoice) => {
+        if (choice === "off") return save({ ...saved, focus: null });
+        const fStop = saved.focus?.fStop ?? DEFAULT_F_STOP;
+        const on: CameraFocus["on"] | null =
+            choice === "lookAt"
+                ? { kind: "lookAt" }
+                : choice === "distance"
+                  ? { kind: "distance", meters: DEFAULT_FOCUS_M }
+                  : followedId === undefined
+                    ? null
+                    : { kind: "performer", marcherId: followedId };
+        if (on) save({ ...saved, focus: { fStop, on } });
+    };
+    const withFocus = (focus: Partial<CameraFocus>): Settings =>
+        saved.focus ? { ...saved, focus: { ...saved.focus, ...focus } } : saved;
+    // The range that looks sharp, where the focus distance is known.
+    const focusM =
+        saved.focus?.on.kind === "distance"
+            ? saved.focus.on.meters
+            : saved.focus?.on.kind === "lookAt" && !saved.follow
+              ? aim.distance
+              : null;
+    const sharp =
+        saved.focus && focusM !== null
+            ? depthOfField(
+                  focalLengthFromFov(saved.fovDeg),
+                  saved.focus.fStop,
+                  focusM,
+              )
+            : null;
+    const length = (m: number) => round(toShown(m), m < 10 ? 1 : 0);
 
     const fieldNumber = (
         key: string,
@@ -189,26 +242,13 @@ export function CameraSettings({
                 />
                 {saved.follow && (
                     <Row label={t("view3d.cameraSettings.performer")}>
-                        <Select
-                            value={String(saved.follow.marcherId)}
-                            onValueChange={(value) =>
-                                setFollow(followChoice, Number(value))
-                            }
-                        >
-                            <SelectTriggerCompact
-                                label={t("view3d.cameraSettings.performer")}
-                                className="w-full justify-start"
-                            />
-                            <SelectContent>
-                                {(marchers ?? []).map((m) => (
-                                    <SelectItem key={m.id} value={String(m.id)}>
-                                        {m.name
-                                            ? `${m.drill_number} ${m.name}`
-                                            : m.drill_number}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <PerformerSelect
+                            label={t("view3d.cameraSettings.performer")}
+                            value={saved.follow.marcherId}
+                            marchers={marchers}
+                            testId="view3d-camera-follow-performer"
+                            onChange={(id) => setFollow(followChoice, id)}
+                        />
                     </Row>
                 )}
             </Section>
@@ -356,6 +396,145 @@ export function CameraSettings({
                     })}
                 </div>
             </Section>
+
+            <Section title={t("view3d.cameraSettings.focus")}>
+                <SegmentedTextSwitch
+                    ariaLabel={t("view3d.cameraSettings.focus")}
+                    testId="view3d-camera-focus-mode"
+                    selected={focusChoice}
+                    setSelected={(value) => setFocus(value as FocusChoice)}
+                    options={[
+                        {
+                            value: "off",
+                            label: t("view3d.cameraSettings.focusOff"),
+                        },
+                        {
+                            value: "lookAt",
+                            label: t("view3d.cameraSettings.focusLookAt"),
+                        },
+                        {
+                            value: "performer",
+                            label: t("view3d.cameraSettings.focusPerformer"),
+                            disabled: followedId === undefined,
+                        },
+                        {
+                            value: "distance",
+                            label: t("view3d.cameraSettings.focusDistance"),
+                        },
+                    ]}
+                />
+                {saved.focus?.on.kind === "performer" && (
+                    <Row label={t("view3d.cameraSettings.performer")}>
+                        <PerformerSelect
+                            label={t("view3d.cameraSettings.focusPerformer")}
+                            value={saved.focus.on.marcherId}
+                            marchers={marchers}
+                            testId="view3d-camera-focus-performer"
+                            onChange={(marcherId) =>
+                                save(
+                                    withFocus({
+                                        on: { kind: "performer", marcherId },
+                                    }),
+                                )
+                            }
+                        />
+                    </Row>
+                )}
+                {saved.focus && (
+                    <div className="grid grid-cols-2 gap-8">
+                        {fieldNumber("fstop", {
+                            label: t("view3d.cameraSettings.fStop"),
+                            tooltip: t("view3d.cameraSettings.fStopTooltip"),
+                            value: saved.focus.fStop,
+                            digits: 1,
+                            step: 1,
+                            scrubPerPx: 0.05,
+                            min: MIN_F_STOP,
+                            max: MAX_F_STOP,
+                            build: (v) => withFocus({ fStop: v }),
+                        })}
+                        {saved.focus.on.kind === "distance" &&
+                            fieldNumber("focus-distance", {
+                                label: t(
+                                    "view3d.cameraSettings.focusDistanceField",
+                                ),
+                                tooltip: t(
+                                    "view3d.cameraSettings.focusDistanceTooltip",
+                                ),
+                                unit: metric ? "m" : "ft",
+                                value: toShown(saved.focus.on.meters),
+                                digits: 1,
+                                step: 1,
+                                scrubPerPx: 0.25,
+                                min: toShown(0.1),
+                                build: (v) =>
+                                    withFocus({
+                                        on: {
+                                            kind: "distance",
+                                            meters: fromShown(v),
+                                        },
+                                    }),
+                            })}
+                    </div>
+                )}
+                {sharp && (
+                    <p
+                        className="text-sub text-text/60"
+                        data-testid="view3d-camera-sharp-range"
+                    >
+                        {Number.isFinite(sharp.far)
+                            ? t("view3d.cameraSettings.sharpRange", {
+                                  near: length(sharp.near),
+                                  far: length(sharp.far),
+                                  unit,
+                              })
+                            : t("view3d.cameraSettings.sharpBeyond", {
+                                  near: length(sharp.near),
+                                  unit,
+                              })}
+                    </p>
+                )}
+            </Section>
+        </div>
+    );
+}
+
+/** Chooses a performer by drill number and name. */
+function PerformerSelect({
+    label,
+    value,
+    marchers,
+    testId,
+    onChange,
+}: {
+    label: string;
+    value: number;
+    marchers:
+        | { id: number; drill_number: string; name?: string | null }[]
+        | undefined;
+    testId: string;
+    onChange: (marcherId: number) => void;
+}) {
+    return (
+        <div data-testid={testId} className="min-w-0">
+            <Select
+                value={String(value)}
+                onValueChange={(v) => onChange(Number(v))}
+            >
+                <SelectTriggerCompact
+                    label={label}
+                    className="w-full justify-start"
+                />
+                <SelectContent>
+                    {(marchers ?? []).map((m) => (
+                        <SelectItem key={m.id} value={String(m.id)}>
+                            {m.name
+                                ? `${m.drill_number} ${m.name}`
+                                : m.drill_number}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
         </div>
     );
 }

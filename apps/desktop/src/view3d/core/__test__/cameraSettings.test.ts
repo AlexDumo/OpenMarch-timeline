@@ -4,6 +4,8 @@ import type { Vector3Tuple } from "three";
 import type { ViewCamera } from "../cameraList";
 import {
     aimOf,
+    blurScalePx,
+    depthOfField,
     camerasFile,
     camerasFileName,
     focalLengthFromFov,
@@ -38,6 +40,29 @@ describe("aim", () => {
         const turned = targetFromAim(eye, { ...aim, panDeg: aim.panDeg + 30 });
         expect(aimOf(eye, turned).distance).toBeCloseTo(aim.distance, 9);
         expect(aimOf(eye, turned).tiltDeg).toBeCloseTo(aim.tiltDeg, 9);
+    });
+});
+
+describe("focus", () => {
+    it("blurs nothing at the focus and more at a wider aperture", () => {
+        const wide = blurScalePx(85, 1.8, 10, 1000);
+        const narrow = blurScalePx(85, 11, 10, 1000);
+        expect(wide).toBeGreaterThan(narrow * 5);
+        // 85 mm at f/1.8 on 10 m: about 0.4 mm on the sensor, ~17 px of 1000.
+        expect(wide).toBeCloseTo(16.9, 0);
+    });
+
+    it("gives the range that looks sharp, which widens as the lens stops down", () => {
+        const portrait = depthOfField(85, 1.8, 10);
+        expect(portrait.near).toBeLessThan(10);
+        expect(portrait.far).toBeGreaterThan(10);
+        expect(portrait.far - portrait.near).toBeLessThan(1.5);
+        const stopped = depthOfField(85, 11, 10);
+        expect(stopped.far - stopped.near).toBeGreaterThan(
+            portrait.far - portrait.near,
+        );
+        // A wide lens focused far is sharp to the horizon.
+        expect(depthOfField(24, 8, 50).far).toBe(Infinity);
     });
 });
 

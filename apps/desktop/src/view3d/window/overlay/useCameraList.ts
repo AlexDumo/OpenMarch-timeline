@@ -13,6 +13,7 @@ import {
     newCameraId,
     newCameraName,
     withVenueCameras,
+    type CameraFocus,
     type CameraFollow,
     type CameraListEdit,
     type SavedCamera,
@@ -49,7 +50,11 @@ export interface CameraList {
     /** Moves a camera to the current view (following whoever the view follows). */
     setToCurrentView: (id: string) => void;
     /** Sets a camera's exact settings and jumps the view there. */
-    setExact: (id: string, pose: ViewPose, follow: CameraFollow | null) => void;
+    setExact: (
+        id: string,
+        pose: ViewPose,
+        extras: { follow: CameraFollow | null; focus: CameraFocus | null },
+    ) => void;
     /** Replaces the venue's cameras with `list` (an imported file's). */
     replaceAll: (list: SavedCamera[]) => void;
     /** Puts the venue's cameras back as they were (undo for a remove). */
@@ -119,6 +124,7 @@ export function useCameraList(): CameraList {
                 name,
                 pose,
                 follow: currentFollow(),
+                focus: useCameraStore.getState().focus,
             }),
         );
         useCameraStore.getState().markActive(id);
@@ -128,16 +134,22 @@ export function useCameraList(): CameraList {
     const setToCurrentView = (id: string) => {
         const pose = useCameraStore.getState().currentPose();
         if (!pose) return;
-        edit({ kind: "setView", id, pose, follow: currentFollow() });
+        edit({
+            kind: "setView",
+            id,
+            pose,
+            follow: currentFollow(),
+            focus: useCameraStore.getState().focus,
+        });
         useCameraStore.getState().markActive(id);
     };
 
-    const setExact: CameraList["setExact"] = (id, pose, follow) => {
+    const setExact: CameraList["setExact"] = (id, pose, { follow, focus }) => {
         const list = currentList();
         if (!list) return;
         const next = editCameraList(
             list,
-            { kind: "setView", id, pose, follow },
+            { kind: "setView", id, pose, follow, focus },
             labelOf,
         );
         saveList(next);
@@ -152,7 +164,9 @@ export function useCameraList(): CameraList {
                 useFollowStore
                     .getState()
                     .followMarcher(follow.marcherId, follow.mode, pose.fovDeg);
-        } else camera.showPose(pose);
+            // After following starts, which clears the view's focus.
+            camera._setFocus(focus);
+        } else camera.showPose(pose, focus);
         camera.markActive(id);
     };
 

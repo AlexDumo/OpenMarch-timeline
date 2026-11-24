@@ -16,7 +16,9 @@
  *   roll (the picture tilted about the line of sight). A view can instead
  *   follow a performer (`follow`): from behind them, or out of their eyes.
  *   Then the camera goes to them and keeps up as they move, and its
- *   position and look-at point are only where it was saved.
+ *   position and look-at point are only where it was saved. A view can
+ *   also focus (`focus`): what is sharp, and the lens's f-number, which
+ *   sets how soft everything nearer and farther gets.
  *
  * Plain TypeScript and zod only, like the rest of `view3d/core/`.
  */
@@ -43,6 +45,28 @@ export const cameraFollowSchema = z.object({
 });
 export type CameraFollow = z.infer<typeof cameraFollowSchema>;
 
+/** The f-numbers a camera can focus at, widest first. */
+export const MIN_F_STOP = 0.95;
+export const MAX_F_STOP = 32;
+
+/**
+ * What a camera keeps sharp: the point it looks at, a distance from it
+ * (meters), or a performer as they move. `fStop` sets how quickly things
+ * nearer or farther go soft: lower is softer, as on a real lens.
+ */
+export const cameraFocusSchema = z.object({
+    fStop: z.number().min(MIN_F_STOP).max(MAX_F_STOP),
+    on: z.discriminatedUnion("kind", [
+        z.object({ kind: z.literal("lookAt") }),
+        z.object({
+            kind: z.literal("distance"),
+            meters: z.number().positive().max(10000),
+        }),
+        z.object({ kind: z.literal("performer"), marcherId: z.number().int() }),
+    ]),
+});
+export type CameraFocus = z.infer<typeof cameraFocusSchema>;
+
 export const savedCameraSchema = z.discriminatedUnion("kind", [
     z.object({
         kind: z.literal("kit"),
@@ -62,6 +86,8 @@ export const savedCameraSchema = z.discriminatedUnion("kind", [
         rollDeg: z.number().min(-MAX_ROLL_DEG).max(MAX_ROLL_DEG).optional(),
         /** Follows this performer instead of staying put. */
         follow: cameraFollowSchema.optional(),
+        /** Focuses, softening what is nearer and farther. Everything sharp when omitted. */
+        focus: cameraFocusSchema.optional(),
     }),
 ]);
 
@@ -125,6 +151,7 @@ export function resolveCameras(
                 fovDeg: entry.fovDeg,
                 ...(entry.rollDeg ? { rollDeg: entry.rollDeg } : {}),
                 ...(entry.follow ? { follow: { ...entry.follow } } : {}),
+                ...(entry.focus ? { focus: structuredClone(entry.focus) } : {}),
             });
         }
     }
@@ -167,11 +194,20 @@ export function normalizeRoll(rollDeg: number): number {
     return Math.round(r * 100) / 100 || 0;
 }
 
-/** The stored fields of a pose (and follow) for a view entry. */
+/** How a view camera behaves besides its pose: following and focus. None when omitted. */
+export interface ViewExtras {
+    follow?: CameraFollow | null;
+    focus?: CameraFocus | null;
+}
+
+/** The stored fields of a pose, following and focus for a view entry. */
 function viewFields(
     pose: ViewPose,
-    follow: CameraFollow | null | undefined,
-): Pick<SavedView, "position" | "target" | "fovDeg" | "rollDeg" | "follow"> {
+    { follow, focus }: ViewExtras,
+): Pick<
+    SavedView,
+    "position" | "target" | "fovDeg" | "rollDeg" | "follow" | "focus"
+> {
     const roll = normalizeRoll(pose.rollDeg ?? 0);
     return {
         position: roundPoint(pose.position),
@@ -179,29 +215,37 @@ function viewFields(
         fovDeg: clampFov(pose.fovDeg),
         ...(roll !== 0 ? { rollDeg: roll } : {}),
         ...(follow ? { follow: { ...follow } } : {}),
+        ...(focus
+            ? {
+                  focus: {
+                      fStop: Math.min(
+                          MAX_F_STOP,
+                          Math.max(
+                              MIN_F_STOP,
+                              Math.round(focus.fStop * 100) / 100,
+                          ),
+                      ),
+                      on: { ...focus.on },
+                  },
+              }
+            : {}),
     };
 }
 
 /** Edits to a camera list. Each returns a new list. */
 export type CameraListEdit =
-    | {
+    | ({
           kind: "add";
           id: string;
           name: string;
           pose: ViewPose;
-          follow?: CameraFollow | null;
-      }
+      } & ViewExtras)
     | { kind: "rename"; id: string; name: string }
     /**
-     * Sets the camera's pose and whether it follows a performer (none when
-     * omitted): "Set to current view" and the exact settings both use it.
+     * Sets the camera's pose, following and focus (none when omitted): "Set
+     * to current view" and the exact settings both use it.
      */
-    | {
-          kind: "setView";
-          id: string;
-          pose: ViewPose;
-          follow?: CameraFollow | null;
-      }
+    | ({ kind: "setView"; id: string; pose: ViewPose } & ViewExtras)
     | { kind: "move"; id: string; by: -1 | 1 }
     | { kind: "remove"; id: string };
 
@@ -226,7 +270,7 @@ export function editCameraList(
                     kind: "view",
                     id: edit.id,
                     name: edit.name.trim().slice(0, CAMERA_NAME_MAX),
-                    ...viewFields(edit.pose, edit.follow),
+                    ...viewFields(edit.pose, edit),
                 },
             ];
         case "rename": {
@@ -248,7 +292,7 @@ export function editCameraList(
                 kind: "view",
                 id: camera.id,
                 name: camera.kind === "view" ? camera.name : label(camera),
-                ...viewFields(edit.pose, edit.follow),
+                ...viewFields(edit.pose, edit),
             };
             return list.map((c, i) => (i === index ? next : c));
         }

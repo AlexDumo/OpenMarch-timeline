@@ -4201,5 +4201,16 @@
     "view3d.cameraSettings.focalLengthTooltip": "Tooltip of the 'Focal length' field label in a 3D View camera's settings. 'Full-frame' is the 35 mm photography standard.",
     "view3d.cameraSettings.fieldOfView": "Label of a number field in a 3D View camera's settings: how much the camera takes in, top to bottom, in degrees. A smaller number zooms in.",
     "view3d.cameraSettings.fieldOfViewTooltip": "Tooltip of the 'Field of view' field label in a 3D View camera's settings.",
-    "view3d.cameraSettings.mm": "Abbreviation for millimeters, shown inside the 'Focal length' field in a 3D View camera's settings."
+    "view3d.cameraSettings.mm": "Abbreviation for millimeters, shown inside the 'Focal length' field in a 3D View camera's settings.",
+    "view3d.cameraSettings.focus": "Heading of the focus section in a 3D View camera's settings, above a switch with four choices: 'Off', 'Look-at', 'Performer' and 'Distance'. With focus on, things nearer and farther than the focus look soft (blurred), as with a real camera lens. Also the switch's name for screen readers.",
+    "view3d.cameraSettings.focusOff": "Choice in a 3D View camera's focus settings: no focus, everything sharp. Short; one of four choices on a small switch.",
+    "view3d.cameraSettings.focusLookAt": "Choice in a 3D View camera's focus settings: keep the point the camera is aimed at sharp. Short; one of four choices on a small switch.",
+    "view3d.cameraSettings.focusPerformer": "Choice in a 3D View camera's focus settings: keep one performer (marcher) sharp as they move. Short; one of four choices on a small switch. Also the name of the menu that picks which performer.",
+    "view3d.cameraSettings.focusDistance": "Choice in a 3D View camera's focus settings: keep things at a set distance from the camera sharp. Short; one of four choices on a small switch.",
+    "view3d.cameraSettings.focusDistanceField": "Label of a number field in a 3D View camera's focus settings: how far from the camera things are sharp, in feet or meters.",
+    "view3d.cameraSettings.focusDistanceTooltip": "Tooltip of the 'Focus distance' field label in a 3D View camera's settings.",
+    "view3d.cameraSettings.fStop": "Label of a number field in a 3D View camera's focus settings: the lens aperture as photographers write it (f/1.8, f/8). Lower numbers blur the background more. Keep the photography term.",
+    "view3d.cameraSettings.fStopTooltip": "Tooltip of the 'f-stop' field label in a 3D View camera's settings.",
+    "view3d.cameraSettings.sharpRange": "Note under the focus settings of a 3D View camera: the range of distances from the camera that look sharp. {near} and {far} are numbers; {unit} is 'feet' or 'meters'.",
+    "view3d.cameraSettings.sharpBeyond": "Note under the focus settings of a 3D View camera when everything past a distance looks sharp. {near} is a number; {unit} is 'feet' or 'meters'."
 }

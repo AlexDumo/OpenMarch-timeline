@@ -186,6 +186,31 @@ describe("editCameraList", () => {
         });
     });
 
+    it("stores focus, clamping the f-stop, and drops it when set to none", () => {
+        const focused = editCameraList([], {
+            kind: "add",
+            id: "view1",
+            name: "Soloist",
+            pose,
+            focus: { fStop: 0.5, on: { kind: "performer", marcherId: 4 } },
+        });
+        expect(focused[0]).toMatchObject({
+            focus: { fStop: 0.95, on: { kind: "performer", marcherId: 4 } },
+        });
+        expect(cameraListSchema.safeParse(focused).success).toBe(true);
+        expect(resolveCameras([], focused)[0].focus).toEqual({
+            fStop: 0.95,
+            on: { kind: "performer", marcherId: 4 },
+        });
+        const sharp = editCameraList(focused, {
+            kind: "setView",
+            id: "view1",
+            pose,
+            focus: null,
+        });
+        expect(sharp[0]).not.toHaveProperty("focus");
+    });
+
     it("moves within bounds and removes", () => {
         expect(
             editCameraList(list, { kind: "move", id: "topDown", by: -1 }).map(

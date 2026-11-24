@@ -80,6 +80,7 @@ import {
 import { useCinemaContext } from "../cinema/subjectPoints";
 import { FOLLOW_KEY, POV_KEY, useFollowStore } from "./followStore";
 import { FollowController } from "./followController";
+import { followTarget, type PerformerPose } from "./followMath";
 import { installFollowTestApi } from "./followTestApi";
 import {
     onPerformersMoved,
@@ -242,9 +243,11 @@ export default function CameraRig() {
             // Following started (the performer is drawn): it moves the camera.
             if (useFollowStore.getState().follow) {
                 useCameraStore.getState()._setActive(seat.id);
+                useCameraStore.getState()._setFocus(seat.focus ?? null);
                 return;
             }
         }
+        useCameraStore.getState()._setFocus(seat.focus ?? null);
         const aim = seatAim(seat);
         rig.flyTo(aim.position, aim.target, {
             nowMs: performance.now(),
@@ -327,6 +330,38 @@ export default function CameraRig() {
         return () => store._setPoseSource(null);
     }, [camera, rig]);
 
+    // How far the focus is: a set distance, the performer as they move, or
+    // the point the camera looks at.
+    useEffect(() => {
+        const store = useCameraStore.getState();
+        const pose: PerformerPose = {
+            x: 0,
+            y: 0,
+            z: 0,
+            heading: 0,
+            height: 0,
+            eye: [0, 0, 0],
+            hasEye: false,
+        };
+        const eye = new Vector3();
+        store._setFocusSource(() => {
+            const focus = useCameraStore.getState().focus;
+            if (!focus) return null;
+            camera.getWorldPosition(eye);
+            const on = focus.on;
+            if (on.kind === "distance") return on.meters;
+            const point =
+                on.kind === "performer" && performerPoseInto(on.marcherId, pose)
+                    ? followTarget(pose)
+                    : rig.lookAt;
+            return Math.max(
+                0.1,
+                eye.distanceTo(scratch.set(point[0], point[1], point[2])),
+            );
+        });
+        return () => store._setFocusSource(null);
+    }, [camera, rig]);
+
     // Following a performer: fly to them as the store says; one pick mode at
     // a time; a camera or the Director takes the view over.
     useEffect(() => {
@@ -339,8 +374,11 @@ export default function CameraRig() {
                 const cameraStore = useCameraStore.getState();
                 if (state.follow) {
                     useDirectorStore.getState().setDirecting(false);
-                    // Following from a camera keeps it the active camera.
-                    if (!cameraFollowRef.current) cameraStore._setActive(null);
+                    // Following from a camera keeps it the active camera and its focus.
+                    if (!cameraFollowRef.current) {
+                        cameraStore._setActive(null);
+                        cameraStore._setFocus(null);
+                    }
                 } else if (cameraStore.activeCameraId !== null) {
                     // Stopping a follow camera leaves a free view.
                     const active = useView3dSceneStore
@@ -360,7 +398,10 @@ export default function CameraRig() {
                     endFollowRef.current();
             }),
             useDirectorStore.subscribe((state, prev) => {
-                if (state.directing && !prev.directing) endFollowRef.current();
+                if (state.directing && !prev.directing) {
+                    endFollowRef.current();
+                    useCameraStore.getState()._setFocus(null);
+                }
             }),
             // Keep up with the performer in the frame they moved.
             onPerformersMoved(() => follow.apply(performance.now())),
