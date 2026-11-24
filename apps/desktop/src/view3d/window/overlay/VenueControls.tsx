@@ -16,11 +16,14 @@ import {
     KIT_FIXED_FLOOR,
     KIT_FIXED_FLOOR_FALLBACK,
     KIT_LIGHTING,
+    REAL_VENUES,
     VENUE_KIT_IDS,
     fieldLinesFor,
     kitFitsField,
     lightingForKit,
+    venueKind,
     type FieldLines,
+    type VenueKind,
     type VenueSettings,
 } from "@/view3d/core/venueSettings";
 import {
@@ -84,9 +87,11 @@ export function useVenueRequest(): {
 const feet = (meters: number) => Math.round(meters / FT);
 
 /**
- * The venue kits, two to a row. A venue whose fixed floor the show's field
- * doesn't fit is dimmed; clicking it says why, under the picker. While the
- * show's own venue is one of those, a note says which venue shows instead.
+ * The venue kits, two to a row, in two groups: the venues sized to the
+ * show's field, then the real venues (`REAL_VENUES`), each with its size as
+ * a tooltip. A venue whose fixed floor the show's field doesn't fit is
+ * dimmed; clicking it says why, under the picker. While the show's own
+ * venue is one of those, a note says which venue shows instead.
  */
 export function VenuePicker() {
     const { t } = useTranslate();
@@ -122,25 +127,59 @@ export function VenuePicker() {
               })
             : null;
     const note = refused ?? fallback;
+    const sizeOf = (kit: VenueKitId): string | undefined => {
+        const real = REAL_VENUES[kit];
+        if (!real) return undefined;
+        return t(`view3d.venueKind.${real.surface}`, {
+            venue: t(`view3d.kit.${kit}`),
+            width: feet(real.width),
+            depth: feet(real.depth),
+        });
+    };
+    const group = (kind: VenueKind) => {
+        const kits = VENUE_KIT_IDS.filter((kit) => venueKind(kit) === kind);
+        return (
+            <div
+                className="flex flex-col gap-4"
+                data-testid={`view3d-venue-group-${kind}`}
+            >
+                <p className="text-sub text-text/60">
+                    {t(`view3d.venueKind.${kind}`)}
+                </p>
+                {kind === "real" && (
+                    <p className="text-sub text-text/40">
+                        {t("view3d.venueKind.realHint")}
+                    </p>
+                )}
+                <Segmented
+                    value={chosen && kits.includes(chosen) ? chosen : null}
+                    options={kits.map((kit) => ({
+                        value: kit,
+                        label: t(`view3d.kit.${kit}`),
+                        title: sizeOf(kit),
+                        unavailable: reasonFor(kit),
+                    }))}
+                    onChange={(kit: VenueKitId) => {
+                        setRefused(null);
+                        request({ kind: "kit", kit });
+                    }}
+                    onUnavailable={(_kit, reason) => setRefused(reason)}
+                    label={t(`view3d.venueKind.${kind}`)}
+                    className="grid! grid-cols-2 [&>*]:justify-start"
+                />
+            </div>
+        );
+    };
 
     return (
         <div className="flex flex-col gap-6">
-            <Segmented
-                value={chosen ?? null}
-                options={VENUE_KIT_IDS.map((kit) => ({
-                    value: kit,
-                    label: t(`view3d.kit.${kit}`),
-                    unavailable: reasonFor(kit),
-                }))}
-                onChange={(kit: VenueKitId) => {
-                    setRefused(null);
-                    request({ kind: "kit", kit });
-                }}
-                onUnavailable={(_kit, reason) => setRefused(reason)}
-                label={t("view3d.overlay.venue")}
-                testId="view3d-venue-picker"
-                className="grid! grid-cols-2 [&>*]:justify-start"
-            />
+            <div
+                className="flex flex-col gap-12"
+                data-testid="view3d-venue-picker"
+            >
+                {group("fitted")}
+                {group("real")}
+            </div>
             {note && (
                 <p
                     className="text-sub text-text/60"

@@ -267,6 +267,35 @@ export const KIT_FIXED_FLOOR: Readonly<
     nightpound: { width: ft(106), depth: ft(78) },
 };
 
+/**
+ * Venues modeled on a real building at its real size, with the field or
+ * floor they're built round. The venue picker lists them apart from the
+ * venues that are sized to the show's field, and shows their size.
+ */
+export const REAL_VENUES: Readonly<
+    Partial<
+        Record<
+            VenueKitId,
+            {
+                readonly surface: "field" | "floor";
+                readonly width: number;
+                readonly depth: number;
+            }
+        >
+    >
+> = {
+    // Built round a football field with end zones (`fixedFieldFootprint`).
+    markDiesel: { surface: "field", width: ft(360), depth: ft(160) },
+    nightpound: { surface: "floor", width: ft(106), depth: ft(78) },
+};
+
+/** Whether a venue is a real building (`REAL_VENUES`) or sized to the show's field. */
+export type VenueKind = "fitted" | "real";
+
+export function venueKind(kit: VenueKitId): VenueKind {
+    return REAL_VENUES[kit] ? "real" : "fitted";
+}
+
 /** The venue a show sees when its field doesn't fit its own venue's floor. */
 export const KIT_FIXED_FLOOR_FALLBACK: VenueKitId = "arena";
 

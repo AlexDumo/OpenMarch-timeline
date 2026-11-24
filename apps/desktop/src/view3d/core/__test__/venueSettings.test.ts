@@ -20,6 +20,7 @@ import {
     kitFitsField,
     kitForField,
     shownKit,
+    venueKind,
     lightingForKit,
     paramsForKitSwitch,
     parseVenueSettings,
@@ -297,5 +298,12 @@ describe("Nightpound's fixed floor", () => {
             shownKit("nightpound", GridFieldTemplates.INDOOR_50x90_8to5),
         ).toBe("nightpound");
         expect(shownKit("nightpound", undefined)).toBe("nightpound");
+    });
+});
+
+describe("venue kinds", () => {
+    it("lists the real buildings apart from the venues sized to the field", () => {
+        const real = VENUE_KIT_IDS.filter((kit) => venueKind(kit) === "real");
+        expect(real).toEqual(["markDiesel", "nightpound"]);
     });
 });
