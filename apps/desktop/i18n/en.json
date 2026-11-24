@@ -3696,7 +3696,8 @@
                 "template": "The template looks like it's still showing. Hide the template layer before you export.",
                 "empty": "Nothing is painted on the uniform's front or back.",
                 "opaque": "The page has no transparent areas. Only the uniform's front and back are used.",
-                "palette": "Parts you didn't paint use {preset}'s colors."
+                "palette": "Parts you didn't paint use {preset}'s colors.",
+                "paintedLogo": "Something on the uniform looks like a logo or number painted on. Painted art widens on fuller builds, so a round crest turns oval. Add it under Logos and numbers instead."
             },
             "refused": {
                 "unsupported": "Import a PNG, an SVG or a uniform file.",
@@ -3709,6 +3710,56 @@
                 "newer": "That uniform file is from a newer version of OpenMarch. Update OpenMarch to import it.",
                 "damaged": "That uniform file is damaged.",
                 "timedOut": "Importing took too long. Try a smaller file."
+            }
+        },
+        "uniformItems": {
+            "title": "Logos and numbers",
+            "add": "Add logo or number…",
+            "adding": "Adding…",
+            "saving": "Saving…",
+            "saveFailed": "The logos and numbers couldn't be saved in the show. The 3D View shows the uniform as it was saved.",
+            "hint": "Place logos, numbers and crests here instead of painting them on the uniform, so they keep their shape on every body type.",
+            "full": "A uniform holds up to {count} logos and numbers.",
+            "unnamed": "Image",
+            "remove": "Remove",
+            "place": "Place",
+            "preset": {
+                "chest": "Chest center",
+                "backNumber": "Back number",
+                "sleeveLeft": "Left sleeve",
+                "sleeveRight": "Right sleeve",
+                "custom": "Custom"
+            },
+            "panelLabel": "Side",
+            "panel": {
+                "front": "Front",
+                "back": "Back",
+                "cape": "Cape"
+            },
+            "x": "Across",
+            "y": "Down",
+            "sizeBy": "Size by",
+            "width": "Width",
+            "height": "Height",
+            "size": "Size",
+            "rotate": "Rotation",
+            "grade": "On other builds",
+            "grades": {
+                "proportional": "Scales with build",
+                "fixed": "Real size",
+                "stretch": "Stretches like fabric",
+                "tile": "Repeating print",
+                "line": "Line, keeps its width"
+            },
+            "repeatOver": "Repeat over",
+            "region": {
+                "torso": "Jacket",
+                "sleeve-L": "Left sleeve",
+                "sleeve-R": "Right sleeve",
+                "hips": "Pants top",
+                "leg-L": "Left leg",
+                "leg-R": "Right leg",
+                "cape": "Cape"
             }
         }
     },

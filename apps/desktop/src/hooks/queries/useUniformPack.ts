@@ -47,17 +47,38 @@ export interface StoredUniformPack extends StoredUniformPackBytes {
     manifest: UniformPackManifest;
 }
 
-/** The show's uniform assets, oldest first, as `{ value, name }` */
+/** One of the show's uniforms: its newest version, and every version's value */
+export interface UniformPackEntry {
+    /** The newest version (`library:<id>@<hash>`) */
+    value: string;
+    name: string;
+    /** Every version's value, oldest first; editing items adds versions (fork #1258) */
+    versions: string[];
+}
+
+/** The show's uniforms, oldest first, one entry per asset however many versions it has */
 export const uniformPacksQueryOptions = () =>
     queryOptions({
         ...showAssetsQueryOptions(),
-        select: (assets) =>
-            assets
-                .filter((asset) => asset.kind === UNIFORM_ASSET_KIND)
-                .map((asset) => ({
-                    value: showAssetRefValue(asset),
-                    name: asset.name,
-                })),
+        select: (assets): UniformPackEntry[] => {
+            const byId = new Map<string, UniformPackEntry>();
+            for (const asset of assets) {
+                if (asset.kind !== UNIFORM_ASSET_KIND) continue;
+                const value = showAssetRefValue(asset);
+                const entry = byId.get(asset.id);
+                if (entry) {
+                    entry.value = value;
+                    entry.name = asset.name;
+                    entry.versions.push(value);
+                } else
+                    byId.set(asset.id, {
+                        value,
+                        name: asset.name,
+                        versions: [value],
+                    });
+            }
+            return [...byId.values()];
+        },
     });
 
 /**
@@ -115,15 +136,28 @@ export const uniformPackQueryOptions = (value: string | null | undefined) =>
 
 /**
  * Stores a pack file in the show and dresses the band in it, as one undo step; then refreshes
- * the assets and the venue settings. The file is read in the worker first. Resolves with the
- * value now in `uniformArtwork`.
+ * the assets and the venue settings. The file is read in the worker first. With `versionOf`
+ * (an edit of a uniform's items), the pack is a new version of that uniform asset. Resolves with
+ * the value now in `uniformArtwork`.
  */
 export const setUniformPackMutationOptions = (qc: QueryClient) =>
     mutationOptions({
-        mutationFn: async (pack: Uint8Array) => {
+        mutationFn: async ({
+            pack,
+            versionOf,
+        }: {
+            pack: Uint8Array;
+            versionOf?: string;
+        }) => {
             const manifest = await readPackManifest(pack);
             const field = await qc.fetchQuery(fieldPropertiesQueryOptions());
-            return await setUniformPack({ db, pack, manifest, field });
+            return await setUniformPack({
+                db,
+                pack,
+                manifest,
+                field,
+                versionOf,
+            });
         },
         onSuccess: async () => {
             await qc.invalidateQueries({ queryKey: showAssetKeys.all() });

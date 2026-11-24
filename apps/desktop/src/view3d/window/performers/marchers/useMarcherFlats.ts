@@ -3,8 +3,12 @@
  * one atlas per (artwork, body type) in use, and each body type's lookup
  * table. Empty until they are ready, so the marchers show their palette
  * first and their art once it's composed.
+ *
+ * When the art changes (an item moved, fork #1258), the last set stays on
+ * the marchers until the new one is composed, so editing never flashes the
+ * palette; its atlases are let go of only then.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
     flatsDpi,
     type FlatsArtworkKey,
@@ -46,17 +50,38 @@ export function useMarcherFlats(
         quality: MarcherQuality;
         map: FlatsResources;
     } | null>(null);
+    /** Every acquired set not yet let go of: the one shown, and any being composed */
+    const held = useRef(new Map<string, () => void>());
+    /** The set on the marchers now, `<wantedKey>#<dpi>` */
+    const shownKey = useRef<string | null>(null);
+    shownKey.current = ready ? `${ready.key}#${flatsDpi(ready.quality)}` : null;
+    useEffect(() => {
+        const sets = held.current;
+        return () => {
+            for (const release of sets.values()) release();
+            sets.clear();
+        };
+    }, []);
     useEffect(() => {
         if (!wantedKey) {
             // back to presets: let go of the last set (its atlases free once unused)
             setReady(null);
+            for (const release of held.current.values()) release();
+            held.current.clear();
             return;
         }
         let live = true;
         const dpi = flatsDpi(quality);
+        const setKey = `${wantedKey}#${dpi}`;
         const pairs = wantedKey
             .split(",")
             .map((k) => k.split("|") as [FlatsArtworkKey, BodyType]);
+        const release = () => {
+            for (const [id, body] of pairs) releaseFlats(id, body, dpi);
+        };
+        // acquired once per set, even if this effect runs again for it
+        held.current.get(setKey)?.();
+        held.current.set(setKey, release);
         const t0 = performance.now();
         Promise.all(
             pairs.map(async ([id, body]) => {
@@ -81,6 +106,12 @@ export function useMarcherFlats(
                         `${mb.toFixed(1)} MB with mipmaps, in ${(performance.now() - t0).toFixed(0)} ms`,
                 );
                 setReady({ key: wantedKey, quality, map: new Map(entries) });
+                // the new set is on the marchers: let go of every older one
+                for (const [k, r] of held.current)
+                    if (k !== setKey) {
+                        r();
+                        held.current.delete(k);
+                    }
             })
             .catch((e: unknown) => {
                 // eslint-disable-next-line no-console -- the palette stays; say why
@@ -88,10 +119,56 @@ export function useMarcherFlats(
             });
         return () => {
             live = false;
-            for (const [id, body] of pairs) releaseFlats(id, body, dpi);
+            // a set that was never shown goes now; the shown one waits for its successor
+            if (
+                held.current.get(setKey) === release &&
+                shownKey.current !== setKey
+            ) {
+                release();
+                held.current.delete(setKey);
+            }
         };
     }, [wantedKey, quality]);
-    return ready && ready.key === wantedKey && ready.quality === quality
-        ? ready.map
-        : NONE;
+    const transition = useMemo(
+        () =>
+            ready && ready.quality === quality && ready.key !== wantedKey
+                ? stillShown(ready.map, wantedKey)
+                : null,
+        [ready, quality, wantedKey],
+    );
+    if (!wantedKey) return NONE;
+    if (ready && ready.key === wantedKey && ready.quality === quality)
+        return ready.map;
+    // composing a change: the previous art stays until the new one is ready
+    return transition ?? NONE;
 }
+
+/**
+ * The previous set's art under the keys `wantedKey` asks for, so the marchers
+ * keep it while the new art composes: the same artwork's entry, or else the
+ * same body type's when the previous set had one artwork.
+ */
+function stillShown(
+    previous: FlatsResources,
+    wantedKey: string,
+): FlatsResources {
+    const byBody = new Map<string, FlatsResourceValue>();
+    const ids = new Set<string>();
+    for (const [key, value] of previous) {
+        const [id, body] = key.split("|");
+        ids.add(id);
+        byBody.set(body, value);
+    }
+    const out = new Map<string, FlatsResourceValue>();
+    for (const key of wantedKey.split(",")) {
+        const [, body] = key.split("|");
+        const value =
+            previous.get(key) ??
+            (ids.size === 1 ? byBody.get(body) : undefined);
+        if (value) out.set(key, value);
+    }
+    return out;
+}
+
+type FlatsResourceValue =
+    FlatsResources extends ReadonlyMap<string, infer V> ? V : never;

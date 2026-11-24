@@ -12,6 +12,9 @@
  */
 import type { PresetLook } from "./uniformPresets";
 import type { BodyType } from "./looks";
+import type { ItemGrade } from "@/view3d/core/uniformPack/format";
+
+export type { ItemGrade } from "@/view3d/core/uniformPack/format";
 
 /** A segment of the hybrid wrap, as `layout.json` lists it. */
 export interface FlatsSegment {
@@ -80,16 +83,11 @@ export interface FlatsRegions {
 }
 
 /**
- * How a placed item follows the body types (docs/3d/uniform-artwork.md,
- * "Grading"): `proportional` scales by the girth factor k and keeps its
- * aspect, `fixed` keeps its real size, `stretch` widens with the girth like
- * fabric.
+ * Art placed over the flats: a logo, crest, number or print. How it follows
+ * the body types is its `grade` (see `ItemGrade` in the pack format).
  */
-export type ItemGrade = "proportional" | "fixed" | "stretch";
-
-/** Art placed over the flats: a logo, crest or number. */
 export interface FlatsItem {
-    /** File name in the artwork's folder. */
+    /** File name in the artwork's folder, or in the pack. */
     file: string;
     /** Centre, panel inches. */
     at: readonly [number, number];
@@ -101,6 +99,8 @@ export interface FlatsItem {
     opacity?: number;
     /** Default `proportional`. */
     grade?: ItemGrade;
+    /** A tile's regions (ids), on the item's panel. */
+    regions?: readonly string[];
 }
 
 /** A look's flats: one image per panel (exactly the panel) plus placed items. */
@@ -345,17 +345,23 @@ export function gradeAt(
 
 /**
  * How to draw a placed item on body `body`'s atlas: its box as worn by the
- * median body (`w`, `h`, inches) and the scale to draw it with (`sx`, `sy`).
- * The lookup tables already widen everything by the girth factor k, so a
- * proportional item is drawn k times taller (k times its size on the body,
- * aspect kept), a fixed one 1/k as wide (its real size), a stretched one as
- * is.
+ * median body (`w`, `h`, inches) and the scale to draw it with (`sx`, `sy`,
+ * applied on the atlas after the item's rotation). The lookup tables already
+ * widen everything by the girth factor k, so a proportional item is drawn k
+ * times taller (k times its size on the body, aspect kept), a fixed one 1/k
+ * as wide (its real size), a stretched one as is.
+ *
+ * A `line` is drawn as is, then its own height (the line's width) scaled by
+ * `ly` before it is rotated: the body widens the atlas k times across, which
+ * thickens a line at angle θ by k / √(k² cos² θ + sin² θ), so `ly` is the
+ * inverse and the line keeps its width while its length follows the fabric.
+ * A tile is laid out by {@link tileLayout}; here it reads as `stretch`.
  */
 export function itemDraw(
     item: FlatsItem,
     aspect: number,
     k: number,
-): { w: number; h: number; sx: number; sy: number } {
+): { w: number; h: number; sx: number; sy: number; ly?: number } {
     let w: number;
     let h: number;
     if (item.width && item.height) {
@@ -369,6 +375,11 @@ export function itemDraw(
         w = item.height * aspect;
     } else throw new Error(`uniform flats: item ${item.file} needs a size`);
     const grade = item.grade ?? "proportional";
+    if (grade === "line") {
+        const a = ((item.rotate ?? 0) * Math.PI) / 180;
+        const ly = Math.hypot(k * Math.cos(a), Math.sin(a)) / k;
+        return { w, h, sx: 1, sy: 1, ly };
+    }
     const [sx, sy] =
         grade === "proportional"
             ? [1, k]
@@ -376,6 +387,149 @@ export function itemDraw(
               ? [1 / k, 1]
               : [1, 1];
     return { w, h, sx, sy };
+}
+
+/** An item's size on the median body from its width or height and its image's aspect. */
+export function itemSize(
+    item: Pick<FlatsItem, "width" | "height">,
+    aspect: number,
+): { w: number; h: number } | null {
+    if (item.width && item.height) return { w: item.width, h: item.height };
+    if (item.width) return { w: item.width, h: item.width / aspect };
+    if (item.height) return { w: item.height * aspect, h: item.height };
+    return null;
+}
+
+/** One region's tiles: where each sits on the atlas's panel (inches) and how big. */
+export interface RegionTiles {
+    region: string;
+    /** The region's outline, panel inches: the tiles are clipped to it. */
+    polygon: readonly (readonly [number, number])[];
+    /** Each tile's top-left, panel inches. */
+    origins: [number, number][];
+    /** One tile's size on the atlas: `w` is 1/k of its real width. */
+    w: number;
+    h: number;
+    k: number;
+}
+
+/**
+ * Where a tile item's copies go on body `body`'s atlas (docs/3d/uniform-
+ * artwork.md, "Grading"): in each of its regions, tiles `tw` × `th` inches
+ * drawn 1/k as wide, with k the region's grade factor at its middle (as the
+ * study's prototype does), so on the body each tile is its real size. The
+ * columns are centred on the region's centre line, so the print is
+ * symmetric about it; the rows run through the item's `at` height, so a
+ * print lines up from one region to the next.
+ */
+export function tileLayout(
+    layout: FlatsLayout,
+    regions: FlatsRegions,
+    body: string,
+    panel: FlatsPanel,
+    item: Pick<FlatsItem, "at" | "regions">,
+    tw: number,
+    th: number,
+): RegionTiles[] {
+    const out: RegionTiles[] = [];
+    for (const r of regions.regions) {
+        if (r.panel !== panel || !item.regions?.includes(r.id)) continue;
+        const xs = r.polygon.map((q) => q[0]);
+        const ys = r.polygon.map((q) => q[1]);
+        const x0 = Math.min(...xs);
+        const x1 = Math.max(...xs);
+        const y0 = Math.min(...ys);
+        const y1 = Math.max(...ys);
+        const mx = (x0 + x1) / 2;
+        const my = (y0 + y1) / 2;
+        const k =
+            panel === "cape"
+                ? 1
+                : gradeAt(layout, regions, body, panel, mx, my).k || 1;
+        const w = tw / k;
+        // a column centred on mx, and a row whose middle is at the item's height
+        const first = mx - w / 2 - Math.ceil((mx - w / 2 - x0) / w) * w;
+        const rowStart = item.at[1] - th / 2;
+        const top = rowStart - Math.ceil((rowStart - y0) / th) * th;
+        const origins: [number, number][] = [];
+        for (let y = top; y < y1; y += th)
+            for (let x = first; x < x1; x += w) origins.push([x, y]);
+        out.push({ region: r.id, polygon: r.polygon, origins, w, h: th, k });
+    }
+    return out;
+}
+
+/** A place an item can be put with one pick: its panel and centre (panel inches). */
+export interface ItemPreset {
+    id: "chest" | "backNumber" | "sleeveLeft" | "sleeveRight";
+    panel: FlatsPanel;
+    at: [number, number];
+}
+
+/** The x middle of a polygon's span at height y, or null when y misses it. */
+function spanMiddle(
+    polygon: readonly (readonly [number, number])[],
+    y: number,
+): number | null {
+    const xs: number[] = [];
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const [xi, yi] = polygon[i];
+        const [xj, yj] = polygon[j];
+        if (yi > y !== yj > y) xs.push(((xj - xi) * (y - yi)) / (yj - yi) + xi);
+    }
+    if (xs.length < 2) return null;
+    return (Math.min(...xs) + Math.max(...xs)) / 2;
+}
+
+/**
+ * The places the item list offers (docs/3d/uniform-artwork.md, "Placing
+ * items"): the chest centre, the back number centre, and each sleeve's
+ * upper arm on the front panel (a fifth of the way down the sleeve, in the
+ * middle of its width). Read from the region outlines, so they follow the
+ * template.
+ */
+export function itemPresets(regions: FlatsRegions): ItemPreset[] {
+    const presets: ItemPreset[] = [
+        { id: "chest", panel: "front", at: [FLATS_CENTRE_X, CHEST_CENTRE_Y] },
+        {
+            id: "backNumber",
+            panel: "back",
+            at: [FLATS_CENTRE_X, BACK_NUMBER_CENTRE_Y],
+        },
+    ];
+    for (const [id, region] of [
+        ["sleeveLeft", "front-sleeve-L"],
+        ["sleeveRight", "front-sleeve-R"],
+    ] as const) {
+        const r = regions.regions.find((q) => q.id === region);
+        if (!r) continue;
+        const ys = r.polygon.map((q) => q[1]);
+        const top = Math.min(...ys);
+        const y = top + 0.2 * (Math.max(...ys) - top);
+        const x = spanMiddle(r.polygon, y);
+        if (x === null) continue;
+        presets.push({
+            id,
+            panel: "front",
+            at: [Math.round(x * 100) / 100, Math.round(y * 100) / 100],
+        });
+    }
+    return presets;
+}
+
+/** The region under an item's centre on its panel, or null. */
+export function regionUnder(
+    regions: FlatsRegions,
+    panel: FlatsPanel,
+    x: number,
+    y: number,
+): string | null {
+    if (panel === "cape") return "cape";
+    return (
+        regions.regions.find(
+            (r) => r.panel === panel && insidePolygon(r.polygon, x, y),
+        )?.id ?? null
+    );
 }
 
 /** Pixels of each region's rim that take their color from further in (anti-aliased art edges). */

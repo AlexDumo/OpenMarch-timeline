@@ -23,15 +23,20 @@ export class UniformPackStoreError extends Error {
     }
 }
 
-/** Resolves with the value now in `uniformArtwork` */
+/**
+ * Resolves with the value now in `uniformArtwork`. With `versionOf`, the pack is stored as a new
+ * version of that uniform asset (an edit of its items, fork #1258) rather than a new uniform.
+ */
 export function storeUniformPack(
     bytes: Uint8Array,
     {
         api = window.view3d,
         timeoutMs = UNIFORM_PACK_STORE_TIMEOUT_MS,
+        versionOf,
     }: {
         api?: Pick<typeof window.view3d, "on" | "requestUniformPack">;
         timeoutMs?: number;
+        versionOf?: string;
     } = {},
 ): Promise<string> {
     const id = crypto.randomUUID();
@@ -51,6 +56,8 @@ export function storeUniformPack(
             stop();
             reject(new UniformPackStoreError("timedOut"));
         }, timeoutMs);
-        api.requestUniformPack({ id, bytes });
+        api.requestUniformPack(
+            versionOf ? { id, bytes, versionOf } : { id, bytes },
+        );
     });
 }

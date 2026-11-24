@@ -14,6 +14,8 @@ import {
 const uniformPackRequestSchema = z.object({
     id: z.string().min(1).max(64),
     bytes: z.instanceof(Uint8Array),
+    /** Store it as a new version of this uniform asset (an edit of its items, fork #1258) */
+    versionOf: z.string().uuid().optional(),
 });
 
 /**
@@ -23,7 +25,10 @@ const uniformPackRequestSchema = z.object({
  */
 export function storeUniformPackRequest(
     raw: unknown,
-    store: (pack: Uint8Array) => Promise<string>,
+    store: (request: {
+        pack: Uint8Array;
+        versionOf?: string;
+    }) => Promise<string>,
     publish: (
         channel: typeof VIEW3D_UNIFORM_PACK_RESULT_CHANNEL,
         result: View3dUniformPackResult,
@@ -38,10 +43,10 @@ export function storeUniformPackRequest(
         );
         return Promise.resolve();
     }
-    const { id, bytes } = asked.data;
+    const { id, bytes, versionOf } = asked.data;
     const answer = (result: View3dUniformPackResult) =>
         publish(VIEW3D_UNIFORM_PACK_RESULT_CHANNEL, result);
-    return store(bytes)
+    return store({ pack: bytes, versionOf })
         .then((value) => answer({ id, ok: true, value }))
         .catch(() => answer({ id, ok: false }));
 }

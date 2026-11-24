@@ -40,6 +40,7 @@ import { KITS_WITH_OWN_FIELD } from "@/view3d/core/venueSettings";
 import { SilkArtworkControls } from "./SilkArtworkControls";
 import { UniformTemplateControls } from "./UniformTemplateControls";
 import { UniformImportControls } from "./UniformImportControls";
+import { UniformItemsControls } from "./UniformItemsControls";
 import {
     BrassFinishPicker,
     LightingControl,
@@ -185,6 +186,7 @@ export function SettingsPanel({
                         <UniformTemplateControls />
                         <UniformImportControls />
                     </Row>
+                    <UniformItemsControls />
                     <Row label={t("view3d.settings.brassFinish")}>
                         <BrassFinishPicker />
                     </Row>

@@ -13,7 +13,7 @@ import {
     getStoredVenueSettings,
     updateVenueSettingsInTransaction,
 } from "./view3dVenue";
-import { addShowAssetInTransaction } from "./showAssets";
+import { addShowAssetInTransaction, getShowAssets } from "./showAssets";
 import {
     defaultVenueForField,
     type VenueFieldInfo,
@@ -21,7 +21,6 @@ import {
 import {
     UNIFORM_ASSET_KIND,
     UNIFORM_PACK_PART,
-    UNIFORM_PACK_VERSION,
     uniformPackManifestSchema,
     type UniformPackManifest,
 } from "@/view3d/core/uniformPack/format";
@@ -32,6 +31,10 @@ import type { JsonObject } from "@/showAssets/hash";
  * Adds the pack file `pack` to the show's assets (reusing it if the show has these bytes already)
  * and dresses the band in it. Returns the value now in `uniformArtwork`.
  *
+ * With `versionOf`, an asset id, the pack is added as a new version of that uniform (an edit of
+ * its items in the 3D View, fork #1258), so the Assets view keeps one uniform, not one per edit.
+ * An id the show doesn't have as a uniform is ignored, and the pack is a uniform of its own.
+ *
  * `manifest` is the pack's, read from these bytes by the caller: the editor reads untrusted packs
  * only in the uniform pack worker (`readPackManifest`), never inside a transaction on its main
  * thread. It is checked again here, which costs nothing.
@@ -41,21 +44,32 @@ export async function setUniformPackInTransaction({
     pack,
     manifest: given,
     field,
+    versionOf,
 }: {
     tx: DbTransaction;
     pack: Uint8Array;
     manifest: UniformPackManifest;
     /** For the default venue, when the show has no venue row yet */
     field: VenueFieldInfo;
+    versionOf?: string;
 }): Promise<string> {
     const manifest = uniformPackManifestSchema.parse(given);
+    const id =
+        versionOf !== undefined &&
+        (await getShowAssets({ db: tx })).some(
+            (asset) =>
+                asset.id === versionOf && asset.kind === UNIFORM_ASSET_KIND,
+        )
+            ? versionOf
+            : undefined;
     const { ref } = await addShowAssetInTransaction({
         tx,
         asset: {
+            ...(id ? { id } : {}),
             kind: UNIFORM_ASSET_KIND,
             name: manifest.name,
             parts: { [UNIFORM_PACK_PART]: pack },
-            sidecar: { formatVersion: UNIFORM_PACK_VERSION },
+            sidecar: { formatVersion: manifest.formatVersion },
             credits: { ...manifest.credits } as JsonObject,
         },
     });
@@ -76,16 +90,24 @@ export async function setUniformPack({
     pack,
     manifest,
     field,
+    versionOf,
 }: {
     db: DbConnection;
     pack: Uint8Array;
     manifest: UniformPackManifest;
     field: VenueFieldInfo;
+    versionOf?: string;
 }): Promise<string> {
     return await transactionWithHistory(
         db,
         "setUniformPack",
         async (tx) =>
-            await setUniformPackInTransaction({ tx, pack, manifest, field }),
+            await setUniformPackInTransaction({
+                tx,
+                pack,
+                manifest,
+                field,
+                versionOf,
+            }),
     );
 }

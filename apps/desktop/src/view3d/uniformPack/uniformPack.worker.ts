@@ -13,8 +13,11 @@
 import {
     FLATS_PAGE_DPI,
     FLATS_PAGE_PX,
+    UNIFORM_ITEM_MAX_PIXELS,
+    UNIFORM_ITEM_STORED_PX,
     UNIFORM_LAYER_MAX_PIXELS,
     UniformPackError,
+    packWithItems,
     pngHeaderSize,
     readUniformPack,
 } from "@/view3d/core/uniformPack/format";
@@ -40,19 +43,25 @@ class Refused extends Error {
     }
 }
 
-/** A PNG's bitmap at `width` × `height`, after its header is checked */
+/**
+ * A PNG's bitmap at `width` × `height` (its own size when they're left out), after its header is
+ * checked against `maxPixels`
+ */
 async function decodePng(
     bytes: Uint8Array,
-    width: number,
-    height: number,
+    width?: number,
+    height?: number,
+    maxPixels = UNIFORM_LAYER_MAX_PIXELS,
 ): Promise<{ bitmap: ImageBitmap; source: { width: number; height: number } }> {
     const source = pngHeaderSize(bytes);
     if (!source) throw new Refused("notPng", "not a PNG");
-    if (source.width * source.height > UNIFORM_LAYER_MAX_PIXELS)
+    if (source.width * source.height > maxPixels)
         throw new Refused(
             "tooLarge",
-            `${source.width} × ${source.height} px is over ${UNIFORM_LAYER_MAX_PIXELS} pixels`,
+            `${source.width} × ${source.height} px is over ${maxPixels} pixels`,
         );
+    width ??= source.width;
+    height ??= source.height;
     let bitmap: ImageBitmap;
     try {
         bitmap = await createImageBitmap(
@@ -110,6 +119,52 @@ async function finishPage(
     reply({ type: "page", png, notes, scaledFrom }, [png.buffer]);
 }
 
+/**
+ * An item image from a canvas holding it: trimmed to its painted pixels (alpha above 8), scaled to
+ * at most `UNIFORM_ITEM_STORED_PX` on its long side, and encoded as PNG. Refuses an empty image.
+ */
+async function finishItem(source: OffscreenCanvas) {
+    const { width, height } = source;
+    const ctx = source.getContext("2d", { willReadFrequently: true })!;
+    const data = ctx.getImageData(0, 0, width, height).data;
+    let x0 = width;
+    let y0 = height;
+    let x1 = -1;
+    let y1 = -1;
+    for (let y = 0; y < height; y++)
+        for (let x = 0; x < width; x++)
+            if (data[(y * width + x) * 4 + 3] > 8) {
+                if (x < x0) x0 = x;
+                if (x > x1) x1 = x;
+                if (y < y0) y0 = y;
+                if (y > y1) y1 = y;
+            }
+    if (x1 < 0) throw new Refused("unreadable", "the image is empty");
+    const w = x1 - x0 + 1;
+    const h = y1 - y0 + 1;
+    const scale = Math.min(1, UNIFORM_ITEM_STORED_PX / Math.max(w, h));
+    const out = new OffscreenCanvas(
+        Math.max(1, Math.round(w * scale)),
+        Math.max(1, Math.round(h * scale)),
+    );
+    const outCtx = out.getContext("2d")!;
+    outCtx.imageSmoothingQuality = "high";
+    outCtx.drawImage(source, x0, y0, w, h, 0, 0, out.width, out.height);
+    const blob = await out.convertToBlob({ type: "image/png" });
+    const png = new Uint8Array(await blob.arrayBuffer());
+    const bitmap = out.transferToImageBitmap();
+    reply(
+        {
+            type: "itemImage",
+            png,
+            bitmap,
+            width: bitmap.width,
+            height: bitmap.height,
+        },
+        [png.buffer, bitmap],
+    );
+}
+
 async function handle(request: UniformPackRequest) {
     const { width, height } = FLATS_PAGE_PX;
     switch (request.type) {
@@ -165,7 +220,83 @@ async function handle(request: UniformPackRequest) {
                 bitmap.close();
             }
             const bitmap = canvas.transferToImageBitmap();
-            reply({ type: "bitmap", bitmap }, [bitmap]);
+            const itemBitmaps: { file: string; bitmap: ImageBitmap }[] = [];
+            for (const { file, png } of pack.itemFiles) {
+                const decoded = await decodePng(
+                    png,
+                    undefined,
+                    undefined,
+                    UNIFORM_ITEM_MAX_PIXELS,
+                );
+                itemBitmaps.push({ file, bitmap: decoded.bitmap });
+            }
+            reply(
+                {
+                    type: "flattened",
+                    bitmap,
+                    items: pack.manifest.items ?? [],
+                    itemBitmaps,
+                },
+                [bitmap, ...itemBitmaps.map((i) => i.bitmap)],
+            );
+            return;
+        }
+        case "item": {
+            const { bitmap } = await decodePng(
+                request.bytes,
+                undefined,
+                undefined,
+                UNIFORM_ITEM_MAX_PIXELS,
+            );
+            const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+            canvas.getContext("2d")!.drawImage(bitmap, 0, 0);
+            bitmap.close();
+            await finishItem(canvas);
+            return;
+        }
+        case "itemPixels": {
+            const { width: w, height: h, pixels } = request;
+            if (
+                !Number.isInteger(w) ||
+                !Number.isInteger(h) ||
+                w < 1 ||
+                h < 1 ||
+                w * h > UNIFORM_ITEM_MAX_PIXELS ||
+                pixels.length !== w * h * 4
+            )
+                throw new Refused("unreadable", "the drawn item's size");
+            const canvas = new OffscreenCanvas(w, h);
+            canvas
+                .getContext("2d")!
+                .putImageData(
+                    new ImageData(
+                        pixels as Uint8ClampedArray<ArrayBuffer>,
+                        w,
+                        h,
+                    ),
+                    0,
+                    0,
+                );
+            await finishItem(canvas);
+            return;
+        }
+        case "withItems": {
+            const pack = readUniformPack(request.bytes);
+            for (const [file, png] of Object.entries(request.files)) {
+                const size = pngHeaderSize(png);
+                if (!size || size.width * size.height > UNIFORM_ITEM_MAX_PIXELS)
+                    throw new Refused("notPng", `${file} isn't an item image`);
+            }
+            let bytes: Uint8Array;
+            try {
+                bytes = packWithItems(pack, request.items, request.files);
+            } catch (error) {
+                throw new Refused(
+                    "damaged",
+                    error instanceof Error ? error.message : String(error),
+                );
+            }
+            reply({ type: "packFile", bytes }, [bytes.buffer]);
             return;
         }
     }
