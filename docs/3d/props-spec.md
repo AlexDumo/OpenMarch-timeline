@@ -7,6 +7,10 @@
 - Decisions: [ADR 0010](../adr/0010-3d-view.md) amendment of 2026-10-11
   (D-9 to D-22) and the [ADR 0004](../adr/0004-performer-cues.md) amendment of 2026-10-11
 - Work: the customization track (C1 to C5) in [phases/](phases/)
+- Amended 2026-11-24 (proposed, pending owner review): uniform artwork is
+  front/back flats rendered by the hybrid wrap, in
+  [uniform-artwork.md](uniform-artwork.md). It replaces the front/back
+  projection in section 8 and the Uniform panel template in section 3.
 
 This spec compiles the 25 resolved tickets of the 3D customization map and the
 owner's review answers of 2026-10-11 into one document workers can read. The
@@ -322,11 +326,13 @@ aliases, never shown as labels [owner, 2026-10-12, Q39–Q41, Q44].
   at size. Values set by the owner on 2026-10-11 [Q29–Q32]:
   - Safe area: 1 in for flags and props; 6 in for floors and Floor props.
   - Bleed: 2 in for floors and Floor props; ½ in for prop panels.
-  - PNG resolution: flags, props and Uniform parts at 150 DPI; floors capped at 8,192 px on the long edge, noting that the PDF or
-    SVG is the print master.
+  - PNG resolution: flags and props at 150 DPI; floors capped at 8,192 px on the long edge, noting that the PDF or
+    SVG is the print master. Uniform flats are 32 px/in (amended
+    2026-11-24, [uniform-artwork.md](uniform-artwork.md)).
   - Silk templates put the pole side on the left (fly wide × header tall).
-    Uniform panels split front from back at z = 0 in the rest pose and are
-    sized from the median body. Floor props use the floor resolution.
+    The uniform template is one flats page (front, back and cape panels,
+    sized from the median body), amended 2026-11-24: see
+    [uniform-artwork.md](uniform-artwork.md). Floor props use the floor resolution.
   - Cut outlines come from traced vendor silhouettes (research
     `research/silk-cuts`); low-confidence shapes carry a "shape from vendor
     photo" note. Templates mark the pole sleeve strip (about 3 in) with a
@@ -723,12 +729,15 @@ rounded to the page. Printing behavior cues stays out of scope.
   accent, trim, …). The pattern (classic, sash, plastron, military, split,
   fade) belongs to the Top; the seam stripe to Bottoms. The data also accepts
   a literal color per part; the v1 editor exposes only the palette.
-- **Artwork:** Top, Bottoms and Overlay take front/back Artwork slots,
-  projected in rest-pose meters inside the uniform shader, with no UVs, on all
-  seven body types and the block bodies. Templates are sized to the median
-  v4u body and graded proportionally; an Artwork's size means "as worn by the
-  reference body". Art wraps poorly onto sides and sleeves, and the template
-  says so [08, 09].
+- **Artwork** (amended 2026-11-24, proposed): Top, Bottoms and Overlay take
+  artwork as front/back **flats** on one page template. The hybrid wrap renders
+  them: the front flat covers the front half of each body segment and the back
+  flat the back half, by angle round the spine or the limb's bone, with no UVs.
+  Logos, numbers and crests are placed **items** that keep their shape on every
+  body. Artists upload PNG, agents write SVG; both become one uniform pack. The
+  full design is [uniform-artwork.md](uniform-artwork.md). The earlier
+  front/back projection in rest-pose meters is superseded: it smeared on the
+  sides and sleeves [08, 09].
 - **Garments:** a custom rigged model that replaces the parts it declares (a
   unitard replaces Top and Bottoms) and can bring its own slots. The median
   fit is required, the other six body-type fits optional. A mesh names its
@@ -738,7 +747,11 @@ rounded to the page. Printing behavior cues stays out of scope.
   clip"). Headwear, Footwear and Gloves take colors only unless a Garment
   replaces them.
 - **Variants:** every variation is its own uniform (hats off, soloist, drum
-  major), made with "Duplicate as variant".
+  major), made with "Duplicate as variant". Amended 2026-11-24 (proposed): a
+  uniform pack may hold several **modes** (ordered lists of artwork layers plus
+  palette and option overrides, such as sash out or unzipped) and several
+  **variants** (guard, percussion, drum major) that share layers. To a Uniform
+  cue each mode is one uniform. See [uniform-artwork.md](uniform-artwork.md).
 
 ### Library and show [06, 09, 16, 26.17]
 
@@ -779,6 +792,10 @@ rounded to the page. Printing behavior cues stays out of scope.
   1 / 4 / 8 / 16 looks on an M1 Pro) [15].
 - Garments cost +1 draw per fitted body type × primitives, and cast no
   shadows [04, 09].
+- Flats artwork (amended 2026-11-24): one small lookup table per body type and
+  one composed atlas per (look, body type in use), cached and counted in the
+  budget notes; if the shader costs too much on the web, the same mapping is
+  baked into per-body UVs. See [uniform-artwork.md](uniform-artwork.md).
 
 ## 9. Budgets
 
