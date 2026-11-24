@@ -18,8 +18,14 @@ import {
     closedOutlineOf,
     fitOutline,
     goRoundPreview,
+    lineRound,
+    loopOutline,
     planGoRound,
+    walkingOutline,
 } from "../timelineTrailAround";
+import { ringTrailOrder } from "../timelineTrailDrag";
+import { lineTool } from "@/shapes/line/lineTool";
+import { linePath, SMOOTH, type LineParams } from "@/shapes/line/lineGeometry";
 
 /**
  * Any closed outline as a closed route (fork #1213): the smooth loop through the marchers, and a
@@ -193,5 +199,359 @@ describe("closed outlines as arcs (fork #1213)", () => {
         for (const p of [0.13, 0.37, 0.5, 0.81])
             for (const at of goRoundPreview(plan, p))
                 expect(off(outline.loop, at)).toBeLessThan(1e-6);
+    });
+});
+
+/**
+ * Review of fork #1215 (2026-11-23). Each of these failed before its fix.
+ */
+describe("a loop is read from where the marchers stand, not from their id order (review, HIGH)", () => {
+    /** A seeded random number from 0 to 1 */
+    const seeded = (seed: number) => () => {
+        seed = (seed * 16807) % 2147483647;
+        return seed / 2147483647;
+    };
+    const shuffled = <T>(a: readonly T[], rnd: () => number): T[] =>
+        a
+            .map((x) => [rnd(), x] as const)
+            .sort((p, q) => p[0] - q[0])
+            .map(([, x]) => x);
+    const permutations = <T>(a: T[]): T[][] =>
+        a.length <= 1
+            ? [a]
+            : a.flatMap((x, i) =>
+                  permutations([...a.slice(0, i), ...a.slice(i + 1)]).map(
+                      (rest) => [x, ...rest],
+                  ),
+              );
+    /** Whether Follow would go around: a closed loop fitted through the marchers */
+    const loops = (pts: readonly XY[]) =>
+        closedOutlineOf(pts, 1)?.kind === "loop";
+    /** The ring as sets of neighbors, by place, so two id orders can be compared */
+    const ringOf = (pts: readonly XY[]): string | null => {
+        const ring = ringOrder(pts);
+        if (!ring) return null;
+        const key = (i: number) => `${pts[i]![0]},${pts[i]![1]}`;
+        return ring
+            .map((i, k) =>
+                [key(i), key(ring[(k + 1) % ring.length]!)].sort().join("|"),
+            )
+            .sort()
+            .join(" ");
+    };
+
+    it("the reviewer's line of four, lowest id second, is no loop", () => {
+        const starts: XY[] = [
+            [2, 0],
+            [0, 0],
+            [4, 0],
+            [6, 0],
+        ];
+        expect(ringOrder(starts)).toBeNull();
+        expect(closedOutlineOf(starts, 1)).toBeNull();
+    });
+
+    it("straight lines, even or uneven, in every id order: never a loop", () => {
+        for (const xs of [
+            [0, 2, 4, 6],
+            [0, 2, 4, 6, 8],
+            [0, 1, 3, 4, 6],
+            [0, 2, 3, 5, 6, 8],
+        ])
+            for (const order of permutations(xs)) {
+                const pts = order.map((x): XY => [x, 0]);
+                expect(ringOrder(pts), `${order}`).toBeNull();
+                expect(loops(pts), `${order}`).toBe(false);
+            }
+        // a slanted line and a gently bowed one, in random id orders
+        const rnd = seeded(11);
+        const slanted: XY[] = Array.from({ length: 7 }, (_, i) => [
+            3 * i,
+            1.3 * i,
+        ]);
+        const bowed: XY[] = Array.from({ length: 6 }, (_, i) => {
+            const t = -0.6 + 0.24 * i;
+            return [20 * Math.sin(t), 20 - 20 * Math.cos(t)];
+        });
+        for (let t = 0; t < 200; t++) {
+            expect(ringOrder(shuffled(slanted, rnd))).toBeNull();
+            expect(loops(shuffled(bowed, rnd))).toBe(false);
+        }
+    });
+
+    it("blocks, on their grid or a little off it, in random id orders: never a loop", () => {
+        const rnd = seeded(7);
+        for (const [w, h] of [
+            [3, 3],
+            [3, 4],
+            [4, 4],
+            [4, 5],
+            [5, 6],
+        ] as const) {
+            const grid: XY[] = Array.from({ length: w * h }, (_, i) => [
+                (i % w) * 2,
+                Math.floor(i / w) * 2,
+            ]);
+            for (let t = 0; t < 300; t++) {
+                expect(loops(shuffled(grid, rnd)), `${w}x${h}`).toBe(false);
+                expect(ringOrder(shuffled(grid, rnd)), `${w}x${h}`).toBeNull();
+            }
+        }
+        // the 3 by 3 block with every choice of first and second marcher (the reviewer's 47 of 72)
+        const block: XY[] = Array.from({ length: 9 }, (_, i) => [
+            (i % 3) * 2,
+            Math.floor(i / 3) * 2,
+        ]);
+        for (let f = 0; f < 9; f++)
+            for (let g = 0; g < 9; g++) {
+                if (g === f) continue;
+                const order = [
+                    f,
+                    g,
+                    ...block.map((_, i) => i).filter((i) => i !== f && i !== g),
+                ];
+                expect(ringOrder(order.map((i) => block[i]!))).toBeNull();
+            }
+    });
+
+    it("scattered marchers: the answer never depends on id order, and a scatter is rarely a loop", () => {
+        const rnd = seeded(7);
+        let taken = 0;
+        const runs = 1500;
+        for (let t = 0; t < runs; t++) {
+            const n = 4 + Math.floor(rnd() * 8);
+            const pts: XY[] = Array.from({ length: n }, () => [
+                rnd() * 20,
+                rnd() * 20,
+            ]);
+            const ring = ringOf(pts);
+            // the same answer, and the same ring, whatever order they come in
+            for (let k = 0; k < 4; k++)
+                expect(ringOf(shuffled(pts, rnd))).toBe(ring);
+            if (!ring) continue;
+            taken++;
+            // one that is taken really is a ring: each marcher's nearest stands beside it
+            const order = ringOrder(pts)!;
+            order.forEach((i, k) => {
+                const d = (j: number) =>
+                    Math.hypot(
+                        pts[i]![0] - pts[j]![0],
+                        pts[i]![1] - pts[j]![1],
+                    );
+                const nearest = Math.min(
+                    ...pts.map((_, j) => (j === i ? Infinity : d(j))),
+                );
+                const beside = Math.min(
+                    d(order[(k + 1) % n]!),
+                    d(order[(k + n - 1) % n]!),
+                );
+                expect(beside).toBeCloseTo(nearest, 9);
+            });
+        }
+        // Before the fix two in five scatters opened going around. A few still stand in a real
+        // ring (five marchers that happen to make a tidy pentagon): under one in twenty
+        expect(taken / runs).toBeLessThan(0.05);
+    });
+
+    it("real loops are still loops, in any id order, placed by hand a step off or not", () => {
+        const rnd = seeded(3);
+        for (const pts of [
+            oval(12, 14, 7),
+            bean(16),
+            bean(12),
+            oval(8, 9, 6),
+        ]) {
+            const ring = ringOf(pts);
+            expect(ring).not.toBeNull();
+            for (let k = 0; k < 20; k++) {
+                const mixed = shuffled(pts, rnd);
+                expect(ringOf(mixed)).toBe(ring);
+                expect(loops(mixed)).toBe(true);
+            }
+        }
+        // twelve and sixteen round a bean, each up to a step off its place: nearly always found
+        for (const n of [12, 16]) {
+            let found = 0;
+            for (let t = 0; t < 200; t++) {
+                const pts = bean(n).map(
+                    ([x, y]): XY => [
+                        x + (rnd() - 0.5) * 2,
+                        y + (rnd() - 0.5) * 2,
+                    ],
+                );
+                if (ringOrder(shuffled(pts, rnd))) found++;
+            }
+            expect(found, `${n}`).toBeGreaterThanOrEqual(190);
+        }
+    });
+});
+
+describe("a leader pulled out of a narrow placed shape is written round the outline shown (review, MEDIUM)", () => {
+    /** `n` round an oval, evenly by angle, none on its long axis */
+    const narrow = (n: number, a: number, b: number): XY[] =>
+        Array.from({ length: n }, (_, i) => {
+            const t = (2 * Math.PI * (i + 0.5)) / n;
+            return [a * Math.cos(t), b * Math.sin(t)];
+        });
+
+    it("the reviewer's narrow ovals: the ring is read round the placed outline, which their places alone don't give back", () => {
+        for (const [a, b, n] of [
+            [10, 1.2, 14],
+            [10, 1.5, 16],
+            [12, 2, 20],
+            [8, 1, 12],
+        ] as const) {
+            const starts = narrow(n, a, b);
+            const drawn = oval(128, a, b);
+            // the tool goes around the placed oval
+            const placed = closedOutlineOf(starts, 1, [drawn])!;
+            expect(placed.kind, `${a}x${b}`).toBe("loop");
+            // their places alone make no ring: the two sides are nearer each other than the
+            // marchers along them
+            expect(ringOrder(starts), `${a}x${b}`).toBeNull();
+            for (const reversed of [false, true]) {
+                const leader = 2;
+                const line = lineRound(
+                    walkingOutline(placed, reversed).loop,
+                    starts,
+                    leader,
+                );
+                // without the outline shown the write can't find the ring (what refused the trail)
+                expect(ringTrailOrder(starts, line, leader, 1)).toBeNull();
+                // with it, the line the tool shows is the one written
+                expect(
+                    ringTrailOrder(
+                        starts,
+                        line,
+                        leader,
+                        1,
+                        null,
+                        placed.geometry,
+                    ),
+                    `${a}x${b}`,
+                ).toEqual(line);
+            }
+            // an outline they don't stand on is no help
+            expect(
+                ringTrailOrder(
+                    starts,
+                    lineRound(placed.loop, starts, 2),
+                    2,
+                    1,
+                    null,
+                    loopAlong(oval(64, a + 6, b + 6))!,
+                ),
+            ).toBeNull();
+        }
+    });
+});
+
+describe("a drawn outline's straight sides stay straight (review, MEDIUM)", () => {
+    /** How far `p` is from the closed run of points `drawn` */
+    const offDrawn = (drawn: readonly XY[], p: XY) =>
+        Math.min(
+            ...drawn.map((a, i) => {
+                const b = drawn[(i + 1) % drawn.length]!;
+                const dx = b[0] - a[0];
+                const dy = b[1] - a[1];
+                const f = Math.max(
+                    0,
+                    Math.min(
+                        1,
+                        ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) /
+                            (dx * dx + dy * dy || 1),
+                    ),
+                );
+                return Math.hypot(a[0] + f * dx - p[0], a[1] + f * dy - p[1]);
+            }),
+        );
+    /** A stadium: two straight sides of `length`, `2·r` apart, joined by half circles */
+    const stadium = (length: number, r: number, along: number, arc: number) => {
+        const drawn: XY[] = [];
+        for (let x = 0; x <= length + 1e-9; x += along) drawn.push([x, 0]);
+        for (let a = -Math.PI / 2 + arc; a < Math.PI / 2 - 1e-9; a += arc)
+            drawn.push([length + r * Math.cos(a), r + r * Math.sin(a)]);
+        for (let x = length; x >= -1e-9; x -= along) drawn.push([x, 2 * r]);
+        for (let a = Math.PI / 2 + arc; a < 1.5 * Math.PI - 1e-9; a += arc)
+            drawn.push([r * Math.cos(a), r + r * Math.sin(a)]);
+        return drawn;
+    };
+    /** The farthest the loop strays from the drawn outline, and the outline from the loop */
+    const strays = (drawn: readonly XY[]) => {
+        const g = loopAlong(drawn)!;
+        expect(validateRouteGeometry(g).ok).toBe(true);
+        const loop = makeLoop(g)!;
+        let out = 0;
+        for (let d = 0; d < loop.L; d += loop.L / 600)
+            out = Math.max(out, offDrawn(drawn, loopPoint(loop, d)));
+        const back = Math.max(...drawn.map((p) => off(loop, p)));
+        return { out, back, loop, g };
+    };
+
+    it("stadiums of every roundness: the sides aren't bowed (they were 0.37 to 0.45 off)", () => {
+        for (const r of [0.75, 1.5, 3, 5, 8])
+            // the sides drawn as one stretch each, or through points along them
+            for (const along of [10, 0.5]) {
+                const drawn = stadium(10, r, along, 0.2);
+                const { out, back, loop } = strays(drawn);
+                // within a sliver of the drawn outline (the half circles are drawn as chords
+                // 0.2 radians long, so the arcs sit that much outside them)
+                expect(out, `r=${r} along=${along}`).toBeLessThan(
+                    0.006 * r + 0.01,
+                );
+                expect(back, `r=${r} along=${along}`).toBeLessThan(
+                    0.006 * r + 0.01,
+                );
+                // and exactly on the straight sides
+                for (let x = 0.5; x < 10; x += 0.5) {
+                    expect(off(loop, [x, 0])).toBeLessThan(1e-9);
+                    expect(off(loop, [x, 2 * r])).toBeLessThan(1e-9);
+                }
+                // the sides meet the half circles without a corner
+                expect(outlineCorners(loop)).toEqual([]);
+            }
+    });
+
+    it("a real Line tool shape, two straight sides closed by curves: followed as drawn", () => {
+        // a stadium as the Line tool draws it: corners at the sides' ends, a smooth point on
+        // each cap
+        const params: LineParams = {
+            points: [
+                { x: 0, y: 0, tension: 0 },
+                { x: 100, y: 0, tension: 0 },
+                { x: 118, y: 18, tension: SMOOTH },
+                { x: 100, y: 36, tension: 0 },
+                { x: 0, y: 36, tension: 0 },
+                { x: -18, y: 18, tension: SMOOTH },
+            ],
+            closed: true,
+            spacing: { mode: "fit" },
+        };
+        const drawn = lineTool.outline!(params, 16).map(
+            ({ x, y }): XY => [x, y],
+        );
+        // the outline gives a straight side by its ends alone
+        expect(drawn.filter(([x, y]) => y === 0 && x > 0 && x < 100)).toEqual(
+            [],
+        );
+        const { out, back, loop, g } = strays(drawn);
+        expect(out).toBeLessThan(0.05);
+        expect(back).toBeLessThan(0.05);
+        // on the path itself, finer than it is drawn, and dead on the straight sides
+        const path = linePath(params);
+        for (const q of path.polyline(path.length / 400))
+            expect(off(loop, [q.x, q.y])).toBeLessThan(0.05);
+        for (let x = 5; x < 100; x += 5) {
+            expect(off(loop, [x, 0])).toBeLessThan(1e-9);
+            expect(off(loop, [x, 36])).toBeLessThan(1e-9);
+        }
+        // and marchers the tool would place round it are on the loop
+        const marchers = path
+            .polyline(path.length / 16)
+            .slice(0, 16)
+            .map((q): XY => [q.x, q.y]);
+        const outline = loopOutline(g, marchers, 11.25)!;
+        expect(outline.kind).toBe("loop");
+        expect(outline.residual).toBeLessThan(0.05);
     });
 });

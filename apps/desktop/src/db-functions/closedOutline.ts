@@ -117,7 +117,7 @@ const clockwise = (pts: readonly XY[]): boolean => {
  * shape): a curve through every point, as Curved draws a trail through its points
  */
 export const loopThrough = (pts: readonly XY[]): RouteGeometry | null =>
-    loopWithTangents(
+    loopWithWays(
         pts,
         pts.map(() => false),
         new Map(),
@@ -128,12 +128,19 @@ export const loopThrough = (pts: readonly XY[]): RouteGeometry | null =>
 const OUTLINE_CORNER = (30 * Math.PI) / 180;
 /** Along a curve, a point is kept each time the outline has turned this much (15°) */
 const OUTLINE_STEP = (15 * Math.PI) / 180;
+/**
+ * ... and at least every this many drawn stretches, so a long run that hardly bends and then
+ * does (a curve leaving a corner) isn't met by two arcs alone
+ */
+const OUTLINE_PIECES = 8;
 
 /**
  * A stretch of a drawn outline this many times longer than a stretch beside it is a straight
  * side of the shape, not one more short piece of a curve (curves are drawn as many short ones)
  */
 const SIDE_RATIO = 3;
+/** At the end of a straight side, a turn past this is a corner: the curve doesn't run on from the side (5°) */
+const SIDE_CORNER = (5 * Math.PI) / 180;
 /** Points of a drawn outline in one straight run are one stretch: bends under this are none (0.006°) */
 const STRAIGHT_TURN = 1e-4;
 /** ... as long as the run hasn't turned more than this in all (0.06°) */
@@ -162,7 +169,6 @@ export function loopAlong(outline: readonly XY[]): RouteGeometry | null {
     const turns = pts.map((_, i) =>
         turnAt(pts[(i + n - 1) % n]!, pts[i]!, pts[(i + 1) % n]!),
     );
-    const sharp = turns.map((t) => Math.abs(t) > OUTLINE_CORNER);
     // stretch i runs from point i to the next; a side when much longer than a stretch beside it
     const lens = pts.map((p, i) => dist(p, pts[(i + 1) % n]!));
     const side = lens.map(
@@ -170,39 +176,72 @@ export function loopAlong(outline: readonly XY[]): RouteGeometry | null {
             l >=
             SIDE_RATIO * Math.min(lens[(i + n - 1) % n]!, lens[(i + 1) % n]!),
     );
+    // a sharp turn is a corner; at the end of a straight side a slighter one is too, where a
+    // curve leaves the side at an angle instead of running on from it
+    const sharp = turns.map(
+        (t, i) =>
+            Math.abs(t) >
+            (side[i] || side[(i + n - 1) % n] ? SIDE_CORNER : OUTLINE_CORNER),
+    );
     // from a corner when there is one, so every curve runs corner to corner
     const first = Math.max(0, sharp.indexOf(true));
     const kept: XY[] = [];
     const corners: boolean[] = [];
-    const straight: boolean[] = [];
-    const tangents = new Map<number, XY>();
+    const ways = new Map<number, Way>();
+    // where each kept point is on the outline, to tell a leg that is one drawn stretch
+    const where: number[] = [];
     let turned = 0;
+    let pieces = 0;
     for (let k = 0; k < n; k++) {
         const i = (first + k) % n;
         const before = (i + n - 1) % n;
+        const after = (i + 1) % n;
         turned += Math.abs(turns[i]!);
+        pieces++;
         // a side's two ends are kept, so it is one leg of its own
         const ends = side[i]! || side[before]!;
-        if (!(k === 0 || sharp[i] || ends || turned >= OUTLINE_STEP)) continue;
+        if (
+            !(
+                k === 0 ||
+                sharp[i] ||
+                ends ||
+                turned >= OUTLINE_STEP ||
+                pieces >= OUTLINE_PIECES
+            )
+        )
+            continue;
         turned = 0;
-        // The way the outline runs at a kept point: along the side it ends, else read from its
-        // own neighbors on the outline (not the kept points either side), so the arcs follow
-        // the drawn curve
-        tangents.set(
-            kept.length,
-            side[before]
-                ? unit(sub(pts[i]!, pts[before]!))
-                : side[i]
-                  ? unit(sub(pts[(i + 1) % n]!, pts[i]!))
-                  : tangentAt(pts[before]!, pts[i]!, pts[(i + 1) % n]!),
-        );
+        pieces = 0;
+        // The way the outline runs at a kept point, read from the outline itself (not from the
+        // kept points either side), so the arcs follow the drawn curve. A corner is come into
+        // one way and left another, the ways of the stretches either side of it. Anywhere else
+        // it runs on: along the side it ends or starts, else as a curve through its neighbors.
+        const into = unit(sub(pts[i]!, pts[before]!));
+        const out = unit(sub(pts[after]!, pts[i]!));
+        const on = side[before]
+            ? into
+            : side[i]
+              ? out
+              : tangentAt(pts[before]!, pts[i]!, pts[after]!);
+        ways.set(kept.length, sharp[i] ? { into, out } : { into: on, out: on });
+        where.push(i);
         kept.push(pts[i]!);
         corners.push(sharp[i]!);
-        // the leg out of this point is the side itself: its other end is the next point kept
-        straight.push(side[i]!);
     }
-    return loopWithTangents(kept, corners, tangents, straight);
+    // A leg that is one drawn stretch between two corners, or a side, is that straight stretch
+    const straight = where.map((i, k) => {
+        const next = where[(k + 1) % where.length]!;
+        const one = next === (i + 1) % n;
+        return (
+            one &&
+            (side[i]! || (corners[k]! && corners[(k + 1) % where.length]!))
+        );
+    });
+    return loopWithWays(kept, corners, ways, straight);
 }
+
+/** The way an outline runs at a point: coming into it, and going out of it (the same unless it's a corner) */
+type Way = { into: XY; out: XY };
 
 /** How far the way turns at `p`, coming from `a` and going on to `b`, signed */
 const turnAt = (a: XY, p: XY, b: XY): number => {
@@ -239,16 +278,17 @@ function withoutStraightRuns(pts: readonly XY[]): XY[] {
 }
 
 /**
- * The closed route through `given` in order, back to the first: a corner where `corners` says so,
- * elsewhere a smooth curve through the point (arcs meeting without a bend), running the way
- * `tangents` gives for it (else as a curve through its neighbors would); the leg out of a point
- * `straight` marks is a straight one, whatever its ends are. Stored clockwise on the field, as
- * the other outlines are. Null for fewer than three points.
+ * The closed route through `given` in order, back to the first. Between two points it is two arcs
+ * meeting without a bend, leaving the first the way the outline goes out of it and arriving at
+ * the second the way it comes in (`ways`; without one, a point is run through as a curve through
+ * its neighbors would). A point `corners` marks is a corner: the legs either side of it needn't
+ * agree there. The leg out of a point `straight` marks is a straight one. Stored clockwise on
+ * the field, as the other outlines are. Null for fewer than three points.
  */
-function loopWithTangents(
+function loopWithWays(
     given: readonly XY[],
     corners: readonly boolean[],
-    tangents: ReadonlyMap<number, XY>,
+    ways: ReadonlyMap<number, Way>,
     straight: readonly boolean[],
 ): RouteGeometry | null {
     const n = given.length;
@@ -258,12 +298,18 @@ function loopWithTangents(
         turned ? (((n - i) % n) + n) % n : ((i % n) + n) % n;
     const pts = Array.from({ length: n }, (_, i) => given[at(i)]!);
     const corner = (i: number) => corners[at(i)]!;
-    const tangent = (i: number): XY => {
-        const t = tangents.get(at(i));
-        if (!t)
-            return tangentAt(pts[(i + n - 1) % n]!, pts[i]!, pts[(i + 1) % n]!);
-        // walked the other way, the outline runs the other way through the point
-        return turned ? [-t[0], -t[1]] : t;
+    /** The way the walk goes at point `i`: out of it, or into it */
+    const way = (i: number, going: "out" | "into"): XY | null => {
+        const w = ways.get(at(i));
+        if (!w)
+            // a corner with no way given has none: its legs are straight to it
+            return corner(i)
+                ? null
+                : tangentAt(pts[(i + n - 1) % n]!, pts[i]!, pts[(i + 1) % n]!);
+        if (!turned) return w[going];
+        // walked the other way, going out of a point is coming into it backwards
+        const back = going === "out" ? w.into : w.out;
+        return [-back[0], -back[1]];
     };
     const legs: Leg[] = [];
     for (let i = 0; i < n; i++) {
@@ -273,14 +319,17 @@ function loopWithTangents(
         if (dist(a, b) < EPS_GEOM) continue;
         // walked the other way, the leg from i to j is the given leg out of j's point
         const side = straight[turned ? at(j) : at(i)]!;
-        if (side || (corner(i) && corner(j))) legs.push({ at: b });
-        else if (corner(i)) {
-            const k = bulgeArriving(a, b, tangent(j));
+        const out = way(i, "out");
+        const into = way(j, "into");
+        if (side || (!out && !into)) legs.push({ at: b });
+        else if (!out) {
+            // out of a bare corner into the curve: one arc that arrives the way the curve runs
+            const k = bulgeArriving(a, b, into!);
             legs.push({ at: b, ...(k ? { bulge: k } : {}) });
-        } else if (corner(j)) {
-            const k = bulgeLeaving(a, b, tangent(i));
+        } else if (!into) {
+            const k = bulgeLeaving(a, b, out);
             legs.push({ at: b, ...(k ? { bulge: k } : {}) });
-        } else legs.push(...twoArcs(a, tangent(i), b, tangent(j)));
+        } else legs.push(...twoArcs(a, out, b, into));
     }
     if (legs.length < 2) return null;
     const closing = legs.pop()!;
@@ -306,49 +355,53 @@ const LOOP_SHARPEST = (135 * Math.PI) / 180;
 const LOOP_TURNING = 4 * Math.PI;
 
 /**
- * The chain of nearest neighbors from `first`: each next the nearest marcher not yet taken. Null
- * when a step has two marchers equally near to go to (after the first step, where a ring has its
- * two neighbors): the chain would then depend on which is asked about first, not on where they
- * stand. The first step's tie goes to the one further left (then up), for the same reason.
+ * Past this angle from one neighbor, another marcher is on a marcher's other side (70°): its two
+ * neighbors in a loop stand on either side of it, however the loop bends there. Measured on
+ * loops placed by hand a step off their places and on scattered marchers: narrower misses real
+ * loops of eight where they bend most, wider takes more scatters for loops.
  */
-function chainFrom(starts: readonly XY[], first: number): number[] | null {
-    const n = starts.length;
-    const order = [first];
-    const left = new Set(starts.map((_, i) => i));
-    left.delete(first);
-    while (left.size > 0) {
-        const from = starts[order[order.length - 1]!]!;
-        let next = -1;
-        let best = Infinity;
-        let tied = false;
-        for (const i of left) {
-            const d = dist(from, starts[i]!);
-            const same = Math.abs(d - best) <= 1e-9 * Math.max(1, best);
-            if (same && next >= 0) {
-                tied = true;
-                const [a, b] = [starts[i]!, starts[next]!];
-                if (a[0] < b[0] || (a[0] === b[0] && a[1] < b[1])) next = i;
-            } else if (d < best) {
-                best = d;
-                next = i;
-                tied = false;
-            }
-        }
-        if (tied && order.length > 1) return null;
-        order.push(next);
-        left.delete(next);
-    }
-    return order.length === n ? order : null;
-}
+const OTHER_SIDE = Math.cos((70 * Math.PI) / 180);
 
-/** Whether the closed chains `a` and `b` are the same ring: the same neighbors, whichever way round */
-function sameRing(a: readonly number[], b: readonly number[]): boolean {
-    const n = a.length;
-    const at = b.indexOf(a[0]!);
-    if (at < 0 || b.length !== n) return false;
-    return [1, -1].some((way) =>
-        a.every((x, k) => x === b[(((at + way * k) % n) + n) % n]),
-    );
+/**
+ * Each marcher's two neighbors, read from where they stand and nothing else: the nearest other
+ * marcher, and the nearest one on its other side ({@link OTHER_SIDE}). Marchers equally near go
+ * to the one further left, then further up, so the answer never depends on the order they are
+ * asked about. Null when one of them has nobody on its other side (the end of a line).
+ */
+function neighborsOf(starts: readonly XY[]): [number, number][] | null {
+    const n = starts.length;
+    const first = (a: XY, b: XY) =>
+        a[0] < b[0] || (a[0] === b[0] && a[1] < b[1]);
+    const nearest = (i: number, ok: (j: number) => boolean): number => {
+        let best = -1;
+        let d = Infinity;
+        for (let j = 0; j < n; j++) {
+            if (j === i || !ok(j)) continue;
+            const dj = dist(starts[i]!, starts[j]!);
+            const same = Math.abs(dj - d) <= 1e-9 * Math.max(1, d);
+            if (best < 0 || (!same && dj < d)) {
+                best = j;
+                d = dj;
+            } else if (same && first(starts[j]!, starts[best]!)) best = j;
+        }
+        return best;
+    };
+    const out: [number, number][] = [];
+    for (let i = 0; i < n; i++) {
+        const one = nearest(i, () => true);
+        if (one < 0) return null;
+        const u = sub(starts[one]!, starts[i]!);
+        const lu = len(u);
+        const other = nearest(i, (j) => {
+            if (j === one) return false;
+            const v = sub(starts[j]!, starts[i]!);
+            const lv = len(v);
+            return lv > EPS_GEOM && dot(u, v) < OTHER_SIDE * lu * lv;
+        });
+        if (other < 0) return null;
+        out.push([one, other]);
+    }
+    return out;
 }
 
 /** Whether the stretches `a`–`b` and `c`–`d` cross or touch (they share no end) */
@@ -414,12 +467,12 @@ function outlinesALoop(
  * The marchers at `starts` in order round the closed loop they stand in (fork #1213), as indexes
  * into `starts`, from the first of them. They stand in a loop when:
  *
- * - the chain of nearest neighbors (each next the nearest not yet taken) is **the same ring
- *   whichever marcher it starts from**, and never has two equally near to choose between, so it
- *   is read from where they stand and not from the order they are asked about (a line, a block
- *   and scattered marchers give different chains from different starts);
- * - it closes: no gap more than 2.5 times the usual one, the closing one included;
- * - each marcher's nearest other stands beside it in the ring;
+ * - every marcher has **two neighbors, one on either side** ({@link neighborsOf}: its nearest
+ *   marcher, and the nearest on its other side), and each of those names it back, so it is read
+ *   from where they stand and never from the order they are asked about (the end of a line has
+ *   nobody on its other side; in a block and among scattered marchers the neighbors don't agree);
+ * - following those neighbors goes round every one of them once and comes back;
+ * - no gap is more than 2.5 times the usual one, the closing one included;
  * - the ring is the outline of a loop ({@link outlinesALoop}): it doesn't cross itself, it
  *   encloses room, and it turns back on itself nowhere.
  *
@@ -428,27 +481,26 @@ function outlinesALoop(
 export function ringOrder(starts: readonly XY[]): number[] | null {
     const n = starts.length;
     if (n < 4) return null;
-    const order = chainFrom(starts, 0);
-    if (!order) return null;
+    const beside = neighborsOf(starts);
+    if (!beside) return null;
+    // each one's neighbors name it back
+    for (let i = 0; i < n; i++)
+        for (const j of beside[i]!) if (!beside[j]!.includes(i)) return null;
+    // round from the first, never back the way it came: every one of them, once
+    const order = [0];
+    for (let from = -1, at = 0; order.length < n; ) {
+        const [a, b] = beside[at]!;
+        const next = a === from ? b : a;
+        if (next === 0 || order.includes(next)) return null;
+        order.push(next);
+        from = at;
+        at = next;
+    }
+    if (!beside[order[n - 1]!]!.includes(0)) return null;
     const gaps = order.map((i, k) =>
         dist(starts[i]!, starts[order[(k + 1) % n]!]!),
     );
     const usual = median(gaps);
     if (!(usual > EPS_GEOM) || Math.max(...gaps) > 2.5 * usual) return null;
-    // a chain of near neighbors, none skipped: each one's nearest other stands beside it
-    const tol = usual / 4;
-    const beside = order.every((i, k) => {
-        const nearest = Math.min(
-            ...starts.map((q, j) => (j === i ? Infinity : dist(starts[i]!, q))),
-        );
-        const side = Math.min(gaps[k]!, gaps[(k + n - 1) % n]!);
-        return side <= nearest + tol;
-    });
-    if (!beside || !outlinesALoop(starts, order)) return null;
-    // the same ring from every one of them
-    for (let first = 1; first < n; first++) {
-        const other = chainFrom(starts, first);
-        if (!other || !sameRing(order, other)) return null;
-    }
-    return order;
+    return outlinesALoop(starts, order) ? order : null;
 }
