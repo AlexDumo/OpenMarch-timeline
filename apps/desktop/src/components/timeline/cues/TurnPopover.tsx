@@ -65,6 +65,7 @@ export function TurnPopover({
     dialNames,
     rowName,
     fromDegrees,
+    whereOf,
     anchor,
     onClose,
 }: {
@@ -77,6 +78,8 @@ export function TurnPopover({
     rowName: string;
     /** Where that row faces when the turn starts */
     fromDegrees: number;
+    /** Where a count is, as the timeline says it ("Page 2 count 8") */
+    whereOf: (count: number) => string;
     /** Where it opens, in the lane's own pixels: under the turn's start */
     anchor: { x: number; y: number };
     onClose: () => void;
@@ -154,7 +157,7 @@ export function TurnPopover({
                     <div className="text-body font-medium">
                         {t("cues.turn.title", {
                             name: rowName,
-                            count: start + 1,
+                            where: whereOf(start),
                         })}
                     </div>
                     <svg
@@ -270,7 +273,7 @@ export function TurnPopover({
                         {t("cues.turn.dialHint")}
                     </p>
                     <label className="text-body flex items-center justify-between gap-8">
-                        {t("cues.turn.from", { count: start + 1 })}
+                        {t("cues.turn.from", { where: whereOf(start) })}
                         <output
                             data-testid="turn-from"
                             className="rounded-6 border-stroke bg-fg-2 text-text-subtitle h-26 w-80 border px-8 text-right leading-[24px]"
@@ -279,7 +282,9 @@ export function TurnPopover({
                         </output>
                     </label>
                     <label className="text-body flex items-center justify-between gap-8">
-                        {t("cues.turn.to", { count: start + counts + 1 })}
+                        {t("cues.turn.to", {
+                            where: whereOf(start + counts),
+                        })}
                         <input
                             data-testid="turn-to"
                             inputMode="decimal"

@@ -72,6 +72,8 @@ import { createTimelineBeatAxis } from "@/timeline/timelineViewModel";
 import { activeFieldEditor } from "@/field/editor/activeFieldEditor";
 import { useFieldProperties } from "@/field/editMode/useApplyFieldEdits";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import { beatWhere } from "@/timeline/timelineRangeWords";
+import { translateTimelineText } from "@/timeline/translateTimelineText";
 import {
     actionDisabledReason,
     isActionChecked,
@@ -187,6 +189,7 @@ export function FacingLaneView({
                 : (show?.cues.find((c) => c.id === cueId) ?? null),
         );
     const popoverCueId = useTurnPopoverStore((s) => s.cueId);
+    const pageBoxes = useTimelineSelectionStore((s) => s.pageBoxes);
     const sides = useFieldProperties()?.sideDescriptions;
     const names: Record<FacingDirection, string> = {
         front: t("cues.facing.front"),
@@ -541,6 +544,13 @@ export function FacingLaneView({
                         rows[popoverRow]!.label,
                     )}
                     fromDegrees={popoverPiece.fromDegrees}
+                    whereOf={(count) => {
+                        const where = beatWhere(
+                            countToSpecBeat(count, show.beatIds, specOf),
+                            pageBoxes,
+                        );
+                        return where ? translateTimelineText(where) : "";
+                    }}
                     anchor={{
                         x: xOf(popoverPiece.from),
                         y: HEADER + popoverRow * ROW + ROW,

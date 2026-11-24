@@ -4506,9 +4506,9 @@
             "angle": "Angle…"
         },
         "turn": {
-            "title": "{name} · turn at count {count}",
-            "from": "From (count {count})",
-            "to": "To (count {count})",
+            "title": "{name} · turn at {where}",
+            "from": "From ({where})",
+            "to": "To ({where})",
             "counts": "Counts",
             "dial": "Where they end up",
             "dialHint": "Drag the dot to where they end up. Keep going past a full circle to add a spin.",
