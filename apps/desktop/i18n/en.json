@@ -1622,7 +1622,8 @@
         "transition": "Transition",
         "width": "Width",
         "units": {
-            "meters": "m"
+            "meters": "m",
+            "feet": "ft"
         },
         "locked": "Locked",
         "lockLabel": "Locked",
@@ -1666,7 +1667,8 @@
             },
             "size": {
                 "title": "Size",
-                "value": "{width} × {depth} m, {height} m tall",
+                "dimensions": "{width} × {depth} {unit}, {height} {unit} tall",
+                "inFile": "In the file: {width} × {depth} {unit}, {height} {unit} tall",
                 "question": "Is that its real size? If not, pick the unit the file was made in.",
                 "suggested": "It looked like it was made in {unit}, so it was converted. Check the size."
             },
@@ -1780,7 +1782,7 @@
                 "validatorWarnings": "{count, plural, one {The file has # warning} other {The file has # warnings}}",
                 "sizeOutOfRange": {
                     "title": "Unusual size for a prop",
-                    "detail": "Its longest side is {largest} m; props are usually {min} to {max} m."
+                    "detailIn": "Its longest side is {largest} {unit}; props are usually {min} to {max} {unit}."
                 },
                 "overTriangleCap": "Still detailed: {triangles} triangles (the aim is {cap})"
             }
@@ -1816,7 +1818,7 @@
             "editTitle": "Edit Podium"
         },
         "default": "Default",
-        "footprint": "{width} × {depth} m",
+        "footprintIn": "{width} × {depth} {unit}",
         "groups": {
             "audio": "Audio",
             "keyboards": "Keyboards",

@@ -36,8 +36,13 @@ import type {
     Turn,
     UnitFix,
 } from "@/showAssets/modelImport/types";
-
-const meters = (value: number) => String(Number(value.toFixed(2)));
+import { useMeasurementSystem } from "@/hooks/useMeasurementSystem";
+import { UNIT_FIXES } from "@/showAssets/modelImport/rules";
+import {
+    lengthUnitKey,
+    shortNumber,
+    shownLength,
+} from "@/utilities/showLengths";
 
 /** The licenses offered (SPDX), most permissive first; empty means Unknown (props-spec §10) */
 export const LICENSE_OPTIONS = [
@@ -102,6 +107,7 @@ export default function ModelImportReview({
     onDone: (modelValue: string | null) => void;
 }) {
     const { t } = useTranslate();
+    const system = useMeasurementSystem();
     const session = useModelImportSession();
     const { result, running, choices } = session;
     const report = result?.report;
@@ -300,7 +306,11 @@ export default function ModelImportReview({
                         testId="model-import-notes"
                     >
                         {report.notes.map((note, i) => (
-                            <Line key={i} {...noteText(note, t)} muted />
+                            <Line
+                                key={i}
+                                {...noteText(note, t, system)}
+                                muted
+                            />
                         ))}
                     </ReportGroup>
                 )}
@@ -366,7 +376,8 @@ export default function ModelImportReview({
 }
 
 /**
- * The size to confirm: width × depth × height in meters, and the file's unit, one click each.
+ * The size to confirm: width × depth × height in the show's units, and the file's unit, one
+ * click each.
  * The import suggests a unit when the size is clearly off; it is never applied silently.
  */
 function SizeConfirm({
@@ -383,6 +394,11 @@ function SizeConfirm({
     onUnit: (unit: UnitFix) => void;
 }) {
     const { t } = useTranslate();
+    // The size shows in the show's units; the file's own numbers show under it when the file
+    // was made in another unit (a model made in meters, in an imperial show)
+    const system = useMeasurementSystem();
+    const shownUnit: UnitFix = system === "metric" ? "none" : "ft";
+    const fileFactor = UNIT_FIXES.find((f) => f.unit === unit)?.factor ?? 1;
     return (
         <section
             className="flex flex-col gap-8"
@@ -393,12 +409,26 @@ function SizeConfirm({
                     className="text-body font-medium tabular-nums"
                     data-testid="model-import-size"
                 >
-                    {t("props.import.size.value", {
-                        width: meters(size.width),
-                        depth: meters(size.depth),
-                        height: meters(size.height),
+                    {t("props.import.size.dimensions", {
+                        width: shownLength(size.width, system),
+                        depth: shownLength(size.depth, system),
+                        height: shownLength(size.height, system),
+                        unit: t(lengthUnitKey(system)),
                     })}
                 </span>
+                {unit !== shownUnit && (
+                    <span
+                        className="text-sub text-text-subtitle tabular-nums"
+                        data-testid="model-import-size-in-file"
+                    >
+                        {t("props.import.size.inFile", {
+                            width: shortNumber(size.width / fileFactor),
+                            depth: shortNumber(size.depth / fileFactor),
+                            height: shortNumber(size.height / fileFactor),
+                            unit: t(`props.import.units.${unit}`),
+                        })}
+                    </span>
+                )}
                 <span className="text-sub text-text-subtitle">
                     {suggested && suggested !== "none"
                         ? t("props.import.size.suggested", {

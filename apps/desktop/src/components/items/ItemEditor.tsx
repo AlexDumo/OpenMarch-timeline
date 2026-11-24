@@ -42,6 +42,12 @@ import {
     proportionalSize,
     type ModelSide,
 } from "@/showAssets/libraryModels";
+import { useMeasurementSystem } from "@/hooks/useMeasurementSystem";
+import {
+    lengthUnitKey,
+    metersToShown,
+    shownToMeters,
+} from "@/utilities/showLengths";
 import { drillNumber, type ItemWithMarcher } from "./ItemRows";
 
 /**
@@ -103,11 +109,17 @@ function CommitNumber({
     onCommit: (value: number) => void;
 }) {
     const [draft, setDraft] = useState<string | null>(null);
+    // What the box shows; typing it again changes nothing (a length shown in feet is rounded)
+    const rounded = String(Number(value.toFixed(3)));
     const commit = () => {
         if (draft === null) return;
         const parsed = Number(draft);
         setDraft(null);
-        if (Number.isFinite(parsed) && parsed >= min && parsed !== value)
+        if (
+            Number.isFinite(parsed) &&
+            parsed >= min &&
+            parsed !== Number(rounded)
+        )
             onCommit(parsed);
     };
     return (
@@ -119,7 +131,7 @@ function CommitNumber({
                 step={step}
                 min={min}
                 aria-label={label}
-                value={draft ?? String(Number(value.toFixed(3)))}
+                value={draft ?? rounded}
                 onChange={(e) => setDraft(e.target.value)}
                 onBlur={commit}
                 onKeyDown={(e) => {
@@ -147,6 +159,7 @@ export function ItemEditor({ itemId }: { itemId: number }) {
     );
     const [name, setName] = useState<string | null>(null);
     const { data: assets } = useQuery(showAssetsQueryOptions());
+    const system = useMeasurementSystem();
     const library = useMemo(() => libraryModels(assets), [assets]);
 
     const item = items?.find((i) => i.id === itemId);
@@ -172,6 +185,9 @@ export function ItemEditor({ itemId }: { itemId: number }) {
     if (!item) return null;
 
     const shown = itemGeometryAt(changes, beat);
+    // Sizes are stored in meters and shown in the show's units (feet with an imperial field)
+    const lengthUnit = t(lengthUnitKey(system));
+    const lengthStep = system === "metric" ? 0.1 : 0.5;
     const writeBeat = outlineWriteBeat(beats, beat);
     const existing = rows?.find(
         (r) => r.item_id === item.id && r.beat_id === writeBeat?.id,
@@ -331,27 +347,36 @@ export function ItemEditor({ itemId }: { itemId: number }) {
                     <div className="grid grid-cols-2 gap-12">
                         <CommitNumber
                             label={t("props.width")}
-                            unit={t("props.units.meters")}
+                            unit={lengthUnit}
                             min={0.01}
-                            step={0.1}
-                            value={shown.width}
-                            onCommit={(width) => writeSide("width", width)}
+                            step={lengthStep}
+                            value={metersToShown(shown.width, system)}
+                            onCommit={(width) =>
+                                writeSide("width", shownToMeters(width, system))
+                            }
                         />
                         <CommitNumber
                             label={t("props.depth")}
-                            unit={t("props.units.meters")}
+                            unit={lengthUnit}
                             min={0.01}
-                            step={0.1}
-                            value={shown.depth}
-                            onCommit={(depth) => writeSide("depth", depth)}
+                            step={lengthStep}
+                            value={metersToShown(shown.depth, system)}
+                            onCommit={(depth) =>
+                                writeSide("depth", shownToMeters(depth, system))
+                            }
                         />
                         <CommitNumber
                             label={t("props.height")}
-                            unit={t("props.units.meters")}
+                            unit={lengthUnit}
                             min={standsUp ? 0.01 : 0}
-                            step={0.1}
-                            value={shown.height}
-                            onCommit={(height) => writeSide("height", height)}
+                            step={lengthStep}
+                            value={metersToShown(shown.height, system)}
+                            onCommit={(height) =>
+                                writeSide(
+                                    "height",
+                                    shownToMeters(height, system),
+                                )
+                            }
                         />
                         <CommitNumber
                             label={t("props.rotation")}

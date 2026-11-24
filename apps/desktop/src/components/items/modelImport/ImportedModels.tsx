@@ -13,8 +13,8 @@ import { isModelAsset } from "@/showAssets/libraryModels";
 import { showAssetRefValue } from "@/showAssets/ref";
 import type { ModelSidecar } from "@/showAssets/modelImport/types";
 import { useBytesUrl } from "./ModelImportReview";
-
-const meters = (value: number) => String(Number(value.toFixed(2)));
+import { useMeasurementSystem } from "@/hooks/useMeasurementSystem";
+import { lengthUnitKey, shownLength } from "@/utilities/showLengths";
 
 /** The show's imported models, newest first, with the sidecar each places by */
 export function importedModels(
@@ -134,6 +134,7 @@ function ModelTile({
     marked: boolean;
 }) {
     const { t } = useTranslate();
+    const system = useMeasurementSystem();
     const footprintId = useId();
     const { width, depth } = asset.sidecar.sizeM;
     return (
@@ -162,9 +163,10 @@ function ModelTile({
                 id={footprintId}
                 className="text-sub text-text-subtitle min-w-0 truncate px-2 leading-tight tabular-nums"
             >
-                {t("frontEnsemble.footprint", {
-                    width: meters(width),
-                    depth: meters(depth),
+                {t("frontEnsemble.footprintIn", {
+                    width: shownLength(width, system),
+                    depth: shownLength(depth, system),
+                    unit: t(lengthUnitKey(system)),
                 })}
             </span>
         </button>
