@@ -491,6 +491,37 @@ describe("rows kept through other edits", () => {
         expect(rowAt(t, 200)).toEqual(closeTo([100, 120, 140, 160]));
     });
 
+    it("keep the short row where it was through a half turn", () => {
+        const t = added(across(11), "far", "far");
+        const turned = edit(
+            t,
+            lineTool.withFrame(t.params, t.spots, {
+                ...lineTool.frameOf(t.params, t.spots),
+                rotation:
+                    lineTool.frameOf(t.params, t.spots).rotation + Math.PI,
+            }),
+            ctx,
+        );
+        // The short row was the back one, 2 rows from the drawn line: now 2 rows in front
+        expect(rowAt(t, 160)).toHaveLength(3);
+        expect(rowAt(turned, 240)).toHaveLength(3);
+        expect(rowAt(turned, 200)).toHaveLength(4);
+    });
+
+    it("are grabbed on the drawn row where its half spots move it", () => {
+        let t = added(across(8), "far");
+        const own = rows
+            .view(t.params, t.spots)!
+            .rows.find((r) => r.side === null)!.index;
+        for (let i = 0; i < 4; i++)
+            t = edit(t, rows.shift(t.params, t.spots, own, 1), ctx);
+        const last = rowAt(t, 200).at(-1)!;
+        expect(last).toBeGreaterThan(200);
+        expect(lineTool.contains(t.params, 8, { x: last, y: 200 }, env)).toBe(
+            true,
+        );
+    });
+
     it("are grabbed where a slant moves them", () => {
         const t = slanted(added(across(8), "far"), "4");
         const back = rowAt(t, 180);

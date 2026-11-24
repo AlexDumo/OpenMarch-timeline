@@ -959,14 +959,14 @@ export function withRows(kind: ToolKind<P>): ToolKind<P> {
         contains: (p, n, point, env) => {
             if (!rowsOf(p)) return kind.contains(p, n, point, env);
             if (kind.contains(p, per(p, n), point, env)) return true;
-            // The other rows where they're drawn, moved along by their half spots and the slant,
-            // within the drawn line's own reach
+            // Every row where it's drawn, moved along by its half spots and the slant (the drawn
+            // one too), within the drawn line's own reach
             const half = lineInterval(p, per(p, n)) / 2;
             const reach = env
                 ? Math.max(Math.min(half, env.stepPx), env.hitRadius)
                 : half;
             return layRows(p, n, (k) => lineFillSpots(p, k, env?.stepPx)).some(
-                (r) => r.offset !== 0 && nearRun(r.spots, point, reach),
+                (r) => nearRun(r.spots, point, reach),
             );
         },
         move: (b, n, delta, env) =>
@@ -977,7 +977,24 @@ export function withRows(kind: ToolKind<P>): ToolKind<P> {
             const was = kind.frameOf(p, per(p, n));
             const flips =
                 (frame.flipX !== frame.flipY) !== (was.flipX !== was.flipY);
-            return flips ? mirrorRows(p, next, n) : next;
+            if (flips) return mirrorRows(p, next, n);
+            // A half turn swaps front and back: marchers shared out evenly are written down
+            // first, or the short row would move to the new back
+            const rows = rowsOf(next);
+            return rows &&
+                rows.list[0]?.count === undefined &&
+                rowFrame(next).sign !== rowFrame(p).sign
+                ? {
+                      ...next,
+                      rows: {
+                          ...rows,
+                          list: rows.list.map((row, i) => ({
+                              ...row,
+                              count: counted(p, rows, n)[i]!,
+                          })),
+                      },
+                  }
+                : next;
         },
         ...(kind.turnOf
             ? { turnOf: (p: P, n: number) => kind.turnOf!(p, per(p, n)) }
