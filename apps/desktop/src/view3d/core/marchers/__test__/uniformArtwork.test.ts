@@ -94,10 +94,8 @@ describe("uniform flats tables", () => {
 
     it("keeps its landmarks where the sample uniform places its items", () => {
         expect(regions.centreX).toBe(FLATS_CENTRE_X);
-        expect(regions.landmarks["chest centre"].y).toBe(CHEST_CENTRE_Y);
-        expect(regions.landmarks["back number centre"].y).toBe(
-            BACK_NUMBER_CENTRE_Y,
-        );
+        expect(regions.landmarks.chestCentre.y).toBe(CHEST_CENTRE_Y);
+        expect(regions.landmarks.backNumberCentre.y).toBe(BACK_NUMBER_CENTRE_Y);
     });
 
     it("leaves the neck out of every region and keeps the hips", () => {

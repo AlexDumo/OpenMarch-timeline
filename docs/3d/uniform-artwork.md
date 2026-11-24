@@ -99,29 +99,42 @@ one of those problems.
 
 ### `regions.json`
 
-This file is for agents. Region outlines are given in **panel inches**, so they can be used as
-clip paths with no offset arithmetic. It holds:
+This file is for agents: the download `uniform-regions.json` (format `openmarch-uniform-flats`,
+`version` 1). Region outlines are given in **panel inches**, x right and y down from the panel's
+top-left corner, so they can be used as clip paths with no offset arithmetic. It holds:
 
-- for every region: its outline polygon, its bounding box, and the side seam's x at every 0.25 in
-  of height for both edges (`seams.rows`). The torso's polygon is its two side seams, then its top
-  edge.
-- guide heights:
+- the page (`page`, `pagePx`, `dpi`), each panel's rectangle and which way it faces (`panels`), and
+  the front and back panels' centre line (`centreX`)
+- for every region (`regions`): its `id` (`front-torso`, `back-sleeve-L`, … or `cape`), `panel`,
+  `part`, `label`, outline `polygon`, `bbox`, its two `edges` named for the body ("outside",
+  "underarm", "inseam", "right side", "left side") with the edge on the other panel each one
+  meets, and `seams`: both side seams' x at every 0.25 in of height inside the region, as
+  `{ y, left, right }`. The torso's polygon is its two side seams, then its top edge round the
+  neck and over the shoulders; its seam rows start at its top, over the shoulders.
+- `wrapBand` and `seams`: how wide the squeezed band at each side seam is, and how the seams meet
+- guide heights (`guides`, by `id`):
 
-  | Guide                                | Height (in) |
-  | ------------------------------------ | ----------- |
-  | neckline (centre front; id `collar`) | 18.84       |
-  | chest                                | 25.32       |
-  | jacket hem and belt                  | 38.31       |
-  | crotch                               | 43.24       |
-  | knee                                 | 56.3        |
-  | elbow                                | 29.28       |
+  | Guide                   | `id`        | Height (in) |
+  | ----------------------- | ----------- | ----------- |
+  | neckline (centre front) | `collar`    | 18.84       |
+  | chest                   | `chest`     | 25.32       |
+  | jacket hem and belt     | `jacketHem` | 38.31       |
+  | crotch                  | `crotch`    | 43.24       |
+  | knee (legs only)        | `knee`      | 56.3        |
+  | elbow (sleeves only)    | `elbow`     | 29.28       |
 
-- landmarks: chest centre, back number centre, and each limb's centre line and cuff
-- the grey context figure (head, shako, visor and shoes as triangles, hands as ellipses), for
-  drawing the template
+- `landmarks`: `chestCentre`, `backNumberCentre`, each limb's `centreLines` on both panels,
+  `sleeveCuff` and `legHem`
 
-It is generated with the lookup tables by `apps/desktop/scripts/view3d-assets/uniform-flats.mjs`,
-and lives at `apps/desktop/src/view3d/assets/uniform-flats/regions.json`.
+The torso stops at the jacket hem, where the hips start; no two regions overlap.
+
+The renderer reads the same file, at `apps/desktop/src/view3d/assets/uniform-flats/regions.json`. It
+is generated with the lookup tables by `apps/desktop/scripts/view3d-assets/uniform-flats.mjs`, which
+writes it with the template's own code (`regionsJson` in
+`apps/desktop/src/view3d/core/artworkTemplates/uniform/regions.ts`), so it is exactly the download
+plus two keys: `generatedBy`, and `figure`, the grey context figure (head, shako, visor and shoes
+as triangles of `[x, y]` points, hands as ellipses) the template draws. Agents should use the
+download.
 
 ## Rendering: the hybrid wrap
 

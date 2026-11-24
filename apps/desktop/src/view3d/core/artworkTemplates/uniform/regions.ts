@@ -74,9 +74,9 @@ export interface FlatsGuides {
 }
 
 /**
- * The outlines and measurements a template is drawn from: the whole input.
- * Today this comes from the design study's fixture (`harnessFixture.ts`);
- * #1255 generates it from the body models.
+ * The outlines and measurements a template is drawn from: the whole input,
+ * generated from the body models (`assets/uniform-flats/regions.json`, fork
+ * #1255).
  */
 export interface FlatsRegionsSource {
     /**
@@ -432,6 +432,10 @@ const VIEWS: Readonly<Record<FlatsPanelId, string>> = {
     cape: "The cape seen from behind: their left is on your left.",
 };
 
+/** `format` and `version` of `uniform-regions.json`, and of the renderer's `regions.json`, which is the same file. */
+export const FLATS_REGIONS_FORMAT = "openmarch-uniform-flats";
+export const FLATS_REGIONS_VERSION = 1;
+
 /** File names, for the downloads and for cross-references inside the files. */
 export const UNIFORM_TEMPLATE_FILES = {
     png: "uniform-template.png",
@@ -454,8 +458,8 @@ export function regionsJson(model: FlatsRegions): object {
         back: round2(centreLineX(find(`back-${part}`))),
     });
     return {
-        format: "openmarch-uniform-flats",
-        version: 1,
+        format: FLATS_REGIONS_FORMAT,
+        version: FLATS_REGIONS_VERSION,
         units: "in",
         body: L.body,
         page: L.page,

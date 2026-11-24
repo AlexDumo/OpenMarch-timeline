@@ -7,6 +7,7 @@ import {
     getShowAsset,
     getShowAssetReferences,
     getShowAssets,
+    historyEncoding,
     readShowAssetBlob,
     valuesNamedInHistory,
 } from "../showAssets";
@@ -258,6 +259,78 @@ describeDbTests("view3dUniformPack", (it) => {
                 await valuesNamedInHistory({ db, values: [value] }),
             );
             expect(after.unused.map((row) => row.value)).toEqual([value]);
+        });
+    });
+
+    describe("valuesNamedInHistory", () => {
+        const HASH = "b".repeat(64);
+        /** Names `value` as the band's uniform, then wears a preset, so only history names it. */
+        const wearThenDrop = async (
+            db: Parameters<typeof updateVenueSettings>[0]["db"],
+            value: string,
+        ) => {
+            const venue = defaultVenueForField(field);
+            await updateVenueSettings({
+                db,
+                settings: { ...venue, uniformArtwork: value },
+            });
+            await updateVenueSettings({ db, settings: venue });
+        };
+
+        it("finds ids with quotes and backslashes, as the venue's JSON and SQL quoting store them", async ({
+            db,
+        }) => {
+            const values = [
+                `library:it's@${HASH}`,
+                `library:say"hi"@${HASH}`,
+                `library:back\\slash@${HASH}`,
+                `library:o''clock"\\x@${HASH}`,
+            ];
+            for (const value of values) await wearThenDrop(db, value);
+            const other = `library:never-worn@${HASH}`;
+            const named = await valuesNamedInHistory({
+                db,
+                values: [...values, other],
+            });
+            expect([...named].sort()).toEqual([...values].sort());
+        });
+
+        it("finds them on the redo side too", async ({ db }) => {
+            const value = `library:it's "quoted"@${HASH}`;
+            const venue = defaultVenueForField(field);
+            await updateVenueSettings({ db, settings: venue });
+            await updateVenueSettings({
+                db,
+                settings: { ...venue, uniformArtwork: value },
+            });
+            await performUndo(db);
+            await db.run(sql`DELETE FROM history_undo`);
+            expect(await valuesNamedInHistory({ db, values: [value] })).toEqual(
+                new Set([value]),
+            );
+        });
+
+        it("reads only steps that write the venue row", async ({ db }) => {
+            const value = `library:chair@${HASH}`;
+            // a step that names the value in another table's row doesn't count
+            await db.run(sql`
+                INSERT INTO history_undo ("sequence", "history_group", "sql")
+                VALUES (NULL, 1, ${`UPDATE "items" SET "model"='${value}' WHERE rowid=1`})`);
+            expect(await valuesNamedInHistory({ db, values: [value] })).toEqual(
+                new Set(),
+            );
+            await db.run(sql`
+                INSERT INTO history_undo ("sequence", "history_group", "sql")
+                VALUES (NULL, 1, ${`UPDATE "view3d_venue" SET "json_data"='{"uniformArtwork":"${value}"}' WHERE rowid=1`})`);
+            expect(await valuesNamedInHistory({ db, values: [value] })).toEqual(
+                new Set([value]),
+            );
+        });
+
+        it("encodes a value as the history's stored SQL holds it", () => {
+            expect(historyEncoding(`library:a'b@x`)).toBe(`library:a''b@x`);
+            expect(historyEncoding(`library:a"b@x`)).toBe(`library:a\\"b@x`);
+            expect(historyEncoding(`library:a\\b@x`)).toBe(`library:a\\\\b@x`);
         });
     });
 });

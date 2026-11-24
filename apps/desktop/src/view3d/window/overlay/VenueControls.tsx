@@ -44,7 +44,11 @@ import {
     isUniformPackValue,
     type UniformPackValue,
 } from "@/view3d/core/marchers/uniformArtwork";
-import { uniformPacksQueryOptions } from "@/hooks/queries/useUniformPack";
+import {
+    uniformPackQueryOptions,
+    uniformPacksQueryOptions,
+} from "@/hooks/queries/useUniformPack";
+import { wornPackProblem } from "@/view3d/core/uniformPack/wornPack";
 import { uniformArtworkAvailable } from "@/view3d/window/uniformArtworkPreview";
 import { ToggleGroup, ToggleGroupItem } from "@openmarch/ui";
 import { Segmented } from "./Panel";
@@ -174,18 +178,26 @@ export function UniformPicker() {
     });
     const named =
         flats && settings ? flatsArtworkOf(settings.uniformArtwork) : null;
-    // a uniform the show no longer has (an undo after Remove unused…): the band wears its preset
+    const namedPack = named && isUniformPackValue(named) ? named : null;
+    const { data: pack, isSuccess: packRead } = useQuery(
+        uniformPackQueryOptions(namedPack),
+    );
     // the uniform whose version the band wears (editing items adds versions, fork #1258)
-    const wornEntry =
-        named && isUniformPackValue(named)
-            ? packs?.find((pack) => pack.versions.includes(named))
-            : undefined;
-    const worn =
-        named && isUniformPackValue(named) && packs
-            ? wornEntry
-                ? (wornEntry.value as UniformPackValue)
-                : null
-            : named;
+    const wornEntry = namedPack
+        ? packs?.find((p) => p.versions.includes(namedPack))
+        : undefined;
+    // a uniform the show no longer has (an undo after Remove unused…), or one whose file
+    // doesn't read: the band wears its preset, so the preset is the one picked
+    const worn = wornPackProblem(
+        namedPack,
+        packs ? wornEntry !== undefined : undefined,
+        packRead ? pack : undefined,
+    )
+        ? null
+        : namedPack
+          ? // the picker offers each uniform once, by its newest version
+            ((wornEntry?.value as UniformPackValue | undefined) ?? namedPack)
+          : named;
     type Value = UniformPresetId | typeof FLATS_SAMPLE | UniformPackValue;
     return (
         <Segmented<Value>

@@ -26,20 +26,33 @@ export * from "./pdf";
 export * from "./png";
 export * from "./flatsAsset";
 
-let loading: Promise<FlatsRegionsSource> | undefined;
+/**
+ * `load`, run the first time it's asked for and shared after; a load that
+ * fails isn't kept, so the next ask tries again.
+ */
+export function loadOnce<T>(load: () => Promise<T>): () => Promise<T> {
+    let loading: Promise<T> | undefined;
+    return () => {
+        const p = (loading ??= load());
+        p.catch(() => {
+            if (loading === p) loading = undefined;
+        });
+        return p;
+    };
+}
 
 /**
  * The outlines every uniform template is drawn from: the ones generated from
- * the body models (fork #1255). The file is about 160 KB, so it loads on
+ * the body models (fork #1255). The file is about 140 KB, so it loads on
  * the first download rather than with the settings panel, as the renderer
  * fetches it on demand too.
  */
-export function loadUniformFlatsSource(): Promise<FlatsRegionsSource> {
-    loading ??= import("../../../assets/uniform-flats/regions.json").then((m) =>
-        fromFlatsAsset(m.default as unknown as FlatsAsset),
+export const loadUniformFlatsSource: () => Promise<FlatsRegionsSource> =
+    loadOnce(() =>
+        import("../../../assets/uniform-flats/regions.json").then((m) =>
+            fromFlatsAsset(m.default as unknown as FlatsAsset),
+        ),
     );
-    return loading;
-}
 
 export type UniformTemplateFormat = keyof typeof UNIFORM_TEMPLATE_FILES;
 

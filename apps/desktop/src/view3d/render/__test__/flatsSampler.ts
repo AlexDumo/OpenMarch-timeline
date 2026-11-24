@@ -8,6 +8,8 @@ import type { FlatsLayout } from "@/view3d/core/marchers/uniformArtwork";
 
 type V3 = [number, number, number];
 const IN = 0.0254;
+/** As OM_FLAT_HEM_INSET in uniform-flats.js, inches. */
+const HEM_INSET = 0.05;
 const PI = Math.PI;
 const sub = (a: V3, b: number[]): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const dot = (a: number[], b: number[]) =>
@@ -108,7 +110,9 @@ export class FlatsSampler {
         const psi = Math.atan2(p[0], p[2] - zc);
         const lut = this.lutAt(psi, row);
         const front = Math.abs(psi) <= PI / 2;
-        const y = g.y0 + Math.min(g.tEnd, Math.max(g.tStart, t)) / IN + lut[3];
+        // the torso keeps HEM_INSET above its last row (the jacket hem), as the shader does
+        const tEnd = s === 0 ? g.tEnd - HEM_INSET * IN : g.tEnd;
+        const y = g.y0 + Math.min(tEnd, Math.max(g.tStart, t)) / IN + lut[3];
         return {
             q: [this.layout.centreX + (front ? lut[0] : -lut[1]), y] as [
                 number,
@@ -131,7 +135,9 @@ export class FlatsSampler {
         const psi = Math.atan2(dot(r, L.side), dot(r, L.fwd));
         const lut = this.lutAt(psi, row);
         const front = Math.abs(psi) <= PI / 2;
-        const y = g.y0 + Math.min(g.tEnd, Math.max(g.tStart, t)) / IN + lut[3];
+        // the torso keeps HEM_INSET above its last row (the jacket hem), as the shader does
+        const tEnd = s === 0 ? g.tEnd - HEM_INSET * IN : g.tEnd;
+        const y = g.y0 + Math.min(tEnd, Math.max(g.tStart, t)) / IN + lut[3];
         return {
             q: [this.layout.centreX + (front ? lut[0] : -lut[1]), y] as [
                 number,
