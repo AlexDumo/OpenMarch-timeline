@@ -35,17 +35,17 @@ import {
     type FlatsArtworkKey,
     type UniformArtworkId,
     isUniformPackValue,
-    splitMode,
 } from "@/view3d/core/marchers/uniformArtwork";
 import {
     FLATS_PAGE_IN,
-    drawnInMode,
     type UniformPackItem,
 } from "@/view3d/core/uniformPack/format";
+import { draftOrigin } from "@/view3d/window/uniformPack/itemDrafts";
 import {
-    draftOrigin,
-    drawnDraft,
-} from "@/view3d/window/uniformPack/itemDrafts";
+    packPageKey,
+    packPagePlan,
+    type PageLayers,
+} from "@/view3d/window/uniformPack/packPage";
 import { readStoredUniformPackBytes } from "@/hooks/queries/useUniformPack";
 import { runUniformPackJob } from "@/view3d/uniformPack/runUniformPackJob";
 import type { BodyType } from "@/view3d/core/marchers/looks";
@@ -239,14 +239,6 @@ interface PackPage {
 const packPages = new Map<string, PackPage>();
 
 /**
- * Which layers a page draws: a pack's mode (its default when null), or, for
- * a draft, the layer files it names, with any new ones' PNGs
- */
-type PageLayers =
-    | { mode: string | null }
-    | { files: string[]; extra: Record<string, Uint8Array> };
-
-/**
  * A show's pack's layers flattened onto one bitmap of the whole page at
  * `dpi`, and its item images decoded, read in the uniform pack worker (never
  * in the window: the show may come from anyone). The window holds one bitmap
@@ -259,9 +251,7 @@ async function withPackPage<T>(
     which: PageLayers,
     use: (drawing: PackDrawing) => Promise<T>,
 ): Promise<T> {
-    const cacheKey = `${key}|${dpi}|${
-        "files" in which ? which.files.join("+") : `#${which.mode ?? ""}`
-    }`;
+    const cacheKey = packPageKey(key, dpi, which);
     let entry = packPages.get(cacheKey);
     if (!entry) {
         const promise = (async (): Promise<PackDrawing> => {
@@ -331,25 +321,11 @@ async function composeAtlas(
     dpi: number,
 ): Promise<FlatsAtlas> {
     if (isUniformPackValue(id)) {
-        // the mode it's worn in (step 5 of fork #1257): its layers, items and palette
-        const { pack, mode } = splitMode(id);
-        // a draft (`itemDrafts.ts`) draws over the pack it started from
-        const draft = drawnDraft(pack);
-        const inMode = draft ? drawnInMode(draft.contents, mode) : null;
-        const which: PageLayers = inMode
-            ? {
-                  files: inMode.layers.map((layer) => layer.file),
-                  extra: Object.fromEntries(
-                      inMode.layers.flatMap((layer) => {
-                          const png = draft?.layerImages[layer.file];
-                          return png ? [[layer.file, png]] : [];
-                      }),
-                  ),
-              }
-            : { mode };
+        // the mode it's worn in, and any draft it draws (step 5 of fork #1257)
+        const { pack, draft, which, items: planned } = packPagePlan(id);
         const draw = async (drawing: PackDrawing): Promise<FlatsAtlas> => {
             const { layout, regions } = await loadFlatsGeometry();
-            const items = inMode ? inMode.items : drawing.items;
+            const items = planned ?? drawing.items;
             const imageOf = (file: string) =>
                 draft?.images[file]?.bitmap ?? drawing.images.get(file);
             const rect = flatsAtlasLayout(

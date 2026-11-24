@@ -302,14 +302,16 @@ Every way in produces the same pack. Nothing downstream knows which way a pack c
     adds the default, called Default, holding everything the uniform drew.
   - Each mode can be renamed, moved (the first is the default) and removed, and has toggles for
     its images, logos and numbers, five colors (main, second, accent, trim, pants) and parts.
-    Removing a mode drops overlays no other mode shows; removing the last keeps what it drew.
+    Removing a mode keeps its images, since another mode may have them turned off for now; images
+    no mode shows can be removed with one button. Removing the last mode keeps what it drew,
+    colors included.
   - A new logo shows in every mode. Edits share the logos' draft, so a burst of edits is one undo
     step.
-  - **Band wears** picks one mode for the whole show (the venue's `uniformMode`). No Look cue
+  - **Band wears** picks one mode for the whole show (the venue's `uniformMode`). No Uniform cue
     exists yet, so switching during the show waits for fork #976.
   - Each (uniform, mode, body type) is its own atlas: about 24 MB at High quality and 6 MB at Low
-    per body type in use. A switch keeps the previous mode's art until the new one is composed,
-    so for a moment both are held.
+    per body type in use. A switch keeps the previous mode's art and colors until the new art is
+    composed, then changes both at once, so for a moment both are held.
 
 - **Variant.** A variant is a separate uniform in the same pack, assigned to performers rather than
   switched by a cue. Guard, percussion and a full drum-major costume are variants. A pack shares

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { parseShowAssetRef, showAssetRefValue } from "../ref";
+import { isShowAssetId, parseShowAssetRef, showAssetRefValue } from "../ref";
+import {
+    splitMode,
+    withMode,
+    type UniformPackValue,
+} from "@/view3d/core/marchers/uniformArtwork";
 import { pitModelName } from "@/view3d/core/pit/pitModels";
 
 const HASH = "ab".repeat(32);
@@ -40,5 +45,25 @@ describe("show asset references", () => {
         expect(
             pitModelName(showAssetRefValue({ id: ID, versionHash: HASH })),
         ).toBe(null);
+    });
+});
+
+describe("asset ids and `#` (ADR 0004 amendment 2026-11-24)", () => {
+    it("refuses `#` in an id, so a Uniform cue's `library:<id>#<mode>` splits at its only `#`", () => {
+        expect(isShowAssetId(ID)).toBe(true);
+        expect(isShowAssetId("a#b")).toBe(false);
+        expect(() =>
+            showAssetRefValue({ id: "a#b", versionHash: HASH }),
+        ).toThrow();
+        expect(parseShowAssetRef(`library:a#b@${HASH}`)).toBeNull();
+        // the 3D View's key for a pack worn in a mode splits back to the pack and the mode
+        const pack = showAssetRefValue({
+            id: ID,
+            versionHash: HASH,
+        }) as UniformPackValue;
+        expect(splitMode(withMode(pack, "sash-out-k3f9"))).toEqual({
+            pack,
+            mode: "sash-out-k3f9",
+        });
     });
 });

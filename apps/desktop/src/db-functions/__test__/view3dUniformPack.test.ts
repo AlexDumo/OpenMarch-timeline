@@ -683,7 +683,7 @@ describeDbTests("view3dUniformPack modes (#1257 step 5)", (it) => {
         );
     });
 
-    it("keeps the mode the band wears across a new version, and drops it for a new uniform", async ({
+    it("keeps the mode the band wears across a new version, and drops it when removed or for a new uniform", async ({
         db,
     }) => {
         const first = await store(db, modesPack());
@@ -703,6 +703,35 @@ describeDbTests("view3dUniformPack modes (#1257 step 5)", (it) => {
         expect((await getStoredVenueSettings({ db }))?.uniformMode).toBe(
             "sash-out",
         );
+        // a version without that mode (it was removed) clears it in the same write
+        const removed = readUniformPack(edited).manifest;
+        const without = writeUniformPack(
+            {
+                ...removed,
+                modes: removed.modes!.filter((m) => m.id !== "sash-out"),
+            },
+            {
+                "layers/base.png": fakePng(3360, 2816, 1),
+                "layers/sash.png": fakePng(3360, 2816, 2),
+            },
+        );
+        await setUniformPack({
+            db,
+            pack: without,
+            manifest: readUniformPack(without).manifest,
+            field,
+            versionOf: parseShowAssetRef(first)!.id,
+        });
+        expect(
+            (await getStoredVenueSettings({ db }))?.uniformMode,
+        ).toBeUndefined();
+        await updateVenueSettings({
+            db,
+            settings: {
+                ...(await getStoredVenueSettings({ db }))!,
+                uniformMode: "plain",
+            },
+        });
         await store(db, packFile("Away", 5));
         expect(
             (await getStoredVenueSettings({ db }))?.uniformMode,

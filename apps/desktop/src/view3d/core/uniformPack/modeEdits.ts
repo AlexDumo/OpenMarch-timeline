@@ -11,9 +11,14 @@
  * - **A new mode starts as a copy of the default**, plus the overlay layer it was made with, if any.
  * - **A new item shows in every mode** ({@link tidyContents}); a removed item or layer leaves
  *   every mode that named it.
- * - **Removing a mode** drops the layers no remaining mode draws, so an overlay doesn't linger in
- *   the file. Removing the last mode keeps exactly its layers and items, so the pack draws what it
- *   drew. Turning a layer off in a mode never drops it.
+ * - **Removing a mode never removes an image** (a layer), like deleting a layer comp in a design
+ *   tool: another mode may have it turned off for now. Images no mode shows are removed on their
+ *   own ({@link removeUnusedLayers}). Removing the last mode is the exception: the pack then draws
+ *   every layer, so it keeps exactly that mode's layers and items, and folds its colors and parts
+ *   into the pack's own, so it draws what that mode drew.
+ * - **A mode id is never reused.** Each new id ends in a random part, so a mode made after one was
+ *   removed never takes its id, and a venue or cue naming the removed one falls back to the
+ *   default instead of picking up the new one.
  *
  * Pure: no React, no workers.
  */
@@ -26,20 +31,27 @@ import {
     type UniformPackMode,
 } from "./format";
 
-/** The pack's lists, never left out */
+/** What an edit can change: the pack's lists (never left out), and its own colors and parts */
 export type PackContents = {
     layers: UniformPackLayer[];
     items: NonNullable<UniformPackContents["items"]>;
     modes: UniformPackMode[];
+    palette: UniformPackManifest["palette"];
+    options: UniformPackManifest["options"];
 };
 
-/** A manifest's or a draft's lists, with the optional ones filled in */
+/** A manifest's or a draft's contents, with the optional lists filled in */
 export const contentsOf = (
-    from: Pick<UniformPackManifest, "layers" | "items" | "modes">,
+    from: Pick<
+        UniformPackManifest,
+        "layers" | "items" | "modes" | "palette" | "options"
+    >,
 ): PackContents => ({
     layers: from.layers,
     items: from.items ?? [],
     modes: from.modes ?? [],
+    palette: from.palette,
+    options: from.options,
 });
 
 export type PaletteRole = keyof UniformPackManifest["palette"];
@@ -82,12 +94,34 @@ function stemOf(name: string, fallback: string): string {
     return stem || fallback;
 }
 
-/** A new mode id for `name`, unused by `modes` */
-export const newModeId = (modes: readonly UniformPackMode[], name: string) =>
-    freshId(
-        stemOf(name, "mode"),
-        modes.map((m) => m.id),
-    );
+/** Makes the random part of a mode id; tests pass their own */
+export type RandomPart = () => string;
+
+const randomPart: RandomPart = () => {
+    const bytes = new Uint8Array(4);
+    crypto.getRandomValues(bytes);
+    return [...bytes]
+        .map((b) => (b % 36).toString(36))
+        .join("")
+        .padEnd(4, "0");
+};
+
+/**
+ * A new mode id for `name`: its stem and a random part (`sash-out-k3f9`), never one of `modes`.
+ * The random part keeps a removed mode's id from coming back (see the module comment).
+ */
+export function newModeId(
+    modes: readonly UniformPackMode[],
+    name: string,
+    random: RandomPart = randomPart,
+): string {
+    const taken = new Set(modes.map((m) => m.id));
+    const stem = stemOf(name, "mode").slice(0, 26).replace(/-+$/, "");
+    for (;;) {
+        const id = `${stem}-${random()}`;
+        if (!taken.has(id)) return id;
+    }
+}
 
 /**
  * A new layer id and file for `name`, unused by `layers` and by `takenFiles` (files a draft
@@ -141,8 +175,12 @@ export function tidyContents(
 }
 
 /** The pack's default mode, as a mode, for a pack that has none yet: every layer and item */
-const impliedDefault = (contents: PackContents, name: string) => ({
-    id: newModeId([], name),
+const impliedDefault = (
+    contents: PackContents,
+    name: string,
+    random?: RandomPart,
+) => ({
+    id: newModeId([], name, random),
     name,
     layers: contents.layers.map((l) => l.id),
     items: contents.items.map((i) => i.id),
@@ -173,10 +211,13 @@ export function addMode(
         name,
         defaultName,
         layer,
+        random,
     }: {
         name: string;
         defaultName: string;
         layer?: UniformPackLayer;
+        /** Makes ids' random parts; tests pass their own */
+        random?: RandomPart;
     },
 ): { contents: PackContents; id: string } {
     const refusal = addModeRefusal(contents, { withLayer: !!layer });
@@ -184,10 +225,16 @@ export function addMode(
     const modes: UniformPackMode[] =
         contents.modes.length > 0
             ? contents.modes
-            : [impliedDefault(contents, defaultName.trim() || "Default")];
+            : [
+                  impliedDefault(
+                      contents,
+                      defaultName.trim() || "Default",
+                      random,
+                  ),
+              ];
     const base = modes[0];
     const trimmed = name.trim() || "Mode";
-    const id = newModeId(modes, trimmed);
+    const id = newModeId(modes, trimmed, random);
     const layers = layer ? [...contents.layers, layer] : contents.layers;
     const mode: UniformPackMode = {
         id,
@@ -232,8 +279,8 @@ export function renameMode(
 }
 
 /**
- * Removes mode `id`. The layers no remaining mode draws go too; removing the last mode keeps
- * exactly its layers and items, so the pack draws what that mode drew.
+ * Removes mode `id`, keeping every layer. Removing the last mode keeps exactly its layers and
+ * items, and makes its colors and parts the pack's own, so the pack draws what that mode drew.
  */
 export function removeMode(contents: PackContents, id: string): PackContents {
     const gone = contents.modes.find((m) => m.id === id);
@@ -246,13 +293,27 @@ export function removeMode(contents: PackContents, id: string): PackContents {
             layers: gone.layers.flatMap((l) => byId.get(l) ?? []),
             items: contents.items.filter((i) => shown.has(i.id)),
             modes: [],
+            palette: { ...contents.palette, ...gone.palette },
+            options: { ...contents.options, ...gone.options },
         };
     }
-    const used = new Set(modes.flatMap((m) => m.layers));
+    return tidyContents({ ...contents, modes });
+}
+
+/** The layers no mode shows (none for a pack without modes, which shows them all) */
+export const unusedLayers = (contents: PackContents): UniformPackLayer[] => {
+    if (contents.modes.length === 0) return [];
+    const used = new Set(contents.modes.flatMap((m) => m.layers));
+    return contents.layers.filter((l) => !used.has(l.id));
+};
+
+/** Removes the layers no mode shows ({@link unusedLayers}) */
+export function removeUnusedLayers(contents: PackContents): PackContents {
+    const unused = new Set(unusedLayers(contents).map((l) => l.id));
+    if (unused.size === 0) return contents;
     return tidyContents({
         ...contents,
-        layers: contents.layers.filter((l) => used.has(l.id)),
-        modes,
+        layers: contents.layers.filter((l) => !unused.has(l.id)),
     });
 }
 
@@ -314,13 +375,13 @@ export function setModeItem(
  */
 export function setModeColor(
     contents: PackContents,
-    base: UniformPackManifest["palette"],
     id: string,
     role: PaletteRole,
     color: string | null,
 ): PackContents {
     const mode = contents.modes.find((m) => m.id === id);
     if (!mode) return contents;
+    const base = contents.palette;
     const palette = { ...mode.palette };
     if (color === null || color.toLowerCase() === base[role].toLowerCase())
         delete palette[role];
@@ -339,12 +400,12 @@ export function setModeColor(
  */
 export function setModeParts(
     contents: PackContents,
-    base: UniformPackManifest["options"],
     id: string,
     on: readonly PartOption[],
 ): PackContents {
     const mode = contents.modes.find((m) => m.id === id);
     if (!mode) return contents;
+    const base = contents.options;
     const options: Partial<UniformPackManifest["options"]> = {};
     for (const part of MODE_PART_OPTIONS) {
         const value = on.includes(part);

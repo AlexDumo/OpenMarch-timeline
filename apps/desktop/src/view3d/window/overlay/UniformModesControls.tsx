@@ -8,7 +8,7 @@
  *   or SVG holding only what changes, decoded in the uniform pack worker like any layer. A mode
  *   with no overlay starts as a copy of the default, to change its colors or parts.
  * - Each mode can be renamed, moved, removed, and given its layers, items, colors and parts.
- * - **Band wears** picks the mode for the whole show. A Look cue will switch modes from a count
+ * - **Band wears** picks the mode for the whole show. A Uniform cue will switch modes from a count
  *   on once fork #976 lands.
  *
  * Every edit goes through the same draft as the logos and numbers (`itemDrafts.ts`): the 3D View
@@ -50,6 +50,7 @@ import {
     moveMode,
     newLayerId,
     removeMode,
+    removeUnusedLayers,
     renameMode,
     setModeColor,
     setModeItem,
@@ -57,12 +58,14 @@ import {
     setModeParts,
     type PackContents,
     type PartOption,
+    unusedLayers,
 } from "@/view3d/core/uniformPack/modeEdits";
 import { uniformArtworkAvailable } from "@/view3d/window/uniformArtworkPreview";
 import { loadFlatsGeometry } from "@/view3d/window/performers/marchers/flatsAtlas";
 import {
     contentsFor,
     editPack,
+    editUnsettled,
     observeWorn,
     useItemDrafts,
     type PackEditOptions,
@@ -95,7 +98,7 @@ export function UniformModesControls() {
     const stored = contentsOf(pack.manifest);
     const contents = contentsFor(draft, wornPack, stored);
     const { modes } = contents;
-    const base = pack.manifest;
+    const unused = unusedLayers(contents);
     const wearing = modeOf(contents, settings?.uniformMode);
     const edit = (
         change: (c: PackContents) => PackContents,
@@ -103,7 +106,7 @@ export function UniformModesControls() {
     ) => editPack(wornPack, stored, change, options);
     // a venue change sends the whole venue: while an edit is unsaved, it would put back the
     // uniform version it was made from, so the picker waits for the save
-    const unsaved = saving || (!!draft && draft.saved < draft.revision);
+    const unsaved = editUnsettled(draft, saving);
     const pickReason = unsaved ? t("view3d.uniformModes.waitForSave") : null;
     const addReason = addModeRefusal(contents, { withLayer: false })
         ? t("view3d.uniformModes.full", { count: UNIFORM_PACK_MAX_MODES })
@@ -227,8 +230,6 @@ export function UniformModesControls() {
                             index={i}
                             count={modes.length}
                             contents={contents}
-                            palette={base.palette}
-                            options={base.options}
                             open={open === mode.id}
                             onToggle={() =>
                                 setOpen(open === mode.id ? null : mode.id)
@@ -237,6 +238,28 @@ export function UniformModesControls() {
                         />
                     ))}
                 </ul>
+            )}
+            {unused.length > 0 && (
+                <div
+                    className="flex flex-wrap items-center gap-6"
+                    data-testid="view3d-uniform-modes-unused"
+                >
+                    <span className="text-sub text-text/60">
+                        {t("view3d.uniformModes.unusedImages", {
+                            count: unused.length,
+                        })}
+                    </span>
+                    <Button
+                        variant="ghost"
+                        size="compact"
+                        data-testid="view3d-uniform-modes-remove-unused"
+                        onClick={() =>
+                            edit((c) => removeUnusedLayers(c), { now: true })
+                        }
+                    >
+                        {t("view3d.uniformModes.removeUnused")}
+                    </Button>
+                </div>
             )}
             {problem && (
                 <p className="text-sub text-red" role="alert">
@@ -438,8 +461,6 @@ function ModeRow({
     index,
     count,
     contents,
-    palette,
-    options,
     open,
     onToggle,
     edit,
@@ -448,8 +469,6 @@ function ModeRow({
     index: number;
     count: number;
     contents: PackContents;
-    palette: Parameters<typeof setModeColor>[1];
-    options: Parameters<typeof setModeParts>[1];
     open: boolean;
     onToggle: () => void;
     edit: (
@@ -458,6 +477,7 @@ function ModeRow({
     ) => void;
 }) {
     const { t } = useTranslate();
+    const { palette, options } = contents;
     const [name, setName] = useState(mode.name);
     const [layerRefused, setLayerRefused] = useState(false);
     useEffect(() => setName(mode.name), [mode.name]);
@@ -654,7 +674,6 @@ function ModeRow({
                                         edit((c) =>
                                             setModeColor(
                                                 c,
-                                                palette,
                                                 mode.id,
                                                 role,
                                                 color,
@@ -674,7 +693,6 @@ function ModeRow({
                                             for (const role of MODE_PALETTE_ROLES)
                                                 next = setModeColor(
                                                     next,
-                                                    palette,
                                                     mode.id,
                                                     role,
                                                     null,
@@ -699,9 +717,7 @@ function ModeRow({
                                 label: t(`view3d.uniformModes.part.${part}`),
                             }))}
                             onChange={(on) =>
-                                edit((c) =>
-                                    setModeParts(c, options, mode.id, on),
-                                )
+                                edit((c) => setModeParts(c, mode.id, on))
                             }
                             label={t("view3d.uniformModes.parts")}
                             testId="view3d-uniform-mode-parts"

@@ -166,7 +166,8 @@ export const isUniformPackValue = (
 /**
  * The 3D View key of a pack worn in a mode (format version 3, step 5 of fork #1257):
  * `<pack or draft key>#<mode id>`, so each (uniform, mode, body type) gets its own atlas. A pack
- * without modes keeps its plain key. Mode ids are `[a-z0-9-]`, so they never hold `#`, `~` or `|`.
+ * without modes keeps its plain key. Mode ids are `[a-z0-9-]` and asset ids never hold `#`
+ * (`isShowAssetId`), so the only `#` is this one, and the key holds no `~` or `|` after it.
  */
 export const withMode = (
     key: UniformPackValue,

@@ -21,6 +21,10 @@ import {
     setModeLayer,
     setModeParts,
     tidyContents,
+    newModeId,
+    removeUnusedLayers,
+    unusedLayers,
+    MODE_PART_OPTIONS,
     type PackContents,
 } from "../modeEdits";
 import { fakePng, sampleManifest } from "./fixtures";
@@ -38,6 +42,10 @@ const start = (): PackContents => ({
         },
     ],
 });
+/** Random parts in order, so ids are predictable here: 0001, 0002, … */
+let counter = 0;
+const random = () => String(++counter).padStart(4, "0");
+
 const layer = (id: string): UniformPackLayer => ({
     id,
     name: id,
@@ -57,11 +65,13 @@ const written = (contents: PackContents) => {
 /** Plain, then sash out (with the sash overlay), then sash out unzipped */
 function cadets() {
     const a = addMode(start(), {
+        random,
         name: "Sash out",
         defaultName: "Plain",
         layer: layer("sash"),
     });
     const b = addMode(a.contents, {
+        random,
         name: "Sash out, unzipped",
         defaultName: "Plain",
         layer: layer("open-front"),
@@ -74,12 +84,13 @@ function cadets() {
 describe("uniform mode edits", () => {
     it("adds the default mode with the first one, so nothing drawn changes", () => {
         const { contents, id: sash } = addMode(start(), {
+            random,
             name: "Sash out",
             defaultName: "Plain",
             layer: layer("sash"),
         });
         expect(contents.modes.map((m) => [m.id, m.name, m.layers])).toEqual([
-            ["plain", "Plain", ["base"]],
+            [contents.modes[0].id, "Plain", ["base"]],
             [sash, "Sash out", ["base", "sash"]],
         ]);
         expect(contents.modes[1].items).toEqual(["crest"]);
@@ -103,23 +114,17 @@ describe("uniform mode edits", () => {
 
     it("adds a mode without a layer as a copy of the default, to recolor", () => {
         const { contents, id } = addMode(start(), {
+            random,
             name: "Ballad",
             defaultName: "Plain",
         });
-        const recolored = setModeColor(
-            contents,
-            base.palette,
-            id,
-            "primary",
-            "#112233",
-        );
+        const recolored = setModeColor(contents, id, "primary", "#112233");
         const mode = recolored.modes.find((m) => m.id === id)!;
         expect(mode.layers).toEqual(["base"]);
         expect(mode.palette).toEqual({ primary: "#112233" });
         // the uniform's own color is no change, so the override goes
         const back = setModeColor(
             recolored,
-            base.palette,
             id,
             "primary",
             base.palette.primary.toUpperCase(),
@@ -132,33 +137,87 @@ describe("uniform mode edits", () => {
 
     it("stores only the parts a mode changes", () => {
         const { contents, id } = addMode(start(), {
+            random,
             name: "Hats off",
             defaultName: "Plain",
         });
         const on = (
             Object.keys(base.options) as (keyof typeof base.options)[]
         ).filter((p) => base.options[p] && p !== "hat");
-        const next = setModeParts(contents, base.options, id, on);
+        const next = setModeParts(contents, id, on);
         expect(next.modes.find((m) => m.id === id)!.options).toEqual(
             base.options.hat ? { hat: false } : undefined,
         );
     });
 
-    it("removes a mode with the layers no other mode draws", () => {
+    it("removes a mode but keeps its images, which can be removed once no mode shows them", () => {
         const { contents, unzipped } = cadets();
         const next = removeMode(contents, unzipped);
-        expect(next.layers.map((l) => l.id)).toEqual(["base", "sash"]);
-        expect(written(next).modes).toHaveLength(2);
+        expect(next.modes).toHaveLength(2);
+        expect(next.layers.map((l) => l.id)).toEqual([
+            "base",
+            "sash",
+            "open-front",
+        ]);
+        expect(unusedLayers(next).map((l) => l.id)).toEqual(["open-front"]);
+        const tidy = removeUnusedLayers(next);
+        expect(tidy.layers.map((l) => l.id)).toEqual(["base", "sash"]);
+        expect(unusedLayers(tidy)).toEqual([]);
+        expect(written(tidy).modes).toHaveLength(2);
     });
 
-    it("removing the last mode keeps exactly what it drew", () => {
+    it("keeps the sash when Sash out has it turned off and Unzipped is removed", () => {
         const { contents, sash, unzipped } = cadets();
-        const one = removeMode(removeMode(contents, "plain"), unzipped);
+        const off = setModeLayer(contents, sash, "sash", false);
+        const next = removeMode(off, unzipped);
+        expect(next.layers.map((l) => l.id)).toContain("sash");
+        // turned back on, Sash out shows it again
+        const on = setModeLayer(next, sash, "sash", true);
+        expect(on.modes.find((m) => m.id === sash)!.layers).toEqual([
+            "base",
+            "sash",
+        ]);
+        expect(written(on).modes).toHaveLength(2);
+    });
+
+    it("removing the last mode keeps exactly what it drew, colors and parts included", () => {
+        const { contents, sash, unzipped } = cadets();
+        const plain = contents.modes[0].id;
+        const recolored = setModeParts(
+            setModeColor(contents, sash, "primary", "#112233"),
+            sash,
+            MODE_PART_OPTIONS.filter((p) => p !== "hat" && base.options[p]),
+        );
+        const one = removeMode(removeMode(recolored, plain), unzipped);
         expect(one.modes.map((m) => m.id)).toEqual([sash]);
         const none = removeMode(one, sash);
         expect(none.modes).toEqual([]);
         expect(none.layers.map((l) => l.id)).toEqual(["base", "sash"]);
-        expect(written(none).formatVersion).toBe(2);
+        expect(none.palette.primary).toBe("#112233");
+        expect(none.palette.secondary).toBe(base.palette.secondary);
+        expect(none.options.hat).toBe(false);
+        expect(none.options.collar).toBe(base.options.collar);
+        const manifest = written(none);
+        expect(manifest.formatVersion).toBe(2);
+        expect(manifest.palette.primary).toBe("#112233");
+        expect(manifest.options.hat).toBe(false);
+    });
+
+    it("never reuses a removed mode's id", () => {
+        const { contents, sash } = cadets();
+        const gone = removeMode(contents, sash);
+        const again = addMode(gone, {
+            name: "Sash out",
+            defaultName: "Plain",
+        });
+        expect(again.id).not.toBe(sash);
+        expect(again.id).toMatch(/^sash-out-[a-z0-9]{4}$/);
+        // a random part that's taken is drawn again
+        const parts = ["aaaa", "aaaa", "bbbb"];
+        const taken = [{ ...contents.modes[0], id: "sash-out-aaaa" }];
+        expect(newModeId(taken, "Sash out", () => parts.shift()!)).toBe(
+            "sash-out-bbbb",
+        );
     });
 
     it("keeps a mode's last layer, and never drops a layer turned off", () => {
@@ -175,7 +234,7 @@ describe("uniform mode edits", () => {
     it("moves a mode, which can make it the default", () => {
         const { contents, sash } = cadets();
         expect(moveMode(contents, sash, -1).modes[0].id).toBe(sash);
-        expect(moveMode(contents, "plain", -1)).toBe(contents);
+        expect(moveMode(contents, contents.modes[0].id, -1)).toBe(contents);
     });
 
     it("renames, keeping the old name for an empty one", () => {
@@ -218,6 +277,7 @@ describe("uniform mode edits", () => {
         let contents = start();
         for (let n = 1; n < 8; n++)
             contents = addMode(contents, {
+                random,
                 name: `Mode ${n}`,
                 defaultName: "Plain",
             }).contents;
@@ -226,7 +286,7 @@ describe("uniform mode edits", () => {
             "modesFull",
         );
         expect(() =>
-            addMode(contents, { name: "Nine", defaultName: "Plain" }),
+            addMode(contents, { name: "Nine", defaultName: "Plain", random }),
         ).toThrow();
         expect(
             newLayerId([layer("sash")], "Sash", ["layers/sash-2.png"]),

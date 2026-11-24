@@ -659,11 +659,8 @@ function inflateEntry(bytes: Uint8Array, entry: ZipEntry): Uint8Array {
     return out;
 }
 
-/**
- * Checks a parsed manifest's head, then the whole of it. `newest` is the newest version taken:
- * this build's, or an older build's when a test reads as that build would.
- */
-function parseManifest(json: unknown, newest: number): UniformPackManifest {
+/** Checks a parsed manifest's head, then the whole of it */
+function parseManifest(json: unknown): UniformPackManifest {
     const head = z
         .object({
             format: z.literal(ASSET_FILE_FORMAT),
@@ -678,10 +675,10 @@ function parseManifest(json: unknown, newest: number): UniformPackManifest {
             "notPack",
             `an asset of kind ${head.data.kind}, not a uniform`,
         );
-    if (head.data.formatVersion > newest)
+    if (head.data.formatVersion > UNIFORM_PACK_VERSION)
         throw new UniformPackError(
             "newer",
-            `format version ${head.data.formatVersion} is newer than ${newest}`,
+            `format version ${head.data.formatVersion} is newer than ${UNIFORM_PACK_VERSION}`,
         );
     const parsed = uniformPackManifestSchema.safeParse(json);
     if (!parsed.success)
@@ -695,15 +692,7 @@ function parseManifest(json: unknown, newest: number): UniformPackManifest {
  * inflated, each stopped at its declared size (see the module comment). Throws
  * {@link UniformPackError}. The app calls it only in `uniformPack.worker`.
  */
-export function readUniformPack(
-    bytes: Uint8Array,
-    {
-        newest = UNIFORM_PACK_VERSION,
-    }: {
-        /** The newest format version to take; tests set an older one to read as an older build */
-        newest?: number;
-    } = {},
-): UniformPack {
+export function readUniformPack(bytes: Uint8Array): UniformPack {
     if (bytes.byteLength > UNIFORM_PACK_MAX_BYTES)
         throw new UniformPackError(
             "tooLarge",
@@ -724,7 +713,7 @@ export function readUniformPack(
         if (error instanceof UniformPackError) throw error;
         throw damaged("manifest.json isn't JSON");
     }
-    const manifest = parseManifest(json, newest);
+    const manifest = parseManifest(json);
     let total = manifestEntry.originalSize;
     const png = (file: string, what: string, maxPixels: number) => {
         const entry = entries.get(file);
@@ -760,10 +749,48 @@ export function readUniformPack(
     return { manifest, layers, itemFiles };
 }
 
-/** What an edit of a pack changes: any of its layers, items and modes */
+/**
+ * What the uniform pack worker's `flatten` draws (step 5 of fork #1257): the layer PNGs, bottom
+ * first, and the items the window then places. By default, mode `mode`'s layers and items (the
+ * default mode when it names none the pack has). With `layers` (a draft's), those layer files
+ * instead, each from the pack or else from `extra` (a draft's new overlay), and every item of the
+ * pack. Throws {@link UniformPackError} `damaged` for a layer file in neither.
+ */
+export function flattenPlan(
+    pack: UniformPack,
+    {
+        mode,
+        layers,
+        extra = {},
+    }: {
+        mode?: string | null;
+        layers?: readonly string[];
+        extra?: Readonly<Record<string, Uint8Array>>;
+    },
+): { images: { file: string; png: Uint8Array }[]; items: UniformPackItem[] } {
+    const own = new Map(
+        pack.manifest.layers.map((layer, i) => [
+            layer.file,
+            pack.layers[i].png,
+        ]),
+    );
+    const inMode = drawnInMode(pack.manifest, mode);
+    const files = layers ?? inMode.layers.map((layer) => layer.file);
+    const images = files.map((file) => {
+        const png = own.get(file) ?? extra[file];
+        if (!png) throw damaged(`no layer ${file}`);
+        return { file, png };
+    });
+    return {
+        images,
+        items: layers ? (pack.manifest.items ?? []) : inMode.items,
+    };
+}
+
+/** What an edit of a pack changes: any of its layers, items and modes, and its colors and parts */
 export type UniformPackContents = Pick<
     UniformPackManifest,
-    "layers" | "items" | "modes"
+    "layers" | "items" | "modes" | "palette" | "options"
 >;
 
 /**

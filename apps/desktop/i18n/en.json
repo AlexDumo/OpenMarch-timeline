@@ -3769,7 +3769,7 @@
         "uniformModes": {
             "title": "Modes",
             "wears": "Band wears",
-            "cueLater": "One mode for the whole show for now. Switching modes during the show comes with Look cues.",
+            "cueLater": "One mode for the whole show for now. Switching modes during the show comes with Uniform cues.",
             "hint": "Add a mode to wear this uniform another way, such as with a sash or unzipped. A mode can add an overlay image or just change colors.",
             "waitForSave": "Wait until the uniform's changes are saved.",
             "full": "A uniform holds up to {count} modes.",
@@ -3817,7 +3817,9 @@
                 "cuffs": "Cuffs",
                 "gloves": "Gloves",
                 "hat": "Hat"
-            }
+            },
+            "unusedImages": "{count, plural, =1 {One image isn't shown in any mode.} other {# images aren't shown in any mode.}}",
+            "removeUnused": "Remove unused images"
         }
     },
     "web": {

@@ -18,7 +18,7 @@ import {
     UNIFORM_ITEM_STORED_PX,
     UNIFORM_LAYER_MAX_PIXELS,
     UniformPackError,
-    drawnInMode,
+    flattenPlan,
     packWithContents,
     pngHeaderSize,
     readUniformPack,
@@ -227,18 +227,8 @@ async function handle(request: UniformPackRequest) {
             const h = Math.max(1, Math.min(8192, Math.round(request.height)));
             const canvas = new OffscreenCanvas(w, h);
             const ctx = canvas.getContext("2d")!;
-            const own = new Map(
-                pack.manifest.layers.map((layer, i) => [
-                    layer.file,
-                    pack.layers[i].png,
-                ]),
-            );
-            const inMode = drawnInMode(pack.manifest, request.mode);
-            const files =
-                request.layers ?? inMode.layers.map((layer) => layer.file);
-            for (const file of files) {
-                const png = own.get(file) ?? request.extra?.[file];
-                if (!png) throw new Refused("damaged", `no layer ${file}`);
+            const plan = flattenPlan(pack, request);
+            for (const { png } of plan.images) {
                 const { bitmap } = await decodePng(png, w, h);
                 ctx.drawImage(bitmap, 0, 0, w, h);
                 bitmap.close();
@@ -271,9 +261,7 @@ async function handle(request: UniformPackRequest) {
                 {
                     type: "flattened",
                     bitmap,
-                    items: request.layers
-                        ? (pack.manifest.items ?? [])
-                        : inMode.items,
+                    items: plan.items,
                     itemBitmaps,
                 },
                 [bitmap, ...itemBitmaps.map((i) => i.bitmap)],

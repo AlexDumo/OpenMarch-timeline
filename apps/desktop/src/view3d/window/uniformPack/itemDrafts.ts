@@ -170,6 +170,18 @@ export function wornKey(
         : worn;
 }
 
+/**
+ * Whether an edit isn't settled in the venue yet: saving, waiting to save, or saved while the
+ * venue still names the version before it (the editor's write hasn't come back). A venue change
+ * sends the whole venue, so one sent now would put back the version the window still sees, and a
+ * burst's save may already have removed it; the mode picker waits until this is false.
+ */
+export const editUnsettled = (
+    draft: ItemDraft | null,
+    saving: boolean,
+): boolean =>
+    saving || (!!draft && (draft.saved < draft.revision || !draft.arrived));
+
 /** The layers, items and modes the lists show for the band's `worn` pack, whose own are `stored` */
 export function contentsFor(
     draft: ItemDraft | null,

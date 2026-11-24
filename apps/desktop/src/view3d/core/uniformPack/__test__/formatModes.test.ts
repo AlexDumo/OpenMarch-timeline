@@ -148,23 +148,13 @@ describe("uniform pack modes (format version 3)", () => {
         ).toBe(2);
     });
 
-    it("is refused as newer by a build that reads only up to version 2", () => {
-        const bytes = writeUniformPack(cadets(), files);
-        expect(codeOf(() => readUniformPack(bytes, { newest: 2 }))).toBe(
-            "newer",
-        );
-        // and a version 2 file can't carry modes: step 4 reserved the list, so it can't have been
-        // written by a build that draws it wrong
+    it("can't hold modes in a version 2 file, which step 4 reserved them in", () => {
+        // step 4's own reader refusing version 3 is checked in formatV3File.test.ts
         expect(
             codeOf(() =>
                 readUniformPack(rawPack({ ...cadets(), formatVersion: 2 })),
             ),
         ).toBe("damaged");
-        // the same build still reads a pack without modes
-        expect(
-            readUniformPack(writeUniformPack(cadets([]), files), { newest: 2 })
-                .manifest.formatVersion,
-        ).toBe(2);
     });
 
     it("refuses modes that break the rules", () => {

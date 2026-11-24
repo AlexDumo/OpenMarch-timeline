@@ -133,7 +133,7 @@ export const venueSettingsSchema = z.object({
      * The mode the band wears its imported uniform in, for the whole show
      * (a mode id of the pack `uniformArtwork` names; format version 3, step 5
      * of fork #1257). Absent, or naming no mode that pack has, means its
-     * default mode (the first). A Look cue will pick a mode from a count on
+     * default mode (the first). A Uniform cue will pick a mode from a count on
      * once fork #976 lands; until then this is the only switch. Added
      * 2026-11-24 without a version bump: older builds ignore it (and refuse
      * a pack with modes as newer). A value that doesn't parse is dropped on

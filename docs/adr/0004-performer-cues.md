@@ -585,3 +585,82 @@ of this change until they are tested more.
   defaults, saved fields, and unknown values.
 - `e2e/browser/tests/performer-defaults.spec.mts`: the section in Show
   settings saves what is chosen.
+
+## Amendment 2026-11-24: Uniform cue values name a uniform's mode, not a version
+
+Fork #1257 (step 5 of the uniform artwork build) and fork #976. Docs only: no
+Uniform cue exists in the app yet. This sets the contract #976 builds to.
+
+### Context
+
+- An imported uniform is a show asset of kind `uniform` (ADR 0010, amendment
+  2026-11-24). Every saved edit of it (its logos, numbers and modes) stores a
+  new Version, and an editing burst replaces its own earlier Version.
+- A uniform pack can hold **modes** (format version 3): plain, sash out, sash
+  out and unzipped. To a Uniform cue, each mode is one uniform ("Silk and
+  Uniform" above: a cue holds one uniform reference).
+- "Cue values that name Library items" above pins every value to an exact
+  Version (`library:<uuid>@<version hash>`). For a uniform that breaks: each
+  edit would leave every cue drawing an old Version, or need every cue
+  rewritten in the same undo step, and a burst's replaced Version would leave
+  cues naming a Version that no longer exists.
+
+### Decision
+
+- **The value.** A Uniform cue that names an imported uniform's mode stores
+  `library:<asset id>#<mode id>`: the asset id with no Version, then the
+  mode's id. This replaces the exact-Version form for Uniform values only.
+  Carry and Silk values keep exact Versions.
+  - Mode ids are `[a-z0-9-]`, up to 32 characters, and never reused within a
+    uniform (each new id ends in a random part), so a removed mode's cues never
+    pick up a mode made later. A rename keeps the id.
+  - A uniform without modes is named the same way with its default mode's id
+    once it has one; until then, the value is `library:<asset id>#` with an
+    empty mode, which means the default mode.
+- **Asset ids never hold `#`.** `isShowAssetId` refuses `#` as it refuses `@`,
+  so the value splits at its only `#`. The app makes asset ids as UUIDs, so no
+  stored id changes. The 3D View's own key for a pack worn in a mode,
+  `library:<id>@<hash>#<mode id>` (`withMode` / `splitMode`), relies on the
+  same rule.
+- **Which Version a cue draws:** the Version the venue's `uniformArtwork`
+  names when it names a Version of that uniform, otherwise the uniform's
+  newest Version. Undo and Redo of an edit move the venue, so cues follow the
+  band's uniform through them.
+- **A mode the uniform no longer has** (removed), or a uniform the show no
+  longer has, falls back to the band's uniform in its default mode. The cue
+  is flagged as a value the compiler doesn't know, like any other.
+- **Removal and delete-protection without a Version.** A version-free value
+  protects the uniform by its asset id:
+  - Remove unused… (ADR 0010, amendment 2026-11-15) counts a
+    `library:<asset id>#…` value as a use of that asset's **newest** Version,
+    the one it draws when the venue doesn't name another. The venue protects
+    the Version it names. Older Versions that nothing else names stay
+    removable.
+  - Deleting a uniform that a cue names (any Version) offers "Replace with…"
+    and lists the cues that name its asset id, as for a Version-pinned value
+    [26.10].
+  - A value is matched by parsing it (`library:` prefix, id up to `#`), not by
+    comparing whole strings, so the Assets view's use counts and the
+    history check (`valuesNamedInHistory`) must look for the asset id as well
+    as each exact Version.
+- **Older shows and builds.** No show stores a version-free value today: core
+  reserves the cue type with built-in values only. A build without this
+  amendment reads `library:<id>#<mode>` as a value it doesn't know, ignores
+  the cue and flags it (`unknown_value`, ADR 0015), and its Remove unused…
+  doesn't see the use.
+  That build also refuses a pack with modes as newer, so it draws the band in
+  its preset anyway.
+
+### Consequences
+
+- #976 must teach the Assets view's use counts, Remove unused… and the
+  history check to read version-free values before any cue stores one.
+- A cue can't pin an old look of a uniform. A designer who wants one makes it
+  a mode, or imports it as another uniform.
+
+### Verification
+
+- When #976 lands: a cue naming `library:<id>#<mode>` draws that mode on the
+  band's Version and follows an edit; removing the mode flags the cue and
+  draws the default; Remove unused… keeps the newest Version a cue names and
+  removes an older one nothing names; an asset id with `#` is refused.
