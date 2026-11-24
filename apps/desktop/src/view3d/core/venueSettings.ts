@@ -5,7 +5,7 @@
  * must not import React, React Three Fiber, drei, Electron or the database.
  */
 import * as z from "zod";
-import type { FieldProperties } from "@openmarch/core";
+import { fieldFootprint, type FieldProperties } from "@openmarch/core";
 import { ft } from "./environment/units";
 import type {
     FieldFootprint,
@@ -371,4 +371,18 @@ export function parseVenueSettingsJson(
         ...result.data,
         lighting: lightingForKit(result.data.kit, result.data.lighting),
     };
+}
+
+/**
+ * The kit a show's venue shows as, in the 3D View and on the 2D field
+ * (`kitForField`): the saved kit, or the fallback when the show's field has
+ * outgrown its fixed floor. Before the field loads, the saved kit.
+ */
+export function shownKit(
+    kit: VenueKitId,
+    fieldProperties: FieldProperties | undefined,
+): VenueKitId {
+    return fieldProperties
+        ? kitForField(kit, fieldFootprint(fieldProperties))
+        : kit;
 }

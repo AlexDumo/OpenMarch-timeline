@@ -4,7 +4,7 @@ import { paintCanvasTexture } from "../../environment";
 import {
     dieselTexture,
     OM,
-    OPENMARCH_URL,
+    OPENMARCH_SITE,
     paintLogo,
     signText,
 } from "../markDiesel/brand";
@@ -123,7 +123,7 @@ export function nightpoundBoardTexture(): CanvasTexture {
                 const logoH = half * 0.5;
                 paintLogo(g, w / 2, y + half / 2, logoH, OM.white);
             } else
-                signText(g, OPENMARCH_URL, w / 2, y + half / 2, half * 0.26, {
+                signText(g, OPENMARCH_SITE, w / 2, y + half / 2, half * 0.26, {
                     color: OM.white,
                     align: "center",
                     spacing: 0.08,

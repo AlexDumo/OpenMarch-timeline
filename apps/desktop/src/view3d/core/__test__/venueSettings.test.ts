@@ -19,6 +19,7 @@ import {
     fieldFamily,
     kitFitsField,
     kitForField,
+    shownKit,
     lightingForKit,
     paramsForKitSwitch,
     parseVenueSettings,
@@ -286,5 +287,15 @@ describe("Nightpound's fixed floor", () => {
         expect(kitForField("hs", football)).toBe("hs");
         const indoor = fieldFootprint(GridFieldTemplates.INDOOR_50x90_8to5);
         expect(kitForField("nightpound", indoor)).toBe("nightpound");
+    });
+
+    it("shows the same kit on the 2D field, and the saved one before the field loads", () => {
+        const football =
+            FootballTemplates.HIGH_SCHOOL_FOOTBALL_FIELD_NO_END_ZONES;
+        expect(shownKit("nightpound", football)).toBe("arena");
+        expect(
+            shownKit("nightpound", GridFieldTemplates.INDOOR_50x90_8to5),
+        ).toBe("nightpound");
+        expect(shownKit("nightpound", undefined)).toBe("nightpound");
     });
 });
