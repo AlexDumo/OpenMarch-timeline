@@ -12,6 +12,7 @@ questions:
   - "Drag around a few spots first, then off the circle, in one drag. Did the trail carry on from where the line had slid to? Is that useful, or would you rather it started from where they stand?"
   - "New (2026-11-23): click a marcher, let go, and move the mouse without holding the button. Did the line follow, and did the next click keep it? Would you rather it worked another way?"
   - "New (2026-11-23): while a trail is drawn, the bar has Straight | Curved. Did you find it, and did Curved bend the trail the way you wanted?"
+  - "New (2026-11-23): put marchers on a closed shape that isn't a circle or box (a closed Curve, or by hand in a loop) and press Shift+L. Did they go around the shape you expected? Anywhere the loop cut a corner or bulged?"
   - "New (2026-11-23): the mode now shows in the top bar (Following, with a live line). Did you see it, and did you miss the note over the field? Was not being able to switch tabs fine, or in the way?"
   - "New (2026-11-23): after clicking a marcher, could you tell at once that you were holding the line?"
   - "Was it clear when you were sliding around and when you had pulled out? Did it ever switch when you didn't mean it to (too easily, or not easily enough)?"
@@ -42,6 +43,10 @@ show.
 - **Around, then out, in one drag.** Slide a few spots around first and then pull off, and the
   trail carries on from where the line had slid to. Come back onto the outline and it slides
   again.
+- **Any closed shape (2026-11-23, a prototype).** Follow now goes around any closed shape the
+  marchers stand all the way around, not only a circle or a box. Placed with a shape tool (a
+  closed Line or Curve, a polygon), they go around that shape's own outline, corners and all.
+  Placed by hand, they go around a smooth loop through them.
 - **Following, in the top bar (2026-11-23, a prototype).** The note over the field is gone.
   While Follow is open, the Paths tab's Follow button reads **Following**, and a short line
   beside it says what's happening ("Holding T9 · move along to slide, away to pull out ·
@@ -83,6 +88,23 @@ show.
   on the finished move goes the other way around as far. Remove trail walks everyone straight
   to the same spots.
 
+**Make a bean and go around it (2026-11-24, each step checked in the app)**
+
+1. Click **Page 1** on the timeline and select the marchers (Ctrl/Cmd+A).
+2. In the top bar open the **Shapes** tab and click the fourth tool, **Curve**.
+3. Click five or six points on the field around the outline you want.
+4. **Click the first point again.** The curve closes and the marchers spread around it. (If
+   you finished it open instead, the shape bar's first menu says **Open**: change it to
+   **Closed**.)
+5. Press **Enter** to place them.
+6. Go to the next page (or right-click the playhead and choose **Create page at playhead**,
+   then click the new page).
+7. Click any marcher of the shape (they all select) and press **Shift+L**.
+8. Drag any marcher along the curve: the note counts the spots. Let go to keep it.
+
+Follow on the page where you placed the shape acts on where they stood before it, so go to
+the next page first.
+
 **Try it**
 
 1. Turn on **Settings › Field › Follow-the-leader (preview)**.
@@ -99,7 +121,8 @@ show.
 
 **Good to know**
 
-- Grabbing anyone needs marchers all the way around a circle or box outline (four or more).
+- Grabbing anyone needs marchers all the way around a closed shape (four or more): a circle,
+  a box outline, a placed closed Line or Curve, or any loop of marchers with no big gap.
   A line on part of a circle (an arc) has two ends: drag a trail out of either, as before.
 - An order you set that zigzags across the circle instead of going around it is followed as
   a trail from its two ends, each marcher through the ones ahead of them.

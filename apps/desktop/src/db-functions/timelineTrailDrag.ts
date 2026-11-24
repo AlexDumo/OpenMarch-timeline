@@ -20,6 +20,7 @@ import {
     EPS_GEOM,
     makeAlongTrail,
     type FtlTrail,
+    type RouteGeometry,
     type XY,
 } from "@openmarch/core";
 import { schema } from "@/global/database/db";
@@ -37,7 +38,12 @@ import { addPageFlagInTransaction } from "./pageFlags";
 import { saveShapeRecipeInTransaction } from "./shapeRecipes";
 import { trailShapeRecipe } from "./timelineTrailShape";
 import { rememberedOrderAt } from "./rememberedOrder";
-import { lineRound, outlineOf, walkingOutline } from "./timelineTrailAround";
+import {
+    closedOutlineOf,
+    loopOutline,
+    lineRound,
+    walkingOutline,
+} from "./timelineTrailAround";
 import {
     followTrailInTransaction,
     lineOrder,
@@ -276,6 +282,11 @@ export function trailOrderFrom(
  * leads): `line` when the starts stand all the way round an outline and `line` is the ring round
  * it, one way or the other, from the one behind its leader `leader`. With an order set by hand
  * (`set`, tail first), the ring must be that order's, turned to its leader. Null otherwise.
+ *
+ * `shown` is the outline the tool went round when it is a placed shape's own (fork #1213), which
+ * the marchers' places alone may not give back (a narrow oval, its two sides nearer each other
+ * than the marchers along them): the ring is then read round that outline, once every marcher is
+ * found on it, all the way round. Without it the outline is fitted from where they stand.
  */
 export function ringTrailOrder(
     starts: readonly XY[],
@@ -283,9 +294,13 @@ export function ringTrailOrder(
     leader: number,
     step: number,
     set: readonly number[] | null = null,
+    shown: RouteGeometry | null = null,
 ): number[] | null {
     if (line.length !== starts.length || line.at(-1) !== leader) return null;
-    const outline = outlineOf(starts, step);
+    // any closed outline they stand all the way round (fork #1213)
+    const outline = shown
+        ? loopOutline(shown, starts, step)
+        : closedOutlineOf(starts, step);
     if (!outline?.full) return null;
     const same = (a: readonly number[], b: readonly number[]) =>
         a.length === b.length && a.every((x, i) => x === b[i]);
@@ -498,6 +513,12 @@ export interface TrailDragInput {
      * line as the tool shows it, tail first and the leader last (`ringTrailOrder` checks it)
      */
     line?: readonly number[] | null;
+    /**
+     * With `line`: the outline the tool went round when it is a placed shape's own (fork #1213),
+     * a closed route, checked again at the write as `GoRoundInput.outline` is. Absent: fitted
+     * from where they stand.
+     */
+    outline?: RouteGeometry | null;
     /** The drawn points, in walking order from the leader; the last is the trail's end */
     points: readonly RoutePointInput[];
     spacing: TrailSpacing;
@@ -555,6 +576,8 @@ export async function trailOrderIn(
         starts: readonly XY[];
         leaderId: number;
         line?: readonly number[] | null;
+        /** With `line`: the placed shape's outline the tool went round (`TrailDragInput.outline`) */
+        outline?: RouteGeometry | null;
         /** One step, in field units (the outline fit's tolerance) */
         step: number;
     },
@@ -569,6 +592,7 @@ export async function trailOrderIn(
             leader,
             args.step,
             along?.leaderFirst ? tailFirstOf(along) : null,
+            args.outline ?? null,
         );
         if (ring) return ring;
     }
@@ -606,6 +630,7 @@ async function planDragInTransaction(
         starts,
         leaderId,
         line: input.line,
+        outline: input.outline,
         step,
     });
     const plan = planTrailDrag(

@@ -35,6 +35,7 @@ import {
     goRoundPreview,
     goRoundRefusalFor,
     lineRound,
+    closedOutlineOf,
     outlineMiss,
     planGoRound,
     reverseOutline,
@@ -1298,6 +1299,55 @@ describeDbTests(
             const otherWay = [3, 2, 1, 8, 7, 6, 5, 4];
             await dragTrail({ db, window: WINDOW, marcherIds: IDS, leaderId: 4, line: otherWay, points: [{ at: out }], spacing: { kind: "keep" }, step, ends: "trail" }); // prettier-ignore
             expect((await trailOf(db)).marcherIds).toEqual(otherWay);
+        });
+
+        it("review of #1215: a leader pulled out of a narrow placed oval is written round the oval the tool went round, which their places alone don't give back", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            // eight round an oval 12 steps long and 1.6 deep, one on each tip
+            const ovalAt = (c0: XY, a: number, b: number, n: number): XY[] =>
+                Array.from({ length: n }, (_v, i) => {
+                    const t = (2 * Math.PI * i) / n;
+                    return [c0[0] + a * Math.cos(t), c0[1] + b * Math.sin(t)];
+                });
+            const { step, c, at } = await onOutline(db, (c0, st) =>
+                ovalAt(c0, 6 * st, 0.8 * st, 8),
+            );
+            // as the shape tools draw the placed oval
+            const drawn = ovalAt(c, 6 * step, 0.8 * step, 128);
+            const placed = closedOutlineOf(at, step, [drawn])!;
+            expect(placed.kind).toBe("loop");
+            // from their places alone there is no outline: the two sides are nearer each other
+            // than the marchers along them
+            expect(closedOutlineOf(at, step)).toBeNull();
+            const original = await dataOf(db);
+            // M4 pulled out, the ring behind it as the tool shows it
+            const line = lineRound(placed.loop, at, 3).map((i) => IDS[i]!);
+            expect(line.at(-1)).toBe(4);
+            const out: XY = [at[3]![0], at[3]![1] + 6 * step];
+            const input = { db, window: WINDOW, marcherIds: IDS, leaderId: 4, line, points: [{ at: out }], spacing: { kind: "keep" as const }, step, ends: "trail" as const }; // prettier-ignore
+            // without the outline shown the write can't find the ring (what refused the drawn trail)
+            await expectRefused(
+                db,
+                () => dragTrail(input),
+                /end of the line|line, curve or arc/,
+            );
+            // an outline they don't stand on is refused too, nothing written
+            const far = closedOutlineOf(
+                ovalAt(c, 14 * step, 9 * step, 12),
+                step,
+            )!;
+            await expectRefused(
+                db,
+                () => dragTrail({ ...input, outline: far.geometry }),
+                /end of the line|line, curve or arc/,
+            );
+            await dragTrail({ ...input, outline: placed.geometry });
+            expect((await trailOf(db)).marcherIds).toEqual(line);
+            const r = await resolverOf(db);
+            expect(near(r.positionAt(4, 17), out)).toBe(true);
+            await expectOneUndoStep(db, original);
         });
     },
 );
