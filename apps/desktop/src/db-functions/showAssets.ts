@@ -27,6 +27,7 @@ import {
     type JsonObject,
 } from "@/showAssets/hash";
 import { isShowAssetId, type ShowAssetRef } from "@/showAssets/ref";
+import { getStoredVenueSettings } from "./view3dVenue";
 
 const { show_assets, show_asset_blobs, items, cues } = schema;
 
@@ -316,8 +317,8 @@ export async function getShowAssetBlobSizes({
 }
 
 /**
- * Every value in the show that may name an asset (`library:<id>@<hash>`): props' models and cue
- * values, as they are now. Undo history isn't read, so "unused" means nothing names it now
+ * Every value in the show that may name an asset (`library:<id>@<hash>`): props' models, cue
+ * values and the band's imported uniform, as they are now. Undo history isn't read, so "unused" means nothing names it now
  * (ADR 0010 amendment 2026-11-15).
  */
 export async function getShowAssetReferences({
@@ -335,9 +336,16 @@ export async function getShowAssetReferences({
         .from(cues)
         .where(sql`${cues.value} LIKE 'library:%'`)
         .all();
-    return [...models, ...values].flatMap((row) =>
-        row.value ? [row.value] : [],
-    );
+    // the band's imported uniform (fork #1257)
+    const venue = await getStoredVenueSettings({ db });
+    const uniform =
+        typeof venue?.uniformArtwork === "string" ? [venue.uniformArtwork] : [];
+    return [
+        ...[...models, ...values].flatMap((row) =>
+            row.value ? [row.value] : [],
+        ),
+        ...uniform,
+    ];
 }
 
 /**

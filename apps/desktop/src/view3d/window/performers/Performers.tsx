@@ -132,8 +132,7 @@ import {
     useMarcherBodies,
 } from "./marchers/useMarcherBodies";
 import { useMarcherFlats } from "./marchers/useMarcherFlats";
-import { uniformArtworkOf } from "@/view3d/core/marchers/uniformArtwork";
-import { uniformArtworkAvailable } from "@/view3d/window/uniformArtworkPreview";
+import { useFlatsWear } from "@/view3d/window/uniformPack/useFlatsWear";
 import { clipsToLoad } from "./marchers/marcherBodies";
 import { hornRowsOf } from "./marchers/hornRows";
 import { sectionCueCarry } from "@/view3d/core/marchers/hornChannel";
@@ -183,10 +182,9 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     // (ADR 0010 D-18)
     const { data: venue } = useVenueSettings();
     const uniformPreset = uniformPresetOf(venue?.uniforms);
-    // the band's flats uniform, a preview (docs/3d/uniform-artwork.md)
-    const uniformArtwork = uniformArtworkAvailable()
-        ? uniformArtworkOf(venue?.uniformArtwork)
-        : null;
+    // the band's flats uniform, a preview (docs/3d/uniform-artwork.md): a
+    // built-in, or the show's imported pack (fork #1257)
+    const uniformArtwork = useFlatsWear(venue?.uniformArtwork);
     const guardUniformPreset = guardUniformPresetOf(venue?.guardUniforms);
     // the brass line's finish and the tubas' horn, from the same settings
     const brassFinish = brassFinishOf(venue?.brassFinish);

@@ -3677,6 +3677,34 @@
             "jsonInfo": "JSON holds the template's shapes and seams as numbers, for scripts and AI agents.",
             "jsonInfoLabel": "About the JSON file",
             "failed": "The uniform template couldn't be made."
+        },
+        "uniformImport": {
+            "import": "Import uniform…",
+            "importing": "Importing…",
+            "save": "Save uniform file",
+            "saveNeedsImported": "Pick an imported uniform above to save it as a file.",
+            "hint": "Paint on the template, hide the template layer, then import a transparent PNG or an SVG. A saved uniform file imports too.",
+            "imported": "The band now wears “{name}”.",
+            "saveFailed": "Couldn't save the imported uniform",
+            "note": {
+                "scaled": "The image is {width} × {height} px, not the template's {templateWidth} × {templateHeight} px, so it was scaled to fit.",
+                "svgViewBox": "The SVG's viewBox isn't the template page (0 0 105 88), so it was fitted to the page.",
+                "template": "The template looks like it's still showing. Hide the template layer before you export.",
+                "empty": "Nothing is painted on the uniform's front or back.",
+                "opaque": "The page has no transparent areas. Only the uniform's front and back are used."
+            },
+            "refused": {
+                "unsupported": "Import a PNG, an SVG or a uniform file.",
+                "pdf": "PDFs can't be imported yet. Export your design as PNG or SVG and import that.",
+                "notPng": "That file isn't a PNG. Export your design as PNG and import it again.",
+                "notSvg": "That file isn't an SVG.",
+                "tooLarge": "That file is too large. Export it at the template's size and import it again.",
+                "unreadable": "That file couldn't be read.",
+                "notPack": "That file isn't an OpenMarch uniform file.",
+                "newer": "That uniform file is from a newer version of OpenMarch. Update OpenMarch to import it.",
+                "damaged": "That uniform file is damaged.",
+                "timedOut": "Importing took too long. Try a smaller file."
+            }
         }
     },
     "web": {
@@ -5171,7 +5199,8 @@
             "confirm": "{count, plural, one {Remove # asset} other {Remove # assets}}"
         },
         "kind": {
-            "model": "3D model"
+            "model": "3D model",
+            "uniform": "Uniform"
         },
         "uses": "{count, plural, one {Used once} other {Used # times}}",
         "unused": "Not used",

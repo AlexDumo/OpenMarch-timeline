@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
     flatsDpi,
-    type UniformArtworkId,
+    type FlatsArtworkKey,
 } from "@/view3d/core/marchers/uniformArtwork";
 import type { BodyType } from "@/view3d/core/marchers/looks";
 import {
@@ -56,7 +56,7 @@ export function useMarcherFlats(
         const dpi = flatsDpi(quality);
         const pairs = wantedKey
             .split(",")
-            .map((k) => k.split("|") as [UniformArtworkId, BodyType]);
+            .map((k) => k.split("|") as [FlatsArtworkKey, BodyType]);
         const t0 = performance.now();
         Promise.all(
             pairs.map(async ([id, body]) => {

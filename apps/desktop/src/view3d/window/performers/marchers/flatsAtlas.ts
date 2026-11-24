@@ -26,8 +26,13 @@ import {
     type FlatsLayout,
     type FlatsPanel,
     type FlatsRegions,
+    type FlatsArtworkKey,
     type UniformArtworkId,
+    isUniformPackValue,
 } from "@/view3d/core/marchers/uniformArtwork";
+import { FLATS_PAGE_IN } from "@/view3d/core/uniformPack/format";
+import { readStoredUniformPack } from "@/hooks/queries/useUniformPack";
+import { runUniformPackJob } from "@/view3d/window/uniformPack/runUniformPackJob";
 import type { BodyType } from "@/view3d/core/marchers/looks";
 import type { FlatsAtlasRect } from "@/view3d/render/uniform-flats.js";
 import FlatsBleedWorker from "./flatsBleed.worker.ts?worker";
@@ -247,8 +252,98 @@ function bleed(
     });
 }
 
+interface PackLayers {
+    promise: Promise<ImageBitmap[]>;
+    users: number;
+}
+const packLayers = new Map<string, PackLayers>();
+
+/**
+ * A show's pack's layers as bitmaps of the whole page at `dpi`, decoded in the
+ * uniform pack worker (never in the window: the show may come from anyone).
+ * Shared while atlases are being composed from them, then closed.
+ */
+async function withPackLayers<T>(
+    key: string,
+    dpi: number,
+    use: (layers: ImageBitmap[]) => Promise<T>,
+): Promise<T> {
+    const cacheKey = `${key}|${dpi}`;
+    let entry = packLayers.get(cacheKey);
+    if (!entry) {
+        const promise = (async () => {
+            const pack = await readStoredUniformPack(key);
+            if (!pack)
+                throw new Error(`3D View: the show has no uniform ${key}`);
+            const bitmaps: ImageBitmap[] = [];
+            for (const layer of pack.layers) {
+                const result = await runUniformPackJob({
+                    type: "decode",
+                    // a copy: the stored bytes are shared through the blob cache
+                    png: layer.png.slice(),
+                    width: Math.round(FLATS_PAGE_IN.width * dpi),
+                    height: Math.round(FLATS_PAGE_IN.height * dpi),
+                });
+                if (result.type === "bitmap") bitmaps.push(result.bitmap);
+            }
+            return bitmaps;
+        })();
+        entry = { promise, users: 0 };
+        packLayers.set(cacheKey, entry);
+    }
+    const held = entry;
+    held.users++;
+    try {
+        return await use(await held.promise);
+    } finally {
+        held.users--;
+        // the next body type usually asks within moments; keep them that long
+        setTimeout(() => {
+            if (held.users > 0 || packLayers.get(cacheKey) !== held) return;
+            packLayers.delete(cacheKey);
+            held.promise
+                .then((bitmaps) => bitmaps.forEach((b) => b.close()))
+                .catch(() => undefined);
+        }, 3000);
+    }
+}
+
 /** Composes artwork `id` for body type `body` at `dpi` pixels per inch. */
 async function composeAtlas(
+    id: FlatsArtworkKey,
+    body: BodyType,
+    dpi: number,
+): Promise<FlatsAtlas> {
+    if (isUniformPackValue(id))
+        return await withPackLayers(id, dpi, async (layers) => {
+            const { regions } = await loadFlatsGeometry();
+            const rect = flatsAtlasLayout(regions, false);
+            return await composeFrom(rect, dpi, (ctx) => {
+                // each layer covers the page: copy each panel's part of it
+                for (const panel of ["front", "back"] as const) {
+                    const o = rect[panel];
+                    const P = regions.panels[panel];
+                    for (const bitmap of layers)
+                        ctx.drawImage(
+                            bitmap,
+                            P.x * dpi,
+                            P.y * dpi,
+                            P.w * dpi,
+                            P.h * dpi,
+                            o[0] * dpi,
+                            o[1] * dpi,
+                            P.w * dpi,
+                            P.h * dpi,
+                        );
+                }
+                return Promise.resolve();
+            });
+        });
+    return await composeBuiltIn(id, body, dpi);
+}
+
+/** Composes built-in artwork `id` for body type `body` at `dpi` pixels per inch. */
+async function composeBuiltIn(
     id: UniformArtworkId,
     body: BodyType,
     dpi: number,
@@ -257,12 +352,22 @@ async function composeAtlas(
     const art = UNIFORM_ARTWORK[id].art;
     const file = (name: string) => urlFor(artUrls, `${id}/${name}`);
     const rect = flatsAtlasLayout(regions, !!art.cape);
-    const W = Math.round(rect.w * dpi);
-    const H = Math.round(rect.h * dpi);
-    const canvas = document.createElement("canvas");
-    canvas.width = W;
-    canvas.height = H;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+    return await composeFrom(rect, dpi, async (ctx) => {
+        await drawBuiltIn(ctx, art, file, layout, regions, rect, body, dpi);
+    });
+}
+
+/** Draws a built-in's panels and placed items onto its atlas. */
+async function drawBuiltIn(
+    ctx: CanvasRenderingContext2D,
+    art: (typeof UNIFORM_ARTWORK)[UniformArtworkId]["art"],
+    file: (name: string) => string,
+    layout: FlatsLayout,
+    regions: FlatsRegions,
+    rect: ReturnType<typeof flatsAtlasLayout>,
+    body: BodyType,
+    dpi: number,
+): Promise<void> {
     const panels: FlatsPanel[] = ["front", "back", "cape"];
     // the panels, each exactly its panel's size
     for (const panel of panels) {
@@ -306,6 +411,25 @@ async function composeAtlas(
             ctx.restore();
         }
     }
+}
+
+/**
+ * An atlas of layout `rect` at `dpi`, drawn by `draw`, then bled in the
+ * worker and uploaded.
+ */
+async function composeFrom(
+    rect: ReturnType<typeof flatsAtlasLayout>,
+    dpi: number,
+    draw: (ctx: CanvasRenderingContext2D) => Promise<void>,
+): Promise<FlatsAtlas> {
+    const { regions } = await loadFlatsGeometry();
+    const W = Math.round(rect.w * dpi);
+    const H = Math.round(rect.h * dpi);
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+    await draw(ctx);
     // the canvas goes once its pixels are read; the worker bleeds them and
     // hands back a bitmap to upload
     const pixels = ctx.getImageData(0, 0, W, H).data.buffer as ArrayBuffer;
@@ -343,7 +467,7 @@ interface CacheEntry {
     refs: number;
 }
 const atlases = new Map<string, CacheEntry>();
-export const flatsKey = (id: UniformArtworkId, body: BodyType, dpi: number) =>
+export const flatsKey = (id: FlatsArtworkKey, body: BodyType, dpi: number) =>
     `${id}|${body}|${dpi}`;
 
 /**
@@ -351,7 +475,7 @@ export const flatsKey = (id: UniformArtworkId, body: BodyType, dpi: number) =>
  * time and shared after. Pair each call with {@link releaseFlats}.
  */
 export function acquireFlats(
-    id: UniformArtworkId,
+    id: FlatsArtworkKey,
     body: BodyType,
     dpi: number,
 ): Promise<FlatsAtlas> {
@@ -368,7 +492,7 @@ export function acquireFlats(
 
 /** Lets go of an atlas from {@link acquireFlats}; the last user frees it. */
 export function releaseFlats(
-    id: UniformArtworkId,
+    id: FlatsArtworkKey,
     body: BodyType,
     dpi: number,
 ): void {

@@ -25,7 +25,7 @@ import {
     type GuardUniformPresetId,
     type UniformPresetId,
 } from "@/view3d/core/marchers/uniformPresets";
-import type { UniformArtworkId } from "@/view3d/core/marchers/uniformArtwork";
+import type { FlatsArtworkKey } from "@/view3d/core/marchers/uniformArtwork";
 
 export type VenueChange =
     | { kind: "kit"; kit: VenueKitId }
@@ -33,7 +33,7 @@ export type VenueChange =
     | { kind: "crowd"; crowd: boolean }
     | { kind: "params"; params: Partial<VenueParams> }
     | { kind: "uniforms"; uniforms: UniformPresetId }
-    | { kind: "uniformArtwork"; uniformArtwork: UniformArtworkId }
+    | { kind: "uniformArtwork"; uniformArtwork: FlatsArtworkKey }
     | { kind: "guardUniforms"; guardUniforms: GuardUniformPresetId }
     | { kind: "brassFinish"; brassFinish: Finish }
     | { kind: "tuba"; tuba: TubaModelId }

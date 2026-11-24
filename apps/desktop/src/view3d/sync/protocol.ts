@@ -157,6 +157,12 @@ export interface View3dVenueChangeRequest {
      * (fork #973). The editor stores it with history.
      */
     silkArtwork?: unknown;
+    /**
+     * A uniform pack file to store and dress the band in (fork #1257; unchecked: the editor
+     * reads it with `readUniformPack`). Stored as a show asset; pointing the band at it is
+     * undoable.
+     */
+    uniformPack?: unknown;
 }
 
 /**

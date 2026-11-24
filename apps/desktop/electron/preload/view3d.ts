@@ -115,6 +115,16 @@ const VIEW3D_API = {
         } satisfies View3dVenueChangeRequest),
 
     /**
+     * Asks the editor to store a uniform pack file (`Uint8Array`) in the show and dress the band
+     * in it (fork #1257). The editor reads it, stores it as a show asset and points the venue
+     * at it with history, then invalidates the assets and venue queries.
+     */
+    requestUniformPack: (pack: unknown) =>
+        ipcRenderer.send("view3d:venue-change-request", {
+            uniformPack: pack,
+        } satisfies View3dVenueChangeRequest),
+
+    /**
      * The "open the 3D View with the show" setting, for the window's question only: `get` is
      * undefined while never answered, null where the window shouldn't ask.
      */

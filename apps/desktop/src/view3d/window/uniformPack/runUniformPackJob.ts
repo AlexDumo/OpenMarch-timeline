@@ -1,0 +1,82 @@
+/**
+ * Runs one job in a fresh uniform pack worker (`uniformPack.worker.ts`) and ends the worker when
+ * it answers, fails or runs out of time, as the model import does (ADR 0010 amendment
+ * 2026-11-15, "crash isolation and cancel"). The worker is a URL worker, never `blob:`, so it
+ * takes its own CSP from its response (`src/security/appCsp.ts`).
+ */
+import UniformPackWorker from "./uniformPack.worker.ts?worker";
+import type {
+    UniformPackRefusal,
+    UniformPackRequest,
+    UniformPackResponse,
+} from "./protocol";
+
+/** How long one job may take */
+export const UNIFORM_PACK_JOB_TIMEOUT_MS = 60_000;
+
+/** A job the worker refused, or that failed or ran out of time */
+export class UniformPackJobError extends Error {
+    constructor(
+        readonly code: UniformPackRefusal | "timedOut",
+        message: string,
+    ) {
+        super(message);
+        this.name = "UniformPackJobError";
+    }
+}
+
+export type UniformPackResult = Exclude<
+    UniformPackResponse,
+    { type: "refused" }
+>;
+
+/**
+ * Sends `request` to a fresh worker. `transfer` hands buffers over instead of copying them, so
+ * pass only arrays nobody else uses.
+ */
+export function runUniformPackJob(
+    request: UniformPackRequest,
+    transfer: Transferable[] = [],
+    timeoutMs = UNIFORM_PACK_JOB_TIMEOUT_MS,
+): Promise<UniformPackResult> {
+    const worker = new UniformPackWorker();
+    return new Promise<UniformPackResult>((resolve, reject) => {
+        const finish = (settle: () => void) => {
+            clearTimeout(timer);
+            worker.terminate();
+            settle();
+        };
+        const timer = setTimeout(
+            () =>
+                finish(() =>
+                    reject(
+                        new UniformPackJobError(
+                            "timedOut",
+                            `no answer in ${timeoutMs} ms`,
+                        ),
+                    ),
+                ),
+            timeoutMs,
+        );
+        worker.onmessage = (event: MessageEvent<UniformPackResponse>) => {
+            const message = event.data;
+            if (message.type === "refused")
+                finish(() =>
+                    reject(
+                        new UniformPackJobError(message.code, message.message),
+                    ),
+                );
+            else finish(() => resolve(message));
+        };
+        worker.onerror = (event) =>
+            finish(() =>
+                reject(
+                    new UniformPackJobError(
+                        "unreadable",
+                        event.message || "the worker failed",
+                    ),
+                ),
+            );
+        worker.postMessage(request, transfer);
+    });
+}

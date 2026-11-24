@@ -168,6 +168,8 @@ class WebHost {
         // The demo shows don't take imported Artwork
         requestSilkArtwork: () =>
             console.warn("3D View demo: silk Artwork can't be imported here"),
+        requestUniformPack: () =>
+            console.warn("3D View demo: uniforms can't be imported here"),
         // The demo has no app settings: never asks to open on launch
         autoOpen: {
             get: () => Promise.resolve(null),
