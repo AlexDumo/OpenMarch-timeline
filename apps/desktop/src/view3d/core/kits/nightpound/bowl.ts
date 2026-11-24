@@ -49,6 +49,7 @@ import {
     BOARD_ASPECT,
     TREAD_PLAIN,
     TREAD_TILE,
+    BOARD_MARKS,
     nightpoundBoardTexture,
     nightpoundSeatTexture,
     nightpoundTreadTexture,
@@ -623,7 +624,8 @@ export function buildBowl(ctx: NightpoundCtx): NightpoundBowl {
         const start = (s0 + s1) / 2 - (n * (bw + gap) - gap) / 2;
         for (let k = 0; k < n; k++) {
             const a = start + k * (bw + gap);
-            const v0 = k % 2 ? 0 : 0.5;
+            // Logo, On The Move, address, in turn (`BOARD_MARKS`).
+            const v0 = 1 - ((k % BOARD_MARKS) + 1) / BOARD_MARKS;
             wall(
                 P(b, -0.03, a, 0),
                 P(b, -0.03, a + bw, 0),
@@ -632,7 +634,7 @@ export function buildBowl(ctx: NightpoundCtx): NightpoundBowl {
                 PLAIN,
                 boards,
                 // Seen from the floor a bank's `s` runs right to left.
-                [1, v0, 0, v0 + 0.5],
+                [1, v0, 0, v0 + 1 / BOARD_MARKS],
             );
         }
     }

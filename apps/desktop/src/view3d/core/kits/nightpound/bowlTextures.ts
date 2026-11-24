@@ -1,6 +1,6 @@
 // cspell:ignore concourse
 import { ClampToEdgeWrapping, RepeatWrapping, type CanvasTexture } from "three";
-import { paintCanvasTexture } from "../../environment";
+import { drawOtmLogo, paintCanvasTexture } from "../../environment";
 import {
     dieselTexture,
     OM,
@@ -104,26 +104,40 @@ export function nightpoundTreadTexture(): CanvasTexture {
 /** Width over height of one sponsor board on the end walls. */
 export const BOARD_ASPECT = 4;
 
+/** The marks the end-wall boards take turns showing (`nightpoundBoardTexture`). */
+export const BOARD_MARKS = 3;
+
 /**
- * The boards on the end walls: black, with a white mark, two to the
- * texture (the logo on the top half, the address on the bottom). `u` spans
- * one board.
+ * The boards on the end walls: black, with a white mark, three to the
+ * texture, top to bottom: the OpenMarch logo, the On The Move logo and the
+ * address (as Mark Diesel's wall pads). `u` spans one board; mark `j`
+ * spans v from `1 - (j + 1) / BOARD_MARKS` to `1 - j / BOARD_MARKS`.
  */
 export function nightpoundBoardTexture(): CanvasTexture {
-    const tex = dieselTexture(1024, 512, (g, w, h) => {
-        const half = h / 2;
-        for (const k of [0, 1]) {
-            const y = k * half;
+    const tex = dieselTexture(1024, 256 * BOARD_MARKS, (g, w, h) => {
+        const tile = h / BOARD_MARKS;
+        for (let k = 0; k < BOARD_MARKS; k++) {
+            const y = k * tile;
             g.fillStyle = "#0b0b0c";
-            g.fillRect(0, y, w, half);
+            g.fillRect(0, y, w, tile);
             g.strokeStyle = "rgba(255,255,255,0.22)";
             g.lineWidth = 4;
-            g.strokeRect(8, y + 8, w - 16, half - 16);
-            if (k === 0) {
-                const logoH = half * 0.5;
-                paintLogo(g, w / 2, y + half / 2, logoH, OM.white);
-            } else
-                signText(g, OPENMARCH_SITE, w / 2, y + half / 2, half * 0.26, {
+            g.strokeRect(8, y + 8, w - 16, tile - 16);
+            if (k === 0)
+                paintLogo(g, w / 2, y + tile / 2, tile * 0.5, OM.white);
+            else if (k === 1)
+                drawOtmLogo(
+                    g,
+                    {
+                        x: w * 0.2,
+                        y: y + tile * 0.2,
+                        w: w * 0.6,
+                        h: tile * 0.6,
+                    },
+                    OM.white,
+                );
+            else
+                signText(g, OPENMARCH_SITE, w / 2, y + tile / 2, tile * 0.26, {
                     color: OM.white,
                     align: "center",
                     spacing: 0.08,
