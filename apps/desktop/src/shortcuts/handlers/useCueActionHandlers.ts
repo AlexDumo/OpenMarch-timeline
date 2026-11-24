@@ -22,6 +22,48 @@ import {
     type ActionId,
 } from "../definitions";
 import { useActionHandler, useActionHandlerGroup } from "../useActionHandler";
+import { askActionParams } from "../palette/actionSource";
+import { useFieldProperties } from "@/field/editMode/useApplyFieldEdits";
+import type { FacingChoice, FacingPick } from "@/cues/facing";
+import {
+    useSideNamesStore,
+    useTurnPopoverStore,
+} from "@/cues/turnPopoverStore";
+import { useEffect } from "react";
+
+/** The Facing quick picks' actions (fork #993), by pick */
+export const FACING_ACTIONS: Readonly<Record<FacingPick, ActionId>> = {
+    front: "facingFront",
+    back: "facingBack",
+    side1: "facingSide1",
+    side2: "facingSide2",
+    turnLeft: "facingTurnLeft",
+    turnRight: "facingTurnRight",
+};
+
+/**
+ * One Facing quick pick: on with a selection at a count, checked when they all face that way
+ * already. The sides are named as the field names them ("Stage left").
+ */
+function useSetFacing(
+    pick: FacingPick,
+    commands: CueCommands,
+    isPlaying: boolean,
+    sideName: string | undefined,
+) {
+    const choice: FacingChoice = { kind: pick };
+    const checked = commands.facingAlready(choice);
+    useActionHandler(FACING_ACTIONS[pick], () => commands.setFacing(choice), {
+        enabled: !isPlaying && commands.canSet("usual") && !checked,
+        checked,
+        disabledReason: checked
+            ? undefined
+            : setReason(commands, isPlaying, false, "cues.reason.pausedFacing"),
+        label: sideName
+            ? () => tolgee.t("actions.cues.setFacing", { item: sideName })
+            : undefined,
+    });
+}
 
 /** Every Equipment action, by what it sets: each catalog item, their own instrument, nothing. */
 const SET_CHOICES = ["usual", ...EQUIPMENT_ITEM_KEYS, "none"] as const;
@@ -55,11 +97,10 @@ function setReason(
     commands: CueCommands,
     isPlaying: boolean,
     select = false,
+    pausedKey = "cues.reason.paused",
 ): string | undefined {
     if (isPlaying)
-        return tolgee.t(
-            select ? "cues.reason.pausedSelect" : "cues.reason.paused",
-        );
+        return tolgee.t(select ? "cues.reason.pausedSelect" : pausedKey);
     const needsSelection = !select;
     if (needsSelection && commands.selectedIds.length === 0)
         return tolgee.t("actions.shape.noMarchersSelected");
@@ -199,6 +240,55 @@ export function useCueActionHandlers() {
     );
     const cueWhy = cueReason(commands, isPlaying);
 
+    // Facing (fork #993): the quick picks, Angle… (asks the degrees), and the picked turn's popover
+    const sides = useFieldProperties()?.sideDescriptions;
+    useEffect(() => {
+        useSideNamesStore.setState({
+            side1: sides?.verboseLeft ?? null,
+            side2: sides?.verboseRight ?? null,
+        });
+    }, [sides?.verboseLeft, sides?.verboseRight]);
+    useSetFacing("front", commands, isPlaying, undefined);
+    useSetFacing("back", commands, isPlaying, undefined);
+    useSetFacing("side1", commands, isPlaying, sides?.verboseLeft);
+    useSetFacing("side2", commands, isPlaying, sides?.verboseRight);
+    useSetFacing("turnLeft", commands, isPlaying, undefined);
+    useSetFacing("turnRight", commands, isPlaying, undefined);
+    useActionHandler(
+        "facingAngle",
+        (args) => {
+            const degrees = Number(args?.degrees);
+            // From a menu or a key: the command bar asks the degrees first
+            if (args?.degrees === undefined || !Number.isFinite(degrees)) {
+                askActionParams("facingAngle");
+                return;
+            }
+            commands.setFacing({ kind: "angle", degrees });
+        },
+        {
+            enabled: !isPlaying && commands.canSet("usual"),
+            disabledReason: setReason(
+                commands,
+                isPlaying,
+                false,
+                "cues.reason.pausedFacing",
+            ),
+        },
+    );
+    const facingCue = commands.cue?.type === "facing";
+    useActionHandler(
+        "cueEditTurn",
+        () =>
+            commands.cue &&
+            useTurnPopoverStore.getState().open(commands.cue.id),
+        {
+            enabled: !isPlaying && facingCue,
+            disabledReason:
+                cueWhy ??
+                (facingCue ? undefined : tolgee.t("cues.reason.notFacing")),
+        },
+    );
+
     const editable = !isPlaying && commands.cue !== null;
     useActionHandler("cueAddSelected", () => commands.editPerformers("add"), {
         enabled: editable && commands.edited("add") !== null,
@@ -225,6 +315,10 @@ export function useCueActionHandlers() {
         },
     );
     const lasting = commands.cue?.length === null;
+    // Facing cues are lasting only (#993)
+    const lastingOnly = facingCue
+        ? tolgee.t("cues.reason.facingLasting")
+        : undefined;
     useActionHandler("cueMakeLasting", () => commands.setLength(null), {
         enabled: editable && !lasting,
         checked: editable && lasting,
@@ -237,7 +331,10 @@ export function useCueActionHandlers() {
             if (Number.isInteger(length) && length >= 1)
                 commands.setLength(length);
         },
-        { enabled: editable, disabledReason: cueWhy },
+        {
+            enabled: editable && !facingCue,
+            disabledReason: cueWhy ?? lastingOnly,
+        },
     );
     useActionHandler("cueMoveToPlayhead", () => commands.moveToPlayhead(), {
         enabled:

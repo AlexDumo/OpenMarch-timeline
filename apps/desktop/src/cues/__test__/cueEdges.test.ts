@@ -1,7 +1,13 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import type { DatabaseCue } from "@/db-functions/cues";
-import { cueEdgeDrag, cueNeighbours, endAtCount } from "../cueEdges";
+import {
+    cueEdgeDrag,
+    cueNeighbours,
+    endAtCount,
+    turnEndAtCount,
+    turnEndDrag,
+} from "../cueEdges";
 import { compileShowCues } from "../showCues";
 import { equipmentLane } from "../equipmentLane";
 
@@ -285,5 +291,49 @@ describe("cue edges among the performers' other cues (#992 review)", () => {
             [6, 60, 2],
             [60, 96, 3],
         ]);
+    });
+});
+
+describe("a Facing turn's end (#993)", () => {
+    it("sets how many counts the turn takes, never before its start nor past the next turn", () => {
+        const at = (delta: number, transition: number | null = null) =>
+            turnEndDrag({ start: 8, transition, until: 12, delta });
+        expect(at(2)).toEqual({ transition: 2, end: 10 });
+        expect(at(-3, 2)).toEqual({ transition: null, end: 8 });
+        expect(at(9)).toEqual({ transition: 4, end: 12 });
+        expect(at(-1, 2)).toEqual({ transition: 1, end: 9 });
+    });
+
+    it("ends a turn at the playhead, or says why not", () => {
+        const facing = (
+            id: number,
+            beatId: number,
+            transition: number | null = null,
+        ) =>
+            ({
+                id,
+                type: "facing",
+                beatId,
+                value: "builtin:facing.back",
+                settings: {},
+                length: null,
+                transition,
+                marcherIds: [1],
+                label: null,
+                notes: null,
+                createdAt: "",
+                updatedAt: "",
+            }) satisfies DatabaseCue;
+        const cue = facing(1, 108);
+        const cues = [cue, facing(2, 112)];
+        const countOf = (beatId: number) => beatId - 100;
+        const end = (count: number, c = cue) =>
+            turnEndAtCount({ cues, cue: c, countOf, count, showEnd: 32 });
+        expect(end(10)).toEqual({ transition: 2 });
+        expect(end(7)).toEqual({ refused: "beforeStart" });
+        expect(end(13)).toEqual({ refused: "pastNext" });
+        expect(end(8)).toEqual({ refused: "endsThere" });
+        expect(end(8, facing(1, 108, 2))).toEqual({ transition: null });
+        expect(end(10, facing(1, 108, 2))).toEqual({ refused: "endsThere" });
     });
 });

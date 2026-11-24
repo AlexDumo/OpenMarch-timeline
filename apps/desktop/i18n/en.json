@@ -305,7 +305,8 @@
             "makeLasting": "Make cue lasting",
             "makeMomentary": "Make cue momentary",
             "params": {
-                "length": "Counts"
+                "length": "Counts",
+                "degrees": "Degrees"
             },
             "delete": "Delete cue",
             "cueKeywords": "cue equipment performers add remove momentary lasting delete",
@@ -329,7 +330,14 @@
             "equipmentUsual": "Equipment: Their own instrument",
             "moveToPlayhead": "Move cue to playhead",
             "endAtPlayhead": "End cue at playhead",
-            "toggleMovesLane": "Show or hide the Moves lane"
+            "toggleMovesLane": "Show or hide the Moves lane",
+            "setFacing": "Facing: {item}",
+            "facingTurnLeft": "Facing: Turn left 45°",
+            "facingTurnRight": "Facing: Turn right 45°",
+            "facingAngle": "Facing: Angle…",
+            "facingKeywords": "facing face turn direction angle degrees spin front back side",
+            "editTurn": "Edit turn…",
+            "toggleFacingLane": "Show or hide the Facing lane"
         },
         "path": {
             "pen": "Path pen",
@@ -765,7 +773,8 @@
         },
         "menu": {
             "equipment": "Equipment",
-            "selectByEquipment": "Select by equipment"
+            "selectByEquipment": "Select by equipment",
+            "facing": "Facing"
         },
         "view3dCamera": {
             "name": "3D View camera",
@@ -4401,7 +4410,11 @@
             "noMatch": "No lanes match",
             "hideNamed": "Hide {lane}",
             "collapseRows": "Collapse rows",
-            "expandRows": "Expand rows"
+            "expandRows": "Expand rows",
+            "facing": "Facing",
+            "facingEmpty": "No facing cues yet. Select performers, then right-click › Facing.",
+            "dragTurnEnd": "Drag to set how many counts the turn takes",
+            "turnMark": "{name}: {value}, {where}"
         },
         "item": {
             "flag": "Flag",
@@ -4464,7 +4477,8 @@
             "drums": "Drums"
         },
         "laneFamily": {
-            "equipment": "Equipment"
+            "equipment": "Equipment",
+            "facing": "Facing"
         },
         "reason": {
             "paused": "Pause to change equipment",
@@ -4477,7 +4491,28 @@
             "endBeforeStart": "Move the playhead after the cue's start first.",
             "endsAtPlayhead": "The cue already ends at the playhead.",
             "endPastNext": "The playhead is past these performers' next change. End the cue before it.",
-            "movesBasic": "Moves have bars in Expert only"
+            "movesBasic": "Moves have bars in Expert only",
+            "notFacing": "Pick a turn in the Facing lane first",
+            "facingLasting": "Facing cues last until the next one",
+            "pausedFacing": "Pause to change facing"
+        },
+        "facing": {
+            "front": "Front",
+            "back": "Back",
+            "side1": "Side 1",
+            "side2": "Side 2",
+            "turnLeft": "Turn left 45°",
+            "turnRight": "Turn right 45°",
+            "angle": "Angle…"
+        },
+        "turn": {
+            "title": "{name} · turn at count {count}",
+            "from": "From (count {count})",
+            "to": "To (count {count})",
+            "counts": "Counts",
+            "dial": "Where they end up",
+            "dialHint": "Drag the dot to where they end up. Keep going past a full circle to add a spin.",
+            "instant": "Instant"
         }
     },
     "coordinates": {

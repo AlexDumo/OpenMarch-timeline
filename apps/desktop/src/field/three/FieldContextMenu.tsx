@@ -41,6 +41,7 @@ import {
 } from "@/shortcuts/definitions";
 import { equipmentCatalog } from "@openmarch/core";
 import { itemKeyOf } from "@/cues/equipmentItems";
+import { useSideNamesStore } from "@/cues/turnPopoverStore";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { getActionLabel } from "@/shortcuts/labels";
 import Shortcut from "@/components/ui/Shortcut";
@@ -235,12 +236,27 @@ const USUAL = equipmentActionOf("usual");
 const NOTHING = equipmentActionOf("none");
 const SELECT_NOTHING = selectHoldingActionOf("none");
 
-/** The Equipment actions: set what the selection holds, and select by what's held. */
+/** The Facing submenu (fork #993): the four directions, the 45° turns, then Angle… */
+const FACING_DIRECTIONS: readonly ActionId[] = [
+    "facingFront",
+    "facingBack",
+    "facingSide1",
+    "facingSide2",
+];
+const FACING_TURNS: readonly ActionId[] = [
+    "facingTurnLeft",
+    "facingTurnRight",
+    "facingAngle",
+];
+
+/** The Equipment and Facing actions: set what the selection holds or faces, select by what's held. */
 const EQUIPMENT_ACTIONS: readonly ActionId[] = [
     USUAL,
     ...FAMILY_MENUS.flatMap((m) => [...m.set, ...m.select]),
     NOTHING,
     SELECT_NOTHING,
+    ...FACING_DIRECTIONS,
+    ...FACING_TURNS,
     ...CUE_EDITS,
 ];
 
@@ -367,6 +383,7 @@ export default function FieldContextMenu({
     );
     // A finger-only tablet has no keys to press: the caps wait for a hardware keyboard (#880)
     const showHints = useShowShortcutHints();
+    const sides = useSideNamesStore();
     const open = at !== null;
     useSyncExternalStore(
         subscribeToActionHandlers,
@@ -438,6 +455,17 @@ export default function FieldContextMenu({
     const after = modeGroups ? [] : shownGroups(GROUPS.slice(EQUIPMENT_AT));
     // Equipment needs a selection and the timeline; the picked cue's entries show while they run
     const equipment = !actions && timelineMode && selectedCount > 0;
+    /** A direction's short name in the Facing submenu */
+    const facingName = (id: ActionId) =>
+        id === "facingSide1"
+            ? (sides.side1 ?? t("cues.facing.side1"))
+            : id === "facingSide2"
+              ? (sides.side2 ?? t("cues.facing.side2"))
+              : t(
+                    id === "facingBack"
+                        ? "cues.facing.back"
+                        : "cues.facing.front",
+                );
     const cueEdits = equipment ? CUE_EDITS.filter((id) => enabled(id)) : [];
     const recent = recentEquipment
         .filter((key): key is EquipmentItemKey =>
@@ -665,6 +693,34 @@ export default function FieldContextMenu({
                                         className={MENU_SEPARATOR_CLASS}
                                     />
                                     {entry(SELECT_NOTHING)}
+                                </SubMenu>
+                                <SubMenu
+                                    testId="field-menu-facing"
+                                    label={t("field.menu.facing")}
+                                >
+                                    {/* The palette's names without "Facing:" (the sides as the
+                                        field names them) */}
+                                    {FACING_DIRECTIONS.map((id) =>
+                                        entry(id, "", facingName(id)),
+                                    )}
+                                    <DropdownMenu.Separator
+                                        className={MENU_SEPARATOR_CLASS}
+                                    />
+                                    {entry(
+                                        "facingTurnLeft",
+                                        "",
+                                        t("cues.facing.turnLeft"),
+                                    )}
+                                    {entry(
+                                        "facingTurnRight",
+                                        "",
+                                        t("cues.facing.turnRight"),
+                                    )}
+                                    {entry(
+                                        "facingAngle",
+                                        "",
+                                        t("cues.facing.angle"),
+                                    )}
                                 </SubMenu>
                                 {cueEdits.map((id) => entry(id))}
                             </>

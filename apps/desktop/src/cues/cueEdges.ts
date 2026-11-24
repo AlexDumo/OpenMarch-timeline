@@ -153,3 +153,58 @@ export function endAtCount({
     if (result.length === cue.length) return { refused: "endsThere" };
     return { length: result.length };
 }
+
+/** A Facing cue's turn after dragging its end: its counts (null: instant) and where it ends. */
+export interface TurnEndResult {
+    readonly transition: number | null;
+    readonly end: number;
+}
+
+/**
+ * Dragging a Facing turn's end `delta` counts (fork #993): the turn starts on the cue's count
+ * `start` and takes `transition` counts (null: instant). It ends no earlier than it starts (then
+ * it's instant) and no later than `until`, its performers' next Facing cue or the show's end.
+ */
+export function turnEndDrag({
+    start,
+    transition,
+    until,
+    delta,
+}: {
+    start: number;
+    transition: number | null;
+    until: number;
+    delta: number;
+}): TurnEndResult {
+    const end = Math.min(
+        Math.max(start + (transition ?? 0) + delta, start),
+        Math.max(until, start),
+    );
+    return { transition: end > start ? end - start : null, end };
+}
+
+/**
+ * Ending a Facing cue's turn on `count` (End cue at playhead): its new counts, or why not. Before
+ * its start, or past its performers' next Facing cue, it's refused; where it ends already too.
+ */
+export function turnEndAtCount({
+    cues,
+    cue,
+    countOf,
+    count,
+    showEnd,
+}: {
+    cues: readonly DatabaseCue[];
+    cue: DatabaseCue;
+    countOf: (beatId: number) => number | undefined;
+    count: number;
+    showEnd: number;
+}): { readonly transition: number | null } | { readonly refused: EndRefusal } {
+    const start = countOf(cue.beatId);
+    if (start === undefined || count < start) return { refused: "beforeStart" };
+    const until = cueNeighbours({ cues, cue, countOf }).nextLasting ?? showEnd;
+    if (count > until) return { refused: "pastNext" };
+    const transition = count > start ? count - start : null;
+    if (transition === cue.transition) return { refused: "endsThere" };
+    return { transition };
+}
