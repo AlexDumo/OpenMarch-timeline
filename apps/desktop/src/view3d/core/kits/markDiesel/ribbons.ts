@@ -11,7 +11,6 @@ import type { LightingPreset, ShowCredits } from "../../types";
 import { bowlOutline, type Ring } from "../bowl";
 import { DIESEL_RING, type RingRange } from "./bowl";
 import {
-    dieselClock,
     dieselRibbonState,
     dieselTexture,
     paintRibbonLower,
@@ -26,7 +25,7 @@ import { dieselLighting } from "./lighting";
  * The two LED ribbons of the Mark Diesel kit, in kit-root space:
  *
  * - the lower ribbon on the club fascia, all the way round the bowl: the
- *   clock, the show now performing and the bands after it;
+ *   show now performing and the bands after it;
  * - the upper ribbon on the terrace fascia, round the four corners and the
  *   ends: OpenMarch's logo and openmarch.com.
  *
@@ -44,8 +43,6 @@ const TILE = { width: 4096, height: 128 };
 const CELLS: [number, number] = [TILE.width / 4, TILE.height / 4];
 /** How fast each ribbon crawls, meters a second. */
 const CRAWL = { lower: 0.5, upper: 0.35 };
-/** The clock is read this often, seconds. */
-const CLOCK_EVERY = 1;
 
 /** Emissive level of the LED ribbons under a preset. */
 export function dieselRibbonLevel(preset: LightingPreset): number {
@@ -129,8 +126,6 @@ export interface DieselRibbons extends DieselPart {
 }
 
 export interface RibbonOptions {
-    /** The time shown on the clock; the system's by default. */
-    now?: () => Date;
     /** Draws the made-up bands (`dieselBandNames`); `Math.random` by default. */
     random?: () => number;
 }
@@ -140,12 +135,11 @@ export function buildDieselRibbons(
     options: RibbonOptions = {},
 ): DieselRibbons {
     const { BOWL } = ctx.frame;
-    const now = options.now ?? (() => new Date());
     const ring = bowlOutline(BOWL.outline);
     const object = new Group();
     object.name = "markDiesel.ribbons";
 
-    let state: DieselRibbonState = dieselRibbonState(now(), options.random);
+    let state: DieselRibbonState = dieselRibbonState(options.random);
     const paintLower = (g: CanvasRenderingContext2D, w: number, h: number) =>
         paintRibbonLower(g, w, h, state);
 
@@ -197,16 +191,10 @@ export function buildDieselRibbons(
     const ribbons = [lower, upper];
 
     const show = (next: DieselRibbonState) => {
-        if (
-            next.title === state.title &&
-            next.time === state.time &&
-            next.year === state.year
-        )
-            return;
+        if (next.title === state.title) return;
         state = next;
         repaintCanvasTexture(lower.map, paintLower);
     };
-    let sinceClock = 0;
 
     return {
         object,
@@ -224,11 +212,6 @@ export function buildDieselRibbons(
                 const u = r.material.uniforms.scroll;
                 u.value = (u.value + step * r.crawl * r.perMeter) % 1;
             }
-            sinceClock += Math.max(dt, 0);
-            if (sinceClock < CLOCK_EVERY) return;
-            sinceClock = 0;
-            // The bands stay put; only the clock moves.
-            show({ ...state, ...dieselClock(now()) });
         },
         dispose() {
             for (const r of ribbons) {

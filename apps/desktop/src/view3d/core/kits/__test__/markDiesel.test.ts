@@ -403,8 +403,8 @@ describe("Mark Diesel kit", () => {
         expect(cloth.max.x - cloth.min.x).toBeGreaterThan(DRAPE.width + 10);
         expect(cloth.max.z).toBeLessThan(f.CENTER.z - f.BOWL.halfZ);
 
-        // The banner sits on the lower hang, just proud of it, facing +Z.
-        const banner = byName(kit.root, "markDiesel.drapeBanner")[0] as Mesh;
+        // The logo panel sits on the lower hang, just proud of it, facing +Z.
+        const banner = byName(kit.root, "markDiesel.drapeLogo")[0] as Mesh;
         const facing = banner.getWorldDirection(new Vector3());
         expect(facing.z).toBeCloseTo(1);
         const where = banner.getWorldPosition(new Vector3());

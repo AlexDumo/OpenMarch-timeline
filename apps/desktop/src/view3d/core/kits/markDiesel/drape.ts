@@ -6,16 +6,13 @@ import {
     Group,
     Mesh,
     MeshStandardMaterial,
+    PlaneGeometry,
     Vector3,
 } from "three";
 import { bowlOutline, RING_PARTS } from "../bowl";
 import { Members } from "../pro/geometry";
 import { DIESEL_RING } from "./bowl";
-import {
-    DIESEL_BANNER_ASPECT,
-    dieselChampionshipBannerTexture,
-    dieselLogoPanelTexture,
-} from "./brand";
+import { dieselLogoPanelTexture } from "./brand";
 import type { DieselCtx, DieselPart } from "./frame";
 import { CATWALK } from "./roof";
 
@@ -33,8 +30,8 @@ import { CATWALK } from "./roof";
  *   onto the lower bowl, its foot lying over the tarped rows to the fourth
  *   row (`dieselDrapeFoot`): a center section and two wings a little behind it,
  *   each on a batten that cables hold from the catwalk (two of them through
- *   bridles). The logo panel and the championship banner hang on the
- *   center section on their own lines.
+ *   bridles). The logo panel hangs on the center section on its own
+ *   lines.
  *
  * The folds are geometry, so the field's light rakes across them. What a
  * fold hides from the hall (the depth of each pleat, the seams between
@@ -80,11 +77,10 @@ const CABLES = [4, 19.3, 26.5, 35, 42, 49.5];
 const BRIDLE = { x: 12.2, half: 2.4, rise: 2.6 };
 
 /**
- * The logo panel and the championship banner on the center section, as
- * one block centered on `DRAPE.banner.y`: the logo panel (the app icon) over the title.
+ * The logo panel (the app icon) on the center section, centered on
+ * `DRAPE.banner.y`.
  */
 const LOGO_PANEL = { size: 7.4 };
-const TITLE = { width: 31, gap: 1.2 };
 
 /** One level of a hang: height, depth of fold (0..1) and brightness. */
 interface Row {
@@ -252,35 +248,6 @@ class Cloth {
     }
 }
 
-/** The logo panel over the championship banner, as one two-part mesh. */
-function bannerGeometry(
-    titleHeight: number,
-    panelY: number,
-    centerY: number,
-): BufferGeometry {
-    const pos: number[] = [];
-    const uv: number[] = [];
-    const quad = (w: number, h: number, y: number) => {
-        const [x0, x1, y0, y1] = [-w / 2, w / 2, y - h / 2, y + h / 2];
-        pos.push(x0, y0, 0, x1, y0, 0, x1, y1, 0);
-        pos.push(x0, y0, 0, x1, y1, 0, x0, y1, 0);
-        uv.push(0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1);
-    };
-    quad(LOGO_PANEL.size, LOGO_PANEL.size, panelY - centerY);
-    quad(
-        TITLE.width,
-        titleHeight,
-        panelY - LOGO_PANEL.size / 2 - TITLE.gap - titleHeight / 2 - centerY,
-    );
-    const geo = new BufferGeometry();
-    geo.setAttribute("position", new Float32BufferAttribute(pos, 3));
-    geo.setAttribute("uv", new Float32BufferAttribute(uv, 2));
-    geo.computeVertexNormals();
-    geo.addGroup(0, 6, 0);
-    geo.addGroup(6, 6, 1);
-    return geo;
-}
-
 export function buildDieselDrape(ctx: DieselCtx): DieselPart {
     const { frame, shared, quality } = ctx;
     const { DRAPE, BOWL, CATWALK_Y } = frame;
@@ -441,29 +408,21 @@ export function buildDieselDrape(ctx: DieselCtx): DieselPart {
         cable(bx, apex.y, DRAPE.z);
     }
 
-    // The logo panel and the championship banner, on their own lines
-    // from the center batten, just proud of the cloth.
-    const titleHeight = TITLE.width / DIESEL_BANNER_ASPECT;
+    // The logo panel, on its own lines from the center batten, just proud
+    // of the cloth.
     const b = DRAPE.banner;
-    const bannerY = b.y;
-    const bannerZ = DRAPE.z + 0.12;
-    const block = LOGO_PANEL.size + TITLE.gap + titleHeight;
-    const panelY = bannerY + block / 2 - LOGO_PANEL.size / 2;
-    const titleTop = panelY - LOGO_PANEL.size / 2 - TITLE.gap;
-    if (high) {
-        const line = (x: number, to: number) =>
+    const panelY = b.y;
+    const panelZ = DRAPE.z + 0.12;
+    if (high)
+        for (const side of [-1, 1]) {
+            const x = cx + b.x + (side * LOGO_PANEL.size) / 2.4;
             rigging.beam(
-                at(cx + b.x + x, centerTop, bannerZ - 0.04),
-                at(cx + b.x + x, to, bannerZ - 0.04),
+                at(x, centerTop, panelZ - 0.04),
+                at(x, panelY + LOGO_PANEL.size / 2, panelZ - 0.04),
                 0.04,
                 LINE,
             );
-        for (const side of [-1, 1]) {
-            line((side * LOGO_PANEL.size) / 2.4, panelY + LOGO_PANEL.size / 2);
-            for (const k of [0.18, 0.48, 0.78, 0.98])
-                line((side * k * TITLE.width) / 2, titleTop);
         }
-    }
 
     const clothMat = new MeshStandardMaterial({
         vertexColors: true,
@@ -482,32 +441,29 @@ export function buildDieselDrape(ctx: DieselCtx): DieselPart {
 
     // Printed vinyl: lit like the cloth, with a little of its own light so
     // the lettering holds in the dark of the hall.
-    const maps = [dieselLogoPanelTexture(), dieselChampionshipBannerTexture()];
-    const bannerMats = maps.map(
-        (map) =>
-            new MeshStandardMaterial({
-                map,
-                roughness: 0.85,
-                emissive: 0xffffff,
-                emissiveMap: map,
-                emissiveIntensity: 0.16,
-            }),
-    );
-    const bannerGeo = bannerGeometry(titleHeight, panelY, bannerY);
-    const banner = new Mesh(bannerGeo, bannerMats);
-    banner.name = "markDiesel.drapeBanner";
-    banner.position.set(cx + b.x, bannerY, bannerZ);
+    const panelMap = dieselLogoPanelTexture();
+    const panelMat = new MeshStandardMaterial({
+        map: panelMap,
+        roughness: 0.85,
+        emissive: 0xffffff,
+        emissiveMap: panelMap,
+        emissiveIntensity: 0.16,
+    });
+    const panelGeo = new PlaneGeometry(LOGO_PANEL.size, LOGO_PANEL.size);
+    const panel = new Mesh(panelGeo, panelMat);
+    panel.name = "markDiesel.drapeLogo";
+    panel.position.set(cx + b.x, panelY, panelZ);
 
-    object.add(hangs, rig, banner);
+    object.add(hangs, rig, panel);
     return {
         object,
         setLighting() {},
         dispose() {
             clothGeo.dispose();
             clothMat.dispose();
-            bannerGeo.dispose();
-            maps.forEach((map) => map.dispose());
-            bannerMats.forEach((m) => m.dispose());
+            panelGeo.dispose();
+            panelMap.dispose();
+            panelMat.dispose();
             rig.dispose();
             object.clear();
         },

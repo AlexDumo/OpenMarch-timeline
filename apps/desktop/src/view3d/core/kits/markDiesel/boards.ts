@@ -30,9 +30,9 @@ export { dieselRibbonLevel } from "./ribbons";
  *
  * - the two corner video boards (south-east and north-west,
  *   `dieselBoardSpots`): LED screens facing the field's center, each
- *   under a lit sign with the hall's name, hung from the roof on four rods.
+ *   under a lit sign with OpenMarch's logo, hung from the roof on four rods.
  *   At high quality they show a live picture of the field (`feed.ts`); at
- *   low quality a bright card with a welcome and the show now performing;
+ *   low quality a bright card with OpenMarch's logo and the show now performing;
  * - the LED ribbons (`ribbons.ts`);
  * - the field wall's pads and the sponsor boards (`surround.ts`);
  * - the rafter banners (`banners.ts`).

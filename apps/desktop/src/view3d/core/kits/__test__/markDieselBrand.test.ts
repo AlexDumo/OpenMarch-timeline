@@ -36,12 +36,10 @@ import { DIESEL_RING } from "../markDiesel/bowl";
 import { paintStadiumSign } from "../markDiesel/stadiumSign";
 import {
     DIESEL_VENUE_PARAMS,
-    dieselClock,
     dieselFieldArt,
     paintAppIcon,
     paintBoardCard,
     paintBoardHeader,
-    paintChampionshipBanner,
     paintDieselFlag,
     paintLogo,
     paintLogoPanel,
@@ -199,16 +197,13 @@ describe("Venue brand painters", () => {
         );
     });
 
-    it("keeps OpenMarch to the back, and names no other brand", () => {
+    it("names the hall only on the red signs, and no other brand", () => {
         const state = {
             title: "",
-            time: "8:43 PM",
-            year: 2026,
             bands: ["Virginia Anthem", "Detroit Headphones", "Boise Kites"],
         };
         const faces: Record<string, string> = {
             logoPanel: written((g) => paintLogoPanel(g, 512, 512)),
-            banner: written((g) => paintChampionshipBanner(g, 2560, 256)),
             wall: written((g) => paintWallPad(g, 2048, 128)),
             nameRing: written((g) => paintNameRing(g, 4096, 128)),
             ribbonLower: written((g) => paintRibbonLower(g, 4096, 128, state)),
@@ -231,9 +226,10 @@ describe("Venue brand painters", () => {
                 paintRafterBanner(g, banner, 256, 640),
             );
         });
-        // OpenMarch's marks: the drape's panel, the flags, the upper ribbon
-        // and two boards (the logo and the web address); On The Move's logo
-        // is on a third. The other boards are dark.
+        // OpenMarch's marks: the drape's panel, the flags, the wall, the upper
+        // ribbon, the video boards' header and card, the monuments and two
+        // sideline boards (the logo and the web address); On The Move's logo
+        // is on a third. The other boards and the ring of names are plain.
         const branded = Object.entries(faces)
             .filter(([, text]) => /\[logo\]|\[marcher\]|openmarch/i.test(text))
             .map(([face]) => face);
@@ -248,7 +244,11 @@ describe("Venue brand painters", () => {
             [
                 "logoPanel",
                 "flag",
+                "wall",
                 "ribbonUpper",
+                "header",
+                "card",
+                "monument",
                 ...boardsShowing("logo"),
                 ...boardsShowing("site"),
             ].sort(),
@@ -262,40 +262,34 @@ describe("Venue brand painters", () => {
         // No event is named anywhere: any show can be on the field.
         for (const [face, text] of Object.entries(faces))
             expect(text, face).not.toMatch(/grand|national|prelims|finals\b/i);
-        expect(faces.banner).toBe("MARK DIESEL STADIUM");
-        expect(faces.wall).toBe("MARK DIESEL STADIUM");
-        expect(faces.nameRing).toBe("MARK DIESEL STADIUM | RING OF CHAMPIONS");
+        // The hall's name is on the red suite signs and nowhere else.
+        for (const [face, text] of Object.entries(faces))
+            if (face !== "sign")
+                expect(text, face).not.toMatch(/diesel|stadium|welcome/i);
+        expect(faces.sign).toContain("MARK DIESEL STADIUM");
+        expect(faces.wall).toBe("[logo] | openmarch.com");
+        expect(faces.nameRing).toBe("");
         expect(faces.ribbonUpper).toBe("[logo] | openmarch.com");
         expect(faces[boardsShowing("site")[0]]).toBe("openmarch.com");
-        expect(faces.sign).toContain("MARK DIESEL STADIUM");
-        expect(faces.header).toBe("MARK DIESEL STADIUM");
-        expect(faces.monument).toBe("MARK DIESEL | STADIUM | WELCOME");
+        expect(faces.header).toBe("[logo]");
+        expect(faces.card).toBe("[logo] | NOW PERFORMING | x");
+        expect(faces.monument).toBe("[logo] | openmarch.com");
     });
 
-    it("shows the clock and the order of appearance on the lower ribbon", () => {
+    it("shows the order of appearance on the lower ribbon, without a clock", () => {
         const bands = ["Virginia Anthem", "Detroit Headphones", "Boise Kites"];
         const untitled = written((g) =>
-            paintRibbonLower(g, 4096, 128, {
-                title: " ",
-                time: "8:43 PM",
-                year: 2026,
-                bands,
-            }),
+            paintRibbonLower(g, 4096, 128, { title: " ", bands }),
         );
         expect(untitled).toBe(
-            "8:43 PM | NOW PERFORMING | Virginia Anthem | UP NEXT | Detroit Headphones | ON DECK | Boise Kites",
+            "NOW PERFORMING | Virginia Anthem | UP NEXT | Detroit Headphones | ON DECK | Boise Kites",
         );
 
         const titled = written((g) =>
-            paintRibbonLower(g, 4096, 128, {
-                title: "Finals",
-                time: "12:05 AM",
-                year: 2027,
-                bands,
-            }),
+            paintRibbonLower(g, 4096, 128, { title: "Finals", bands }),
         );
         expect(titled).toBe(
-            "12:05 AM | NOW PERFORMING | Finals | UP NEXT | Virginia Anthem | ON DECK | Detroit Headphones",
+            "NOW PERFORMING | Finals | UP NEXT | Virginia Anthem | ON DECK | Detroit Headphones",
         );
     });
 
@@ -308,9 +302,7 @@ describe("Venue brand painters", () => {
         expect(new Set(names).size).toBe(3);
         for (const name of names)
             expect(name).toMatch(/^[A-Z][\w ]+ [A-Z][\w ]+$/);
-        expect(
-            dieselRibbonState(new Date(2026, 0, 1), random).bands,
-        ).toHaveLength(3);
+        expect(dieselRibbonState(random).bands).toHaveLength(3);
         // Even a stuck random number gives one name rather than looping.
         expect(dieselBandNames(3, () => 0)).toEqual(["Virginia Anthem"]);
     });
@@ -331,15 +323,6 @@ describe("Venue brand painters", () => {
             paintBoardCard(g, 1024, 560, { title: "" }),
         );
         expect(bare).toContain("NOW PERFORMING | OpenMarch");
-    });
-
-    it("reads the clock in twelve hours", () => {
-        expect(dieselClock(new Date(2026, 10, 13, 20, 43, 39))).toEqual({
-            time: "8:43 PM",
-            year: 2026,
-        });
-        expect(dieselClock(new Date(2027, 0, 1, 0, 5)).time).toBe("12:05 AM");
-        expect(dieselClock(new Date(2027, 0, 1, 12, 0)).time).toBe("12:00 PM");
     });
 
     it("defaults the end zones to OpenMarch's, as every kit does", () => {
@@ -512,28 +495,12 @@ describe("Mark Diesel LED ribbons", () => {
         expect(scroll.value - step).toBeCloseTo(step * 6, 8);
     });
 
-    it("reads the clock about once a second of frame time", () => {
-        const now = vi.fn(() => new Date(2026, 10, 13, 20, 43));
-        const part = keep(buildDieselRibbons(context("low"), { now }));
-        expect(now).toHaveBeenCalledTimes(1);
-        for (let i = 0; i < 30; i++)
-            part.onFrame?.({ cameraPosition: [0, 5, 40], dt: 1 / 60 });
-        expect(now).toHaveBeenCalledTimes(1);
-        for (let i = 0; i < 31; i++)
-            part.onFrame?.({ cameraPosition: [0, 5, 40], dt: 1 / 60 });
-        expect(now).toHaveBeenCalledTimes(2);
-        expect(() => part.setCredits({ title: "Finals" })).not.toThrow();
-    });
-
-    it("draws its bands once, not on every clock tick", () => {
-        let minute = 43;
-        const now = () => new Date(2026, 10, 13, 20, minute);
+    it("draws its bands once, not on every frame or title", () => {
         const random = vi.fn(() => 0.5);
-        const part = keep(buildDieselRibbons(context("low"), { now, random }));
+        const part = keep(buildDieselRibbons(context("low"), { random }));
         const drawn = random.mock.calls.length;
         expect(drawn).toBeGreaterThan(0);
-        // A new minute repaints the clock; the bands stay.
-        for (minute = 44; minute < 47; minute++)
+        for (let i = 0; i < 3; i++)
             part.onFrame?.({ cameraPosition: [0, 5, 40], dt: 1.1 });
         part.setCredits({ title: "Finals" });
         expect(random).toHaveBeenCalledTimes(drawn);

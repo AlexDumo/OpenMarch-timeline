@@ -429,7 +429,7 @@ export function dieselFrame(footprint: FieldFootprint) {
      * upper deck from the catwalk down to the ring of names and wraps both
      * back corners; `lower` hangs in front of it on cables from the catwalk,
      * from just under the ring down onto the lower bowl, and carries the
-     * banner. The lower bowl's seats in front of it are tarped black.
+     * logo panel. The lower bowl's seats in front of it are tarped black.
      */
     const lowerDrapeZ = -(SUPERFRAME_Z + 2);
     const lowerDrapeOffset = -lowerDrapeZ - halfZ;
@@ -458,9 +458,9 @@ export function dieselFrame(footprint: FieldFootprint) {
         /** Cables from the catwalk to the lower hang's top batten. */
         cables: { count: 15, topY: CATWALK_Y },
         /**
-         * The credits banner on the lower hang (center, size). Photo 10,
-         * solved from the yard lines, puts the logo panel and title block
-         * between about 7.7 and 18.4 m.
+         * Where the logo panel hangs on the lower hang (center), in the
+         * block photo 10 puts the real banner in, solved from the yard
+         * lines: between about 7.7 and 18.4 m.
          */
         banner: { x: 0, y: 12.6, width: 40, height: 12.5 },
     };

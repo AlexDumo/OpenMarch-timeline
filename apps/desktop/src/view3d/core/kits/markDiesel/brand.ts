@@ -16,30 +16,33 @@ import type { ShowCredits, VenueParams } from "../../types";
 /**
  * The venue's identity: everything in the hall that carries a name or a
  * logo is painted here, on canvas. The hall is Mark Diesel Stadium and
- * names no event, so any show can be on its field; OpenMarch's marks stay
- * few and quiet: the drape's logo panel, two back sideline boards (the logo
- * and openmarch.com), the upper LED ribbon (the same two), the flags in the
- * roof, the end zones and the marcher on the midfield helmet. No other
- * brand, real or made up. The marks are OpenMarch's own, never redrawn:
+ * names no event, so any show can be on its field. Its name appears only
+ * on the red suite signs (`stadiumSign.ts`); everywhere else the signage is
+ * quiet: OpenMarch's marks, openmarch.com, or nothing. No other brand, real
+ * or made up. The marks are OpenMarch's own, never redrawn:
  *
  * - the logo, "OPEN" over "MARCH" with the marcher standing in for the O
- *   and the M (`OPENMARCH_LOGO`, from `apps/website/public/openmarch.svg`);
+ *   and the M (`OPENMARCH_LOGO`, from `apps/website/public/openmarch.svg`):
+ *   on the field wall's pads, the middle back sideline board, the upper LED
+ *   ribbon, the video boards' header and card and the plaza's monuments,
+ *   most of them beside openmarch.com;
  * - the app icon: the marcher (`MARCHER_MARK`) in white on a violet rounded
- *   square, cut off at the bottom, as in `apps/desktop/build/icon.png`;
- * - the marcher itself (`MARCHER_MARK`);
+ *   square, cut off at the bottom, as in `apps/desktop/build/icon.png`: the
+ *   drape's logo panel;
+ * - the marcher itself (`MARCHER_MARK`): the roof flags and the midfield
+ *   helmet;
  * - the On The Move logo (`drawOtmLogo`), OpenMarch's other app, on one
  *   back sideline board.
+ *
+ * The end zones say OPENMARCH. The ring of the upper deck and the other
+ * sideline boards are plain. The lower LED ribbon shows the show's own
+ * title (or a made-up band) and the bands up after it; the rafter banners
+ * only CHAMPIONS or FINALISTS and a year.
  *
  * The colors are the app's: brand violet, its dark-theme lavender, and the
  * near-black of the app's dark theme (`packages/ui/src/tailwind.css`); the
  * type is DM Sans, the app's face, but for the red suite signs' leaning
  * serif (`stadiumSign.ts`).
- *
- * Everywhere else the hall names itself: the drape's banner, the video
- * boards' header and card, the field wall's pads, the rafter banners, the
- * ring of legends and the plaza's monument signs; the other sideline boards
- * are dark. The video boards and the lower LED ribbon show the show's own
- * title when it has one.
  *
  * Painters take a 2D context and the face's size in pixels and nothing else,
  * so tests can run them against a recording context. The `diesel*Texture`
@@ -65,8 +68,9 @@ export const OM = {
 
 /** The name as signage sets it in capitals. */
 export const OPENMARCH_SIGN = "OPENMARCH";
-/** The hall's name, as its signs set it. */
-export const DIESEL_NAME = "MARK DIESEL";
+/** OpenMarch's web address, as the hall's signs show it. */
+export const OPENMARCH_SITE = "openmarch.com";
+/** The hall's name, as its red suite signs set it (`stadiumSign.ts`). */
 export const DIESEL_STADIUM = "MARK DIESEL STADIUM";
 
 /**
@@ -303,39 +307,10 @@ export function paintLogoPanel(g: G, w: number, h: number): void {
     paintAppIcon(g, w / 2, h / 2, Math.min(w, h) * 0.78);
 }
 
-/** Width over height of the drape's championship banner. */
-export const DIESEL_BANNER_ASPECT = 10;
-
-/**
- * The drape's banner: the hall's name, white on black, between
- * two lavender rules.
- */
-export function paintChampionshipBanner(g: G, w: number, h: number): void {
-    g.fillStyle = OM.ink;
-    g.fillRect(0, 0, w, h);
-    g.strokeStyle = "rgba(207,203,230,0.18)";
-    g.lineWidth = Math.max(2, h * 0.012);
-    g.strokeRect(h * 0.05, h * 0.05, w - h * 0.1, h - h * 0.1);
-    const gap = h * 0.55;
-    const textW = signText(g, DIESEL_STADIUM, w / 2, h / 2, h * 0.34, {
-        color: OM.white,
-        align: "center",
-        spacing: 0.06,
-        maxWidth: w - h * 2 - 2 * gap,
-    });
-    g.fillStyle = OM.lavender;
-    for (const side of [-1, 1])
-        g.fillRect(
-            w / 2 + side * (textW / 2 + gap) - h * 0.015,
-            h * 0.22,
-            h * 0.03,
-            h * 0.56,
-        );
-}
-
 /**
  * One tile of the padded field wall (16 wall heights long): dark vinyl pads
- * with their seams, and the hall's name once, small, in lavender.
+ * with their seams, OpenMarch's logo in the first half and openmarch.com in
+ * the second, small, in lavender.
  */
 export function paintWallPad(g: G, w: number, h: number): void {
     const sheen = g.createLinearGradient(0, 0, 0, h);
@@ -355,32 +330,19 @@ export function paintWallPad(g: G, w: number, h: number): void {
     // The rolled top edge.
     g.fillStyle = "rgba(255,255,255,0.1)";
     g.fillRect(0, 0, w, h * 0.05);
-    signText(g, DIESEL_STADIUM, w / 2, h * 0.53, h * 0.26, {
+    paintLogo(g, w / 4, h * 0.53, h * 0.56, OM.lavender);
+    signText(g, OPENMARCH_SITE, (3 * w) / 4, h * 0.53, h * 0.24, {
         color: OM.lavender,
         align: "center",
-        spacing: 0.14,
+        spacing: 0.06,
         weight: 0,
-        maxWidth: w * 0.6,
+        maxWidth: w * 0.4,
     });
 }
 
-/** What the ring of legends says, between small lavender diamonds. */
-const RING_LEGENDS = [DIESEL_STADIUM, "RING OF CHAMPIONS"];
-
-/** A small diamond, `size` pixels across, centered on (cx, cy). */
-function diamond(g: G, cx: number, cy: number, size: number): void {
-    g.beginPath();
-    g.moveTo(cx, cy - size / 2);
-    g.lineTo(cx + size / 2, cy);
-    g.lineTo(cx, cy + size / 2);
-    g.lineTo(cx - size / 2, cy);
-    g.closePath();
-    g.fill();
-}
-
 /**
- * One tile of the upper deck's fascia: small white legends on black, a
- * lavender diamond between each.
+ * One tile of the upper deck's fascia: plain black, with a fine light line
+ * along each edge.
  */
 export function paintNameRing(g: G, w: number, h: number): void {
     g.fillStyle = OM.ink;
@@ -388,31 +350,12 @@ export function paintNameRing(g: G, w: number, h: number): void {
     g.fillStyle = "rgba(255,255,255,0.1)";
     g.fillRect(0, 0, w, 2);
     g.fillRect(0, h - 2, w, 2);
-    const slot = w / RING_LEGENDS.length;
-    // A diamond at each slot's edge; the one on the tile's seam is drawn at
-    // both ends, so its halves meet where the tile repeats.
-    g.fillStyle = OM.lavender;
-    for (let i = 0; i <= RING_LEGENDS.length; i++)
-        diamond(g, i * slot, h / 2, h * 0.22);
-    RING_LEGENDS.forEach((legend, i) => {
-        const x = i * slot;
-        signText(g, legend, x + slot / 2, h / 2, h * 0.24, {
-            color: "#eceaf4",
-            align: "center",
-            spacing: 0.12,
-            weight: 0,
-            maxWidth: slot - h * 1.2,
-        });
-    });
 }
 
 /** What the lower LED ribbon shows. */
 export interface DieselRibbonState {
     /** The show's title; blank puts the first of `bands` on instead. */
     title: string;
-    /** The time of day, as `dieselClock` formats it. */
-    time: string;
-    year: number;
     /** Made-up bands for the order of appearance (`dieselBandNames`). */
     bands: string[];
 }
@@ -477,24 +420,11 @@ export function dieselBandNames(
     return names;
 }
 
-/** The ribbons' clock and year for a date: "8:43 PM". */
-export function dieselClock(date: Date): { time: string; year: number } {
-    const hours = date.getHours();
-    const minutes = String(date.getMinutes()).padStart(2, "0");
-    const time = `${hours % 12 || 12}:${minutes} ${hours < 12 ? "AM" : "PM"}`;
-    return { time, year: date.getFullYear() };
-}
-
 /** The ribbons' state with a blank title, for the first paint. */
 export function dieselRibbonState(
-    date: Date,
     random: () => number = Math.random,
 ): DieselRibbonState {
-    return {
-        title: "",
-        ...dieselClock(date),
-        bands: dieselBandNames(3, random),
-    };
+    return { title: "", bands: dieselBandNames(3, random) };
 }
 
 /** A hairline along both edges, the one constant all the way round. */
@@ -506,8 +436,8 @@ function ledEdges(g: G, w: number, h: number, color: string): void {
 
 /**
  * One tile of the lower LED ribbon (32 ribbon heights long), left to right:
- * the clock, the show now performing (its title, or a made-up band), and
- * the two bands up after it.
+ * the show now performing (its title, or a made-up band), and the two bands
+ * up after it.
  */
 export function paintRibbonLower(
     g: G,
@@ -519,27 +449,14 @@ export function paintRibbonLower(
     g.fillStyle = OM.ink;
     g.fillRect(0, 0, w, h);
 
-    // The clock, on a violet block.
-    const block = g.createLinearGradient(0, 0, 4.6 * u, 0);
-    block.addColorStop(0, OM.violet);
-    block.addColorStop(1, OM.deep);
-    g.fillStyle = block;
-    g.fillRect(0, 0, 4.6 * u, h);
-    signText(g, state.time, 2.3 * u, h / 2, h * 0.42, {
-        color: OM.white,
-        align: "center",
-        spacing: 0.04,
-        maxWidth: 3.8 * u,
-    });
-
     // The order of appearance: a label over each name, a violet rule
     // between them.
     const [first = "", ...rest] = state.bands;
     const title = state.title.trim();
     const slots: [string, string, number, number][] = [
-        ["NOW PERFORMING", title || first, 5.3 * u, 11 * u],
-        ["UP NEXT", (title ? first : rest[0]) ?? "", 17.3 * u, 6.8 * u],
-        ["ON DECK", (title ? rest[0] : rest[1]) ?? "", 25 * u, 6.6 * u],
+        ["NOW PERFORMING", title || first, 1.2 * u, 13 * u],
+        ["UP NEXT", (title ? first : rest[0]) ?? "", 15.4 * u, 7.6 * u],
+        ["ON DECK", (title ? rest[0] : rest[1]) ?? "", 24.2 * u, 7.2 * u],
     ];
     for (const [label, name, x, room] of slots) {
         g.fillStyle = OM.violet;
@@ -580,18 +497,13 @@ export function paintRibbonUpper(g: G, w: number, h: number): void {
 }
 
 /**
- * The sign over each video board: the hall's name in lit white, between two
- * lavender rules.
+ * The sign over each video board: OpenMarch's logo in lit white, between
+ * two lavender rules.
  */
 export function paintBoardHeader(g: G, w: number, h: number): void {
     g.fillStyle = "#0b0a10";
     g.fillRect(0, 0, w, h);
-    const nameW = signText(g, DIESEL_STADIUM, w / 2, h / 2, h * 0.5, {
-        color: OM.white,
-        align: "center",
-        spacing: 0.1,
-        maxWidth: w * 0.6,
-    });
+    const nameW = paintLogo(g, w / 2, h / 2, h * 0.72, OM.white);
     g.fillStyle = OM.lavender;
     for (const side of [-1, 1]) {
         const x0 = w / 2 + side * (nameW / 2 + h * 0.5);
@@ -601,8 +513,8 @@ export function paintBoardHeader(g: G, w: number, h: number): void {
 }
 
 /**
- * The card a video board shows when it has no live picture: a welcome to
- * the hall, and the show now performing, bright on violet.
+ * The card a video board shows when it has no live picture: OpenMarch's
+ * logo, and the show now performing, bright on violet.
  */
 export function paintBoardCard(
     g: G,
@@ -616,22 +528,14 @@ export function paintBoardCard(
     ground.addColorStop(1, OM.night);
     g.fillStyle = ground;
     g.fillRect(0, 0, w, h);
-    const left = h * 0.12;
-    const room = w - 2 * left;
-    signText(g, "WELCOME TO", left, h * 0.24, h * 0.05, {
-        color: OM.lavender,
-        spacing: 0.16,
-        weight: 0,
-        maxWidth: room,
-    });
-    signText(g, DIESEL_NAME, left, h * 0.4, h * 0.11, {
-        color: OM.white,
-        maxWidth: room,
-    });
-    signText(g, "STADIUM", left, h * 0.56, h * 0.11, {
-        color: OM.white,
-        maxWidth: room,
-    });
+    const logoHeight = h * 0.36;
+    paintLogo(
+        g,
+        h * 0.12 + (logoHeight * LOGO_ASPECT) / 2,
+        h * 0.4,
+        logoHeight,
+        OM.white,
+    );
 
     // The lower third: the show now performing.
     g.fillStyle = "rgba(7,6,13,0.84)";
@@ -678,9 +582,6 @@ export interface SponsorPanel {
 
 /** Height of the sponsor boards, meters. */
 export const SPONSOR_HEIGHT = 1;
-
-/** OpenMarch's web address, as the boards and the upper ribbon show it. */
-export const OPENMARCH_SITE = "openmarch.com";
 
 const board = (
     face: SponsorFace,
@@ -849,8 +750,8 @@ export function paintDieselFlag(g: G, w: number, h: number): void {
 export const MONUMENT_ASPECT = 2.6;
 
 /**
- * The face of a monument sign on the plaza: the hall's name in white on the
- * app's night, over a violet foot with a welcome.
+ * The face of a monument sign on the plaza: OpenMarch's logo in white on
+ * the app's night, over a violet foot with openmarch.com.
  */
 export function paintMonument(g: G, w: number, h: number): void {
     g.fillStyle = OM.night;
@@ -861,20 +762,8 @@ export function paintMonument(g: G, w: number, h: number): void {
     g.fillStyle = OM.lavender;
     g.fillRect(0, h - foot, w, Math.max(2, h * 0.012));
     const body = h - foot;
-    signText(g, DIESEL_NAME, w / 2, body * 0.42, body * 0.28, {
-        color: OM.white,
-        align: "center",
-        spacing: 0.06,
-        maxWidth: w * 0.86,
-    });
-    signText(g, "STADIUM", w / 2, body * 0.78, body * 0.12, {
-        color: OM.mist,
-        align: "center",
-        spacing: 0.3,
-        weight: 0,
-        maxWidth: w * 0.86,
-    });
-    signText(g, "WELCOME", w / 2, h - foot / 2, foot * 0.38, {
+    paintLogo(g, w / 2, body / 2, body * 0.66, OM.white);
+    signText(g, OPENMARCH_SITE, w / 2, h - foot / 2, foot * 0.38, {
         color: OM.white,
         align: "center",
         spacing: 0.06,
@@ -986,17 +875,12 @@ export function dieselLogoPanelTexture(): CanvasTexture {
     return dieselTexture(1024, 1024, paintLogoPanel);
 }
 
-/** The drape's championship banner (`DIESEL_BANNER_ASPECT`). */
-export function dieselChampionshipBannerTexture(): CanvasTexture {
-    return dieselTexture(2560, 256, paintChampionshipBanner);
-}
-
 /** The flag on each superframe (`DIESEL_FLAG_ASPECT`). */
 export function dieselFlagTexture(): CanvasTexture {
     return dieselTexture(512, 768, paintDieselFlag);
 }
 
-/** The ring of legends' tile (64 m of a 2 m fascia); repeats along U. */
+/** The ring of names' tile (64 m of a 2 m fascia, plain); repeats along U. */
 export function dieselNameRingTexture(): CanvasTexture {
     return dieselTexture(4096, 128, paintNameRing, { repeat: true });
 }
