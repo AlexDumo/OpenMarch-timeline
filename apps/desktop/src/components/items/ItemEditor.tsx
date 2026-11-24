@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LockSimpleIcon } from "@phosphor-icons/react";
 import { T, useTranslate } from "@tolgee/react";
@@ -133,8 +133,9 @@ function CommitNumber({
 
 /**
  * A length field: the stored meters in the show's units (`6' 11 7/8"`, or `2.13 m`). It takes
- * any length typed (`4'6"`, `4.5 ft`, `54 in`, `1.4 m`; a bare number is in the show's unit) and
- * commits on blur or Enter; anything else shows the stored value again.
+ * any length typed (`4'6"`, `4.5 ft`, `54 in`, `1.4 m`; a bare number is in the unit the box
+ * shows) and commits on blur or Enter. Text it can't use shows the stored value again and says
+ * why under the box.
  */
 function CommitLength({
     meters,
@@ -149,14 +150,23 @@ function CommitLength({
     lengths: ShowLengths;
     onCommit: (meters: number) => void;
 }) {
+    const { t } = useTranslate();
     const [draft, setDraft] = useState<string | null>(null);
+    const [refused, setRefused] = useState<string | null>(null);
+    const errorId = useId();
     const shown = lengths.format(meters);
     const commit = () => {
         if (draft === null) return;
-        const parsed = draft.trim() === shown ? null : lengths.parse(draft);
         setDraft(null);
-        if (parsed !== null && parsed >= minMeters && parsed !== meters)
-            onCommit(parsed);
+        if (draft.trim() === shown) return;
+        const parsed = lengths.parse(draft, meters);
+        if (parsed === null)
+            setRefused(t("props.lengthUnreadable", { text: draft.trim() }));
+        else if (parsed < minMeters)
+            setRefused(
+                t("props.lengthTooSmall", { min: lengths.format(minMeters) }),
+            );
+        else if (parsed !== meters) onCommit(parsed);
     };
     return (
         <label className="text-body flex flex-col gap-4">
@@ -164,14 +174,28 @@ function CommitLength({
             <Input
                 compact
                 aria-label={label}
-                inputMode="decimal"
+                aria-invalid={refused !== null}
+                aria-describedby={refused ? errorId : undefined}
                 value={draft ?? shown}
-                onChange={(e) => setDraft(e.target.value)}
+                onChange={(e) => {
+                    setDraft(e.target.value);
+                    setRefused(null);
+                }}
                 onBlur={commit}
                 onKeyDown={(e) => {
                     if (e.key === "Enter") commit();
                 }}
             />
+            {refused && (
+                <span
+                    id={errorId}
+                    role="alert"
+                    className="text-sub text-red"
+                    data-testid="item-length-refused"
+                >
+                    {refused}
+                </span>
+            )}
         </label>
     );
 }

@@ -308,7 +308,31 @@ describeDbTests("Model import", (it) => {
         const resized = (await getItemGeometry({ db })).at(-1)!;
         expect(resized.depth).toBeCloseTo(sizeM.depth * 2);
         expect(resized.height).toBeCloseTo(sizeM.height * 2);
-        await performUndo(db);
+
+        // A bare number is in the unit the box shows: inches once the chair is under a foot
+        const typeWidth = async (value: string, meters: number) => {
+            fireEvent.change(width, { target: { value } });
+            fireEvent.keyDown(width, { key: "Enter" });
+            await waitFor(async () => {
+                const rows = await getItemGeometry({ db });
+                expect(rows.at(-1)!.width).toBeCloseTo(meters, 6);
+            });
+        };
+        await typeWidth("10 in", 0.254);
+        await waitFor(() => expect(width.value).toBe('10"'));
+        await typeWidth("12", 0.3048);
+
+        // Text that isn't a length says so and keeps the size
+        fireEvent.change(width, { target: { value: "wide" } });
+        fireEvent.keyDown(width, { key: "Enter" });
+        expect(
+            (await screen.findByTestId("item-length-refused")).textContent,
+        ).toContain("“wide”");
+        expect((await getItemGeometry({ db })).at(-1)!.width).toBeCloseTo(
+            0.3048,
+            6,
+        );
+        for (let i = 0; i < 3; i++) await performUndo(db);
 
         // One undo removes the prop and keeps the model
         await performUndo(db);

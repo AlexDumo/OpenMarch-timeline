@@ -1183,6 +1183,8 @@
     "props.errors.outline": "Error toast shown when changing a prop's outline (its size, rotation or shape) fails.",
     "props.errors.update": "Error toast shown when changing a prop's other settings (name, surface type) fails.",
     "props.height": "Label of the field for a prop's height, its vertical size. It shows and takes a length in the show's units (feet and inches, or meters).",
+    "props.lengthUnreadable": "Under a prop's Width, Depth or Height box, in red, after the user typed text that isn't a length; the box shows the stored size again. {text} is what they typed. The examples are lengths the box accepts: keep them as written (feet and inches, decimal feet, meters).",
+    "props.lengthTooSmall": "Under a prop's Width, Depth or Height box, in red, after the user typed a size below the smallest allowed. {min} is that smallest size, already written with its unit.",
     "props.hide": "Tooltip and screen-reader label of the eye button on a prop's row. Shown while the prop is visible; pressing it hides the prop on the field (it is not deleted).",
     "props.name": "Label of the text field for a prop's name. Optional; when empty the prop shows its generated number.",
     "props.offField": "Notice shown instead of the outline fields when the prop is not on the field at the playhead's current count. A prop's outline can only be changed at a count where it is on the field.",

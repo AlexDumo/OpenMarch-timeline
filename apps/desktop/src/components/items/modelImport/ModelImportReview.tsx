@@ -398,8 +398,7 @@ function SizeConfirm({
     const lengths = useShowLengths();
     const shownUnit: UnitFix = lengths.system === "metric" ? "none" : "ft";
     const fileFactor = UNIT_FIXES.find((f) => f.unit === sizeUnit)?.factor ?? 1;
-    const fileNumber = (meters: number) =>
-        String(Number((meters / fileFactor).toFixed(2)));
+    const fileNumber = (meters: number) => lengths.number(meters / fileFactor);
     return (
         <section
             className="flex flex-col gap-8"

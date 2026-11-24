@@ -1587,6 +1587,8 @@
             "preset": "Couldn't apply the preset"
         },
         "height": "Height",
+        "lengthUnreadable": "Couldn't read “{text}” as a length. Type it like 4 ft 6 in, 4.5 ft or 1.4 m.",
+        "lengthTooSmall": "Too small: at least {min}.",
         "hide": "Hide on the field",
         "name": "Name",
         "offField": "Off field at the playhead. Move the playhead to a count where the prop is on the field to change its outline.",
