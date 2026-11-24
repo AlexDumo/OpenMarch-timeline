@@ -24,7 +24,6 @@ import {
     followShapeRefusal,
     goRoundRefusalFor,
     outlineMiss,
-    outlineOf,
 } from "@/db-functions/timelineTrailAround";
 import { placedBoxesAt } from "@/shapes/placed/placedBoxStore";
 import { rippleFormAt } from "@/db-functions/timelineTrailRipple";
@@ -367,7 +366,12 @@ async function whyNoShape(
     const moved = ends.some(
         (p, i) => Math.hypot(p[0] - starts[i]![0], p[1] - starts[i]![1]) > 1e-6,
     );
-    if (moved && (followSource(ends) || outlineOf(ends, step)))
+    // Any shape Follow could take there counts, a closed curve's too (review of fork #1215)
+    if (
+        moved &&
+        (followSource(ends) ||
+            closedOutlineOf(ends, step, placedOutlines(ids, window.end)))
+    )
         return followShapeRefusal.later();
     const chosen = new Set(ids);
     for (const shape of placedBoxesAt(window.start)) {

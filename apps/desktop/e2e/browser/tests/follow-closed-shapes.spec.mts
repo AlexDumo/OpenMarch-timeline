@@ -402,9 +402,9 @@ test("change: a placed shape clicked on the next page shows its editing bar; whi
     await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
     await waitForIdle(page);
     await page.keyboard.press("Escape");
+    // the new page is selected already (on touch the playhead's hit area covers its box)
     await addPageAt(page, 11);
     await waitForIdle(page);
-    await selectPage(show, "Page 3");
     await page.keyboard.press("Escape");
     // one marcher of the shape clicked: the whole shape is selected, its own bar shows
     const [, , , one] = await drawnMarchers(page);
