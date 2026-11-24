@@ -144,7 +144,7 @@ describeDbTests("Model import", (it) => {
         // The size to confirm, the turn, and the detail level: Light, with what it costs
         expect(
             within(review).getByTestId("model-import-size").textContent,
-        ).toMatch(/^[\d.]+ × [\d.]+ ft, [\d.]+ ft tall$/);
+        ).toMatch(/^[\d' /]+" × [\d' /]+", [\d' /]+" tall$/);
         // The test show is imperial and the file is in meters, so the file's numbers show too
         expect(
             within(review).getByTestId("model-import-size-in-file").textContent,
@@ -294,11 +294,11 @@ describeDbTests("Model import", (it) => {
         expect(
             await screen.findByTestId("item-keeps-proportions"),
         ).toBeTruthy();
-        // The box shows the show's units (feet in an imperial show); doubling what it shows
-        // doubles the stored meters
+        // The box shows feet and inches in this imperial show, and takes a length in any unit
         const width = screen.getByLabelText<HTMLInputElement>("Width");
+        expect(width.value).toMatch(/"$/);
         fireEvent.change(width, {
-            target: { value: String(Number(width.value) * 2) },
+            target: { value: `${sizeM.width * 2} m` },
         });
         fireEvent.keyDown(width, { key: "Enter" });
         await waitFor(async () => {

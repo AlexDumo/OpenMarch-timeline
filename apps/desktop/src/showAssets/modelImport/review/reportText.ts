@@ -3,11 +3,6 @@
  * note as a title and an optional detail. Kept apart from the screen so every code has a test.
  */
 import type { Fix, Note, Refusal } from "../types";
-import {
-    lengthUnitKey,
-    shownLength,
-    type MeasurementSystem,
-} from "@/utilities/showLengths";
 
 export type Translate = (
     key: string,
@@ -190,11 +185,11 @@ export function fixText(fix: Fix, t: Translate): ReportLine {
 
 const N = "props.import.notes";
 
-/** A quiet note, its lengths in the show's units */
+/** A quiet note, its lengths as `length` writes meters (in the show's units) */
 export function noteText(
     note: Note,
     t: Translate,
-    system: MeasurementSystem,
+    length: (meters: number) => string,
 ): ReportLine {
     switch (note.code) {
         case "validatorWarnings":
@@ -204,11 +199,10 @@ export function noteText(
         case "sizeOutOfRange":
             return {
                 title: t(`${N}.sizeOutOfRange.title`),
-                detail: t(`${N}.sizeOutOfRange.detailIn`, {
-                    largest: shownLength(note.largestM, system),
-                    min: shownLength(note.minM, system),
-                    max: shownLength(note.maxM, system),
-                    unit: t(lengthUnitKey(system)),
+                detail: t(`${N}.sizeOutOfRange.detailOf`, {
+                    largest: length(note.largestM),
+                    min: length(note.minM),
+                    max: length(note.maxM),
                 }),
             };
         case "overTriangleCap":

@@ -42,12 +42,7 @@ import {
     proportionalSize,
     type ModelSide,
 } from "@/showAssets/libraryModels";
-import { useMeasurementSystem } from "@/hooks/useMeasurementSystem";
-import {
-    lengthUnitKey,
-    metersToShown,
-    shownToMeters,
-} from "@/utilities/showLengths";
+import { useShowLengths, type ShowLengths } from "@/hooks/useMeasurementSystem";
 import { drillNumber, type ItemWithMarcher } from "./ItemRows";
 
 /**
@@ -109,17 +104,11 @@ function CommitNumber({
     onCommit: (value: number) => void;
 }) {
     const [draft, setDraft] = useState<string | null>(null);
-    // What the box shows; typing it again changes nothing (a length shown in feet is rounded)
-    const rounded = String(Number(value.toFixed(3)));
     const commit = () => {
         if (draft === null) return;
         const parsed = Number(draft);
         setDraft(null);
-        if (
-            Number.isFinite(parsed) &&
-            parsed >= min &&
-            parsed !== Number(rounded)
-        )
+        if (Number.isFinite(parsed) && parsed >= min && parsed !== value)
             onCommit(parsed);
     };
     return (
@@ -131,7 +120,52 @@ function CommitNumber({
                 step={step}
                 min={min}
                 aria-label={label}
-                value={draft ?? rounded}
+                value={draft ?? String(Number(value.toFixed(3)))}
+                onChange={(e) => setDraft(e.target.value)}
+                onBlur={commit}
+                onKeyDown={(e) => {
+                    if (e.key === "Enter") commit();
+                }}
+            />
+        </label>
+    );
+}
+
+/**
+ * A length field: the stored meters in the show's units (`6' 11 7/8"`, or `2.13 m`). It takes
+ * any length typed (`4'6"`, `4.5 ft`, `54 in`, `1.4 m`; a bare number is in the show's unit) and
+ * commits on blur or Enter; anything else shows the stored value again.
+ */
+function CommitLength({
+    meters,
+    minMeters,
+    label,
+    lengths,
+    onCommit,
+}: {
+    meters: number;
+    minMeters: number;
+    label: string;
+    lengths: ShowLengths;
+    onCommit: (meters: number) => void;
+}) {
+    const [draft, setDraft] = useState<string | null>(null);
+    const shown = lengths.format(meters);
+    const commit = () => {
+        if (draft === null) return;
+        const parsed = draft.trim() === shown ? null : lengths.parse(draft);
+        setDraft(null);
+        if (parsed !== null && parsed >= minMeters && parsed !== meters)
+            onCommit(parsed);
+    };
+    return (
+        <label className="text-body flex flex-col gap-4">
+            <span className="text-text/70">{label}</span>
+            <Input
+                compact
+                aria-label={label}
+                inputMode="decimal"
+                value={draft ?? shown}
                 onChange={(e) => setDraft(e.target.value)}
                 onBlur={commit}
                 onKeyDown={(e) => {
@@ -159,7 +193,8 @@ export function ItemEditor({ itemId }: { itemId: number }) {
     );
     const [name, setName] = useState<string | null>(null);
     const { data: assets } = useQuery(showAssetsQueryOptions());
-    const system = useMeasurementSystem();
+    // Sizes are stored in meters and shown in the show's units (props-spec §3)
+    const lengths = useShowLengths();
     const library = useMemo(() => libraryModels(assets), [assets]);
 
     const item = items?.find((i) => i.id === itemId);
@@ -185,9 +220,6 @@ export function ItemEditor({ itemId }: { itemId: number }) {
     if (!item) return null;
 
     const shown = itemGeometryAt(changes, beat);
-    // Sizes are stored in meters and shown in the show's units (feet with an imperial field)
-    const lengthUnit = t(lengthUnitKey(system));
-    const lengthStep = system === "metric" ? 0.1 : 0.5;
     const writeBeat = outlineWriteBeat(beats, beat);
     const existing = rows?.find(
         (r) => r.item_id === item.id && r.beat_id === writeBeat?.id,
@@ -345,38 +377,26 @@ export function ItemEditor({ itemId }: { itemId: number }) {
                 )}
                 {shown ? (
                     <div className="grid grid-cols-2 gap-12">
-                        <CommitNumber
+                        <CommitLength
                             label={t("props.width")}
-                            unit={lengthUnit}
-                            min={0.01}
-                            step={lengthStep}
-                            value={metersToShown(shown.width, system)}
-                            onCommit={(width) =>
-                                writeSide("width", shownToMeters(width, system))
-                            }
+                            lengths={lengths}
+                            minMeters={0.01}
+                            meters={shown.width}
+                            onCommit={(width) => writeSide("width", width)}
                         />
-                        <CommitNumber
+                        <CommitLength
                             label={t("props.depth")}
-                            unit={lengthUnit}
-                            min={0.01}
-                            step={lengthStep}
-                            value={metersToShown(shown.depth, system)}
-                            onCommit={(depth) =>
-                                writeSide("depth", shownToMeters(depth, system))
-                            }
+                            lengths={lengths}
+                            minMeters={0.01}
+                            meters={shown.depth}
+                            onCommit={(depth) => writeSide("depth", depth)}
                         />
-                        <CommitNumber
+                        <CommitLength
                             label={t("props.height")}
-                            unit={lengthUnit}
-                            min={standsUp ? 0.01 : 0}
-                            step={lengthStep}
-                            value={metersToShown(shown.height, system)}
-                            onCommit={(height) =>
-                                writeSide(
-                                    "height",
-                                    shownToMeters(height, system),
-                                )
-                            }
+                            lengths={lengths}
+                            minMeters={standsUp ? 0.01 : 0}
+                            meters={shown.height}
+                            onCommit={(height) => writeSide("height", height)}
                         />
                         <CommitNumber
                             label={t("props.rotation")}

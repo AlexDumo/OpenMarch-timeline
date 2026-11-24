@@ -13,8 +13,7 @@ import {
     type PitVariant,
 } from "@/view3d/core/pit/catalog";
 import { usePitVariantLabel } from "./usePitVariantLabel";
-import { useMeasurementSystem } from "@/hooks/useMeasurementSystem";
-import { lengthUnitKey, shownLength } from "@/utilities/showLengths";
+import { useShowLengths } from "@/hooks/useMeasurementSystem";
 
 const GROUPS: readonly PitGroup[] = [
     "keyboards",
@@ -25,8 +24,6 @@ const GROUPS: readonly PitGroup[] = [
 
 const GROUP_HEADING_CLASS =
     "text-sub text-text-subtitle px-8 pt-8 pb-4 font-medium tracking-wide uppercase";
-
-/** Meters, to two decimals at most */
 
 /**
  * The front ensemble view's Add equipment (instruments.md §6): every model as a small picture,
@@ -161,11 +158,10 @@ function EquipmentTile({
     const { t } = useTranslate();
     const footprintId = useId();
     const url = pitThumbnailUrl(variant.fileId);
-    const system = useMeasurementSystem();
-    const footprint = t("frontEnsemble.footprintIn", {
-        width: shownLength(variant.footprint.width, system),
-        depth: shownLength(variant.footprint.depth, system),
-        unit: t(lengthUnitKey(system)),
+    const lengths = useShowLengths();
+    const footprint = t("frontEnsemble.footprintSize", {
+        width: lengths.format(variant.footprint.width),
+        depth: lengths.format(variant.footprint.depth),
     });
     const name = variantName ? `${familyName} · ${variantName}` : familyName;
     return (

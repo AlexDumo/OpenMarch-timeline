@@ -86,11 +86,11 @@ describe("the import report's words", () => {
     it.each(NOTES.map((n) => [n.code, n] as const))(
         "notes %s",
         (_code, note) => {
-            expect(noteText(note, t, "metric").title).toBeTruthy();
+            expect(noteText(note, t, String).title).toBeTruthy();
         },
     );
 
-    it("gives an odd size in the show's units", () => {
+    it("writes an odd size's lengths with the length it's given", () => {
         const say = (key: string, params?: Record<string, string | number>) =>
             `${key} ${JSON.stringify(params ?? {})}`;
         const note: Note = {
@@ -99,11 +99,8 @@ describe("the import report's words", () => {
             minM: 0.1,
             maxM: 20,
         };
-        expect(noteText(note, say, "imperial").detail).toContain(
-            '"largest":"131.23","min":"0.33","max":"65.62","unit":"props.units.feet',
-        );
-        expect(noteText(note, say, "metric").detail).toContain(
-            '"largest":"40","min":"0.1","max":"20","unit":"props.units.meters',
+        expect(noteText(note, say, (m) => `<${m}>`).detail).toContain(
+            '"largest":"<40>","min":"<0.1>","max":"<20>"',
         );
     });
 

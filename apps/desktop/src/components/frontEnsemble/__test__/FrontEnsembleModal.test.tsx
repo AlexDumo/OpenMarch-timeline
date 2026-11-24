@@ -225,11 +225,13 @@ describeDbTests("Front ensemble panel", (it) => {
             name: "Add equipment",
         });
         // Every model is a picture, named by family and variant; the default is marked, and
-        // each tells its footprint, in the show's units (feet: the test show is imperial)
+        // each tells its footprint, in the show's units (feet and inches: the test show is imperial)
         const rosewood43 = within(ensemble).getByRole("button", {
             name: "Marimba · 4.3 octaves · Rosewood Default",
         });
-        expect(rosewood43).toHaveAccessibleDescription("6.98 × 2.95 ft");
+        expect(rosewood43).toHaveAccessibleDescription(
+            `6' 11 7/8" × 2' 11 3/8"`,
+        );
         expect(rosewood43.querySelector("img")).not.toBeNull();
         // The search box narrows the pictures
         fireEvent.change(
