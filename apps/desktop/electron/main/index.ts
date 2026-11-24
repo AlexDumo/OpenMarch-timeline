@@ -89,6 +89,7 @@ import {
     captureException,
     captureMessage,
     makeElectronOfflineTransport,
+    makeElectronTransport,
 } from "@sentry/electron/main";
 import { scrubUserPaths } from "@/utilities/scrubUserPaths";
 import {
@@ -237,14 +238,15 @@ console.log("Sentry error reporting allowed:", errorReportsAllowed());
 
 init({
     dsn: "https://72e6204c8e527c4cb7a680db2f9a1e0b@o4509010215239680.ingest.us.sentry.io/4509010222579712",
-    // Enabled to catch crashes; the transport sends nothing until the person opts in
+    // Enabled to catch crashes; nothing is sent until the person opts in. The gate sits under the
+    // offline queue, so reports saved earlier and re-sent at launch are checked too.
     enabled: process.env.NODE_ENV !== "development",
-    transport: consentGatedTransport(
-        makeElectronOfflineTransport(),
-        errorReportsAllowed,
+    transport: makeElectronOfflineTransport(
+        consentGatedTransport(makeElectronTransport, errorReportsAllowed),
     ),
-    // The app's own diagnostics go without the console breadcrumbs, which name files, and no
-    // report names the computer's user (paths under C:\Users\<name>, /Users/<name>, /home/<name>).
+    // The app's own diagnostics go without the console breadcrumbs, which name files, and event
+    // text doesn't name the computer's user (paths under C:\Users\<name>, /Users/<name>,
+    // /home/<name>). Crash dump attachments aren't scrubbed; they too wait for consent.
     beforeSend: (event) => scrubUserPaths(stripDiagnosticBreadcrumbs(event)),
 });
 

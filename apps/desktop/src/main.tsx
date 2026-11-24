@@ -17,8 +17,14 @@ import posthog, { type PostHogConfig } from "posthog-js";
 import { PostHogProvider } from "posthog-js/react";
 import { TolgeeProvider } from "@tolgee/react";
 import { applyAnalyticsConsent } from "@/utilities/analyticsConsent";
-import { registerAnalyticsContext } from "@/utilities/analyticsContext";
-import { scrubUserPaths } from "@/utilities/scrubUserPaths";
+import {
+    forgetStoredUserPaths,
+    registerAnalyticsContext,
+} from "@/utilities/analyticsContext";
+import {
+    scrubUserPaths,
+    scrubUserPathsInString,
+} from "@/utilities/scrubUserPaths";
 import tolgee from "@/global/singletons/Tolgee";
 import { installClickFocusMarker } from "@/utilities/clickFocus";
 import { initEditorModeStore } from "@/stores/EditorModeStore";
@@ -70,14 +76,21 @@ function mountEditor() {
         disable_surveys: isPlaywrightSession,
         disable_surveys_automatic_display: isPlaywrightSession,
         disable_web_experiments: isPlaywrightSession,
-        // Typed text (show titles, marcher names) never goes into replays
-        session_recording: { maskAllInputs: true },
-        // The page URL and error messages are file paths that name the computer's user
+        session_recording: {
+            // Typed text (show titles, marcher names) never goes into replays
+            maskAllInputs: true,
+            // Replays compress page text before `before_send` sees it, so every text node
+            // passes through the scrubber here: only paths that name the user change
+            maskTextSelector: "*",
+            maskTextFn: (text) => scrubUserPathsInString(text),
+        },
+        // Error messages and older builds' page URLs are file paths that name the computer's user
         before_send: (event) => (event ? scrubUserPaths(event) : event),
     };
 
     if (import.meta.env.VITE_PUBLIC_POSTHOG_KEY) {
         posthog.init(import.meta.env.VITE_PUBLIC_POSTHOG_KEY, options);
+        forgetStoredUserPaths(posthog);
         registerAnalyticsContext(posthog);
     }
 
