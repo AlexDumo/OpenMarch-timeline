@@ -9,6 +9,7 @@
  */
 import type { FieldFootprint } from "@openmarch/core";
 import type { Object3D, Vector3Tuple } from "three";
+import type { FieldSurfaceStyle } from "./field/plan";
 
 /** Venue kits shipped in the MVP. `blank` is the field on a plain ground. */
 export type VenueKitId =
@@ -155,6 +156,12 @@ export interface KitBuildInput {
      * podium item (docs/3d/instruments.md §6). Defaults to true.
      */
     venuePodium?: boolean;
+    /**
+     * The style the show's field is painted in (`kitFieldStyle`). A
+     * fixed-field kit paints its own field under a floor that isn't turf.
+     * Defaults to a floor.
+     */
+    fieldStyle?: FieldSurfaceStyle;
 }
 
 export interface FrameContext {

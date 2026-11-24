@@ -103,9 +103,36 @@ export const venueSettingsSchema = z.object({
      * (fork #973) without a version bump.
      */
     silkArtwork: z.number().int().positive().optional(),
+    /**
+     * Whose lines a venue with a field of its own (`KITS_WITH_OWN_FIELD`)
+     * paints: the show's field ("show") or the stadium's real ones
+     * ("stadium"); absent means the show's. Added 2026-11-23 without a
+     * version bump, like `brassFinish`: older builds ignore it.
+     */
+    fieldLines: z.enum(["show", "stadium"]).optional(),
 });
 
 export type VenueSettings = z.infer<typeof venueSettingsSchema>;
+
+export type FieldLines = NonNullable<VenueSettings["fieldLines"]>;
+
+/**
+ * Venues with a football field of their own, painted from the stadium's
+ * turf drawings (`KIT_OWN_FIELD`): they never shrink to the show's field,
+ * lay a floor on their turf as a tarp, and can paint their own lines in
+ * place of the show's (`fieldLines`).
+ */
+export const KITS_WITH_OWN_FIELD: readonly VenueKitId[] = ["markDiesel"];
+
+/** The lines a venue paints: the stadium's only where it has its own. */
+export function fieldLinesFor(
+    kit: VenueKitId,
+    fieldLines: FieldLines | undefined,
+): FieldLines {
+    return KITS_WITH_OWN_FIELD.includes(kit) && fieldLines === "stadium"
+        ? "stadium"
+        : "show";
+}
 
 // Compile-time checks that the schema matches the shared contracts in types.ts.
 type Equals<A, B> =

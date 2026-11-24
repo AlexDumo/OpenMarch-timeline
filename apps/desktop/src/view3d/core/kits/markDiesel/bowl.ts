@@ -1,6 +1,4 @@
 // cspell:ignore vomitory vomitories metalness tarped concourse downlights emissivemap
-import { DIESEL_TURF } from "./turf";
-import { applyTurfSheen } from "../../field/turfSheen";
 import {
     BufferGeometry,
     DoubleSide,
@@ -212,8 +210,10 @@ const GLASS_POST_PITCH = 1.8;
 const NAME_TILE = 45;
 /** Upper-deck portals: rows covered, and width. */
 const UPPER_PORTAL = { firstRow: 4, lastRow: 6, width: 3 };
-/** The turf apron round the field: over the site's paint, under the field. */
+/** The floor round the turf: over the site's paint, under the turf. */
 const FLOOR_Y = 0.02;
+/** The floor's sealed concrete, darker than the stands' bare concrete. */
+const FLOOR_CONCRETE = 0x4a4c50;
 /** Height of a tier's back wall above its last tread. */
 const RIM = 1.2;
 
@@ -1803,7 +1803,8 @@ export function buildDieselBowl(ctx: DieselCtx): DieselBowl {
         addAisleSteps();
     }
 
-    // The floor inside the bowl: turf out to the field wall.
+    // The floor inside the bowl, out to the field wall: sealed concrete. The
+    // turf (`turf.ts`) covers it out to the drawings' outline.
     const floor = ring(0.4, FLOOR_Y);
     const floorPos: number[] = [];
     for (let i = 0; i < N; i++) {
@@ -1815,20 +1816,13 @@ export function buildDieselBowl(ctx: DieselCtx): DieselBowl {
     const floorGeo = new BufferGeometry();
     floorGeo.setAttribute("position", new Float32BufferAttribute(floorPos, 3));
     floorGeo.computeVertexNormals();
-    // The same synthetic turf as the field (`turf.ts`), with its rolls'
-    // lay, grain, crumb and dull specular, so the apron reads as the
-    // field's turf carried on to the wall.
-    const floorMat = shared.std(parseInt(DIESEL_TURF.base.slice(1), 16), {
-        roughness: 0.95,
-    });
-    applyTurfSheen(floorMat);
+    const floorMat = shared.std(FLOOR_CONCRETE, { roughness: 0.9 });
     addMesh(
         floorGeo,
         setGroundLayer(
             floorMat,
-            // The apron round the field: over the site's paint, under the
-            // field itself.
-            GROUND_LAYER.track,
+            // Over the site's paint, under the turf and the field.
+            GROUND_LAYER.lots,
         ),
         "markDiesel.floor",
     );

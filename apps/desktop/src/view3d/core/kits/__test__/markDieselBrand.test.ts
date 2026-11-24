@@ -37,7 +37,6 @@ import {
     DIESEL_VENUE_PARAMS,
     dieselClock,
     dieselFieldArt,
-    LOGO_ASPECT,
     OPENMARCH_SIGN,
     paintAppIcon,
     paintBoardCard,
@@ -307,7 +306,7 @@ describe("Mark Diesel midfield art", () => {
         FieldPropertiesTemplates.HIGH_SCHOOL_FOOTBALL_FIELD_NO_END_ZONES;
     const params: VenueParams = { ...DIESEL_VENUE_PARAMS };
 
-    it("paints the OpenMarch logo, keylined, between the hashes", () => {
+    it("paints the helmet at the drawings' 27 ft, between the hashes", () => {
         const plain = planField({ fieldProperties, style: "turf", params });
         expect(plain.items.filter((i) => i.type === "logo")).toHaveLength(1);
 
@@ -325,12 +324,11 @@ describe("Mark Diesel midfield art", () => {
         const f = plan.footprint;
         expect(item.x).toBe(0);
         expect(item.z).toBeCloseTo((f.minZ + f.maxZ) / 2);
-        expect(item.width).toBeLessThanOrEqual(dieselFieldArt.maxWidth);
-        expect(item.width).toBeGreaterThan(8);
-        expect(item.height).toBeCloseTo(item.width / dieselFieldArt.aspect);
-        expect(dieselFieldArt.aspect).toBeCloseTo(LOGO_ASPECT);
-        expect(written((g) => dieselFieldArt.paint(g, 460, 256))).toBe(
-            "[logo]",
+        // The turf drawings' midfield logo: 27 ft across.
+        expect(item.width).toBeCloseTo(27 * 0.3048);
+        expect(item.height).toBeCloseTo(item.width / 0.9753);
+        expect(written((g) => dieselFieldArt.paint(g, 256, 256))).toBe(
+            "[marcher]",
         );
         // The end zones say OPENMARCH, with the marcher (`field/paint.ts`).
         const zones = plan.items.filter((i) => i.role === "endZoneText");

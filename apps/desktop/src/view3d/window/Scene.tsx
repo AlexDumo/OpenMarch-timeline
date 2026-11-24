@@ -70,7 +70,9 @@ import {
     KIT_BUILDERS,
     KIT_FIELD_ART,
     KIT_FIELD_TURF,
-    KIT_FIELD_STYLE,
+    kitFieldProperties,
+    placeKitField,
+    kitFieldStyle,
 } from "@/view3d/core/kits";
 import type {
     CameraSeat,
@@ -249,7 +251,16 @@ function SceneContents({
     const paramsKey = JSON.stringify(settings.params);
     const params = useStable<VenueParams>(settings.params, paramsKey);
     const kitId = settings.kit;
-    const fieldStyle = KIT_FIELD_STYLE[kitId];
+    const fieldStyle = useMemo(
+        () => kitFieldStyle(kitId, fieldProperties),
+        [kitId, fieldProperties],
+    );
+    // The show's field, or the stadium's own lines when the show asks.
+    const fieldLines = settings.fieldLines;
+    const surfaceField = useMemo(
+        () => kitFieldProperties(kitId, fieldProperties, fieldLines),
+        [kitId, fieldProperties, fieldLines],
+    );
     const footprintKey = useMemo(
         () => JSON.stringify(venueFootprint(fieldProperties, fieldStyle)),
         [fieldProperties, fieldStyle],
@@ -320,6 +331,7 @@ function SceneContents({
             params,
             quality,
             venuePodium,
+            fieldStyle,
         });
         scene.add(built.root);
         useView3dSceneStore.getState()._setKit(kitId, built);
@@ -329,12 +341,12 @@ function SceneContents({
             if (store.kit === built) store._setKit(null, null);
             built.dispose();
         };
-    }, [scene, kitId, footprintKey, params, quality, venuePodium]);
+    }, [scene, kitId, footprintKey, params, quality, venuePodium, fieldStyle]);
 
     // Field surface.
     useEffect(() => {
         const surface = buildFieldSurface({
-            fieldProperties,
+            fieldProperties: surfaceField,
             theme: fieldProperties.theme,
             style: fieldStyle,
             centerArt: KIT_FIELD_ART[kitId],
@@ -344,12 +356,28 @@ function SceneContents({
             maxTextureSize: gl.capabilities.maxTextureSize,
             anisotropy: gl.capabilities.getMaxAnisotropy(),
         });
+        placeKitField(
+            surface.mesh,
+            surfaceField,
+            fieldProperties,
+            JSON.parse(footprintKey) as FieldFootprint,
+        );
         scene.add(surface.mesh);
         return () => {
             scene.remove(surface.mesh);
             surface.dispose();
         };
-    }, [scene, gl, fieldProperties, fieldStyle, kitId, params, image]);
+    }, [
+        scene,
+        gl,
+        fieldProperties,
+        surfaceField,
+        footprintKey,
+        fieldStyle,
+        kitId,
+        params,
+        image,
+    ]);
 
     // Crowd: one instanced mesh from the kit's seat rows.
     useEffect(() => {

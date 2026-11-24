@@ -47,6 +47,7 @@ export type {
     EndZoneStyle,
     FieldCenterArt,
     TurfColors,
+    TurfMarks,
     TurfSurface,
     FieldPlan,
     FieldSurfaceStyle,

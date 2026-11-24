@@ -1,6 +1,18 @@
-import type { FieldCenterArt, FieldSurfaceStyle, TurfColors } from "../field";
-import { DIESEL_TURF } from "./markDiesel/turf";
-import type { KitBuilder, VenueKitId } from "../types";
+import type { FieldProperties } from "@openmarch/core";
+import {
+    KITS_WITH_OWN_FIELD,
+    fieldFamily,
+    fieldLinesFor,
+    type FieldLines,
+} from "../venueSettings";
+import {
+    type FieldCenterArt,
+    type FieldSurfaceStyle,
+    type TurfColors,
+} from "../field";
+import { DIESEL_FIELD, DIESEL_TURF } from "./markDiesel/turf";
+import type { Object3D } from "three";
+import type { FieldFootprint, KitBuilder, VenueKitId } from "../types";
 import { buildArena } from "./arena";
 import { buildBighs } from "./bighs";
 import { buildBlank } from "./blank";
@@ -42,6 +54,71 @@ export const KIT_FIELD_STYLE: Readonly<Record<VenueKitId, FieldSurfaceStyle>> =
         arena: "tarp",
         blank: "theme",
     };
+
+/**
+ * The field a venue with a field of its own (`KITS_WITH_OWN_FIELD`) paints
+ * under a floor, or in place of the show's lines (`fieldLines`).
+ */
+export const KIT_OWN_FIELD: Readonly<
+    Partial<Record<VenueKitId, FieldProperties>>
+> = { markDiesel: DIESEL_FIELD };
+
+/**
+ * The surface style a kit paints the show's field in: `KIT_FIELD_STYLE`,
+ * except that in a venue with its own field a field that isn't a football
+ * field (indoor, SoundSport, any grid) is a tarp (the show's field image,
+ * or the generated tarp) laid on the venue's turf. A football field stays
+ * turf whatever its step size.
+ */
+export function kitFieldStyle(
+    kitId: VenueKitId,
+    fieldProperties: FieldProperties,
+): FieldSurfaceStyle {
+    const style = KIT_FIELD_STYLE[kitId];
+    if (
+        !KITS_WITH_OWN_FIELD.includes(kitId) ||
+        fieldFamily(fieldProperties) === "football"
+    )
+        return style;
+    return "tarp";
+}
+
+/**
+ * The field a kit paints: the show's, or, when the show asks for the
+ * stadium's lines (`fieldLines`) and its field is turf, the venue's own
+ * field (`KIT_OWN_FIELD`). Marchers keep the show's coordinates either way.
+ */
+export function kitFieldProperties(
+    kitId: VenueKitId,
+    fieldProperties: FieldProperties,
+    fieldLines: FieldLines | undefined,
+): FieldProperties {
+    const own = KIT_OWN_FIELD[kitId];
+    if (
+        !own ||
+        fieldLinesFor(kitId, fieldLines) !== "stadium" ||
+        kitFieldStyle(kitId, fieldProperties) !== "turf"
+    )
+        return fieldProperties;
+    return own;
+}
+
+/**
+ * Centers the field surface on the field the kit is built round
+ * (`footprint`) when it paints the venue's own field (`painted`, from
+ * `kitFieldProperties`) in place of the show's: a show field short of
+ * regulation size has its sidelines elsewhere. Otherwise leaves it be.
+ */
+export function placeKitField(
+    mesh: Object3D,
+    painted: FieldProperties,
+    show: FieldProperties,
+    footprint: FieldFootprint,
+): void {
+    if (painted === show) return;
+    mesh.position.x = (footprint.minX + footprint.maxX) / 2;
+    mesh.position.z = (footprint.minZ + footprint.maxZ) / 2;
+}
 
 /**
  * Midfield art a kit paints in place of the OpenMarch logo

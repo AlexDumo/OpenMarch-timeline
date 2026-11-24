@@ -9,6 +9,7 @@ import {
     TEXTURE_FONT,
 } from "../../environment";
 import type { FieldCenterArt } from "../../field";
+import { HELMET } from "./helmet";
 import { MARCHER_MARK, OPENMARCH_LOGO } from "../../field/brandMark";
 import type { ShowCredits, VenueParams } from "../../types";
 
@@ -952,23 +953,57 @@ export function paintMonument(g: G, w: number, h: number): void {
     });
 }
 
+/** The face mask's gray-blue, as the turf drawings color it. */
+const HELMET_MASK = "#a2c2d1";
+
 /**
- * The paint at midfield: the OpenMarch logo in white, keylined in violet,
- * 18 yards across (`FieldSurfaceInput.centerArt`).
+ * The paint at midfield: the turf drawings' helmet (`helmet.ts`), traced
+ * line for line, with the OpenMarch marcher where the drawings have the
+ * team's horseshoe and OpenMarch violet for its blue, in the box the
+ * drawings give the midfield logo (27 ft across, 13 ft 6 in each side of
+ * the 50; `FieldSurfaceInput.centerArt`).
  */
 export const dieselFieldArt: FieldCenterArt = {
-    aspect: LOGO_ASPECT,
-    maxWidth: 16.46,
+    aspect: HELMET.aspect,
+    maxWidth: 27 * 0.3048,
     paint(g, w, h) {
-        // Inset so the keyline stays on the canvas.
-        const keyline = h * 0.012;
-        const height = Math.min(h, w / LOGO_ASPECT) - 2 * keyline;
-        paintLogo(g, w / 2, h / 2, height, OM.white, {
-            color: OM.violet,
-            width: keyline,
-        });
+        paintHelmet(g, w, h);
     },
 };
+
+/** Paints the midfield helmet into a `w` x `h` box (`dieselFieldArt`). */
+export function paintHelmet(g: G, w: number, h: number): void {
+    const u = Math.min(h, w / HELMET.aspect);
+    g.save();
+    g.translate((w - u * HELMET.aspect) / 2, (h - u) / 2);
+    g.scale(u, u);
+    const fill = (rings: typeof HELMET.shell, color: string) => {
+        g.beginPath();
+        for (const ring of rings) {
+            ring.forEach(([x, y], i) =>
+                i === 0 ? g.moveTo(x, y) : g.lineTo(x, y),
+            );
+            g.closePath();
+        }
+        g.fillStyle = color;
+        g.fill("evenodd");
+    };
+    fill(HELMET.shell, OM.white);
+    fill(HELMET.lines, OM.violet);
+    fill(HELMET.mask, HELMET_MASK);
+    // The OpenMarch marcher, as tall as the horseshoe, centered where it was.
+    const [left, top, right, bottom] = HELMET.logoBox;
+    const markHeight = bottom - top;
+    const markWidth = (markHeight * MARCHER_MARK.width) / MARCHER_MARK.height;
+    paintMarcher(
+        g,
+        (left + right) / 2 - markWidth / 2,
+        top,
+        markHeight,
+        OM.violet,
+    );
+    g.restore();
+}
 
 type Paint = (g: G, width: number, height: number) => void;
 
