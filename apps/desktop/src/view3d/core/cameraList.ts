@@ -249,6 +249,8 @@ export type CameraListEdit =
      */
     | ({ kind: "setView"; id: string; pose: ViewPose } & ViewExtras)
     | { kind: "move"; id: string; by: -1 | 1 }
+    /** Moves a camera to a place in the list (a drag), clamped to the list. */
+    | { kind: "moveTo"; id: string; index: number }
     | { kind: "remove"; id: string };
 
 /**
@@ -308,6 +310,16 @@ export function editCameraList(
             if (index < 0 || to < 0 || to >= list.length) return [...list];
             const next = [...list];
             [next[index], next[to]] = [next[to], next[index]];
+            return next;
+        }
+        case "moveTo": {
+            if (index < 0) return [...list];
+            const next = list.filter((_, i) => i !== index);
+            const to = Math.max(
+                0,
+                Math.min(next.length, Math.round(edit.index)),
+            );
+            next.splice(to, 0, list[index]);
             return next;
         }
         case "remove":

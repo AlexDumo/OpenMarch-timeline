@@ -31,6 +31,8 @@ import {
     ArrowUpIcon,
     CopyIcon,
     CrosshairSimpleIcon,
+    DotsSixVerticalIcon,
+    DotsThreeIcon,
     DownloadSimpleIcon,
     PersonSimpleWalkIcon,
     EyeIcon,
@@ -40,6 +42,22 @@ import {
     TrashIcon,
     XIcon,
 } from "@phosphor-icons/react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import {
+    closestCenter,
+    DndContext,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    type DragEndEvent,
+    type Modifier,
+} from "@dnd-kit/core";
+import {
+    SortableContext,
+    useSortable,
+    verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Button, Input } from "@openmarch/ui";
 import clsx from "clsx";
 import {
@@ -58,7 +76,16 @@ import { SEAT_FOV_DEG, seatAim } from "../camera/rigMath";
 import { CameraSettings } from "./CameraSettings";
 import { useCameraStore } from "../camera/cameraStore";
 import { ToggleButton } from "./Panel";
+import {
+    MENU_CONTENT_CLASS,
+    MENU_ITEM_CLASS,
+    MENU_SEPARATOR_CLASS,
+} from "@/components/ui/popupClasses";
+import { MenuItemWithReason } from "@/components/timeline/TimelineRangeMenu";
 import { useCameraList, type CameraList } from "./useCameraList";
+
+/** A dragged camera moves only up and down the list. */
+const verticalOnly: Modifier = ({ transform }) => ({ ...transform, x: 0 });
 
 /** How long "Removed … Undo" stays. */
 const UNDO_MS = 8000;
@@ -92,6 +119,27 @@ export function CamerasPanel({
     // The camera whose settings are open.
     const [openId, setOpenId] = useState<string | null>(null);
     const [importError, setImportError] = useState<string | null>(null);
+    // The order just dropped, shown until the saved list comes back
+    const [dropped, setDropped] = useState<string[] | null>(null);
+    useEffect(() => setDropped(null), [list.cameras]);
+    const shown = dropped
+        ? dropped.flatMap((id) => list.cameras.filter((c) => c.id === id))
+        : list.cameras;
+    // The handle is touch-action: none, so the pointer sensor serves fingers too
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    );
+    const onDragEnd = ({ active, over }: DragEndEvent) => {
+        if (!over || active.id === over.id) return;
+        const ids = shown.map((camera) => camera.id);
+        const from = ids.indexOf(String(active.id));
+        const to = ids.indexOf(String(over.id));
+        if (from < 0 || to < 0) return;
+        const next = [...ids];
+        next.splice(to, 0, ...next.splice(from, 1));
+        setDropped(next);
+        list.edit({ kind: "moveTo", id: String(active.id), index: to });
+    };
     const fileInput = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -213,36 +261,52 @@ export function CamerasPanel({
                         {t("view3d.cameras.empty")}
                     </p>
                 ) : (
-                    <ol className="flex flex-col gap-2">
-                        {list.cameras.map((camera, index) => (
-                            <CameraRow
-                                key={camera.id}
-                                camera={camera}
-                                index={index}
-                                count={list.cameras.length}
-                                active={camera.id === activeCameraId}
-                                list={list}
-                                onRemove={() => remove(camera)}
-                                onDuplicate={() => {
-                                    const copy = list.duplicate(camera.id);
-                                    if (!copy) return;
-                                    // Ready to rename, with its settings open if the original's were.
-                                    setFocusId(copy);
-                                    setOpenId((id) =>
-                                        id === camera.id ? copy : id,
-                                    );
-                                }}
-                                focus={camera.id === focusId}
-                                onFocused={onFocused}
-                                settingsOpen={camera.id === openId}
-                                onToggleSettings={() =>
-                                    setOpenId((id) =>
-                                        id === camera.id ? null : camera.id,
-                                    )
-                                }
-                            />
-                        ))}
-                    </ol>
+                    <DndContext
+                        sensors={sensors}
+                        collisionDetection={closestCenter}
+                        modifiers={[verticalOnly]}
+                        onDragEnd={onDragEnd}
+                    >
+                        <SortableContext
+                            items={shown.map((camera) => camera.id)}
+                            strategy={verticalListSortingStrategy}
+                        >
+                            <ol className="flex flex-col gap-2">
+                                {shown.map((camera, index) => (
+                                    <CameraRow
+                                        key={camera.id}
+                                        camera={camera}
+                                        index={index}
+                                        count={list.cameras.length}
+                                        active={camera.id === activeCameraId}
+                                        list={list}
+                                        onRemove={() => remove(camera)}
+                                        onDuplicate={() => {
+                                            const copy = list.duplicate(
+                                                camera.id,
+                                            );
+                                            if (!copy) return;
+                                            // Ready to rename, with its settings open if the original's were.
+                                            setFocusId(copy);
+                                            setOpenId((id) =>
+                                                id === camera.id ? copy : id,
+                                            );
+                                        }}
+                                        focus={camera.id === focusId}
+                                        onFocused={onFocused}
+                                        settingsOpen={camera.id === openId}
+                                        onToggleSettings={() =>
+                                            setOpenId((id) =>
+                                                id === camera.id
+                                                    ? null
+                                                    : camera.id,
+                                            )
+                                        }
+                                    />
+                                ))}
+                            </ol>
+                        </SortableContext>
+                    </DndContext>
                 )}
                 <p className="text-sub text-text/60">
                     {t("view3d.cameras.hint")}
@@ -366,6 +430,7 @@ export function CamerasPanel({
     );
 }
 
+// eslint-disable-next-line max-lines-per-function
 function CameraRow({
     camera,
     index,
@@ -395,20 +460,55 @@ function CameraRow({
     const selectCamera = useCameraStore((s) => s.selectCamera);
     const name = list.label(camera);
     const defaultName = camera.labelKey ? t(camera.labelKey) : undefined;
+    const [menuOpen, setMenuOpen] = useState(false);
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        setActivatorNodeRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({ id: camera.id });
+    const more = t("view3d.cameras.more", { name });
 
     return (
         <li
+            ref={setNodeRef}
+            style={{
+                transform: CSS.Translate.toString(transform),
+                transition,
+            }}
             className={clsx(
                 "rounded-4 flex flex-col p-2",
                 active && "bg-accent/10",
                 settingsOpen && "bg-text/5",
+                isDragging && "bg-modal shadow-modal relative z-10",
             )}
             data-testid="view3d-camera-row"
             data-value={camera.id}
             data-state={active ? "on" : "off"}
             data-follow={camera.follow?.mode ?? ""}
+            // A right-click opens the row's menu, as the ⋯ button does
+            onContextMenu={(event) => {
+                if ((event.target as HTMLElement).closest("input")) return;
+                event.preventDefault();
+                setMenuOpen(true);
+            }}
         >
             <div className="flex items-center gap-4">
+                <button
+                    type="button"
+                    ref={setActivatorNodeRef}
+                    {...attributes}
+                    {...listeners}
+                    aria-label={t("view3d.cameras.dragToReorder", { name })}
+                    title={t("view3d.cameras.dragToReorder", { name })}
+                    data-testid="view3d-camera-drag"
+                    className="text-text/50 hover:text-text touch:min-h-44 touch:min-w-32 flex h-28 w-16 shrink-0 cursor-grab touch-none items-center justify-center active:cursor-grabbing"
+                >
+                    <DotsSixVerticalIcon size={16} weight="bold" />
+                </button>
                 <button
                     type="button"
                     onClick={() => selectCamera(camera.id)}
@@ -458,58 +558,121 @@ function CameraRow({
                     pressed={settingsOpen}
                     testId="view3d-camera-settings-toggle"
                 />
-                <ToggleButton
-                    onClick={() => list.setToCurrentView(camera.id)}
-                    icon={<CrosshairSimpleIcon size={16} />}
-                    label={t("view3d.cameras.setView")}
-                    tooltip={t("view3d.cameras.setViewTooltip")}
-                    iconOnly
-                    testId="view3d-camera-set-view"
-                />
-                <ToggleButton
-                    onClick={onDuplicate}
-                    icon={<CopyIcon size={16} />}
-                    label={t("view3d.cameras.duplicate")}
-                    tooltip={
-                        list.full
-                            ? t("view3d.cameras.full", { max: MAX_CAMERAS })
-                            : t("view3d.cameras.duplicateTooltip")
-                    }
-                    iconOnly
-                    disabled={!list.ready || list.full}
-                    testId="view3d-camera-duplicate"
-                />
-                <ToggleButton
-                    onClick={() =>
-                        list.edit({ kind: "move", id: camera.id, by: -1 })
-                    }
-                    icon={<ArrowUpIcon size={14} />}
-                    label={t("view3d.cameras.moveUp")}
-                    tooltip={t("view3d.cameras.moveUp")}
-                    iconOnly
-                    disabled={index === 0}
-                    testId="view3d-camera-up"
-                />
-                <ToggleButton
-                    onClick={() =>
-                        list.edit({ kind: "move", id: camera.id, by: 1 })
-                    }
-                    icon={<ArrowDownIcon size={14} />}
-                    label={t("view3d.cameras.moveDown")}
-                    tooltip={t("view3d.cameras.moveDown")}
-                    iconOnly
-                    disabled={index === count - 1}
-                    testId="view3d-camera-down"
-                />
-                <ToggleButton
-                    onClick={onRemove}
-                    icon={<TrashIcon size={16} />}
-                    label={t("view3d.cameras.remove")}
-                    tooltip={t("view3d.cameras.remove")}
-                    tooltipSide="left"
-                    iconOnly
-                    testId="view3d-camera-remove"
-                />
+                <DropdownMenu.Root
+                    open={menuOpen}
+                    onOpenChange={setMenuOpen}
+                    modal={false}
+                >
+                    <DropdownMenu.Trigger
+                        aria-label={more}
+                        title={more}
+                        data-testid="view3d-camera-more"
+                        className="rounded-4 hover:bg-text/10 data-[state=open]:bg-text/10 focus-visible:outline-accent flex size-28 shrink-0 items-center justify-center outline-hidden focus-visible:outline-2"
+                    >
+                        <DotsThreeIcon size={16} weight="bold" />
+                    </DropdownMenu.Trigger>
+                    <DropdownMenu.Portal>
+                        <DropdownMenu.Content
+                            align="end"
+                            side="bottom"
+                            sideOffset={4}
+                            collisionPadding={8}
+                            className={clsx(
+                                MENU_CONTENT_CLASS,
+                                "min-w-[13rem]",
+                            )}
+                            data-testid="view3d-camera-menu-items"
+                        >
+                            <DropdownMenu.Item
+                                className={MENU_ITEM_CLASS}
+                                onSelect={onToggleSettings}
+                                data-testid="view3d-camera-menu-settings"
+                            >
+                                <SlidersHorizontalIcon size={14} aria-hidden />
+                                {settingsOpen
+                                    ? t("view3d.cameras.hideSettings")
+                                    : t("view3d.cameras.settings")}
+                            </DropdownMenu.Item>
+                            <DropdownMenu.Item
+                                className={MENU_ITEM_CLASS}
+                                onSelect={() =>
+                                    list.setToCurrentView(camera.id)
+                                }
+                                data-testid="view3d-camera-set-view"
+                            >
+                                <CrosshairSimpleIcon size={14} aria-hidden />
+                                {t("view3d.cameras.setView")}
+                            </DropdownMenu.Item>
+                            <MenuItemWithReason
+                                testId="view3d-camera-duplicate"
+                                reason={
+                                    list.full
+                                        ? t("view3d.cameras.full", {
+                                              max: MAX_CAMERAS,
+                                          })
+                                        : null
+                                }
+                                reasonTestId="view3d-camera-duplicate-reason"
+                                onSelect={onDuplicate}
+                            >
+                                <CopyIcon size={14} aria-hidden />
+                                {t("view3d.cameras.duplicate")}
+                            </MenuItemWithReason>
+                            <DropdownMenu.Separator
+                                className={MENU_SEPARATOR_CLASS}
+                            />
+                            <MenuItemWithReason
+                                testId="view3d-camera-up"
+                                reason={
+                                    index === 0
+                                        ? t("view3d.cameras.alreadyFirst")
+                                        : null
+                                }
+                                reasonTestId="view3d-camera-up-reason"
+                                onSelect={() =>
+                                    list.edit({
+                                        kind: "move",
+                                        id: camera.id,
+                                        by: -1,
+                                    })
+                                }
+                            >
+                                <ArrowUpIcon size={14} aria-hidden />
+                                {t("view3d.cameras.moveUp")}
+                            </MenuItemWithReason>
+                            <MenuItemWithReason
+                                testId="view3d-camera-down"
+                                reason={
+                                    index === count - 1
+                                        ? t("view3d.cameras.alreadyLast")
+                                        : null
+                                }
+                                reasonTestId="view3d-camera-down-reason"
+                                onSelect={() =>
+                                    list.edit({
+                                        kind: "move",
+                                        id: camera.id,
+                                        by: 1,
+                                    })
+                                }
+                            >
+                                <ArrowDownIcon size={14} aria-hidden />
+                                {t("view3d.cameras.moveDown")}
+                            </MenuItemWithReason>
+                            <DropdownMenu.Separator
+                                className={MENU_SEPARATOR_CLASS}
+                            />
+                            <DropdownMenu.Item
+                                className={clsx(MENU_ITEM_CLASS, "text-red")}
+                                onSelect={onRemove}
+                                data-testid="view3d-camera-remove"
+                            >
+                                <TrashIcon size={14} aria-hidden />
+                                {t("view3d.cameras.remove")}
+                            </DropdownMenu.Item>
+                        </DropdownMenu.Content>
+                    </DropdownMenu.Portal>
+                </DropdownMenu.Root>
             </div>
             {settingsOpen && <CameraSettings camera={camera} list={list} />}
         </li>

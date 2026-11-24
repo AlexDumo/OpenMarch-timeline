@@ -111,6 +111,18 @@ describe("editCameraList", () => {
         ).toHaveLength(MAX_CAMERAS);
     });
 
+    it("moves a camera to a place in the list", () => {
+        const ids = list.map((c) => c.id);
+        const moved = (id: string, index: number) =>
+            editCameraList(list, { kind: "moveTo", id, index }).map(
+                (c) => c.id,
+            );
+        expect(moved(ids[0], 2)).toEqual([ids[1], ids[2], ids[0]]);
+        expect(moved(ids[2], 0)).toEqual([ids[2], ids[0], ids[1]]);
+        expect(moved(ids[1], 99)).toEqual([ids[0], ids[2], ids[1]]);
+        expect(moved("gone", 0)).toEqual(ids);
+    });
+
     it("adds a duplicate right after its original", () => {
         const next = editCameraList(list, {
             kind: "add",
