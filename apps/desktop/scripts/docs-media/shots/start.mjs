@@ -1,3 +1,4 @@
+// cspell:words filechooser
 // The Start here chapter (guides/start/*).
 import fs from "node:fs";
 import path from "node:path";
