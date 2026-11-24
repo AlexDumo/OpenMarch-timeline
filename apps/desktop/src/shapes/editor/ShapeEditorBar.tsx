@@ -1581,8 +1581,8 @@ const FillPill = memo(function FillPill({
  * The Rows menu (spec #1190): the marchers of a Line, Curve or Arc split into rows alongside it,
  * one shape with it. Its button says how many rows; it lists them in field order, each with its
  * spots (a press leaves one empty), its marchers (typed, dragged or stepped, one at a time from or
- * to another row, so nobody is ever left out) and, when it's short or moved, arrows that move it
- * half a spot. Each change is one undo step (one save for a placed shape). None for a kind without.
+ * to another row, so nobody is ever left out) and, once there's more than one row, arrows that
+ * move it half a spot along the line, a full row as well as a short one. Each change is one undo step (one save for a placed shape). None for a kind without.
  */
 function RowsMenu({ target }: { target: ShapeEditTarget }) {
     const [open, setOpen] = useEditorMenu();
@@ -1843,7 +1843,9 @@ function RowsMenu({ target }: { target: ShapeEditTarget }) {
                     {view.rows.map((row, i) => {
                         const param = rows.count(row.index);
                         const name = rowName(row, across);
-                        const moves = row.short || row.shift !== 0;
+                        // Any row moves along once there are others to move against: a full one
+                        // staggers as a short one does (owner on #1190)
+                        const moves = view.rows.length > 1;
                         return (
                             <div
                                 key={row.index}
