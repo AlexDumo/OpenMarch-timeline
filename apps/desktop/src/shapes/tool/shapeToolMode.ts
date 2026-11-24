@@ -41,6 +41,7 @@ import { ShapeGlide } from "./spotGlide";
 import { handleMenuSections, openHandleMenu } from "../field/handleMenu";
 import { groupDrawing } from "../field/groupDrawing";
 import { stepDrawing } from "../field/stepDrawing";
+import { rowsGapDrawing } from "../field/rowsGapDrawing";
 import type { GroupMenuState } from "../field/shapePointer";
 import {
     setShapePointerOver,
@@ -85,6 +86,8 @@ interface Shown {
     readonly groupMenu: GroupMenuState | null;
     /** A number setting the kind's step is engaged: the step drawn (owner on #596) */
     readonly stepShown: boolean;
+    /** A Rows apart or Slant number is engaged: the rows' gap drawn (#1190) */
+    readonly rowsGapShown: boolean;
 }
 let shown: Shown | null = null;
 const shownNow = (): Shown | null => {
@@ -93,7 +96,7 @@ const shownNow = (): Shown | null => {
     const { hover } = useSpotHover.getState();
     const calm = shapeCalm(!!tool.gesture);
     const walks = useUiSettingsStore.getState().uiSettings.shapeWalks ?? false;
-    const { pivotPreview, scrubbing, groupMenu, stepShown } =
+    const { pivotPreview, scrubbing, groupMenu, stepShown, rowsGapShown } =
         useShapePointerStore.getState();
     if (
         shown?.tool !== tool ||
@@ -103,7 +106,8 @@ const shownNow = (): Shown | null => {
         shown.pivotPreview !== pivotPreview ||
         shown.scrubbing !== scrubbing ||
         shown.groupMenu !== groupMenu ||
-        shown.stepShown !== stepShown
+        shown.stepShown !== stepShown ||
+        shown.rowsGapShown !== rowsGapShown
     )
         shown = {
             tool,
@@ -114,6 +118,7 @@ const shownNow = (): Shown | null => {
             scrubbing,
             groupMenu,
             stepShown,
+            rowsGapShown,
         };
     return shown;
 };
@@ -180,7 +185,16 @@ function hoverAt(tool: ToolState, at: XY, radius: number): void {
 }
 
 const drawingOf = memoDrawing(
-    ({ tool, hover, calm, walks, scrubbing, groupMenu, stepShown }: Shown) => {
+    ({
+        tool,
+        hover,
+        calm,
+        walks,
+        scrubbing,
+        groupMenu,
+        stepShown,
+        rowsGapShown,
+    }: Shown) => {
         const field = currentShapeField();
         if (!field) return null;
         const n = tool.spots;
@@ -250,6 +264,15 @@ const drawingOf = memoDrawing(
                       n,
                       stepShown,
                       tool.gesture,
+                      env.stepPx,
+                  )),
+            ...(drawing
+                ? {}
+                : rowsGapDrawing(
+                      tool.kind,
+                      tool.params,
+                      n,
+                      rowsGapShown,
                       env.stepPx,
                   )),
             ...(drawing

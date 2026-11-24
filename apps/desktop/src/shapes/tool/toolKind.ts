@@ -202,6 +202,11 @@ export interface ToolParam<P> {
      * {@link ToolKind.step} and lights its pivot (a Line's offset, owner on #596)
      */
     readonly showsStep?: boolean;
+    /**
+     * While the number is pointed at, focused or dragged, the field draws the gap from one of the
+     * kind's rows to the next ({@link ToolRows.gap}) with its numbers (Rows apart and Slant, #1190)
+     */
+    readonly showsRowsGap?: boolean;
     /** Hidden while this is false (a spacing with only one spot that way) */
     shown?(params: P, n: number): boolean;
     /** The number as shown: "6 × 2", "2" */
@@ -563,6 +568,16 @@ export interface ToolRows<P> {
     readonly apart: ToolParam<P>;
     /** How much further along each row starts than the one in front */
     readonly slant: ToolParam<P>;
+    /**
+     * The gap its Rows apart and Slant numbers set, as the field draws it while they're engaged:
+     * from an end spot of the drawn row straight across to the next row (`corner`), then along it
+     * by the slant (`to`, `corner` itself with none), in field units; `outward` a unit vector away
+     * from the block there. Null with only the drawn row.
+     */
+    gap(
+        params: P,
+        n: number,
+    ): { from: XY; corner: XY; to: XY; outward: XY } | null;
 }
 
 /**

@@ -35,6 +35,7 @@ import { keepInView } from "./keepInView";
 import { glideTo, isGliding } from "@/field/three/fieldNavigation";
 import { activeFieldEditor } from "@/field/editor/activeFieldEditor";
 import {
+    engageRowsGap,
     engageStep,
     setShapeScrubbing,
     useShapePointerStore,
@@ -1004,49 +1005,55 @@ const NumberChip = memo(function NumberChip({
 }) {
     const plain = useMemo(() => actions.scrub(param), [actions, param]);
     const showsStep = param.showsStep === true;
+    // A number setting the kind's step, or the gap between its rows: the field draws it while it's
+    // pointed at, focused (typing too) or dragged (owner on #596; Rows, #1190)
+    const engageMark = showsStep
+        ? engageStep
+        : param.showsRowsGap === true
+          ? engageRowsGap
+          : null;
+    const shows = engageMark !== null;
     const key = param.key;
-    // A number setting the kind's step: the field draws it while it's pointed at, focused (typing
-    // too) or dragged (owner on #596)
     const scrub = useMemo(
         () =>
-            showsStep
+            engageMark
                 ? {
                       ...plain,
                       onScrubStart: () => {
-                          engageStep(`${key}:drag`, true);
+                          engageMark(`${key}:drag`, true);
                           plain.onScrubStart();
                       },
                       onScrubEnd: (keep: boolean) => {
-                          engageStep(`${key}:drag`, false);
+                          engageMark(`${key}:drag`, false);
                           plain.onScrubEnd(keep);
                       },
                   }
                 : plain,
-        [plain, showsStep, key],
+        [plain, engageMark, key],
     );
     useEffect(
         () => () => {
             for (const how of ["hover", "focus", "typing", "drag"])
-                engageStep(`${key}:${how}`, false);
+                engageMark?.(`${key}:${how}`, false);
         },
-        [key],
+        [engageMark, key],
     );
     // Focused is the number itself (Tab reaches it) or typing into it: the button gives way to
     // the input and back without a blur, so a change of one clears the other
-    const engage = showsStep
+    const engage = engageMark
         ? {
-              onPointerEnter: () => engageStep(`${key}:hover`, true),
-              onPointerLeave: () => engageStep(`${key}:hover`, false),
-              onFocus: () => engageStep(`${key}:focus`, true),
-              onBlur: () => engageStep(`${key}:focus`, false),
+              onPointerEnter: () => engageMark(`${key}:hover`, true),
+              onPointerLeave: () => engageMark(`${key}:hover`, false),
+              onFocus: () => engageMark(`${key}:focus`, true),
+              onBlur: () => engageMark(`${key}:focus`, false),
           }
         : {};
     const onTyping = useCallback(
         (typing: boolean) => {
-            engageStep(`${key}:focus`, false);
-            engageStep(`${key}:typing`, typing);
+            engageMark?.(`${key}:focus`, false);
+            engageMark?.(`${key}:typing`, typing);
         },
-        [key],
+        [engageMark, key],
     );
     return (
         <span
@@ -1076,7 +1083,7 @@ const NumberChip = memo(function NumberChip({
                 testId={`shape-editor-${param.key}`}
                 {...scrub}
                 onType={(text) => actions.type(param, text)}
-                onTyping={showsStep ? onTyping : undefined}
+                onTyping={shows ? onTyping : undefined}
                 onSnap={
                     derived && param.snap
                         ? () => actions.snap(param)

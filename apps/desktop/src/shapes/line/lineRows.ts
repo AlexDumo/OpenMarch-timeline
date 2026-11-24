@@ -546,6 +546,7 @@ function stepsParam(field: "apart" | "slant"): ToolParam<P> {
         drag: "x",
         interval: false,
         blends: false,
+        showsRowsGap: true,
         display: (p, _n, stepPx) =>
             signed
                 ? formatSignedSteps(read(p) / stepPx)
@@ -568,6 +569,43 @@ function stepsParam(field: "apart" | "slant"): ToolParam<P> {
     };
 }
 
+/**
+ * The gap the Rows apart and Slant numbers set, for the field to draw while they're engaged, at
+ * an end of the block so it's clear of the spots: from the drawn row's end spot straight across
+ * to the next row behind it (or to its left; in front or to the right when there's none), then
+ * along by the slant, into the block. The end is the one the slant leans away from, or with none
+ * the right-hand one on screen (the top one up and down the field). `outward` points away from
+ * the block there, along the line. Null with only the drawn row.
+ */
+export function rowsGap(
+    p: P,
+    n: number,
+): { from: XY; corner: XY; to: XY; outward: XY } | null {
+    const rows = rowsOf(p);
+    if (!rows || rows.list.length < 2) return null;
+    const drawn = layRows(p, n)[rows.drawn]!;
+    if (drawn.spots.length === 0) return null;
+    const { along, left, sign } = rowFrame(p);
+    // Row +1 is on the line's left-hand side: behind (or to the left) when `sign` is +1
+    const offset =
+        rows.drawn + sign < rows.list.length && rows.drawn + sign >= 0
+            ? sign
+            : -sign;
+    // How far the next row starts further along the line's own way
+    const lean = offset * (rows.slant ?? 0);
+    const last =
+        Math.abs(lean) > 1e-9
+            ? lean < 0
+            : Math.abs(along.x) > 1e-9
+              ? along.x > 0
+              : along.y < 0;
+    const spot = last ? drawn.spots[drawn.spots.length - 1]! : drawn.spots[0]!;
+    const from = { x: spot.x, y: spot.y };
+    const corner = add(from, scale(left, offset * rows.apart));
+    const to = add(corner, scale(along, lean));
+    return { from, corner, to, outward: last ? along : scale(along, -1) };
+}
+
 /** The Rows menu (spec #1190) */
 export const LINE_ROWS: ToolRows<P> = {
     view: rowsView,
@@ -580,6 +618,7 @@ export const LINE_ROWS: ToolRows<P> = {
     clear: (p) => withRowsSet(p, undefined),
     apart: stepsParam("apart"),
     slant: stepsParam("slant"),
+    gap: rowsGap,
 };
 
 // ── The kind with rows ──────────────────────────────────────────────────────────────────

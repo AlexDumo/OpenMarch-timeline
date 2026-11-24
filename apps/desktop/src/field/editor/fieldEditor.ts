@@ -578,6 +578,20 @@ export type FieldModeDrawing = {
         across: string;
         deep: string;
     };
+    /**
+     * While a Line's Rows apart or Slant number is pointed at, focused or dragged (#1190): the gap
+     * at an end of the block, from the drawn row's end spot straight across to the next row
+     * (`corner`), then along it by the slant (`to`), dashed, labeled ("4 steps apart · Slant 1";
+     * no slant leg when `slant` is null) on the `outward` side, a unit vector away from the block
+     */
+    rowsGap?: {
+        from: FieldPoint;
+        corner: FieldPoint;
+        to: FieldPoint;
+        outward: FieldPoint;
+        apart: string;
+        slant: string | null;
+    };
 };
 
 /** What the editor knows of a press it asks a {@link FieldMode} to claim. */

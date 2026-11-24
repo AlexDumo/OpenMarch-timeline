@@ -173,6 +173,30 @@ describe("rows of a line", () => {
         expect(rows.slant.display(t.params, 16, STEP)).toBe("1");
     });
 
+    it("measure the gap at an end of the block, across then along by the slant", () => {
+        let t = added(across(16), "far");
+        const front = rowAt(t, 200);
+        // No slant: at the right-hand end, pointing out of the block
+        expect(rows.gap(t.params, 16)).toEqual({
+            from: { x: expect.closeTo(180, 6), y: 200 },
+            corner: { x: expect.closeTo(180, 6), y: 180 },
+            to: { x: expect.closeTo(180, 6), y: 180 },
+            outward: { x: 1, y: 0 },
+        });
+        // Leaning right: at the left-hand end, the slant running into the block to a spot
+        t = edit(t, rows.slant.type(t.params, 16, "1", env), ctx);
+        const gap = rows.gap(t.params, 16)!;
+        expect(gap.from.x).toBeCloseTo(front[0]!);
+        expect(gap.to.x).toBeCloseTo(front[0]! + STEP);
+        expect(gap.to.y).toBeCloseTo(180);
+        expect(gap.outward.x).toBeCloseTo(-1);
+        expect(rowAt(t, 180)[0]).toBeCloseTo(gap.to.x);
+        // With only a row in front, it goes forward
+        const ahead = added(across(16), "near");
+        expect(rows.gap(ahead.params, 16)!.corner.y).toBeCloseTo(220);
+        expect(rows.gap(across(16).params, 16)).toBeNull();
+    });
+
     it("change how far apart they are in steps", () => {
         let t = added(across(16), "far");
         t = edit(t, rows.apart.type(t.params, 16, "3", env), ctx);
