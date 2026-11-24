@@ -6,13 +6,14 @@
  * - Double-tap zoom is off in CSS (`touch-action: manipulation` on html and
  *   body, src/styles/index.css), and so is the rubber band and
  *   pull-to-refresh (`overscroll-behavior: none`).
- * - iOS Safari ignores `user-scalable=no` and `maximum-scale` for pinches,
- *   so its own `gesture*` events are cancelled, and so is any two-finger
- *   move outside an element that handles its gestures itself.
- * - On a computer, a trackpad pinch (and Ctrl + scroll wheel) arrives as a
- *   wheel event with `ctrlKey` set. The field and the timeline zoom
- *   themselves on it; anywhere else it is cancelled, so a pinch over a panel
- *   or a toolbar can't zoom the page. Keyboard zoom (Cmd/Ctrl with + and −)
+ * - Safari ignores `user-scalable=no` and `maximum-scale` for pinches, so
+ *   its own `gesture*` events are cancelled (this also covers a trackpad
+ *   pinch in Safari on a Mac), and so is any two-finger move outside an
+ *   element that handles its gestures itself.
+ * - In Chrome, Edge and Firefox on a computer, a trackpad pinch (and Ctrl +
+ *   scroll wheel) arrives as a wheel event with `ctrlKey` set. The field and
+ *   the timeline zoom themselves on it; anywhere else it is cancelled, so a pinch over a panel or a toolbar can't zoom the
+ *   page. Keyboard zoom (Cmd/Ctrl with + and −)
  *   and the browser's zoom menu still work, as WCAG 1.4.4 (Resize Text)
  *   needs.
  *
@@ -55,7 +56,11 @@ export function shouldBlockTouchMove(
     return cancelable && touchCount > 1 && !startedOnOwner;
 }
 
-/** Whether a wheel event is a pinch or Ctrl + wheel that would zoom the page. */
+/**
+ * Whether a wheel event is a pinch or a Ctrl + wheel that would zoom the
+ * page. Cmd + wheel scrolls in browsers, so a panel still scrolls while Cmd
+ * is held (say, during Cmd-click selection).
+ */
 export function shouldBlockWheel(event: {
     ctrlKey: boolean;
     cancelable: boolean;
