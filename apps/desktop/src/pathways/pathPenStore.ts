@@ -1443,6 +1443,10 @@ async function saveFollow(
 ): Promise<void> {
     // A leader pulled out of a closed outline needn't be an end of the line: the ring as shown
     const line = follow.peel ? trailLine(follow) : null;
+    // ... round the outline the tool went round, when it is a placed shape's own (fork #1213):
+    // the write reads the ring round that one, as going round is written (`saveAround`)
+    const shown = follow.peel?.around.outline;
+    const outline = shown?.kind === "loop" ? shown.geometry : null;
     if (ripplesIn(follow))
         await rippleTrail({
             db,
@@ -1454,6 +1458,7 @@ async function saveFollow(
             enter,
             snake: snakeByOf(follow),
             line,
+            outline,
             step: follow.step,
         });
     else
@@ -1463,6 +1468,7 @@ async function saveFollow(
             marcherIds: follow.ids,
             leaderId,
             line,
+            outline,
             points,
             spacing: followSpacingOf(session),
             step: follow.step,
@@ -1730,6 +1736,9 @@ async function saveAround(follow: FollowDrag): Promise<boolean> {
             amount: around.amount,
             unit: around.unit,
             step: follow.step,
+            // any other closed outline (fork #1213) is written as the tool shows it
+            outline:
+                around.outline.kind === "loop" ? around.outline.geometry : null,
         });
         invalidatePlacedBoxes();
         return true;

@@ -155,6 +155,7 @@ import {
 import { outlineGapOf } from "../distribute/outlineGap";
 import type { XY } from "../types";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { useFollowing } from "@/pathways/FollowStatus";
 import tolgee from "@/global/singletons/Tolgee";
 import { getActionShortcutKeys } from "@/shortcuts/labels";
 import {
@@ -221,6 +222,10 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
     );
     const tucked = useShapeTuckedUnderTrail(boxIds);
     const touch = useIsTouchMode();
+    // While Following (pathways step 10), a selected placed shape's editor steps aside: the
+    // Follow tool has the field and its own bar, and this one comes back when Follow is left
+    // (the shape stays selected)
+    const following = useFollowing();
     const hintLayerRef = useFieldLayerRef<HTMLDivElement>();
     if (hidden) return <ShapeAwayChip />;
     if (armed || clicking)
@@ -261,7 +266,7 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
                 {touch && <DrawButtons clicking={clicking} />}
             </div>
         );
-    const target = toolOpen ? tool : tucked ? null : placed;
+    const target = toolOpen ? tool : tucked || following ? null : placed;
     if (!target) return null;
     return (
         <RichTips>

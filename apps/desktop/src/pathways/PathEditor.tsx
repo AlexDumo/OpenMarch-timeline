@@ -417,10 +417,16 @@ function PathPenBanner({ session }: { session: PathSession }) {
                         shape:
                             session.follow!.around!.outline.kind === "circle"
                                 ? tolgee.t("pathways.banner.circle", "circle")
-                                : tolgee.t(
-                                      "pathways.banner.boxOutline",
-                                      "box outline",
-                                  ),
+                                : session.follow!.around!.outline.kind ===
+                                    "loop"
+                                  ? tolgee.t(
+                                        "pathways.banner.closedShape",
+                                        "shape",
+                                    )
+                                  : tolgee.t(
+                                        "pathways.banner.boxOutline",
+                                        "box outline",
+                                    ),
                         enter: () => <Shortcut action="applyShape" />,
                         esc,
                     }}

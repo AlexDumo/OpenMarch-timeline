@@ -11,7 +11,7 @@
  *   then the move's shape recipes re-dealt so they agree.
  */
 import { and, eq, inArray } from "drizzle-orm";
-import { createResolver, type XY } from "@openmarch/core";
+import { createResolver, type RouteGeometry, type XY } from "@openmarch/core";
 import { schema } from "@/global/database/db";
 import { readTimelineTables } from "@/timeline/timelineRows";
 import type { DbConnection, DbTransaction } from "./types";
@@ -104,6 +104,8 @@ export interface RippleInput {
      */
     line?: readonly number[] | null;
     step?: number;
+    /** With `line`: the placed shape's outline the tool went round (`TrailDragInput.outline`) */
+    outline?: RouteGeometry | null;
 }
 
 export interface RippleResult extends FollowTrailResult {
@@ -196,6 +198,7 @@ export async function rippleTrailInTransaction(
         starts,
         leaderId,
         line: input.line,
+        outline: input.outline,
         step: input.step ?? 1,
         snake: input.snake,
     });

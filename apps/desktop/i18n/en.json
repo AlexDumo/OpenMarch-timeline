@@ -4954,6 +4954,7 @@
             "followOutline": "Follow: click or drag any marcher around the {shape}, or out of it to lead a trail, and the rest follow · or type how far · <enter></enter> to finish · <esc></esc> to leave",
             "circle": "circle",
             "boxOutline": "box outline",
+            "closedShape": "shape",
             "rippleDrawing": "Ripple in, {marcher} leading: click an end of the form to go straight in, or click for corners first · Double-click to finish · <esc></esc> to cancel",
             "followGrabBox": "Follow: drag a trail out of a corner of the box, and the box snakes out after it · <esc></esc> to leave",
             "headDrawing": "Drawing on the trail, {marcher} leading: <how></how> · Back along it to shorten · <enter></enter> or double-click to finish · <esc></esc> to cancel",
