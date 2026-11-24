@@ -21,6 +21,7 @@ import type { FieldMarchers } from "../fieldMarchers";
 import { useInputModeStore } from "@/stores/InputModeStore";
 import { PATH_FIELD_MENU } from "@/pathways/pathPenMode";
 import { resetKeyboardSeen } from "@/stores/KeyboardSeenStore";
+import { useJoinOfferStore } from "@/shapes/placed/useJoinShapes";
 import {
     MENU_CONTENT_CLASS,
     POINT_MENU_PLACEMENT,
@@ -310,6 +311,27 @@ describe("FieldContextMenu", () => {
         expect(item("alignVertically")).toBeNull();
     });
 
+    it("offers Join into one line on placed shapes, greyed with its reason when it can't run (#1220)", () => {
+        // Not a selection of shapes: left out, though it has a reason (the palette shows it)
+        handle("shapeJoin", { enabled: false, reason: "Select two shapes" });
+        open({ selectedCount: 3 });
+        expect(item("shapeJoin")).toBeNull();
+        cleanup();
+        // Placed shapes selected: shown, greyed, with the reason behind its ?
+        useJoinOfferStore.setState({ offered: true });
+        open({ selectedCount: 6 });
+        expect(item("shapeJoin")).toHaveAttribute("aria-disabled", "true");
+        expect(item("shapeJoin-reason-icon")).toBeTruthy();
+        cleanup();
+        handlers.splice(0).forEach((off) => off());
+        // Two lines: it runs
+        const run = handle("shapeJoin");
+        open({ selectedCount: 6 });
+        fireEvent.click(item("shapeJoin")!);
+        expect(run).toHaveBeenCalled();
+        useJoinOfferStore.setState({ offered: false });
+    });
+
     it("offers editing the item right-clicked, first, only while one is selected", () => {
         for (const id of FIELD_MENU_ACTIONS) handle(id);
         handle("editSelectedItem", { enabled: false });
@@ -321,6 +343,7 @@ describe("FieldContextMenu", () => {
         for (const id of FIELD_MENU_ACTIONS) handle(id);
         handle("shapeGroup", { enabled: false, reason: null });
         handle("shapeUngroup", { enabled: false, reason: null });
+        handle("shapeJoin", { enabled: false, reason: "Select two shapes" });
         // The Path group shows only what applies: here Edit path, Edit <name>'s line, then after a
         // line Detach, Detach all and Remove path
         for (const id of [
