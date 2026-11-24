@@ -157,6 +157,23 @@ describe("FieldDisplayBar", () => {
         venue.kit = "hs";
     });
 
+    it("checks None, not the greyed-out Turf edge, where there's no turf", () => {
+        venue.kit = "gym";
+        useUiSettingsStore.getState().setUiSettings({
+            ...settings(),
+            fieldVenueAround: undefined,
+        });
+        open();
+        fireEvent.click(screen.getByTestId("field-display-venue"));
+        const checked = (id: string) =>
+            screen
+                .getByTestId(`field-display-venue-around-${id}`)
+                .getAttribute("aria-checked");
+        expect(checked("field")).toBe("true");
+        expect(checked("edge")).toBe("false");
+        venue.kit = "hs";
+    });
+
     it("toggles next paths from the paths popover", () => {
         open();
         fireEvent.click(screen.getByTestId("start-flag-positions"));

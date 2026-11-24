@@ -4,7 +4,6 @@ import { useShortcutsDialogStore } from "@/stores/ShortcutsDialogStore";
 import { isBasicMode, useEditorModeStore } from "@/stores/EditorModeStore";
 import tolgee from "@/global/singletons/Tolgee";
 import { useActionHandler } from "../useActionHandler";
-import { setFieldVenue } from "@/field/three/venueUnderlay/fieldVenue";
 import { useTempoModeStore } from "@/tempo/tempoModeStore";
 import {
     openFrontEnsemble,
@@ -20,24 +19,7 @@ export function useUiActionHandlers() {
     useActionHandler("toggleNextPagePaths", () =>
         setUiSettings({ ...settings(), nextPaths: !settings().nextPaths }),
     );
-    // The venue on the field (#1207): off, or back to the look last picked. The palette names
-    // what it will do
-    const venueOn = () => (settings().fieldVenue ?? "off") !== "off";
-    useActionHandler(
-        "toggleFieldVenue",
-        () =>
-            setFieldVenue(
-                venueOn() ? "off" : (settings().fieldVenueLast ?? "faint"),
-            ),
-        {
-            label: () =>
-                tolgee.t(
-                    venueOn()
-                        ? "actions.ui.hideFieldVenue"
-                        : "actions.ui.showFieldVenue",
-                ),
-        },
-    );
+    // Show or hide venue on field is the field's (useFieldVenueAction), which knows the venue
     const cameraOn = () => settings().view3dCameraOnField === true;
     useActionHandler(
         "toggleView3dCameraOnField",

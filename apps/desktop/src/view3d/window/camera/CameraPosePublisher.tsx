@@ -16,9 +16,13 @@ const STILL_MS = 1000;
 export default function CameraPosePublisher() {
     const camera = useThree((s) => s.camera);
     const direction = useMemo(() => new Vector3(), []);
+    /** The pose last sent, and when */
     const last = useRef<{ key: string; at: number; pose: View3dCameraPose }>(
         null,
     );
+    /** A newer pose held back by the throttle, sent when it ends */
+    const pending = useRef<{ key: string; pose: View3dCameraPose }>(null);
+    const trailing = useRef(0);
     const send = window.view3d?.sendCamera;
 
     useEffect(() => {
@@ -26,13 +30,14 @@ export default function CameraPosePublisher() {
         const timer = window.setInterval(() => {
             if (last.current) send(last.current.pose);
         }, STILL_MS);
-        return () => window.clearInterval(timer);
+        return () => {
+            window.clearInterval(timer);
+            window.clearTimeout(trailing.current);
+        };
     }, [send]);
 
     useFrame(() => {
         if (!send) return;
-        const now = performance.now();
-        if (last.current && now - last.current.at < MOVING_MS) return;
         camera.getWorldDirection(direction);
         const perspective = camera as PerspectiveCamera;
         const pose: View3dCameraPose = {
@@ -41,12 +46,27 @@ export default function CameraPosePublisher() {
             fov: perspective.fov ?? 50,
             aspect: perspective.aspect ?? 1.6,
         };
-        const key = [...pose.position, ...pose.direction, pose.fov]
+        const key = [...pose.position, ...pose.direction, pose.fov, pose.aspect]
             .map((n) => n.toFixed(2))
             .join(",");
-        if (key === last.current?.key) return;
-        last.current = { key, at: now, pose };
-        send(pose);
+        if (key === (pending.current ?? last.current)?.key) return;
+        const publish = (next: { key: string; pose: View3dCameraPose }) => {
+            pending.current = null;
+            last.current = { ...next, at: performance.now() };
+            send(next.pose);
+        };
+        const wait = last.current
+            ? MOVING_MS - (performance.now() - last.current.at)
+            : 0;
+        if (wait <= 0) return publish({ key, pose });
+        // The window draws only when something changes, so the frame where the camera
+        // settles may be the last: send it when the throttle ends
+        const first = !pending.current;
+        pending.current = { key, pose };
+        if (first)
+            trailing.current = window.setTimeout(() => {
+                if (pending.current) publish(pending.current);
+            }, wait);
     });
     return null;
 }

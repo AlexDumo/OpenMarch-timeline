@@ -5,7 +5,12 @@ import { useId, useState } from "react";
 import clsx from "clsx";
 import { useShallow } from "zustand/react/shallow";
 import { ShortcutTooltip } from "@/components/timeline/ShortcutTooltip";
-import { MENU_BUTTON_CLASS } from "@/components/ui/popupClasses";
+import {
+    MENU_BUTTON_CLASS,
+    MENU_LABEL_CLASS,
+    MENU_SEPARATOR_CLASS,
+    POPOVER_CLASS,
+} from "@/components/ui/popupClasses";
 import {
     useUiSettingsStore,
     type FieldVenueAround,
@@ -14,7 +19,11 @@ import {
 } from "@/stores/UiSettingsStore";
 import { useVenueSettings } from "@/hooks/queries/useVenueSettings";
 import { KIT_FIELD_STYLE } from "@/view3d/core/kits/fieldStyle";
-import { setFieldVenue } from "@/field/three/venueUnderlay/fieldVenue";
+import {
+    setFieldVenue,
+    venueAround,
+    venueShows,
+} from "@/field/three/venueUnderlay/fieldVenue";
 import { DISPLAY_BUTTON_CLASS, DisplayCaption } from "./displayButton";
 
 const LOOKS: readonly { value: FieldVenueLook; key: string }[] = [
@@ -30,9 +39,6 @@ const AROUND: readonly { value: FieldVenueAround; key: string }[] = [
     { value: "stands", key: "toolbar.view.venueAroundStands" },
 ];
 
-const POPOVER_CLASS =
-    "border-stroke bg-modal text-text shadow-modal rounded-6 z-50 flex w-[240px] flex-col gap-4 border p-8 backdrop-blur-32";
-const HEADING_CLASS = "text-sub text-text-subtitle px-8 pt-4 pb-2";
 const REASON_CLASS = "text-sub text-text-subtitle px-8 pb-4 leading-snug";
 
 const change = (patch: Partial<UiSettings>) => {
@@ -54,13 +60,15 @@ export default function VenueButton() {
     const { look, around, camera } = useUiSettingsStore(
         useShallow((s) => ({
             look: s.uiSettings.fieldVenue ?? "off",
-            around: s.uiSettings.fieldVenueAround ?? "edge",
+            around: s.uiSettings.fieldVenueAround,
             camera: s.uiSettings.view3dCameraOnField === true,
         })),
     );
     const { data: venue } = useVenueSettings();
     const style = KIT_FIELD_STYLE[venue?.kit ?? "hs"];
-    const blank = style === "theme";
+    const blank = !venueShows(style);
+    // What's drawn: Turf edge reads as None where there's no turf
+    const drawnAround = venueAround(around, style);
     const label = t("toolbar.view.venue");
     const current = t(LOOKS.find((l) => l.value === look)?.key ?? "");
     return (
@@ -95,9 +103,12 @@ export default function VenueButton() {
                     align="start"
                     sideOffset={6}
                     aria-label={label}
-                    className={POPOVER_CLASS}
+                    className={clsx(
+                        POPOVER_CLASS,
+                        "z-50 flex w-[240px] flex-col gap-4",
+                    )}
                 >
-                    <h3 id={looksId} className={HEADING_CLASS}>
+                    <h3 id={looksId} className={MENU_LABEL_CLASS}>
                         {label}
                     </h3>
                     {blank && (
@@ -128,7 +139,7 @@ export default function VenueButton() {
                             </button>
                         ))}
                     </div>
-                    <h3 id={aroundId} className={HEADING_CLASS}>
+                    <h3 id={aroundId} className={MENU_LABEL_CLASS}>
                         {t("toolbar.view.venueAround")}
                     </h3>
                     <div
@@ -141,7 +152,7 @@ export default function VenueButton() {
                                 key={choice.value}
                                 type="button"
                                 role="radio"
-                                aria-checked={around === choice.value}
+                                aria-checked={drawnAround === choice.value}
                                 disabled={
                                     blank ||
                                     (choice.value === "edge" &&
@@ -153,7 +164,8 @@ export default function VenueButton() {
                                 }
                                 className={clsx(
                                     MENU_BUTTON_CLASS,
-                                    around === choice.value && "text-accent",
+                                    drawnAround === choice.value &&
+                                        "text-accent",
                                 )}
                             >
                                 {t(choice.key)}
@@ -165,10 +177,10 @@ export default function VenueButton() {
                             {t("toolbar.view.venueEdgeStadiumOnly")}
                         </p>
                     )}
-                    <div className="border-stroke my-2 border-t" />
+                    <div role="separator" className={MENU_SEPARATOR_CLASS} />
                     <button
                         type="button"
-                        role="menuitemcheckbox"
+                        role="switch"
                         aria-checked={camera}
                         data-testid="field-display-venue-camera"
                         onClick={() => change({ view3dCameraOnField: !camera })}

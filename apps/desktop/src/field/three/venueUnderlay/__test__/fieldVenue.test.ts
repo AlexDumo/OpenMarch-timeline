@@ -7,6 +7,7 @@ import {
     VENUE_LOOKS,
     planBaseColor,
     styleBaseColor,
+    venueAround,
     venueLook,
     venuePasses,
     washedColor,
@@ -25,9 +26,22 @@ const GRID_DRAWS: FieldRole[] = ["yardLine", "hash", "yardNumber", "border"];
 
 describe("venueLook", () => {
     it("is null when the venue is off or unset", () => {
-        expect(venueLook("off")).toBeNull();
-        expect(venueLook(undefined)).toBeNull();
-        expect(venueLook("faint")).toBe(VENUE_LOOKS.faint);
+        expect(venueLook("off", "turf")).toBeNull();
+        expect(venueLook(undefined, "turf")).toBeNull();
+        expect(venueLook("faint", "turf")).toBe(VENUE_LOOKS.faint);
+    });
+
+    it("is null on a Field only venue, whatever look is kept for other shows", () => {
+        expect(venueLook("full", "theme")).toBeNull();
+        expect(venueLook("full", "tarp")).toBe(VENUE_LOOKS.full);
+    });
+});
+
+describe("venueAround", () => {
+    it("draws Turf edge only on stadium turf, and None elsewhere", () => {
+        expect(venueAround(undefined, "turf")).toBe("edge");
+        expect(venueAround("edge", "tarp")).toBe("field");
+        expect(venueAround("stands", "tarp")).toBe("stands");
     });
 
     it("washes Faint lighter than Soft, and Soft lighter than Full color", () => {

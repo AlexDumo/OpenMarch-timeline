@@ -475,27 +475,29 @@ export default function VenueUnderlayLayer({
             return;
         }
         let live = true;
-        let surface: Surface | null = null;
         void loadKits()
             .then((modules) => {
                 if (!live) return;
-                surface = renderAround(
-                    modules,
-                    gl,
-                    kitId,
-                    fieldProperties,
-                    JSON.parse(paramsKey) as VenueParams,
+                setStands(
+                    renderAround(
+                        modules,
+                        gl,
+                        kitId,
+                        fieldProperties,
+                        JSON.parse(paramsKey) as VenueParams,
+                    ),
                 );
-                setStands(surface);
             })
             .catch((error: unknown) =>
                 console.warn("The venue's stands couldn't be drawn", error),
             );
         return () => {
             live = false;
-            surface?.dispose();
         };
     }, [gl, wantStands, kitId, fieldProperties, paramsKey]);
+    // A stands render is freed once the next one (or none) has replaced it on screen: the mesh
+    // keeps drawing the old render target while the new one renders
+    useEffect(() => () => stands?.dispose(), [stands]);
 
     const fieldBackground = fieldProperties.theme.background;
     const fieldMesh = useSurfaceMesh(

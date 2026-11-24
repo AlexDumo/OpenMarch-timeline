@@ -138,10 +138,12 @@ import VenueUnderlayLayer from "./venueUnderlay/VenueUnderlayLayer";
 import CameraMarkerLayer from "./venueUnderlay/CameraMarkerLayer";
 import {
     styleBaseColor,
+    venueAround,
     venueLook,
     washedColor,
     withLightLines,
 } from "./venueUnderlay/fieldVenue";
+import { useFieldVenueAction } from "./venueUnderlay/useFieldVenueAction";
 import { useVenueSettings } from "@/hooks/queries/useVenueSettings";
 import { KIT_FIELD_STYLE } from "@/view3d/core/kits/fieldStyle";
 import MarchersLayer from "./layers/MarchersLayer";
@@ -265,12 +267,13 @@ function ThreeFieldView() {
     const { fieldVenue, fieldVenueAround } = useUiSettingsStore(
         useShallow((s) => ({
             fieldVenue: s.uiSettings.fieldVenue,
-            fieldVenueAround: s.uiSettings.fieldVenueAround ?? "edge",
+            fieldVenueAround: s.uiSettings.fieldVenueAround,
         })),
     );
-    const venue3d = venueLook(fieldVenue);
     const { data: venue } = useVenueSettings();
     const venueStyle = KIT_FIELD_STYLE[venue?.kit ?? "hs"];
+    const venue3d = venueLook(fieldVenue, venueStyle);
+    useFieldVenueAction(venueStyle);
     // Full color draws the grid in light ink over the dark turf
     const lineFieldProperties = useMemo(
         () =>
@@ -814,10 +817,11 @@ function ThreeFieldView() {
                         <VenueUnderlayLayer
                             fieldProperties={fieldProperties}
                             look={venue3d}
-                            around={fieldVenueAround}
+                            around={venueAround(fieldVenueAround, venueStyle)}
                         />
                         <CameraMarkerLayer fieldProperties={fieldProperties} />
                         <FieldLayer
+                            // `??` narrows: fieldProperties is set here
                             fieldProperties={
                                 lineFieldProperties ?? fieldProperties
                             }

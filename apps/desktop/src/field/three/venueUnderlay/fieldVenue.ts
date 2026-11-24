@@ -8,6 +8,7 @@ import type {
 import { TURF } from "@/view3d/core/field/turfPlan";
 import {
     useUiSettingsStore,
+    type FieldVenueAround,
     type FieldVenueLook,
 } from "@/stores/UiSettingsStore";
 
@@ -70,9 +71,32 @@ export const VENUE_LOOKS: Readonly<
     },
 };
 
-/** The look's numbers, or null when the venue is off. */
-export function venueLook(look: FieldVenueLook | undefined): VenueLook | null {
-    return !look || look === "off" ? null : VENUE_LOOKS[look];
+/**
+ * The look's numbers, or null when the venue is off. A Field only venue (the
+ * theme's surface) has nothing to show, so the look, kept for every show, is
+ * off there.
+ */
+export function venueLook(
+    look: FieldVenueLook | undefined,
+    style: FieldSurfaceStyle,
+): VenueLook | null {
+    return !look || look === "off" || !venueShows(style)
+        ? null
+        : VENUE_LOOKS[look];
+}
+
+/** False for a Field only venue, which has no surface of its own to show. */
+export function venueShows(style: FieldSurfaceStyle): boolean {
+    return style !== "theme";
+}
+
+/** What's drawn around the field: only stadium turf has an edge; elsewhere it's none. */
+export function venueAround(
+    around: FieldVenueAround | undefined,
+    style: FieldSurfaceStyle,
+): FieldVenueAround {
+    const value = around ?? "edge";
+    return value === "edge" && style !== "turf" ? "field" : value;
 }
 
 /** Roles the 2D grid draws itself; doubled lines a pixel apart look broken. */
