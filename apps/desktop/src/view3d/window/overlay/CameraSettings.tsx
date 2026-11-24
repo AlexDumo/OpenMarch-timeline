@@ -157,7 +157,7 @@ export function CameraSettings({
         );
     };
 
-    const where = describePosition(field, saved.position);
+    const where = describePosition(t, field, saved.position);
 
     return (
         <div
@@ -362,6 +362,7 @@ export function CameraSettings({
 
 /** Where a point is over the field, in drill terms; empty when it can't be said. */
 function describePosition(
+    t: (key: string, params: Record<string, string>) => string,
     field: Parameters<typeof worldToPixels>[0] | undefined,
     position: Vector3Tuple,
 ): string {
@@ -372,7 +373,11 @@ function describePosition(
             x: position[0],
             z: position[2],
         });
-        return new ReadableCoords({ x, y, roundingDenominator: 4 }).toString();
+        const coords = new ReadableCoords({ x, y, roundingDenominator: 4 });
+        return t("coordinates.full", {
+            x: coords.toVerboseStringX({ includeStepsString: true }),
+            y: coords.toVerboseStringY({ includeStepsString: true }),
+        });
     } catch {
         return "";
     }
@@ -480,7 +485,7 @@ function NumberField({
             data-testid={testId}
             className={clsx(
                 "rounded-6 border-stroke bg-fg-2 text-body text-text focus:border-accent h-26 w-full min-w-0 border pl-6 text-right tabular-nums outline-hidden",
-                unit ? "pr-24" : "pr-6",
+                !unit ? "pr-6" : unit.length > 1 ? "pr-32" : "pr-20",
             )}
             onChange={(event) => setDraft(event.target.value)}
             onBlur={() => {

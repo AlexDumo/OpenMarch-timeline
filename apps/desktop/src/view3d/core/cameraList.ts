@@ -155,7 +155,9 @@ function roundPoint(point: Vector3Tuple): Vector3Tuple {
 }
 
 function clampFov(fovDeg: number): number {
-    return Math.min(MAX_FOV_DEG, Math.max(MIN_FOV_DEG, fovDeg));
+    // Hundredths of a degree are plenty and keep the stored JSON short.
+    const fov = Math.round(fovDeg * 100) / 100;
+    return Math.min(MAX_FOV_DEG, Math.max(MIN_FOV_DEG, fov));
 }
 
 /** Wraps a roll into -180..180 degrees, to a hundredth of a degree. */
