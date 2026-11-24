@@ -32,6 +32,12 @@ const rgb = (n: number): [number, number, number] => [
     n & 0xff,
 ];
 const front = regions.panels.front;
+const back = regions.panels.back;
+const inBackPanel = (x: number, y: number) =>
+    x / DPI >= back.x &&
+    x / DPI < back.x + back.w &&
+    y / DPI >= back.y &&
+    y / DPI < back.y + back.h;
 const inFrontPanel = (x: number, y: number) =>
     x / DPI >= front.x &&
     x / DPI < front.x + front.w &&
@@ -103,6 +109,7 @@ describe("imported page notes", () => {
         const chest = { x: front.x + 17, y: front.y + 25.32 };
         const navy: [number, number, number, number] = [20, 20, 70, 255];
         const gold: [number, number, number, number] = [220, 180, 60, 255];
+        // the front is painted with the shape; the back is plain navy
         const jacket = (paint: (xIn: number, yIn: number) => boolean) =>
             pageNotes(
                 page((x, y) =>
@@ -110,7 +117,9 @@ describe("imported page notes", () => {
                         ? paint(x / DPI, y / DPI)
                             ? gold
                             : navy
-                        : [0, 0, 0, 0],
+                        : inBackPanel(x, y)
+                          ? navy
+                          : [0, 0, 0, 0],
                 ),
                 W,
                 H,
@@ -131,5 +140,20 @@ describe("imported page notes", () => {
         ).toEqual([]);
         // nothing at all
         expect(jacket(() => false)).toEqual([]);
+        // an overlay layer, mostly clear (a crest over clear "fabric"): no note
+        expect(
+            pageNotes(
+                page((x, y) =>
+                    inFrontPanel(x, y) &&
+                    Math.hypot(x / DPI - chest.x, y / DPI - chest.y) < 3
+                        ? gold
+                        : [0, 0, 0, 0],
+                ),
+                W,
+                H,
+                DPI,
+                regions,
+            ),
+        ).toEqual([]);
     });
 });

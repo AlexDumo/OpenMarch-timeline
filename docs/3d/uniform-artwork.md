@@ -207,12 +207,17 @@ How the atlas draws each grade (step 4, fork #1258):
   all 7 bodies.
 - **Stretch** items are drawn as they are.
 - **Tile** items repeat in each listed region, each tile `1/k` as wide with k at the region's
-  middle (as the study's prototype did). The columns are centred on the region's centre line, and
-  the rows line up with one centred on the item's `at` height, so a print continues from one region
-  to the next.
+  middle (as the study's prototype did). So a tile is its real size at the region's middle row
+  only: elsewhere in the region its row's k differs, and the tiles drift up to about 25% from their
+  real width (measured over the back torso, a sleeve and a leg on all 7 bodies). The columns are
+  centred on the region's centre line, and the rows line up with one centred on the item's `at`
+  height, so a print continues from one region to the next.
 - **Line** items (piping, braid) are drawn with their own height scaled by
   `√(k² cos² θ + sin² θ) / k`, so the line keeps its width at any angle θ while its length
   follows the fabric. The image's width is the line's length; a vertical line is rotated 90°.
+
+An item whose image's shape makes a side over 120 in (or a tile with a side under 1 in) isn't
+drawn, and the item list says so; a tile region that would need over 4000 copies is left plain.
 
 Items are composed into the same atlas as the layers, so the atlas memory doesn't change. While
 composing, the window also holds each item image decoded (at most 1024 px on its long side, so
@@ -303,16 +308,20 @@ numbers** section shows while the band wears a uniform imported into the show.
   - **Side:** Front or Back. No look draws a cape yet, so Cape shows only for an item a file
     already put there.
   - **Across** and **Down:** the centre in panel inches.
-  - **Size by** width or height, and **Size** in inches.
+  - **Size by** width or height, and **Size** in inches. Switching Size by keeps the item's
+    size: the number becomes its other side's length.
   - **Rotation** in degrees.
   - **On other builds:** the grade.
-  - **Repeat over** (a repeating print only): one toggle per region on its side.
+  - **Repeat over** (a repeating print only): one toggle per region on its side. The last one
+    on stays on and says why: a print needs a part to cover.
   - **Remove.**
 - **Live view.** The 3D View draws each change at once from an item draft in the window
   (`itemDrafts.ts`), and the draft is saved a moment later (at once for adding and removing) as a
-  new version of the same uniform asset, so Undo and Redo work like any venue change. If the
-  venue moves elsewhere before a change is saved (Undo, another uniform picked), the draft ends and
-  the unsaved change is dropped.
+  new version of the same uniform asset.
+- **Undo.** Edits less than 4 s apart are one burst and one undo step: Undo goes back to where
+  the burst started, and the show keeps two versions, the start and the end. If the venue moves
+  elsewhere before a change is saved (Undo, another uniform picked), the editor stores nothing and
+  the unsaved change is dropped, so Undo wins.
 - While a change composes, the marchers keep their previous art instead of showing the palette.
 
 ## Hanging pieces and other shapes
@@ -344,7 +353,8 @@ These are attachments, not artwork:
     channel) is the fabric; a 4-connected group of samples unlike it, 2.5 to 16 in on each side, no
     more than 2.5× longer than wide, filling at least a fifth of its box and touching neither the
     region's edge nor its top or bottom, is called a logo. Stripes, bands and sashes cross a
-    region, so they don't count.
+    region, so they don't count. It runs only on a layer that paints at least half the garment
+    area, since anything on a mostly clear overlay layer would stand alone.
   - a template layer left visible in the export
   - a wrong image size
   - an item outside every region

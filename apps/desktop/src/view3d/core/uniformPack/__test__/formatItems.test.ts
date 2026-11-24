@@ -160,6 +160,15 @@ describe("uniform pack items (format version 2)", () => {
             "items/crest.png": fakePng(4096, 4096),
         });
         expect(codeOf(() => readUniformPack(huge))).toBe("tooLarge");
+        // within the pixel count, but far too long on one side
+        const long = zipSync({
+            "manifest.json": strToU8(
+                JSON.stringify({ ...withItems([crest]), formatVersion: 2 }),
+            ),
+            "layers/base.png": fakePng(),
+            "items/crest.png": fakePng(65536, 64),
+        });
+        expect(codeOf(() => readUniformPack(long))).toBe("tooLarge");
     });
 
     it("rewrites a pack with new items, dropping images no item names", () => {

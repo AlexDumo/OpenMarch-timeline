@@ -12,8 +12,12 @@ import {
     valuesNamedInHistory,
 } from "../showAssets";
 import { sql } from "drizzle-orm";
-import { setUniformPack } from "../view3dUniformPack";
-import { parseShowAssetRef } from "@/showAssets/ref";
+import {
+    UniformPackSupersededError,
+    saveUniformItemsPack,
+    setUniformPack,
+} from "../view3dUniformPack";
+import { parseShowAssetRef, showAssetRefValue } from "@/showAssets/ref";
 import { REMOVABLE_ASSET_KINDS, showAssetUse } from "@/showAssets/assetUse";
 import {
     readUniformPack,
@@ -25,7 +29,30 @@ import {
 } from "@/view3d/core/uniformPack/__test__/fixtures";
 import { defaultVenueForField } from "@/view3d/core/venueSettings";
 
+const showAssetValue = showAssetRefValue;
+
 const field = FootballTemplates.HIGH_SCHOOL_FOOTBALL_FIELD_WITH_END_ZONES;
+
+/** The tag-1 "Home uniform" with a crest `width` inches wide on the chest: format version 2 */
+const crestPack = (width: number) =>
+    writeUniformPack(
+        {
+            ...sampleManifest("Home uniform"),
+            items: [
+                {
+                    id: "crest",
+                    file: "items/crest.png",
+                    panel: "front",
+                    at: [17, 25.32],
+                    width,
+                },
+            ],
+        },
+        {
+            "layers/base.png": fakePng(3360, 2816, 1),
+            "items/crest.png": fakePng(512, 512, 9),
+        },
+    );
 
 /** The tag-1 "Home uniform" with a crest on the chest: format version 2 */
 const packWithItemsFixture = () =>
@@ -181,6 +208,133 @@ describeDbTests("view3dUniformPack", (it) => {
                 versionOf: "00000000-0000-4000-8000-000000000000",
             });
             expect(parseShowAssetRef(other)!.id).not.toBe(a.id);
+        });
+
+        it("stores nothing when the venue moved on before an item edit arrived (#1258)", async ({
+            db,
+        }) => {
+            const plain = await store(db, packFile("Home uniform", 1));
+            const first = await saveUniformItemsPack({
+                db,
+                pack: crestPack(6),
+                manifest: readUniformPack(crestPack(6)).manifest,
+                field,
+                versionOf: parseShowAssetRef(plain)!.id,
+                expect: plain,
+            });
+            const before = (await getShowAssets({ db })).length;
+            // Undo while the next edit is saving
+            await performUndo(db);
+            await expect(
+                saveUniformItemsPack({
+                    db,
+                    pack: crestPack(7),
+                    manifest: readUniformPack(crestPack(7)).manifest,
+                    field,
+                    versionOf: parseShowAssetRef(plain)!.id,
+                    expect: first.value,
+                    amend: first.token ?? undefined,
+                }),
+            ).rejects.toBeInstanceOf(UniformPackSupersededError);
+            // nothing stored, the Undo stands, and Redo still brings the edit back
+            expect((await getShowAssets({ db })).length).toBe(before);
+            expect((await getStoredVenueSettings({ db }))?.uniformArtwork).toBe(
+                plain,
+            );
+            await performRedo(db);
+            expect((await getStoredVenueSettings({ db }))?.uniformArtwork).toBe(
+                first.value,
+            );
+        });
+
+        it("keeps a burst of 10 item edits to one undo step and two versions (#1258)", async ({
+            db,
+        }) => {
+            const origin = await store(db, packFile("Home uniform", 1));
+            const id = parseShowAssetRef(origin)!.id;
+            let latest = origin;
+            let token: string | null | undefined;
+            for (let n = 1; n <= 10; n++) {
+                const pack = crestPack(n);
+                const saved = await saveUniformItemsPack({
+                    db,
+                    pack,
+                    manifest: readUniformPack(pack).manifest,
+                    field,
+                    versionOf: id,
+                    expect: latest,
+                    amend: token ?? undefined,
+                });
+                // the burst keeps its first save's token
+                if (n > 1) expect(saved.token).toBe(token);
+                token = saved.token;
+                latest = saved.value;
+            }
+            // two versions of the uniform: where the burst started and where it ended
+            const versions = (await getShowAssets({ db })).filter(
+                (a) => a.id === id,
+            );
+            expect(versions.map((v) => showAssetValue(v))).toEqual([
+                origin,
+                latest,
+            ]);
+            expect((await getStoredVenueSettings({ db }))?.uniformArtwork).toBe(
+                latest,
+            );
+            // one undo step goes back to where it started, and redo to where it ended
+            await performUndo(db);
+            expect((await getStoredVenueSettings({ db }))?.uniformArtwork).toBe(
+                origin,
+            );
+            await performRedo(db);
+            expect((await getStoredVenueSettings({ db }))?.uniformArtwork).toBe(
+                latest,
+            );
+            // the step before the burst is still the import's
+            await performUndo(db);
+            await performUndo(db);
+            expect(
+                (await getStoredVenueSettings({ db }))?.uniformArtwork,
+            ).not.toBe(origin);
+        });
+
+        it("starts a new undo step when something else was edited in the burst (#1258)", async ({
+            db,
+        }) => {
+            const origin = await store(db, packFile("Home uniform", 1));
+            const id = parseShowAssetRef(origin)!.id;
+            const first = await saveUniformItemsPack({
+                db,
+                pack: crestPack(4),
+                manifest: readUniformPack(crestPack(4)).manifest,
+                field,
+                versionOf: id,
+                expect: origin,
+            });
+            // another edit becomes the latest undo step
+            const venue = (await getStoredVenueSettings({ db }))!;
+            await updateVenueSettings({
+                db,
+                settings: { ...venue, crowd: !venue.crowd },
+            });
+            const second = await saveUniformItemsPack({
+                db,
+                pack: crestPack(5),
+                manifest: readUniformPack(crestPack(5)).manifest,
+                field,
+                versionOf: id,
+                expect: first.value,
+                amend: first.token ?? undefined,
+            });
+            expect(second.token).not.toBe(first.token);
+            // the first save's version stays: an undo step names it
+            expect(
+                (await getShowAssets({ db })).filter((a) => a.id === id),
+            ).toHaveLength(3);
+            await performUndo(db);
+            expect((await getStoredVenueSettings({ db }))?.uniformArtwork).toBe(
+                first.value,
+            );
         });
 
         it("refuses a manifest that doesn't parse, changing nothing", async ({

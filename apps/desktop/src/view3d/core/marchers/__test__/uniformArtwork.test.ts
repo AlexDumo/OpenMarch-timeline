@@ -20,7 +20,9 @@ import {
     insidePolygon,
     itemDraw,
     itemPresets,
+    itemSize,
     itemStrips,
+    MAX_TILES_PER_REGION,
     tileLayout,
     uniformArtworkOf,
     flatsArtworkOf,
@@ -583,22 +585,39 @@ describe("placed items on the 7 body types", () => {
             }
     });
 
-    it("tiles a print at its real size on every body", () => {
+    it("tiles a print at its real size at each region's middle row, on every body", () => {
         const item = {
             at: [17, 30] as const,
             regions: ["back-torso", "back-sleeve-L", "back-leg-R"],
         };
+        let drift = 0;
         for (const body of BODY_TYPES) {
             const tiles = tileLayout(layout, regions, body, "back", item, 4, 2);
             expect(tiles.map((t) => t.region)).toEqual(item.regions);
             for (const t of tiles) {
-                // on the body, at the region's middle row, each tile is 4 × 2 in
+                // each tile is drawn 1/k as wide, with k at the region's middle row, so on the
+                // body a tile is 4 × 2 in at that row
                 expect(t.w * t.k).toBeCloseTo(4, 6);
                 expect(t.h).toBe(2);
                 if (body === "neutral-full") expect(t.k).toBeGreaterThan(1.05);
-                // the tiles cover the region
-                const xs = t.polygon.map((q) => q[0]);
+                // elsewhere in the region the row's own k differs, so the tiles drift from their
+                // real width there: measured, not hidden
                 const ys = t.polygon.map((q) => q[1]);
+                const xs = t.polygon.map((q) => q[0]);
+                const mx = (Math.min(...xs) + Math.max(...xs)) / 2;
+                for (
+                    let y = Math.min(...ys) + 0.5;
+                    y < Math.max(...ys);
+                    y += 0.5
+                ) {
+                    const row = gradeAt(layout, regions, body, "back", mx, y);
+                    if (row.region === t.region)
+                        drift = Math.max(
+                            drift,
+                            Math.abs((t.w * row.k) / 4 - 1),
+                        );
+                }
+                // the tiles cover the region
                 const ox = t.origins.map((o) => o[0]);
                 const oy = t.origins.map((o) => o[1]);
                 expect(Math.min(...ox)).toBeLessThanOrEqual(Math.min(...xs));
@@ -615,6 +634,54 @@ describe("placed items on the 7 body types", () => {
                     expect(Math.min(off, 2 - off)).toBeLessThan(1e-9);
                 }
             }
+        }
+        // Away from the middle row a tile is not its real width: k there differs. Measured at
+        // 25.5% at worst over these regions and bodies (decision 3 of fork #1287: k at the
+        // region's middle, as the study's prototype did). This pins it so a change shows.
+        expect(drift).toBeGreaterThan(0.2);
+        expect(drift).toBeLessThan(0.27);
+    });
+
+    it("leaves out an item whose image's shape makes a side too long, or a tile too small", () => {
+        // a 1 × 2048 px pinstripe 120 in wide would be 245,760 in tall
+        expect(itemSize({ width: 120 }, 1 / 2048)).toBeNull();
+        // a 1024 × 1 line sized by its height
+        expect(itemSize({ height: 0.5 }, 1024)).toBeNull();
+        expect(itemSize({ width: 10, height: 121 }, 1)).toBeNull();
+        // a 2048 × 1 tile 1 in wide is 1/2048 in tall
+        expect(itemSize({ width: 1, grade: "tile" }, 2048)).toBeNull();
+        expect(itemSize({ width: 4, grade: "tile" }, 4)).toEqual({
+            w: 4,
+            h: 1,
+        });
+        expect(itemSize({ width: 6 }, 1)).toEqual({ w: 6, h: 6 });
+        expect(itemSize({ width: 12 }, 24)).toEqual({ w: 12, h: 0.5 });
+        expect(itemSize({ width: 6 }, Number.NaN)).toBeNull();
+        // a region that would need too many copies is left plain
+        for (const body of BODY_TYPES) {
+            const tiles = tileLayout(
+                layout,
+                regions,
+                body,
+                "back",
+                { at: [17, 30], regions: ["back-torso"] },
+                0.1,
+                0.1,
+            );
+            expect(tiles).toEqual([]);
+            const ok = tileLayout(
+                layout,
+                regions,
+                body,
+                "back",
+                { at: [17, 30], regions: ["back-torso"] },
+                1,
+                1,
+            );
+            expect(ok).toHaveLength(1);
+            expect(ok[0].origins.length).toBeLessThanOrEqual(
+                MAX_TILES_PER_REGION,
+            );
         }
     });
 });
