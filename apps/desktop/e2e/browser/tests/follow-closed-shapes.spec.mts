@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 import { test, expect, type Show } from "../fixtures.mjs";
 import {
+    addPageAt,
     drawnMarchers,
     expectCanvasMatchesShow,
     readField,
@@ -364,4 +365,60 @@ test("change: marchers placed with the Curve tool on a closed curve (its first p
     for (const id of ALL)
         for (const [x, y] of mid[id]!)
             expect(offCurve({ x: x!, y: y! }), `T${id}`).toBeLessThan(0.05 * S);
+});
+
+test("change: a placed shape clicked on the next page shows its editing bar; while Following the bar steps aside, and it is back when Follow is left", async ({
+    show,
+}) => {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    // A closed Curve placed on the last page, then a page added after it, which carries its spots
+    await selectPage(show, "Page 2");
+    await selectAll(page);
+    await page.getByRole("tab", { name: "Shapes" }).click();
+    await page.getByTestId("shapes-tab-curve").click();
+    const at = (dx: number, dy: number) => ({
+        x: cf.x + dx * S,
+        y: cf.y + dy * S,
+    });
+    const points = [
+        at(-30, -30),
+        at(-18, -36),
+        at(-6, -30),
+        at(-10, -20),
+        at(-24, -18),
+    ];
+    const click = async (to: Point) => {
+        const on = await toScreen(page, to);
+        await page.mouse.move(on.x, on.y, { steps: 4 });
+        await page.mouse.click(on.x, on.y);
+    };
+    for (const point of points) await click(point);
+    await click(points[0]!);
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await waitForIdle(page);
+    await page.keyboard.press("Escape");
+    await addPageAt(page, 11);
+    await waitForIdle(page);
+    await selectPage(show, "Page 3");
+    await page.keyboard.press("Escape");
+    // one marcher of the shape clicked: the whole shape is selected, its own bar shows
+    const [, , , one] = await drawnMarchers(page);
+    await page.mouse.click(one!.screen.x, one!.screen.y);
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    await expect(page.getByTestId("placed-box-readout")).toBeVisible();
+    // Following: only the Follow bar, the shape's own bar gone
+    await page.keyboard.press("Shift+L");
+    await expect(page.getByTestId("follow-round")).toBeVisible();
+    await expect(page.getByTestId("placed-box-readout")).toHaveCount(0);
+    // Esc leaves Follow: the shape is still selected, and its bar is back
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("follow-round")).toBeHidden();
+    await expect(page.getByTestId("placed-box-readout")).toBeVisible();
 });
