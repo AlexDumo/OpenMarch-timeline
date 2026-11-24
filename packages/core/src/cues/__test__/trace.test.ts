@@ -116,8 +116,9 @@ describe("traceCue", () => {
                 },
             ],
         });
-        expect(traceCue(turning, 1, "facing", 6).winner).toBe(7);
-        expect(traceCue(turning, 1, "facing", 4).winner).toBeNull();
+        // A facing's turn starts on its count (#993)
+        expect(traceCue(turning, 1, "facing", 10).winner).toBe(7);
+        expect(traceCue(turning, 1, "facing", 6).winner).toBeNull();
     });
 
     it("says which cue is in effect but hidden (a kneel while the dot travels)", () => {

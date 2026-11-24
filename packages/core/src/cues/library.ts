@@ -79,7 +79,10 @@ const toss = (
         defaultLength: length,
     });
 
-/** A Facing value: a turn over 2 counts unless its cue says. */
+/**
+ * A Facing value: lasting only, and instant unless its cue gives the turn counts (fork #993). The
+ * turn starts on the cue's count (`facing.ts`).
+ */
 const facing = (
     id: string,
     name: string,
@@ -87,7 +90,7 @@ const facing = (
     extra: Partial<CueValue> = {},
 ): CueValue =>
     lasting(`facing.${id}`, "facing", name, label, ALL_CARRIES, {
-        defaultTransition: 2,
+        locked: true,
         ...extra,
     });
 
@@ -205,6 +208,8 @@ export const CUE_LIBRARY: readonly CueValue[] = [
     facing("back", "Back", "Back"),
     facing("side1", "Side 1", "S1"),
     facing("side2", "Side 2", "S2"),
+    facing("turnLeft", "Turn left 45°", "L45"),
+    facing("turnRight", "Turn right 45°", "R45"),
     facing("travel", "Direction of travel", "Travel"),
     facing("angle", "Angle", "Angle", { settings: [number("degrees")] }),
     facing("point", "Toward a point", "Point", {
