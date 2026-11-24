@@ -7,7 +7,7 @@ import {
     MeshStandardMaterial,
     type CanvasTexture,
 } from "three";
-import { DIESEL_NAME, dieselTexture, signText } from "./brand";
+import { DIESEL_STADIUM, dieselTexture, signText } from "./brand";
 import type { DieselFrame } from "./frame";
 
 /**
@@ -16,11 +16,11 @@ import type { DieselFrame } from "./frame";
  * the west one above the 200s; photo 6 shows the east one between the
  * drape's two hangs. Their letters are a heavy serif leaning right
  * (photo 17: LUCAS OIL STADIUM); here they spell the hall's name, MARK
- * DIESEL, in the same red LED.
+ * DIESEL STADIUM, in the same red LED.
  */
 
 /** Size of the box, meters: length, height, depth off the fascia. */
-export const STADIUM_SIGN = { length: 7.2, height: 0.95, depth: 0.32 };
+export const STADIUM_SIGN = { length: 11.5, height: 0.95, depth: 0.32 };
 /** The letters' red, and the dark face they stand on. */
 const LED_RED = "#ff2a1c";
 const FACE = "#0a0a0c";
@@ -54,9 +54,9 @@ export function paintStadiumSign(
     g.save();
     g.shadowColor = "rgba(255,40,24,0.9)";
     g.shadowBlur = h * 0.18;
-    signText(g, DIESEL_NAME, w / 2, h / 2, cap, options);
+    signText(g, DIESEL_STADIUM, w / 2, h / 2, cap, options);
     g.restore();
-    signText(g, DIESEL_NAME, w / 2, h / 2, cap, {
+    signText(g, DIESEL_STADIUM, w / 2, h / 2, cap, {
         ...options,
         color: "#ff6a50",
         weight: 0,

@@ -49,6 +49,8 @@ import {
     paintNameRing,
     paintRafterBanner,
     paintRibbonLower,
+    dieselBandNames,
+    dieselRibbonState,
     paintRibbonUpper,
     paintSponsorPanel,
     paintWallPad,
@@ -198,7 +200,12 @@ describe("Venue brand painters", () => {
     });
 
     it("keeps OpenMarch to the back, and names no other brand", () => {
-        const state = { title: "", time: "8:43 PM", year: 2026 };
+        const state = {
+            title: "",
+            time: "8:43 PM",
+            year: 2026,
+            bands: ["Virginia Anthem", "Detroit Headphones", "Boise Kites"],
+        };
         const faces: Record<string, string> = {
             logoPanel: written((g) => paintLogoPanel(g, 512, 512)),
             banner: written((g) => paintChampionshipBanner(g, 2560, 256)),
@@ -213,6 +220,8 @@ describe("Venue brand painters", () => {
             sign: written((g) => paintStadiumSign(g, 1152, 152)),
         };
         SPONSOR_PANELS.forEach((panel, i) => {
+            // The On The Move logo is an image the test DOM never loads.
+            if (panel.face === "otm") return;
             faces[`sponsor${i}`] = written((g) =>
                 paintSponsorPanel(g, panel, panel.width * 128, 128),
             );
@@ -222,14 +231,16 @@ describe("Venue brand painters", () => {
                 paintRafterBanner(g, banner, 256, 640),
             );
         });
-        // OpenMarch's marks: the drape's panel, the flags and two boards.
+        // OpenMarch's marks: the drape's panel, the flags and one board; On
+        // The Move's logo is on another.
         const branded = Object.entries(faces)
             .filter(([, text]) => /\[logo\]|\[marcher\]|openmarch/i.test(text))
             .map(([face]) => face);
         const logoBoards = SPONSOR_PANELS.map((p, i) =>
             p.face === "logo" ? `sponsor${i}` : null,
         ).filter((f) => f !== null);
-        expect(logoBoards).toHaveLength(2);
+        expect(logoBoards).toHaveLength(1);
+        expect(SPONSOR_PANELS.filter((p) => p.face === "otm")).toHaveLength(1);
         expect(branded.sort()).toEqual(
             ["logoPanel", "flag", ...logoBoards].sort(),
         );
@@ -238,42 +249,59 @@ describe("Venue brand painters", () => {
                 /lucas|colts|yamaha|bands of america|\bboa\b|openmarch\.com/i,
             );
         expect(faces.banner).toBe("GRAND NATIONAL CHAMPIONSHIPS");
-        expect(faces.ribbonUpper).toContain(
-            "GRAND NATIONAL CHAMPIONSHIPS – PRELIMS",
+        expect(faces.wall).toBe("GRAND NATIONAL CHAMPIONSHIPS");
+        expect(faces.nameRing).toBe(
+            "GRAND NATIONALS | CHAMPIONSHIPS | GRAND CHAMPION",
         );
-        expect(faces.sign).toContain("MARK DIESEL");
-        expect(faces.header).toBe("MARK DIESEL");
+        expect(faces.ribbonUpper).toBe("GRAND NATIONALS");
+        expect(faces.sign).toContain("MARK DIESEL STADIUM");
+        expect(faces.header).toBe("MARK DIESEL STADIUM");
         expect(faces.monument).toBe(
             "MARK DIESEL | STADIUM | GRAND NATIONAL CHAMPIONSHIPS",
         );
     });
 
-    it("shows the year, the clock and the show on the lower ribbon", () => {
+    it("shows the clock and the order of appearance on the lower ribbon", () => {
+        const bands = ["Virginia Anthem", "Detroit Headphones", "Boise Kites"];
         const untitled = written((g) =>
             paintRibbonLower(g, 4096, 128, {
                 title: " ",
                 time: "8:43 PM",
                 year: 2026,
+                bands,
             }),
         );
-        expect(untitled).toMatch(
-            /^MARK DIESEL \| 2026 GRAND NATIONAL CHAMPIONSHIPS/,
+        expect(untitled).toBe(
+            "8:43 PM | NOW PERFORMING | Virginia Anthem | UP NEXT | Detroit Headphones | ON DECK | Boise Kites",
         );
-        expect(untitled).toContain("PRELIMS");
-        expect(untitled).toContain("8:43 PM");
-        expect(untitled).toMatch(/MARK DIESEL STADIUM$/);
-        expect(untitled).not.toContain("NOW PERFORMING");
 
         const titled = written((g) =>
             paintRibbonLower(g, 4096, 128, {
                 title: "Finals",
                 time: "12:05 AM",
                 year: 2027,
+                bands,
             }),
         );
-        expect(titled).toContain("NOW PERFORMING | Finals");
-        expect(titled).toContain("12:05 AM");
-        expect(titled).not.toContain("MARK DIESEL STADIUM");
+        expect(titled).toBe(
+            "12:05 AM | NOW PERFORMING | Finals | UP NEXT | Virginia Anthem | ON DECK | Detroit Headphones",
+        );
+    });
+
+    it("makes up different bands, place then noun", () => {
+        let seed = 1;
+        const random = () =>
+            ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+        const names = dieselBandNames(3, random);
+        expect(names).toHaveLength(3);
+        expect(new Set(names).size).toBe(3);
+        for (const name of names)
+            expect(name).toMatch(/^[A-Z][\w ]+ [A-Z][\w ]+$/);
+        expect(
+            dieselRibbonState(new Date(2026, 0, 1), random).bands,
+        ).toHaveLength(3);
+        // Even a stuck random number gives one name rather than looping.
+        expect(dieselBandNames(3, () => 0)).toEqual(["Virginia Anthem"]);
     });
 
     it("puts the show and the window's own words on the board's card", () => {
