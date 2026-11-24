@@ -6,7 +6,6 @@ import {
     XIcon,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
-import { twMerge } from "tailwind-merge";
 import { TouchCaption } from "@/components/ui/InfoTip";
 import EnsembleList from "./EnsembleList";
 import MobileExportView from "./MobileExportView";
@@ -19,7 +18,7 @@ import {
 } from "./queries/useProductions";
 import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 import { useAuth } from "@/auth/useAuth";
-import { Button } from "@openmarch/ui";
+import { Button, twMerge } from "@openmarch/ui";
 import { AuthButton, SignInButton } from "../../auth/AuthButton";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetApiEditorV1EnsemblesAnyQueryOptions } from "@/api/generated/ensembles/ensembles";

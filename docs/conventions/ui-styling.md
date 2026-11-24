@@ -76,11 +76,12 @@ hand:
   in toolbars and floating bars.
 - Don't build a button out of `bg-accent text-text-invert rounded-6 px-10`. Add
   extra classes through `className` so `twMerge` resolves conflicts.
-- `twMerge` doesn't know this theme's font sizes: it reads `text-body` and `text-sub`
-  as text colors. So the Button's own `text-body` loses to its variant's color and the
-  button inherits its parent's size, and a size passed through `className` removes
-  the variant's color. Append the size after the merge instead:
-  `` `${getButtonClassName({ ... })} text-body` ``.
+- Merge classes with `twMerge` or `cn` from `@openmarch/ui`
+  (`packages/ui/src/utils/cn.ts`), never from `tailwind-merge` directly (lint rejects
+  it). Plain tailwind-merge reads `text-body` and `text-sub` as text colors, so a size
+  and a color knock each other out. The shared one knows the theme's font sizes,
+  colors and radii; a token added to the `@theme` block also goes in its lists, and
+  its test fails until it does.
 - Inputs use `Input`/`Select` from `@openmarch/ui`, or their look:
   `rounded-6 border-stroke bg-fg-2 text-body`, 26 px tall when compact.
 - Icons come from `@phosphor-icons/react`, at three sizes: 24 for standalone icons and

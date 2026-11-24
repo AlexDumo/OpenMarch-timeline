@@ -3,7 +3,7 @@
  * Tempo mode: the tempo lanes' popovers: the add/remove box,
  * the inline editor, and the right-click menu with its icons.
  */
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@openmarch/ui";
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import clsx from "clsx";
 import {

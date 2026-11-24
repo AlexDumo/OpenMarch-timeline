@@ -33,6 +33,7 @@
     "scripts": {
         "dev": "tsup --watch",
         "build": "tsup --format esm,cjs",
+        "test": "vitest run",
         "playground": "astro dev",
         "lint": "eslint . --fix",
         "lint:check": "eslint .",
@@ -42,7 +43,8 @@
     },
     "devDependencies": {
         "tsup": "^8.5.0",
-        "typescript": "catalog:"
+        "typescript": "catalog:",
+        "vitest": "^4.0.0"
     },
     "dependencies": {
         "@astrojs/mdx": "^4.3.0",

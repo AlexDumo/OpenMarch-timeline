@@ -1,5 +1,5 @@
 import { clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@openmarch/ui";
 
 /** A rounded group of toolbar controls. In touch mode it grows so each control can be finger-sized. */
 export default function ToolbarSection({

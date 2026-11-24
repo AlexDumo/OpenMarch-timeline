@@ -103,6 +103,27 @@ module.exports = {
                     "WithStatement",
                     ...uiStyleRestrictions(),
                 ],
+                // Plain tailwind-merge doesn't know the theme's font sizes and drops
+                // text-body next to a text color (fork #1004)
+                "no-restricted-imports": [
+                    "error",
+                    {
+                        paths: [
+                            {
+                                name: "tailwind-merge",
+                                message:
+                                    'Use twMerge or cn from "@openmarch/ui" (packages/ui/src/utils/cn.ts), which knows the theme\'s font sizes and colors.',
+                            },
+                        ],
+                    },
+                ],
+            },
+        },
+        {
+            // The one place allowed to build the theme-aware merge
+            files: ["packages/ui/src/utils/cn.ts"],
+            rules: {
+                "no-restricted-imports": "off",
             },
         },
         {

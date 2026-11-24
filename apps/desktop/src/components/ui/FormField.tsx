@@ -1,5 +1,5 @@
 import * as Form from "@radix-ui/react-form";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@openmarch/ui";
 import { clsx } from "clsx";
 import { forwardRef } from "react";
 import { T } from "@tolgee/react";

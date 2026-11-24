@@ -1,5 +1,4 @@
-import { Button } from "@openmarch/ui";
-import { twMerge } from "tailwind-merge";
+import { Button, twMerge } from "@openmarch/ui";
 import { FastForwardIcon } from "@phosphor-icons/react";
 import { isDevBuild } from "@/utilities/devBuild";
 

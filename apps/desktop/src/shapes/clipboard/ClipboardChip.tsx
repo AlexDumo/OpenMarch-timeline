@@ -7,9 +7,8 @@ import {
 } from "react";
 import { useTranslate } from "@tolgee/react";
 import clsx from "clsx";
-import { twMerge } from "tailwind-merge";
 import { CaretUpIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
-import { getButtonClassName } from "@openmarch/ui";
+import { getButtonClassName, twMerge } from "@openmarch/ui";
 import { Tip } from "@/components/ui/Tip";
 import ActionButton from "@/shortcuts/ActionButton";
 import { POPOVER_CLASS } from "@/components/ui/popupClasses";

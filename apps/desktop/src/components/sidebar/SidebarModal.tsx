@@ -1,7 +1,7 @@
 import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 import clsx from "clsx";
 import { type ReactNode, useEffect, useState } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@openmarch/ui";
 import { TouchCaption } from "@/components/ui/InfoTip";
 import { FIELD_EDIT_PANEL_ID } from "@/field/editMode/fieldEditPanelId";
 

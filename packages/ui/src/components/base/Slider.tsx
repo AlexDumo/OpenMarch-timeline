@@ -1,7 +1,7 @@
 import React from "react";
 import * as RadixSlider from "@radix-ui/react-slider";
 import { type SliderProps } from "@radix-ui/react-slider";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "../../utils/cn";
 
 /**
  * `aria-label` names the thumb for screen readers and is required. The package has no
