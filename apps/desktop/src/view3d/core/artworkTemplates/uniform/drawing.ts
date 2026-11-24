@@ -16,6 +16,7 @@
  */
 // cspell:words inseam underarm paintable
 import {
+    FLATS_LAYOUT,
     SAFE_INSET,
     WRAP_BAND_SHARE,
     bottomOf,
@@ -287,7 +288,10 @@ const EDGE_TEXT = {
  * Both edges' names at a height, with an arrow pointing at each edge, just
  * past the wrap band. The height is an odd inch, between two numbered ticks.
  */
-function edgeLabels(region: FlatsRegion, at: number): DrawNode[] {
+function edgeLabels(
+    region: FlatsRegion,
+    at: number,
+): { nodes: DrawNode[]; rows: number[] } {
     const odd = (v: number) => Math.round((v - 1) / 2) * 2 + 1;
     const ARROW = 0.26;
     const GAP = 0.36;
@@ -312,7 +316,7 @@ function edgeLabels(region: FlatsRegion, at: number): DrawNode[] {
     // Both names at one height when they fit across, else the right one 2 in lower
     const y = odd(at);
     const span = spanAt(region.polygon, y);
-    if (!span) return [];
+    if (!span) return { nodes: [], rows: [] };
     const row = { y, ...span };
     const room = wrapLine(row, "right") - wrapLine(row, "left") - 0.24;
     const need = region.edges.reduce(
@@ -320,7 +324,37 @@ function edgeLabels(region: FlatsRegion, at: number): DrawNode[] {
             sum + GAP + textWidthEm(EDGE_TEXT[e.name]) * SIZE.label + 0.3,
         0,
     );
-    return [...label("left", y), ...label("right", need <= room ? y : y + 2)];
+    const lower = need <= room ? y : y + 2;
+    return {
+        nodes: [...label("left", y), ...label("right", lower)],
+        rows: lower === y ? [y] : [y, lower],
+    };
+}
+
+/**
+ * Where a limb's rotated name goes: centred in the longest stretch of the
+ * limb clear of its edge labels and guide lines, so nothing overlaps it.
+ */
+function nameHeight(
+    region: FlatsRegion,
+    labelRows: readonly number[],
+    guideYs: readonly number[],
+): number {
+    const top = region.bbox.y + 1;
+    const bottom = bottomOf(region) - 1;
+    // Each label row covers its text's height, each guide its label above the line
+    const blocked = [
+        ...labelRows.map((y) => [y - 0.45, y + 0.3]),
+        ...guideYs.map((y) => [y - 0.55, y + 0.15]),
+    ].sort((a, b) => a[0] - b[0]);
+    let best = { from: top, to: top };
+    let from = top;
+    for (const [a, b] of [...blocked, [bottom, bottom]]) {
+        const to = Math.min(a, bottom);
+        if (to - from > best.to - best.from) best = { from, to };
+        from = Math.max(from, b);
+    }
+    return best.to > best.from ? (best.from + best.to) / 2 : (top + bottom) / 2;
 }
 
 /** A dashed guide across a region at a height, with its label above the line. */
@@ -365,7 +399,12 @@ function guideAcross(
 }
 
 /** A small cross marking a landmark, with its name beside it. */
-function landmark(x: number, y: number, label: string): DrawNode[] {
+function landmark(
+    x: number,
+    y: number,
+    label: string,
+    labelDy = -0.12,
+): DrawNode[] {
     const s = 0.35;
     return [
         line(
@@ -384,7 +423,7 @@ function landmark(x: number, y: number, label: string): DrawNode[] {
             COLORS.guideText,
             0.04,
         ),
-        text(x + 0.5, y - 0.12, SIZE.label, label, COLORS.guideText),
+        text(x + 0.5, y + labelDy, SIZE.label, label, COLORS.guideText),
     ];
 }
 
@@ -454,7 +493,8 @@ const PANEL_TITLES = {
 
 function panelGuides(model: FlatsRegions, panel: "front" | "back"): GroupNode {
     const s = model.source;
-    const P = s.panels[panel];
+    const L = FLATS_LAYOUT;
+    const P = L.panels[panel];
     const mine = model.regions.filter((r) => r.panel === panel);
     const part = (p: string) => mine.find((r) => r.part === p)!;
     const torso = part("torso");
@@ -479,7 +519,7 @@ function panelGuides(model: FlatsRegions, panel: "front" | "back"): GroupNode {
                 bold: true,
             },
         ),
-        ...contextFigure(mine, s.centreX),
+        ...contextFigure(mine, L.centreX),
     ];
 
     const spans = new Map(mine.map((r) => [r.id, sampleSpans(r)]));
@@ -492,15 +532,15 @@ function panelGuides(model: FlatsRegions, panel: "front" | "back"): GroupNode {
     nodes.push(
         line(
             [
-                [s.centreX, r3(torso.bbox.y - 5)],
-                [s.centreX, r3(bottomOf(hips))],
+                [L.centreX, r3(torso.bbox.y - 5)],
+                [L.centreX, r3(bottomOf(hips))],
             ],
             COLORS.guide,
             0.04,
             0.4,
         ),
         text(
-            s.centreX + 0.2,
+            L.centreX + 0.2,
             torso.bbox.y - 4.4,
             SIZE.label,
             panel === "front" ? "centre front" : "centre back",
@@ -514,7 +554,7 @@ function panelGuides(model: FlatsRegions, panel: "front" | "back"): GroupNode {
         ...guideAcross(torso, s.guides.chest, "chest"),
         ...guideAcross(
             hips,
-            s.guides.hem + 0.02,
+            s.guides.jacketHem + 0.02,
             "jacket hem and belt",
             "left",
             true,
@@ -533,8 +573,10 @@ function panelGuides(model: FlatsRegions, panel: "front" | "back"): GroupNode {
         nodes.push(
             ...landmark(
                 s.landmarks.chestCentre[0],
-                s.landmarks.chestCentre[1] + 1.5,
+                s.landmarks.chestCentre[1],
                 "chest centre",
+                // below the chest line, which runs through the mark
+                SIZE.label * 1.4,
             ),
         );
     else
@@ -583,7 +625,7 @@ function panelGuides(model: FlatsRegions, panel: "front" | "back"): GroupNode {
         };
     };
     {
-        const at = mid(torso, s.guides.chest + 3, s.guides.hem);
+        const at = mid(torso, s.guides.chest + 3, s.guides.jacketHem);
         nodes.push(
             text(
                 at.x,
@@ -594,7 +636,7 @@ function panelGuides(model: FlatsRegions, panel: "front" | "back"): GroupNode {
                 "middle",
             ),
         );
-        const h = mid(hips, s.guides.hem, s.guides.crotch);
+        const h = mid(hips, s.guides.jacketHem, s.guides.crotch);
         nodes.push(
             text(
                 h.x,
@@ -606,44 +648,49 @@ function panelGuides(model: FlatsRegions, panel: "front" | "back"): GroupNode {
             ),
         );
     }
+    // Edge names: on the torso once, on every limb twice; then each limb's
+    // name in the longest stretch they leave clear
+    nodes.push(...edgeLabels(torso, s.guides.chest + 3).nodes);
+    const limbName = (limb: FlatsRegion, rows: number[], guideY: number) => {
+        const y = nameHeight(limb, rows, [guideY]);
+        const span = spanAt(limb.polygon, y);
+        const x = span
+            ? (span.left + span.right) / 2
+            : limb.bbox.x + limb.bbox.w / 2;
+        return text(
+            x + SIZE.regionName * 0.35,
+            y,
+            SIZE.regionName,
+            limb.label,
+            COLORS.regionText,
+            "middle",
+            { rotate: -90 },
+        );
+    };
     for (const side of ["L", "R"]) {
         const sleeve = part(`sleeve-${side}`);
-        const a = mid(sleeve, s.guides.elbow + 1, bottomOf(sleeve) - 1);
+        const leg = part(`leg-${side}`);
+        const labels = [
+            edgeLabels(sleeve, sleeve.bbox.y + 3.5),
+            edgeLabels(sleeve, s.guides.elbow + 4),
+        ];
+        const legLabels = [
+            edgeLabels(leg, leg.bbox.y + 4),
+            edgeLabels(leg, s.guides.knee + 4),
+        ];
+        for (const l of [...labels, ...legLabels]) nodes.push(...l.nodes);
         nodes.push(
-            text(
-                a.x + SIZE.regionName * 0.35,
-                a.y,
-                SIZE.regionName,
-                sleeve.label,
-                COLORS.regionText,
-                "middle",
-                { rotate: -90 },
+            limbName(
+                sleeve,
+                labels.flatMap((l) => l.rows),
+                s.guides.elbow,
+            ),
+            limbName(
+                leg,
+                legLabels.flatMap((l) => l.rows),
+                s.guides.knee,
             ),
         );
-        const leg = part(`leg-${side}`);
-        const l = mid(leg, s.guides.knee + 1, bottomOf(leg) - 1);
-        nodes.push(
-            text(
-                l.x + SIZE.regionName * 0.35,
-                l.y,
-                SIZE.regionName,
-                leg.label,
-                COLORS.regionText,
-                "middle",
-                { rotate: -90 },
-            ),
-        );
-    }
-
-    // Edge names: on the torso once, on every limb twice
-    nodes.push(...edgeLabels(torso, s.guides.chest + 3));
-    for (const side of ["L", "R"]) {
-        const sleeve = part(`sleeve-${side}`);
-        nodes.push(...edgeLabels(sleeve, sleeve.bbox.y + 3.5));
-        nodes.push(...edgeLabels(sleeve, s.guides.elbow + 4));
-        const leg = part(`leg-${side}`);
-        nodes.push(...edgeLabels(leg, leg.bbox.y + 4));
-        nodes.push(...edgeLabels(leg, s.guides.knee + 4));
     }
 
     // Which side is which, at the panel's foot
@@ -676,7 +723,7 @@ function panelGuides(model: FlatsRegions, panel: "front" | "back"): GroupNode {
 }
 
 function capeGuides(model: FlatsRegions): GroupNode {
-    const P = model.source.panels.cape;
+    const P = FLATS_LAYOUT.panels.cape;
     return {
         kind: "group",
         id: "guides-cape",
@@ -842,7 +889,7 @@ function legend(
     nodes.push(text(x + 10.4, at - 0.08, SIZE.body, "10 in", COLORS.text));
     at += 1.4;
     for (const l of wrapText(
-        `Sizes are real inches on the ${model.source.body} body. Other body types stretch round their girth; lengths stay the same.`,
+        `Sizes are real inches on the ${FLATS_LAYOUT.body} body. Other body types stretch round their girth; lengths stay the same.`,
         max,
     )) {
         nodes.push(text(x, at, SIZE.body, l, COLORS.secondary));
@@ -854,7 +901,7 @@ function legend(
 export function uniformTemplateDrawing(
     model: FlatsRegions,
 ): UniformTemplateDrawing {
-    const s = model.source;
+    const s = FLATS_LAYOUT;
     const { w, h } = s.page;
     const px = `${w * s.dpi} x ${h * s.dpi} px`;
 

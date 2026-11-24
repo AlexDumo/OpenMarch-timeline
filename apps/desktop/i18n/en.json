@@ -3672,7 +3672,8 @@
         "uniformTemplate": {
             "label": "Uniform template:",
             "preparing": "Preparing…",
-            "jsonTooltip": "The template's shapes and seams as numbers, for scripts and AI agents",
+            "jsonInfo": "JSON holds the template's shapes and seams as numbers, for scripts and AI agents.",
+            "jsonInfoLabel": "About the JSON file",
             "failed": "The uniform template couldn't be made."
         }
     },

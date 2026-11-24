@@ -3,24 +3,27 @@
  * render harness (its `templates/flats/regions.json`, outside the repo),
  * copied verbatim into `fixtures/harness-flats-regions.json`. #1255 ports the
  * geometry tool and generates the outlines from the body models; swapping its
- * file in is the one line in `./index.ts` that picks the source.
+ * outlines in is the one line in `./index.ts` that picks the source, and this
+ * file and the fixture are then deleted.
  *
- * Two changes from the harness file, both to meet the design:
- *
- * - The harness torso still includes the neck. The design keeps the neck out
- *   of every region (the palette collar covers it), so the torso is cut at
- *   the collar line here. #1255 takes the neck out of the geometry itself.
- * - The harness's `collar` sub-regions are reference shapes, not paintable
- *   regions, so they are dropped.
+ * The harness's regions overlap where the torso meets the hips and the hips
+ * meet the legs, and the design says no two regions touch. So here the torso
+ * ends at the jacket hem line, the hips run from there to the crotch line,
+ * and the legs start at the crotch line: neighbours share a line but never
+ * overlap. The neck and the harness's `collar` shapes are left to
+ * `flatsRegions`, which takes the neck out of any torso and ignores shapes
+ * that aren't paintable parts.
  *
  * Plain TypeScript only: this module lives under `view3d/core/`, so it must
  * not import React, React Three Fiber, drei, Electron or the database.
  */
-// cspell:words paintable Hodgman
+// cspell:words paintable
 import harness from "./fixtures/harness-flats-regions.json";
 import {
-    FLATS_PARTS,
-    type FlatsPart,
+    FLATS_LAYOUT,
+    cutAbove,
+    cutBelow,
+    type FlatsGuides,
     type FlatsRegionsSource,
     type Point,
 } from "./regions";
@@ -29,7 +32,9 @@ interface HarnessRegions {
     readonly median: string;
     readonly dpi: number;
     readonly sheet: { readonly w: number; readonly h: number };
-    readonly panels: FlatsRegionsSource["panels"];
+    readonly panels: Readonly<
+        Record<string, { x: number; y: number; w: number; h: number }>
+    >;
     readonly centreX: number;
     readonly regions: readonly {
         readonly id: string;
@@ -46,60 +51,68 @@ interface HarnessRegions {
     };
 }
 
-/** The part of a polygon at or below the height `y` (Sutherland–Hodgman against one line). */
-export function cutAbove(polygon: readonly Point[], y: number): Point[] {
-    const out: Point[] = [];
-    for (let i = 0; i < polygon.length; i++) {
-        const a = polygon[i];
-        const b = polygon[(i + 1) % polygon.length];
-        const aIn = a[1] >= y;
-        const bIn = b[1] >= y;
-        if (aIn) out.push(a);
-        if (aIn !== bIn) {
-            const f = (y - a[1]) / (b[1] - a[1]);
-            out.push([Math.round((a[0] + f * (b[0] - a[0])) * 100) / 100, y]);
-        }
-    }
-    return out;
-}
-
 function guide(h: HarnessRegions, prefix: string): number {
     const found = h.guides.find((g) => g.label.startsWith(prefix));
     if (!found) throw new Error(`Harness regions: no ${prefix} guide`);
     return found.y;
 }
 
+/** The harness file must be drawn on the template's own layout. */
+function checkLayout(h: HarnessRegions): void {
+    const L = FLATS_LAYOUT;
+    const same =
+        h.median === L.body &&
+        h.dpi === L.dpi &&
+        h.sheet.w === L.page.w &&
+        h.sheet.h === L.page.h &&
+        h.centreX === L.centreX &&
+        (["front", "back", "cape"] as const).every((id) =>
+            (["x", "y", "w", "h"] as const).every(
+                (k) => h.panels[id]?.[k] === L.panels[id][k],
+            ),
+        );
+    if (!same) throw new Error("Harness regions: not the template's layout");
+}
+
+/** A part's outline trimmed so it doesn't overlap its neighbours. */
+function trimmed(
+    part: string,
+    polygon: readonly Point[],
+    g: FlatsGuides,
+): readonly Point[] {
+    if (part === "torso") return cutBelow(polygon, g.jacketHem);
+    if (part === "hips")
+        return cutBelow(cutAbove(polygon, g.jacketHem), g.crotch);
+    if (part.startsWith("leg-")) return cutAbove(polygon, g.crotch);
+    return polygon;
+}
+
 export function fromHarness(h: HarnessRegions): FlatsRegionsSource {
-    const collar = guide(h, "collar");
+    checkLayout(h);
+    const guides: FlatsGuides = {
+        collar: guide(h, "collar"),
+        chest: guide(h, "chest"),
+        jacketHem: guide(h, "jacket hem"),
+        crotch: guide(h, "crotch"),
+        knee: guide(h, "knee"),
+        elbow: guide(h, "elbow"),
+    };
     const regions: FlatsRegionsSource["regions"][number][] = [];
     for (const r of h.regions) {
         if (r.panel !== "front" && r.panel !== "back") continue;
-        const part = r.id.slice(r.panel.length + 1) as FlatsPart;
-        if (!FLATS_PARTS.includes(part)) continue; // the collar sub-shapes
+        const part = r.id.slice(r.panel.length + 1);
         const polygon = r.polygon.map(([x, y]): Point => [x, y]);
         regions.push({
             panel: r.panel,
             part,
-            polygon: part === "torso" ? cutAbove(polygon, collar) : polygon,
+            polygon: trimmed(part, polygon, guides),
         });
     }
     const chest = h.landmarks["chest centre"];
     const back = h.landmarks["back number centre"];
     return {
-        body: h.median,
-        page: h.sheet,
-        dpi: h.dpi,
-        panels: h.panels,
-        centreX: h.centreX,
         regions,
-        guides: {
-            collar,
-            chest: guide(h, "chest"),
-            hem: guide(h, "jacket hem"),
-            crotch: guide(h, "crotch"),
-            knee: guide(h, "knee"),
-            elbow: guide(h, "elbow"),
-        },
+        guides,
         landmarks: {
             chestCentre: [chest.x, chest.y],
             backNumberCentre: [back.x, back.y],

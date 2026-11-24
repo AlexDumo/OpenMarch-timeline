@@ -6,6 +6,9 @@ import { pngChunk } from "../../png";
 import {
     FLATS_PARTS,
     UNIFORM_FLATS_SOURCE,
+    flatsRegions,
+    insidePolygon,
+    type DrawNode,
     uniformTemplate,
     uniformTemplateFile,
     uniformTemplatePdf,
@@ -145,6 +148,25 @@ describe("uniform template sizes", () => {
         expect(pdf).toContain("/MediaBox [0 0 7560 6336]");
     });
 
+    it("names each hem for what it is", async () => {
+        const json = (await regionsJson()) as RegionsJson & {
+            landmarks: Record<string, unknown>;
+        };
+        expect(json.guides.map((g) => g.id)).toEqual([
+            "collar",
+            "chest",
+            "jacketHem",
+            "crotch",
+            "knee",
+            "elbow",
+        ]);
+        expect(json.guides.find((g) => g.id === "jacketHem")!.y).toBe(38.31);
+        expect(json.landmarks.legHem).toBe(74.04);
+        expect(json.landmarks.sleeveCuff).toBe(41.32);
+        expect(Object.keys(json.landmarks)).not.toContain("hem");
+        expect(Object.keys(json.landmarks)).not.toContain("cuff");
+    });
+
     it("gives the same sizes in uniform-regions.json", async () => {
         const json = await regionsJson();
         expect(json.page).toEqual({ w: 105, h: 88 });
@@ -183,8 +205,9 @@ describe("uniform template regions", () => {
     });
 
     it("keeps the neck out of the torso", () => {
+        const { model } = uniformTemplate();
         for (const panel of ["front", "back"] as const) {
-            const torso = UNIFORM_FLATS_SOURCE.regions.find(
+            const torso = model.regions.find(
                 (r) => r.panel === panel && r.part === "torso",
             )!;
             const top = Math.min(...torso.polygon.map(([, y]) => y));
@@ -192,6 +215,76 @@ describe("uniform template regions", () => {
                 UNIFORM_FLATS_SOURCE.guides.collar,
             );
         }
+    });
+
+    it("cuts a neck out of any torso, and ignores shapes that aren't parts", () => {
+        const withNeck = {
+            ...UNIFORM_FLATS_SOURCE,
+            regions: [
+                ...UNIFORM_FLATS_SOURCE.regions.map((r) =>
+                    r.part === "torso"
+                        ? {
+                              ...r,
+                              polygon: [...r.polygon, [17, 10] as const],
+                          }
+                        : r,
+                ),
+                {
+                    panel: "front" as const,
+                    part: "collar",
+                    polygon: [
+                        [15, 10],
+                        [19, 10],
+                        [19, 19],
+                    ] as const,
+                },
+            ],
+        };
+        const model = flatsRegions(withNeck);
+        expect(model.regions.map((r) => r.id)).not.toContain("front-collar");
+        const torso = model.regions.find((r) => r.id === "front-torso")!;
+        expect(torso.bbox.y).toBeCloseTo(UNIFORM_FLATS_SOURCE.guides.collar, 6);
+    });
+
+    it("never overlaps two regions on a panel; neighbours only share a line", () => {
+        const { model } = uniformTemplate();
+        for (const panel of ["front", "back"] as const) {
+            const mine = model.regions.filter((r) => r.panel === panel);
+            // Points every 0.1 in, off any whole-hundredth line a cut lies on
+            for (let y = 0.005; y < 78; y += 0.1)
+                for (let x = 0.005; x < 34; x += 0.1) {
+                    const hits = mine.filter((r) =>
+                        insidePolygon(r.polygon, [x, y]),
+                    );
+                    expect(
+                        hits.length,
+                        `${panel} (${x.toFixed(3)}, ${y.toFixed(3)}): ${hits.map((r) => r.id).join(", ")}`,
+                    ).toBeLessThan(2);
+                }
+        }
+    });
+
+    it("draws the chest centre mark on its landmark", () => {
+        const { drawing } = uniformTemplate();
+        const [x, y] = UNIFORM_FLATS_SOURCE.landmarks.chestCentre;
+        const front = (drawing.root[2].children as DrawNode[]).find(
+            (n) => n.kind === "group" && n.id === "guides-front",
+        );
+        const shapes =
+            front?.kind === "group"
+                ? front.children.filter((n) => n.kind === "shape")
+                : [];
+        const vertical = shapes.find(
+            (n) =>
+                n.kind === "shape" &&
+                n.points.length === 2 &&
+                n.points[0][0] === x &&
+                n.points[1][0] === x &&
+                n.points[0][1] < y &&
+                n.points[1][1] > y &&
+                n.points[1][1] - n.points[0][1] < 1,
+        );
+        expect(vertical).toBeDefined();
     });
 
     it("names a limb's outside and its underarm or inseam, swapped between the panels", async () => {

@@ -2,11 +2,13 @@
  * The uniform template download under the band's uniform in the settings
  * panel (docs/3d/uniform-artwork.md, "Flats template", fork #1256): the
  * front and back flats page as PNG, SVG or PDF, and its regions as JSON for
- * scripts and agents. Shaped like the flag silk template's buttons.
+ * scripts and agents. Shaped like the flag silk template's buttons; an
+ * InfoTip says what the JSON is for, so a tap reaches it too.
  */
 import { useState } from "react";
 import { useTranslate } from "@tolgee/react";
 import { Button } from "@openmarch/ui";
+import InfoTip from "@/components/ui/InfoTip";
 import {
     UNIFORM_TEMPLATE_FORMATS,
     uniformTemplateFile,
@@ -67,11 +69,6 @@ export function UniformTemplateControls() {
                         variant="secondary"
                         size="compact"
                         disabled={busy !== null}
-                        title={
-                            format === "json"
-                                ? t("view3d.uniformTemplate.jsonTooltip")
-                                : undefined
-                        }
                         data-testid={`view3d-uniform-template-${format}`}
                         onClick={() => void download(format)}
                     >
@@ -80,6 +77,11 @@ export function UniformTemplateControls() {
                             : format.toUpperCase()}
                     </Button>
                 ))}
+                <InfoTip
+                    content={t("view3d.uniformTemplate.jsonInfo")}
+                    label={t("view3d.uniformTemplate.jsonInfoLabel")}
+                    side="bottom"
+                />
             </div>
             {problem && (
                 <p className="text-sub text-red" role="alert">

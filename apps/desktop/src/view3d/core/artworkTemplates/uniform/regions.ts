@@ -11,7 +11,7 @@
  * Plain TypeScript only: this module lives under `view3d/core/`, so it must
  * not import React, React Three Fiber, drei, Electron or the database.
  */
-// cspell:words inseam underarm paintable
+// cspell:words inseam underarm paintable Hodgman
 
 /** `[x, y]` in inches, x right and y down. */
 export type Point = readonly [number, number];
@@ -38,11 +38,11 @@ export interface PanelRect {
 }
 
 /**
- * The outlines and measurements a template is drawn from: the whole input.
- * Today this comes from the design study's fixture (`harnessFixture.ts`);
- * #1255 generates it from the body models.
+ * The template's page layout, fixed by the design: the page, its DPI, the
+ * panels and the front and back panels' centre line. Outlines are drawn to
+ * fit it, so a source holds only outlines, guide heights and landmarks.
  */
-export interface FlatsRegionsSource {
+export const FLATS_LAYOUT: {
     /** The body type the outlines are sized from. */
     readonly body: string;
     readonly page: { readonly w: number; readonly h: number };
@@ -50,21 +50,45 @@ export interface FlatsRegionsSource {
     readonly panels: Readonly<Record<FlatsPanelId, PanelRect>>;
     /** The centre line of the front and back panels, panel inches. */
     readonly centreX: number;
-    /** One outline per part per panel, in panel inches. Each is the side seam. */
+} = {
+    body: "neutral-average",
+    page: { w: 105, h: 88 },
+    dpi: 32,
+    panels: {
+        front: { x: 4, y: 6, w: 34, h: 78 },
+        back: { x: 42, y: 6, w: 34, h: 78 },
+        cape: { x: 80, y: 10, w: 20.7, h: 17.9 },
+    },
+    centreX: 17,
+};
+
+/** Guide heights, panel inches from the panel's top. */
+export interface FlatsGuides {
+    readonly collar: number;
+    readonly chest: number;
+    /** The jacket's hem, which is also the belt line. */
+    readonly jacketHem: number;
+    readonly crotch: number;
+    readonly knee: number;
+    readonly elbow: number;
+}
+
+/**
+ * The outlines and measurements a template is drawn from: the whole input.
+ * Today this comes from the design study's fixture (`harnessFixture.ts`);
+ * #1255 generates it from the body models.
+ */
+export interface FlatsRegionsSource {
+    /**
+     * Outlines in panel inches, each the side seam. One per paintable part
+     * per panel is needed; shapes for any other part are ignored.
+     */
     readonly regions: readonly {
         readonly panel: "front" | "back";
-        readonly part: FlatsPart;
+        readonly part: string;
         readonly polygon: readonly Point[];
     }[];
-    /** Guide heights, panel inches from the panel's top. */
-    readonly guides: {
-        readonly collar: number;
-        readonly chest: number;
-        readonly hem: number;
-        readonly crotch: number;
-        readonly knee: number;
-        readonly elbow: number;
-    };
+    readonly guides: FlatsGuides;
     readonly landmarks: {
         /** On the front panel. */
         readonly chestCentre: Point;
@@ -270,6 +294,50 @@ export function edgesOf(
 
 const ORDER: readonly FlatsPart[] = FLATS_PARTS;
 
+/** One step of Sutherland–Hodgman: the part of a polygon on the kept side of the height `y`. */
+function cutAt(
+    polygon: readonly Point[],
+    y: number,
+    keep: (py: number) => boolean,
+): Point[] {
+    const out: Point[] = [];
+    for (let i = 0; i < polygon.length; i++) {
+        const a = polygon[i];
+        const b = polygon[(i + 1) % polygon.length];
+        const aIn = keep(a[1]);
+        if (aIn) out.push(a);
+        if (aIn !== keep(b[1])) {
+            const f = (y - a[1]) / (b[1] - a[1]);
+            out.push([round2(a[0] + f * (b[0] - a[0])), y]);
+        }
+    }
+    return out;
+}
+
+/** The part of a polygon at or below the height `y` (y grows downward). */
+export const cutAbove = (polygon: readonly Point[], y: number) =>
+    cutAt(polygon, y, (py) => py >= y);
+
+/** The part of a polygon at or above the height `y`. */
+export const cutBelow = (polygon: readonly Point[], y: number) =>
+    cutAt(polygon, y, (py) => py <= y);
+
+/**
+ * A part's outline as the template paints it. The neck is never paintable
+ * (the palette collar covers it), so the torso stops at the collar line;
+ * for outlines that already leave the neck out, this changes nothing.
+ */
+function paintable(
+    part: FlatsPart,
+    polygon: readonly Point[],
+    guides: FlatsGuides,
+): readonly Point[] {
+    if (part !== "torso") return polygon;
+    return Math.min(...polygon.map(([, y]) => y)) < guides.collar
+        ? cutAbove(polygon, guides.collar)
+        : polygon;
+}
+
 /** The template's regions, with seams, edges and boxes, from a source. */
 export function flatsRegions(source: FlatsRegionsSource): FlatsRegions {
     const regions: FlatsRegion[] = [];
@@ -280,19 +348,20 @@ export function flatsRegions(source: FlatsRegionsSource): FlatsRegions {
             );
             if (!found)
                 throw new Error(`Uniform regions: no ${panel}-${part} outline`);
-            const bbox = bboxOf(found.polygon);
+            const polygon = paintable(part, found.polygon, source.guides);
+            const bbox = bboxOf(polygon);
             regions.push({
                 id: `${panel}-${part}`,
                 panel,
                 part,
                 label: PART_LABELS[part],
-                polygon: found.polygon,
+                polygon,
                 bbox,
-                edges: edgesOf(panel, part, source.centreX, bbox),
-                seams: seamTable(found.polygon),
+                edges: edgesOf(panel, part, FLATS_LAYOUT.centreX, bbox),
+                seams: seamTable(polygon),
             });
         }
-    const cape = source.panels.cape;
+    const cape = FLATS_LAYOUT.panels.cape;
     const capeOutline: Point[] = [
         [0, 0],
         [cape.w, 0],
@@ -318,7 +387,7 @@ export function centreLineX(region: FlatsRegion): number {
     return mids.reduce((s, x) => s + x, 0) / Math.max(1, mids.length);
 }
 
-/** The bottom of a region: a sleeve's cuff or a leg's hem. */
+/** The bottom of a region: a sleeve's cuff or a leg's hem (`sleeveCuff`, `legHem`). */
 export const bottomOf = (region: FlatsRegion) => region.bbox.y + region.bbox.h;
 
 const VIEWS: Readonly<Record<FlatsPanelId, string>> = {
@@ -342,6 +411,7 @@ export const UNIFORM_TEMPLATE_FILES = {
  */
 export function regionsJson(model: FlatsRegions): object {
     const s = model.source;
+    const L = FLATS_LAYOUT;
     const find = (id: string) => model.regions.find((r) => r.id === id)!;
     const limb = (part: FlatsPart) => ({
         front: round2(centreLineX(find(`front-${part}`))),
@@ -351,20 +421,20 @@ export function regionsJson(model: FlatsRegions): object {
         format: "openmarch-uniform-flats",
         version: 1,
         units: "in",
-        body: s.body,
-        page: s.page,
-        dpi: s.dpi,
-        pagePx: { w: s.page.w * s.dpi, h: s.page.h * s.dpi },
+        body: L.body,
+        page: L.page,
+        dpi: L.dpi,
+        pagePx: { w: L.page.w * L.dpi, h: L.page.h * L.dpi },
         files: UNIFORM_TEMPLATE_FILES,
         coordinates:
             "Panel inches: x right and y down from the panel's top-left corner. Add the panel's x and y to get page inches.",
         panels: Object.fromEntries(
             (["front", "back", "cape"] as const).map((id) => [
                 id,
-                { ...s.panels[id], view: VIEWS[id] },
+                { ...L.panels[id], view: VIEWS[id] },
             ]),
         ),
-        centreX: s.centreX,
+        centreX: L.centreX,
         wrapBand: {
             share: WRAP_BAND_SHARE,
             about: `The outer ${WRAP_BAND_SHARE * 100}% of each half-width, measured in from each side seam, wraps round the side of the body and is squeezed there.`,
@@ -391,7 +461,11 @@ export function regionsJson(model: FlatsRegions): object {
         guides: [
             { id: "collar", y: s.guides.collar, label: "collar" },
             { id: "chest", y: s.guides.chest, label: "chest" },
-            { id: "hem", y: s.guides.hem, label: "jacket hem and belt" },
+            {
+                id: "jacketHem",
+                y: s.guides.jacketHem,
+                label: "jacket hem and belt",
+            },
             { id: "crotch", y: s.guides.crotch, label: "crotch" },
             {
                 id: "knee",
@@ -422,8 +496,8 @@ export function regionsJson(model: FlatsRegions): object {
                     (p) => [p, limb(p)],
                 ),
             ),
-            cuff: round2(bottomOf(find("front-sleeve-L"))),
-            hem: round2(bottomOf(find("front-leg-L"))),
+            sleeveCuff: round2(bottomOf(find("front-sleeve-L"))),
+            legHem: round2(bottomOf(find("front-leg-L"))),
         },
     };
 }
