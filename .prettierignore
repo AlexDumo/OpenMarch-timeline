@@ -9,8 +9,6 @@
 **/node_modules/
 
 # Generated files
-# Uniform flats regions copied verbatim from the design-study harness (#1256, until #1255)
-**/artworkTemplates/uniform/fixtures/*.json
 *.d.ts
 *.d.cts
 *.d.mts

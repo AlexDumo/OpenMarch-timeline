@@ -87,6 +87,11 @@ export interface FlatsRegionsSource {
         readonly panel: "front" | "back";
         readonly part: string;
         readonly polygon: readonly Point[];
+        /**
+         * Both side seams' x every `SEAM_STEP` inches, as the outlines'
+         * generator measured them; computed from the outline when absent.
+         */
+        readonly seams?: readonly SeamRow[];
     }[];
     readonly guides: FlatsGuides;
     readonly landmarks: {
@@ -94,6 +99,20 @@ export interface FlatsRegionsSource {
         readonly chestCentre: Point;
         /** On the back panel. */
         readonly backNumberCentre: Point;
+    };
+    /**
+     * The grey figure for orientation (head and neck, hat, shoes, hands), on
+     * the front panel; the back panel shows its mirror image about the centre
+     * line. Not paintable.
+     */
+    readonly figure?: {
+        readonly shapes: readonly (readonly Point[])[];
+        readonly hands: readonly {
+            readonly cx: number;
+            readonly cy: number;
+            readonly rx: number;
+            readonly ry: number;
+        }[];
     };
 }
 
@@ -323,19 +342,28 @@ export const cutBelow = (polygon: readonly Point[], y: number) =>
     cutAt(polygon, y, (py) => py <= y);
 
 /**
- * A part's outline as the template paints it. The neck is never paintable
- * (the palette collar covers it), so the torso stops at the collar line;
- * for outlines that already leave the neck out, this changes nothing.
+ * A part's outline trimmed so it never overlaps its neighbours: the torso
+ * ends at the jacket hem line, the hips run from there to the crotch line,
+ * and the legs start at the crotch line. Neighbours may share a line. For
+ * outlines that already stop there, this changes nothing.
  */
-function paintable(
+function withoutOverlap(
     part: FlatsPart,
     polygon: readonly Point[],
-    guides: FlatsGuides,
+    g: FlatsGuides,
 ): readonly Point[] {
-    if (part !== "torso") return polygon;
-    return Math.min(...polygon.map(([, y]) => y)) < guides.collar
-        ? cutAbove(polygon, guides.collar)
-        : polygon;
+    const top = Math.min(...polygon.map(([, y]) => y));
+    const bottom = Math.max(...polygon.map(([, y]) => y));
+    let out = polygon;
+    if (part === "torso" && bottom > g.jacketHem)
+        out = cutBelow(out, g.jacketHem);
+    if (part === "hips") {
+        if (top < g.jacketHem) out = cutAbove(out, g.jacketHem);
+        if (bottom > g.crotch) out = cutBelow(out, g.crotch);
+    }
+    if (part.startsWith("leg-") && top < g.crotch)
+        out = cutAbove(out, g.crotch);
+    return out;
 }
 
 /** The template's regions, with seams, edges and boxes, from a source. */
@@ -348,8 +376,16 @@ export function flatsRegions(source: FlatsRegionsSource): FlatsRegions {
             );
             if (!found)
                 throw new Error(`Uniform regions: no ${panel}-${part} outline`);
-            const polygon = paintable(part, found.polygon, source.guides);
+            const polygon = withoutOverlap(part, found.polygon, source.guides);
             const bbox = bboxOf(polygon);
+            // The generator's seam rows, inside the (possibly trimmed) outline
+            const seams = found.seams
+                ? found.seams.filter(
+                      (row) =>
+                          row.y > bbox.y + 1e-6 &&
+                          row.y < bbox.y + bbox.h - 1e-6,
+                  )
+                : seamTable(polygon);
             regions.push({
                 id: `${panel}-${part}`,
                 panel,
@@ -358,7 +394,7 @@ export function flatsRegions(source: FlatsRegionsSource): FlatsRegions {
                 polygon,
                 bbox,
                 edges: edgesOf(panel, part, FLATS_LAYOUT.centreX, bbox),
-                seams: seamTable(polygon),
+                seams,
             });
         }
     const cape = FLATS_LAYOUT.panels.cape;

@@ -1,12 +1,14 @@
 // @vitest-environment node
-// cspell:words ihdr idat iend inseam underarm
+// cspell:words ihdr idat iend inseam underarm paintable
 import { deflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { pngChunk } from "../../png";
 import {
     FLATS_PARTS,
-    UNIFORM_FLATS_SOURCE,
+    FLATS_LAYOUT,
     flatsRegions,
+    loadUniformFlatsSource,
+    seamTable,
     insidePolygon,
     type DrawNode,
     uniformTemplate,
@@ -17,6 +19,9 @@ import {
     type UniformCanvas,
     type UniformCanvasContext,
 } from "..";
+
+/** The outlines generated from the body models (assets/uniform-flats/regions.json). */
+const SOURCE = await loadUniformFlatsSource();
 
 /** A 1 × 1 PNG, standing in for what a real canvas encodes. */
 function tinyPng(): Uint8Array {
@@ -106,7 +111,7 @@ const REGION_IDS = [
 ];
 
 describe("uniform template sizes", () => {
-    const { drawing } = uniformTemplate();
+    const { drawing } = uniformTemplate(SOURCE);
 
     it("is a 105 × 88 in page at 32 px per inch", () => {
         expect(drawing.width).toBe(105);
@@ -192,7 +197,7 @@ describe("uniform template regions", () => {
     });
 
     it("has every region id on a shape in the SVG's regions group, outside the guides", () => {
-        const svg = uniformTemplateSvg(uniformTemplate().drawing);
+        const svg = uniformTemplateSvg(uniformTemplate(SOURCE).drawing);
         const regions = svg.slice(
             svg.indexOf('<g id="regions">'),
             svg.indexOf('<g id="guides">'),
@@ -204,50 +209,63 @@ describe("uniform template regions", () => {
         expect(svg.match(/class="region"/g)).toHaveLength(REGION_IDS.length);
     });
 
-    it("keeps the neck out of the torso", () => {
-        const { model } = uniformTemplate();
+    it("keeps the neck out of every region, and paints the yoke round it", () => {
+        const { model } = uniformTemplate(SOURCE);
+        const neck: [number, number] = [
+            FLATS_LAYOUT.centreX,
+            SOURCE.guides.collar - 0.5,
+        ];
+        for (const r of model.regions.filter((r) => r.panel !== "cape"))
+            expect(insidePolygon(r.polygon, neck), r.id).toBe(false);
         for (const panel of ["front", "back"] as const) {
-            const torso = model.regions.find(
-                (r) => r.panel === panel && r.part === "torso",
-            )!;
-            const top = Math.min(...torso.polygon.map(([, y]) => y));
-            expect(top).toBeGreaterThanOrEqual(
-                UNIFORM_FLATS_SOURCE.guides.collar,
-            );
+            const torso = model.regions.find((r) => r.id === `${panel}-torso`)!;
+            // The torso's top runs up round the neck and over the shoulders
+            expect(torso.bbox.y).toBeLessThan(SOURCE.guides.collar - 2);
         }
     });
 
-    it("cuts a neck out of any torso, and ignores shapes that aren't parts", () => {
-        const withNeck = {
-            ...UNIFORM_FLATS_SOURCE,
+    it("ignores shapes that aren't paintable parts", () => {
+        const model = flatsRegions({
+            ...SOURCE,
             regions: [
-                ...UNIFORM_FLATS_SOURCE.regions.map((r) =>
-                    r.part === "torso"
-                        ? {
-                              ...r,
-                              polygon: [...r.polygon, [17, 10] as const],
-                          }
-                        : r,
-                ),
+                ...SOURCE.regions,
                 {
-                    panel: "front" as const,
+                    panel: "front",
                     part: "collar",
                     polygon: [
                         [15, 10],
                         [19, 10],
                         [19, 19],
-                    ] as const,
+                    ],
                 },
             ],
-        };
-        const model = flatsRegions(withNeck);
+        });
         expect(model.regions.map((r) => r.id)).not.toContain("front-collar");
-        const torso = model.regions.find((r) => r.id === "front-torso")!;
-        expect(torso.bbox.y).toBeCloseTo(UNIFORM_FLATS_SOURCE.guides.collar, 6);
+    });
+
+    it("agrees with the generator's seam rows, measured from the outlines", () => {
+        let compared = 0;
+        for (const r of SOURCE.regions) {
+            expect(r.seams, `${r.panel}-${r.part}`).toBeDefined();
+            const mine = new Map(
+                seamTable(r.polygon).map((row) => [row.y, row]),
+            );
+            for (const row of r.seams!) {
+                const m = mine.get(row.y);
+                expect(m, `${r.panel}-${r.part} at ${row.y}`).toBeDefined();
+                // within 0.05 in: the elbow rows differ by that much at most
+                expect(Math.abs(m!.left - row.left)).toBeLessThanOrEqual(0.051);
+                expect(Math.abs(m!.right - row.right)).toBeLessThanOrEqual(
+                    0.051,
+                );
+                compared++;
+            }
+        }
+        expect(compared).toBeGreaterThan(1000);
     });
 
     it("never overlaps two regions on a panel; neighbours only share a line", () => {
-        const { model } = uniformTemplate();
+        const { model } = uniformTemplate(SOURCE);
         for (const panel of ["front", "back"] as const) {
             const mine = model.regions.filter((r) => r.panel === panel);
             // Points every 0.1 in, off any whole-hundredth line a cut lies on
@@ -265,8 +283,8 @@ describe("uniform template regions", () => {
     });
 
     it("draws the chest centre mark on its landmark", () => {
-        const { drawing } = uniformTemplate();
-        const [x, y] = UNIFORM_FLATS_SOURCE.landmarks.chestCentre;
+        const { drawing } = uniformTemplate(SOURCE);
+        const [x, y] = SOURCE.landmarks.chestCentre;
         const front = (drawing.root[2].children as DrawNode[]).find(
             (n) => n.kind === "group" && n.id === "guides-front",
         );

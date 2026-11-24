@@ -7,7 +7,7 @@
  * not import React, React Three Fiber, drei, Electron or the database.
  */
 import { uniformTemplateDrawing, type UniformTemplateDrawing } from "./drawing";
-import { HARNESS_FLATS_SOURCE } from "./harnessFixture";
+import { fromFlatsAsset, type FlatsAsset } from "./flatsAsset";
 import { uniformTemplatePdf } from "./pdf";
 import { uniformTemplatePng, type UniformCanvas } from "./png";
 import {
@@ -24,13 +24,22 @@ export * from "./drawing";
 export * from "./svg";
 export * from "./pdf";
 export * from "./png";
+export * from "./flatsAsset";
+
+let loading: Promise<FlatsRegionsSource> | undefined;
 
 /**
- * The outlines every uniform template is drawn from. Until fork #1255 lands
- * they come from the design study's fixture; then this line takes its
- * generated outlines instead.
+ * The outlines every uniform template is drawn from: the ones generated from
+ * the body models (fork #1255). The file is about 160 KB, so it loads on
+ * the first download rather than with the settings panel, as the renderer
+ * fetches it on demand too.
  */
-export const UNIFORM_FLATS_SOURCE: FlatsRegionsSource = HARNESS_FLATS_SOURCE;
+export function loadUniformFlatsSource(): Promise<FlatsRegionsSource> {
+    loading ??= import("../../../assets/uniform-flats/regions.json").then((m) =>
+        fromFlatsAsset(m.default as unknown as FlatsAsset),
+    );
+    return loading;
+}
 
 export type UniformTemplateFormat = keyof typeof UNIFORM_TEMPLATE_FILES;
 
@@ -69,9 +78,7 @@ export interface UniformTemplateFile {
     readonly data: string | Uint8Array;
 }
 
-export function uniformTemplate(
-    source: FlatsRegionsSource = UNIFORM_FLATS_SOURCE,
-): {
+export function uniformTemplate(source: FlatsRegionsSource): {
     model: FlatsRegions;
     drawing: UniformTemplateDrawing;
 } {
@@ -86,9 +93,11 @@ export function uniformTemplate(
 export async function uniformTemplateFile(
     format: UniformTemplateFormat,
     makeCanvas: (width: number, height: number) => UniformCanvas,
-    source: FlatsRegionsSource = UNIFORM_FLATS_SOURCE,
+    source?: FlatsRegionsSource,
 ): Promise<UniformTemplateFile> {
-    const { model, drawing } = uniformTemplate(source);
+    const { model, drawing } = uniformTemplate(
+        source ?? (await loadUniformFlatsSource()),
+    );
     const name = UNIFORM_TEMPLATE_FILES[format];
     const mimeType = MIME[format];
     switch (format) {

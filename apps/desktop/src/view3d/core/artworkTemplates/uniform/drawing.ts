@@ -6,7 +6,8 @@
  *
  * The drawing has three top-level groups, painted in order:
  *
- * - `background`: the white page
+ * - `background`: the white page and the grey figure (head, hat, hands,
+ *   shoes), which the regions cover where they meet it
  * - `regions`: one shape per region, with the region's id, in panel inches
  *   inside a group per panel
  * - `guides`: everything else, guidance only
@@ -25,6 +26,7 @@ import {
     type EdgeSide,
     type FlatsRegion,
     type FlatsRegions,
+    type FlatsRegionsSource,
     type Point,
     type SeamRow,
 } from "./regions";
@@ -215,7 +217,12 @@ function safeArea(
     region: FlatsRegion,
     rows: readonly SeamRow[],
 ): ShapeNode | undefined {
-    const top = region.bbox.y + SAFE_INSET.end;
+    // Clear of the region's top, and of any notch in it: the torso's top runs
+    // round the neck, so the safe area starts where the outline is one span wide
+    const notch = rows
+        .filter((r) => crossingsAt(region.polygon, r.y) > 2)
+        .reduce((low, r) => Math.max(low, r.y), region.bbox.y);
+    const top = notch + SAFE_INSET.end;
     const bottom = bottomOf(region) - SAFE_INSET.end;
     const inside = rows.filter((r) => r.y >= top && r.y <= bottom);
     if (inside.length < 2) return undefined;
@@ -234,6 +241,14 @@ function safeArea(
         width: 0.04,
         dash: 0.25,
     };
+}
+
+/** How many times a polygon's outline crosses the height `y`. */
+function crossingsAt(polygon: readonly Point[], y: number): number {
+    let n = 0;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++)
+        if (polygon[j][1] <= y ? polygon[i][1] > y : polygon[i][1] <= y) n++;
+    return n;
 }
 
 /** Seam ticks every inch of height on both edges, numbered every 2 in by their height. */
@@ -427,42 +442,74 @@ function landmark(
     ];
 }
 
-/** Head, neck, hands and shoes in grey, for orientation: not paintable. */
+/**
+ * The grey figure on a panel: head and neck, hat, shoes and hands, for
+ * orientation only. The source draws it on the front panel; the back panel
+ * shows its mirror image about the centre line.
+ */
+/**
+ * The neck: the notch the torso's top edge makes round it, which no region
+ * covers. Filled grey so it reads as not paintable where the figure's head
+ * doesn't reach. Empty when the torso's top has no notch.
+ */
+function neckNotch(torso: FlatsRegion): Point[] {
+    const lefts: Point[] = [];
+    const rights: Point[] = [];
+    for (let y = torso.bbox.y + 0.01; y < bottomOf(torso); y += 0.05) {
+        const xs: number[] = [];
+        const ring = torso.polygon;
+        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+            const [xa, ya] = ring[j];
+            const [xb, yb] = ring[i];
+            if (ya <= y ? yb > y : yb <= y)
+                xs.push(xa + ((y - ya) / (yb - ya)) * (xb - xa));
+        }
+        if (xs.length < 4) {
+            if (lefts.length) break;
+            continue;
+        }
+        xs.sort((a, b) => a - b);
+        lefts.push([r3(xs[1]), r3(y)]);
+        rights.push([r3(xs[xs.length - 2]), r3(y)]);
+    }
+    return lefts.length > 1 ? [...lefts, ...rights.reverse()] : [];
+}
+
 function contextFigure(
-    regions: readonly FlatsRegion[],
-    centreX: number,
-): ShapeNode[] {
-    const torso = regions.find((r) => r.part === "torso")!;
-    const neckW = torso.bbox.w * 0.27;
-    const neckH = 4.5;
-    const neckTop = torso.bbox.y - neckH;
-    const headRx = torso.bbox.w * 0.19;
-    const headRy = 4.8;
-    const grey = (points: Point[]): ShapeNode => ({
+    figure: FlatsRegionsSource["figure"],
+    torso: FlatsRegion,
+    panel: "front" | "back",
+): GroupNode {
+    const cx = FLATS_LAYOUT.centreX;
+    const x = (v: number) => r3(panel === "front" ? v : 2 * cx - v);
+    const P = FLATS_LAYOUT.panels[panel];
+    // Each piece is stroked in its own grey too, so no seams show between triangles
+    const grey = (points: readonly Point[]): ShapeNode => ({
         kind: "shape",
         points,
         closed: true,
         fill: COLORS.context,
+        stroke: COLORS.context,
+        width: 0.04,
     });
-    const shapes = [
-        grey(
-            rect(r3(centreX - neckW / 2), r3(neckTop), r3(neckW), neckH + 0.02),
-        ),
-        grey(ellipse(centreX, neckTop - headRy + 0.6, headRx, headRy)),
-    ];
-    for (const r of regions) {
-        const rows = r.seams;
-        const lastRow = rows[rows.length - 1];
-        if (!lastRow) continue;
-        const cx = (lastRow.left + lastRow.right) / 2;
-        const w = lastRow.right - lastRow.left;
-        const bottom = bottomOf(r);
-        if (r.part.startsWith("sleeve"))
-            shapes.push(grey(ellipse(cx, bottom + 3.2, w * 0.42, 3.2)));
-        if (r.part.startsWith("leg"))
-            shapes.push(grey(ellipse(cx, bottom + 1.5, w * 0.6, 1.5)));
-    }
-    return shapes;
+    return {
+        kind: "group",
+        id: `figure-${panel}`,
+        dx: P.x,
+        dy: P.y,
+        children: [
+            ...(figure?.shapes ?? []).map((shape) =>
+                grey(shape.map(([px, py]): Point => [x(px), py])),
+            ),
+            ...(figure?.hands ?? []).map((h) =>
+                grey(ellipse(x(h.cx), h.cy, h.rx, h.ry)),
+            ),
+            // The notch is in panel inches already, on its own panel
+            ...((notch) => (notch.length ? [grey(notch)] : []))(
+                neckNotch(torso),
+            ),
+        ],
+    };
 }
 
 /** Inch ticks down a panel's left edge, numbered every 6 in. */
@@ -519,7 +566,6 @@ function panelGuides(model: FlatsRegions, panel: "front" | "back"): GroupNode {
                 bold: true,
             },
         ),
-        ...contextFigure(mine, L.centreX),
     ];
 
     const spans = new Map(mine.map((r) => [r.id, sampleSpans(r)]));
@@ -550,7 +596,7 @@ function panelGuides(model: FlatsRegions, panel: "front" | "back"): GroupNode {
 
     // Guide lines
     nodes.push(
-        ...guideAcross(torso, s.guides.collar + 0.02, "collar", "centre", true),
+        ...guideAcross(torso, s.guides.collar + 0.02, "neckline", "left", true),
         ...guideAcross(torso, s.guides.chest, "chest"),
         ...guideAcross(
             hips,
@@ -902,6 +948,7 @@ export function uniformTemplateDrawing(
     model: FlatsRegions,
 ): UniformTemplateDrawing {
     const s = FLATS_LAYOUT;
+    const { figure } = model.source;
     const { w, h } = s.page;
     const px = `${w * s.dpi} x ${h * s.dpi} px`;
 
@@ -964,7 +1011,7 @@ export function uniformTemplateDrawing(
         height: h,
         dpi: s.dpi,
         title: "OpenMarch uniform template",
-        description: `Uniform flats template in inches (${w} x ${h} in; the PNG is ${px}). Paint inside the shapes in g#regions; their ids are front-torso, front-sleeve-L, front-sleeve-R, front-hips, front-leg-L, front-leg-R, the same with back-, and cape. Their points are panel inches inside a group moved to each panel. Everything in g#guides is guidance only. uniform-regions.json has the outlines, the side seam table, guide heights and landmarks.`,
+        description: `Uniform flats template in inches (${w} x ${h} in; the PNG is ${px}). Paint inside the shapes in g#regions; their ids are front-torso, front-sleeve-L, front-sleeve-R, front-hips, front-leg-L, front-leg-R, the same with back-, and cape. Their points are panel inches inside a group moved to each panel. Everything in g#background and g#guides is guidance only. uniform-regions.json has the outlines, the side seam table, guide heights and landmarks.`,
         root: [
             {
                 kind: "group",
@@ -976,6 +1023,15 @@ export function uniformTemplateDrawing(
                         closed: true,
                         fill: COLORS.page,
                     },
+                    ...(["front", "back"] as const).map((panel) =>
+                        contextFigure(
+                            figure,
+                            model.regions.find(
+                                (r) => r.id === `${panel}-torso`,
+                            )!,
+                            panel,
+                        ),
+                    ),
                 ],
             },
             { kind: "group", id: "regions", children: regionGroups },
