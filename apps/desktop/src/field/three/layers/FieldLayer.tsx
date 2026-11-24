@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import type { FieldViewFrom } from "@/field/fieldViewFrom";
 import { useFrame, useThree } from "@react-three/fiber";
 import {
     BufferAttribute,
@@ -196,8 +197,11 @@ export default function FieldLayer({
     strips = NO_STRIPS,
     numberAtlas,
     labelAtlas,
+    viewFrom = "audience",
 }: {
     fieldProperties: FieldProperties;
+    /** The side the field is seen from: the performers' turns it (exports only, #1265) */
+    viewFrom?: FieldViewFrom;
     /** The pit areas in front of and behind the field (`pitAreasOf`) */
     strips?: readonly FieldRect[];
     /** The yard number font. */
@@ -218,6 +222,7 @@ export default function FieldLayer({
                 gridLines,
                 halfLines,
                 strips,
+                viewFrom,
             },
         );
         const batch = (atlas: GlyphAtlas, font: "number" | "label") => {
@@ -255,6 +260,7 @@ export default function FieldLayer({
         halfLines,
         numberAtlas,
         labelAtlas,
+        viewFrom,
     ]);
 
     useEffect(() => {

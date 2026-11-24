@@ -3960,5 +3960,9 @@
     "actions.ui.hideView3dCameraOnField": "Command palette label of the 3D View camera action while it shows. Verb.",
     "field.view3dCamera.name": "Small chip on the 2D field shown while hovering or dragging the purple camera marker. The marker is where the separate 3D View window's camera stands. Names it.",
     "field.view3dCamera.move": "Accessible label of the purple camera marker on the 2D field: dragging it moves the 3D View window's camera across the field (it keeps looking the same way).",
-    "field.view3dCamera.aim": "Accessible label of the small ring at the end of the 3D View camera's dashed line of sight on the 2D field: dragging it turns the camera to look at that spot."
+    "field.view3dCamera.aim": "Accessible label of the small ring at the end of the 3D View camera's dashed line of sight on the 2D field: dragging it turns the camera to look at that spot.",
+    "exportCoordinates.viewFrom": "Label for a two-way choice in the drill chart and video export tabs: which side of the football field the export shows it from (the audience's side or the performers' side).",
+    "exportCoordinates.viewFromAudience": "Choice for \"View from\": the field seen from the stands, the front sideline at the bottom, as the editor shows it.",
+    "exportCoordinates.viewFromPerformers": "Choice for \"View from\": the field turned around, as marching performers see it when they face the front (the audience). Plural noun.",
+    "exportCoordinates.viewFromTooltip": "Tooltip on \"View from\" in the export tabs. \"Side 1\" is the drill term for one end of the field; keep it as a fixed term."
 }
