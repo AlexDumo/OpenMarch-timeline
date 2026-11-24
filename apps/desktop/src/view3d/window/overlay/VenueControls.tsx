@@ -139,11 +139,11 @@ export function FieldLinesControl() {
                 label={t("view3d.settings.fieldLines")}
                 testId="view3d-field-lines-picker"
             />
-            {lines === "stadium" && (
-                <p className="text-sub text-text/60">
-                    {t("view3d.settings.fieldLinesStadiumNote")}
-                </p>
-            )}
+            <p className="text-sub text-text/60">
+                {lines === "stadium"
+                    ? t("view3d.settings.fieldLinesStadiumNote")
+                    : t("view3d.settings.fieldLinesShowNote")}
+            </p>
         </div>
     );
 }
