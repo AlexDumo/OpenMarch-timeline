@@ -78,11 +78,13 @@ export function UniformTemplateControls() {
                                 : format.toUpperCase()}
                         </Button>
                     );
-                    // the tip explains the JSON button: it wraps with it, never onto a line alone
+                    // the tip explains the JSON button: it wraps with it, never onto a line alone.
+                    // In touch mode its hit area reaches 14 px past the icon, so the gap is that
+                    // wide there and a tap on the button's right edge stays the button's.
                     return format === "json" ? (
                         <span
                             key={format}
-                            className="inline-flex shrink-0 items-center gap-4"
+                            className="touch:gap-14 inline-flex shrink-0 items-center gap-4"
                         >
                             {button}
                             <InfoTip

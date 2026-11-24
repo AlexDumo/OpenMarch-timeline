@@ -109,6 +109,18 @@ export function showAssetUse(
     };
 }
 
+/**
+ * The values Remove unused… keeps because an undo or redo step names them: `inHistory` once that's
+ * been read, and until then (or when it can't be read) every one of `uniforms`, so nothing an
+ * undo needs is ever offered.
+ */
+export function keptForHistory(
+    uniforms: readonly string[],
+    inHistory: ReadonlySet<string> | undefined,
+): ReadonlySet<string> {
+    return inHistory ?? new Set(uniforms);
+}
+
 /** A size for people: "4.1 MB", "820 KB", "12 bytes" (the unit words are the caller's) */
 export function sizeParts(bytes: number): {
     value: string;

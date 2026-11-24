@@ -3,7 +3,8 @@
 - Design: [../uniform-artwork.md](../uniform-artwork.md)
 - Epic: fork #971, work under #975
 - Integration branch: `uniforms/host`. It ships to `main` as **one** pull request.
-- Orchestrator: one T3 thread, which owns this file and the tracker.
+- Orchestrator: one T3 thread, which owns this file and keeps the tracker in the integration
+  pull request (fork #1274) up to date.
 
 ## What "shipped" means
 
@@ -37,7 +38,7 @@ The integration pull request goes to `main` when all of these are true:
 - Simulated users try a step before the owner sees it.
 - At most two steps wait on the owner at once.
 - Bring `main` into `uniforms/host` before each step starts, so the final merge stays small.
-- Anything new that comes up becomes an issue and a row below, not a detour.
+- Anything new that comes up becomes an issue and a line in the tracker (fork #1274), not a detour.
 
 ## Tracker
 

@@ -3,8 +3,10 @@
 // "Rendering: the hybrid wrap") and writes, under src/view3d/assets/uniform-flats/:
 //
 //   regions.json        the flats template in numbers: panels, region outlines (panel inches), side seams every
-//                       0.25 in, guides, landmarks and the grey context figure. The template (fork #1256) is drawn
-//                       from it; authors and agents read it.
+//                       0.25 in, guides, landmarks and the grey context figure. It is the template's downloadable
+//                       uniform-regions.json, written by the template's own code (artworkTemplates/uniform/
+//                       regions.ts, regionsJson), plus the figure and `generatedBy`; the template (fork #1256) is
+//                       drawn from it and the renderer reads its outlines.
 //   layout.json         what the renderer needs: segments, rows, bone frames, joint planes, grade factors per body.
 //   lut/<body>.bin      one lookup table per body type: RGBA half floats, LUT_ANGLES columns x rows (see below).
 //
@@ -34,6 +36,13 @@ import fs from "node:fs";
 import path from "node:path";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+// the template's own code writes the file, so the renderer's asset and the download agree (Node 24 runs the
+// TypeScript as it is)
+import {
+    flatsRegions,
+    regionsJson as templateRegionsJson,
+    spanAt,
+} from "../../src/view3d/core/artworkTemplates/uniform/regions.ts";
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const DESKTOP = path.resolve(HERE, "../..");
@@ -263,6 +272,9 @@ for (const seg of SEGMENTS) {
     };
 }
 tRange.torso.min = 0;
+// the torso stops at the jacket hem, where the hips start: the jacket's last few mm over the pants take the
+// hem row's art, and the torso's outline ends on the template's hem line
+tRange.torso.max = Y_TOP_TORSO - Y_TOP_HIPS;
 tRange.hips.min = 0;
 tRange.hips.max = Y_TOP_HIPS - Y_CROTCH;
 // a thigh starts where the crotch plane crosses its axis, less a little for the tilt
@@ -1015,8 +1027,27 @@ for (const panel of ["front", "back"]) {
                     4,
             ) / 4;
         const seamRows = [];
+        // above the side seams (the torso's shoulders), the outline's own extent, from the region's top
+        const yTop = Math.min(...ys);
+        for (
+            let y = Math.floor(yTop * 4 + 1e-9) / 4 + 0.25;
+            y < seamY0 - 1e-9;
+            y += 0.25
+        ) {
+            const span = spanAt(polygon, y);
+            if (span)
+                seamRows.push({
+                    y: r2(y),
+                    left: r2(span.left),
+                    right: r2(span.right),
+                });
+        }
         for (let y = seamY0; y <= seamY1 + 1e-9; y += 0.25)
-            seamRows.push([r2(y), r2(xAt(left, y)), r2(xAt(right, y))]);
+            seamRows.push({
+                y: r2(y),
+                left: r2(xAt(left, y)),
+                right: r2(xAt(right, y)),
+            });
         REGIONS.push({
             id: `${panel}-${part}`,
             panel,
@@ -1030,7 +1061,7 @@ for (const panel of ["front", "back"]) {
                 w: r2(Math.max(...xs) - Math.min(...xs)),
                 h: r2(Math.max(...ys) - Math.min(...ys)),
             },
-            seams: { step: 0.25, rows: seamRows },
+            seams: seamRows,
         });
     }
 }
@@ -1058,7 +1089,7 @@ const GUIDES = [
         label: "neckline at the centre front (above it: the neck, palette colors only)",
     },
     { id: "chest", y: yWorld(1.3), label: "chest" },
-    { id: "hem", y: yWorld(Y_TOP_HIPS), label: "jacket hem and belt" },
+    { id: "jacketHem", y: yWorld(Y_TOP_HIPS), label: "jacket hem and belt" },
     { id: "crotch", y: yWorld(Y_CROTCH), label: "crotch" },
     {
         id: "knee",
@@ -1074,7 +1105,7 @@ const GUIDES = [
 ];
 
 // the grey context figure (head, shako, visor, shoes; hands at the cuffs), front panel inches; the back panel
-// is its mirror image about the centre line. Triangles as flat [x0, y0, x1, y1, x2, y2] lists.
+// is its mirror image about the centre line. Triangles as three [x, y] points.
 const FIGURE = (() => {
     const proj = (p, dx = 0) => [
         CX + toIn(p[0]) + dx,
@@ -1095,11 +1126,9 @@ const FIGURE = (() => {
             (t) => t.part === part && (part !== 0 || t.c[1] > 1.4),
         );
         parts[name] = tris.map((t) =>
-            t.pts
-                .flatMap((p) =>
-                    proj(p, part === 4 ? Math.sign(t.c[0]) * legShift : 0),
-                )
-                .map(r2),
+            t.pts.map((p) =>
+                proj(p, part === 4 ? Math.sign(t.c[0]) * legShift : 0).map(r2),
+            ),
         );
     }
     const hands = ["L", "R"].map((s) => {
@@ -1109,75 +1138,58 @@ const FIGURE = (() => {
         const xl = flatX(seg, k, "F", last.Fm);
         const xr = flatX(seg, k, "F", last.Fp);
         return {
-            side: s,
             cx: r2(CX + (xl + xr) / 2),
             cy: r2(rowY(seg, k) + 3.4),
             rx: r2((xr - xl) * 0.42),
             ry: 3.4,
         };
     });
-    return { parts, hands };
+    // head, shako, visor and shoes, in that order, as one list of triangles
+    return { shapes: Object.values(parts).flat(), hands };
 })();
 
-const regionsJson = {
-    format: "openmarch-uniform-flats@1",
-    generatedBy: "apps/desktop/scripts/view3d-assets/uniform-flats.mjs",
-    technique: "hybrid",
-    input: "flats",
-    units: "in",
-    median: MEDIAN,
-    dpi: DPI,
-    sheet: PAGE,
-    sheetPx: { w: PAGE.w * DPI, h: PAGE.h * DPI },
-    coordinates:
-        "Sheet inches from the page's top-left (x right, y down). Region polygons, seams, guides and landmarks are panel inches: from the panel's top-left. A front or back image given on its own covers exactly its panel; a sheet image covers the whole page.",
-    panels: PANELS,
-    centreX: CX,
-    views: {
-        front: "as you face the performer: the performer's right is on your left",
-        back: "as you stand behind the performer: the performer's left is on your left",
-        cape: "the cape from behind",
-    },
-    regions: REGIONS.map((r) => ({
-        id: r.id,
+// regions.json: the template's uniform-regions.json, from the template's own code, plus the figure
+const GUIDE = (id) => GUIDES.find((g) => g.id === id).y;
+const templateModel = flatsRegions({
+    regions: REGIONS.filter((r) => r.panel !== "cape").map((r) => ({
         panel: r.panel,
         part: r.part,
-        label: r.label,
         polygon: r.polygon,
-        bbox: r.bbox,
-        ...(r.seams ? { seams: r.seams } : {}),
+        seams: r.seams,
     })),
-    regionNotes:
-        "Each garment polygon is its left side seam top to bottom, then its right side seam bottom to top; the torso's then runs along its top edge (round the neck and over the shoulders) back to the start. seams.rows are [y, left x, right x] every 0.25 in. Both edges of every region are side seams, where the front flat meets the back flat. The head, neck, hands, shoes and hat are outside every region: they take palette colors only.",
-    guides: GUIDES,
+    guides: {
+        collar: GUIDE("collar"),
+        chest: GUIDE("chest"),
+        jacketHem: GUIDE("jacketHem"),
+        crotch: GUIDE("crotch"),
+        knee: GUIDE("knee"),
+        elbow: GUIDE("elbow"),
+    },
     landmarks: {
-        "chest centre": { panel: "front", x: r2(CX), y: yWorld(1.3) },
-        "upper back centre": { panel: "back", x: r2(CX), y: yWorld(1.3) },
-        "back number centre": { panel: "back", x: r2(CX), y: yWorld(1.22) },
-        "sleeve-L centre line": {
-            front: r2(CX + ARM_OFF),
-            back: r2(CX - ARM_OFF),
-        },
-        "sleeve-R centre line": {
-            front: r2(CX - ARM_OFF),
-            back: r2(CX + ARM_OFF),
-        },
-        "leg-L centre line": {
-            front: r2(CX + LEG_OFF),
-            back: r2(CX - LEG_OFF),
-        },
-        "leg-R centre line": {
-            front: r2(CX - LEG_OFF),
-            back: r2(CX + LEG_OFF),
-        },
-        elbow: GUIDES.find((g) => g.id === "elbow").y,
-        cuff: r2(rowY("forearm-L", segRows["forearm-L"].rows - 1)),
-        knee: GUIDES.find((g) => g.id === "knee").y,
-        hem: r2(rowY("shin-L", segRows["shin-L"].rows - 1)),
+        chestCentre: [r2(CX), yWorld(1.3)],
+        backNumberCentre: [r2(CX), yWorld(1.22)],
     },
     figure: FIGURE,
-    blend: BLEND,
+});
+const regionsJson = {
+    ...templateRegionsJson(templateModel),
+    generatedBy: "apps/desktop/scripts/view3d-assets/uniform-flats.mjs",
+    figure: FIGURE,
 };
+if (
+    regionsJson.dpi !== DPI ||
+    regionsJson.page.w !== PAGE.w ||
+    regionsJson.page.h !== PAGE.h ||
+    regionsJson.centreX !== CX ||
+    ["front", "back", "cape"].some((id) =>
+        ["x", "y", "w", "h"].some(
+            (k) => regionsJson.panels[id][k] !== PANELS[id][k],
+        ),
+    )
+)
+    throw new Error(
+        "uniform flats: the template's page layout (regions.ts FLATS_LAYOUT) and this script's differ",
+    );
 
 const layoutJson = {
     generatedBy: "apps/desktop/scripts/view3d-assets/uniform-flats.mjs",
@@ -1221,9 +1233,17 @@ const layoutJson = {
     /** Grade factor per body, segment and row: [front, back]. */
     k: KROWS,
 };
+// as the template writes its download (index.ts formatJson): each point, seam row or box on one line
 fs.writeFileSync(
     path.join(OUT, "regions.json"),
-    JSON.stringify(regionsJson, null, 1) + "\n",
+    `${JSON.stringify(regionsJson, null, 1).replace(
+        /[[{][^[\]{}]*[\]}]/g,
+        (leaf) =>
+            leaf
+                .replace(/\s*\n\s*/g, " ")
+                .replace(/([[{]) /, "$1")
+                .replace(/ ([\]}])$/, "$1"),
+    )}\n`,
 );
 fs.writeFileSync(
     path.join(OUT, "layout.json"),

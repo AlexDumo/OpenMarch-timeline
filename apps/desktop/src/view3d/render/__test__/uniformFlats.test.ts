@@ -62,6 +62,21 @@ describe("withFlats", () => {
         );
         // the palette collar only on the neck: the yoke takes art
         expect(body).toContain("c = mix(c, uTrim, omFlatNeck() * uCollar);");
+        // the neck's antialiasing (fwidth) runs in uniform control flow, before uniformColor(): never
+        // inside its part branches
+        const neck = fs.slice(
+            fs.indexOf("float omFlatNeck() {"),
+            fs.indexOf("}", fs.indexOf("float omFlatNeck() {")),
+        );
+        expect(neck).not.toContain("fwidth");
+        expect(neck).not.toContain("return 0.0");
+        const main = fs.slice(fs.indexOf("void main()"));
+        expect(
+            main.indexOf("omFlatNeckW = omFlatNeckWeight();"),
+        ).toBeGreaterThan(-1);
+        expect(main.indexOf("omFlatNeckW = omFlatNeckWeight();")).toBeLessThan(
+            main.indexOf("uniformColor()"),
+        );
         expect(body).not.toMatch(/over\(p\.y - [0-9.]+\) \* uCollar/);
         expect(shader.uniforms.uFlatNeckR.value).toBe(
             layout.neckR["neutral-average"],

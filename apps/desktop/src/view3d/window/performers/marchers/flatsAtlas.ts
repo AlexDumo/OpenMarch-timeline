@@ -10,7 +10,9 @@
  *   the body type, so each (look, body type, resolution) has its own atlas;
  *   then a worker copies every region's edge pixels 1.5 in outward so
  *   filtering at the side seams never reaches the empty page, and hands back
- *   an ImageBitmap: no canvas or pixel copy stays in the window.
+ *   an ImageBitmap. No canvas or pixel array stays in the window, but the
+ *   bitmap does: three keeps it as `texture.image` until the atlas is freed,
+ *   when disposing the texture closes it.
  * - Atlases are shared while in use (`acquireFlats`) and freed when the last
  *   user lets go.
  */
@@ -36,10 +38,7 @@ import { runUniformPackJob } from "@/view3d/uniformPack/runUniformPackJob";
 import type { BodyType } from "@/view3d/core/marchers/looks";
 import type { FlatsAtlasRect } from "@/view3d/render/uniform-flats.js";
 import FlatsBleedWorker from "./flatsBleed.worker.ts?worker";
-import type {
-    FlatsBleedRequest,
-    FlatsBleedResponse,
-} from "./flatsBleed.worker";
+import { createBleedClient } from "./flatsBleedClient";
 
 const lutUrls = import.meta.glob<string>(
     "../../../assets/uniform-flats/lut/*.bin",
@@ -188,35 +187,7 @@ function regionMask(
     return mask;
 }
 
-let worker: Worker | null = null;
-let nextId = 1;
-const pending = new Map<
-    number,
-    { resolve: (b: ImageBitmap) => void; reject: (e: Error) => void }
->();
-/** Plan keys the worker has been sent a mask for. */
-const planned = new Set<string>();
-function bleedWorker(): Worker {
-    if (worker) return worker;
-    const w = new FlatsBleedWorker();
-    w.onmessage = (e: MessageEvent<FlatsBleedResponse>) => {
-        const p = pending.get(e.data.id);
-        if (!p) return;
-        pending.delete(e.data.id);
-        if ("bitmap" in e.data) p.resolve(e.data.bitmap);
-        else p.reject(new Error(`3D View: flats bleed: ${e.data.error}`));
-    };
-    w.onerror = (e) => {
-        for (const p of pending.values())
-            p.reject(new Error(`3D View: flats bleed worker: ${e.message}`));
-        pending.clear();
-        planned.clear();
-        w.terminate();
-        worker = null;
-    };
-    worker = w;
-    return w;
-}
+const bleedClient = createBleedClient(() => new FlatsBleedWorker());
 
 /**
  * Bleeds composed pixels in the worker (`flatsBleed.worker.ts`) and returns
@@ -231,24 +202,13 @@ function bleed(
     H: number,
     pixels: ArrayBuffer,
 ): Promise<ImageBitmap> {
-    const key = `${dpi}|${rect.w}|${rect.h}|${rect.cape ? 1 : 0}`;
-    const steps = Math.round(FLATS_BLEED_IN * dpi);
-    const mask = planned.has(key) ? null : regionMask(regions, rect, dpi, W, H);
-    const w = bleedWorker();
-    planned.add(key);
-    const id = nextId++;
-    return new Promise<ImageBitmap>((resolve, reject) => {
-        pending.set(id, { resolve, reject });
-        const request: FlatsBleedRequest = {
-            id,
-            key,
-            W,
-            H,
-            steps,
-            mask,
-            pixels,
-        };
-        w.postMessage(request, [pixels, ...(mask ? [mask.buffer] : [])]);
+    return bleedClient.bleed({
+        key: `${dpi}|${rect.w}|${rect.h}|${rect.cape ? 1 : 0}`,
+        W,
+        H,
+        steps: Math.round(FLATS_BLEED_IN * dpi),
+        pixels,
+        mask: () => regionMask(regions, rect, dpi, W, H),
     });
 }
 

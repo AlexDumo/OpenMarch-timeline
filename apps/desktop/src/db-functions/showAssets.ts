@@ -349,10 +349,20 @@ export async function getShowAssetReferences({
 }
 
 /**
+ * How `value` reads inside a stored history statement: the venue's JSON escapes `"` and `\`, and
+ * SQLite's `quote()` doubles `'` (`historyTriggers.ts`).
+ */
+export function historyEncoding(value: string): string {
+    return JSON.stringify(value).slice(1, -1).replaceAll("'", "''");
+}
+
+/**
  * Which of `values` an undo or redo step could write back: those the history's stored SQL names.
  * Remove unused… is outside undo, so an asset a step would bring back must stay; the show keeps
  * an imported uniform the venue named before (fork #1257). The values are asset references
- * (`library:<id>@<hash>`), which history stores verbatim inside the venue's JSON.
+ * (`library:<id>@<hash>`), which history stores inside the venue's JSON, escaped
+ * ({@link historyEncoding}). One pass over the steps that write the venue's row; the rest of
+ * history never names a uniform.
  */
 export async function valuesNamedInHistory({
     db,
@@ -362,13 +372,26 @@ export async function valuesNamedInHistory({
     values: readonly string[];
 }): Promise<Set<string>> {
     const named = new Set<string>();
-    for (const value of values) {
-        const hit = await db.get<{ found: number } | undefined>(sql`
-            SELECT 1 AS found FROM history_undo WHERE instr(sql, ${value}) > 0
-            UNION ALL
-            SELECT 1 AS found FROM history_redo WHERE instr(sql, ${value}) > 0
-            LIMIT 1`);
-        if (hit) named.add(value);
+    if (values.length === 0) return named;
+    // the triggers write `UPDATE "view3d_venue" …` and `INSERT INTO "view3d_venue" …` with the
+    // row's data; `DELETE FROM` steps carry none
+    const rows = await db.all<{ sql: string } | [string]>(sql`
+        SELECT sql FROM history_undo
+        WHERE sql LIKE 'UPDATE "view3d_venue" %' OR sql LIKE 'INSERT INTO "view3d_venue" %'
+        UNION ALL
+        SELECT sql FROM history_redo
+        WHERE sql LIKE 'UPDATE "view3d_venue" %' OR sql LIKE 'INSERT INTO "view3d_venue" %'`);
+    const wanted = values.map((value) => ({
+        value,
+        encoded: historyEncoding(value),
+    }));
+    for (const row of rows) {
+        // the renderer's proxy may hand rows back as arrays
+        const text = Array.isArray(row) ? row[0] : row.sql;
+        for (const w of wanted)
+            if (!named.has(w.value) && text.includes(w.encoded))
+                named.add(w.value);
+        if (named.size === values.length) break;
     }
     return named;
 }

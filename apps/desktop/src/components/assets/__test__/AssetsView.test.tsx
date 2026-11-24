@@ -60,6 +60,25 @@ vi.mock("@/App", () => ({
 }));
 app.client = harnessQueryClient;
 
+// The uniform pack worker doesn't run in jsdom: read packs here, with the same reader
+vi.mock("@/view3d/uniformPack/runUniformPackJob", async () => {
+    const { readUniformPack } =
+        await import("@/view3d/core/uniformPack/format");
+    return {
+        runUniformPackJob: async (request: {
+            type: string;
+            bytes: Uint8Array;
+        }) => {
+            if (request.type !== "pack")
+                throw new Error(`no ${request.type} jobs in this test`);
+            return {
+                type: "pack",
+                manifest: readUniformPack(request.bytes).manifest,
+            };
+        },
+    };
+});
+
 const JsdomBlob = globalThis.Blob;
 afterAll(() => {
     globalThis.Blob = JsdomBlob;
@@ -371,5 +390,108 @@ describeDbTests("Assets view", (it) => {
             expect.stringContaining("Uniform A"),
             expect.stringContaining("Uniform B"),
         ]);
+    });
+
+    /** Stores a uniform pack and dresses the band in it, as the editor does */
+    const wearUniform = async (db: DbConnection, name: string, tag: number) => {
+        const pack = writeUniformPack(sampleManifest(name), {
+            "layers/base.png": fakePng(3360, 2816, tag),
+        });
+        return await setUniformPack({
+            db,
+            pack,
+            manifest: readUniformPack(pack).manifest,
+            field: await fieldPropertiesOf(db),
+        });
+    };
+
+    it("says when the band's uniform is in the show but doesn't read, and when it isn't in the show", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        const value = await wearUniform(db, "Readable", 11);
+        await setUpFeature(<SidebarModal />, 1, []);
+        await act(async () => showAssetsView());
+        const view = await screen.findByTestId("assets-view");
+        await waitFor(() =>
+            expect(within(view).getAllByTestId("asset-row")).toHaveLength(1),
+        );
+        // it reads: no note
+        await act(async () => {
+            await harnessQueryClient()!.refetchQueries();
+        });
+        expect(
+            screen.queryByTestId("assets-unreadable-uniform-note"),
+        ).toBeNull();
+        expect(screen.queryByTestId("assets-missing-uniform-note")).toBeNull();
+
+        // the band wears one whose stored file is damaged
+        const broken = await wearUniform(db, "Damaged", 12);
+        const [asset] = (await getShowAssets({ db })).filter(
+            (a) => a.name === "Damaged",
+        );
+        await db.run(
+            sql`UPDATE show_asset_blobs SET data = x'00' WHERE hash = ${asset.parts.pack}`,
+        );
+        expect(broken).not.toBe(value);
+        await refresh();
+        await waitFor(() =>
+            expect(
+                screen.getByTestId("assets-unreadable-uniform-note"),
+            ).toHaveTextContent("can't be read"),
+        );
+        expect(screen.queryByTestId("assets-missing-uniform-note")).toBeNull();
+
+        // the venue names one the show doesn't have
+        const venue = (await getStoredVenueSettings({ db }))!;
+        await updateVenueSettings({
+            db,
+            settings: {
+                ...venue,
+                uniformArtwork: `library:gone@${"c".repeat(64)}`,
+            },
+        });
+        await refresh();
+        await waitFor(() =>
+            expect(
+                screen.getByTestId("assets-missing-uniform-note"),
+            ).toHaveTextContent("isn't in this show anymore"),
+        );
+        expect(
+            screen.queryByTestId("assets-unreadable-uniform-note"),
+        ).toBeNull();
+    });
+
+    it("lists the assets when the undo history can't be read, keeps every uniform, and says so", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        // the band wore this uniform, then a preset: only history names it now
+        await wearUniform(db, "Old uniform", 13);
+        const venue = (await getStoredVenueSettings({ db }))!;
+        const { uniformArtwork: _worn, ...preset } = venue;
+        await updateVenueSettings({ db, settings: preset });
+        // the history scan fails
+        await db.run(sql`ALTER TABLE history_redo RENAME TO history_redo_gone`);
+
+        await setUpFeature(<SidebarModal />, 1, []);
+        await act(async () => showAssetsView());
+        const view = await screen.findByTestId("assets-view");
+        await waitFor(() =>
+            expect(within(view).getAllByTestId("asset-row")).toHaveLength(1),
+        );
+        await waitFor(
+            () =>
+                expect(
+                    screen.getByTestId("assets-history-failed-note"),
+                ).toBeInTheDocument(),
+            // the query tries a few times first, as every query does
+            { timeout: 15_000 },
+        );
+        // not offered for removal: an undo may still need it
+        expect(screen.queryByTestId("assets-unused-note")).toBeNull();
+        await db.run(sql`ALTER TABLE history_redo_gone RENAME TO history_redo`);
     });
 });
