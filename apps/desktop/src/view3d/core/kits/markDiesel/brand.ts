@@ -310,8 +310,8 @@ export function paintLogoPanel(g: G, w: number, h: number): void {
 
 /**
  * One tile of the padded field wall (16 wall heights long): dark vinyl pads
- * with their seams, OpenMarch's logo in the first half and On The Move's in
- * the second, small, in lavender.
+ * with their seams, then in turn OpenMarch's logo, On The Move's and
+ * openmarch.com, small, in lavender.
  */
 export function paintWallPad(g: G, w: number, h: number): void {
     const sheen = g.createLinearGradient(0, 0, 0, h);
@@ -331,12 +331,20 @@ export function paintWallPad(g: G, w: number, h: number): void {
     // The rolled top edge.
     g.fillStyle = "rgba(255,255,255,0.1)";
     g.fillRect(0, 0, w, h * 0.05);
-    paintLogo(g, w / 4, h * 0.53, h * 0.56, OM.lavender);
+    // A third of the tile each, centered: OpenMarch, On The Move, the site.
+    paintLogo(g, w / 6, h * 0.53, h * 0.56, OM.lavender);
     drawOtmLogo(
         g,
-        { x: (3 * w) / 4 - w * 0.1, y: h * 0.25, w: w * 0.2, h: h * 0.56 },
+        { x: w / 2 - w * 0.08, y: h * 0.25, w: w * 0.16, h: h * 0.56 },
         OM.lavender,
     );
+    signText(g, OPENMARCH_SITE, (5 * w) / 6, h * 0.53, h * 0.24, {
+        color: OM.lavender,
+        align: "center",
+        spacing: 0.06,
+        weight: 0,
+        maxWidth: w * 0.26,
+    });
 }
 
 /**
