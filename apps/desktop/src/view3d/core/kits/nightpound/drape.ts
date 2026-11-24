@@ -7,18 +7,10 @@ import {
     MeshStandardMaterial,
     PlaneGeometry,
     Vector3,
-    type CanvasTexture,
     type BufferGeometry,
     type Material,
 } from "three";
 import { Members } from "../pro/geometry";
-import {
-    dieselTexture,
-    OM,
-    paintLogo,
-    signText,
-    LOGO_ASPECT,
-} from "../markDiesel/brand";
 import { Cloth, type Row } from "../markDiesel/drape";
 import {
     CURTAIN_TUNNEL,
@@ -42,59 +34,16 @@ const ROOF_BACK = FLOOR.minZ - 1.2;
 /** The folded 100s: eleven rows, each folded seat a nosing on the stack's face. */
 const STACK_ROWS = 11;
 
-/** The event's name on the drape's center banner. */
-export const NIGHTPOUND_EVENT = "WORLD CHAMPIONSHIPS";
-export const NIGHTPOUND_PLACE = "NIGHTPOUND, OH";
-
-/** Black serge, linear albedo (as Mark Diesel's drape). */
-const CLOTH: [number, number, number] = [0.026, 0.03, 0.043];
+/** The hem's tint on the black serge, linear albedo (as Mark Diesel's drape). */
 const HEM: [number, number, number] = [0.085, 0.09, 0.105];
 const PIPE = 0x22242a;
 const TRUSS = 0xb9bdc4;
-
-/** The center banner on the drape's face; the rest of the drape stays plain black. */
-const BANNER = { width: 9.6, height: 1.2, y: DRAPE_HEIGHT - 0.95 };
-
-/** Width over height of the center banner. */
-const BANNER_ASPECT = BANNER.width / BANNER.height;
-
-/**
- * The center banner: the OpenMarch logo, a lavender rule and the event's
- * name over the place, white on black, like the drape's banner in the
- * reference photos (where the event's own marks hang).
- */
-function paintBanner(g: CanvasRenderingContext2D, w: number, h: number) {
-    g.fillStyle = OM.ink;
-    g.fillRect(0, 0, w, h);
-    g.strokeStyle = "rgba(207,203,230,0.18)";
-    g.lineWidth = Math.max(2, h * 0.012);
-    g.strokeRect(h * 0.05, h * 0.05, w - h * 0.1, h - h * 0.1);
-    const logoH = h * 0.6;
-    const logoW = logoH * LOGO_ASPECT;
-    const gap = h * 0.4;
-    const textW = w - h * 0.9 - logoW - 2 * gap;
-    let at = h * 0.45;
-    paintLogo(g, at + logoW / 2, h / 2, logoH, OM.white);
-    at += logoW + gap;
-    g.fillStyle = OM.lavender;
-    g.fillRect(at - h * 0.015, h * 0.2, h * 0.03, h * 0.6);
-    signText(g, NIGHTPOUND_EVENT, at + gap, h * 0.4, h * 0.27, {
-        color: OM.white,
-        spacing: 0.06,
-        maxWidth: textW,
-    });
-    signText(g, NIGHTPOUND_PLACE, at + gap, h * 0.74, h * 0.13, {
-        color: OM.lavender,
-        spacing: 0.2,
-        maxWidth: textW,
-    });
-}
 
 /**
  * The back of the floor in WGI trim, in kit-root space:
  *
  * - the drape, 11 ft of pleated black cloth on a pipe along the back of the
- *   safety zone, with the event's banner at its center;
+ *   safety zone, plain black (no banner);
  * - the box it makes with the curtain tunnel behind it: a black cloth roof
  *   on the tunnel's pipe, and a return panel at each end;
  * - the openings at the back corners, the entry at +X and the exit at -X,
@@ -111,7 +60,6 @@ export function buildDrape(ctx: NightpoundCtx): NightpoundPart {
     object.name = "nightpound.drape";
     const geos: BufferGeometry[] = [];
     const mats: Material[] = [];
-    const textures: CanvasTexture[] = [];
     const at = (x: number, y: number, z: number) => new Vector3(x, y, z);
 
     // Cloth: the face, the returns and the valances, one geometry.
@@ -289,42 +237,12 @@ export function buildDrape(ctx: NightpoundCtx): NightpoundPart {
         object.add(door);
     }
 
-    // The banner, at the center of the drape's face.
-    const bannerTex = dieselTexture(
-        2560,
-        Math.round(2560 / BANNER_ASPECT),
-        paintBanner,
-    );
-    textures.push(bannerTex);
-    const sign = (tex: CanvasTexture) => {
-        const m = new MeshStandardMaterial({
-            map: tex,
-            roughness: 0.85,
-            emissive: 0xffffff,
-            emissiveMap: tex,
-            emissiveIntensity: 0.05,
-        });
-        mats.push(m);
-        return m;
-    };
-    const bannerGeo = new PlaneGeometry(BANNER.width, BANNER.height);
-    geos.push(bannerGeo);
-    const banner = new Mesh(bannerGeo, sign(bannerTex));
-    banner.name = "nightpound.drape.banner";
-    banner.position.set(
-        (DRAPE_RUN.minX + DRAPE_RUN.maxX) / 2,
-        BANNER.y,
-        DRAPE_Z + 0.2,
-    );
-    object.add(banner);
-
     return {
         object,
         setLighting() {},
         dispose() {
             geos.forEach((g) => g.dispose());
             mats.forEach((m) => m.dispose());
-            textures.forEach((t) => t.dispose());
         },
     };
 }

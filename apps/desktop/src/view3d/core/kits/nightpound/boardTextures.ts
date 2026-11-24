@@ -2,7 +2,6 @@ import type { CanvasTexture } from "three";
 import {
     SIGN,
     creditsTexture,
-    drawOpenMarchLogo,
     inFace,
     paintCanvasTexture,
     paintCreditsCard,
@@ -14,28 +13,23 @@ import { AUX_BOARD, BOARD, BOARD_ATLAS } from "./boardPlan";
 /**
  * What Nightpound's boards show. The main faces carry the show's credits
  * card; the corner wedges, the auxiliary board and the lower ring stay
- * quiet: a near-black ground, the OpenMarch logo in soft white and the brand
- * purple as hairlines (`environment/signage.ts`). No sponsors.
+ * quiet: a near-black ground with the brand purple as hairlines, and no
+ * logo (`environment/signage.ts`). No sponsors.
  */
 
 const ATLAS = 1024;
 
-/** A quiet screen in its own `w` x `h`: the logo over a hairline. */
-function paintQuiet(
-    g: CanvasRenderingContext2D,
-    w: number,
-    h: number,
-    logoHeight: number,
-): void {
+/**
+ * A quiet screen in its own `w` x `h`: the dark ground with a hairline of
+ * the brand purple along its top and bottom. No logo: the main faces carry
+ * the only one, on the credits card.
+ */
+function paintQuiet(g: CanvasRenderingContext2D, w: number, h: number): void {
     screenGround(g, w, h);
-    drawOpenMarchLogo(g, w / 2, h * 0.47, logoHeight, SIGN.mark);
-    g.fillStyle = "rgba(140,120,255,0.55)";
-    g.fillRect(
-        w / 2 - logoHeight * 0.7,
-        h * 0.47 + logoHeight,
-        logoHeight * 1.4,
-        3,
-    );
+    g.fillStyle = "rgba(140,120,255,0.4)";
+    const line = Math.max(2, h * 0.012);
+    g.fillRect(0, 0, w, line);
+    g.fillRect(0, h - line, w, line);
 }
 
 /**
@@ -66,7 +60,7 @@ export function boardAtlasTexture(): CreditsTexture {
             wedgeW,
             half,
             (wedgeW / ATLAS) * (BOARD.faceWidth / BOARD.faceHeight) * 2,
-            (w, h) => paintQuiet(g, w, h, h * 0.09),
+            (w, h) => paintQuiet(g, w, h),
         );
         inFace(
             g,
@@ -75,14 +69,14 @@ export function boardAtlasTexture(): CreditsTexture {
             (aux.u1 - aux.u0) * ATLAS,
             half,
             AUX_BOARD.width / AUX_BOARD.height,
-            (w, h) => paintQuiet(g, w, h, h * 0.2),
+            (w, h) => paintQuiet(g, w, h),
         );
     });
 }
 
 /**
  * One side of the lower ring, 1024 x 128: hairlines along both edges all the
- * way round and the logo at the middle of each side.
+ * way round, and no logo.
  */
 export function boardRingTexture(): CanvasTexture {
     return paintCanvasTexture(1024, 128, (g) => {
@@ -99,11 +93,6 @@ export function boardRingTexture(): CanvasTexture {
                 g.fillStyle = "rgba(140,120,255,0.5)";
                 g.fillRect(0, 0, w, 3);
                 g.fillRect(0, h - 3, w, 3);
-                drawOpenMarchLogo(g, w / 2, h / 2, h * 0.42, SIGN.mark);
-                // A dim rule either side of the logo.
-                g.fillStyle = "rgba(140,120,255,0.3)";
-                g.fillRect(w * 0.08, h / 2 - 1, w * 0.22, 2);
-                g.fillRect(w * 0.7, h / 2 - 1, w * 0.22, 2);
             },
         );
     });
