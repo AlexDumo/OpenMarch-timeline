@@ -11,6 +11,7 @@ import type { LightingPreset, ShowCredits } from "../../types";
 import { bowlOutline, type Ring } from "../bowl";
 import { DIESEL_RING, type RingRange } from "./bowl";
 import {
+    dieselClock,
     dieselRibbonState,
     dieselTexture,
     paintRibbonLower,
@@ -25,9 +26,9 @@ import { dieselLighting } from "./lighting";
  * The two LED ribbons of the Mark Diesel kit, in kit-root space:
  *
  * - the lower ribbon on the club fascia, all the way round the bowl: the
- *   OpenMarch logo, the event, the clock and the show now performing;
+ *   clock, the show now performing and the bands after it;
  * - the upper ribbon on the terrace fascia, round the four corners and the
- *   ends: the event and the round between the app icons.
+ *   ends: GRAND NATIONALS.
  *
  * Each is its own mesh a few centimeters in front of the bowl's fascia,
  * facing the field, and crawls slowly to the left while the window draws.
@@ -130,6 +131,8 @@ export interface DieselRibbons extends DieselPart {
 export interface RibbonOptions {
     /** The time shown on the clock; the system's by default. */
     now?: () => Date;
+    /** Draws the made-up bands (`dieselBandNames`); `Math.random` by default. */
+    random?: () => number;
 }
 
 export function buildDieselRibbons(
@@ -142,7 +145,7 @@ export function buildDieselRibbons(
     const object = new Group();
     object.name = "markDiesel.ribbons";
 
-    let state: DieselRibbonState = dieselRibbonState(now());
+    let state: DieselRibbonState = dieselRibbonState(now(), options.random);
     const paintLower = (g: CanvasRenderingContext2D, w: number, h: number) =>
         paintRibbonLower(g, w, h, state);
 
@@ -224,7 +227,8 @@ export function buildDieselRibbons(
             sinceClock += Math.max(dt, 0);
             if (sinceClock < CLOCK_EVERY) return;
             sinceClock = 0;
-            show({ ...state, ...dieselRibbonState(now()), title: state.title });
+            // The bands stay put; only the clock moves.
+            show({ ...state, ...dieselClock(now()) });
         },
         dispose() {
             for (const r of ribbons) {

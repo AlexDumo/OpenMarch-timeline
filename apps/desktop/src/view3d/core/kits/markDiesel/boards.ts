@@ -25,12 +25,12 @@ import { buildDieselSurround } from "./surround";
 export { dieselRibbonLevel } from "./ribbons";
 
 /**
- * Everything in the Mark Diesel kit that carries OpenMarch's name, in
+ * Everything in the Mark Diesel kit that carries a name or a picture, in
  * kit-root space:
  *
  * - the two corner video boards (south-east and north-west,
  *   `dieselBoardSpots`): LED screens facing the field's center, each
- *   under a lit OpenMarch sign and hung from the roof on four rods.
+ *   under a lit sign with the hall's name, hung from the roof on four rods.
  *   At high quality they show a live picture of the field (`feed.ts`); at
  *   low quality a bright card with the event and the show now performing;
  * - the LED ribbons (`ribbons.ts`);

@@ -22,12 +22,13 @@ import { ringStrip } from "./ribbons";
 /**
  * What stands round the field at field level, in kit-root space:
  *
- * - the padded wall's printed face: violet vinyl pads with the OpenMarch
- *   wordmark and address, a few centimeters in front of the bowl's wall,
- *   everywhere but under the drape (where the wall stays black);
+ * - the padded wall's printed face: dark vinyl pads with the event's name,
+ *   a few centimeters in front of the bowl's wall, everywhere but under
+ *   the drape (where the wall stays black);
  * - the sponsor boards: a row of low printed boards along the back
- *   sideline, in front of the wall under the drape, each an OpenMarch
- *   board, with the event's own boards in the middle.
+ *   sideline, in front of the wall under the drape: the hall's and the
+ *   event's names, with OpenMarch's and On The Move's logos either side of
+ *   the event's own boards in the middle.
  *
  * Both are printed surfaces lit by the hall; the boards also glow a little,
  * so they read against the black behind them.
