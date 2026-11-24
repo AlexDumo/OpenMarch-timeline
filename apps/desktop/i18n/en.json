@@ -3670,6 +3670,13 @@
             "unreadable": "That PNG couldn't be read.",
             "templateFailed": "The template couldn't be made.",
             "saveFailed": "Couldn't save the flag silk artwork"
+        },
+        "uniformTemplate": {
+            "label": "Uniform template:",
+            "preparing": "Preparing…",
+            "jsonInfo": "JSON holds the template's shapes and seams as numbers, for scripts and AI agents.",
+            "jsonInfoLabel": "About the JSON file",
+            "failed": "The uniform template couldn't be made."
         }
     },
     "web": {

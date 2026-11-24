@@ -38,6 +38,7 @@ import ControlSchemePicker from "../camera/ControlSchemePicker";
 import { Segmented } from "./Panel";
 import { KITS_WITH_OWN_FIELD } from "@/view3d/core/venueSettings";
 import { SilkArtworkControls } from "./SilkArtworkControls";
+import { UniformTemplateControls } from "./UniformTemplateControls";
 import {
     BrassFinishPicker,
     LightingControl,
@@ -180,6 +181,7 @@ export function SettingsPanel({
                     />
                     <Row label={t("view3d.settings.uniforms")} stacked>
                         <UniformPicker />
+                        <UniformTemplateControls />
                     </Row>
                     <Row label={t("view3d.settings.brassFinish")}>
                         <BrassFinishPicker />
