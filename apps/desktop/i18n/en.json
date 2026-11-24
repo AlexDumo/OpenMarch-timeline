@@ -5259,7 +5259,8 @@
             "large": "Assets make this show large: {size}. Large shows are slower to open, save and share.",
             "missingUniform": "The band's uniform isn't in this show anymore, so the band wears its preset. Import it again in the 3D View settings to bring it back.",
             "unreadableUniform": "The band's uniform is in this show, but its file can't be read (it may be damaged, or from a newer OpenMarch), so the band wears its preset. Pick another uniform in the 3D View settings, or import one.",
-            "historyFailed": "Couldn't check which uniforms Undo can bring back, so imported uniforms aren't offered for removal."
+            "historyFailed": "Couldn't check which uniforms Undo can bring back, so imported uniforms aren't offered for removal.",
+            "unusedVersions": "{count, plural, one {# asset version isn't used} other {# asset versions aren't used}} anywhere in the show · {size}"
         },
         "removeUnused": {
             "button": "Remove unused…",
@@ -5270,7 +5271,10 @@
             "cancel": "Cancel",
             "confirm": "{count, plural, one {Remove # asset} other {Remove # assets}}",
             "olderVersions": "{count, plural, one {An older version of {name}} other {# older versions of {name}}}",
-            "versions": "{name} ({count} versions)"
+            "versions": "{count, plural, one {{name} (# version)} other {{name} (# versions)}}",
+            "otherVersions": "{count, plural, one {Another version of {name}} other {# other versions of {name}}}",
+            "titleVersions": "{count, plural, one {Remove # unused version?} other {Remove # unused versions?}}",
+            "confirmVersions": "{count, plural, one {Remove # version} other {Remove # versions}}"
         },
         "kind": {
             "model": "3D model",

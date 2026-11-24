@@ -348,15 +348,23 @@ function ItemRow({
     const size = item[sizeBy] ?? NEW_ITEM_IN;
     const grade = item.grade ?? "proportional";
     const change = onChange;
-    const [refusal, setRefusal] = useState<string | null>(null);
+    /** The Size by choice last refused; its reason shows while it's still refused */
+    const [refusedBy, setRefusedBy] = useState<"width" | "height" | null>(null);
     const sizeByReason = (value: number) =>
         t("view3d.uniformItems.sizeByRefused", {
             value: fmt(value),
             min: itemFieldMin(grade),
             max: ITEM_MAX_IN,
         });
-    // its box on the median body; null when the image's shape makes a side too long (or, for a
-    // tile, too short) to draw
+    // clears itself once the item's size makes that choice valid
+    const stillRefused =
+        refusedBy && aspect !== null && refusedBy !== sizeBy
+            ? sizeBySwitch(item, aspect, refusedBy)
+            : null;
+    const refusal =
+        stillRefused && !stillRefused.ok
+            ? sizeByReason(stillRefused.value)
+            : null;
     // drawn and visible at its size? If not, what size would be (`itemSizeAdvice`)
     const advice = aspect === null ? null : itemSizeAdvice(item, aspect);
 
@@ -462,10 +470,10 @@ function ItemRow({
                                 const next = sizeBySwitch(item, aspect, by);
                                 // unavailable: say why, where a click or a tap lands
                                 if (!next.ok) {
-                                    setRefusal(sizeByReason(next.value));
+                                    setRefusedBy(by);
                                     return;
                                 }
-                                setRefusal(null);
+                                setRefusedBy(null);
                                 onChange({
                                     width:
                                         by === "width" ? next.value : undefined,
@@ -557,15 +565,14 @@ function ItemRow({
                 </Field>
             </div>
             {grade === "tile" && <TileRegions item={item} onChange={change} />}
-            {refusal && (
-                <p
-                    className="text-sub text-text/60"
-                    role="status"
-                    data-testid="view3d-uniform-item-size-by-refused"
-                >
-                    {refusal}
-                </p>
-            )}
+            {/* always mounted, so a screen reader announces the text when it appears */}
+            <p
+                className={refusal ? "text-sub text-text/60" : "sr-only"}
+                role="status"
+                data-testid="view3d-uniform-item-size-by-refused"
+            >
+                {refusal ?? ""}
+            </p>
             {advice && advice.state !== "ok" && (
                 <p
                     className="text-sub text-yellow"
@@ -651,11 +658,13 @@ function TileRegions({
                 label={t("view3d.uniformItems.repeatOver")}
                 testId="view3d-uniform-item-regions"
             />
-            {refused && (
-                <span className="text-sub text-text/60" role="status">
-                    {needsOne}
-                </span>
-            )}
+            {/* always mounted, so a screen reader announces the text when it appears */}
+            <span
+                className={refused ? "text-sub text-text/60" : "sr-only"}
+                role="status"
+            >
+                {refused ? needsOne : ""}
+            </span>
         </div>
     );
 }

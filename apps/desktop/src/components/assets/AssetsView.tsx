@@ -34,6 +34,7 @@ import {
     uniformsInHistoryQueryOptions,
 } from "@/hooks/queries/useShowAssets";
 import {
+    removableCount,
     removableLines,
     groupAssetVersions,
     type AssetGroup,
@@ -200,6 +201,7 @@ export function AssetsContents({
                 {use && (
                     <AssetNotes
                         unused={use.unused}
+                        all={use.assets}
                         unusedBytes={use.unusedBytes}
                         totalBytes={use.totalBytes}
                         missingProps={use.missingProps}
@@ -240,6 +242,7 @@ export function AssetsContents({
 /** The quiet notes at the top: unused assets, props whose model is gone, a large show */
 function AssetNotes({
     unused,
+    all,
     unusedBytes,
     totalBytes,
     missingProps,
@@ -248,6 +251,8 @@ function AssetNotes({
     onRemove,
 }: {
     unused: readonly AssetUse[];
+    /** Every asset version, to count unused ones as the Remove unused… list groups them */
+    all: readonly AssetUse[];
     unusedBytes: number;
     totalBytes: number;
     missingProps: number;
@@ -255,6 +260,7 @@ function AssetNotes({
     historyFailed: boolean;
     onRemove: () => void;
 }) {
+    const tally = removableCount(removableLines(unused, all));
     const sizeText = useSizeText();
     const notes: React.ReactNode[] = [];
     if (unused.length > 0)
@@ -266,9 +272,13 @@ function AssetNotes({
             >
                 <span>
                     <T
-                        keyName="assets.notes.unused"
+                        keyName={
+                            tally.unit === "versions"
+                                ? "assets.notes.unusedVersions"
+                                : "assets.notes.unused"
+                        }
                         params={{
-                            count: unused.length,
+                            count: tally.count,
                             size: sizeText(unusedBytes),
                         }}
                     />
@@ -550,6 +560,9 @@ function RemoveUnusedDialog({
 }) {
     const { t } = useTranslate();
     const unused = checking ? [] : given;
+    // one line per asset, and a count that matches the lines
+    const lines = removableLines(unused, all);
+    const tally = removableCount(lines);
     const queryClient = useQueryClient();
     const sizeText = useSizeText();
     const { mutate, isPending } = useMutation(
@@ -563,8 +576,12 @@ function RemoveUnusedDialog({
                         <T keyName="assets.removeUnused.button" />
                     ) : (
                         <T
-                            keyName="assets.removeUnused.title"
-                            params={{ count: unused.length }}
+                            keyName={
+                                tally.unit === "versions"
+                                    ? "assets.removeUnused.titleVersions"
+                                    : "assets.removeUnused.title"
+                            }
+                            params={{ count: tally.count }}
                         />
                     )}
                 </AlertDialogTitle>
@@ -585,7 +602,7 @@ function RemoveUnusedDialog({
                         className="text-body flex max-h-[16rem] flex-col gap-4 overflow-y-auto"
                         data-testid="assets-remove-list"
                     >
-                        {removableLines(unused, all).map((line) => (
+                        {lines.map((line) => (
                             <li
                                 key={line.id}
                                 className="flex justify-between gap-12"
@@ -593,7 +610,9 @@ function RemoveUnusedDialog({
                                 <span className="truncate">
                                     {line.olderOnly
                                         ? t(
-                                              "assets.removeUnused.olderVersions",
+                                              line.allOlder
+                                                  ? "assets.removeUnused.olderVersions"
+                                                  : "assets.removeUnused.otherVersions",
                                               {
                                                   count: line.count,
                                                   name: line.name,
@@ -636,8 +655,12 @@ function RemoveUnusedDialog({
                                 }
                             >
                                 <T
-                                    keyName="assets.removeUnused.confirm"
-                                    params={{ count: unused.length }}
+                                    keyName={
+                                        tally.unit === "versions"
+                                            ? "assets.removeUnused.confirmVersions"
+                                            : "assets.removeUnused.confirm"
+                                    }
+                                    params={{ count: tally.count }}
                                 />
                             </Button>
                         </AlertDialogAction>

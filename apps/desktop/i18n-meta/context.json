@@ -4056,5 +4056,9 @@
     "assets.otherVersions": "In the Assets view, listing the show's imported models and uniforms, under one asset's name. Like the older-versions count, when some of the other versions are newer than the one in use (after an undo). {size} is a size such as 2.1 MB.",
     "view3d.uniformItems.loading": "In the 3D View settings panel, Performers tab, in the \"Logos and numbers\" section. Short status shown while the band's uniform loads after a save or an undo; the list can't be edited until it has.",
     "assets.removeUnused.olderVersions": "In the Remove unused… dialog of the Assets view, one line of the list of what will be removed. Older saved versions of an asset whose current version stays in the show (editing a uniform's logos and numbers saves new versions). {name} is the asset's name.",
-    "assets.removeUnused.versions": "In the Remove unused… dialog of the Assets view, one line of the list of what will be removed. An asset that nothing uses, with all of its saved versions. {name} is the asset's name; {count} is a number."
+    "assets.removeUnused.versions": "In the Remove unused… dialog of the Assets view. One line of the list: an asset that nothing uses, with all of its saved versions. {name} is the asset's name; # is how many versions.",
+    "assets.removeUnused.otherVersions": "In the Remove unused… dialog of the Assets view. One line of the list: saved versions of an asset that stays in the show, some of them newer than the one in use (after an undo). {name} is the asset's name.",
+    "assets.removeUnused.titleVersions": "In the Remove unused… dialog of the Assets view. The dialog title when the list counts saved versions of assets (editing a uniform saves new versions). # is how many versions will be removed.",
+    "assets.removeUnused.confirmVersions": "In the Remove unused… dialog of the Assets view. The button that removes the listed saved versions. # is how many.",
+    "assets.notes.unusedVersions": "In the Assets view, a note at the top: how many saved versions of the show's assets nothing uses, and their size on disk. {size} is a size such as 2.7 MB. A Remove unused… button follows."
 }

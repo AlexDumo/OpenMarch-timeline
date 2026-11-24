@@ -193,8 +193,10 @@ export interface RemovableLine {
     /** How many of its versions go */
     count: number;
     bytes: number;
-    /** Whether another version of it stays (in use or kept for undo): these are older versions */
+    /** Whether another version of it stays (in use or kept for undo) */
     olderOnly: boolean;
+    /** With `olderOnly`: whether every version that goes was added before every one that stays */
+    allOlder: boolean;
 }
 
 /**
@@ -207,6 +209,7 @@ export function removableLines(
     all: readonly AssetUse[],
 ): RemovableLine[] {
     const going = new Set(unused.map((row) => row.value));
+    const order = new Map(all.map((row, i) => [row.value, i]));
     const lines = new Map<string, RemovableLine>();
     for (const row of unused) {
         const line = lines.get(row.asset.id);
@@ -220,12 +223,36 @@ export function removableLines(
                 name: row.asset.name,
                 count: 1,
                 bytes: row.bytes,
-                olderOnly: all.some(
-                    (other) =>
-                        other.asset.id === row.asset.id &&
-                        !going.has(other.value),
-                ),
+                olderOnly: false,
+                allOlder: false,
             });
     }
+    for (const line of lines.values()) {
+        const versions = all.filter((r) => r.asset.id === line.id);
+        const staying = versions.filter((r) => !going.has(r.value));
+        line.olderOnly = staying.length > 0;
+        const firstStaying = Math.min(
+            ...staying.map((r) => order.get(r.value) ?? 0),
+        );
+        line.allOlder =
+            line.olderOnly &&
+            versions
+                .filter((r) => going.has(r.value))
+                .every((r) => (order.get(r.value) ?? 0) < firstStaying);
+    }
     return [...lines.values()];
+}
+
+/**
+ * What Remove unused… counts, consistent with its grouped list: versions when any line is a
+ * group of versions, otherwise assets (one line each)
+ */
+export function removableCount(lines: readonly RemovableLine[]): {
+    count: number;
+    unit: "assets" | "versions";
+} {
+    const versions = lines.some((l) => l.olderOnly || l.count > 1);
+    return versions
+        ? { count: lines.reduce((n, l) => n + l.count, 0), unit: "versions" }
+        : { count: lines.length, unit: "assets" };
 }

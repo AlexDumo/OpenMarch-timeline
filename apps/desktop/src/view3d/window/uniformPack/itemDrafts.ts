@@ -297,8 +297,9 @@ async function save(): Promise<void> {
     if (state.saving || !state.draft) return;
     const draft = state.draft;
     if (draft.saved === draft.revision) return;
+    // only what the venue names while this runs: a save can reproduce an older version's bytes
+    // (an item put back where it was), so a version named before it started proves nothing
     seenInFlight.clear();
-    if (lastWorn) seenInFlight.add(lastWorn);
     useItemDrafts.setState({
         saving: true,
         draft: { ...draft, inFlight: true },
@@ -364,8 +365,16 @@ async function save(): Promise<void> {
                     const waiting = d.latest;
                     arriveTimer = setTimeout(() => {
                         arriveTimer = null;
-                        const now = useItemDrafts.getState().draft;
-                        if (now && !now.arrived && now.latest === waiting)
+                        const { draft: now, saving } = useItemDrafts.getState();
+                        // only with nothing saving or left to save: a pending save's `expect`
+                        // decides instead (the editor refuses it if the venue moved on)
+                        if (
+                            now &&
+                            !now.arrived &&
+                            now.latest === waiting &&
+                            now.saved === now.revision &&
+                            !saving
+                        )
                             end();
                     }, ARRIVE_MS);
                 }
@@ -424,4 +433,15 @@ export function itemListState(
     if (draftApplies(draft, worn))
         return { items: draft.items, editable: true };
     return { items: stored, editable: !placeholder };
+}
+
+/** Puts the module back as it starts, for tests that mustn't depend on each other's order */
+export function resetItemDraftsForTests() {
+    end();
+    burst = null;
+    lastEditAt = 0;
+    lastWorn = null;
+    lastLoaded = false;
+    seenInFlight.clear();
+    useItemDrafts.setState({ draft: null, saving: false, failed: false });
 }
