@@ -195,7 +195,7 @@ export interface RemovableLine {
     bytes: number;
     /** Whether another version of it stays (in use or kept for undo) */
     olderOnly: boolean;
-    /** With `olderOnly`: whether every version that goes was added before every one that stays */
+    /** With `olderOnly`: whether every version that goes was added before the one in use */
     allOlder: boolean;
 }
 
@@ -231,14 +231,16 @@ export function removableLines(
         const versions = all.filter((r) => r.asset.id === line.id);
         const staying = versions.filter((r) => !going.has(r.value));
         line.olderOnly = staying.length > 0;
-        const firstStaying = Math.min(
-            ...staying.map((r) => order.get(r.value) ?? 0),
+        // older than the version in use, not just than one kept for undo
+        const inUse = staying.filter((r) => r.uses > 0);
+        const firstInUse = Math.min(
+            ...inUse.map((r) => order.get(r.value) ?? 0),
         );
         line.allOlder =
-            line.olderOnly &&
+            inUse.length > 0 &&
             versions
                 .filter((r) => going.has(r.value))
-                .every((r) => (order.get(r.value) ?? 0) < firstStaying);
+                .every((r) => (order.get(r.value) ?? 0) < firstInUse);
     }
     return [...lines.values()];
 }

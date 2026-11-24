@@ -122,6 +122,23 @@ describe("removableLines", () => {
         expect(line.allOlder).toBe(false);
     });
 
+    it("calls them older when they precede the version in use, though an earlier one is kept for undo", () => {
+        // the origin, kept for undo; three undone versions; then the one in use
+        const rows = [
+            version("u", "o", 0, "b0"),
+            version("u", "a", 0, "b1"),
+            version("u", "b", 0, "b2"),
+            version("u", "c", 0, "b3"),
+            version("u", "d", 1, "b4"),
+        ];
+        const [line] = removableLines(rows.slice(1, 4), rows);
+        expect(line).toMatchObject({
+            count: 3,
+            olderOnly: true,
+            allOlder: true,
+        });
+    });
+
     it("counts assets when every line is one whole asset", () => {
         const rows = [version("u", "a", 0, "b1"), version("m", "b", 0, "b2")];
         expect(removableCount(removableLines(rows, rows))).toEqual({
