@@ -267,7 +267,8 @@ describe("Venue brand painters", () => {
             if (face !== "sign")
                 expect(text, face).not.toMatch(/diesel|stadium|welcome/i);
         expect(faces.sign).toContain("MARK DIESEL STADIUM");
-        expect(faces.wall).toBe("[logo] | openmarch.com");
+        // On The Move's logo, beside it, is an image the test DOM never loads.
+        expect(faces.wall).toBe("[logo]");
         expect(faces.nameRing).toBe("");
         expect(faces.ribbonUpper).toBe("[logo] | openmarch.com");
         expect(faces[boardsShowing("site")[0]]).toBe("openmarch.com");

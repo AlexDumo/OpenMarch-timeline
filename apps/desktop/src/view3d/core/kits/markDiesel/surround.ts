@@ -22,9 +22,9 @@ import { ringStrip } from "./ribbons";
 /**
  * What stands round the field at field level, in kit-root space:
  *
- * - the padded wall's printed face: dark vinyl pads with OpenMarch's logo and openmarch.com,
- *   a few centimeters in front of the bowl's wall, everywhere but under
- *   the drape (where the wall stays black);
+ * - the padded wall's printed face: dark vinyl pads with OpenMarch's and On
+ *   The Move's logos in turn, a few centimeters in front of the bowl's
+ *   wall, everywhere but under the drape (where the wall stays black);
  * - the sponsor boards: a row of low printed boards along the back
  *   sideline, in front of the wall under the drape: dark boards, with
  *   OpenMarch's logo, openmarch.com and On The Move's logo in the middle.

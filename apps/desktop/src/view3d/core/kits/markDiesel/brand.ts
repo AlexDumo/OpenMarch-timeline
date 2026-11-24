@@ -25,14 +25,15 @@ import type { ShowCredits, VenueParams } from "../../types";
  *   and the M (`OPENMARCH_LOGO`, from `apps/website/public/openmarch.svg`):
  *   on the field wall's pads, the middle back sideline board, the upper LED
  *   ribbon, the video boards' header and card and the plaza's monuments,
- *   most of them beside openmarch.com;
+ *   most of them beside openmarch.com or On The Move's logo;
  * - the app icon: the marcher (`MARCHER_MARK`) in white on a violet rounded
  *   square, cut off at the bottom, as in `apps/desktop/build/icon.png`: the
  *   drape's logo panel;
  * - the marcher itself (`MARCHER_MARK`): the roof flags and the midfield
  *   helmet;
  * - the On The Move logo (`drawOtmLogo`), OpenMarch's other app, on one
- *   back sideline board.
+ *   back sideline board and, turn about with OpenMarch's, on the field
+ *   wall's pads.
  *
  * The end zones say OPENMARCH. The ring of the upper deck and the other
  * sideline boards are plain. The lower LED ribbon shows the show's own
@@ -309,7 +310,7 @@ export function paintLogoPanel(g: G, w: number, h: number): void {
 
 /**
  * One tile of the padded field wall (16 wall heights long): dark vinyl pads
- * with their seams, OpenMarch's logo in the first half and openmarch.com in
+ * with their seams, OpenMarch's logo in the first half and On The Move's in
  * the second, small, in lavender.
  */
 export function paintWallPad(g: G, w: number, h: number): void {
@@ -331,13 +332,11 @@ export function paintWallPad(g: G, w: number, h: number): void {
     g.fillStyle = "rgba(255,255,255,0.1)";
     g.fillRect(0, 0, w, h * 0.05);
     paintLogo(g, w / 4, h * 0.53, h * 0.56, OM.lavender);
-    signText(g, OPENMARCH_SITE, (3 * w) / 4, h * 0.53, h * 0.24, {
-        color: OM.lavender,
-        align: "center",
-        spacing: 0.06,
-        weight: 0,
-        maxWidth: w * 0.4,
-    });
+    drawOtmLogo(
+        g,
+        { x: (3 * w) / 4 - w * 0.1, y: h * 0.25, w: w * 0.2, h: h * 0.56 },
+        OM.lavender,
+    );
 }
 
 /**
@@ -436,7 +435,7 @@ function ledEdges(g: G, w: number, h: number, color: string): void {
 
 /**
  * One tile of the lower LED ribbon (32 ribbon heights long), left to right:
- * the show now performing (its title, or a made-up band), and the two bands
+ * a violet block fading into the black, the show now performing (its title, or a made-up band), and the two bands
  * up after it.
  */
 export function paintRibbonLower(
@@ -449,14 +448,22 @@ export function paintRibbonLower(
     g.fillStyle = OM.ink;
     g.fillRect(0, 0, w, h);
 
+    // A violet block at the head of the tile, fading into the black.
+    const block = g.createLinearGradient(0, 0, 6 * u, 0);
+    block.addColorStop(0, OM.violet);
+    block.addColorStop(0.7, OM.deep);
+    block.addColorStop(1, OM.ink);
+    g.fillStyle = block;
+    g.fillRect(0, 0, 6 * u, h);
+
     // The order of appearance: a label over each name, a violet rule
     // between them.
     const [first = "", ...rest] = state.bands;
     const title = state.title.trim();
     const slots: [string, string, number, number][] = [
-        ["NOW PERFORMING", title || first, 1.2 * u, 13 * u],
-        ["UP NEXT", (title ? first : rest[0]) ?? "", 15.4 * u, 7.6 * u],
-        ["ON DECK", (title ? rest[0] : rest[1]) ?? "", 24.2 * u, 7.2 * u],
+        ["NOW PERFORMING", title || first, 6.6 * u, 10 * u],
+        ["UP NEXT", (title ? first : rest[0]) ?? "", 17.6 * u, 6.6 * u],
+        ["ON DECK", (title ? rest[0] : rest[1]) ?? "", 25.2 * u, 6.4 * u],
     ];
     for (const [label, name, x, room] of slots) {
         g.fillStyle = OM.violet;
