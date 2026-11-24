@@ -111,9 +111,17 @@ export function drawnDraft(key: string) {
     return key.includes("~") ? (drawn.get(key) ?? null) : null;
 }
 
-/** The pack value a draft key is drawn over (the draft's newest saved pack), or the key itself */
-export const draftOrigin = (key: string): UniformPackValue =>
-    (drawn.get(key)?.origin ?? key.split("~")[0]) as UniformPackValue;
+/**
+ * The saved pack a draft key is drawn over: its layers and older item images. Resolved when a
+ * composition starts, not when the revision was drawn: a burst's save removes the version it
+ * replaces, so a revision drawn while a save ran may name a version that is gone by then. While
+ * the key's draft is live, that's the draft's newest saved pack; otherwise the newest it knew.
+ */
+export function draftOrigin(key: string): UniformPackValue {
+    const live = useItemDrafts.getState().draft;
+    if (live && key.startsWith(`${live.origin}~`)) return live.latest;
+    return (drawn.get(key)?.origin ?? key.split("~")[0]) as UniformPackValue;
+}
 
 function remember(draft: ItemDraft) {
     const key = draftKey(draft.origin, draft.shown);

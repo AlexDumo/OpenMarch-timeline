@@ -308,7 +308,7 @@ async function composeAtlas(
     if (isUniformPackValue(id)) {
         // an item draft (`itemDrafts.ts`) draws over the pack it started from
         const draft = drawnDraft(id);
-        return await withPackPage(draftOrigin(id), dpi, async (drawing) => {
+        const draw = async (drawing: PackDrawing): Promise<FlatsAtlas> => {
             const { layout, regions } = await loadFlatsGeometry();
             const items = draft ? draft.items : drawing.items;
             const imageOf = (file: string) =>
@@ -352,7 +352,16 @@ async function composeAtlas(
                 }
                 return Promise.resolve();
             });
-        });
+        };
+        const from = draftOrigin(id);
+        try {
+            return await withPackPage(from, dpi, draw);
+        } catch (error) {
+            // a burst's save removed that version while this composed: read the newest
+            const now = draftOrigin(id);
+            if (!draft || now === from) throw error;
+            return await withPackPage(now, dpi, draw);
+        }
     }
     return await composeBuiltIn(id, body, dpi);
 }

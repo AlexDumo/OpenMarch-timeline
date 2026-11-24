@@ -5,7 +5,7 @@ import {
 import { assert } from "../utilities/assert";
 import { mainProcessLog } from "../utilities/mainProcessLog";
 import { DbConnection, DbTransaction } from "./types";
-import { asc, isNotNull, lt, max } from "drizzle-orm";
+import { and, asc, isNotNull, like, lt, max, or } from "drizzle-orm";
 import { DB, schema } from "../global/database/db";
 import { Constants } from "../global/Constants";
 import { getTableName, gt, sql, eq, desc, count, inArray } from "drizzle-orm";
@@ -857,6 +857,65 @@ export async function getLatestUndoEntryToken(
 ): Promise<string | null> {
     const entry = await latestUndoEntry(db);
     return entry === null ? null : `${historyEpoch}\n${entry}`;
+}
+
+/**
+ * Runs `func` in a transaction that joins the latest undo entry instead of making a new one,
+ * while that entry is still the one `token` names (getLatestUndoEntryToken). Returns
+ * `{ amended: false }`, having run nothing, when it isn't.
+ *
+ * It runs under the same lock as transactionWithHistory and undo/redo, so no wrapped edit, undo
+ * or redo can start or land inside it. The history rows `func`'s writes add to the tables named
+ * in `tables` are deleted in the same transaction: the latest entry's own statements already put
+ * those rows back to how they were before it, so Undo still returns to there. Rows any other write
+ * added are kept, so nothing else becomes impossible to undo. Keep `func` short (no hashing or
+ * building large values in it): it holds the lock.
+ */
+export async function amendLatestUndoEntry<T>(
+    db: DbConnection,
+    token: string,
+    tables: readonly string[],
+    func: (tx: DbTransaction) => Promise<T>,
+): Promise<{ amended: true; result: T } | { amended: false }> {
+    return await withTransactionWithHistoryLock(async () => {
+        const outcome = await db.transaction(async (tx) => {
+            if ((await getLatestUndoEntryTokenInTransaction(tx)) !== token)
+                return null;
+            const { history_undo } = schema;
+            const before =
+                (
+                    await tx
+                        .select({ last: max(history_undo.sequence) })
+                        .from(history_undo)
+                        .get()
+                )?.last ?? 0;
+            const result = await func(tx);
+            for (const table of tables)
+                await tx
+                    .delete(history_undo)
+                    .where(
+                        and(
+                            gt(history_undo.sequence, before),
+                            or(
+                                like(history_undo.sql, `UPDATE "${table}" %`),
+                                like(
+                                    history_undo.sql,
+                                    `DELETE FROM "${table}" %`,
+                                ),
+                                like(
+                                    history_undo.sql,
+                                    `INSERT INTO "${table}" %`,
+                                ),
+                            ),
+                        ),
+                    )
+                    .run();
+            return { result };
+        });
+        if (outcome === null) return { amended: false as const };
+        notifyHistoryChange();
+        return { amended: true as const, result: outcome.result };
+    });
 }
 
 /**

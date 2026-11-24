@@ -103,14 +103,16 @@ function checkNewAsset(asset: NewShowAsset) {
 export async function addShowAssetInTransaction({
     tx,
     asset,
+    hashes,
 }: {
     tx: DbTransaction;
     asset: NewShowAsset;
+    /** From {@link hashShowAsset}, worked out before a lock is taken, so the transaction is short */
+    hashes?: ShowAssetHashes;
 }): Promise<{ ref: ShowAssetRef; added: boolean }> {
     checkNewAsset(asset);
-    const partHashes = await hashParts(asset.parts);
+    const { partHashes, versionHash } = hashes ?? (await hashShowAsset(asset));
     const sidecar = canonicalJson(asset.sidecar ?? {});
-    const versionHash = await versionHashOf(partHashes, sidecar);
 
     // Each part's bytes, stored once. On a re-import this also puts back bytes a damaged file
     // lost, or replaces stored bytes that no longer match their hash
@@ -176,6 +178,24 @@ export async function addShowAssetInTransaction({
         })
         .run();
     return { ref: { id, versionHash }, added: true };
+}
+
+/** An asset's part hashes and Version hash */
+export interface ShowAssetHashes {
+    partHashes: Record<string, string>;
+    versionHash: string;
+}
+
+/** The hashes {@link addShowAssetInTransaction} works out, for a caller to work out early */
+export async function hashShowAsset(
+    asset: Pick<NewShowAsset, "parts" | "sidecar">,
+): Promise<ShowAssetHashes> {
+    const partHashes = await hashParts(asset.parts);
+    const versionHash = await versionHashOf(
+        partHashes,
+        canonicalJson(asset.sidecar ?? {}),
+    );
+    return { partHashes, versionHash };
 }
 
 /**

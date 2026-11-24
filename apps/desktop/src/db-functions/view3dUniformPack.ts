@@ -7,13 +7,8 @@
  * Adding the asset is outside undo, like every show asset; pointing the venue at it is undoable,
  * so Undo puts the band back in what it wore and the pack stays in the show for next time.
  */
-import { gt, max } from "drizzle-orm";
-import { schema } from "@/global/database/db";
 import type { DbConnection, DbTransaction } from "./types";
-import {
-    getLatestUndoEntryTokenInTransaction,
-    transactionWithHistory,
-} from "./history";
+import { amendLatestUndoEntry, transactionWithHistory } from "./history";
 import {
     getStoredVenueSettings,
     updateVenueSettingsInTransaction,
@@ -21,6 +16,8 @@ import {
 import {
     addShowAssetInTransaction,
     getShowAssets,
+    hashShowAsset,
+    type ShowAssetHashes,
     removeShowAssetsInTransaction,
     valuesNamedInHistory,
 } from "./showAssets";
@@ -56,6 +53,7 @@ export async function setUniformPackInTransaction({
     field,
     versionOf,
     expect,
+    hashes,
 }: {
     tx: DbTransaction;
     pack: Uint8Array;
@@ -65,6 +63,8 @@ export async function setUniformPackInTransaction({
     versionOf?: string;
     /** Store only if the venue names this value now; otherwise store nothing and throw */
     expect?: string;
+    /** The pack's hashes, worked out before the transaction (`hashShowAsset`) */
+    hashes?: ShowAssetHashes;
 }): Promise<string> {
     const manifest = uniformPackManifestSchema.parse(given);
     if (expect !== undefined) {
@@ -81,6 +81,7 @@ export async function setUniformPackInTransaction({
             : undefined;
     const { ref } = await addShowAssetInTransaction({
         tx,
+        hashes,
         asset: {
             ...(id ? { id } : {}),
             kind: UNIFORM_ASSET_KIND,
@@ -172,45 +173,46 @@ export async function saveUniformItemsPack({
     expect: string;
     amend?: string;
 }): Promise<{ value: string; token: string | null }> {
+    // the slow part, before any lock: hashing the whole pack
+    const hashes = await hashShowAsset({
+        parts: { [UNIFORM_PACK_PART]: pack },
+        sidecar: { formatVersion: manifest.formatVersion },
+    });
     if (amend !== undefined) {
-        const amended = await db.transaction(async (tx) => {
-            if ((await getLatestUndoEntryTokenInTransaction(tx)) !== amend)
-                return null;
-            const { history_undo } = schema;
-            const before =
-                (
-                    await tx
-                        .select({ last: max(history_undo.sequence) })
-                        .from(history_undo)
-                        .get()
-                )?.last ?? 0;
-            const value = await setUniformPackInTransaction({
-                tx,
-                pack,
-                manifest,
-                field,
-                versionOf,
-                expect,
-            });
-            // the venue's change joins no undo step: the burst's first one still goes back to
-            // where it started
-            await tx
-                .delete(history_undo)
-                .where(gt(history_undo.sequence, before))
-                .run();
-            // the version this one replaces, unless the history still names it
-            const replaced = parseShowAssetRef(expect);
-            if (
-                replaced &&
-                expect !== value &&
-                !(await valuesNamedInHistory({ db: tx, values: [expect] })).has(
+        const amended = await amendLatestUndoEntry(
+            db,
+            amend,
+            ["view3d_venue"],
+            async (tx) => {
+                const value = await setUniformPackInTransaction({
+                    tx,
+                    pack,
+                    manifest,
+                    field,
+                    versionOf,
                     expect,
+                    hashes,
+                });
+                // the version this one replaces, unless the history still names it
+                const replaced = parseShowAssetRef(expect);
+                if (
+                    replaced &&
+                    expect !== value &&
+                    !(
+                        await valuesNamedInHistory({
+                            db: tx,
+                            values: [expect],
+                        })
+                    ).has(expect)
                 )
-            )
-                await removeShowAssetsInTransaction({ tx, refs: [replaced] });
-            return value;
-        });
-        if (amended !== null) return { value: amended, token: amend };
+                    await removeShowAssetsInTransaction({
+                        tx,
+                        refs: [replaced],
+                    });
+                return value;
+            },
+        );
+        if (amended.amended) return { value: amended.result, token: amend };
     }
     let token: string | null = null;
     const value = await transactionWithHistory(
@@ -224,6 +226,7 @@ export async function saveUniformItemsPack({
                 field,
                 versionOf,
                 expect,
+                hashes,
             }),
         {
             onUndoToken: (t) => {
