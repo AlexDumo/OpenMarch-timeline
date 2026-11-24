@@ -81,7 +81,10 @@ import {
     MENU_ITEM_CLASS,
     MENU_SEPARATOR_CLASS,
 } from "@/components/ui/popupClasses";
-import { MenuItemWithReason } from "@/components/timeline/TimelineRangeMenu";
+import {
+    MenuItemWithReason,
+    TimelineMenuClose,
+} from "@/components/timeline/TimelineRangeMenu";
 import { useCameraList, type CameraList } from "./useCameraList";
 
 /** A dragged camera moves only up and down the list. */
@@ -461,6 +464,7 @@ function CameraRow({
     const name = list.label(camera);
     const defaultName = camera.labelKey ? t(camera.labelKey) : undefined;
     const [menuOpen, setMenuOpen] = useState(false);
+    const closeMenu = useCallback(() => setMenuOpen(false), []);
     const {
         attributes,
         listeners,
@@ -572,105 +576,117 @@ function CameraRow({
                         <DotsThreeIcon size={16} weight="bold" />
                     </DropdownMenu.Trigger>
                     <DropdownMenu.Portal>
-                        <DropdownMenu.Content
-                            align="end"
-                            side="bottom"
-                            sideOffset={4}
-                            collisionPadding={8}
-                            className={clsx(
-                                MENU_CONTENT_CLASS,
-                                "min-w-[13rem]",
-                            )}
-                            data-testid="view3d-camera-menu-items"
-                        >
-                            <DropdownMenu.Item
-                                className={MENU_ITEM_CLASS}
-                                onSelect={onToggleSettings}
-                                data-testid="view3d-camera-menu-settings"
+                        {/* Escape on an entry's reason closes the menu with it */}
+                        <TimelineMenuClose.Provider value={closeMenu}>
+                            <DropdownMenu.Content
+                                align="end"
+                                side="bottom"
+                                sideOffset={4}
+                                collisionPadding={8}
+                                className={clsx(
+                                    MENU_CONTENT_CLASS,
+                                    "min-w-[13rem]",
+                                )}
+                                data-testid="view3d-camera-menu-items"
                             >
-                                <SlidersHorizontalIcon size={14} aria-hidden />
-                                {settingsOpen
-                                    ? t("view3d.cameras.hideSettings")
-                                    : t("view3d.cameras.settings")}
-                            </DropdownMenu.Item>
-                            <DropdownMenu.Item
-                                className={MENU_ITEM_CLASS}
-                                onSelect={() =>
-                                    list.setToCurrentView(camera.id)
-                                }
-                                data-testid="view3d-camera-set-view"
-                            >
-                                <CrosshairSimpleIcon size={14} aria-hidden />
-                                {t("view3d.cameras.setView")}
-                            </DropdownMenu.Item>
-                            <MenuItemWithReason
-                                testId="view3d-camera-duplicate"
-                                reason={
-                                    list.full
-                                        ? t("view3d.cameras.full", {
-                                              max: MAX_CAMERAS,
-                                          })
-                                        : null
-                                }
-                                reasonTestId="view3d-camera-duplicate-reason"
-                                onSelect={onDuplicate}
-                            >
-                                <CopyIcon size={14} aria-hidden />
-                                {t("view3d.cameras.duplicate")}
-                            </MenuItemWithReason>
-                            <DropdownMenu.Separator
-                                className={MENU_SEPARATOR_CLASS}
-                            />
-                            <MenuItemWithReason
-                                testId="view3d-camera-up"
-                                reason={
-                                    index === 0
-                                        ? t("view3d.cameras.alreadyFirst")
-                                        : null
-                                }
-                                reasonTestId="view3d-camera-up-reason"
-                                onSelect={() =>
-                                    list.edit({
-                                        kind: "move",
-                                        id: camera.id,
-                                        by: -1,
-                                    })
-                                }
-                            >
-                                <ArrowUpIcon size={14} aria-hidden />
-                                {t("view3d.cameras.moveUp")}
-                            </MenuItemWithReason>
-                            <MenuItemWithReason
-                                testId="view3d-camera-down"
-                                reason={
-                                    index === count - 1
-                                        ? t("view3d.cameras.alreadyLast")
-                                        : null
-                                }
-                                reasonTestId="view3d-camera-down-reason"
-                                onSelect={() =>
-                                    list.edit({
-                                        kind: "move",
-                                        id: camera.id,
-                                        by: 1,
-                                    })
-                                }
-                            >
-                                <ArrowDownIcon size={14} aria-hidden />
-                                {t("view3d.cameras.moveDown")}
-                            </MenuItemWithReason>
-                            <DropdownMenu.Separator
-                                className={MENU_SEPARATOR_CLASS}
-                            />
-                            <DropdownMenu.Item
-                                className={clsx(MENU_ITEM_CLASS, "text-red")}
-                                onSelect={onRemove}
-                                data-testid="view3d-camera-remove"
-                            >
-                                <TrashIcon size={14} aria-hidden />
-                                {t("view3d.cameras.remove")}
-                            </DropdownMenu.Item>
-                        </DropdownMenu.Content>
+                                <DropdownMenu.Item
+                                    className={MENU_ITEM_CLASS}
+                                    onSelect={onToggleSettings}
+                                    data-testid="view3d-camera-menu-settings"
+                                >
+                                    <SlidersHorizontalIcon
+                                        size={14}
+                                        aria-hidden
+                                    />
+                                    {settingsOpen
+                                        ? t("view3d.cameras.hideSettings")
+                                        : t("view3d.cameras.settings")}
+                                </DropdownMenu.Item>
+                                <DropdownMenu.Item
+                                    className={MENU_ITEM_CLASS}
+                                    onSelect={() =>
+                                        list.setToCurrentView(camera.id)
+                                    }
+                                    data-testid="view3d-camera-set-view"
+                                >
+                                    <CrosshairSimpleIcon
+                                        size={14}
+                                        aria-hidden
+                                    />
+                                    {t("view3d.cameras.setView")}
+                                </DropdownMenu.Item>
+                                <MenuItemWithReason
+                                    testId="view3d-camera-duplicate"
+                                    reason={
+                                        list.full
+                                            ? t("view3d.cameras.full", {
+                                                  max: MAX_CAMERAS,
+                                              })
+                                            : null
+                                    }
+                                    reasonTestId="view3d-camera-duplicate-reason"
+                                    onSelect={onDuplicate}
+                                >
+                                    <CopyIcon size={14} aria-hidden />
+                                    {t("view3d.cameras.duplicate")}
+                                </MenuItemWithReason>
+                                <DropdownMenu.Separator
+                                    className={MENU_SEPARATOR_CLASS}
+                                />
+                                <MenuItemWithReason
+                                    testId="view3d-camera-up"
+                                    reason={
+                                        index === 0
+                                            ? t("view3d.cameras.alreadyFirst")
+                                            : null
+                                    }
+                                    reasonTestId="view3d-camera-up-reason"
+                                    onSelect={() =>
+                                        list.edit({
+                                            kind: "move",
+                                            id: camera.id,
+                                            by: -1,
+                                        })
+                                    }
+                                >
+                                    <ArrowUpIcon size={14} aria-hidden />
+                                    {t("view3d.cameras.moveUp")}
+                                </MenuItemWithReason>
+                                <MenuItemWithReason
+                                    testId="view3d-camera-down"
+                                    reason={
+                                        index === count - 1
+                                            ? t("view3d.cameras.alreadyLast")
+                                            : null
+                                    }
+                                    reasonTestId="view3d-camera-down-reason"
+                                    onSelect={() =>
+                                        list.edit({
+                                            kind: "move",
+                                            id: camera.id,
+                                            by: 1,
+                                        })
+                                    }
+                                >
+                                    <ArrowDownIcon size={14} aria-hidden />
+                                    {t("view3d.cameras.moveDown")}
+                                </MenuItemWithReason>
+                                <DropdownMenu.Separator
+                                    className={MENU_SEPARATOR_CLASS}
+                                />
+                                <DropdownMenu.Item
+                                    className={clsx(
+                                        MENU_ITEM_CLASS,
+                                        "text-red",
+                                    )}
+                                    onSelect={onRemove}
+                                    data-testid="view3d-camera-remove"
+                                >
+                                    <TrashIcon size={14} aria-hidden />
+                                    {t("view3d.cameras.remove")}
+                                </DropdownMenu.Item>
+                            </DropdownMenu.Content>
+                        </TimelineMenuClose.Provider>
                     </DropdownMenu.Portal>
                 </DropdownMenu.Root>
             </div>
