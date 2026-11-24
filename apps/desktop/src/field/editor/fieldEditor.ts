@@ -378,6 +378,8 @@ export type FieldModeDrawing = {
     barHandles?: readonly { at: FieldPoint; from: FieldPoint }[];
     /** The outline is open: drawn without joining its last point to its first (a line, #524) */
     openOutline?: boolean;
+    /** The shape's other rows (spec #1190), open lines drawn like its outline */
+    rows?: readonly (readonly FieldPoint[])[];
     /**
      * The outline is a drawn path (pathways): drawn solid and heavier than a shape's outline, so it
      * reads over a group's faint lanes; heaviest while drawn or open (`edited`), a little lighter
@@ -583,6 +585,20 @@ export type FieldModeDrawing = {
         across: string;
         deep: string;
     };
+    /**
+     * While a Line's Rows apart or Slant number is pointed at, focused or dragged (#1190): the gap
+     * at an end of the block, from the drawn row's end spot straight across to the next row
+     * (`corner`), then along it by the slant (`to`), dashed, labeled ("4 steps apart · Slant 1";
+     * no slant leg when `slant` is null) on the `outward` side, a unit vector away from the block
+     */
+    rowsGap?: {
+        from: FieldPoint;
+        corner: FieldPoint;
+        to: FieldPoint;
+        outward: FieldPoint;
+        apart: string;
+        slant: string | null;
+    };
 };
 
 /** What the editor knows of a press it asks a {@link FieldMode} to claim. */
@@ -733,6 +749,8 @@ export class FieldEditor {
     private gestureButton = 0;
     private hover: FieldCursor = "default";
     private hoverHandle: HandleId | null = null;
+    private hoverMarcherId: number | null = null;
+    private readonly hoverMarcherListeners = new Set<() => void>();
     /** The selection box's cover when a rotation started: the box turns with it until the release */
     private rotateCovers: FieldRect | null = null;
     /**
@@ -939,6 +957,7 @@ export class FieldEditor {
         if (this.ignoredButton !== null) return;
         const press = this.press;
         if (!press) {
+            this.setHoverMarcher(this.marcherAt(pointer));
             const modeCursor =
                 this.mode?.cursorAt(pointer, {
                     onDot: () => this.marcherAt(pointer) !== null,
@@ -1272,6 +1291,7 @@ export class FieldEditor {
     pointerLeave(): void {
         this.mode?.leave?.();
         this.setHoverHandle(null);
+        this.setHoverMarcher(null);
         this.setPivotHover(null);
         if (this.pickAt) {
             this.pickAt = null;
@@ -1486,6 +1506,23 @@ export class FieldEditor {
      */
     hoveredHandle(): HandleId | null {
         return this.hoverHandle;
+    }
+
+    /**
+     * The marcher the pointer rests on with no button down, or null: the field shows a drill
+     * number an equipment icon stands in for while it's pointed at (#992).
+     */
+    hoveredMarcher(): number | null {
+        return this.hoverMarcherId;
+    }
+
+    /**
+     * Calls `listener` when {@link hoveredMarcher} changes (apart from {@link subscribe}, which a
+     * marcher pointed at doesn't wake). Returns the unsubscribe.
+     */
+    subscribeHoveredMarcher(listener: () => void): () => void {
+        this.hoverMarcherListeners.add(listener);
+        return () => this.hoverMarcherListeners.delete(listener);
     }
 
     /**
@@ -2558,6 +2595,12 @@ export class FieldEditor {
         this.gesture = null;
         gesture.cancel();
         this.emit();
+    }
+
+    private setHoverMarcher(id: number | null) {
+        if (id === this.hoverMarcherId) return;
+        this.hoverMarcherId = id;
+        for (const listener of this.hoverMarcherListeners) listener();
     }
 
     private setHoverHandle(handle: HandleId | null) {
