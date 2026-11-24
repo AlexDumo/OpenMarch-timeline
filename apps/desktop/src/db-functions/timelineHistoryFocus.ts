@@ -3,6 +3,7 @@ import { inArray } from "drizzle-orm";
 import { DB, schema } from "../global/database/db";
 import { DbConnection, DbTransaction } from "./types";
 import { type GridPage, readPageGrid } from "./timelineRipple";
+import type { ShapeRecipeState } from "./shapeRecipes";
 
 /**
  * Where to look after an undo or redo (docs/timeline/phases/07-page-parity.md P7.13): the page
@@ -29,6 +30,10 @@ import { type GridPage, readPageGrid } from "./timelineRipple";
  *   ripple begins.
  * - **Marchers to select:** the marchers changed on that page, or no change to the selection when
  *   there are none (for example a shape no transition uses).
+ * - **Placed shapes** (ADR 0006): a placed shape the action changed, placed on a changed page and
+ *   holding a marcher changed there, adds all its marchers, so it comes back selected whole. An
+ *   edit of a shape can leave some of its marchers where they stood (a join keeps a line's own
+ *   marchers), and those would otherwise be left out.
  */
 
 type Change = ChangeBatch["changes"][number];
@@ -245,6 +250,41 @@ const changedPages = (
 };
 
 /**
+ * Adds to each changed page the marchers of every placed shape in `shapes` placed there (on the
+ * page its move ends on) that holds one of the page's changed marchers
+ */
+const addWholeShapes = async (
+    reader: DbTransaction,
+    pages: readonly GridPage[],
+    byPage: Map<number, Set<number>>,
+    shapes: readonly ShapeRecipeState[],
+): Promise<void> => {
+    if (shapes.length === 0) return;
+    const moves = [...new Set(shapes.flatMap((s) => s.timelineId ?? []))];
+    const t = schema.timelines;
+    const ends = new Map(
+        moves.length === 0
+            ? []
+            : (
+                  await reader
+                      .select({ id: t.id, end: t.end_beat })
+                      .from(t)
+                      .where(inArray(t.id, moves))
+                      .all()
+              ).map((m) => [m.id, m.end]),
+    );
+    for (const shape of shapes) {
+        const end = shape.timelineId === null ? 0 : ends.get(shape.timelineId);
+        if (end === undefined) continue;
+        const page = pageForEndBeat(pages, end);
+        const marchers = page && byPage.get(page.id);
+        if (!marchers || !shape.marcherIds.some((id) => marchers.has(id)))
+            continue;
+        for (const id of shape.marcherIds) marchers.add(id);
+    }
+};
+
+/**
  * Works out the page and marchers to show after an undo or redo whose committed batch is `batch`.
  *
  * Reads the page grid and the timeline rows as they are now; call it after the action commits,
@@ -252,6 +292,7 @@ const changedPages = (
  *
  * @param options.currentPageId the page the user is on, kept when the action changed it
  * @param options.beatsChanged the action changed `beats`, so deleted rows are not placed
+ * @param options.shapes the placed shapes the action changed, as they are after it
  */
 export async function timelineHistoryFocus(
     db: DbConnection | DB | DbTransaction,
@@ -259,7 +300,12 @@ export async function timelineHistoryFocus(
     {
         currentPageId,
         beatsChanged = false,
-    }: { currentPageId?: number; beatsChanged?: boolean } = {},
+        shapes = [],
+    }: {
+        currentPageId?: number;
+        beatsChanged?: boolean;
+        shapes?: readonly ShapeRecipeState[];
+    } = {},
 ): Promise<TimelineHistoryFocus> {
     if (batch.changes.length === 0) return NO_FOCUS();
     const reader = db as DbTransaction;
@@ -273,6 +319,7 @@ export async function timelineHistoryFocus(
             ? undefined
             : pages.find((p) => p.id === currentPageId);
     const byPage = changedPages(batch, pages, scan, live, currentPage);
+    await addWholeShapes(reader, pages, byPage, shapes);
     // A shape-only change (to a shape no transition uses) has no page
     if (byPage.size === 0) return NO_FOCUS();
 
