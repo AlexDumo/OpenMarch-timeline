@@ -9,6 +9,7 @@ import {
 import {
     bendPieceThrough,
     bendThrough,
+    pieceAt,
     pieceType,
     PIECE_BEND,
     setPieceType,
@@ -166,6 +167,29 @@ describe("splitting an arc", () => {
     it("a straight stretch still splits as before", () => {
         const p = line(corner(0, 0), corner(10, 0));
         expect(splitPiece(p, 0).points[1]).toMatchObject({ x: 5, y: 0 });
+    });
+});
+
+describe("right-click on a part", () => {
+    const env = { hitRadius: 1.5, stepPx: 10 };
+    const p = line(corner(0, 0), corner(0, 40), corner(-20, 40));
+
+    it("opens the nearest part's menu anywhere along it", () => {
+        expect(pieceAt(p, 4, { x: 0.5, y: 7 }, env)).toBe("m0");
+        expect(pieceAt(p, 4, { x: -15, y: 41 }, env)).toBe("m1");
+    });
+
+    it("an arc part along its curve, not its chord", () => {
+        const arc = setPieceType(p, 1, "arc");
+        const onCurve = middle(arc, 1);
+        expect(pieceAt(arc, 4, onCurve, env)).toBe("m1");
+        expect(pieceAt(arc, 4, { x: -10, y: 40 }, env)).toBeNull();
+    });
+
+    it("not on a marcher or away from the line", () => {
+        const spot = lineSpots(p, 4)[1]!;
+        expect(pieceAt(p, 4, spot, env)).toBeNull();
+        expect(pieceAt(p, 4, { x: 10, y: 10 }, env)).toBeNull();
     });
 });
 

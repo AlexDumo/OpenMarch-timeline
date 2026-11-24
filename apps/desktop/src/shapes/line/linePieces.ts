@@ -267,3 +267,26 @@ export function splitPiece(
         ? arc
         : splitArc(p, index, { marcher: false })!;
 }
+
+/**
+ * The part of the line a right-click at `at` lands on, as its middle handle's key (`m<i>`), so its
+ * menu opens anywhere along it (#1218), or null. Within `hitRadius` of the line, the nearest part;
+ * never on a marcher, whose right-click keeps the field's menu for the shape's marchers.
+ */
+export function pieceAt(
+    p: LineParams,
+    n: number,
+    at: XY,
+    env: { readonly hitRadius: number; readonly stepPx?: number },
+): string | null {
+    const reach = env.hitRadius;
+    if (lineSpots(p, n, env.stepPx).some((spot) => dist(spot, at) <= reach))
+        return null;
+    let best: { index: number; gap: number } | null = null;
+    lineSegments(p).forEach((segment, index) => {
+        const path = makePath([segment]);
+        const gap = dist(path.at(path.project(at)), at);
+        if (gap <= reach && (!best || gap < best.gap)) best = { index, gap };
+    });
+    return best === null ? null : `m${(best as { index: number }).index}`;
+}

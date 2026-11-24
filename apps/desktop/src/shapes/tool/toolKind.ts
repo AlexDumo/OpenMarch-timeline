@@ -473,6 +473,11 @@ export interface ToolHandleMenu<P> {
         value: string,
         env: ToolEnv,
     ): { readonly params: P; readonly selected?: string | null } | null;
+    /**
+     * The handle whose menu a right-click at `at` opens when it lands on no handle, or null: a
+     * Line's part anywhere along it, not only on its middle handle (#1218)
+     */
+    keyAt?(params: P, n: number, at: XY, env: ToolEnv): string | null;
 }
 
 /**

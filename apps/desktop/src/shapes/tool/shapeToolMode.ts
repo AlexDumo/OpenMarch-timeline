@@ -537,15 +537,12 @@ export const shapeToolMode: FieldMode = {
         const field = currentShapeField();
         if (!tool || !field || tool.gesture || tool.params === null)
             return false;
+        const env = envOf(field, tool, undefined, pointer.kind);
         return openHandleMenu(
             tool.kind,
             tool.params,
             tool.spots,
-            pressTarget(
-                tool,
-                pointer.field,
-                envOf(field, tool, undefined, pointer.kind),
-            ),
+            pressTarget(tool, pointer.field, env),
             pointer.screen,
             (key, value) => {
                 const now = currentShapeField();
@@ -562,6 +559,7 @@ export const shapeToolMode: FieldMode = {
                 const after = useShapeToolStore.getState().tool;
                 return after ? { params: after.params, n: after.spots } : null;
             },
+            { at: pointer.field, env },
         );
     },
     // A pen held still on a handle with a menu (a Line's point, tablet 1.5): the press gives way

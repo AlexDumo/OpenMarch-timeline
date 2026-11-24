@@ -107,6 +107,7 @@ import {
 } from "./lineGeometry";
 import {
     bendPieceThrough,
+    pieceAt,
     pieceType,
     setPieceType,
     splitPiece,
@@ -1246,6 +1247,7 @@ function segmentMenu(p: LineParams, index: number): ToolMenuSection[] {
  * segment's new point and whether it's straight or curved.
  */
 const MENU: ToolHandleMenu<LineParams> = {
+    keyAt: (p, n, at, env) => pieceAt(p, n, at, env),
     sections(p, n, key) {
         const index = pointOf(p, key);
         if (index >= 0) return pointMenu(p, n, index);

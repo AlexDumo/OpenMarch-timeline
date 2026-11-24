@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { ShapeTarget } from "../frame/gestures";
-import type { AnyToolKind, ToolMenuSection } from "../tool/toolKind";
+import type { AnyToolKind, ToolEnv, ToolMenuSection } from "../tool/toolKind";
 import type { XY } from "../types";
 
 /** A shape handle's right-click menu, open (#569) */
@@ -41,7 +41,9 @@ export function handleMenuSections(
  * one (`ToolKind.menu`); says whether it did. `pick` applies an entry picked to handle `key` and
  * returns the shape after it, so a menu that stays open (a segmented either/or, #568) shows the
  * change; it closes when the handle has no menu any more. A path's corners and legs open theirs
- * through here too (pathways), so only `menu` is read.
+ * through here too (pathways), so only `menu` is read. A right-click on no handle opens the menu
+ * its kind gives that spot (`ToolHandleMenu.keyAt`, a Line's part, #1218) when `near` says where
+ * it landed on the field.
  */
 export function openHandleMenu(
     kind: Pick<AnyToolKind, "menu">,
@@ -53,9 +55,16 @@ export function openHandleMenu(
         key: string,
         value: string,
     ) => { readonly params: unknown; readonly n: number } | null,
+    near?: { readonly at: XY; readonly env: ToolEnv },
 ): boolean {
-    if (target?.type !== "handle" || params === null) return false;
-    const { key } = target;
+    if (params === null) return false;
+    const key =
+        target?.type === "handle"
+            ? target.key
+            : target?.type === "draw" || !near
+              ? null
+              : (kind.menu?.keyAt?.(params, n, near.at, near.env) ?? null);
+    if (key === null) return false;
     const sectionsOf = (p: unknown, count: number) =>
         p === null ? null : handleMenuSections(kind, p, count, key);
     const sections = sectionsOf(params, n);
