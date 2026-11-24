@@ -9,6 +9,7 @@ import {
     type ShapeRecipeRecord,
 } from "@/db-functions/shapeRecipes";
 import { historyKeys } from "@/hooks/queries/useHistory";
+import type { DbTransaction } from "@/db-functions/types";
 import { samePosition } from "@/db-functions/timelineMoves";
 import {
     planCanvasEdit,
@@ -50,6 +51,22 @@ export interface ShapePlacement {
      * of marchers does, and any shape they stood in loses them
      */
     readonly plain?: boolean;
+    /**
+     * Other placed shapes changed in the same edit (#1235: shapes linked to an edited one, their
+     * ends stretched to its joints): saved with it, members and all, as one undo step. Each
+     * replaces its own recipe, which is on the same move.
+     */
+    readonly also?: readonly LinkedPlacement[];
+}
+
+/** A placed shape saved beside another's placement ({@link ShapePlacement.also}) */
+export interface LinkedPlacement {
+    readonly recipe: ShapeRecipeRecord;
+    readonly members: readonly ShapeRecipeMember[];
+    readonly replaces: {
+        readonly id: number;
+        readonly timelineId: number | null;
+    };
 }
 
 /** What placing the open shape would write; null while there is nothing to place */
@@ -142,9 +159,25 @@ export async function writePlacement(
     /** Inside isolation, leave the playhead where it is; always with a `plan`, unless told */
     keepPlayhead: boolean = plan !== null,
 ): Promise<boolean> {
-    const { members, replaces } = placement;
+    const { members: own, replaces, also = [] } = placement;
+    // Linked shapes' members move in the same edit (#1235)
+    const members = [...own, ...also.flatMap((a) => a.members)];
     const to = new Map(members.map((m) => [m.marcherId, m]));
     const marcherIds = members.map((m) => m.marcherId);
+    /** The other shapes saved, each over its own recipe when it's in move `timelineId` */
+    const saveAlso = async (tx: DbTransaction, timelineId: number | null) => {
+        for (const a of also)
+            await saveShapeRecipeInTransaction({
+                tx,
+                timelineId,
+                recipe: a.recipe,
+                members: a.members,
+                replaces:
+                    a.replaces.timelineId === timelineId
+                        ? a.replaces.id
+                        : undefined,
+            });
+    };
     let saved = false;
     const spotsOf = (current: readonly { readonly marcher_id: number }[]) =>
         current.flatMap((c) => {
@@ -200,12 +233,13 @@ export async function writePlacement(
                     tx,
                     timelineId,
                     recipe: placement.recipe,
-                    members,
+                    members: own,
                     replaces:
                         replaces && replaces.timelineId === timelineId
                             ? replaces.id
                             : undefined,
                 });
+                await saveAlso(tx, timelineId);
                 if (basic && timelineId !== null)
                     leftOut = await leftOutByOtherCounts(
                         tx,
@@ -218,15 +252,16 @@ export async function writePlacement(
         // Nobody moved and no move here holds the shape's members (a change without `setAll`):
         // the change goes to the recipe shown, in its own move
         if (!saved && replaces) {
-            await transactionWithHistory(db, "editShapeRecipe", (tx) =>
-                saveShapeRecipeInTransaction({
+            await transactionWithHistory(db, "editShapeRecipe", async (tx) => {
+                await saveShapeRecipeInTransaction({
                     tx,
                     timelineId: replaces.timelineId,
                     recipe: placement.recipe,
-                    members,
+                    members: own,
                     replaces: replaces.id,
-                }),
-            );
+                });
+                await saveAlso(tx, replaces.timelineId);
+            });
             invalidatePlacedBoxes();
         }
     } catch (e) {

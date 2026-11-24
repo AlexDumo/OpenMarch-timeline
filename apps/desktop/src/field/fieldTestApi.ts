@@ -170,6 +170,8 @@ export interface FieldTestApi {
     marchersShown?(): boolean;
     /** The placed boxes outlined on the field (the View tab's Shapes setting). */
     placedBoxes?(): FieldTestPlacedBox[];
+    /** The joints of linked shapes marked on the field (#1235), in field units */
+    shapeJoints?(): { x: number; y: number }[];
     /**
      * The props and equipment drawn (C2.1), by ascending marcher id. Items Off
      * field at the beat shown, or hidden by the user, are left out.

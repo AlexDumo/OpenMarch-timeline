@@ -321,6 +321,7 @@ describe("FieldContextMenu", () => {
         for (const id of FIELD_MENU_ACTIONS) handle(id);
         handle("shapeGroup", { enabled: false, reason: null });
         handle("shapeUngroup", { enabled: false, reason: null });
+        handle("shapeDetach", { enabled: false, reason: null });
         // The Path group shows only what applies: here Edit path, Edit <name>'s line, then after a
         // line Detach, Detach all and Remove path
         for (const id of [

@@ -3921,5 +3921,9 @@
     "assets.errors.remove": "Error toast when removing the unused imported files fails.",
     "assets.errors.credits": "Error toast when saving an imported file's license and author fails.",
     "props.modelMissing": "Note in a prop's edit panel when the imported 3D model it names isn't in the show any more (it was removed, then an undo brought the prop back). The prop draws as a plain block.",
-    "props.imported.manage": "Small link under the Props panel's Imported group that opens the Assets panel, where imported models' size, use and license are shown."
+    "props.imported.manage": "Small link under the Props panel's Imported group that opens the Assets panel, where imported models' size, use and license are shown.",
+    "actions.shape.detach": "Name of the Detach action in the command palette and the field's right-click menu, and the entry in the menu of a joint between two linked shapes (right-click or long-press where two placed lines, curves or arcs meet). Two shapes can be linked end to end so moving one stretches the other; Detach separates them again, and the shape that was attached gets a marcher on its own end. Keep it a short verb.",
+    "actions.shape.detachKeywords": "Search words for the Detach action in the command palette, separated by spaces. Not shown; translate as words people might type to find it (unlink, joint, linked shape).",
+    "shapes.links.jointMenu": "Heading of the small menu opened by right-clicking or long-pressing the joint where two linked shapes (placed lines, curves or arcs) meet. One marcher stands on the joint; {shape} is the kind of shape whose marcher it is (Line, Arc). Read as: the marcher on the joint belongs to the {shape}.",
+    "shapes.links.detachNeedsLink": "Reason shown for the greyed-out Detach command in the command palette when no linked shape is selected. Linked shapes are placed lines, curves or arcs joined end to end."
 }

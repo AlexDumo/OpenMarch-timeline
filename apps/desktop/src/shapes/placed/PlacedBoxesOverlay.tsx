@@ -20,6 +20,8 @@ import {
     usePlacedBoxBeat,
 } from "./placedBoxStore";
 import { closedOf } from "../distribute/modes";
+import { liveLinks } from "./shapeLinks";
+import { useLinkDragStore } from "./linkDragStore";
 
 /** One placed shape as the field outlines it, in field units */
 export interface PlacedBoxDrawing {
@@ -132,9 +134,42 @@ export function placedBoxDrawing(
 }
 
 let drawn: readonly PlacedBoxDrawing[] = [];
+let drawnJoints: readonly XY[] = [];
 
 /** The placed boxes outlined on the field now, for the field test API */
 export const drawnPlacedBoxes = (): readonly PlacedBoxDrawing[] => drawn;
+
+/** The joints of linked shapes marked on the field now (#1235), for the field test API */
+export const drawnShapeJoints = (): readonly XY[] => drawnJoints;
+
+/**
+ * A joint's mark (#1235): a ring with a diamond in it, its radius in CSS px, wide enough to show
+ * round a selected shape's end handle
+ */
+const JOINT_PX = 11;
+/** The snap ring while a dragged end will attach, in CSS px */
+const SNAP_PX = 11;
+
+/** A link's mark at `at` (CSS px): a ring round the joint's marcher with a diamond in it */
+function JointMark({ at, color }: { at: XY; color: string }) {
+    const d = JOINT_PX * 0.45;
+    return (
+        <g data-testid="shapeJoint">
+            <circle
+                cx={at.x}
+                cy={at.y}
+                r={JOINT_PX}
+                fill="none"
+                stroke={color}
+                strokeWidth={2}
+            />
+            <polygon
+                points={`${at.x},${at.y - d} ${at.x + d},${at.y} ${at.x},${at.y + d} ${at.x - d},${at.y}`}
+                fill={color}
+            />
+        </g>
+    );
+}
 
 /**
  * Placed shapes on the field (docs/timeline/research/shapes/07-placed-boxes.md), by the View tab's
@@ -143,7 +178,8 @@ export const drawnPlacedBoxes = (): readonly PlacedBoxDrawing[] => drawn;
  * label above it, in the theme's shape color. Hidden during playback and while the Shape tool is open, which draws its
  * own; the selected box draws its own outline and handles (`LiveBoxMode`). Few boxes, so SVG
  * over the field, like the editor's overlay. It takes no pointer events, and exports don't draw
- * it.
+ * it. Linked shapes' joints are marked whenever the setting isn't off (#1235), and a drag of a
+ * selected shape draws the ring of the end it will attach to and the shapes following it.
  */
 export function PlacedBoxesOverlay({
     isPlaying,
@@ -163,6 +199,7 @@ export function PlacedBoxesOverlay({
     const editing = useBoxSelectionStore((s) => s.selected?.recipe.id ?? null);
     const selected = useSelectedMarchers()?.selectedMarchers;
     const view = useFieldViewStore();
+    const linkDrag = useLinkDragStore();
 
     // The recipes change with the show: every resolver change re-reads them, and so does every
     // undoable edit, undo and redo, for those that change only a recipe
@@ -171,17 +208,22 @@ export function PlacedBoxesOverlay({
     }, [version]);
     useEffect(() => followPlacedBoxChanges(), []);
 
-    const drawings = useMemo(() => {
-        if (mode === "off" || isPlaying || toolOpen) return [];
+    const { drawings, joints } = useMemo(() => {
+        if (mode === "off" || isPlaying || toolOpen)
+            return { drawings: [], joints: [] };
         const ids = new Set((selected ?? []).map((m) => m.id));
-        return placedBoxesAt(beat, recipes)
-            .filter(
-                (box) =>
-                    box.recipe.id !== editing &&
-                    (mode === "always" ||
-                        box.recipe.members.some((m) => ids.has(m.marcherId))),
-            )
-            .map((box) => placedBoxDrawing(box, stepPx));
+        const boxes = placedBoxesAt(beat, recipes);
+        const shown = (box: PlacedBox) =>
+            mode === "always" ||
+            box.recipe.id === editing ||
+            box.recipe.members.some((m) => ids.has(m.marcherId));
+        return {
+            drawings: boxes
+                .filter((box) => box.recipe.id !== editing && shown(box))
+                .map((box) => placedBoxDrawing(box, stepPx)),
+            // Every joint is marked (#1235), so a link shows before either shape is selected
+            joints: liveLinks(boxes, beat).map((l) => l.at),
+        };
         // placedBoxesAt reads the resolver and the move end beats, which these stand for
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
@@ -198,12 +240,15 @@ export function PlacedBoxesOverlay({
     ]);
     useEffect(() => {
         drawn = drawings;
+        drawnJoints = joints;
         return () => {
             drawn = [];
+            drawnJoints = [];
         };
-    }, [drawings]);
+    }, [drawings, joints]);
 
-    if (drawings.length === 0) return null;
+    const dragging = linkDrag.ring !== null || linkDrag.followers.length > 0;
+    if (drawings.length === 0 && joints.length === 0 && !dragging) return null;
     const color = rgbaToString(theme.shape);
     return (
         <svg
@@ -240,6 +285,62 @@ export function PlacedBoxesOverlay({
                     </g>
                 );
             })}
+            {joints.map((at) => (
+                <JointMark
+                    key={`${at.x},${at.y}`}
+                    at={fieldToElement(view, at.x, at.y)}
+                    color={color}
+                />
+            ))}
+            {/* Shapes linked to the one dragged, where they'll be (#1235) */}
+            {linkDrag.followers.map((f) => (
+                <g key={`follow-${f.id}`} data-testid="linkFollower">
+                    <polyline
+                        points={f.outline
+                            .map((c) => fieldToElement(view, c.x, c.y))
+                            .map((p) => `${p.x},${p.y}`)
+                            .join(" ")}
+                        fill="none"
+                        stroke={color}
+                        strokeWidth={1.5}
+                        strokeDasharray="4 3"
+                    />
+                    {f.spots.map((c, i) => {
+                        const p = fieldToElement(view, c.x, c.y);
+                        return (
+                            <circle
+                                key={i}
+                                cx={p.x}
+                                cy={p.y}
+                                r={3}
+                                fill={color}
+                                fillOpacity={0.6}
+                            />
+                        );
+                    })}
+                </g>
+            ))}
+            {linkDrag.ring &&
+                (() => {
+                    const p = fieldToElement(
+                        view,
+                        linkDrag.ring.x,
+                        linkDrag.ring.y,
+                    );
+                    return (
+                        <circle
+                            data-testid="linkSnapRing"
+                            cx={p.x}
+                            cy={p.y}
+                            r={SNAP_PX}
+                            fill={color}
+                            fillOpacity={0.15}
+                            stroke={color}
+                            strokeWidth={1.5}
+                            strokeDasharray="3 2"
+                        />
+                    );
+                })()}
         </svg>
     );
 }

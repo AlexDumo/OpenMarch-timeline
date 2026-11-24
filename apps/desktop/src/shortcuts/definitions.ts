@@ -996,6 +996,18 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
     },
 
+    // Detach linked shapes (#1235): the selected placed lines, curves or arcs come apart at their
+    // joints, the attached one getting its own end marcher back. The joint's right-click menu
+    // says the same. No key until one is asked for (shapes/placed/detachLinks)
+    shapeDetach: {
+        labelKey: "actions.shape.detach",
+        keywordsKey: "actions.shape.detachKeywords",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+
     // Pathways step 1 (ADR 0016): the Path pen draws a cornered path for one selected marcher's
     // move at the playhead. P as in design tools' pen. While it draws, Enter (applyShape) finishes,
     // Backspace (shapeRemoveLastPoint) takes the last corner back and Escape

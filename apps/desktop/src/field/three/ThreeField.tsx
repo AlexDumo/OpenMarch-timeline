@@ -77,6 +77,7 @@ import {
 } from "@/shapes/placed/boxSelection";
 import {
     drawnPlacedBoxes,
+    drawnShapeJoints,
     PlacedBoxesOverlay,
 } from "@/shapes/placed/PlacedBoxesOverlay";
 import { ShapeEditor } from "@/shapes/editor/ShapeEditorBar";
@@ -631,6 +632,7 @@ function ThreeFieldView() {
                 selectionPivot: () => editor.selectionPivot(),
                 modeDrawing: () => editor.modeDrawing(),
                 placedBoxes: drawnPlacedBoxes,
+                shapeJoints: drawnShapeJoints,
                 items,
                 propTool: () => editor.propToolShape(),
                 fieldImage: () => latest.current.fieldImage,

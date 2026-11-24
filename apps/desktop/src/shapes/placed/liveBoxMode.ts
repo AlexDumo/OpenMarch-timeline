@@ -47,6 +47,20 @@ import {
     useSavingBoxStore,
 } from "./boxSelectionStore";
 import { outlineGapAt } from "../distribute/outlineGap";
+import type { LineParams } from "../line/lineGeometry";
+import { placedBoxesAt } from "./placedBoxStore";
+import {
+    attachedParams,
+    attachSnap,
+    followersOf,
+    isLinkable,
+    linkAt,
+    liveLinks,
+    type AttachSnap,
+    type ShapeLink,
+} from "./shapeLinks";
+import { clearLinkDrag, useLinkDragStore } from "./linkDragStore";
+import { openJointMenu } from "./detachLinks";
 import { openHandleMenu } from "../field/handleMenu";
 import { groupDrawing } from "../field/groupDrawing";
 import { stepDrawing } from "../field/stepDrawing";
@@ -62,6 +76,9 @@ import {
     useShapePointerStore,
     guideGesture,
 } from "../field/shapePointer";
+
+/** How far from another shape's end a dragged end attaches to it, in handle reaches (#1235) */
+const ATTACH_REACH = 1.5;
 
 /** What a press that reaches inside keeps for the box: its pivot, handles and knob */
 const OWN_CONTROLS: ReadonlySet<ShapeTarget["type"]> = new Set([
@@ -227,6 +244,17 @@ export class LiveBoxMode implements FieldMode {
     private readDuringGesture: PlacedBox | null = null;
     /** What made the last press: a held key's rerun goes on with its reach (tablet 1.4) */
     private pressKind: PointerKind = "mouse";
+    /**
+     * The placed shapes and links around the gesture under way (#1235), read at its press: what
+     * a dragged end can attach to, and who follows
+     */
+    private linkScene: {
+        readonly boxes: readonly PlacedBox[];
+        readonly links: readonly ShapeLink[];
+        readonly beat: number;
+    } | null = null;
+    /** Where the dragged end attaches on release, shown by a ring there (#1235) */
+    private snap: AttachSnap | null = null;
 
     constructor(
         box: PlacedBox,
@@ -356,17 +384,88 @@ export class LiveBoxMode implements FieldMode {
                 ...toolEnvFor(field, held.roles(), { kind: pointer.kind }),
                 reachInside,
             }) ?? this.live;
+        this.linkScene = null;
+        this.snap = null;
+        if (this.live.gesture && isLinkable(this.live.box)) {
+            const beat =
+                this.pressedAt ??
+                displayedBeat(useTimelineSelectionStore.getState());
+            const boxes = placedBoxesAt(beat);
+            this.linkScene = { boxes, links: liveLinks(boxes, beat), beat };
+        }
         this.emit();
+    }
+
+    /**
+     * Linked shapes mid-drag (#1235): a moved end of this shape near a free end of another on its
+     * move snaps onto it, a ring there saying it attaches on release (not with `constrain`, $mod,
+     * held: a way to place without attaching, as drawing tools have), and the shapes linked to
+     * this one follow, their outlines and marchers drawn where they'll be
+     */
+    private followLinks(constrain: boolean): void {
+        const scene = this.linkScene;
+        const g = this.live.gesture;
+        const field = currentShapeField();
+        if (!scene || !g || !field) {
+            this.snap = null;
+            clearLinkDrag();
+            return;
+        }
+        const whole = g.type === "move";
+        this.snap =
+            (whole || g.type === "handle") && !constrain
+                ? attachSnap({
+                      box: this.live.box,
+                      params: this.live.params,
+                      boxes: scene.boxes,
+                      links: scene.links,
+                      radius: toolEnvFor(field).hitRadius * ATTACH_REACH,
+                      beat: scene.beat,
+                  })
+                : null;
+        if (this.snap)
+            this.live = {
+                ...this.live,
+                params: attachedParams(
+                    this.live.params as LineParams,
+                    this.snap,
+                    whole,
+                ),
+            };
+        const ctx = { ...shapeContextFor(field), draft: true };
+        useLinkDragStore.setState({
+            ring: this.snap?.at ?? null,
+            followers: followersOf(
+                this.live.box,
+                this.live.params,
+                scene.links,
+            ).map((f) => ({
+                id: f.box.recipe.id,
+                outline: shapeOutline(f.box.kind, f.params, f.box.spots),
+                spots: liveTargets(f.box, f.params, ctx).members.map(
+                    ({ x, y }) => ({ x, y }),
+                ),
+            })),
+        });
+    }
+
+    /** The gesture's link state let go */
+    private endLinks(): void {
+        this.linkScene = null;
+        this.snap = null;
+        clearLinkDrag();
     }
 
     move(pointer: FieldPointer): void {
         const field = currentShapeField();
         if (!field) return;
+        const roles = this.held?.move(pointer);
         this.live = moveLive(
             this.live,
             pointer.field,
-            toolEnvFor(field, this.held?.move(pointer), { kind: pointer.kind }),
+            toolEnvFor(field, roles, { kind: pointer.kind }),
         );
+        this.followLinks(roles?.constrain ?? false);
         this.emit();
     }
 
@@ -379,6 +478,7 @@ export class LiveBoxMode implements FieldMode {
             at,
             toolEnvFor(field, roles, { kind: this.pressKind }),
         );
+        this.followLinks(roles.constrain);
         this.emit();
     }
 
@@ -389,6 +489,7 @@ export class LiveBoxMode implements FieldMode {
 
     release(pointer: FieldPointer, click: LiveClick | null): void {
         this.endHeld();
+        this.endLinks();
         const before = this.live;
         const out = releaseLive(
             before,
@@ -425,6 +526,21 @@ export class LiveBoxMode implements FieldMode {
     openMenu(pointer: FieldPointer): boolean {
         const field = currentShapeField();
         if (!field || this.live.gesture) return false;
+        // A joint (#1235): its own menu, Detach
+        const beat = displayedBeat(useTimelineSelectionStore.getState());
+        const joint = isLinkable(this.live.box)
+            ? linkAt(
+                  this.live.box,
+                  pointer.field,
+                  liveLinks(placedBoxesAt(beat), beat),
+                  toolEnvFor(field, undefined, { kind: pointer.kind })
+                      .hitRadius,
+              )
+            : null;
+        if (joint) {
+            openJointMenu(joint, pointer.screen, this.queryClient);
+            return true;
+        }
         const { kind, spots } = this.live.box;
         const target = shapeTargetAt(
             kind,
@@ -480,6 +596,7 @@ export class LiveBoxMode implements FieldMode {
 
     cancel(): void {
         this.endHeld();
+        this.endLinks();
         this.live = openLive(this.live.box, this.live.selected);
         this.catchUp();
         this.emit();

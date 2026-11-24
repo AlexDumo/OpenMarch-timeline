@@ -113,9 +113,10 @@ export function withEnds(p: LineParams, ends: ArcEnds): LineParams {
         closed: _closed,
         distribution: _distribution,
         corners: _corners,
+        attach,
         ...rest
     } = p;
-    if (ends === "open") return { ...rest, points };
+    if (ends === "open") return { ...rest, points, ...(attach && { attach }) };
     const fill = p.distribution ? { distribution: p.distribution } : {};
     // Round a circle the marchers go evenly, with no corner holding one at the ends
     return ends === "circle"

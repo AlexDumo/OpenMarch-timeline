@@ -12,7 +12,10 @@ import {
     displayedBeat,
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
-import { writePlacement } from "../tool/shapePlacement";
+import { writePlacement, type LinkedPlacement } from "../tool/shapePlacement";
+import type { ShapeContext } from "../types";
+import type { LineParams } from "../line/lineGeometry";
+import { followersOf, liveLinks, withoutDeadLinks } from "./shapeLinks";
 import { liveTargets } from "./liveBox";
 import type { PlacedBox } from "./placedBox";
 import { placedOrderChoice } from "./placedOrder";
@@ -88,6 +91,11 @@ export function commitBox(
     origins?: ReadonlyMap<number, XY>,
     /** Who goes where, picked anew (#528): the recipe's otherwise */
     order: OrderChoice = placedOrderChoice(box),
+    /**
+     * Other placed shapes changed in the same step (#1235: Detach of several links), each to its
+     * params; shapes linked to `box` follow it whether or not they're listed
+     */
+    others: readonly LinkedEdit[] = [],
 ): Promise<void> {
     const field = currentShapeField();
     if (!field) return Promise.resolve();
@@ -126,6 +134,7 @@ export function commitBox(
                 layOutAgain,
                 origins,
                 order,
+                others,
             );
         } catch (e) {
             console.error("Couldn't save the shape", e);
@@ -136,6 +145,72 @@ export function commitBox(
                 useSavingBoxStore.setState({ box: null, beats: [] });
         }
     }, undefined);
+}
+
+/** Another placed shape saved in the same step as an edit ({@link commitBox}'s `others`) */
+export interface LinkedEdit {
+    readonly box: PlacedBox;
+    readonly params: unknown;
+}
+
+/**
+ * What linked shapes (#1235) do when `box` is saved as `params` at `beat`, among the placed shapes
+ * shown there (`boxes`): the attachments of
+ * `box` that link nothing now are dropped from it, and every shape linked to it whose joint moved
+ * follows, its end stretched there, saved in the same step beside `others`. On a later page the
+ * shapes are only carried onto (`carried`), `box` is saved as a copy of its own there, unlinked,
+ * and nothing follows: a link holds only where its shapes were placed.
+ */
+export function linkedSave(
+    box: PlacedBox,
+    params: unknown,
+    boxes: readonly PlacedBox[],
+    beat: number,
+    carried: boolean,
+    others: readonly LinkedEdit[] = [],
+): { params: unknown; others: LinkedEdit[] } {
+    const links = carried ? [] : liveLinks(boxes, beat);
+    const listed = new Set(others.map((o) => o.box.recipe.id));
+    const following = followersOf(box, params, links).filter(
+        (f) => !listed.has(f.box.recipe.id),
+    );
+    const edits = [...others, ...following];
+    // Each attachment checked against the shapes as this save leaves them
+    const saved = new Map<number, unknown>([
+        [box.recipe.id, params],
+        ...edits.map((o) => [o.box.recipe.id, o.params] as const),
+    ]);
+    const after = (b: PlacedBox<LineParams>) =>
+        (saved.get(b.recipe.id) as LineParams | undefined) ?? b.params;
+    // On a later page the copy is unlinked: nothing there counts
+    const live = (b: PlacedBox, p: unknown) =>
+        withoutDeadLinks(b, p, carried ? [] : boxes, beat, after);
+    return {
+        params: live(box, params),
+        others: edits.map((o) => ({
+            box: o.box,
+            params: live(o.box, o.params),
+        })),
+    };
+}
+
+/** `others` laid out and saved as their own recipes beside an edit (`writePlacement`'s `also`) */
+export function linkedPlacements(
+    others: readonly LinkedEdit[],
+    ctx: ShapeContext,
+): LinkedPlacement[] {
+    return others.map(({ box, params }) => {
+        const { members, spots } = liveTargets(box, params, ctx);
+        return {
+            recipe: {
+                ...box.recipe,
+                params: { ...(params as object), spots },
+                ...recipeOrderFields(box, placedOrderChoice(box)),
+            },
+            members,
+            replaces: box.recipe,
+        };
+    });
 }
 
 /** Where a save goes: the edit window and beat it was made at */
@@ -196,13 +271,26 @@ async function saveBox(
     layOutAgain?: boolean,
     origins?: ReadonlyMap<number, XY>,
     order: OrderChoice = placedOrderChoice(box),
+    others: readonly LinkedEdit[] = [],
 ): Promise<void> {
     const field = currentShapeField();
     if (!field) return;
+    const ctx = shapeContextFor(field);
+    const carried = carriedOnto(at.plan, box);
+    // Shapes linked to it follow, in the same step (#1235)
+    const linked = linkedSave(
+        box,
+        params,
+        placedBoxesAt(at.beat),
+        at.beat,
+        carried,
+        others,
+    );
+    params = linked.params;
     const { members: targets, spots } = liveTargets(
         box,
         params,
-        shapeContextFor(field),
+        ctx,
         layOutAgain,
         origins,
         order,
@@ -219,9 +307,8 @@ async function saveBox(
             replaces: box.recipe,
             // Changed on a later page it's carried onto: that page gets its own copy, even when
             // nobody moves (a pivot change), and the earlier page keeps its own
-            setAll:
-                carriedOnto(at.plan, box) &&
-                !sameParams(next, box.recipe.params),
+            setAll: carried && !sameParams(next, box.recipe.params),
+            also: linkedPlacements(linked.others, ctx),
         },
         queryClient,
         tolgee.t("shapes.placed.editError", "Couldn't edit the shape"),
