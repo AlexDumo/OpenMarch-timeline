@@ -42,7 +42,9 @@ dress, The Cadets 2019, Carolina Crown 2015 and 2019, and five Fred J. Miller ca
 ## Flats template
 
 The template is drawn for the median body (`neutral-average`) in real inches. It is downloadable as
-PNG, SVG and PDF, together with `regions.json`.
+PNG, SVG and PDF, together with `regions.json`. The downloads are named `uniform-template.png`,
+`.svg` and `.pdf` and `uniform-regions.json`, so they are easy to find in a Downloads folder; this
+document calls them the template and `regions.json`.
 
 - **Page:** 105 × 88 in. The PNG is 32 px/in, which makes it 3360 × 2816 px.
 - **Panels.** Coordinates are page inches, given as x, y, width × height:

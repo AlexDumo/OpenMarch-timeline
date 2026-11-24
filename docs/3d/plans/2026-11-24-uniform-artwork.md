@@ -41,18 +41,36 @@ The integration pull request goes to `main` when all of these are true:
 
 ## Tracker
 
-Owner verdicts are good, fix or rethink.
+The live tracker is the integration pull request, **fork #1274** (`uniforms/host` into `main`). Its
+checklist, the step issues and the project board (fork project 5) are where status lives. This file
+holds what doesn't change much.
 
-| Step | Issue | What you can try                                         | Branch / PR                          | Status          | Owner verdict |
-| ---- | ----- | -------------------------------------------------------- | ------------------------------------ | --------------- | ------------- |
-| 0    | #975  | The design and this plan                                 | `docs/uniform-artwork-flats` / #1254 | In review       |               |
-| 1    | #1256 | Download the uniform template from the 3D View settings  |                                      | Started         |               |
-| 2    | #1255 | A sample uniform in flats on the band, on all body types |                                      | Started         |               |
-| 3    | #1257 | Import front/back PNG, SVG or PDF as the band's uniform  |                                      | Waiting on 1, 2 |               |
-| 4    | #1258 | Place logos and numbers, and preview on all 7 bodies     |                                      | Waiting on 3    |               |
-| 5    | #1257 | Modes (sash out, unzipped) and switching between them    |                                      | Waiting on 3    |               |
-| 6    | #1260 | Agent skill: photos to a pack, plus headless render      |                                      | Waiting on 3, 4 |               |
-| H    | #1259 | A real artist makes a uniform on the template            | needs a person                       | Waiting on 1    |               |
+| Step | Issue | What you can try                                               | Needs |
+| ---- | ----- | -------------------------------------------------------------- | ----- |
+| 1    | #1256 | Download the uniform template from the 3D View settings        |       |
+| 2    | #1255 | A sample uniform in flats on the band, on all body types       |       |
+| 3    | #1257 | Import front/back PNG, SVG or PDF as the band's uniform        | 1, 2  |
+| 4    | #1258 | Place logos and numbers, and preview on all 7 bodies           | 3     |
+| 5    | #1257 | Modes (sash out, unzipped) and switching between them          | 3     |
+| 6    | #1260 | Agent skill: photos to a pack, plus headless render            | 3, 4  |
+| H    | #1259 | A real artist makes a uniform on the template (needs a person) | 1     |
+
+## How to pick up a step
+
+Anyone can pick up a step, with or without agents.
+
+1. Check #1274 and the issue. If someone is assigned and the issue is In progress, talk to them
+   first.
+2. Claim the issue: `scripts/om-claim <n> --branch uniforms/step-<n>-<name>`. See
+   [docs/agents/work-tracking.md](../../agents/work-tracking.md).
+3. Branch from `uniforms/host`, after `main` has been merged into it, and open the pull request
+   **into `uniforms/host`**, never into `main`.
+4. Read [../uniform-artwork.md](../uniform-artwork.md) and the issue. The study's prototype and
+   evidence are on the owner's dev box under `/mnt/ssd/uniform-wrap/`. If you can't reach it, the
+   design doc and issue are enough.
+5. Push as soon as the code compiles, then post the preview link and 3 to 5 "try this" steps on the
+   pull request. Tests come after that, before the merge.
+6. When it merges, tick the step in #1274.
 
 ## Decisions log
 
