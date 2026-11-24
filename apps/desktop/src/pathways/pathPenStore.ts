@@ -1714,6 +1714,9 @@ async function saveAround(follow: FollowDrag): Promise<boolean> {
             amount: around.amount,
             unit: around.unit,
             step: follow.step,
+            // any other closed outline (fork #1213) is written as the tool shows it
+            outline:
+                around.outline.kind === "loop" ? around.outline.geometry : null,
         });
         invalidatePlacedBoxes();
         return true;

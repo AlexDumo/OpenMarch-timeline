@@ -20,6 +20,7 @@ import {
 } from "@/db-functions/timelineTrails";
 import {
     aroundTrailOver,
+    closedOutlineOf,
     followShapeRefusal,
     goRoundRefusalFor,
     outlineMiss,
@@ -287,7 +288,13 @@ async function howItFollows(
     set: readonly number[] | null,
 ): Promise<{ around: FollowAround | null } | { refusal: TimelineText }> {
     const { ids, step, window } = base;
-    const outline = outlineOf(starts, step);
+    // Any closed outline (fork #1213): a circle or box, a placed closed shape's own outline, or
+    // the smooth loop through the marchers
+    const outline = closedOutlineOf(
+        starts,
+        step,
+        placedOutlines(ids, window.start),
+    );
     const closed = outline?.full ? outline : null;
     const loop = !closed
         ? null
@@ -296,7 +303,13 @@ async function howItFollows(
           : guessAround(base, closed);
     if (loop) {
         const refusal = await db.transaction((tx) =>
-            goRoundRefusalFor(tx, window, ids, step),
+            goRoundRefusalFor(
+                tx,
+                window,
+                ids,
+                step,
+                closed?.kind === "loop" ? closed.geometry : null,
+            ),
         );
         if (refusal) return { refusal };
         const again = await aroundTrailOver(db, window, ids);
@@ -312,6 +325,26 @@ async function howItFollows(
         : await whyNoShape(resolver, ids, window, starts, step);
     const refusal = why ?? (await dragRefusalOf(window, ids, tailFirst));
     return refusal ? { refusal } : { around: null };
+}
+
+/**
+ * The outlines of the placed closed shapes that hold every one of `ids` at `beat` (fork #1213),
+ * each as the shape tools draw it: a closed run of points. An open shape (a line) has none.
+ */
+function placedOutlines(
+    ids: readonly number[],
+    beat: number,
+): [number, number][][] {
+    return placedBoxesAt(beat).flatMap((shape) => {
+        const members = new Set(shape.recipe.members.map((m) => m.marcherId));
+        if (!ids.every((id) => members.has(id))) return [];
+        const { kind, params, spots } = shape;
+        if (!kind.outline || kind.outlineOpen?.(params, spots)) return [];
+        const outline = kind.outline(params, spots);
+        return outline.length >= 3
+            ? [outline.map((p): [number, number] => [p.x, p.y])]
+            : [];
+    });
 }
 
 /**

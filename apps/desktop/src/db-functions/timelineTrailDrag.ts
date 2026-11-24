@@ -37,7 +37,11 @@ import { addPageFlagInTransaction } from "./pageFlags";
 import { saveShapeRecipeInTransaction } from "./shapeRecipes";
 import { trailShapeRecipe } from "./timelineTrailShape";
 import { rememberedOrderAt } from "./rememberedOrder";
-import { lineRound, outlineOf, walkingOutline } from "./timelineTrailAround";
+import {
+    closedOutlineOf,
+    lineRound,
+    walkingOutline,
+} from "./timelineTrailAround";
 import {
     followTrailInTransaction,
     lineOrder,
@@ -285,7 +289,9 @@ export function ringTrailOrder(
     set: readonly number[] | null = null,
 ): number[] | null {
     if (line.length !== starts.length || line.at(-1) !== leader) return null;
-    const outline = outlineOf(starts, step);
+    // any closed outline they stand all the way round (fork #1213): the ring is the same one
+    // whichever outline of it the tool drew
+    const outline = closedOutlineOf(starts, step);
     if (!outline?.full) return null;
     const same = (a: readonly number[], b: readonly number[]) =>
         a.length === b.length && a.every((x, i) => x === b[i]);
