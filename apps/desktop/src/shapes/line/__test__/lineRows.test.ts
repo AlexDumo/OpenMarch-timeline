@@ -180,7 +180,7 @@ describe("rows of a line", () => {
         expect(rows.apart.display(t.params, 16, STEP)).toBe("3");
     });
 
-    it("leave a spot empty by making the row a spot longer, every marcher kept", () => {
+    it("leave a spot empty in place, its marcher going to the shortest row", () => {
         let t = across(30);
         t = edit(t, rows.pick(t.params, 30, 8, env), ctx);
         expect(counts(t)).toEqual([6, 8, 8, 8]);
@@ -189,7 +189,7 @@ describe("rows of a line", () => {
         t = edit(t, rows.toggleSpot(t.params, 30, second.index, 4, env), ctx);
         const view = rows.view(t.params, 30)!;
         expect(view.empty).toBe(2);
-        expect(view.rows[2]!.count).toBe(8);
+        expect(counts(t)).toEqual([8, 8, 6, 8]);
         expect(view.rows[2]!.spots).toEqual([
             true,
             true,
@@ -199,14 +199,22 @@ describe("rows of a line", () => {
             true,
             true,
             true,
-            true,
-            true,
         ]);
         expect(spotsOf(t)).toHaveLength(30);
         expect(lineTool.emptySpots!(t.params, 30)).toHaveLength(2);
-        // Pressed again, an empty spot goes
+        // Pressed again, it's filled from the longest row
         t = edit(t, rows.toggleSpot(t.params, 30, second.index, 3, env), ctx);
         expect(rows.view(t.params, 30)!.empty).toBe(1);
+        expect(counts(t)).toEqual([7, 8, 7, 8]);
+    });
+
+    it("grow the drawn line alone by a spot to leave one empty", () => {
+        let t = across(6);
+        t = edit(t, rows.toggleSpot(t.params, 6, 0, 2, env), ctx);
+        const view = rows.view(t.params, 6)!;
+        expect(view.rows[0]!.count).toBe(6);
+        expect(view.rows[0]!.spots).toHaveLength(7);
+        expect(spotsOf(t)).toHaveLength(6);
     });
 
     it("offer box sizes, keeping a row in front in front", () => {

@@ -1501,8 +1501,9 @@ const fillShown = (kind: AnyToolKind, params: unknown, spots: number) => {
         ]),
         flipX,
         flipY,
-        // The Rows menu lists every row (spec #1190)
+        // The Rows menu lists every row, and shows its spacing (spec #1190)
         kind.rows ? kind.rows.view(params, spots) : null,
+        kind.rows ? (params as { rows?: unknown }).rows : null,
     ]);
 };
 
@@ -2102,12 +2103,16 @@ function sitsTip(shift: number, by: -1 | 1, across: boolean): string {
                     "Half a spot toward the front",
                 );
     if (shift === 0)
-        return tolgee.t("shapes.rows.sitsCentered", "{way} (now centered)", {
-            way,
-        });
+        return tolgee.t(
+            "shapes.rows.sitsCentered",
+            "{way}. It sits centered now",
+            {
+                way,
+            },
+        );
     return tolgee.t(
         "shapes.rows.sitsNow",
-        "{way} (now {half, plural, one {# half spot} other {# half spots}} {side})",
+        "{way}. It sits {half, plural, one {# half spot} other {# half spots}} {side} now",
         {
             way,
             half: Math.abs(shift),

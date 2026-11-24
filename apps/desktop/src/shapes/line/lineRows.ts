@@ -301,8 +301,10 @@ function removeRow(p: P, n: number, index: number): P {
 }
 
 /**
- * Spot `spot` of row `index`, as the menu shows it (left to right), left empty, the row a spot
- * longer so its marcher stays in it; or an empty one filled in again, the row a spot shorter
+ * Spot `spot` of row `index`, as the menu shows it (left to right), left empty, or an empty one
+ * filled in again. The row keeps its length: its marcher there goes to the shortest other row, or
+ * one comes from the longest (sim study of #1190: a row that grew moved the dots under the
+ * pointer). With no other row to give or take, the row grows a spot, or loses the empty one.
  */
 function toggleSpot(
     p: P,
@@ -312,20 +314,39 @@ function toggleSpot(
     env: ToolEnv,
 ): P | null {
     const rows = rowsOrOne(p, env);
-    const size = rowSizes(p, rows, n)[index];
+    const sizes = rowSizes(p, rows, n);
+    const size = sizes[index];
     if (!size || spot < 0 || spot >= size.length) return null;
     const j = rowFrame(p).sign === 1 ? spot : size.length - 1 - spot;
     const empty = size.empty;
     const was = empty.includes(j);
-    const next = was
-        ? empty.filter((e) => e !== j).map((e) => (e > j ? e - 1 : e))
-        : [...empty.map((e) => (e >= j ? e + 1 : e)), j].sort((a, b) => a - b);
+    const counts = sizes.map((s) => s.count);
+    const order = frontToBack(rows, rowFrame(p).sign);
+    const other = was
+        ? pickRow(counts, order, "longest", index, 1)
+        : counts[index]! > 1
+          ? pickRow(counts, order, "shortest", index)
+          : null;
+    const inPlace = other !== null;
+    const next = inPlace
+        ? was
+            ? empty.filter((e) => e !== j)
+            : [...empty, j].sort((a, b) => a - b)
+        : was
+          ? empty.filter((e) => e !== j).map((e) => (e > j ? e - 1 : e))
+          : [...empty.map((e) => (e >= j ? e + 1 : e)), j].sort(
+                (a, b) => a - b,
+            );
     const row = rows.list[index]!;
     const { empty: _was, ...rest } = row;
     const list = rows.list.map((r, i) =>
         i === index ? (next.length ? { ...rest, empty: next } : rest) : r,
     );
-    return withRowsSet(p, { ...rows, list });
+    if (!inPlace) return withRowsSet(p, { ...rows, list });
+    const by = was ? 1 : -1;
+    counts[index]! += by;
+    counts[other]! -= by;
+    return withRowsSet(p, withCounts({ ...rows, list }, counts));
 }
 
 /** Row `index` moved half a spot the menu's way (+ right or back), or centered again */
