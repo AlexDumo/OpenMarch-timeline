@@ -2230,7 +2230,7 @@
             "ungroupError": "Couldn't ungroup the shape",
             "ungroupIsolated": "Ungroup this shape outside isolation: it comes from an earlier page",
             "joinNeedsTwo": "Select two shapes to join: lines, curves or arcs",
-            "joinBoxOrCircle": "Only lines, curves and arcs can be joined. Box and Circle can be joined once Edit as line exists",
+            "joinBoxOrCircle": "Only lines, curves and arcs can be joined",
             "joinNotLine": "Only lines, curves and arcs can be joined",
             "joinClosed": "A closed line has no ends to join",
             "joinOtherMoves": "These shapes were placed on different moves: join shapes from the same move",

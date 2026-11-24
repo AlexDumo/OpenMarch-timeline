@@ -101,7 +101,7 @@ export function joinCheck(
             boxOrCircle
                 ? tolgee.t(
                       "shapes.placed.joinBoxOrCircle",
-                      "Only lines, curves and arcs can be joined. Box and Circle can be joined once Edit as line exists",
+                      "Only lines, curves and arcs can be joined",
                   )
                 : tolgee.t(
                       "shapes.placed.joinNotLine",

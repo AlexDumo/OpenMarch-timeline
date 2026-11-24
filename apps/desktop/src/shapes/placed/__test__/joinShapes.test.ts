@@ -171,13 +171,13 @@ describe("joinCheck", () => {
         });
     });
 
-    unitIt("refuses a Box, saying when it can be joined", () => {
+    unitIt("refuses a Box, saying which shapes can be joined", () => {
         const check = joinCheck(
             new Set([11, 12, 13, 41, 42, 43, 44]),
             placed(LINE_A, box(4, [41, 42, 43, 44])),
         );
         expect(check).toMatchObject({ ok: false, onShapes: true });
-        if (!check.ok) expect(check.reason).toMatch(/Edit as line/);
+        if (!check.ok) expect(check.reason).toMatch(/lines, curves and arcs/);
     });
 
     unitIt("refuses a closed line", () => {
