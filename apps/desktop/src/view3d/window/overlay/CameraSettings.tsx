@@ -35,7 +35,10 @@ import {
 import { worldToPixels } from "@openmarch/core";
 import {
     MAX_F_STOP,
+    MAX_FOLLOW_DISTANCE_M,
+    MAX_FOLLOW_TILT_DEG,
     MAX_FOV_DEG,
+    MIN_FOLLOW_DISTANCE_M,
     MAX_ROLL_DEG,
     MIN_F_STOP,
     MIN_FOV_DEG,
@@ -60,10 +63,18 @@ import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
 import { ReadableCoords } from "@/global/classes/ReadableCoords";
 import { SEAT_FOV_DEG, seatAim } from "../camera/rigMath";
 import { useCameraStore } from "../camera/cameraStore";
-import { useFollowStore } from "../camera/followStore";
+import { framingOf, useFollowStore } from "../camera/followStore";
+import {
+    POV_DEFAULT_TILT_DEG,
+    POV_MAX_PITCH,
+    THIRD_PERSON_DISTANCE,
+    THIRD_PERSON_TILT_DEG,
+} from "../camera/followMath";
 import type { CameraList } from "./useCameraList";
 
 const METERS_PER_FOOT = 0.3048;
+/** How far the point of view looks up or down, degrees. */
+const POV_MAX_TILT_DEG = Math.round((POV_MAX_PITCH * 180) / Math.PI);
 
 type FollowChoice = "fixed" | "third" | "pov";
 
@@ -131,8 +142,26 @@ export function CameraSettings({
             follow: next.follow,
             focus: next.focus,
         });
-    const show = (next: Settings) =>
-        useCameraStore.getState().showPose(poseOf(next), next.focus);
+    /** Shows settings without saving them (a drag): a follow camera re-aims, others jump. */
+    const show = (next: Settings) => {
+        const camera = useCameraStore.getState();
+        if (!next.follow) return camera.showPose(poseOf(next), next.focus);
+        const store = useFollowStore.getState();
+        const framing = framingOf(next.follow);
+        if (
+            store.follow?.marcherId === next.follow.marcherId &&
+            store.follow.mode === next.follow.mode
+        )
+            store.setFraming(next.fovDeg, framing ?? {});
+        else
+            store.followMarcher(
+                next.follow.marcherId,
+                next.follow.mode,
+                next.fovDeg,
+                framing,
+            );
+        camera._setFocus(next.focus);
+    };
 
     /** Settings with one axis of the camera or look-at point changed. */
     const withPoint =
@@ -158,8 +187,20 @@ export function CameraSettings({
     const setFollow = (choice: FollowChoice, marcherId = followedId) => {
         if (choice === "fixed" || marcherId === undefined)
             save({ ...saved, follow: null });
+        else if (
+            saved.follow?.mode === choice &&
+            saved.follow.marcherId !== marcherId
+        )
+            // Another performer, framed the same way.
+            save({ ...saved, follow: { ...saved.follow, marcherId } });
         else save({ ...saved, follow: { marcherId, mode: choice } });
     };
+
+    /** Settings with the follow's aim changed. */
+    const withFollow = (aim: Partial<CameraFollow>): Settings =>
+        saved.follow
+            ? { ...saved, follow: { ...saved.follow, ...aim } }
+            : saved;
 
     const focusChoice: FocusChoice = saved.focus?.on.kind ?? "off";
     const setFocus = (choice: FocusChoice) => {
@@ -260,6 +301,74 @@ export function CameraSettings({
                             ]}
                         />
                     </Row>
+                )}
+                {saved.follow && (
+                    <div className="grid grid-cols-3 gap-8">
+                        {fieldNumber("follow-angle", {
+                            label:
+                                saved.follow.mode === "pov"
+                                    ? t("view3d.cameraSettings.lookTurn")
+                                    : t("view3d.cameraSettings.around"),
+                            tooltip:
+                                saved.follow.mode === "pov"
+                                    ? t("view3d.cameraSettings.lookTurnTooltip")
+                                    : t("view3d.cameraSettings.aroundTooltip"),
+                            unit: "°",
+                            value: saved.follow.angleDeg ?? 0,
+                            digits: 1,
+                            step: 5,
+                            scrubPerPx: 0.5,
+                            min: -180,
+                            max: 180,
+                            build: (v) => withFollow({ angleDeg: v }),
+                        })}
+                        {fieldNumber("follow-tilt", {
+                            label: t("view3d.cameraSettings.tilt"),
+                            tooltip:
+                                saved.follow.mode === "pov"
+                                    ? t("view3d.cameraSettings.lookTiltTooltip")
+                                    : t(
+                                          "view3d.cameraSettings.followTiltTooltip",
+                                      ),
+                            unit: "°",
+                            value:
+                                saved.follow.tiltDeg ??
+                                (saved.follow.mode === "pov"
+                                    ? POV_DEFAULT_TILT_DEG
+                                    : THIRD_PERSON_TILT_DEG),
+                            digits: 1,
+                            step: 1,
+                            scrubPerPx: 0.25,
+                            min:
+                                saved.follow.mode === "pov"
+                                    ? -POV_MAX_TILT_DEG
+                                    : -MAX_FOLLOW_TILT_DEG,
+                            max:
+                                saved.follow.mode === "pov"
+                                    ? POV_MAX_TILT_DEG
+                                    : MAX_FOLLOW_TILT_DEG,
+                            build: (v) => withFollow({ tiltDeg: v }),
+                        })}
+                        {saved.follow.mode === "third" &&
+                            fieldNumber("follow-distance", {
+                                label: t("view3d.cameraSettings.distance"),
+                                tooltip: t(
+                                    "view3d.cameraSettings.distanceTooltip",
+                                ),
+                                unit,
+                                value: toShown(
+                                    saved.follow.distanceM ??
+                                        THIRD_PERSON_DISTANCE,
+                                ),
+                                digits: 1,
+                                step: 1,
+                                scrubPerPx: 0.1,
+                                min: toShown(MIN_FOLLOW_DISTANCE_M),
+                                max: toShown(MAX_FOLLOW_DISTANCE_M),
+                                build: (v) =>
+                                    withFollow({ distanceM: fromShown(v) }),
+                            })}
+                    </div>
                 )}
             </Section>
 

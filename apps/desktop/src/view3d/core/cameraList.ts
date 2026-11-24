@@ -38,10 +38,35 @@ export const MAX_ROLL_DEG = 180;
 
 const pointSchema = z.tuple([z.number(), z.number(), z.number()]);
 
-/** A camera that follows a performer: from behind them (`third`) or out of their eyes (`pov`). */
+/** Follow-camera aim limits: tilt either way and distance from the performer (m). */
+export const MAX_FOLLOW_TILT_DEG = 85;
+export const MIN_FOLLOW_DISTANCE_M = 1;
+export const MAX_FOLLOW_DISTANCE_M = 100;
+
+/**
+ * A camera that follows a performer: from outside them (`third`) or out of
+ * their eyes (`pov`). Its aim, each the mode's own default when omitted:
+ *
+ * - `third`: `angleDeg` round them from behind (0), toward their right
+ *   (90) to in front (180); `tiltDeg` how high the camera looks down from;
+ *   `distanceM` from their chest.
+ * - `pov`: `angleDeg` turns the look to their right (negative: left) and
+ *   `tiltDeg` up (negative: down, at an instrument).
+ */
 export const cameraFollowSchema = z.object({
     marcherId: z.number().int(),
     mode: z.enum(["third", "pov"]),
+    angleDeg: z.number().min(-180).max(180).optional(),
+    tiltDeg: z
+        .number()
+        .min(-MAX_FOLLOW_TILT_DEG)
+        .max(MAX_FOLLOW_TILT_DEG)
+        .optional(),
+    distanceM: z
+        .number()
+        .min(MIN_FOLLOW_DISTANCE_M)
+        .max(MAX_FOLLOW_DISTANCE_M)
+        .optional(),
 });
 export type CameraFollow = z.infer<typeof cameraFollowSchema>;
 
@@ -200,6 +225,37 @@ export interface ViewExtras {
     focus?: CameraFocus | null;
 }
 
+/** A follow setting as stored: aim wrapped, clamped and rounded, defaults left out. */
+export function followFields(follow: CameraFollow): CameraFollow {
+    const out: CameraFollow = {
+        marcherId: follow.marcherId,
+        mode: follow.mode,
+    };
+    if (follow.angleDeg !== undefined) {
+        const angle = normalizeRoll(follow.angleDeg);
+        if (angle !== 0) out.angleDeg = angle;
+    }
+    if (follow.tiltDeg !== undefined && Number.isFinite(follow.tiltDeg))
+        out.tiltDeg = clampRound(
+            follow.tiltDeg,
+            -MAX_FOLLOW_TILT_DEG,
+            MAX_FOLLOW_TILT_DEG,
+            100,
+        );
+    if (follow.mode === "third" && follow.distanceM !== undefined)
+        out.distanceM = clampRound(
+            follow.distanceM,
+            MIN_FOLLOW_DISTANCE_M,
+            MAX_FOLLOW_DISTANCE_M,
+            1000,
+        );
+    return out;
+}
+
+function clampRound(v: number, min: number, max: number, per: number) {
+    return Math.min(max, Math.max(min, Math.round(v * per) / per));
+}
+
 /** The stored fields of a pose, following and focus for a view entry. */
 function viewFields(
     pose: ViewPose,
@@ -214,7 +270,7 @@ function viewFields(
         target: roundPoint(pose.target),
         fovDeg: clampFov(pose.fovDeg),
         ...(roll !== 0 ? { rollDeg: roll } : {}),
-        ...(follow ? { follow: { ...follow } } : {}),
+        ...(follow ? { follow: followFields(follow) } : {}),
         ...(focus
             ? {
                   focus: {

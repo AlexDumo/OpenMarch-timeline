@@ -25,7 +25,7 @@ import type { VenueKitId } from "@/view3d/core/types";
 import { useShowCameras } from "@/hooks/queries/useShowCameras";
 import { useCameraStore } from "../camera/cameraStore";
 import { SEAT_FOV_DEG, seatAim } from "../camera/rigMath";
-import { useFollowStore } from "../camera/followStore";
+import { framingOf, useFollowStore } from "../camera/followStore";
 import { useView3dSceneStore } from "../sceneStore";
 
 export interface CameraList {
@@ -66,10 +66,16 @@ export interface CameraList {
     chooseDefaults: () => void;
 }
 
-/** Who the view follows now, as a camera's follow setting; null for nobody. */
+/** Who the view follows now and how it aims, as a camera's follow setting; null for nobody. */
 function currentFollow(): CameraFollow | null {
-    const follow = useFollowStore.getState().follow;
-    return follow ? { marcherId: follow.marcherId, mode: follow.mode } : null;
+    const store = useFollowStore.getState();
+    const follow = store.follow;
+    if (!follow) return null;
+    return {
+        marcherId: follow.marcherId,
+        mode: follow.mode,
+        ...(store.currentFraming() ?? follow.framing ?? {}),
+    };
 }
 
 // eslint-disable-next-line max-lines-per-function
@@ -189,14 +195,19 @@ export function useCameraList(): CameraList {
         // Show it now: the saved list takes a moment to come back.
         const camera = useCameraStore.getState();
         if (follow) {
-            const current = useFollowStore.getState().follow;
+            const store = useFollowStore.getState();
+            const current = store.follow;
             if (
                 current?.marcherId !== follow.marcherId ||
                 current?.mode !== follow.mode
             )
-                useFollowStore
-                    .getState()
-                    .followMarcher(follow.marcherId, follow.mode, pose.fovDeg);
+                store.followMarcher(
+                    follow.marcherId,
+                    follow.mode,
+                    pose.fovDeg,
+                    framingOf(follow),
+                );
+            else store.setFraming(pose.fovDeg, framingOf(follow) ?? {});
             // After following starts, which clears the view's focus.
             camera._setFocus(focus);
         } else camera.showPose(pose, focus);

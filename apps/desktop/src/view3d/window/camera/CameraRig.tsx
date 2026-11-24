@@ -78,7 +78,7 @@ import {
     useDirectorStore,
 } from "../cinema/directorStore";
 import { useCinemaContext } from "../cinema/subjectPoints";
-import { FOLLOW_KEY, POV_KEY, useFollowStore } from "./followStore";
+import { FOLLOW_KEY, framingOf, POV_KEY, useFollowStore } from "./followStore";
 import { FollowController } from "./followController";
 import { followTarget, type PerformerPose } from "./followMath";
 import { installFollowTestApi } from "./followTestApi";
@@ -192,6 +192,12 @@ export default function CameraRig() {
             }),
         [rig, camera],
     );
+    // Where the follow aims now, for "Set to current view".
+    useEffect(() => {
+        const store = useFollowStore.getState();
+        store._setFramingSource(() => follow.framing());
+        return () => store._setFramingSource(null);
+    }, [follow]);
     /** Stops following without moving the camera: something else takes it over. */
     const endFollowRef = useRef(() => {});
     endFollowRef.current = () => {
@@ -236,6 +242,7 @@ export default function CameraRig() {
                         seat.follow.marcherId,
                         seat.follow.mode,
                         seat.fovDeg,
+                        framingOf(seat.follow),
                     );
             } finally {
                 cameraFollowRef.current = false;

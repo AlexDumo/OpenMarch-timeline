@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { CameraSeat } from "../types";
 import {
     cameraListSchema,
+    followFields,
     normalizeRoll,
     defaultCameraList,
     EMPTY_SHOW_CAMERAS,
@@ -360,5 +361,33 @@ describe("normalizeRoll", () => {
         expect(normalizeRoll(45.678)).toBe(45.68);
         expect(normalizeRoll(Number.NaN)).toBe(0);
         expect(Object.is(normalizeRoll(-0), 0)).toBe(true);
+    });
+});
+
+describe("followFields", () => {
+    it("wraps, clamps and rounds a follow camera's aim, dropping defaults", () => {
+        expect(
+            followFields({
+                marcherId: 3,
+                mode: "third",
+                angleDeg: 450,
+                tiltDeg: 99,
+                distanceM: 12.34567,
+            }),
+        ).toEqual({
+            marcherId: 3,
+            mode: "third",
+            angleDeg: 90,
+            tiltDeg: 85,
+            distanceM: 12.346,
+        });
+        expect(
+            followFields({
+                marcherId: 3,
+                mode: "pov",
+                angleDeg: 0,
+                distanceM: 5,
+            }),
+        ).toEqual({ marcherId: 3, mode: "pov" });
     });
 });
