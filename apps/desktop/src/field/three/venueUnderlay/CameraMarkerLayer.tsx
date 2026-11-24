@@ -14,23 +14,39 @@ import type { FieldProperties } from "@openmarch/core";
 import { parseCameraPose } from "@/view3d/sync/protocol";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { cameraWedge } from "./cameraWedge";
-import { useFieldCameraStore } from "./fieldCameraStore";
+import { SETTLE_MS, useFieldCameraStore } from "./fieldCameraStore";
+import { useTheme } from "@/context/ThemeContext";
 
 /** Over the field's lines and text, under props, paths and marchers. */
 const ORDER = 1.2;
-/** The app's accent purple (#6442ff); the field's canvas writes colors as given (`linear`). */
-const ACCENT = [100 / 255, 66 / 255, 1] as const;
+/**
+ * The theme's accent, as the camera chip over the canvas uses it (lighter in dark mode). The
+ * field's canvas writes colors as given (`linear`), so it's the CSS color, 0..1.
+ */
+function accentColor(): [number, number, number] {
+    const css = getComputedStyle(document.documentElement)
+        .getPropertyValue("--color-accent")
+        .match(/\d+(\.\d+)?/g);
+    return css && css.length >= 3
+        ? [Number(css[0]) / 255, Number(css[1]) / 255, Number(css[2]) / 255]
+        : [100 / 255, 66 / 255, 1];
+}
 /** A pose this old means the 3D View stopped sending (closed, or its show changed). */
 const STALE_MS = 3000;
 /** The wedge's fill and edges fade from the camera to the far end of its view. */
 const FILL_ALPHA = [0.3, 0.02] as const;
 const EDGE_ALPHA = [0.75, 0.05] as const;
 
-/** RGBA per vertex: the camera's corner, then the two far corners. */
-function fadingColors(near: number, far: number, vertices: number) {
+/** RGBA per vertex: the camera's corner, then the far corners. */
+function fadingColors(
+    accent: readonly number[],
+    near: number,
+    far: number,
+    vertices: number,
+) {
     const colors = new Float32Array(vertices * 4);
     for (let i = 0; i < vertices; i++) {
-        colors.set([...ACCENT, i === 0 ? near : far], i * 4);
+        colors.set([...accent, i === 0 ? near : far], i * 4);
     }
     return colors;
 }
@@ -43,7 +59,9 @@ function fadingColors(near: number, far: number, vertices: number) {
 function useFieldCameraFeed(shown: boolean) {
     useEffect(() => {
         const electron = window.electron;
-        const clear = () => useFieldCameraStore.setState({ pose: null });
+        // A drag in progress ends with the marker
+        const clear = () =>
+            useFieldCameraStore.setState({ pose: null, dragging: false });
         if (!shown || !electron?.onView3dCamera) {
             clear();
             return;
@@ -54,7 +72,8 @@ function useFieldCameraFeed(shown: boolean) {
             window.clearTimeout(stale);
             stale = window.setTimeout(clear, STALE_MS);
             // A drag on the field leads; the window catches up
-            if (useFieldCameraStore.getState().dragging) return;
+            const { dragging, settledAt } = useFieldCameraStore.getState();
+            if (dragging || performance.now() - settledAt < SETTLE_MS) return;
             useFieldCameraStore.setState({ pose });
         });
         const stopState = electron.onView3dWindowState?.((open) => {
@@ -93,7 +112,7 @@ export default function CameraMarkerLayer({
         );
         fillGeometry.setAttribute(
             "color",
-            new BufferAttribute(fadingColors(...FILL_ALPHA, 3), 4),
+            new BufferAttribute(new Float32Array(3 * 4), 4),
         );
         // Two edges, each from the camera out: camera, left, camera, right
         const edgeGeometry = new BufferGeometry();
@@ -101,9 +120,10 @@ export default function CameraMarkerLayer({
             "position",
             new BufferAttribute(new Float32Array(12), 3),
         );
-        const edgeColors = fadingColors(...EDGE_ALPHA, 4);
-        edgeColors[2 * 4 + 3] = EDGE_ALPHA[0]; // the second edge starts at the camera too
-        edgeGeometry.setAttribute("color", new BufferAttribute(edgeColors, 4));
+        edgeGeometry.setAttribute(
+            "color",
+            new BufferAttribute(new Float32Array(4 * 4), 4),
+        );
         const style = {
             vertexColors: true,
             transparent: true,
@@ -128,6 +148,28 @@ export default function CameraMarkerLayer({
         });
         return { group, fill, edges };
     }, []);
+
+    // The theme's accent, again when the theme changes: a frame later, once the dark class follows
+    const { theme: appTheme } = useTheme();
+    useEffect(() => {
+        const frame = window.requestAnimationFrame(() => paint(accentColor()));
+        return () => window.cancelAnimationFrame(frame);
+        function paint(accent: [number, number, number]) {
+            const fillColors = fill.geometry.getAttribute(
+                "color",
+            ) as BufferAttribute;
+            fillColors.copyArray(fadingColors(accent, ...FILL_ALPHA, 3));
+            fillColors.needsUpdate = true;
+            const edgeColors = fadingColors(accent, ...EDGE_ALPHA, 4);
+            edgeColors[2 * 4 + 3] = EDGE_ALPHA[0]; // the second edge starts at the camera too
+            const lineColors = edges.geometry.getAttribute(
+                "color",
+            ) as BufferAttribute;
+            lineColors.copyArray(edgeColors);
+            lineColors.needsUpdate = true;
+            invalidate();
+        }
+    }, [appTheme, fill, edges, invalidate]);
 
     useEffect(() => {
         const draw = (pose: ReturnType<typeof parseCameraPose>) => {

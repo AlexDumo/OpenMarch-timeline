@@ -9,9 +9,15 @@ import type { View3dCameraPose } from "@/view3d/sync/protocol";
 export interface FieldCameraState {
     pose: View3dCameraPose | null;
     dragging: boolean;
+    /** When the last drag ended (`performance.now()`), so poses sent before it don't jump the marker back */
+    settledAt: number;
 }
+
+/** How long after a drag the window's reports wait, for the last move to reach it and come back. */
+export const SETTLE_MS = 400;
 
 export const useFieldCameraStore = create<FieldCameraState>(() => ({
     pose: null,
     dragging: false,
+    settledAt: 0,
 }));

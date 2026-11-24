@@ -93,6 +93,28 @@ describe("moving the camera from the field", () => {
         ).toBeCloseTo(30);
     });
 
+    it("keeps the pitch exactly, even looking up at the stands", () => {
+        const start = pose({ direction: [0, 0.2, -Math.sqrt(0.96)] });
+        const moved = cameraMovedTo(start, 5, 0);
+        const after = poseLooking(start, moved.position, moved.target);
+        after.direction.forEach((n, i) =>
+            expect(n).toBeCloseTo(start.direction[i]),
+        );
+    });
+
+    it("moves a camera looking straight down", () => {
+        const start = pose({ position: [0, 40, -25], direction: [0, -1, 0] });
+        const moved = cameraMovedTo(start, 10, -25);
+        expect(moved.target).not.toEqual(moved.position);
+        expect(cameraAim(start)).toEqual([0, 0, -25]);
+    });
+
+    it("keeps the ring under the pointer when aiming far across the stadium", () => {
+        const aimed = cameraAimedAt(pose(), 0, -150);
+        const after = poseLooking(pose(), aimed.position, aimed.target);
+        expect(cameraAim(after)[2]).toBeCloseTo(-150);
+    });
+
     it("keeps a direction when aimed at its own feet", () => {
         const aimed = cameraAimedAt(pose(), 0, 20);
         expect(aimed.target[2]).toBeLessThan(20);

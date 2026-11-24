@@ -65,26 +65,29 @@ export function cameraWedge(
 
 /** Closest the aim comes to the camera on the ground, in meters. */
 const MIN_AIM = 3;
+/** Farthest ground the aim follows; past it (or above the horizon) it sits ahead at eye level. */
+const AIM_REACH = 400;
 
 type Triple = [number, number, number];
 
 /**
  * The point the camera looks at, in world meters: where the middle of its view
  * meets the ground (when that's in reach), or a point ahead at eye level
- * when it looks at or above the horizon.
+ * when it looks at or above the horizon. Straight down, the ground under it.
  */
 export function cameraAim(pose: View3dCameraPose): Triple {
     const [px, py, pz] = pose.position;
     const [dx, dy, dz] = pose.direction;
     const horizontal = Math.hypot(dx, dz);
-    if (dy < -1e-3 && horizontal > 1e-3) {
+    if (horizontal <= 1e-3) return [px, 0, pz];
+    if (dy < -1e-3) {
         const along = (Math.max(py, 0) / -dy) * horizontal;
-        if (along <= MAX_REACH) {
+        if (along <= AIM_REACH) {
             const t = Math.max(MIN_AIM, along) / horizontal;
             return [px + dx * t, Math.max(0, py + dy * t), pz + dz * t];
         }
     }
-    const scale = horizontal > 1e-3 ? LEVEL_REACH / horizontal : 0;
+    const scale = LEVEL_REACH / horizontal;
     return [px + dx * scale, py, pz + dz * scale];
 }
 
@@ -103,17 +106,27 @@ export function poseLooking(
     };
 }
 
-/** The camera carried across the ground to `x, z` (meters), still looking the same way. */
+/**
+ * The camera carried across the ground to `x, z` (meters) at its height,
+ * looking exactly the same way: the target is along its own direction, as far
+ * as its aim was.
+ */
 export function cameraMovedTo(
     pose: View3dCameraPose,
     x: number,
     z: number,
 ): { position: Triple; target: Triple } {
-    const [px, py, pz] = pose.position;
+    const position: Triple = [x, pose.position[1], z];
     const aim = cameraAim(pose);
+    const distance = Math.max(
+        MIN_AIM,
+        Math.hypot(...aim.map((n, i) => n - pose.position[i])),
+    );
     return {
-        position: [x, py, z],
-        target: [aim[0] + x - px, aim[1], aim[2] + z - pz],
+        position,
+        target: position.map(
+            (n, i) => n + pose.direction[i] * distance,
+        ) as Triple,
     };
 }
 
