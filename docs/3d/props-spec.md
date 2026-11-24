@@ -431,7 +431,10 @@ aliases, never shown as labels [owner, 2026-10-12, Q39–Q41, Q44].
 - **One lock, a deliberate unlock** (owner, 2026-11-23 and 2026-11-24, fork
   #1241). A locked item can't be clicked, dragged, boxed, lassoed or picked by
   Select all, and canvas edits leave it out (`withoutLockedMovesInTransaction`).
-  Its right-click selects it alone and offers Unlock and Edit. Locking and
+  Its right-click selects it alone and offers Unlock and Edit. It carries no
+  padlock on the field (owner, 2026-11-24): a click on it shows a "Locked" tag
+  beside the pointer for a few seconds, and the tag opens the same menu, so a
+  click is never dead and a rage click unlocks nothing. Locking and
   unlocking write only the flag: the old "one position for the whole show"
   meaning (a drag set the home and cleared moves) is gone. Equipment starts
   locked; drawn props start unlocked. A selected prop shows no resize or turn

@@ -192,7 +192,16 @@ describe("FieldEditor with items", () => {
         click(clicked.editor, 340, 115);
         expect(clicked.state.selected).toEqual([]);
         // It says why: the item is locked (no dead click)
-        expect(clicked.ports.lockedItemClicked).toHaveBeenCalledWith(2);
+        expect(clicked.ports.lockedItemClicked).toHaveBeenLastCalledWith(2, {
+            x: 340,
+            y: 115,
+        });
+        // A click anywhere else puts that away
+        click(clicked.editor, 60, 300);
+        expect(clicked.ports.lockedItemClicked).toHaveBeenLastCalledWith(null, {
+            x: 60,
+            y: 300,
+        });
         // A drag from inside it is a marquee, which takes the marchers and never the item
         const { editor, state } = setup({ locked: true });
         editor.pointerDown(at(340, 115));

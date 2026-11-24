@@ -109,7 +109,7 @@ test("a drag from a locked marimba leaves it put; unlocked from its right-click,
     expect((await savedPosition(show, 20, 0)).x).toBe(MARIMBA.x);
 });
 
-test("a marquee over the pit takes nothing, and a click on a locked item selects nothing", async ({
+test("a marquee over the pit takes nothing; a click on a locked item selects nothing and shows a Locked tag that opens its menu", async ({
     show,
 }) => {
     await expect.poll(() => drawnItems(show.page)).toHaveLength(2);
@@ -133,4 +133,14 @@ test("a marquee over the pit takes nothing, and a click on a locked item selects
     expect(
         await show.page.evaluate(() => window.fieldTest!.selection()),
     ).toEqual([]);
+
+    // The click shows that it's locked, and the tag opens its Unlock menu, as a right-click does
+    await show.page.getByTestId("field-locked-tag").click();
+    await expect(
+        show.page.getByTestId("field-menu-unlockSelectedItem"),
+    ).toBeVisible();
+    await expect
+        .poll(() => show.page.evaluate(() => window.fieldTest!.selection()))
+        .toEqual([20]);
+    await expect(show.page.getByTestId("field-locked-tag")).toHaveCount(0);
 });

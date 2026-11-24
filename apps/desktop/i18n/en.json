@@ -726,7 +726,10 @@
             "move": "Move the 3D View camera",
             "aim": "Aim the 3D View camera"
         },
-        "lockedItemClicked": "{name} is locked. Right-click it to unlock it."
+        "lockedItem": {
+            "tag": "Locked",
+            "open": "Locked: click to unlock or edit it"
+        }
     },
     "fieldDisplay": {
         "label": "Field display",

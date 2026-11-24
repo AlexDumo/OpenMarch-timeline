@@ -218,10 +218,10 @@ export type FieldEditorPorts = {
      */
     itemHandlesShown?(id: number): boolean;
     /**
-     * A click on locked item `id`, which passes over it: says it's locked and how to unlock it,
-     * so the click isn't dead (props epic step 2)
+     * A click at `at` on locked item `id`, which passes over it: shows that it's locked, so the
+     * click isn't dead (props epic step 2). Null: a click anywhere else, which puts that away
      */
-    lockedItemClicked?(id: number): void;
+    lockedItemClicked?(id: number | null, at: FieldPoint): void;
     /** Item `id`'s Outline as drawn, or null when it isn't drawn. */
     itemFrame?(id: number): ItemFrame | null;
     /** Draws item `id` at this size and turn while a handle drags it; null draws it as stored. */
@@ -2486,6 +2486,28 @@ export class FieldEditor {
         this.ports.openMenu?.(pointer, hit);
     }
 
+    /**
+     * Opens locked item `id`'s own menu (Unlock, Edit) at `screen`, with it selected alone, as a
+     * right-click on it does: from the tag a click on it shows (props epic step 2)
+     */
+    openLockedItemMenu(id: number, field: FieldPoint, screen: FieldPoint) {
+        this.write([id]);
+        this.ports.openMenu?.(
+            {
+                field,
+                screen,
+                button: 2,
+                kind: "mouse",
+                shift: false,
+                alt: false,
+                ctrl: false,
+                meta: false,
+            },
+            id,
+            LOCKED_ITEM_MENU,
+        );
+    }
+
     /** The topmost locked item drawn under `pointer` that can be selected, or null */
     private lockedItemAt({ field }: FieldPointer): number | null {
         const isLocked = this.ports.isLocked;
@@ -2495,10 +2517,10 @@ export class FieldEditor {
     }
 
     private click(press: FieldPress, shift: boolean) {
-        if (press.hit === null) {
-            const locked = this.lockedItemAt(press.start);
-            if (locked !== null) this.ports.lockedItemClicked?.(locked);
-        }
+        this.ports.lockedItemClicked?.(
+            press.hit === null ? this.lockedItemAt(press.start) : null,
+            press.start.field,
+        );
         const chosen =
             press.hit === null
                 ? null
