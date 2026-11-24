@@ -17,11 +17,10 @@ import type { ShowCredits, VenueParams } from "../../types";
  * The venue's identity: everything in the hall that carries a name or a
  * logo is painted here, on canvas. The hall is Mark Diesel Stadium and
  * names no event, so any show can be on its field; OpenMarch's marks stay
- * few: the
- * drape's logo panel, one back sideline board, the flags in the
- * roof, the end zones and the marcher on the midfield helmet. No
- * other brand, real or made up. The marks are OpenMarch's own, never
- * redrawn:
+ * few and quiet: the drape's logo panel, two back sideline boards (the logo
+ * and openmarch.com), the upper LED ribbon (the same two), the flags in the
+ * roof, the end zones and the marcher on the midfield helmet. No other
+ * brand, real or made up. The marks are OpenMarch's own, never redrawn:
  *
  * - the logo, "OPEN" over "MARCH" with the marcher standing in for the O
  *   and the M (`OPENMARCH_LOGO`, from `apps/website/public/openmarch.svg`);
@@ -36,12 +35,11 @@ import type { ShowCredits, VenueParams } from "../../types";
  * type is DM Sans, the app's face, but for the red suite signs' leaning
  * serif (`stadiumSign.ts`).
  *
- * Everywhere else the hall names itself: the drape's banner,
- * the LED ribbons,
- * the video boards' header and card, the field wall's pads, the other
- * sideline boards, the rafter banners, the ring of legends and the plaza's
- * monument signs. The boards and ribbons show the show's own title when it
- * has one.
+ * Everywhere else the hall names itself: the drape's banner, the video
+ * boards' header and card, the field wall's pads, the rafter banners, the
+ * ring of legends and the plaza's monument signs; the other sideline boards
+ * are dark. The video boards and the lower LED ribbon show the show's own
+ * title when it has one.
  *
  * Painters take a 2D context and the face's size in pixels and nothing else,
  * so tests can run them against a recording context. The `diesel*Texture`
@@ -70,8 +68,6 @@ export const OPENMARCH_SIGN = "OPENMARCH";
 /** The hall's name, as its signs set it. */
 export const DIESEL_NAME = "MARK DIESEL";
 export const DIESEL_STADIUM = "MARK DIESEL STADIUM";
-/** What the long boards greet the crowd with. */
-export const DIESEL_WELCOME = "WELCOME TO MARK DIESEL STADIUM";
 
 /**
  * The venue's colors and end-zone lettering for a show that has not chosen
@@ -566,27 +562,21 @@ export function paintRibbonLower(
 }
 
 /**
- * One tile of the upper LED ribbon: GRAND NATIONALS in white on black, between a violet-to-lavender glow at each end.
+ * One tile of the upper LED ribbon, black and quiet: OpenMarch's logo in
+ * the first half and its web address in the second, each centered in its
+ * half, so the two alternate all the way round.
  */
 export function paintRibbonUpper(g: G, w: number, h: number): void {
     g.fillStyle = OM.ink;
     g.fillRect(0, 0, w, h);
-    const glow = g.createLinearGradient(0, 0, w, 0);
-    glow.addColorStop(0, OM.lavender);
-    glow.addColorStop(0.08, OM.violet);
-    glow.addColorStop(0.2, "rgba(100,66,255,0)");
-    glow.addColorStop(0.8, "rgba(100,66,255,0)");
-    glow.addColorStop(0.92, OM.violet);
-    glow.addColorStop(1, OM.lavender);
-    g.fillStyle = glow;
-    g.fillRect(0, 0, w, h);
-    signText(g, DIESEL_STADIUM, w / 2, h / 2, h * 0.42, {
-        color: OM.white,
+    paintLogo(g, w / 4, h / 2, h * 0.8, OM.white);
+    signText(g, OPENMARCH_SITE, (3 * w) / 4, h / 2, h * 0.32, {
+        color: OM.mist,
         align: "center",
-        spacing: 0.06,
-        maxWidth: w * 0.6,
+        spacing: 0.04,
+        maxWidth: w * 0.4,
     });
-    ledEdges(g, w, h, "rgba(255,255,255,0.22)");
+    ledEdges(g, w, h, "rgba(255,255,255,0.12)");
 }
 
 /**
@@ -672,18 +662,16 @@ export type SponsorFace =
     | "logo"
     /** The On The Move app's logo. */
     | "otm"
-    /** A line of text. */
-    | "text"
-    /** The welcome to the hall, on the long middle boards. */
-    | "event";
+    /** OpenMarch's web address, on the long middle board. */
+    | "site"
+    /** Nothing: a dark board. */
+    | "blank";
 
 /** One board on the back sideline. */
 export interface SponsorPanel {
     /** Meters wide; every board is `SPONSOR_HEIGHT` tall. */
     width: number;
     face: SponsorFace;
-    /** The line on a "text" board. */
-    text?: string;
     ground: string;
     color: string;
 }
@@ -691,36 +679,35 @@ export interface SponsorPanel {
 /** Height of the sponsor boards, meters. */
 export const SPONSOR_HEIGHT = 1;
 
+/** OpenMarch's web address, as the boards and the upper ribbon show it. */
+export const OPENMARCH_SITE = "openmarch.com";
+
 const board = (
     face: SponsorFace,
     ground: string,
     color: string,
-    text?: string,
-): SponsorPanel => ({ width: 7, face, ground, color, text });
-const EVENT_BOARD: SponsorPanel = {
-    width: 13,
-    face: "event",
-    ground: OM.ink,
-    color: OM.white,
-};
+    width = 7,
+): SponsorPanel => ({ width, face, ground, color });
+/** One dark board, shared so the atlas paints it once. */
+const BLANK_BOARD = board("blank", OM.ink, OM.white);
 
 /**
  * The boards along the back sideline, from the audience's left to right:
- * the hall's name and its welcome, with OpenMarch's logo on one side of the middle
- * and On The Move's on the other (the ends drop first where the row is too
- * long).
+ * dark boards, then OpenMarch's logo, its web address and On The Move's
+ * logo in the middle (the dark ends drop first where the row is too long).
  */
 export const SPONSOR_PANELS: SponsorPanel[] = [
-    board("text", OM.night, OM.mist, DIESEL_STADIUM),
-    board("text", OM.ink, OM.lavender, "WELCOME"),
-    board("text", OM.night, OM.mist, DIESEL_STADIUM),
+    BLANK_BOARD,
+    BLANK_BOARD,
+    BLANK_BOARD,
+    BLANK_BOARD,
     board("logo", OM.ink, OM.white),
-    EVENT_BOARD,
-    EVENT_BOARD,
+    board("site", OM.ink, OM.white, 13),
     board("otm", OM.ink, OM.white),
-    board("text", OM.night, OM.mist, DIESEL_STADIUM),
-    board("text", OM.ink, OM.lavender, "WELCOME"),
-    board("text", OM.night, OM.mist, DIESEL_STADIUM),
+    BLANK_BOARD,
+    BLANK_BOARD,
+    BLANK_BOARD,
+    BLANK_BOARD,
 ];
 
 /** One sponsor board, `w` x `h` pixels. */
@@ -749,16 +736,16 @@ export function paintSponsorPanel(
                 color,
             );
             return;
-        case "event":
-        case "text":
-            signText(
-                g,
-                panel.face === "event" ? DIESEL_WELCOME : (panel.text ?? ""),
-                w / 2,
-                h / 2,
-                h * 0.3,
-                { color, align: "center", spacing: 0.08, maxWidth: room },
-            );
+        case "site":
+            signText(g, OPENMARCH_SITE, w / 2, h / 2, h * 0.36, {
+                color,
+                align: "center",
+                spacing: 0.04,
+                maxWidth: room,
+            });
+            return;
+        case "blank":
+            return;
     }
 }
 

@@ -231,22 +231,33 @@ describe("Venue brand painters", () => {
                 paintRafterBanner(g, banner, 256, 640),
             );
         });
-        // OpenMarch's marks: the drape's panel, the flags and one board; On
-        // The Move's logo is on another.
+        // OpenMarch's marks: the drape's panel, the flags, the upper ribbon
+        // and two boards (the logo and the web address); On The Move's logo
+        // is on a third. The other boards are dark.
         const branded = Object.entries(faces)
             .filter(([, text]) => /\[logo\]|\[marcher\]|openmarch/i.test(text))
             .map(([face]) => face);
-        const logoBoards = SPONSOR_PANELS.map((p, i) =>
-            p.face === "logo" ? `sponsor${i}` : null,
-        ).filter((f) => f !== null);
-        expect(logoBoards).toHaveLength(1);
-        expect(SPONSOR_PANELS.filter((p) => p.face === "otm")).toHaveLength(1);
+        const boardsShowing = (face: string) =>
+            SPONSOR_PANELS.map((p, i) =>
+                p.face === face ? `sponsor${i}` : null,
+            ).filter((f) => f !== null);
+        expect(boardsShowing("logo")).toHaveLength(1);
+        expect(boardsShowing("site")).toHaveLength(1);
+        expect(boardsShowing("otm")).toHaveLength(1);
         expect(branded.sort()).toEqual(
-            ["logoPanel", "flag", ...logoBoards].sort(),
+            [
+                "logoPanel",
+                "flag",
+                "ribbonUpper",
+                ...boardsShowing("logo"),
+                ...boardsShowing("site"),
+            ].sort(),
         );
+        for (const face of boardsShowing("blank"))
+            expect(faces[face], face).toBe("");
         for (const [face, text] of Object.entries(faces))
             expect(text, face).not.toMatch(
-                /lucas|colts|yamaha|bands of america|\bboa\b|openmarch\.com/i,
+                /lucas|colts|yamaha|bands of america|\bboa\b/i,
             );
         // No event is named anywhere: any show can be on the field.
         for (const [face, text] of Object.entries(faces))
@@ -254,7 +265,8 @@ describe("Venue brand painters", () => {
         expect(faces.banner).toBe("MARK DIESEL STADIUM");
         expect(faces.wall).toBe("MARK DIESEL STADIUM");
         expect(faces.nameRing).toBe("MARK DIESEL STADIUM | RING OF CHAMPIONS");
-        expect(faces.ribbonUpper).toBe("MARK DIESEL STADIUM");
+        expect(faces.ribbonUpper).toBe("[logo] | openmarch.com");
+        expect(faces[boardsShowing("site")[0]]).toBe("openmarch.com");
         expect(faces.sign).toContain("MARK DIESEL STADIUM");
         expect(faces.header).toBe("MARK DIESEL STADIUM");
         expect(faces.monument).toBe("MARK DIESEL | STADIUM | WELCOME");
@@ -618,8 +630,8 @@ describe("Mark Diesel field surround", () => {
         expect(first.x - first.panel.width / 2).toBeGreaterThanOrEqual(
             -room / 2,
         );
-        // The event's own boards, in the middle, are the last to go.
-        expect(row.some((b) => b.panel.face === "event")).toBe(true);
+        // The marks in the middle are the last to go.
+        expect(row.some((b) => b.panel.face === "site")).toBe(true);
     });
 
     it("packs each distinct board once, inside the atlas", () => {

@@ -32,7 +32,7 @@ export { dieselRibbonLevel } from "./ribbons";
  *   `dieselBoardSpots`): LED screens facing the field's center, each
  *   under a lit sign with the hall's name, hung from the roof on four rods.
  *   At high quality they show a live picture of the field (`feed.ts`); at
- *   low quality a bright card with the event and the show now performing;
+ *   low quality a bright card with a welcome and the show now performing;
  * - the LED ribbons (`ribbons.ts`);
  * - the field wall's pads and the sponsor boards (`surround.ts`);
  * - the rafter banners (`banners.ts`).
