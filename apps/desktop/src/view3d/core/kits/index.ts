@@ -1,7 +1,6 @@
 import type { FieldProperties } from "@openmarch/core";
 import { fieldLinesFor, type FieldLines } from "../venueSettings";
-import { type FieldCenterArt, type TurfColors } from "../field";
-import { DIESEL_FIELD, DIESEL_TURF } from "./markDiesel/turf";
+import { DIESEL_FIELD } from "./markDiesel/turf";
 import type { Object3D } from "three";
 import type { FieldFootprint, KitBuilder, VenueKitId } from "../types";
 import { buildArena } from "./arena";
@@ -12,7 +11,6 @@ import { KIT_FIELD_STYLE, kitFieldStyle } from "./fieldStyle";
 import { buildGym } from "./gym";
 import { buildHs } from "./hs";
 import { buildMarkDiesel } from "./markDiesel";
-import { dieselFieldArt } from "./markDiesel/brand";
 import { buildProKit } from "./pro";
 
 /**
@@ -31,6 +29,7 @@ export const KIT_BUILDERS: Readonly<Record<VenueKitId, KitBuilder>> = {
 };
 
 export { KIT_FIELD_STYLE, kitFieldStyle };
+export { KIT_FIELD_ART, KIT_FIELD_TURF } from "./fieldLook";
 
 /**
  * The field a venue with a field of its own (`KITS_WITH_OWN_FIELD`) paints
@@ -76,21 +75,6 @@ export function placeKitField(
     mesh.position.x = (footprint.minX + footprint.maxX) / 2;
     mesh.position.z = (footprint.minZ + footprint.maxZ) / 2;
 }
-
-/**
- * Midfield art a kit paints in place of the OpenMarch logo
- * (`FieldSurfaceInput.centerArt`).
- */
-export const KIT_FIELD_ART: Readonly<
-    Partial<Record<VenueKitId, FieldCenterArt>>
-> = { markDiesel: dieselFieldArt };
-
-/**
- * Grass colors a kit paints in place of the shared turf's
- * (`FieldSurfaceInput.turf`). Kits without an entry are unchanged.
- */
-export const KIT_FIELD_TURF: Readonly<Partial<Record<VenueKitId, TurfColors>>> =
-    { markDiesel: DIESEL_TURF };
 
 /** Crowd density used when a kit doesn't suggest one (`KitResult`). */
 export const DEFAULT_CROWD_DENSITY = 0.6;

@@ -575,8 +575,12 @@ export function buildDieselFixtures(ctx: DieselCtx): DieselFixtures {
             const array = m.instanceMatrix.array as Float32Array;
             for (let i = 0; i < m.count; i++) {
                 const at = i * 16;
-                if (half(sideOf(i))) array.fill(0, at, at + 16);
-                else array.set(kept[k].subarray(at, at + 16), at);
+                if (half(sideOf(i))) {
+                    // Scaled to nothing, but still an affine matrix
+                    // (w = 1): an all-zero one makes the mesh's bounds NaN.
+                    array.fill(0, at, at + 15);
+                    array[at + 15] = 1;
+                } else array.set(kept[k].subarray(at, at + 16), at);
             }
             m.instanceMatrix.needsUpdate = true;
         });
