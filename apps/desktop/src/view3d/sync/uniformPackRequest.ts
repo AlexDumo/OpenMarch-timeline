@@ -16,7 +16,20 @@ const uniformPackRequestSchema = z.object({
     bytes: z.instanceof(Uint8Array),
     /** Store it as a new version of this uniform asset (an edit of its items, fork #1258) */
     versionOf: z.string().uuid().optional(),
+    /** Store it only if the venue still names this value (an item edit, fork #1258) */
+    expect: z.string().min(1).max(200).optional(),
+    /** The undo entry this edit's burst extends (an item edit, fork #1258) */
+    amend: z
+        .string()
+        .max(4 * 1024 * 1024)
+        .optional(),
 });
+
+/** What storing a pack gave: the value now in `uniformArtwork`, and for an item edit its token */
+export interface StoredUniformPackResult {
+    value: string;
+    token?: string | null;
+}
 
 /**
  * Stores the pack `raw` asks for with `store` (which reads it in the uniform pack worker and
@@ -28,7 +41,9 @@ export function storeUniformPackRequest(
     store: (request: {
         pack: Uint8Array;
         versionOf?: string;
-    }) => Promise<string>,
+        expect?: string;
+        amend?: string;
+    }) => Promise<StoredUniformPackResult>,
     publish: (
         channel: typeof VIEW3D_UNIFORM_PACK_RESULT_CHANNEL,
         result: View3dUniformPackResult,
@@ -43,10 +58,25 @@ export function storeUniformPackRequest(
         );
         return Promise.resolve();
     }
-    const { id, bytes, versionOf } = asked.data;
+    const { id, bytes, versionOf, expect, amend } = asked.data;
     const answer = (result: View3dUniformPackResult) =>
         publish(VIEW3D_UNIFORM_PACK_RESULT_CHANNEL, result);
-    return store({ pack: bytes, versionOf })
-        .then((value) => answer({ id, ok: true, value }))
-        .catch(() => answer({ id, ok: false }));
+    return store({ pack: bytes, versionOf, expect, amend })
+        .then(({ value, token }) =>
+            answer({
+                id,
+                ok: true,
+                value,
+                ...(token !== undefined ? { token } : {}),
+            }),
+        )
+        .catch((error: unknown) =>
+            answer(
+                // `UniformPackSupersededError` (db-functions/view3dUniformPack.ts)
+                error instanceof Error &&
+                    error.name === "UniformPackSupersededError"
+                    ? { id, ok: false, superseded: true }
+                    : { id, ok: false },
+            ),
+        );
 }

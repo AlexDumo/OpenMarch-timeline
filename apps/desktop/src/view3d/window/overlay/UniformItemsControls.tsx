@@ -29,6 +29,7 @@ import {
     flatsArtworkOf,
     isUniformPackValue,
     itemPresets,
+    itemSize,
     regionUnder,
     type FlatsRegions,
     type ItemPreset,
@@ -55,7 +56,7 @@ import {
 } from "@/view3d/window/uniformPack/itemDrafts";
 import { importItemFile } from "@/view3d/window/uniformPack/importItem";
 import { UniformImportError } from "@/view3d/window/uniformPack/importUniform";
-import { Segmented } from "./Panel";
+import { Segmented, SegmentedMany } from "./Panel";
 import { useVenueRequest } from "./VenueControls";
 
 const ACCEPT = "image/png,image/svg+xml,.png,.svg";
@@ -106,6 +107,13 @@ export function UniformItemsControls() {
     const items = itemsFor(draft, wornPack, stored);
     const presets = regions ? itemPresets(regions) : [];
     const full = items.length >= UNIFORM_PACK_MAX_ITEMS;
+    /** An item image's width over height: a new one's bitmap, else its stored PNG's header */
+    const aspectOf = (file: string): number | null => {
+        const image = draft?.images[file]?.bitmap;
+        if (image) return image.width / image.height;
+        const size = pack.itemSizes[file];
+        return size ? size.width / size.height : null;
+    };
 
     const edit = (
         change: (items: UniformPackItem[]) => UniformPackItem[],
@@ -218,6 +226,7 @@ export function UniformItemsControls() {
                         <ItemRow
                             key={item.id}
                             item={item}
+                            aspect={aspectOf(item.file)}
                             presets={presets}
                             onChange={(patch) => update(item.id, patch)}
                             onRemove={() =>
@@ -282,11 +291,14 @@ export function withPatch(
 
 function ItemRow({
     item,
+    aspect,
     presets,
     onChange,
     onRemove,
 }: {
     item: UniformPackItem;
+    /** Its image's width over height, once known */
+    aspect: number | null;
     presets: ItemPreset[];
     onChange: (patch: Partial<UniformPackItem>) => void;
     onRemove: () => void;
@@ -298,6 +310,9 @@ function ItemRow({
     const size = item[sizeBy] ?? NEW_ITEM_IN;
     const grade = item.grade ?? "proportional";
     const change = onChange;
+    // its box on the median body; null when the image's shape makes a side too long (or, for a
+    // tile, too short) to draw
+    const box = aspect === null ? undefined : itemSize(item, aspect);
 
     return (
         <li
@@ -397,9 +412,13 @@ function ItemRow({
                             onValueChange={(value) => {
                                 const by = value as "width" | "height";
                                 if (by === sizeBy) return;
+                                // the item keeps its box: the other side's length becomes the number
+                                const other = box
+                                    ? round2(by === "width" ? box.w : box.h)
+                                    : size;
                                 onChange({
-                                    width: by === "width" ? size : undefined,
-                                    height: by === "height" ? size : undefined,
+                                    width: by === "width" ? other : undefined,
+                                    height: by === "height" ? other : undefined,
                                 });
                             }}
                         >
@@ -462,11 +481,24 @@ function ItemRow({
                 </Field>
             </div>
             {grade === "tile" && <TileRegions item={item} onChange={change} />}
+            {box === null && (
+                <p
+                    className="text-sub text-yellow"
+                    role="status"
+                    data-testid="view3d-uniform-item-not-drawn"
+                >
+                    {t(
+                        grade === "tile"
+                            ? "view3d.uniformItems.notDrawnTile"
+                            : "view3d.uniformItems.notDrawn",
+                    )}
+                </p>
+            )}
         </li>
     );
 }
 
-/** The regions a tile repeats over: one toggle per region on its panel */
+/** The regions a tile repeats over: one toggle per region on its side */
 function TileRegions({
     item,
     onChange,
@@ -475,47 +507,43 @@ function TileRegions({
     onChange: (patch: Partial<UniformPackItem>) => void;
 }) {
     const { t } = useTranslate();
-    const chosen = new Set(item.regions ?? []);
+    const [refused, setRefused] = useState(false);
     const own = FLATS_REGION_IDS.filter((r) => panelOfRegion(r) === item.panel);
+    const needsOne = t("view3d.uniformItems.needsRegion");
     return (
         <div className="flex flex-col gap-4">
             <span className="text-sub text-text/70">
                 {t("view3d.uniformItems.repeatOver")}
             </span>
-            <div className="flex flex-wrap gap-4">
-                {own.map((region) => {
-                    const on = chosen.has(region);
-                    const part =
-                        region === "cape"
-                            ? "cape"
-                            : region.replace(/^(front|back)-/, "");
-                    return (
-                        <Button
-                            key={region}
-                            variant="ghost"
-                            size="compact"
-                            aria-pressed={on}
-                            data-testid="view3d-uniform-item-region"
-                            data-value={region}
-                            className={
-                                on
-                                    ? "rounded-4 border-accent bg-accent/15 text-accent h-28 border px-10"
-                                    : "rounded-4 border-stroke text-text h-28 border px-10"
-                            }
-                            onClick={() => {
-                                const next = own.filter((r) =>
-                                    r === region ? !on : chosen.has(r),
-                                );
-                                // a tile needs a region: the last one stays
-                                if (next.length > 0)
-                                    onChange({ regions: next });
-                            }}
-                        >
-                            {t(`view3d.uniformItems.region.${part}`)}
-                        </Button>
-                    );
-                })}
-            </div>
+            <SegmentedMany<FlatsRegionId>
+                value={(item.regions ?? []).filter((r) => own.includes(r))}
+                options={own.map((region) => ({
+                    value: region,
+                    label: t(
+                        `view3d.uniformItems.region.${
+                            region === "cape"
+                                ? "cape"
+                                : region.replace(/^(front|back)-/, "")
+                        }`,
+                    ),
+                }))}
+                onChange={(regions) => {
+                    setRefused(false);
+                    // in the template's order
+                    onChange({
+                        regions: own.filter((r) => regions.includes(r)),
+                    });
+                }}
+                lastReason={needsOne}
+                onRefused={() => setRefused(true)}
+                label={t("view3d.uniformItems.repeatOver")}
+                testId="view3d-uniform-item-regions"
+            />
+            {refused && (
+                <span className="text-sub text-text/60" role="status">
+                    {needsOne}
+                </span>
+            )}
         </div>
     );
 }

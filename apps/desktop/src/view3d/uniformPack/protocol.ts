@@ -75,7 +75,13 @@ export type UniformPackResponse =
           /** The picked image's size when it wasn't the template's, so it was scaled */
           scaledFrom: { width: number; height: number } | null;
       }
-    | { type: "pack"; manifest: UniformPackManifest; notes: PageNote[] }
+    | {
+          type: "pack";
+          manifest: UniformPackManifest;
+          notes: PageNote[];
+          /** Each item image's size, from its PNG header, by file (fork #1258) */
+          itemSizes: Record<string, { width: number; height: number }>;
+      }
     | {
           type: "flattened";
           bitmap: ImageBitmap;

@@ -12,7 +12,10 @@
  */
 import type { PresetLook } from "./uniformPresets";
 import type { BodyType } from "./looks";
-import type { ItemGrade } from "@/view3d/core/uniformPack/format";
+import {
+    ITEM_MIN_TILE_IN,
+    type ItemGrade,
+} from "@/view3d/core/uniformPack/format";
 
 export type { ItemGrade } from "@/view3d/core/uniformPack/format";
 
@@ -443,14 +446,37 @@ export function itemStrips(
 
 /** An item's size on the median body from its width or height and its image's aspect. */
 export function itemSize(
-    item: Pick<FlatsItem, "width" | "height">,
+    item: Pick<FlatsItem, "width" | "height" | "grade">,
     aspect: number,
 ): { w: number; h: number } | null {
-    if (item.width && item.height) return { w: item.width, h: item.height };
-    if (item.width) return { w: item.width, h: item.width / aspect };
-    if (item.height) return { w: item.height * aspect, h: item.height };
-    return null;
+    let w: number;
+    let h: number;
+    if (item.width && item.height) [w, h] = [item.width, item.height];
+    else if (item.width) [w, h] = [item.width, item.width / aspect];
+    else if (item.height) [w, h] = [item.height * aspect, item.height];
+    else return null;
+    // the side the image's shape gives can be anything: a 1 × 2048 px image 120 in wide would be
+    // 245,760 in tall. Such an item isn't drawn (the item list says so).
+    const least = item.grade === "tile" ? ITEM_MIN_TILE_IN : 0;
+    // a tile under 1 in either way would draw too many copies
+    if (
+        !Number.isFinite(w) ||
+        !Number.isFinite(h) ||
+        w > ITEM_MAX_IN ||
+        h > ITEM_MAX_IN ||
+        w <= 0 ||
+        h <= 0 ||
+        w < least ||
+        h < least
+    )
+        return null;
+    return { w, h };
 }
+
+/** The largest side an item is drawn at, inches */
+export const ITEM_MAX_IN = 120;
+/** A tile item's region with more tiles than this isn't drawn */
+export const MAX_TILES_PER_REGION = 4000;
 
 /** One region's tiles: where each sits on the atlas's panel (inches) and how big. */
 export interface RegionTiles {
@@ -503,9 +529,14 @@ export function tileLayout(
         const first = mx - w / 2 - Math.ceil((mx - w / 2 - x0) / w) * w;
         const rowStart = item.at[1] - th / 2;
         const top = rowStart - Math.ceil((rowStart - y0) / th) * th;
+        const cols = Math.ceil((x1 - first) / w);
+        const rows = Math.ceil((y1 - top) / th);
+        // too many copies to draw: the region is left plain
+        if (!(cols * rows <= MAX_TILES_PER_REGION)) continue;
         const origins: [number, number][] = [];
-        for (let y = top; y < y1; y += th)
-            for (let x = first; x < x1; x += w) origins.push([x, y]);
+        for (let r = 0; r < rows; r++)
+            for (let c = 0; c < cols; c++)
+                origins.push([first + c * w, top + r * th]);
         out.push({ region: r.id, polygon: r.polygon, origins, w, h: th, k });
     }
     return out;

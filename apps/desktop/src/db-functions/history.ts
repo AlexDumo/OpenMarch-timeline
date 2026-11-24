@@ -859,6 +859,17 @@ export async function getLatestUndoEntryToken(
     return entry === null ? null : `${historyEpoch}\n${entry}`;
 }
 
+/**
+ * getLatestUndoEntryToken read inside `tx`, so a write can check that the entry it means to
+ * extend is still the latest in the same transaction that extends it.
+ */
+export async function getLatestUndoEntryTokenInTransaction(
+    tx: DbTransaction,
+): Promise<string | null> {
+    const entry = await latestUndoEntry(tx);
+    return entry === null ? null : `${historyEpoch}\n${entry}`;
+}
+
 /** The newest undo entry's group and statements, or null if there is none. */
 async function latestUndoEntry(
     db: DbConnection | DbTransaction,

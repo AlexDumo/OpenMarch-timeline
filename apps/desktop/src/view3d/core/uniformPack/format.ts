@@ -73,6 +73,8 @@ export const UNIFORM_LAYER_MAX_PIXELS =
     4 * FLATS_PAGE_PX.width * FLATS_PAGE_PX.height;
 /** An item image with more pixels than this isn't decoded (2048 × 2048) */
 export const UNIFORM_ITEM_MAX_PIXELS = 2048 * 2048;
+/** Nor one longer than this on either side */
+export const UNIFORM_ITEM_MAX_SIDE = 4096;
 /** An imported item image is stored at most this many pixels on its long side */
 export const UNIFORM_ITEM_STORED_PX = 1024;
 
@@ -610,7 +612,11 @@ export function readUniformPack(bytes: Uint8Array): UniformPack {
         const data = inflateEntry(bytes, entry);
         const size = pngHeaderSize(data);
         if (!size) throw damaged(`${what} ${file} isn't a PNG`);
-        if (size.width * size.height > maxPixels)
+        if (
+            size.width * size.height > maxPixels ||
+            (what === "item" &&
+                Math.max(size.width, size.height) > UNIFORM_ITEM_MAX_SIDE)
+        )
             throw new UniformPackError(
                 "tooLarge",
                 `${what} ${file} is ${size.width} × ${size.height} px`,

@@ -14,6 +14,7 @@ import {
     FLATS_PAGE_DPI,
     FLATS_PAGE_PX,
     UNIFORM_ITEM_MAX_PIXELS,
+    UNIFORM_ITEM_MAX_SIDE,
     UNIFORM_ITEM_STORED_PX,
     UNIFORM_LAYER_MAX_PIXELS,
     UniformPackError,
@@ -55,7 +56,12 @@ async function decodePng(
 ): Promise<{ bitmap: ImageBitmap; source: { width: number; height: number } }> {
     const source = pngHeaderSize(bytes);
     if (!source) throw new Refused("notPng", "not a PNG");
-    if (source.width * source.height > maxPixels)
+    if (
+        source.width * source.height > maxPixels ||
+        // an item image is also capped on each side, so 65536 × 64 isn't an item
+        (maxPixels === UNIFORM_ITEM_MAX_PIXELS &&
+            Math.max(source.width, source.height) > UNIFORM_ITEM_MAX_SIDE)
+    )
         throw new Refused(
             "tooLarge",
             `${source.width} × ${source.height} px is over ${maxPixels} pixels`,
@@ -205,7 +211,13 @@ async function handle(request: UniformPackRequest) {
                 const { canvas } = await pageCanvas(pack.layers[0].png);
                 notes = notesOf(canvas, request.regions);
             }
-            reply({ type: "pack", manifest: pack.manifest, notes });
+            const itemSizes: Record<string, { width: number; height: number }> =
+                {};
+            for (const { file, png } of pack.itemFiles) {
+                const size = pngHeaderSize(png);
+                if (size) itemSizes[file] = size;
+            }
+            reply({ type: "pack", manifest: pack.manifest, notes, itemSizes });
             return;
         }
         case "flatten": {
@@ -222,10 +234,23 @@ async function handle(request: UniformPackRequest) {
             const bitmap = canvas.transferToImageBitmap();
             const itemBitmaps: { file: string; bitmap: ImageBitmap }[] = [];
             for (const { file, png } of pack.itemFiles) {
+                // decoded at most UNIFORM_ITEM_STORED_PX on its long side, whatever it says
+                const size = pngHeaderSize(png);
+                const scale = size
+                    ? Math.min(
+                          1,
+                          UNIFORM_ITEM_STORED_PX /
+                              Math.max(size.width, size.height),
+                      )
+                    : 1;
                 const decoded = await decodePng(
                     png,
-                    undefined,
-                    undefined,
+                    size
+                        ? Math.max(1, Math.round(size.width * scale))
+                        : undefined,
+                    size
+                        ? Math.max(1, Math.round(size.height * scale))
+                        : undefined,
                     UNIFORM_ITEM_MAX_PIXELS,
                 );
                 itemBitmaps.push({ file, bitmap: decoded.bitmap });
@@ -284,7 +309,11 @@ async function handle(request: UniformPackRequest) {
             const pack = readUniformPack(request.bytes);
             for (const [file, png] of Object.entries(request.files)) {
                 const size = pngHeaderSize(png);
-                if (!size || size.width * size.height > UNIFORM_ITEM_MAX_PIXELS)
+                if (
+                    !size ||
+                    size.width * size.height > UNIFORM_ITEM_MAX_PIXELS ||
+                    Math.max(size.width, size.height) > UNIFORM_ITEM_MAX_SIDE
+                )
                     throw new Refused("notPng", `${file} isn't an item image`);
             }
             let bytes: Uint8Array;

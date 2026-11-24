@@ -3761,7 +3761,10 @@
                 "leg-L": "Left leg",
                 "leg-R": "Right leg",
                 "cape": "Cape"
-            }
+            },
+            "needsRegion": "A repeating print needs at least one part.",
+            "notDrawn": "This image is too long or thin to show at this size, so it isn't drawn. Change its size, or size it by its other side.",
+            "notDrawnTile": "Each copy of this print would be under 1 in or over 120 in on one side, so it isn't drawn. Change its size, or size it by its other side."
         }
     },
     "web": {

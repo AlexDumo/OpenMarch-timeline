@@ -194,10 +194,7 @@ export function UniformPicker() {
         packRead ? pack : undefined,
     )
         ? null
-        : namedPack
-          ? // the picker offers each uniform once, by its newest version
-            ((wornEntry?.value as UniformPackValue | undefined) ?? namedPack)
-          : named;
+        : named;
     type Value = UniformPresetId | typeof FLATS_SAMPLE | UniformPackValue;
     return (
         <Segmented<Value>
@@ -221,8 +218,11 @@ export function UniformPicker() {
                               value: FLATS_SAMPLE as Value,
                               label: t("view3d.uniformPreset.flatsSample"),
                           },
+                          // each uniform once: the version the band wears, else its newest
                           ...(packs ?? []).map((pack) => ({
-                              value: pack.value as Value,
+                              value: (pack === wornEntry && namedPack
+                                  ? namedPack
+                                  : pack.value) as Value,
                               label: pack.name,
                           })),
                       ]

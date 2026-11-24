@@ -14,6 +14,13 @@
  *   composed and cached like any other look's (`flatsAtlas.ts` reads them back with
  *   {@link drawnDraft}).
  *
+ * **One undo step per burst.** Edits with less than {@link BURST_IDLE_MS} between them are one
+ * burst: its first save is an undo step from where it started, and each later save amends it
+ * (the editor checks the step is still the latest), replacing the burst's previous version. So
+ * a burst leaves two versions in the show, its origin and its latest. A save carries `expect`,
+ * the pack it was made from: if the venue moved on meanwhile (Undo, another uniform), the editor
+ * stores nothing, and the save can't override the Undo or clear Redo.
+ *
  * New images are decoded in the uniform pack worker before they get here.
  */
 import { create } from "zustand";
@@ -25,7 +32,10 @@ import type { UniformPackValue } from "@/view3d/core/marchers/uniformArtwork";
 import { readStoredUniformPackBytes } from "@/hooks/queries/useUniformPack";
 import { parseShowAssetRef } from "@/showAssets/ref";
 import { runUniformPackJob } from "@/view3d/uniformPack/runUniformPackJob";
-import { storeUniformPack } from "./storeUniformPack";
+import {
+    UniformPackStoreError,
+    storeUniformItemsPack,
+} from "./storeUniformPack";
 
 /** A new item image: what the pack stores, and the decoded bitmap the window draws */
 export interface ItemImage {
@@ -70,6 +80,13 @@ const SHOW_DELAY_MS = 120;
 /** How long after the last change a draft is saved, ms */
 const SAVE_DELAY_MS = 700;
 
+/** Edits closer together than this are one burst: one undo step, two versions, ms */
+export const BURST_IDLE_MS = 4000;
+
+/** The editing burst: the pack its last save made, and the token to amend its undo step */
+let burst: { value: string; token: string } | null = null;
+let lastEditAt = 0;
+
 let showTimer: ReturnType<typeof setTimeout> | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -77,6 +94,7 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 const drawn = new Map<
     string,
     {
+        /** The saved pack its layers and older item images are read from: the newest one */
         origin: UniformPackValue;
         items: UniformPackItem[];
         images: Record<string, ItemImage>;
@@ -93,14 +111,15 @@ export function drawnDraft(key: string) {
     return key.includes("~") ? (drawn.get(key) ?? null) : null;
 }
 
-/** The pack value a draft key is drawn over (its origin), or the key itself */
+/** The pack value a draft key is drawn over (the draft's newest saved pack), or the key itself */
 export const draftOrigin = (key: string): UniformPackValue =>
     (drawn.get(key)?.origin ?? key.split("~")[0]) as UniformPackValue;
 
 function remember(draft: ItemDraft) {
     const key = draftKey(draft.origin, draft.shown);
     drawn.set(key, {
-        origin: draft.origin,
+        // a burst's earlier versions are removed as it saves, so read the newest
+        origin: draft.latest,
         items: draft.items,
         images: draft.images,
     });
@@ -176,6 +195,9 @@ export function editItems(
         now = false,
     }: { images?: Record<string, ItemImage>; now?: boolean } = {},
 ) {
+    const at = Date.now();
+    if (at - lastEditAt > BURST_IDLE_MS) burst = null;
+    lastEditAt = at;
     const current = useItemDrafts.getState().draft;
     const live = draftApplies(current, worn) ? current : null;
     const base: ItemDraft = live ?? {
@@ -242,9 +264,17 @@ async function save(): Promise<void> {
         });
         if (result.type !== "packFile")
             throw new Error("the uniform wasn't written");
-        const value = (await storeUniformPack(result.bytes, {
+        // a burst that went idle before this save ends here
+        if (Date.now() - lastEditAt > BURST_IDLE_MS) burst = null;
+        const amend =
+            burst && burst.value === draft.latest ? burst.token : undefined;
+        const saved = await storeUniformItemsPack(result.bytes, {
             versionOf: parseShowAssetRef(draft.latest)?.id,
-        })) as UniformPackValue;
+            expect: draft.latest,
+            amend,
+        });
+        const value = saved.value as UniformPackValue;
+        burst = saved.token ? { value, token: saved.token } : null;
         const now = useItemDrafts.getState().draft;
         // the draft ended meanwhile (Undo, another uniform): the save stands, the draft doesn't
         if (now && now.origin === draft.origin && now.latest === draft.latest) {
@@ -262,9 +292,18 @@ async function save(): Promise<void> {
             useItemDrafts.setState({ draft: next });
         }
     } catch (error) {
-        console.warn("3D View: couldn't save the uniform's items", error);
-        useItemDrafts.setState({ failed: true });
-        end();
+        burst = null;
+        if (
+            error instanceof UniformPackStoreError &&
+            error.reason === "superseded"
+        ) {
+            // the venue moved on (Undo, another uniform): the edit is dropped, as Undo wins
+            end();
+        } else {
+            console.warn("3D View: couldn't save the uniform's items", error);
+            useItemDrafts.setState({ failed: true });
+            end();
+        }
     } finally {
         useItemDrafts.setState({ saving: false });
     }

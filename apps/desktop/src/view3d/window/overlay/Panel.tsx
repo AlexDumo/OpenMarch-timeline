@@ -149,7 +149,68 @@ export function Segmented<T extends string>({
                     value={option.value}
                     title={option.title}
                     data-value={option.value}
-                    className="text-body rounded-4! hover:bg-text/10! data-[state=on]:bg-accent! data-[state=on]:hover:bg-accent! data-[state=on]:text-text-invert! h-28 border-0! px-10! whitespace-nowrap"
+                    className={SEGMENT_CLASS}
+                >
+                    {option.label}
+                </ToggleGroupItem>
+            ))}
+        </ToggleGroup>
+    );
+}
+
+/** The look of a segment, shared by {@link Segmented} and {@link SegmentedMany} */
+const SEGMENT_CLASS =
+    "text-body rounded-4! hover:bg-text/10! data-[state=on]:bg-accent! data-[state=on]:hover:bg-accent! data-[state=on]:text-text-invert! h-28 border-0! px-10! whitespace-nowrap aria-disabled:cursor-not-allowed";
+
+/**
+ * Like {@link Segmented}, but any number of options can be on. With `atLeastOne`, the last one
+ * on can't be turned off: it says why in its tooltip (`lastReason`), and clicking it calls
+ * `onRefused` so the panel can say it too.
+ */
+export function SegmentedMany<T extends string>({
+    value,
+    options,
+    onChange,
+    label,
+    testId,
+    lastReason,
+    onRefused,
+    className,
+}: {
+    value: readonly T[];
+    options: readonly SegmentOption<T>[];
+    onChange: (value: T[]) => void;
+    label: string;
+    testId?: string;
+    /** Why the last option on can't be turned off; set to keep at least one on */
+    lastReason?: string;
+    onRefused?: () => void;
+    className?: string;
+}) {
+    const only = lastReason && value.length === 1 ? value[0] : null;
+    return (
+        <ToggleGroup
+            type="multiple"
+            value={[...value]}
+            onValueChange={(next: string[]) => {
+                if (lastReason && next.length === 0) onRefused?.();
+                else onChange(next as T[]);
+            }}
+            aria-label={label}
+            data-testid={testId}
+            className={clsx(
+                "h-auto! shrink-0 flex-wrap gap-2 border-0! bg-transparent! bg-none!",
+                className,
+            )}
+        >
+            {options.map((option) => (
+                <ToggleGroupItem
+                    key={option.value}
+                    value={option.value}
+                    title={option.value === only ? lastReason : option.title}
+                    aria-disabled={option.value === only || undefined}
+                    data-value={option.value}
+                    className={SEGMENT_CLASS}
                 >
                     {option.label}
                 </ToggleGroupItem>

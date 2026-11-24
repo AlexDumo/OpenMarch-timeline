@@ -135,14 +135,20 @@ export function pageNotes(
             }
     if (garment > 0 && painted / garment < EMPTY_SHARE) notes.push("empty");
     if (garment > 0 && tint / garment > TEMPLATE_SHARE) notes.push("template");
+    // only on a layer that paints the fabric: an overlay (a sash, an open front) is mostly
+    // clear, and anything on it would stand alone on the clear "fabric"
     if (
         !notes.includes("template") &&
+        garment > 0 &&
+        painted / garment >= FABRIC_SHARE &&
         paintedLogoIn(pixels, width, dpi, regions)
     )
         notes.push("paintedLogo");
     return notes;
 }
 
+/** The painted-logo check runs only on a layer that paints at least this share of the garment */
+const FABRIC_SHARE = 0.5;
 /** The painted-logo check's grid, inches */
 const LOGO_CELL_IN = 0.5;
 /** A shape this size, inches, on both sides, could be a logo; smaller is a button, larger is fabric */

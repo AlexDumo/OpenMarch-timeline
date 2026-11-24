@@ -13,7 +13,11 @@ import {
 } from "@tanstack/react-query";
 import { db } from "@/global/database/db";
 import { getShowAsset } from "@/db-functions/showAssets";
-import { setUniformPack } from "@/db-functions/view3dUniformPack";
+import {
+    UniformPackSupersededError,
+    saveUniformItemsPack,
+    setUniformPack,
+} from "@/db-functions/view3dUniformPack";
 import { parseShowAssetRef, showAssetRefValue } from "@/showAssets/ref";
 import {
     UNIFORM_ASSET_KIND,
@@ -45,6 +49,8 @@ export interface StoredUniformPackBytes {
 /** One stored pack, read in the worker */
 export interface StoredUniformPack extends StoredUniformPackBytes {
     manifest: UniformPackManifest;
+    /** Each item image's size in pixels, by file, from its header (fork #1258) */
+    itemSizes: Record<string, { width: number; height: number }>;
 }
 
 /** One of the show's uniforms: its newest version, and every version's value */
@@ -101,13 +107,18 @@ export async function readStoredUniformPackBytes(
 export async function readPackManifest(
     bytes: Uint8Array,
 ): Promise<UniformPackManifest> {
+    return (await readPackInWorker(bytes)).manifest;
+}
+
+/** A pack file's manifest and its item images' sizes, read in the worker */
+async function readPackInWorker(bytes: Uint8Array) {
     // a copy: the worker takes it, and callers' bytes may be shared
     const result = await runUniformPackJob({
         type: "pack",
         bytes: bytes.slice(),
     });
     if (result.type !== "pack") throw new Error("uniform pack: no manifest");
-    return result.manifest;
+    return result;
 }
 
 /**
@@ -121,10 +132,10 @@ export const uniformPackQueryOptions = (value: string | null | undefined) =>
             const stored = await readStoredUniformPackBytes(value);
             if (!stored) return null;
             try {
-                return {
-                    ...stored,
-                    manifest: await readPackManifest(stored.bytes),
-                };
+                const { manifest, itemSizes } = await readPackInWorker(
+                    stored.bytes,
+                );
+                return { ...stored, manifest, itemSizes };
             } catch (error) {
                 console.warn("3D View: the show's uniform doesn't read", error);
                 return null;
@@ -145,25 +156,45 @@ export const setUniformPackMutationOptions = (qc: QueryClient) =>
         mutationFn: async ({
             pack,
             versionOf,
+            expect,
+            amend,
         }: {
             pack: Uint8Array;
             versionOf?: string;
-        }) => {
+            /** An item edit (fork #1258): store only while the venue names this */
+            expect?: string;
+            /** An item edit's burst token, from its first save */
+            amend?: string;
+        }): Promise<{ value: string; token?: string | null }> => {
             const manifest = await readPackManifest(pack);
             const field = await qc.fetchQuery(fieldPropertiesQueryOptions());
-            return await setUniformPack({
-                db,
-                pack,
-                manifest,
-                field,
-                versionOf,
-            });
+            if (expect !== undefined)
+                return await saveUniformItemsPack({
+                    db,
+                    pack,
+                    manifest,
+                    field,
+                    versionOf,
+                    expect,
+                    amend,
+                });
+            return {
+                value: await setUniformPack({
+                    db,
+                    pack,
+                    manifest,
+                    field,
+                    versionOf,
+                }),
+            };
         },
         onSuccess: async () => {
             await qc.invalidateQueries({ queryKey: showAssetKeys.all() });
             await qc.invalidateQueries({ queryKey: venueSettingsKeys.all() });
         },
         onError: (error) => {
+            // an item edit the venue had moved on from: dropped on purpose, nothing failed
+            if (error instanceof UniformPackSupersededError) return;
             conToastError(tolgee.t("view3d.uniformImport.saveFailed"), error);
         },
     });

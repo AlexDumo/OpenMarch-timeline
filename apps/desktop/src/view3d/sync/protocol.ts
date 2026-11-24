@@ -94,6 +94,16 @@ export interface View3dUniformPackResult {
     ok: boolean;
     /** When stored: the value now in `uniformArtwork` */
     value?: string;
+    /**
+     * An item edit (fork #1258): the undo entry its burst extends (getLatestUndoEntryToken), for
+     * the next save of the same burst to send back as `amend`
+     */
+    token?: string | null;
+    /**
+     * Not stored, on purpose: the venue no longer names the pack the edit started from (Undo, or
+     * another uniform picked while it saved), so the edit was dropped
+     */
+    superseded?: boolean;
 }
 
 /** The channels the editor publishes and the window may listen to. */
@@ -174,7 +184,9 @@ export interface View3dVenueChangeRequest {
     silkArtwork?: unknown;
     /**
      * A uniform pack file to store and dress the band in (fork #1257), as
-     * `{ id: string, bytes: Uint8Array }`. Unchecked: the editor reads the bytes in the uniform
+     * `{ id: string, bytes: Uint8Array }`, plus for an item edit (fork #1258) `versionOf` (the
+     * uniform asset it is a version of), `expect` (the value the venue must still name, or
+     * nothing is stored) and `amend` (the token of the undo entry its editing burst extends). Unchecked: the editor reads the bytes in the uniform
      * pack worker. Stored as a show asset; pointing the band at it is undoable. The editor answers
      * on `VIEW3D_UNIFORM_PACK_RESULT_CHANNEL` with the same `id`.
      */
