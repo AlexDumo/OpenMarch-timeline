@@ -323,6 +323,17 @@ numbers** section shows while the band wears a uniform imported into the show.
   elsewhere before a change is saved (Undo, another uniform picked), the editor stores nothing and
   the unsaved change is dropped, so Undo wins.
 - While a change composes, the marchers keep their previous art instead of showing the palette.
+  - A burst's save removes the version it replaces, and the 3D View hears of the asset change and
+    the venue change separately. A version the window's venue still names reads as its uniform's
+    newest version, never as missing, and the item list and Save uniform file keep the last pack
+    while the band moves to the next version.
+- **Size notes.** A row says when its item isn't drawn (a side over 120 in, or a repeating
+  print's copy under 1 in) or is too thin to see (under 1/32 in), and which Size values work, by
+  which side, or that no size works for that image. Switching Size by keeps the size exactly and
+  isn't offered when the other side's length is outside the Size field's 0.25 (1 for a print)
+  to 120 in.
+- **Assets view.** A uniform is one row, showing the version in use, with "N older versions"
+  and their size beside it; Remove unused… still takes out the versions nothing names.
 
 ## Hanging pieces and other shapes
 
@@ -355,6 +366,10 @@ These are attachments, not artwork:
     region's edge nor its top or bottom, is called a logo. Stripes, bands and sashes cross a
     region, so they don't count. It runs only on a layer that paints at least half the garment
     area, since anything on a mostly clear overlay layer would stand alone.
+    - **Known limit:** it assumes each region has one flat fabric color. On a two-toned or shaded
+      jacket (a dark yoke over a shaded body, as in the hands-on test's `fjm-page.png`) the second
+      tone counts as "not fabric", touches the region's edges, and a logo painted on it merges into
+      it, so no note shows. Finding it would need real segmentation.
   - a template layer left visible in the export
   - a wrong image size
   - an item outside every region
