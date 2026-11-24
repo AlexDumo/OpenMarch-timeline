@@ -73,12 +73,18 @@ float omFlatNeckDist(vec3 p) {
   float zc = omFlatLut(0.0, omFlatRow(0, uFlatTops.x - p.y)).b;
   return length(vec2(p.x, p.z - zc));
 }
-// 1 on the neck (the jacket's standing collar), antialiased: it takes the palette collar and no art.
-float omFlatNeck() {
-  if (omFlatPart() != 1) return 0.0;
+// 1 on the neck (the jacket's standing collar), antialiased: it takes the palette collar and no art. Worked
+// out in uniform control flow before uniformColor() runs (fwidth needs every pixel of the quad), which reads
+// it from omFlatNeckW inside its part branches.
+float omFlatNeckW = 0.0;
+float omFlatNeckWeight() {
   float d = uFlatNeckR - omFlatNeckDist(vRest);
   float fw = fwidth(d) + 1e-5;
-  return smoothstep(-fw, fw, d);
+  float w = smoothstep(-fw, fw, d);
+  return omFlatPart() == 1 ? w : 0.0;
+}
+float omFlatNeck() {
+  return omFlatNeckW;
 }
 // A spine segment (0 torso, 1 hips) at t (m down from its top): its point on the flats.
 vec2 omFlatSpine(int s, vec3 p, float t, out bool front) {
@@ -306,7 +312,7 @@ export function withFlats(THREE, material, params) {
             .replace(COLLAR_LINE, "c = mix(c, uTrim, omFlatNeck() * uCollar);")
             .replace(
                 FLATS_DIFFUSE_LINE,
-                "vec4 omArt = omFlatArt();\n  vec4 diffuseColor = vec4( uniformColor() * (1.0 - omArt.a) + omArt.rgb, opacity );",
+                "omFlatNeckW = omFlatNeckWeight();\n  vec4 omArt = omFlatArt();\n  vec4 diffuseColor = vec4( uniformColor() * (1.0 - omArt.a) + omArt.rgb, opacity );",
             );
     };
     material.customProgramCacheKey = () => key + "|flats";

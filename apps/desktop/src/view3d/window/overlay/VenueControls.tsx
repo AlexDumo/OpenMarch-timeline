@@ -44,7 +44,11 @@ import {
     isUniformPackValue,
     type UniformPackValue,
 } from "@/view3d/core/marchers/uniformArtwork";
-import { uniformPacksQueryOptions } from "@/hooks/queries/useUniformPack";
+import {
+    uniformPackQueryOptions,
+    uniformPacksQueryOptions,
+} from "@/hooks/queries/useUniformPack";
+import { wornPackProblem } from "@/view3d/core/uniformPack/wornPack";
 import { uniformArtworkAvailable } from "@/view3d/window/uniformArtworkPreview";
 import { ToggleGroup, ToggleGroupItem } from "@openmarch/ui";
 import { Segmented } from "./Panel";
@@ -174,14 +178,19 @@ export function UniformPicker() {
     });
     const named =
         flats && settings ? flatsArtworkOf(settings.uniformArtwork) : null;
-    // a uniform the show no longer has (an undo after Remove unused…): the band wears its preset
-    const worn =
-        named &&
-        isUniformPackValue(named) &&
-        packs &&
-        !packs.some((pack) => pack.value === named)
-            ? null
-            : named;
+    const namedPack = named && isUniformPackValue(named) ? named : null;
+    const { data: pack, isSuccess: packRead } = useQuery(
+        uniformPackQueryOptions(namedPack),
+    );
+    // a uniform the show no longer has (an undo after Remove unused…), or one whose file
+    // doesn't read: the band wears its preset, so the preset is the one picked
+    const worn = wornPackProblem(
+        namedPack,
+        packs?.some((p) => p.value === namedPack),
+        packRead ? pack : undefined,
+    )
+        ? null
+        : named;
     type Value = UniformPresetId | typeof FLATS_SAMPLE | UniformPackValue;
     return (
         <Segmented<Value>

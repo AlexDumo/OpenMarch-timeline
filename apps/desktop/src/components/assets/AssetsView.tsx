@@ -35,6 +35,7 @@ import {
 } from "@/hooks/queries/useShowAssets";
 import {
     LARGE_SHOW_ASSET_BYTES,
+    keptForHistory,
     showAssetUse,
     sizeParts,
     type AssetUse,
@@ -43,6 +44,11 @@ import { withoutEmpty } from "@/showAssets/modelImport/review/modelImportSession
 import type { ModelCredits } from "@/showAssets/modelImport/types";
 import type { JsonObject } from "@/showAssets/hash";
 import { UNIFORM_ASSET_KIND } from "@/view3d/core/uniformPack/format";
+import {
+    wornPackProblem,
+    type WornPackProblem,
+} from "@/view3d/core/uniformPack/wornPack";
+import { uniformPackQueryOptions } from "@/hooks/queries/useUniformPack";
 import { showAssetRefValue } from "@/showAssets/ref";
 
 /**
@@ -79,26 +85,22 @@ function useAssetUse() {
                 .map(showAssetRefValue),
         [assets],
     );
-    // uniforms an undo or redo would bring back are never offered for removal
-    const { data: inHistory } = useQuery(
+    // uniforms an undo or redo would bring back are never offered for removal; the list shows
+    // while that's checked, and every uniform counts as kept until it's known
+    const { data: inHistory, isError: historyFailed } = useQuery(
         uniformsInHistoryQueryOptions(uniforms),
     );
+    const worn =
+        typeof venue?.uniformArtwork === "string" &&
+        venue.uniformArtwork.startsWith("library:")
+            ? venue.uniformArtwork
+            : null;
+    // whether the band's uniform reads: when it doesn't, the band wears its preset
+    const { data: wornPack } = useQuery(uniformPackQueryOptions(worn));
     return useMemo(() => {
         // `venue` is null with no venue row, undefined while it loads
-        if (
-            !assets ||
-            !sizes ||
-            !items ||
-            !cues ||
-            venue === undefined ||
-            !inHistory
-        )
+        if (!assets || !sizes || !items || !cues || venue === undefined)
             return null;
-        const worn =
-            typeof venue?.uniformArtwork === "string" &&
-            venue.uniformArtwork.startsWith("library:")
-                ? venue.uniformArtwork
-                : null;
         const use = showAssetUse(
             assets,
             sizes,
@@ -108,7 +110,8 @@ function useAssetUse() {
                 armed,
                 worn,
             ],
-            inHistory,
+            // a failed read keeps every uniform, even if an older read succeeded
+            keptForHistory(uniforms, historyFailed ? undefined : inHistory),
         );
         const known = new Set(use.assets.map((row) => row.value));
         // Props naming a model the show doesn't have: an undo brought one back, say
@@ -116,10 +119,27 @@ function useAssetUse() {
             (item) =>
                 item.model?.startsWith("library:") && !known.has(item.model),
         ).length;
-        // The band's uniform when the show doesn't have it (an undo after Remove unused…)
-        const missingUniform = worn !== null && !known.has(worn);
-        return { ...use, missingProps, missingUniform };
-    }, [assets, sizes, items, cues, armed, venue, inHistory]);
+        // The band's uniform when the show doesn't have it (an undo after Remove unused…), or
+        // has it but its file doesn't read
+        const uniformProblem = wornPackProblem(
+            worn,
+            known.has(worn ?? ""),
+            wornPack,
+        );
+        return { ...use, missingProps, uniformProblem, historyFailed };
+    }, [
+        assets,
+        sizes,
+        items,
+        cues,
+        armed,
+        venue,
+        worn,
+        uniforms,
+        inHistory,
+        historyFailed,
+        wornPack,
+    ]);
 }
 
 export function AssetsContents({
@@ -164,7 +184,8 @@ export function AssetsContents({
                         unusedBytes={use.unusedBytes}
                         totalBytes={use.totalBytes}
                         missingProps={use.missingProps}
-                        missingUniform={use.missingUniform}
+                        uniformProblem={use.uniformProblem}
+                        historyFailed={use.historyFailed}
                         onRemove={() => setRemoving(true)}
                     />
                 )}
@@ -198,14 +219,16 @@ function AssetNotes({
     unusedBytes,
     totalBytes,
     missingProps,
-    missingUniform,
+    uniformProblem,
+    historyFailed,
     onRemove,
 }: {
     unused: readonly AssetUse[];
     unusedBytes: number;
     totalBytes: number;
     missingProps: number;
-    missingUniform: boolean;
+    uniformProblem: WornPackProblem | null;
+    historyFailed: boolean;
     onRemove: () => void;
 }) {
     const sizeText = useSizeText();
@@ -245,10 +268,25 @@ function AssetNotes({
                 />
             </li>,
         );
-    if (missingUniform)
+    if (uniformProblem === "missing")
         notes.push(
             <li key="missingUniform" data-testid="assets-missing-uniform-note">
                 <T keyName="assets.notes.missingUniform" />
+            </li>,
+        );
+    if (uniformProblem === "unreadable")
+        notes.push(
+            <li
+                key="unreadableUniform"
+                data-testid="assets-unreadable-uniform-note"
+            >
+                <T keyName="assets.notes.unreadableUniform" />
+            </li>,
+        );
+    if (historyFailed)
+        notes.push(
+            <li key="historyFailed" data-testid="assets-history-failed-note">
+                <T keyName="assets.notes.historyFailed" />
             </li>,
         );
     if (totalBytes > LARGE_SHOW_ASSET_BYTES)

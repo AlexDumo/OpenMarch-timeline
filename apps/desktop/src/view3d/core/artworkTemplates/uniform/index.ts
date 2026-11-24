@@ -35,10 +35,15 @@ let loading: Promise<FlatsRegionsSource> | undefined;
  * fetches it on demand too.
  */
 export function loadUniformFlatsSource(): Promise<FlatsRegionsSource> {
-    loading ??= import("../../../assets/uniform-flats/regions.json").then((m) =>
-        fromFlatsAsset(m.default as unknown as FlatsAsset),
-    );
-    return loading;
+    const load = (loading ??=
+        import("../../../assets/uniform-flats/regions.json").then((m) =>
+            fromFlatsAsset(m.default as unknown as FlatsAsset),
+        ));
+    // a failed load isn't kept, so the next download tries again
+    load.catch(() => {
+        if (loading === load) loading = undefined;
+    });
+    return load;
 }
 
 export type UniformTemplateFormat = keyof typeof UNIFORM_TEMPLATE_FILES;

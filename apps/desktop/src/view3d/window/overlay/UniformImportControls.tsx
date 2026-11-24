@@ -31,6 +31,7 @@ import {
     FLATS_PAGE_PX,
     uniformPackFileName,
 } from "@/view3d/core/uniformPack/format";
+import { wornPackProblem } from "@/view3d/core/uniformPack/wornPack";
 import { uniformArtworkAvailable } from "@/view3d/window/uniformArtworkPreview";
 import { loadFlatsGeometry } from "@/view3d/window/performers/marchers/flatsAtlas";
 import {
@@ -65,9 +66,13 @@ export function UniformImportControls() {
         uniformPackQueryOptions(wornPack),
     );
     const { data: packs } = useQuery(uniformPacksQueryOptions());
-    // the venue names a uniform the show doesn't have (an undo after Remove unused…) or that
-    // doesn't read: the band wears its preset
-    const missing = wornPack !== null && packRead && pack === null;
+    // the venue names a uniform the show doesn't have (an undo after Remove unused…) or whose
+    // file doesn't read: the band wears its preset
+    const wornProblem = wornPackProblem(
+        wornPack,
+        packs?.some((p) => p.value === wornPack),
+        packRead ? pack : undefined,
+    );
 
     if (!uniformArtworkAvailable()) return null;
 
@@ -208,13 +213,15 @@ export function UniformImportControls() {
                     ))}
                 </div>
             )}
-            {missing && (
+            {wornProblem && (
                 <p
                     className="text-sub text-yellow"
                     role="status"
-                    data-testid="view3d-uniform-missing"
+                    data-testid={`view3d-uniform-${wornProblem}`}
                 >
-                    {t("view3d.uniformImport.missing")}
+                    {wornProblem === "missing"
+                        ? t("view3d.uniformImport.missing")
+                        : t("view3d.uniformImport.unreadable")}
                 </p>
             )}
             {problem && (

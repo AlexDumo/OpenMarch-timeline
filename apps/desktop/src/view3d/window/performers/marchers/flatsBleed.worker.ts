@@ -21,7 +21,14 @@ export interface FlatsBleedRequest {
 
 export type FlatsBleedResponse =
     | { id: number; bitmap: ImageBitmap }
-    | { id: number; error: string; needsMask?: boolean };
+    | {
+          id: number;
+          error: string;
+          /** The worker has no plan for the key: send the mask. */
+          needsMask?: boolean;
+          /** The request's pixels, handed back with `needsMask` for the retry. */
+          pixels?: ArrayBuffer;
+      };
 
 const plans = new Map<string, { dst: Int32Array; from: Int32Array }>();
 
@@ -31,11 +38,15 @@ onmessage = async (event: MessageEvent<FlatsBleedRequest>) => {
         let plan = plans.get(key);
         if (!plan) {
             if (!mask) {
-                postMessage({
-                    id,
-                    error: "no plan",
-                    needsMask: true,
-                } satisfies FlatsBleedResponse);
+                postMessage(
+                    {
+                        id,
+                        error: "no plan",
+                        needsMask: true,
+                        pixels,
+                    } satisfies FlatsBleedResponse,
+                    { transfer: [pixels] },
+                );
                 return;
             }
             plan = bleedPlan(mask, W, H, steps);

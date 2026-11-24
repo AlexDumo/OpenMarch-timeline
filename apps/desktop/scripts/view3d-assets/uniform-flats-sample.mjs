@@ -39,14 +39,14 @@ function band(panel, part, y0, y1, fill) {
 /** A stripe `w` inches wide inside a region's seam: "left" or "right" as seen on the panel. */
 function seamStripe(panel, part, edge, w, fill) {
     const r = region(panel, part);
-    const rows = r.seams.rows;
-    const x = (row) => (edge === "left" ? row[1] : row[2]);
+    const rows = r.seams;
+    const x = (row) => row[edge];
     const inward = edge === "left" ? w : -w;
     // a little past the seam, so the bleed and filtering stay on the stripe
-    const outer = rows.map((row) => [x(row) - inward * 0.5, row[0]]);
-    const inner = rows.map((row) => [x(row) + inward, row[0]]).reverse();
-    const y0 = rows[0][0];
-    const y1 = rows[rows.length - 1][0];
+    const outer = rows.map((row) => [x(row) - inward * 0.5, row.y]);
+    const inner = rows.map((row) => [x(row) + inward, row.y]).reverse();
+    const y0 = rows[0].y;
+    const y1 = rows[rows.length - 1].y;
     // extend to the region's top and bottom edges
     outer.unshift([outer[0][0], y0 - 0.6]);
     inner.push([inner[inner.length - 1][0], y0 - 0.6]);
@@ -65,9 +65,11 @@ function clipDefs(panel) {
 }
 const outerEdge = (panel, part) => {
     // the outer seam is the one farther from the centre line
-    const rows = region(panel, part).seams.rows;
+    const rows = region(panel, part).seams;
     const mid = rows[rows.length >> 1];
-    return Math.abs(mid[1] - CX) > Math.abs(mid[2] - CX) ? "left" : "right";
+    return Math.abs(mid.left - CX) > Math.abs(mid.right - CX)
+        ? "left"
+        : "right";
 };
 
 function panelSvg(panel) {
@@ -104,7 +106,7 @@ function panelSvg(panel) {
         );
     }
     // a band round each forearm, a hand's width above the cuff, on both panels
-    const cuff = R.landmarks.cuff;
+    const cuff = R.landmarks.sleeveCuff;
     for (const part of ["sleeve-L", "sleeve-R"]) {
         o.push(band(panel, part, cuff - 5.5, cuff - 4, GOLD));
         o.push(band(panel, part, cuff - 3.6, cuff - 3.2, GOLD));
