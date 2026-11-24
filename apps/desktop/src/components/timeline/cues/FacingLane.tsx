@@ -383,11 +383,15 @@ export function FacingLaneView({
             // their own)
             onPointerDown={(e) => {
                 if (e.target === e.currentTarget) pick(null);
+                // A press in the lane's menus and popovers (drawn elsewhere in the page, but
+                // inside the lane for React) is theirs, not the timeline's
                 if (
-                    e.target instanceof Element &&
-                    e.target.closest(
-                        '[data-testid="facing-lane-header"], button',
-                    )
+                    !(e.target instanceof Node) ||
+                    !e.currentTarget.contains(e.target) ||
+                    (e.target instanceof Element &&
+                        e.target.closest(
+                            '[data-testid="facing-lane-header"], button',
+                        ))
                 )
                     e.stopPropagation();
             }}
@@ -543,7 +547,20 @@ export function FacingLaneView({
                         rows[popoverRow]!.marcherIds,
                         rows[popoverRow]!.label,
                     )}
-                    fromDegrees={popoverPiece.fromDegrees}
+                    // Where the row faces as the turn starts: the turn's own start, which an
+                    // instant turn has no bar for
+                    fromDegrees={
+                        show.compiled
+                            .segments(
+                                rows[popoverRow]!.marcherIds[0]!,
+                                "facing",
+                            )
+                            .find(
+                                (seg) =>
+                                    seg.cueId === popoverCueId &&
+                                    seg.kind === "transition",
+                            )?.fromDegrees ?? popoverPiece.fromDegrees
+                    }
                     whereOf={(count) => {
                         const where = beatWhere(
                             countToSpecBeat(count, show.beatIds, specOf),

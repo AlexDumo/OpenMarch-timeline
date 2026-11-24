@@ -20,6 +20,7 @@ import { facingLane } from "@/cues/facing";
 import { useCueSelectionStore } from "@/cues/cueSelectionStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { FacingLaneView } from "../FacingLane";
+import { useTurnPopoverStore } from "@/cues/turnPopoverStore";
 import { useTimelinePointer } from "../../TimelinePrimitives";
 import type { TimelineBeatRange } from "../../TimelineViewModel";
 
@@ -277,5 +278,24 @@ describe("the Facing lane (#993)", () => {
             30 * PPB,
         );
         expect(onSeek.mock.calls.at(-1)?.[0]).toBe(30);
+    });
+
+    // The simulated users' finding (#993): clicking the popover's fields moved the playhead, and an
+    // instant turn's From showed where it ends
+    it("keeps presses in the turn popover off the timeline, and shows an instant turn's start in From", async () => {
+        const onSeek = vi.fn();
+        useCueSelectionStore.getState().pick(null);
+        const cues = [cue(1, 5, "side2"), cue(2, 13, "back")];
+        const view = renderLane(cues, { onSeek });
+        await act(async () => {
+            useCueSelectionStore.getState().pick(cues[1]!);
+            useTurnPopoverStore.getState().open(2);
+        });
+        const counts = await view.findByTestId("turn-counts");
+        await clickAt(counts, 300);
+        expect(onSeek).not.toHaveBeenCalled();
+        // From side 2 (90°), the back is 180°
+        expect(view.getByTestId("turn-from").textContent).toBe("90°");
+        await act(async () => useTurnPopoverStore.getState().close());
     });
 });

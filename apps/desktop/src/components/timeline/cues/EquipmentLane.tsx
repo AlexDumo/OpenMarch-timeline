@@ -477,11 +477,15 @@ export function EquipmentLaneView({
             // their own)
             onPointerDown={(e) => {
                 if (e.target === e.currentTarget) pick(null);
+                // A press in the lane's menus and popovers (drawn elsewhere in the page, but
+                // inside the lane for React) is theirs, not the timeline's
                 if (
-                    e.target instanceof Element &&
-                    e.target.closest(
-                        '[data-testid="equipment-lane-header"], button',
-                    )
+                    !(e.target instanceof Node) ||
+                    !e.currentTarget.contains(e.target) ||
+                    (e.target instanceof Element &&
+                        e.target.closest(
+                            '[data-testid="equipment-lane-header"], button',
+                        ))
                 )
                     e.stopPropagation();
             }}
