@@ -1,5 +1,7 @@
 import { isMacPlatform } from "@/shortcuts/platform";
+import { MODIFIER_RELEASE_GRACE_MS } from "./modifierGrace";
 import {
+    HELD_ROLES,
     releaseUsedKeys,
     rolesOf,
     trackHeldKeys,
@@ -15,6 +17,11 @@ import {
  * The held roles of one gesture, from its press to its release. Keeps the press rule (a key the
  * press used is no role until it's released) and follows keys pressed or released mid-drag, so a
  * gesture only asks `roles()` and re-runs its last move when told to.
+ *
+ * A role turns off only once its key (or on-screen toggle) has been up for the release grace
+ * (`MODIFIER_RELEASE_GRACE_MS`): people let go of Shift a moment before the mouse, and that drop
+ * should keep Shift. Turning a role on is immediate; holding a role a little longer is the whole
+ * cost, so letting go on purpose to cancel it still works, the preview just changes after the grace.
  */
 export interface GestureKeys {
     /** The held roles now */
@@ -42,6 +49,7 @@ export function startGestureKeys({
     track = true,
     map,
     isMac = isMacPlatform(),
+    releaseGraceMs = MODIFIER_RELEASE_GRACE_MS,
 }: {
     context: GestureContext;
     /** The keys held at the press (`heldKeysOf` the pointer-down) */
@@ -61,33 +69,76 @@ export function startGestureKeys({
     track?: boolean;
     map?: RoleMap;
     isMac?: boolean;
+    /** How long a released role still counts; 0 turns it off at once */
+    releaseGraceMs?: number;
 }): GestureKeys {
     let keys = press;
     let used: ReadonlySet<RoleKey> = new Set(usedByPress);
-    const roles = () =>
+    /** Roles whose key came up and that still count until their timer runs out */
+    const graced = new Map<HeldRole, ReturnType<typeof setTimeout>>();
+    const actual = () =>
         rolesOf(keys, context, {
             map,
             isMac,
             onScreen: onScreen?.(),
             usedByPress: used,
         });
-    let last = roles();
+    const withGrace = (now: Roles): Roles => {
+        if (graced.size === 0) return now;
+        const out = { ...now };
+        for (const role of graced.keys()) out[role] = true;
+        return out;
+    };
+    let last = actual();
+    const roles = () => withGrace(actual());
+    const clearGrace = () => {
+        for (const timer of graced.values()) clearTimeout(timer);
+        graced.clear();
+    };
     /** Whether the roles changed since they were last read here */
-    const reread = () => {
-        const now = roles();
-        const changed = !sameRoles(now, last);
-        last = now;
+    const reread = (grace = true) => {
+        const now = actual();
+        for (const role of HELD_ROLES) {
+            const timer = graced.get(role);
+            if (now[role]) {
+                // Held again (or still): the pending release is off
+                if (timer !== undefined) {
+                    clearTimeout(timer);
+                    graced.delete(role);
+                }
+            } else if (
+                grace &&
+                last[role] &&
+                timer === undefined &&
+                releaseGraceMs > 0
+            ) {
+                graced.set(
+                    role,
+                    setTimeout(() => {
+                        graced.delete(role);
+                        if (reread()) onRolesChange?.(last);
+                    }, releaseGraceMs),
+                );
+            }
+        }
+        const next = withGrace(now);
+        const changed = !sameRoles(next, last);
+        last = next;
         return changed;
     };
-    const update = (next: HeldKeys) => {
+    const apply = (next: HeldKeys, grace: boolean) => {
         keys = next;
         used = releaseUsedKeys(used, keys, isMac);
-        return reread();
+        return reread(grace);
     };
+    const update = (next: HeldKeys) => apply(next, true);
     const detachKeys = track
         ? trackHeldKeys(
-              (next) => {
-                  if (update(next)) onRolesChange?.(last);
+              (next, cause) => {
+                  // The window lost focus: no keyup will come, and nothing is being dropped
+                  const blurred = cause === "blur";
+                  if (blurred) clearGrace();
+                  if (apply(next, !blurred)) onRolesChange?.(last);
               },
               () => keys,
           )
@@ -103,6 +154,7 @@ export function startGestureKeys({
         dispose: () => {
             detachKeys();
             detachScreen();
+            clearGrace();
         },
     };
 }
