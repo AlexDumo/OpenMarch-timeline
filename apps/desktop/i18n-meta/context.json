@@ -1698,6 +1698,7 @@
     "shapes.kinds.line.measured.x": "In the Line shape editor's Measured menu: what a typed interval between marchers measures. Text: \"↔ Side to side\".",
     "shapes.kinds.line.measured.y": "In the Line shape editor's Measured menu: what a typed interval between marchers measures. Text: \"↕ Front to back\".",
     "shapes.kinds.line.menu.add": "In the right-click menu on a point or segment of a Line shape on the field. Text: \"Add point here\".",
+    "shapes.kinds.line.menu.arc": "In the right-click menu on a segment of a Line shape on the field: bends that stretch of the line into an arc. Text: \"Arc\".",
     "shapes.kinds.line.menu.close": "In the right-click menu on a point or segment of a Line shape on the field. Text: \"Close line\".",
     "shapes.kinds.line.menu.closeFew": "In the right-click menu on a point or segment of a Line shape on the field. Text: \"A line needs three points to close\".",
     "shapes.kinds.line.menu.corner": "In the right-click menu on a point or segment of a Line shape on the field. Text: \"Corner\".",
