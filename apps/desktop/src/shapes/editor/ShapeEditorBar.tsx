@@ -1682,7 +1682,7 @@ function RowsMenu({ target }: { target: ShapeEditTarget }) {
                                 ? view.empty > 0
                                     ? tolgee.t(
                                           "shapes.rows.headingEmpty",
-                                          "{count} marchers in {rows} rows · {empty} empty spots",
+                                          "{count} marchers in {rows} rows · {empty, plural, one {# empty spot} other {# empty spots}}",
                                           {
                                               count: spots,
                                               rows: view.rows.length,
@@ -2107,7 +2107,7 @@ function sitsTip(shift: number, by: -1 | 1, across: boolean): string {
         });
     return tolgee.t(
         "shapes.rows.sitsNow",
-        "{way} (now {half} half spots {side})",
+        "{way} (now {half, plural, one {# half spot} other {# half spots}} {side})",
         {
             way,
             half: Math.abs(shift),
