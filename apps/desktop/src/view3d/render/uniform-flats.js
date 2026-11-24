@@ -38,6 +38,10 @@ uniform vec2 uFlatWrist;          // t along the left and right forearm (m) belo
 uniform float uFlatNeckR;         // the jacket closer than this (m) to the neck's axis is the neck
 const float OM_FLAT_IN = 0.0254;
 const float OM_FLAT_PI = 3.14159265;
+// The torso's rows end on the jacket hem, where the hips' region starts on the flats. The jacket's lowest few mm
+// hang below it and clamp to its last row: kept this far (in) above the hem, they take the jacket's art rather than
+// a blend of it and the pants' along the boundary.
+const float OM_FLAT_HEM_INSET = 0.05;
 float omFlatRow(int s, float t) {
   vec4 g = uFlatSeg[s];
   float f = clamp((t - g.z) / (g.w - g.z), 0.0, 1.0);
@@ -95,7 +99,8 @@ vec2 omFlatSpine(int s, vec3 p, float t, out bool front) {
   vec4 lut = omFlatLut(psi, row);
   front = abs(psi) <= 0.5 * OM_FLAT_PI;
   // down the segment: inches, kept to its rows so its ends never reach past the region
-  return vec2(uFlatCx + (front ? lut.r : -lut.g), uFlatY0[s] + clamp(t, g.z, g.w) / OM_FLAT_IN + lut.a);
+  float tEnd = s == 0 ? g.w - OM_FLAT_HEM_INSET * OM_FLAT_IN : g.w;
+  return vec2(uFlatCx + (front ? lut.r : -lut.g), uFlatY0[s] + clamp(t, g.z, tEnd) / OM_FLAT_IN + lut.a);
 }
 // Limb segment i (0..7, as uFlatHead): its point on the flats, and t along its bone (m).
 vec2 omFlatLimb(int i, vec3 p, out float t, out float psi, out bool front) {
