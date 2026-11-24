@@ -31,7 +31,7 @@ const run = async ({
             return answer;
         },
         onFailed: (i, reason) => failed.push([i, reason]),
-        onMade: (i) => progressed.push(i),
+        onAttempted: (i) => progressed.push(i),
         isCancelled: () =>
             cancelAfter !== undefined && progressed.includes(cancelAfter),
         cancelledMessage: "cancelled",
@@ -91,7 +91,7 @@ describe("makeDrillChartFiles", () => {
 
     describe("individual charts", () => {
         it("counts the PDFs made and reports each failure, then succeeds", async () => {
-            const { count, error, failed, attempted } = await run({
+            const { count, error, failed, attempted, progressed } = await run({
                 individualCharts: true,
                 answers: [
                     { success: true },
@@ -111,6 +111,17 @@ describe("makeDrillChartFiles", () => {
             ]);
             // A thrown error doesn't stop the remaining marchers; a skipped one isn't tried
             expect(attempted).toEqual([0, 1, 2, 3]);
+            // Progress moves on for failed charts too, not for skipped ones
+            expect(progressed).toEqual([0, 1, 2, 3]);
+        });
+
+        it("fails when there are no marchers to chart", async () => {
+            const { error, attempted } = await run({
+                individualCharts: true,
+                answers: [],
+            });
+            expect(error).toBe("none made");
+            expect(attempted).toEqual([]);
         });
 
         it("fails when no PDF was made", async () => {

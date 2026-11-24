@@ -31,7 +31,7 @@ export async function makeDrillChartFiles({
     skipReason,
     makePdf,
     onFailed,
-    onMade,
+    onAttempted,
     isCancelled,
     cancelledMessage,
     noneMadeMessage,
@@ -45,8 +45,8 @@ export async function makeDrillChartFiles({
     makePdf: (index: number) => Promise<DrillChartPdfResult>;
     /** An individual chart that was skipped or failed */
     onFailed: (index: number, reason: string) => void;
-    /** Called after each individual chart, made or not, for progress */
-    onMade: (index: number) => void;
+    /** Called after each individual chart is tried, made or not, for progress */
+    onAttempted: (index: number) => void;
     isCancelled: () => boolean;
     cancelledMessage: string;
     /** The reason given when individual charts are on and no PDF was made */
@@ -82,7 +82,7 @@ export async function makeDrillChartFiles({
             reason = pdfFailureReason(error);
         }
         if (success) made += 1;
-        onMade(index);
+        onAttempted(index);
         if (!success) onFailed(index, reason || unknownErrorMessage);
         if (isCancelled()) throw new Error(cancelledMessage);
     }

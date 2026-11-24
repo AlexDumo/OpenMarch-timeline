@@ -736,7 +736,7 @@ function DrillChartExport() {
                         exportDir,
                         individualCharts,
                     }),
-                onMade: (marcher) => {
+                onAttempted: (marcher) => {
                     setProgress(50 + (50 * marcher) / svgPages.length);
                     setCurrentStep(
                         t("exportCoordinates.generatingPDF", {
