@@ -7,6 +7,7 @@ import {
     REFUSAL_REPEAT_MS,
     reportPaletteSearchFoundNothing,
     usageTracker,
+    wordsOf,
 } from "../usageEvents";
 import {
     registerActionHandler,
@@ -133,17 +134,29 @@ describe("createUsageTracker", () => {
         expect(capture).toHaveBeenCalledTimes(MAX_REFUSALS);
     });
 
-    it("sends each empty palette search once, trimmed and lowercased, without words that hold digits", () => {
-        const { capture, tracker } = setup();
-        tracker.paletteSearchFoundNothing("B12");
+    it("sends each empty palette search once, keeping only the app's own words", () => {
+        const capture = vi.fn();
+        const known = new Set(["rotate", "block", "mirror"]);
+        const tracker = createUsageTracker(
+            capture,
+            () => 0,
+            () => true,
+            (word) => known.has(word),
+        );
         tracker.paletteSearchFoundNothing("  Rotate Block 3 ");
-        tracker.paletteSearchFoundNothing("rotate block");
+        tracker.paletteSearchFoundNothing("rotate block 4");
+        tracker.paletteSearchFoundNothing("Mirror Jake Smith");
         tracker.paletteSearchFoundNothing("x");
-        tracker.paletteSearchFoundNothing("a".repeat(300));
         expect(capture.mock.calls).toEqual([
-            ["palette search found nothing", { query: "rotate block" }],
-            ["palette search found nothing", { query: "a".repeat(120) }],
+            ["palette search found nothing", { query: "rotate block *" }],
+            ["palette search found nothing", { query: "mirror * *" }],
         ]);
+    });
+
+    it("finds the words of a translation file", () => {
+        expect(
+            wordsOf({ a: "Rotate the block", b: { c: "Fan out: 8 × 4" } }),
+        ).toEqual(new Set(["rotate", "the", "block", "fan", "out"]));
     });
 });
 
@@ -176,7 +189,7 @@ describe("installUsageEvents", () => {
         const summary = capture.mock.calls.find(
             ([event]) => event === "actions used",
         );
-        expect(summary?.[2]).toEqual({ sendNow: true });
+        expect(summary?.[2]).toEqual({ sendNow: false });
         expect(summary?.[1]).toMatchObject({
             actions: { swapMarchers: 3 },
             actions_by_key: { swapMarchers: 1 },
@@ -188,7 +201,7 @@ describe("installUsageEvents", () => {
             reason: "Put the playhead inside a page",
         });
         expect(capture).toHaveBeenCalledWith("palette search found nothing", {
-            query: "fan out",
+            query: "* *",
         });
 
         runAction("swapMarchers");
@@ -196,7 +209,7 @@ describe("installUsageEvents", () => {
         expect(capture).toHaveBeenLastCalledWith(
             "actions used",
             expect.objectContaining({ sources: { other: 1 } }),
-            { sendNow: true },
+            { sendNow: false },
         );
         expect(usageTracker()).toBeNull();
         unregister();

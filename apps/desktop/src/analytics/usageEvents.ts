@@ -12,8 +12,8 @@
 import type { ActionRunSource } from "@/shortcuts/registry";
 
 /**
- * Sends an event. `sendNow` means the window may be about to go away (hidden, reloaded or closed):
- * send it at once rather than in the next batch, which would die with the page.
+ * Sends an event. `sendNow` means the window was hidden and may be about to close (quitting hides
+ * it first): send it at once rather than in the next batch.
  */
 export type CaptureFn = (
     event: string,
@@ -36,14 +36,34 @@ const UNDO = "performUndo";
 const REDO = "performRedo";
 
 /**
- * A palette search without the words that hold digits (marcher labels such as "B12", set and page
- * numbers, counts), so what's left says what was looked for without naming marchers or places.
+ * A palette search with only the words the app's own text uses ("rotate", "mirror", "tempo");
+ * every other word (a marcher's name, a show title, a label like "B12") becomes `*`. Says what
+ * was looked for without naming people, shows or places.
  */
-export function searchWithoutNumbers(query: string): string {
+export function redactSearch(
+    query: string,
+    isKnownWord: (word: string) => boolean,
+): string {
     return query
+        .toLowerCase()
         .split(/\s+/)
-        .filter((word) => word !== "" && !/\d/.test(word))
+        .filter((word) => word !== "")
+        .map((word) => (isKnownWord(word) ? word : "*"))
         .join(" ");
+}
+
+/** The words (letters only, two or more, lowercased) in every string of a translation file. */
+export function wordsOf(
+    value: unknown,
+    words = new Set<string>(),
+): Set<string> {
+    if (typeof value === "string") {
+        for (const word of value.toLowerCase().match(/\p{L}{2,}/gu) ?? [])
+            words.add(word);
+    } else if (value && typeof value === "object") {
+        for (const item of Object.values(value)) wordsOf(item, words);
+    }
+    return words;
 }
 
 function clip(text: string): string {
@@ -72,6 +92,7 @@ export function createUsageTracker(
     capture: CaptureFn,
     now: () => number = Date.now,
     isEdit: (id: string) => boolean = () => true,
+    isKnownWord: (word: string) => boolean = () => false,
 ): UsageTracker {
     let actions: Record<string, number> = {};
     let byKey: Record<string, number> = {};
@@ -113,8 +134,9 @@ export function createUsageTracker(
             });
         },
         paletteSearchFoundNothing(query) {
-            const text = clip(searchWithoutNumbers(query)).toLowerCase();
-            if (text.length < 2 || searchesSent.has(text)) return;
+            if (query.trim().length < 2) return;
+            const text = clip(redactSearch(query, isKnownWord));
+            if (searchesSent.has(text)) return;
             if (searchesSent.size >= MAX_EMPTY_SEARCHES) return;
             searchesSent.add(text);
             capture("palette search found nothing", { query: text });
@@ -145,6 +167,14 @@ export function createUsageTracker(
 }
 
 let installed: UsageTracker | null = null;
+
+/** The app's own words, for `redactSearch`; empty until `setKnownWords`. */
+let knownWords: ReadonlySet<string> = new Set();
+
+/** Sets the words a palette search may keep (the app's English text). */
+export function setKnownWords(words: ReadonlySet<string>): void {
+    knownWords = words;
+}
 
 /** The tracker `installUsageEvents` set up, or null (tests, web build, no analytics key). */
 export function usageTracker(): UsageTracker | null {
@@ -179,7 +209,9 @@ export function installUsageEvents(
         ) => () => void;
     },
 ): () => void {
-    const tracker = createUsageTracker(capture, Date.now, isEdit);
+    const tracker = createUsageTracker(capture, Date.now, isEdit, (word) =>
+        knownWords.has(word),
+    );
     installed = tracker;
     const stopRuns = registry.subscribeToActionRuns((id, source) =>
         tracker.actionRan(id, source),
@@ -191,17 +223,18 @@ export function installUsageEvents(
     const onHidden = () => {
         if (document.visibilityState === "hidden") tracker.flush(true);
     };
-    // PostHog's own pagehide handler has already sent its queue by now: send this one at once
-    const onPageHide = () => tracker.flush(true);
+    // In the capture phase, so it runs before PostHog's own pagehide handler, which sends the
+    // queue by beacon as the page goes (each show open or close reloads the window)
+    const onPageHide = () => tracker.flush();
     document.addEventListener("visibilitychange", onHidden);
-    window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("pagehide", onPageHide, { capture: true });
     return () => {
-        tracker.flush(true);
+        tracker.flush();
         stopRuns();
         stopRefusals();
         clearInterval(timer);
         document.removeEventListener("visibilitychange", onHidden);
-        window.removeEventListener("pagehide", onPageHide);
+        window.removeEventListener("pagehide", onPageHide, { capture: true });
         if (installed === tracker) installed = null;
     };
 }

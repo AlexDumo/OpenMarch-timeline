@@ -28,7 +28,11 @@ import {
 import tolgee from "@/global/singletons/Tolgee";
 import { installClickFocusMarker } from "@/utilities/clickFocus";
 import { initEditorModeStore } from "@/stores/EditorModeStore";
-import { installUsageEvents } from "@/analytics/usageEvents";
+import {
+    installUsageEvents,
+    setKnownWords,
+    wordsOf,
+} from "@/analytics/usageEvents";
 import { isEditAction } from "@/shortcuts/definitions";
 import {
     subscribeToActionRefusals,
@@ -105,12 +109,15 @@ function mountEditor() {
                     posthog.capture(
                         event,
                         properties,
-                        options?.sendNow
-                            ? { send_instantly: true, transport: "sendBeacon" }
-                            : undefined,
+                        options?.sendNow ? { send_instantly: true } : undefined,
                     ),
                 isEditAction,
                 { subscribeToActionRuns, subscribeToActionRefusals },
+            );
+        // Palette searches keep only words the app's own text uses
+        if (!isSettingsWindow)
+            void import("../i18n/en.json").then((english) =>
+                setKnownWords(wordsOf(english.default)),
             );
     }
 

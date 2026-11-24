@@ -1719,10 +1719,31 @@ const NON_EDIT_CATEGORIES: ReadonlySet<ActionCategory> = new Set([
     "select",
 ]);
 
-/** Whether the action changes the show, judged by its category. Unknown ids are not edits. */
+/** Actions in edit categories that still don't change the show: views, modes and copying. */
+const NON_EDIT_ACTIONS: ReadonlySet<string> = new Set([
+    "timelineZoomIn",
+    "timelineZoomOut",
+    "timelineZoomFit",
+    "toggleSnap",
+    "toggleEditorMode",
+    "toggleTempoMode",
+    "copyFormation",
+    "followPreview",
+    "toggleMarcherOrder",
+]);
+
+/**
+ * Whether the action changes the show, judged by its category, less views, modes, copying and
+ * selecting. Unknown ids are not edits.
+ */
 export function isEditAction(id: string): boolean {
     const action = (
         ACTIONS as Partial<Record<string, { category: ActionCategory }>>
     )[id];
-    return action !== undefined && !NON_EDIT_CATEGORIES.has(action.category);
+    return (
+        action !== undefined &&
+        !NON_EDIT_CATEGORIES.has(action.category) &&
+        !NON_EDIT_ACTIONS.has(id) &&
+        !id.startsWith("fieldEditSelectAll")
+    );
 }
