@@ -957,7 +957,7 @@
             "drillNumber": "Drill Number",
             "errorLoadingCoords": "Error loading coordinates",
             "propsLook": "Prop size and look: Props panel",
-            "lockedSelected": "{count, plural, one {# locked item selected. It stays where it is: right-click it and choose Unlock to move it.} other {# locked items selected. They stay where they are: right-click one and choose Unlock to move it.}}",
+            "lockedSelected": "{count, plural, one {# locked item selected. It isn't moved here: right-click it and choose Unlock to move it.} other {# locked items selected. They aren't moved here: right-click one and choose Unlock to move it.}}",
             "playing": "Playing. Pause to see and edit the selected marchers.",
             "maxStepSize": "Largest step size",
             "minStepSize": "Smallest step size",

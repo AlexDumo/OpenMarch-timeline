@@ -2343,9 +2343,13 @@ export class FieldEditor {
     private drawnPositions(ids: readonly number[]): MarcherPosition[] {
         const { ids: drawn, positions, hidden } = this.ports.marchers();
         const wanted = new Set(ids);
+        const isLocked = this.ports.isLocked ?? (() => false);
         const starts: MarcherPosition[] = [];
         for (let i = 0; i < drawn.length; i++) {
-            if (!wanted.has(drawn[i]) || hidden?.[i]) continue;
+            // A locked item selected with others (from its menu or the Props panel) isn't moved,
+            // turned or boxed with them: only an unlock lets it move (props epic step 2)
+            if (!wanted.has(drawn[i]) || hidden?.[i] || isLocked(drawn[i]))
+                continue;
             starts.push({
                 id: drawn[i],
                 x: positions[i * 2],

@@ -86,6 +86,38 @@ describeDbTests("locked items", (it) => {
         await expectOnePosition(db, item.marcher_id, [100, 100]);
     });
 
+    it("a canvas edit of a locked item with moves keeps its moves, in no undo step", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const item = await newItem(db, "prop");
+        await moveMarchersInTarget({
+            db,
+            target: { kind: "range", start: 1, end: 17 },
+            moves: [{ marcherId: item.marcher_id, x: 300, y: 200 }],
+        });
+        await updateItems({
+            db,
+            modifiedItems: [{ itemId: item.id, locked: true }],
+        });
+        const moved = await assignmentsOf(db, item.marcher_id);
+        const steps = async () =>
+            (await db.select().from(schema.history_undo).all()).length;
+        const before = await steps();
+
+        await moveMarchersInTarget({
+            db,
+            target: { kind: "range", start: 17, end: 25 },
+            moves: [{ marcherId: item.marcher_id, x: 50, y: 60 }],
+        });
+
+        expect(await assignmentsOf(db, item.marcher_id)).toEqual(moved);
+        expect(await steps()).toBe(before);
+        expect((await resolverOf(db)).positionAt(item.marcher_id, 25)).toEqual([
+            300, 200,
+        ]);
+    });
+
     it("an edit of performers and a locked item moves the performers alone", async ({
         db,
         marchersAndPages,

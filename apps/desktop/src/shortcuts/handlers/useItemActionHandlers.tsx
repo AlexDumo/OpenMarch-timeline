@@ -30,7 +30,9 @@ import { showAssetRefValue } from "@/showAssets/ref";
  */
 export function useItemActionHandlers() {
     const { t } = useTranslate();
-    const selected = useSelectedMarchers()?.selectedMarchers ?? [];
+    const selectedContext = useSelectedMarchers();
+    const selected = selectedContext?.selectedMarchers ?? [];
+    const setSelectedMarchers = selectedContext?.setSelectedMarchers;
     const { data: items } = useQuery(allItemsQueryOptions());
     const item =
         selected.length === 1
@@ -69,6 +71,8 @@ export function useItemActionHandlers() {
             if (!item || item.locked) return;
             hideItemHandles();
             updateItems.mutate([{ itemId: item.id, locked: true }]);
+            // Locked, it can't be selected: let it go, as a click past it would
+            setSelectedMarchers?.([]);
         },
         {
             enabled: item !== undefined && !item.locked,

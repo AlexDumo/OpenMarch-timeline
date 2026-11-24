@@ -46,9 +46,10 @@ export function drawnSelectionBox(
     const item = items && selectedItemFrame(marchers, items);
     if (item) return item;
     const drawn: FieldPoint[] = [];
-    // Hidden marchers aren't drawn, and the editor's handles skip them too
+    // Hidden marchers aren't drawn, and the editor's handles skip them too, as they skip a
+    // locked item, which nothing moves
     for (let i = 0; i < selected.length; i++)
-        if (selected[i] && !hidden[i])
+        if (selected[i] && !hidden[i] && !items?.isLocked(marchers.ids[i]))
             drawn.push({ x: positions[i * 2], y: positions[i * 2 + 1] });
     const box = drawn.length < 2 ? null : boundsOf(drawn);
     // Clear of the order lane drawn on the selection (step 4j)

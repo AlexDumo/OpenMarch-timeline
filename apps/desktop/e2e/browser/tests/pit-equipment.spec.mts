@@ -99,6 +99,10 @@ test("a drag from a locked marimba leaves it put; unlocked from its right-click,
     await expect
         .poll(() => show.query("SELECT locked FROM items WHERE id = 1"))
         .toEqual([{ locked: 0 }]);
+    // The field has it unlocked too, so the drag takes it
+    await expect
+        .poll(() => drawnItems(show.page).then((items) => items[0]?.locked))
+        .toBe(false);
 
     await dragFrom(show.page, grab, { x: 30 * zoom, y: 0 });
     await waitForIdle(show.page);

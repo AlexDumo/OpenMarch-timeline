@@ -223,6 +223,14 @@ describe("FieldEditor with items", () => {
         );
     });
 
+    it("leaves a locked item selected with a marcher out of a drag of the marcher", () => {
+        const { editor, state } = setup({ locked: true, selected: [2, 1] });
+        editor.pointerDown(at(100, 100));
+        editor.pointerMove(at(120, 100));
+        editor.pointerUp(at(120, 100));
+        expect(state.drops).toEqual([[{ id: 1, x: 120, y: 100 }]]);
+    });
+
     it("opens the field's own menu at a right-click on an unlocked item", () => {
         const { editor, state, ports } = setup();
         editor.pointerDown(at(340, 115, { button: 2 }));

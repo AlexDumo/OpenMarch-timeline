@@ -78,6 +78,10 @@ test("a back podium unlocked from its right-click and dragged further back lands
     await expect
         .poll(() => show.query("SELECT locked FROM items WHERE id = 1"))
         .toEqual([{ locked: 0 }]);
+    // The field has it unlocked too, so the drag takes it
+    await expect
+        .poll(() => drawnItems(show.page).then((items) => items[0]?.locked))
+        .toBe(false);
     await dragFrom(show.page, grab, { x: 0, y: -60 * zoom });
     await waitForIdle(show.page);
     await expect

@@ -700,7 +700,7 @@ describeDbTests("Front ensemble panel", (it) => {
         expect(
             await screen.findByTestId("inspector-locked-selected"),
         ).toHaveTextContent(
-            "1 locked item selected. It stays where it is: right-click it and choose Unlock to move it.",
+            "1 locked item selected. It isn't moved here: right-click it and choose Unlock to move it.",
         );
         expect(
             screen.getByTestId("inspector-items-selected"),

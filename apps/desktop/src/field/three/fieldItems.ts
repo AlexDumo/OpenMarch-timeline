@@ -42,7 +42,7 @@ export type DrawnItemOutline = {
     readonly center: Pt;
     /** The prop's own color (`items.color`), or null for the theme's line color */
     readonly color: RgbaColor | null;
-    /** Locked to one position for the whole show (`items.locked`): drawn with a lock */
+    /** Locked (`items.locked`): not selected or moved on the field until it's unlocked */
     readonly locked: boolean;
     /** Where a player stands to play it, for a pit instrument (`playingSpotOf`), else null */
     readonly playingSpot: PlayingSpot | null;
@@ -104,7 +104,7 @@ export class FieldItems implements FieldItemSource {
 
     /**
      * The items by marcher id, their Outline changes, those the user hid, the
-     * colors of those that have one, those locked to one position, the models
+     * colors of those that have one, those locked, the models
      * of those that name one, and the show's imported models by `items.model`
      * value.
      */
