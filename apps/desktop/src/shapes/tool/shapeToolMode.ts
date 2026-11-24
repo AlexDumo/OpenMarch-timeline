@@ -233,7 +233,7 @@ const drawingOf = memoDrawing(
             stage: drawing ? ("drawing" as const) : ("open" as const),
             outline: shapeOutline(tool.kind, tool.params, n),
             openOutline: tool.kind.outlineOpen?.(tool.params, n) ?? false,
-            rows: tool.kind.rowOutlines?.(tool.params, n) ?? [],
+            rows: tool.kind.rowOutlines?.(tool.params, n, env.stepPx) ?? [],
             construction: tool.kind.construction?.(tool.params, n) ?? [],
             spots,
             walks: walks
@@ -245,7 +245,8 @@ const drawingOf = memoDrawing(
             // the keyboard is in its editor
             calm,
             gaps: gap ? [gap] : [],
-            emptySpots: tool.kind.emptySpots?.(tool.params, n) ?? [],
+            emptySpots:
+                tool.kind.emptySpots?.(tool.params, n, env.stepPx) ?? [],
             labels:
                 n <= SPOT_LABEL_LIMIT
                     ? targets.map((t) => ({

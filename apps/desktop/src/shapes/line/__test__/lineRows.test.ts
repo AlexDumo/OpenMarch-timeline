@@ -15,6 +15,9 @@ import {
     type ToolState,
 } from "../../tool/toolMachine";
 import type { ShapeContext, XY } from "../../types";
+import { flipShape } from "../../frame/gestures";
+import { pivotOf } from "../../frame/pivot";
+import { assignSlots } from "../../assign";
 
 /**
  * Rows of a line (spec #1190): the selected marchers split into rows alongside the drawn line, in
@@ -403,5 +406,104 @@ describe("rows of an arc", () => {
                 y: expect.closeTo(s.y - 2 * STEP, 6),
             });
         }
+    });
+});
+
+describe("rows kept through other edits", () => {
+    const flipped = (t: ToolState, axis: "across" | "deep") =>
+        edit(
+            t,
+            flipShape(
+                lineTool,
+                t.params,
+                t.spots,
+                axis,
+                pivotOf(t.params),
+                env,
+            ),
+            ctx,
+        );
+    const slanted = (t: ToolState, steps: string) =>
+        edit(t, rows.slant.type(t.params, t.spots, steps, env), ctx);
+
+    it("stay on their side of the field when the line is flipped across, the slant mirrored", () => {
+        const t = slanted(added(across(8), "far"), "1");
+        // Behind, each row a step further right than the one in front
+        expect(rowAt(t, 180)[0]! - rowAt(t, 200)[0]!).toBeCloseTo(STEP);
+        const f = flipped(t, "across");
+        expect(rowAt(f, 220)).toEqual([]);
+        expect(rowAt(f, 180)).toHaveLength(4);
+        expect(names(f)).toEqual(names(t));
+        // A mirror: the row behind now a step further left
+        expect(rowAt(f, 180)[0]! - rowAt(f, 200)[0]!).toBeCloseTo(-STEP);
+    });
+
+    it("go to the other side when the line is flipped front to back", () => {
+        const f = flipped(added(across(8), "far"), "deep");
+        expect(rowAt(f, 180)).toEqual([]);
+        expect(rowAt(f, 220)).toHaveLength(4);
+    });
+
+    it("keep everyone in their row with Keep order", () => {
+        const t = added(across(8), "far");
+        const slots = lineTool.shape.generate(t.params, 8, ctx);
+        const got = assignSlots({
+            kind: lineTool.shape,
+            params: t.params,
+            slots,
+            marchers: slots.map((_, i) => ({
+                id: i + 1,
+                at: { x: 0, y: 0 },
+                drillRank: i,
+                along: i,
+            })),
+            mode: "keep",
+            ctx,
+        });
+        expect(got).toEqual(slots.map((_, i) => i));
+    });
+
+    it("order an arc's spots row by row however far it bows", () => {
+        let t = drawn(12, { x: 100, y: 200 }, { x: 200, y: 200 }, arcTool);
+        t = edit(t, arcTool.rows!.add(t.params, 12, "far", env), ctx);
+        t = edit(t, arcTool.rows!.apart.type(t.params, 12, "1", env), ctx);
+        const slots = arcTool.shape.generate(t.params, 12, ctx);
+        const keys = slots.map((s) =>
+            arcTool.shape.orderKey(t.params, s, ctx, 12),
+        );
+        const sorted = slots
+            .map((s, i) => ({ row: s.row!, key: keys[i]! }))
+            .sort((a, b) => a.key[0]! - b.key[0]! || a.key[1]! - b.key[1]!)
+            .map((e) => e.row);
+        // Every spot of one row before the next: the row changes once
+        const changes = sorted.filter((r, i) => i > 0 && r !== sorted[i - 1]);
+        expect(changes).toHaveLength(1);
+    });
+
+    it("let the drawn line go back on its ends once the other rows are removed", () => {
+        let t = added(drawn(4, { x: 100, y: 200 }, { x: 160, y: 200 }), "far");
+        const view = rows.view(t.params, t.spots)!;
+        const own = view.rows.find((r) => r.side === null)!.index;
+        const other = view.rows.find((r) => r.side !== null)!.index;
+        t = edit(t, rows.shift(t.params, t.spots, own, 1), ctx);
+        t = edit(t, rows.remove(t.params, t.spots, other), ctx);
+        expect(paramsOf(t).rows).toBeUndefined();
+        expect(rowAt(t, 200)).toEqual(closeTo([100, 120, 140, 160]));
+    });
+
+    it("are grabbed where a slant moves them", () => {
+        const t = slanted(added(across(8), "far"), "4");
+        const back = rowAt(t, 180);
+        expect(
+            lineTool.contains(t.params, 8, { x: back.at(-1)!, y: 180 }, env),
+        ).toBe(true);
+        expect(
+            lineTool.contains(
+                t.params,
+                8,
+                { x: back.at(-1)! + 30, y: 180 },
+                env,
+            ),
+        ).toBe(false);
     });
 });

@@ -572,11 +572,13 @@ export interface ToolRows<P> {
      * The gap its Rows apart and Slant numbers set, as the field draws it while they're engaged:
      * from an end spot of the drawn row straight across to the next row (`corner`), then along it
      * by the slant (`to`, `corner` itself with none), in field units; `outward` a unit vector away
-     * from the block there. Null with only the drawn row.
+     * from the block there. Null with only the drawn row. `stepPx` places the spots as the shape
+     * does (a measured line's centered run sits on the grid).
      */
     gap(
         params: P,
         n: number,
+        stepPx?: number,
     ): { from: XY; corner: XY; to: XY; outward: XY } | null;
 }
 
@@ -796,18 +798,22 @@ export interface ToolKind<P> {
     readonly loose?: boolean;
     /**
      * Spots nobody takes (loose dots pasted onto fewer marchers, #961): drawn as empty rings
-     * while it's open
+     * while it's open. `stepPx` places them as the shape does.
      */
-    emptySpots?(params: P, n: number): readonly XY[];
+    emptySpots?(params: P, n: number, stepPx?: number): readonly XY[];
     /** The params as placing saves them, when the open shape holds more than a recipe keeps */
     forPlacing?(params: P): P;
     /** Its Rows menu (spec #1190); absent for a kind without */
     readonly rows?: ToolRows<P>;
     /**
      * The outlines of its rows besides the drawn one, drawn like its own outline (spec #1190).
-     * None when absent.
+     * None when absent. `stepPx` places them as the shape does.
      */
-    rowOutlines?(params: P, n: number): readonly (readonly XY[])[];
+    rowOutlines?(
+        params: P,
+        n: number,
+        stepPx?: number,
+    ): readonly (readonly XY[])[];
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

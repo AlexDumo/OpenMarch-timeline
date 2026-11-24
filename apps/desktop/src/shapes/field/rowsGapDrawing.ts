@@ -32,7 +32,7 @@ export function rowsGapDrawing(
     stepPx: number,
 ): { rowsGap?: RowsGapMark } {
     if (!engaged || !kind.rows) return {};
-    const gap = kind.rows.gap(params, n);
+    const gap = kind.rows.gap(params, n, stepPx);
     if (!gap) return {};
     const apartSteps = kind.rows.apart.value?.(params, n, stepPx) ?? 0;
     const slanted =

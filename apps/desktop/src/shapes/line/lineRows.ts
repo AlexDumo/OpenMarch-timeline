@@ -18,7 +18,7 @@ import {
     type LineRow,
     type LineRows,
 } from "./rowsParams";
-import { lineOutline, type LineParams } from "./lineGeometry";
+import { lineInterval, lineOutline, type LineParams } from "./lineGeometry";
 import { lineFillSpots } from "./lineFill";
 
 /**
@@ -176,19 +176,60 @@ export function layRows(
     });
 }
 
-/** Where row `offset` sits from the drawn line, across it */
-const acrossOf = (p: P, rows: LineRows, offset: number): XY =>
-    scale(rowFrame(p).left, offset * rows.apart);
+/** Whether `point` is within `reach` of the run through `spots` */
+function nearRun(spots: readonly XY[], point: XY, reach: number): boolean {
+    const near = (a: XY, b: XY) => {
+        const d = sub(b, a);
+        const len2 = dot(d, d);
+        const t =
+            len2 > 0
+                ? Math.max(0, Math.min(1, dot(sub(point, a), d) / len2))
+                : 0;
+        const q = add(a, scale(d, t));
+        return Math.hypot(point.x - q.x, point.y - q.y) <= reach;
+    };
+    if (spots.length === 1) return near(spots[0]!, spots[0]!);
+    return spots.some((a, i) => i > 0 && near(spots[i - 1]!, a));
+}
+
+/**
+ * The rows of a line just mirrored, back on the side of the field they were on. A mirror keeps
+ * the line's points in order but swaps its left-hand side for its right, so the rows go in the
+ * other order across it and lean the other way; their marchers, written down as they were
+ * before (`before`), keep their rows.
+ */
+export function mirrorRows(before: P, p: P, n: number): P {
+    const rows = rowsOf(p);
+    if (!rows) return p;
+    // Shared out evenly, which row is short goes by front and back, which a mirror may swap
+    const counts =
+        rows.list[0]?.count === undefined ? counted(before, rows, n) : null;
+    const list = rows.list
+        .map((row, i) => (counts ? { ...row, count: counts[i]! } : row))
+        .reverse();
+    return {
+        ...p,
+        rows: {
+            ...rows,
+            list,
+            drawn: list.length - 1 - rows.drawn,
+            ...(rows.slant ? { slant: -rows.slant } : {}),
+        },
+    };
+}
 
 // ── Editing the rows ────────────────────────────────────────────────────────────────────
 
 /** `p` with `rows` set, or taken off when there's only the drawn line left, as drawn */
 export function withRowsSet(p: P, rows: LineRows | undefined): P {
+    // The drawn line alone sits on its own ends: a half spot left over from other rows would
+    // push it past them, with no arrows left to bring it back
+    if (rows?.list.length === 1 && rows.list[0]!.shift) {
+        const { shift: _was, ...row } = rows.list[0]!;
+        rows = { ...rows, list: [row] };
+    }
     const plain =
-        !rows ||
-        (rows.list.length === 1 &&
-            !rows.list[0]!.shift &&
-            !rows.list[0]!.empty?.length);
+        !rows || (rows.list.length === 1 && !rows.list[0]!.empty?.length);
     if (!plain) return { ...p, rows };
     if (p.rows === undefined) return p;
     const { rows: _gone, ...rest } = p;
@@ -580,10 +621,13 @@ function stepsParam(field: "apart" | "slant"): ToolParam<P> {
 export function rowsGap(
     p: P,
     n: number,
+    stepPx?: number,
 ): { from: XY; corner: XY; to: XY; outward: XY } | null {
     const rows = rowsOf(p);
     if (!rows || rows.list.length < 2) return null;
-    const drawn = layRows(p, n)[rows.drawn]!;
+    const drawn = layRows(p, n, (k) => lineFillSpots(p, k, stepPx))[
+        rows.drawn
+    ]!;
     if (drawn.spots.length === 0) return null;
     const { along, left, sign } = rowFrame(p);
     // Row +1 is on the line's left-hand side: behind (or to the left) when `sign` is +1
@@ -720,9 +764,23 @@ export function rowsShape(shape: ShapeKind<P>): ShapeKind<P> {
         },
         generate: (p, n, ctx) => {
             if (!rowsOf(p)) return shape.generate(p, n, ctx);
+            // `s` counts the spots row by row, as they're listed: Keep order lays marchers on
+            // in that order, so an edit of the rows keeps everyone in their row. Each row's own
+            // distance along would tie across rows and deal the marchers out column by column.
+            let s = 0;
             return layRows(p, n, spotsFor(shape, p, ctx)).flatMap((r) =>
                 r.spots.flatMap((slot, j): Slot[] =>
-                    r.filled[j] ? [{ ...slot, row: r.index, col: j }] : [],
+                    r.filled[j]
+                        ? [
+                              {
+                                  x: slot.x,
+                                  y: slot.y,
+                                  s: s++,
+                                  row: r.index,
+                                  col: j,
+                              },
+                          ]
+                        : [],
                 ),
             );
         },
@@ -732,6 +790,11 @@ export function rowsShape(shape: ShapeKind<P>): ShapeKind<P> {
             if (!rows) return shape.orderKey(p, point, ctx, n);
             const { along, left, sign } = rowFrame(p);
             const from = sub(point, lineOutline(p)[0]!);
+            // A spot knows its row; worked out from where it is, the bow of a curve would put
+            // the middle of one row in the next
+            const slot = point as Slot;
+            if (slot.row !== undefined && slot.col !== undefined)
+                return [(slot.row - rows.drawn) * sign, slot.col * sign];
             const offset = Math.round(dot(from, left) / rows.apart);
             return [offset * sign, dot(from, along) * sign];
         },
@@ -894,22 +957,28 @@ export function withRows(kind: ToolKind<P>): ToolKind<P> {
               }
             : {}),
         contains: (p, n, point, env) => {
-            const rows = rowsOf(p);
-            if (!rows) return kind.contains(p, n, point, env);
-            return rows.list.some((_, i) =>
-                kind.contains(
-                    p,
-                    per(p, n),
-                    sub(point, acrossOf(p, rows, i - rows.drawn)),
-                    env,
-                ),
+            if (!rowsOf(p)) return kind.contains(p, n, point, env);
+            if (kind.contains(p, per(p, n), point, env)) return true;
+            // The other rows where they're drawn, moved along by their half spots and the slant,
+            // within the drawn line's own reach
+            const half = lineInterval(p, per(p, n)) / 2;
+            const reach = env
+                ? Math.max(Math.min(half, env.stepPx), env.hitRadius)
+                : half;
+            return layRows(p, n, (k) => lineFillSpots(p, k, env?.stepPx)).some(
+                (r) => r.offset !== 0 && nearRun(r.spots, point, reach),
             );
         },
         move: (b, n, delta, env) =>
             keep(b, kind.move(b, per(b, n), delta, env)),
         frameOf: (p, n) => kind.frameOf(p, per(p, n)),
-        withFrame: (p, n, frame) =>
-            keep(p, kind.withFrame(p, per(p, n), frame)),
+        withFrame: (p, n, frame) => {
+            const next = keep(p, kind.withFrame(p, per(p, n), frame));
+            const was = kind.frameOf(p, per(p, n));
+            const flips =
+                (frame.flipX !== frame.flipY) !== (was.flipX !== was.flipY);
+            return flips ? mirrorRows(p, next, n) : next;
+        },
         ...(kind.turnOf
             ? { turnOf: (p: P, n: number) => kind.turnOf!(p, per(p, n)) }
             : {}),
@@ -945,18 +1014,19 @@ export function withRows(kind: ToolKind<P>): ToolKind<P> {
             ? { forPlacing: (p: P) => keep(p, kind.forPlacing!(p)) }
             : {}),
         // Every row's spots left empty
-        emptySpots: (p, n) => {
-            if (!rowsOf(p)) return kind.emptySpots?.(p, n) ?? [];
-            return layRows(p, n).flatMap((r) =>
-                r.spots
-                    .filter((_, j) => !r.filled[j])
-                    .map(({ x, y }) => ({ x, y })),
+        emptySpots: (p, n, stepPx) => {
+            if (!rowsOf(p)) return kind.emptySpots?.(p, n, stepPx) ?? [];
+            return layRows(p, n, (k) => lineFillSpots(p, k, stepPx)).flatMap(
+                (r) =>
+                    r.spots
+                        .filter((_, j) => !r.filled[j])
+                        .map(({ x, y }) => ({ x, y })),
             );
         },
         rows: LINE_ROWS,
-        rowOutlines: (p, n) => {
+        rowOutlines: (p, n, stepPx) => {
             if (!rowsOf(p)) return [];
-            return layRows(p, n)
+            return layRows(p, n, (k) => lineFillSpots(p, k, stepPx))
                 .filter((r) => r.offset !== 0 && r.spots.length > 0)
                 .map((r) => r.spots.map(({ x, y }) => ({ x, y })));
         },
