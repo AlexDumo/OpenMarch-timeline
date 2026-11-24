@@ -1528,7 +1528,7 @@ test("change: Shift+Enter, or Shift-click on Place, puts the marchers on the spo
     const place = page.getByTestId("shape-editor-place");
     await place.hover();
     await expect(page.getByRole("tooltip")).toContainText(
-        "place the marchers without keeping the shape",
+        "place without keeping the shape",
     );
     await place.click({ modifiers: ["Shift"] });
     await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
