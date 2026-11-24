@@ -125,8 +125,11 @@ export function sideOf(
 }
 
 /** Whether end `end` of `box` is in one of `links` */
-const linkedEnd = (box: PlacedBox, end: LineEnd, links: readonly ShapeLink[]) =>
-    linksOf(box, links).some((l) => sideOf(box, l).end === end);
+export const linkedEnd = (
+    box: PlacedBox,
+    end: LineEnd,
+    links: readonly ShapeLink[],
+): boolean => linksOf(box, links).some((l) => sideOf(box, l).end === end);
 
 /** Where a dragged end will attach (`attachSnap`) */
 export interface AttachSnap {
@@ -137,13 +140,84 @@ export interface AttachSnap {
     readonly ownerEnd: LineEnd;
     /** The joint: the owner's end */
     readonly at: XY;
+    /**
+     * The shape to stretch onto the joint instead of the one dragged, when the kind's own rule for
+     * a dragged end left that end out of reach though the pointer is in it (an Arc's end slides
+     * along its chord): the shape as it was at the press, turned and scaled about its far end
+     */
+    readonly from?: LineParams;
+}
+
+/** An end of an open Line, Curve or Arc shown on its own page that a dragged end can attach to */
+interface FreeEnd {
+    readonly owner: PlacedBox<LineParams>;
+    readonly ownerEnd: LineEnd;
+    readonly at: XY;
+}
+
+/**
+ * The ends `box` can attach to: each end, not linked or attached, of another open Line, Curve or
+ * Arc shown on its own page at `beat`, on the same move. None when `box` itself can't link.
+ */
+export function freeEnds(
+    box: PlacedBox,
+    boxes: readonly PlacedBox[],
+    links: readonly ShapeLink[],
+    beat: number,
+): FreeEnd[] {
+    if (!isLinkable(box) || !onOwnPage(box, beat)) return [];
+    const out: FreeEnd[] = [];
+    for (const owner of boxes) {
+        if (
+            owner.recipe.id === box.recipe.id ||
+            !isLinkable(owner) ||
+            owner.recipe.timelineId !== box.recipe.timelineId ||
+            !onOwnPage(owner, beat)
+        )
+            continue;
+        for (const ownerEnd of LINE_ENDS) {
+            if (
+                owner.params.attach?.[ownerEnd] ||
+                linkedEnd(owner, ownerEnd, links)
+            )
+                continue;
+            out.push({ owner, ownerEnd, at: endPoint(owner.params, ownerEnd) });
+        }
+    }
+    return out;
+}
+
+/**
+ * Which end of `box` (as `base`) its handle `key` is, if one is: the handle standing on it. Null
+ * for any other handle (a Line's middle point, an Arc's middle), or a shape that can't link.
+ */
+export function handleEnd(
+    box: PlacedBox,
+    base: unknown,
+    key: string,
+): LineEnd | null {
+    if (!isLinkable(box)) return null;
+    const p = base as LineParams;
+    if (!hasEnds(p)) return null;
+    const handle = box.kind
+        .handles(p as never, box.spots)
+        .find((h) => h.key === key);
+    if (!handle) return null;
+    return (
+        LINE_ENDS.find((end) => near(handle.at, endPoint(p, end), 1e-6)) ?? null
+    );
 }
 
 /**
  * Where `box`, drawn now with `params` (mid-drag), would attach on release: an end of it that the
  * drag moved and isn't linked, within `radius` of a free end of another open Line, Curve or Arc
- * shown on its own page, on the same move. The nearest pair wins. Null when there's none, when
- * `box` itself can't link, or for anything but a move or an end's drag (`moved`).
+ * shown on its own page, on the same move ({@link freeEnds}). The nearest pair wins. Null when
+ * there's none, when `box` itself can't link, or for anything but a move or an end's drag.
+ *
+ * An end's drag (`dragged`: which end, the pointer, and the shape at the press) is measured from
+ * the pointer, whatever the kind's own rule for that end did with it: an Arc's end slides along
+ * its chord, so it may stand well off the pointer, yet the pointer on another shape's end attaches
+ * it there (`from`: the press's shape is stretched onto the joint, its form kept).
  */
 export function attachSnap({
     box,
@@ -152,6 +226,7 @@ export function attachSnap({
     links,
     radius,
     beat,
+    dragged,
 }: {
     box: PlacedBox;
     params: unknown;
@@ -159,47 +234,42 @@ export function attachSnap({
     links: readonly ShapeLink[];
     radius: number;
     beat: number;
+    dragged?: { end: LineEnd; pointer: XY; base: unknown };
 }): AttachSnap | null {
-    if (!isLinkable(box) || !onOwnPage(box, beat)) return null;
+    if (!isLinkable(box)) return null;
     const p = params as LineParams;
     if (!hasEnds(p)) return null;
+    const targets = freeEnds(box, boxes, links, beat);
+    if (targets.length === 0) return null;
     let best: (AttachSnap & { d: number }) | null = null;
-    for (const end of LINE_ENDS) {
+    for (const end of dragged ? [dragged.end] : LINE_ENDS) {
         if (linkedEnd(box, end, links) || p.attach?.[end]) continue;
         const was = endPoint(box.params, end);
-        const from = endPoint(p, end);
+        const from = dragged ? dragged.pointer : endPoint(p, end);
         // Only an end the drag moved
-        if (near(was, from, 1e-9)) continue;
-        for (const owner of boxes) {
-            if (
-                owner.recipe.id === box.recipe.id ||
-                !isLinkable(owner) ||
-                owner.recipe.timelineId !== box.recipe.timelineId ||
-                !onOwnPage(owner, beat)
-            )
-                continue;
-            for (const ownerEnd of LINE_ENDS) {
-                if (
-                    owner.params.attach?.[ownerEnd] ||
-                    linkedEnd(owner, ownerEnd, links)
-                )
-                    continue;
-                const at = endPoint(owner.params, ownerEnd);
-                const d = Math.hypot(at.x - from.x, at.y - from.y);
-                if (d <= radius && (!best || d < best.d))
-                    best = { end, owner, ownerEnd, at, d };
-            }
+        if (!dragged && near(was, from, 1e-9)) continue;
+        for (const target of targets) {
+            const d = Math.hypot(target.at.x - from.x, target.at.y - from.y);
+            if (d <= radius && (!best || d < best.d))
+                best = { end, ...target, d };
         }
     }
     if (!best) return null;
     const { d: _d, ...snap } = best;
+    // The kind's end out of reach though the pointer's in it: stretch the press's shape instead
+    if (
+        dragged &&
+        !near(endPoint(p, snap.end), snap.at, radius) &&
+        hasEnds(dragged.base as LineParams)
+    )
+        return { ...snap, from: dragged.base as LineParams };
     return snap;
 }
 
 /**
  * `params` attached as `snap` says: the end lands exactly on the joint (the whole line moved
- * there when `whole`, its other end staying put otherwise) and stores the link, so it holds no
- * marcher there
+ * there when `whole`, its other end staying put otherwise, stretched from `snap.from` when it
+ * says) and stores the link, so it holds no marcher there
  */
 export function attachedParams(
     params: LineParams,
@@ -209,7 +279,7 @@ export function attachedParams(
     const from = endPoint(params, snap.end);
     const landed = whole
         ? shiftLine(params, { x: snap.at.x - from.x, y: snap.at.y - from.y })
-        : stretchEnds(params, { [snap.end]: snap.at });
+        : stretchEnds(snap.from ?? params, { [snap.end]: snap.at });
     return withAttach(landed, snap.end, {
         recipe: snap.owner.recipe.id,
         end: snap.ownerEnd,

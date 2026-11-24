@@ -4,7 +4,7 @@ import tolgee from "@/global/singletons/Tolgee";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { useBoxSelectionStore } from "./boxSelectionStore";
-import { detachLinks } from "./detachLinks";
+import { detachLabel, detachLinks } from "./detachLinks";
 import type { PlacedBox } from "./placedBox";
 import {
     placedBoxesAt,
@@ -77,6 +77,19 @@ export function useDetachLinks(
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [ready, enabled, selectedIds, recipes, ends, version, beat],
     );
+    // Named from the shape selected whole, if one side of the link is
+    const label = useMemo(() => {
+        if (links.length === 0) return undefined;
+        const selected = new Set(selectedIds);
+        const from = links
+            .flatMap((l) => [l.attacher, l.owner])
+            .find(
+                (b) =>
+                    b.recipe.members.length > 0 &&
+                    b.recipe.members.every((m) => selected.has(m.marcherId)),
+            );
+        return detachLabel(links, from);
+    }, [links, selectedIds]);
     useActionHandler(
         "shapeDetach",
         () => {
@@ -84,6 +97,7 @@ export function useDetachLinks(
         },
         {
             enabled: links.length > 0,
+            label,
             ignoreRepeat: true,
             disabledReason:
                 ready && enabled

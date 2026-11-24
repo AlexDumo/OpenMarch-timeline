@@ -208,7 +208,7 @@
             "groupKeywords": "group shape freeze as is keep together combine",
             "ungroup": "Shape: Ungroup",
             "ungroupKeywords": "ungroup shape break apart release separate",
-            "detach": "Detach",
+            "detach": "Detach linked shape",
             "detachKeywords": "detach unlink linked joint joined separate line curve arc shape",
             "enterBox": "Select only this marcher",
             "centerPivot": "Shape: Move the pivot back to the center",
@@ -2603,7 +2603,11 @@
         },
         "links": {
             "jointMenu": "Joint marcher: {shape}'s",
-            "detachNeedsLink": "Select a linked line, curve or arc to detach it"
+            "detachNeedsLink": "Select a linked line, curve or arc to detach it",
+            "detachFrom": "Detach from {shape}",
+            "detachCount": "Detach {count} linked shapes",
+            "releaseTip": "Release to link to {shape}",
+            "dropTip": "Drop on another shape's end to link"
         }
     },
     "tags": {

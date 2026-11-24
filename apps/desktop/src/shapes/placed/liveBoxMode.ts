@@ -53,12 +53,16 @@ import {
     attachedParams,
     attachSnap,
     followersOf,
+    freeEnds,
+    handleEnd,
     isLinkable,
     linkAt,
+    linkedEnd,
     liveLinks,
     type AttachSnap,
     type ShapeLink,
 } from "./shapeLinks";
+import { linkDragTip, type LinkTip } from "./linkTip";
 import { clearLinkDrag, useLinkDragStore } from "./linkDragStore";
 import { openJointMenu } from "./detachLinks";
 import { openHandleMenu } from "../field/handleMenu";
@@ -77,8 +81,11 @@ import {
     guideGesture,
 } from "../field/shapePointer";
 
-/** How far from another shape's end a dragged end attaches to it, in handle reaches (#1235) */
-const ATTACH_REACH = 1.5;
+/**
+ * How far from another shape's end the pointer dragging an end (or a moved shape's end) attaches
+ * it, in handle reaches (#1235): 16 px for a mouse, further for a pen or finger, at any zoom
+ */
+const ATTACH_REACH = 1.6;
 
 /** What a press that reaches inside keeps for the box: its pivot, handles and knob */
 const OWN_CONTROLS: ReadonlySet<ShapeTarget["type"]> = new Set([
@@ -107,92 +114,102 @@ interface Shown {
     readonly groupMenu: GroupMenuState | null;
     /** A number setting the kind's step is engaged: the step drawn (owner on #596) */
     readonly stepShown: boolean;
+    /** What the readout by the pointer says about linking the dragged end (#1235) */
+    readonly linkTip: LinkTip | null;
 }
 
-const drawingOf = memoDrawing(
-    ({
-        live: saved,
-        preview,
+/** What the selected placed shape draws, `shown` */
+const drawShown = ({
+    live: saved,
+    preview,
+    calm,
+    scrubbing,
+    groupMenu,
+    stepShown,
+}: Shown) => {
+    const live =
+        preview && !saved.gesture ? { ...saved, params: preview } : saved;
+    const changing = live.gesture !== null || preview !== null;
+    const field = currentShapeField();
+    if (!field) return null;
+    const { kind, spots: n } = live.box;
+    const ctx = shapeContextFor(field);
+    // Each member keeps their spot (or the box is laid out again for a new count across); a
+    // spread drafts its spots while a handle is dragged (#439), and the commit lays them out
+    const targets = changing
+        ? liveTargets(
+              live.box,
+              live.params,
+              live.gesture ? { ...ctx, draft: true } : ctx,
+          ).members
+        : [];
+    const names = drillNumbers(field);
+    const env = toolEnvFor(field);
+    return {
+        stage: "open" as const,
+        outline: shapeOutline(kind, live.params, n),
+        openOutline: kind.outlineOpen?.(live.params, n) ?? false,
+        construction: kind.construction?.(live.params, n) ?? [],
+        // While a gesture goes, where the marchers will stand, and who
+        spots: targets,
+        walks: [],
+        labels:
+            targets.length <= SPOT_LABEL_LIMIT
+                ? targets.map((t) => ({
+                      at: t,
+                      text: names.get(t.marcherId) ?? "",
+                  }))
+                : [],
         calm,
-        scrubbing,
-        groupMenu,
-        stepShown,
-    }: Shown) => {
-        const live =
-            preview && !saved.gesture ? { ...saved, params: preview } : saved;
-        const changing = live.gesture !== null || preview !== null;
-        const field = currentShapeField();
-        if (!field) return null;
-        const { kind, spots: n } = live.box;
-        const ctx = shapeContextFor(field);
-        // Each member keeps their spot (or the box is laid out again for a new count across); a
-        // spread drafts its spots while a handle is dragged (#439), and the commit lays them out
-        const targets = changing
-            ? liveTargets(
-                  live.box,
+        ...handleDrawing(kind, live.params, n, live.selected),
+        gaps: gapsOf(kind, live.params, n),
+        ...stepDrawing(
+            kind,
+            live.params,
+            n,
+            stepShown,
+            live.gesture,
+            env.stepPx,
+        ),
+        ...frameDrawing(
+            kind,
+            live.params,
+            n,
+            live.gesture,
+            live.pointer ?? null,
+            env,
+        ),
+        ...guideDrawing(
+            kind,
+            live.params,
+            n,
+            targets,
+            guideGesture(live.gesture, scrubbing),
+            env,
+            field,
+        ),
+        // The members stand on the spots, laid out in order along the shape
+        ...(groupMenu
+            ? groupDrawing(
+                  kind,
                   live.params,
-                  live.gesture ? { ...ctx, draft: true } : ctx,
-              ).members
-            : [];
-        const names = drillNumbers(field);
-        const env = toolEnvFor(field);
-        return {
-            stage: "open" as const,
-            outline: shapeOutline(kind, live.params, n),
-            openOutline: kind.outlineOpen?.(live.params, n) ?? false,
-            construction: kind.construction?.(live.params, n) ?? [],
-            // While a gesture goes, where the marchers will stand, and who
-            spots: targets,
-            walks: [],
-            labels:
-                targets.length <= SPOT_LABEL_LIMIT
-                    ? targets.map((t) => ({
-                          at: t,
-                          text: names.get(t.marcherId) ?? "",
-                      }))
-                    : [],
-            calm,
-            ...handleDrawing(kind, live.params, n, live.selected),
-            gaps: gapsOf(kind, live.params, n),
-            ...stepDrawing(
-                kind,
-                live.params,
-                n,
-                stepShown,
-                live.gesture,
-                env.stepPx,
-            ),
-            ...frameDrawing(
-                kind,
-                live.params,
-                n,
-                live.gesture,
-                live.pointer ?? null,
-                env,
-            ),
-            ...guideDrawing(
-                kind,
-                live.params,
-                n,
-                targets,
-                guideGesture(live.gesture, scrubbing),
-                env,
-                field,
-            ),
-            // The members stand on the spots, laid out in order along the shape
-            ...(groupMenu
-                ? groupDrawing(
-                      kind,
-                      live.params,
-                      n,
-                      kind.shape.generate(live.params, n, ctx),
-                      groupMenu,
-                      env.stepPx,
-                  )
-                : {}),
-        };
-    },
-);
+                  n,
+                  kind.shape.generate(live.params, n, ctx),
+                  groupMenu,
+                  env.stepPx,
+              )
+            : {}),
+    };
+};
+
+/** The shape as drawn, with what the pointer's readout says about linking its end (#1235) */
+const drawingOf = memoDrawing((shown: Shown) => {
+    const drawing = drawShown(shown);
+    return (
+        drawing &&
+        linkDragTip(drawing, shown.live.pointer ?? null, shown.linkTip)
+    );
+});
 
 /** The live mode of the selected placed shape, for its keys; null with none selected */
 let activeLive: LiveBoxMode | null = null;
@@ -255,6 +272,8 @@ export class LiveBoxMode implements FieldMode {
     } | null = null;
     /** Where the dragged end attaches on release, shown by a ring there (#1235) */
     private snap: AttachSnap | null = null;
+    /** What the readout by the pointer says about linking, mid-drag (#1235) */
+    private linkTip: LinkTip | null = null;
 
     constructor(
         box: PlacedBox,
@@ -402,27 +421,47 @@ export class LiveBoxMode implements FieldMode {
      * held: a way to place without attaching, as drawing tools have), and the shapes linked to
      * this one follow, their outlines and marchers drawn where they'll be
      */
-    private followLinks(constrain: boolean): void {
+    private followLinks(constrain: boolean, pointer: XY): void {
         const scene = this.linkScene;
         const g = this.live.gesture;
         const field = currentShapeField();
         if (!scene || !g || !field) {
             this.snap = null;
+            this.linkTip = null;
             clearLinkDrag();
             return;
         }
         const whole = g.type === "move";
+        const box = this.live.box;
+        // An end's drag is measured from the pointer, whatever the kind does with the end
+        const end = g.type === "handle" ? handleEnd(box, g.base, g.key) : null;
+        const free =
+            end !== null &&
+            !linkedEnd(box, end, scene.links) &&
+            !(g.base as LineParams).attach?.[end];
         this.snap =
             (whole || g.type === "handle") && !constrain
                 ? attachSnap({
-                      box: this.live.box,
+                      box,
                       params: this.live.params,
                       boxes: scene.boxes,
                       links: scene.links,
-                      radius: toolEnvFor(field).hitRadius * ATTACH_REACH,
+                      radius:
+                          toolEnvFor(field, undefined, { kind: this.pressKind })
+                              .hitRadius * ATTACH_REACH,
                       beat: scene.beat,
+                      ...(end
+                          ? { dragged: { end, pointer, base: g.base } }
+                          : {}),
                   })
                 : null;
+        this.linkTip = this.snap
+            ? { kind: "release", shape: this.snap.owner.kind.shape.label }
+            : free &&
+                !constrain &&
+                freeEnds(box, scene.boxes, scene.links, scene.beat).length > 0
+              ? { kind: "drop" }
+              : null;
         if (this.snap)
             this.live = {
                 ...this.live,
@@ -453,6 +492,7 @@ export class LiveBoxMode implements FieldMode {
     private endLinks(): void {
         this.linkScene = null;
         this.snap = null;
+        this.linkTip = null;
         clearLinkDrag();
     }
 
@@ -465,7 +505,7 @@ export class LiveBoxMode implements FieldMode {
             pointer.field,
             toolEnvFor(field, roles, { kind: pointer.kind }),
         );
-        this.followLinks(roles?.constrain ?? false);
+        this.followLinks(roles?.constrain ?? false, pointer.field);
         this.emit();
     }
 
@@ -478,7 +518,7 @@ export class LiveBoxMode implements FieldMode {
             at,
             toolEnvFor(field, roles, { kind: this.pressKind }),
         );
-        this.followLinks(roles.constrain);
+        this.followLinks(roles.constrain, at);
         this.emit();
     }
 
@@ -538,7 +578,12 @@ export class LiveBoxMode implements FieldMode {
               )
             : null;
         if (joint) {
-            openJointMenu(joint, pointer.screen, this.queryClient);
+            openJointMenu(
+                joint,
+                this.live.box,
+                pointer.screen,
+                this.queryClient,
+            );
             return true;
         }
         const { kind, spots } = this.live.box;
@@ -648,7 +693,8 @@ export class LiveBoxMode implements FieldMode {
             this.shown.pivotPreview !== pivotPreview ||
             this.shown.scrubbing !== scrubbing ||
             this.shown.groupMenu !== groupMenu ||
-            this.shown.stepShown !== stepShown
+            this.shown.stepShown !== stepShown ||
+            this.shown.linkTip !== this.linkTip
         )
             this.shown = {
                 live: this.live,
@@ -658,6 +704,7 @@ export class LiveBoxMode implements FieldMode {
                 scrubbing,
                 groupMenu,
                 stepShown,
+                linkTip: this.linkTip,
             };
         return drawingOf(this.shown);
     }

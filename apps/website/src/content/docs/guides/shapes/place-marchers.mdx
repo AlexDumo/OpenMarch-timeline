@@ -46,13 +46,13 @@ Drag inside the shape, or press the arrow keys, to move it. Its handles and numb
 
 Placed lines, curves and arcs on the same page can be linked at their ends, like the stem and hook of a J, and still stay separate shapes: each keeps its own marchers and its own interval, and clicking one selects only that one.
 
-To link two, select one and drag one of its ends (or the whole shape) onto an end of the other. A ring shows on that end when yours will attach; let go and it does. Hold <Kbd keys="Mod" /> while you drag to put the end there without attaching.
+To link two, select one and drag one of its ends (or the whole shape) onto an end of the other. While you drag an end, the readout by the pointer says <Ui k="shapes.links.dropTip" plain />. When the pointer comes near the other shape's end, a ring shows on that end and the readout says <Ui k="shapes.links.releaseTip" values={{ shape: "Line" }} plain />; let go and your end lands exactly there and attaches. An arc's end goes there too, the arc turning and growing about its other end, though dragging its end otherwise only stretches its width. Hold <Kbd keys="Mod" /> while you drag to put the end there without attaching.
 
 One marcher stands on the joint, the one that was already on the end you dragged onto. The shape you dragged holds none there: its first marcher stands one of its own intervals from the joint. A small ring with a diamond marks the joint.
 
 After that, moving or changing either shape moves the other's end at the joint with it. That shape stretches, its far end staying where it is, and its marchers spread out again along it. Dragging the end at the joint moves both ends. It's all one step you can undo.
 
-To take them apart, right-click the joint of the selected shape (or long-press it on a tablet) and choose <Ui k="actions.shape.detach" />; it's in the command palette too, and in the field's menu while a linked shape is selected. The shape you dragged gets a marcher on its own end again, standing with the other shape's until you drag one of them away.
+To take them apart, right-click the joint of the selected shape (or long-press it on a tablet) and choose <Ui k="shapes.links.detachFrom" values={{ shape: "Line" }} /> (it names the shape on the other side of the joint); it's in the command palette too, and in the field's menu while a linked shape is selected. The shape you dragged gets a marcher on its own end again, standing on the same spot as the other shape's until you drag one of them away.
 
 A link holds only on the page the two shapes were placed on: changing one on a later page gives that page its own copy, not linked. Ungrouping either shape ends the link too. Boxes and circles can't be linked.
 

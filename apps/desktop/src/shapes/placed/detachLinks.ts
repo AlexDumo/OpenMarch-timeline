@@ -7,7 +7,7 @@ import { withAttach } from "../line/lineLinks";
 import type { LineParams } from "../line/lineGeometry";
 import { commitBox, type LinkedEdit } from "./commitBox";
 import type { PlacedBox } from "./placedBox";
-import type { ShapeLink } from "./shapeLinks";
+import { sideOf, type ShapeLink } from "./shapeLinks";
 
 /**
  * **Detach** (#1235): linked shapes come apart. The shape that attached gets its own marcher on
@@ -16,11 +16,35 @@ import type { ShapeLink } from "./shapeLinks";
  * is dragged away.
  */
 
-/** "Detach", the action's label: the joint's menu and the command palette say the same */
-export const detachLabel = (): string =>
-    getActionLabel("shapeDetach", (key, params) =>
-        tolgee.t(key, params as never),
-    );
+/**
+ * What Detach says (#1235): the shape it comes apart from, as the Shapes tab names its kind
+ * ("Detach from Line"), seen from `from` (the selected shape; the joint marcher's own otherwise);
+ * "Detach 2 linked shapes" for several links; the action's own label ("Detach linked shape") for
+ * none. The joint's menu, the field's menu and the command palette all say it.
+ */
+export function detachLabel(
+    links: readonly ShapeLink[],
+    from?: PlacedBox | null,
+): string {
+    if (links.length > 1)
+        return tolgee.t(
+            "shapes.links.detachCount",
+            "Detach {count} linked shapes",
+            { count: links.length },
+        );
+    const link = links[0];
+    if (!link)
+        return getActionLabel("shapeDetach", (key, params) =>
+            tolgee.t(key, params as never),
+        );
+    const side =
+        from && from.recipe.id === link.attacher.recipe.id
+            ? link.attacher
+            : link.owner;
+    return tolgee.t("shapes.links.detachFrom", "Detach from {shape}", {
+        shape: sideOf(side, link).other.kind.shape.label,
+    });
+}
 
 /**
  * `links` detached, as one undo step: each shape that attached saved without those attachments
@@ -63,6 +87,7 @@ export function detachLinks(
  */
 export function openJointMenu(
     link: ShapeLink,
+    from: PlacedBox,
     at: XY,
     queryClient: QueryClient,
 ): void {
@@ -77,7 +102,9 @@ export function openJointMenu(
                         "Joint marcher: {shape}'s",
                         { shape: link.owner.kind.shape.label },
                     ),
-                    items: [{ value: "detach", label: detachLabel() }],
+                    items: [
+                        { value: "detach", label: detachLabel([link], from) },
+                    ],
                 },
             ],
             pick(value) {

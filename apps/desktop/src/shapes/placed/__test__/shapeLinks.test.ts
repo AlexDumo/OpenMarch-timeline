@@ -26,11 +26,16 @@ import type { ShapeContext, XY } from "../../types";
 import { boxesAt, type PlacedBox, type PlacedRecipe } from "../placedBox";
 import { linkedPlacements, linkedSave } from "../commitBox";
 import { liveTargets } from "../liveBox";
+import { arcTool } from "../../arc/arcTool";
+import { bendOf } from "../../arc/arcGeometry";
+import type { ToolEnv } from "../../tool/toolKind";
 import {
     attachedParams,
     attachSnap,
     detachedParams,
     followersOf,
+    freeEnds,
+    handleEnd,
     liveLinks,
     withoutDeadLinks,
 } from "../shapeLinks";
@@ -296,6 +301,165 @@ describe("attachSnap", () => {
             ).toBeNull();
         },
     );
+});
+
+describe("attachSnap, an end dragged by its handle", () => {
+    // The line straight down; the arc off to its right, its ends level with each other but not
+    // with the line's bottom end (as people draw them, #1249's sims)
+    const SIDE_ARC = arc({ x: 40, y: 30 }, { x: 80, y: 30 });
+    const scene = () =>
+        placed([
+            recipe(1, lineShape, LINE, [11, 12, 13, 14]),
+            recipe(2, arcShape, SIDE_ARC, [21, 22, 23]),
+        ]);
+    const env: ToolEnv = {
+        stepPx: STEP,
+        snap: false,
+        pull: false,
+        constrain: false,
+        gridSnap: (p) => p,
+        hitRadius: 3,
+    };
+    /** The arc's start dragged to `to` by the kind's own rule, as the field does */
+    const dragStart = (to: XY) =>
+        arcTool.dragHandle(SIDE_ARC, 3, "p0", to, env) as LineParams;
+
+    unitIt("knows which handle is which end", () => {
+        const arcBox = byId(scene(), 2);
+        expect(handleEnd(arcBox, SIDE_ARC, "p0")).toBe("start");
+        expect(handleEnd(arcBox, SIDE_ARC, "p1")).toBe("end");
+        expect(handleEnd(arcBox, SIDE_ARC, "mid")).toBeNull();
+    });
+
+    unitIt(
+        "lands an Arc's end exactly on the line's end, though its own rule slides it along its chord",
+        () => {
+            const boxes = scene();
+            const arcBox = byId(boxes, 2);
+            // The pointer just off the line's bottom end, well off the arc's chord
+            const pointer = { x: 1.5, y: 59 };
+            const live = dragStart(pointer);
+            // The kind's end stays level with its other end: far from the target
+            expect(endPoint(live, "start").y).toBeCloseTo(30);
+            const snap = attachSnap({
+                box: arcBox,
+                params: live,
+                boxes,
+                links: [],
+                radius: 5,
+                beat: 0,
+                dragged: { end: "start", pointer, base: SIDE_ARC },
+            });
+            expect(snap).toMatchObject({
+                end: "start",
+                ownerEnd: "end",
+                at: { x: 0, y: 60 },
+                from: SIDE_ARC,
+            });
+            const attached = attachedParams(live, snap!, false);
+            // Exactly on the joint, its far end where it was, its sweep kept, the link stored
+            expect(endPoint(attached, "start")).toEqual({ x: 0, y: 60 });
+            const far = endPoint(attached, "end");
+            expect(far.x).toBeCloseTo(80);
+            expect(far.y).toBeCloseTo(30);
+            expect(bendOf(attached)).toBeCloseTo(bendOf(SIDE_ARC));
+            expect(attached.attach).toEqual({
+                start: { recipe: 1, end: "end" },
+            });
+        },
+    );
+
+    unitIt(
+        "a Line's end that follows the pointer keeps its own landing, nudged onto the joint",
+        () => {
+            const boxes = placed([
+                recipe(1, lineShape, LINE, [11, 12, 13, 14]),
+                recipe(
+                    2,
+                    lineShape,
+                    straight({ x: 40, y: 30 }, { x: 80, y: 30 }),
+                    [21, 22, 23],
+                ),
+            ]);
+            const lineBox = byId(boxes, 2);
+            const pointer = { x: 1, y: 61 };
+            const live = straight(pointer, { x: 80, y: 30 });
+            const snap = attachSnap({
+                box: lineBox,
+                params: live,
+                boxes,
+                links: [],
+                radius: 5,
+                beat: 0,
+                dragged: { end: "start", pointer, base: lineBox.params },
+            });
+            expect(snap?.from).toBeUndefined();
+            const attached = attachedParams(live, snap!, false);
+            expect(endPoint(attached, "start")).toEqual({ x: 0, y: 60 });
+            expect(endPoint(attached, "end")).toEqual({ x: 80, y: 30 });
+        },
+    );
+
+    unitIt(
+        "out of reach, nothing snaps: the Arc's end slides as before",
+        () => {
+            const boxes = scene();
+            const arcBox = byId(boxes, 2);
+            const pointer = { x: 8, y: 59 };
+            const live = dragStart(pointer);
+            expect(
+                attachSnap({
+                    box: arcBox,
+                    params: live,
+                    boxes,
+                    links: [],
+                    radius: 5,
+                    beat: 0,
+                    dragged: { end: "start", pointer, base: SIDE_ARC },
+                }),
+            ).toBeNull();
+            // Even with the slid end itself near the target, only the pointer counts
+            expect(
+                attachSnap({
+                    box: arcBox,
+                    params: arc({ x: 1, y: 60 }, { x: 80, y: 30 }),
+                    boxes,
+                    links: [],
+                    radius: 5,
+                    beat: 0,
+                    dragged: { end: "start", pointer, base: SIDE_ARC },
+                }),
+            ).toBeNull();
+        },
+    );
+
+    unitIt("offers only free ends on the same move", () => {
+        const boxes = J();
+        const third = placed([
+            ...boxes.map((b) => b.recipe),
+            recipe(
+                3,
+                lineShape,
+                straight({ x: 30, y: 80 }, { x: 60, y: 80 }),
+                [31, 32],
+            ),
+            recipe(
+                4,
+                lineShape,
+                straight({ x: 90, y: 80 }, { x: 99, y: 80 }),
+                [41, 42],
+                6,
+            ),
+        ]);
+        const ends = freeEnds(
+            byId(third, 3),
+            third,
+            liveLinks(third, 0),
+            0,
+        ).map((e) => `${e.owner.recipe.id}:${e.ownerEnd}`);
+        // The line's bottom end and the arc's start are the joint; the other move's line is out
+        expect(ends.sort()).toEqual(["1:start", "2:end"]);
+    });
 });
 
 describe("followersOf", () => {
