@@ -27,6 +27,7 @@ import {
     type Point,
     type SeamRow,
 } from "./regions";
+import { textWidthEm } from "./textWidth";
 
 export interface ShapeNode {
     readonly kind: "shape";
@@ -287,28 +288,39 @@ const EDGE_TEXT = {
  * past the wrap band. The height is an odd inch, between two numbered ticks.
  */
 function edgeLabels(region: FlatsRegion, at: number): DrawNode[] {
-    const y = Math.round((at - 1) / 2) * 2 + 1;
-    const span = spanAt(region.polygon, y);
-    if (!span) return [];
-    const row = { y, ...span };
-    const nodes: DrawNode[] = [];
-    for (const edge of region.edges) {
-        const inward = edge.side === "left" ? 1 : -1;
-        const tip = wrapLine(row, edge.side) + inward * 0.12;
-        const baseline = y + SIZE.label * 0.36;
-        nodes.push(arrow(tip, y, edge.side, 0.26));
-        nodes.push(
+    const odd = (v: number) => Math.round((v - 1) / 2) * 2 + 1;
+    const ARROW = 0.26;
+    const GAP = 0.36;
+    const label = (side: EdgeSide, y: number): DrawNode[] => {
+        const edge = region.edges.find((e) => e.side === side);
+        const span = spanAt(region.polygon, y);
+        if (!edge || !span) return [];
+        const inward = side === "left" ? 1 : -1;
+        const tip = wrapLine({ y, ...span }, side) + inward * 0.12;
+        return [
+            arrow(tip, y, side, ARROW),
             text(
-                tip + inward * 0.36,
-                baseline,
+                tip + inward * GAP,
+                y + SIZE.label * 0.36,
                 SIZE.label,
                 EDGE_TEXT[edge.name],
                 COLORS.seamText,
-                edge.side === "left" ? "start" : "end",
+                side === "left" ? "start" : "end",
             ),
-        );
-    }
-    return nodes;
+        ];
+    };
+    // Both names at one height when they fit across, else the right one 2 in lower
+    const y = odd(at);
+    const span = spanAt(region.polygon, y);
+    if (!span) return [];
+    const row = { y, ...span };
+    const room = wrapLine(row, "right") - wrapLine(row, "left") - 0.24;
+    const need = region.edges.reduce(
+        (sum, e) =>
+            sum + GAP + textWidthEm(EDGE_TEXT[e.name]) * SIZE.label + 0.3,
+        0,
+    );
+    return [...label("left", y), ...label("right", need <= room ? y : y + 2)];
 }
 
 /** A dashed guide across a region at a height, with its label above the line. */
