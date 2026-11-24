@@ -1,4 +1,5 @@
 /* eslint-disable no-control-regex */
+import { reportMilestone, sizeBucket } from "@/analytics/usageEvents";
 import { useAudioOffsetSeconds } from "@/tempo/audioOffset";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MarcherCoordinateSheetPreview from "./MarcherCoordinateSheet";
@@ -302,6 +303,10 @@ function CoordinateSheetExport() {
 
             setProgress(100);
             setCurrentStep(t("exportCoordinates.exportComplete"));
+            reportMilestone("export finished", {
+                kind: "coordinate_sheets",
+                marchers: sizeBucket(processedMarchers.length),
+            });
 
             toast.success(
                 t("exportCoordinates.coordinateSheetsExported", {
@@ -330,6 +335,7 @@ function CoordinateSheetExport() {
             );
         } catch (error) {
             console.error("Export error:", error);
+            reportMilestone("export failed", { kind: "coordinate_sheets" });
             setCurrentStep(t("exportCoordinates.exportFailed"));
             toast.error(
                 t("exportCoordinates.exportFailedToast", {
@@ -871,6 +877,7 @@ function DrillChartExport() {
             setProgress(100);
             setCurrentStep(t("exportCoordinates.exportComplete"));
 
+            reportMilestone("export finished", { kind: "drill_charts" });
             toast.success(t("exportCoordinates.drillChartsExported"), {
                 duration: ACTION_TOAST_DURATION_MS,
                 action: {
@@ -880,6 +887,7 @@ function DrillChartExport() {
                 },
             });
         } catch (error) {
+            reportMilestone("export failed", { kind: "drill_charts" });
             toast.error(
                 t("exportCoordinates.pdfExportFailed", {
                     error:
@@ -1417,6 +1425,10 @@ function VideoExport() {
 
             setProgress(100);
             setCurrentStep(t("exportCoordinates.exportComplete"));
+            reportMilestone("export finished", {
+                kind: "video",
+                audio: result.hasAudio,
+            });
             if (isWebBuild) {
                 // Saving needs a fresh tap (the share sheet won't open
                 // this long after the Export tap): see "Save video" below
@@ -1437,6 +1449,7 @@ function VideoExport() {
             });
         } catch (error) {
             console.error("Video export failed:", error);
+            reportMilestone("export failed", { kind: "video" });
             setCurrentStep(t("exportCoordinates.exportFailed"));
             toast.error(
                 t("exportCoordinates.videoExportFailed", {

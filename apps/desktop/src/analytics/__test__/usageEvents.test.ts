@@ -5,7 +5,9 @@ import {
     MAX_REFUSALS,
     QUICK_UNDO_MS,
     REFUSAL_REPEAT_MS,
+    reportMilestone,
     reportPaletteSearchFoundNothing,
+    sizeBucket,
     usageTracker,
     wordsOf,
 } from "../usageEvents";
@@ -213,5 +215,37 @@ describe("installUsageEvents", () => {
         );
         expect(usageTracker()).toBeNull();
         unregister();
+    });
+});
+
+describe("milestones", () => {
+    it.each([
+        [0, "0"],
+        [1, "1-9"],
+        [9, "1-9"],
+        [10, "10-49"],
+        [149, "50-149"],
+        [150, "150-399"],
+        [400, "400+"],
+    ])("sizeBucket(%i) is %s", (count, bucket) => {
+        expect(sizeBucket(count)).toBe(bucket);
+    });
+
+    it("sends milestones only once usage events are installed", () => {
+        const capture = vi.fn();
+        reportMilestone("show opened");
+        expect(capture).not.toHaveBeenCalled();
+        const stop = installUsageEvents(capture, () => true, {
+            subscribeToActionRuns,
+            subscribeToActionRefusals,
+        });
+        reportMilestone("export finished", { kind: "video", audio: true });
+        expect(capture).toHaveBeenCalledWith("export finished", {
+            kind: "video",
+            audio: true,
+        });
+        stop();
+        reportMilestone("show opened");
+        expect(capture).toHaveBeenCalledTimes(1);
     });
 });

@@ -8,6 +8,8 @@
  *   after they ran. Never one event per action.
  * - `action refused`: someone tried an action that can't run now; carries the reason shown.
  * - `palette search found nothing`: a command palette search with no results.
+ * - Milestones (`reportMilestone`): steps of getting a show going, such as `show created`,
+ *   `marchers added`, `music imported` and `export finished`, for the new-user funnel.
  */
 import type { ActionRunSource } from "@/shortcuts/registry";
 
@@ -79,6 +81,8 @@ export interface UsageTracker {
     actionRan(id: string, source: ActionRunSource): void;
     actionRefused(id: string, source: ActionRunSource, reason: string): void;
     paletteSearchFoundNothing(query: string): void;
+    /** Sends a milestone event as it is (`reportMilestone`). */
+    milestone(event: Milestone, properties?: Record<string, unknown>): void;
     /** Sends the counts gathered so far, if any, and starts a new window (`sendNow`: see `CaptureFn`). */
     flush(sendNow?: boolean): void;
 }
@@ -141,6 +145,9 @@ export function createUsageTracker(
             searchesSent.add(text);
             capture("palette search found nothing", { query: text });
         },
+        milestone(event, properties = {}) {
+            capture(event, properties);
+        },
         flush(sendNow = false) {
             const total = Object.values(actions).reduce((a, b) => a + b, 0);
             const at = now();
@@ -184,6 +191,36 @@ export function usageTracker(): UsageTracker | null {
 /** A palette search that found nothing; no-op until `installUsageEvents` runs. */
 export function reportPaletteSearchFoundNothing(query: string): void {
     installed?.paletteSearchFoundNothing(query);
+}
+
+/** The milestones of getting a show going, for the new-user funnel. */
+export type Milestone =
+    | "show opened"
+    | "show created"
+    | "marchers added"
+    | "music imported"
+    | "export finished"
+    | "export failed";
+
+/**
+ * A milestone, with counts and kinds only (never names, titles or paths); no-op until
+ * `installUsageEvents` runs.
+ */
+export function reportMilestone(
+    event: Milestone,
+    properties?: Record<string, unknown>,
+): void {
+    installed?.milestone(event, properties);
+}
+
+/** A count in a range, so sizes say how big without saying exactly: "0", "1-9", "10-49", ... */
+export function sizeBucket(count: number): string {
+    if (count <= 0) return "0";
+    if (count < 10) return "1-9";
+    if (count < 50) return "10-49";
+    if (count < 150) return "50-149";
+    if (count < 400) return "150-399";
+    return "400+";
 }
 
 /** How often the action counts are sent while the window stays open. */

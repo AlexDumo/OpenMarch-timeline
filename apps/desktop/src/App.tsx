@@ -1,4 +1,5 @@
 import { threeZoomControls } from "@/field/three/fieldNavigation";
+import { reportMilestone } from "@/analytics/usageEvents";
 import Toolbar, { PreviewToolbar } from "@/components/toolbar/Toolbar";
 import Inspector from "@/components/inspector/Inspector";
 import SidebarModal from "@/components/sidebar/SidebarModal";
@@ -162,6 +163,11 @@ function App() {
         // eslint-disable-next-line no-console
         console.log("🎭 React app running in Playwright Codegen mode");
     }
+
+    // Each time a show becomes the open one in this window
+    useEffect(() => {
+        if (databaseIsReady) reportMilestone("show opened");
+    }, [databaseIsReady]);
 
     useEffect(() => {
         // Check if database is ready

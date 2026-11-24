@@ -1,4 +1,5 @@
 import { db, schema } from "@/global/database/db";
+import { reportMilestone } from "@/analytics/usageEvents";
 import { eq } from "drizzle-orm";
 import {
     queryOptions,
@@ -110,6 +111,7 @@ export const createMarchersMutationOptions = (qc: QueryClient) => {
         mutationFn: (newMarchers: NewMarcherArgs[]) =>
             createMarchers({ db, newMarchers }),
         onSuccess: async (_, variables) => {
+            reportMilestone("marchers added", { count: variables.length });
             // Invalidate all marcher queries
             await qc.invalidateQueries({
                 queryKey: [KEY_BASE],

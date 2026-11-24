@@ -1,4 +1,5 @@
 import { db } from "@/global/database/db";
+import { reportMilestone, sizeBucket } from "@/analytics/usageEvents";
 import { schema } from "@/global/database/db";
 import { asc } from "drizzle-orm";
 import {
@@ -800,6 +801,13 @@ export async function completeNewShow(
             ),
         );
     }
+
+    reportMilestone("show created", {
+        tempo: form.tempo?.method ?? "skip",
+        audio: form.audio?.method ?? "skip",
+        marchers: sizeBucket(form.performers?.marchers.length ?? 0),
+        from_previous_show: form.previousDotsImport !== undefined,
+    });
 
     await queryClient.invalidateQueries({
         queryKey: databaseReadyQueryOptions().queryKey,
