@@ -111,6 +111,32 @@ describe("editCameraList", () => {
         ).toHaveLength(MAX_CAMERAS);
     });
 
+    it("adds a duplicate right after its original", () => {
+        const next = editCameraList(list, {
+            kind: "add",
+            id: "view1",
+            name: "Front row copy",
+            pose,
+            after: list[1].id,
+        });
+        expect(next.map((c) => c.id)).toEqual([
+            list[0].id,
+            list[1].id,
+            "view1",
+            list[2].id,
+        ]);
+        // An unknown original puts it last.
+        expect(
+            editCameraList(list, {
+                kind: "add",
+                id: "view1",
+                name: "x",
+                pose,
+                after: "gone",
+            })[3].id,
+        ).toBe("view1");
+    });
+
     it("renames, and an empty name gives a default camera its label back", () => {
         const named = editCameraList(list, {
             kind: "rename",

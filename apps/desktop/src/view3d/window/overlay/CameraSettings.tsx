@@ -221,6 +221,7 @@ export function CameraSettings({
                 <SegmentedTextSwitch
                     ariaLabel={t("view3d.cameraSettings.does")}
                     testId="view3d-camera-follow-mode"
+                    className="self-start"
                     selected={followChoice}
                     setSelected={(value) => setFollow(value as FollowChoice)}
                     options={[
@@ -401,6 +402,7 @@ export function CameraSettings({
                 <SegmentedTextSwitch
                     ariaLabel={t("view3d.cameraSettings.focus")}
                     testId="view3d-camera-focus-mode"
+                    className="self-start"
                     selected={focusChoice}
                     setSelected={(value) => setFocus(value as FocusChoice)}
                     options={[

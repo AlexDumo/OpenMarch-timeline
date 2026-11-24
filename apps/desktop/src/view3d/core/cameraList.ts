@@ -239,6 +239,8 @@ export type CameraListEdit =
           id: string;
           name: string;
           pose: ViewPose;
+          /** Puts the new camera right after this one (a duplicate); last when omitted. */
+          after?: string;
       } & ViewExtras)
     | { kind: "rename"; id: string; name: string }
     /**
@@ -262,17 +264,22 @@ export function editCameraList(
 ): SavedCamera[] {
     const index = list.findIndex((camera) => camera.id === edit.id);
     switch (edit.kind) {
-        case "add":
+        case "add": {
             if (index >= 0 || list.length >= MAX_CAMERAS) return [...list];
+            const added: SavedCamera = {
+                kind: "view",
+                id: edit.id,
+                name: edit.name.trim().slice(0, CAMERA_NAME_MAX),
+                ...viewFields(edit.pose, edit),
+            };
+            const after = list.findIndex((camera) => camera.id === edit.after);
+            if (after < 0) return [...list, added];
             return [
-                ...list,
-                {
-                    kind: "view",
-                    id: edit.id,
-                    name: edit.name.trim().slice(0, CAMERA_NAME_MAX),
-                    ...viewFields(edit.pose, edit),
-                },
+                ...list.slice(0, after + 1),
+                added,
+                ...list.slice(after + 1),
             ];
+        }
         case "rename": {
             if (index < 0) return [...list];
             const name = edit.name.trim().slice(0, CAMERA_NAME_MAX);

@@ -24,6 +24,7 @@ import {
 import type { VenueKitId } from "@/view3d/core/types";
 import { useShowCameras } from "@/hooks/queries/useShowCameras";
 import { useCameraStore } from "../camera/cameraStore";
+import { SEAT_FOV_DEG, seatAim } from "../camera/rigMath";
 import { useFollowStore } from "../camera/followStore";
 import { useView3dSceneStore } from "../sceneStore";
 
@@ -47,6 +48,8 @@ export interface CameraList {
     edit: (edit: Exclude<CameraListEdit, { kind: "add" }>) => void;
     /** Saves the current view as a new camera; returns its id. */
     addCurrentView: () => string | null;
+    /** Adds a copy of a camera right after it; returns the copy's id. */
+    duplicate: (id: string) => string | null;
     /** Moves a camera to the current view (following whoever the view follows). */
     setToCurrentView: (id: string) => void;
     /** Sets a camera's exact settings and jumps the view there. */
@@ -131,6 +134,36 @@ export function useCameraList(): CameraList {
         return id;
     };
 
+    const duplicate = (id: string) => {
+        const list = currentList();
+        const camera = cameras.find((c) => c.id === id);
+        if (!list || !camera || list.length >= MAX_CAMERAS) return null;
+        const copyId = newCameraId(list);
+        const original = label(camera);
+        const name = newCameraName(cameras.map(label), (n) =>
+            n === 1
+                ? t("view3d.cameras.copyName", { name: original })
+                : t("view3d.cameras.copyNameN", { name: original, n }),
+        );
+        saveList(
+            editCameraList(list, {
+                kind: "add",
+                id: copyId,
+                name,
+                after: id,
+                pose: {
+                    // Where it actually looks, as the view shows it.
+                    ...seatAim(camera),
+                    fovDeg: camera.fovDeg ?? SEAT_FOV_DEG,
+                    rollDeg: camera.rollDeg,
+                },
+                follow: camera.follow,
+                focus: camera.focus,
+            }),
+        );
+        return copyId;
+    };
+
     const setToCurrentView = (id: string) => {
         const pose = useCameraStore.getState().currentPose();
         if (!pose) return;
@@ -181,6 +214,7 @@ export function useCameraList(): CameraList {
         label,
         edit,
         addCurrentView,
+        duplicate,
         setToCurrentView,
         setExact,
         replaceAll: (next) => saveList(next.slice(0, MAX_CAMERAS)),

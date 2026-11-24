@@ -29,6 +29,7 @@ import {
     ArrowCounterClockwiseIcon,
     ArrowDownIcon,
     ArrowUpIcon,
+    CopyIcon,
     CrosshairSimpleIcon,
     DownloadSimpleIcon,
     PersonSimpleWalkIcon,
@@ -186,7 +187,7 @@ export function CamerasPanel({
             data-testid="view3d-cameras-panel"
             data-customized={list.customized}
             className={clsx(
-                "border-stroke bg-modal backdrop-blur-32 rounded-6 shadow-modal text-text pointer-events-auto flex w-[22rem] max-w-full flex-col overflow-hidden border",
+                "border-stroke bg-modal backdrop-blur-32 rounded-6 shadow-modal text-text pointer-events-auto flex w-[24rem] max-w-full flex-col overflow-hidden border",
                 className,
             )}
         >
@@ -222,6 +223,15 @@ export function CamerasPanel({
                                 active={camera.id === activeCameraId}
                                 list={list}
                                 onRemove={() => remove(camera)}
+                                onDuplicate={() => {
+                                    const copy = list.duplicate(camera.id);
+                                    if (!copy) return;
+                                    // Ready to rename, with its settings open if the original's were.
+                                    setFocusId(copy);
+                                    setOpenId((id) =>
+                                        id === camera.id ? copy : id,
+                                    );
+                                }}
                                 focus={camera.id === focusId}
                                 onFocused={onFocused}
                                 settingsOpen={camera.id === openId}
@@ -363,6 +373,7 @@ function CameraRow({
     active,
     list,
     onRemove,
+    onDuplicate,
     focus,
     onFocused,
     settingsOpen,
@@ -374,6 +385,7 @@ function CameraRow({
     active: boolean;
     list: CameraList;
     onRemove: () => void;
+    onDuplicate: () => void;
     focus: boolean;
     onFocused: () => void;
     settingsOpen: boolean;
@@ -453,6 +465,19 @@ function CameraRow({
                     tooltip={t("view3d.cameras.setViewTooltip")}
                     iconOnly
                     testId="view3d-camera-set-view"
+                />
+                <ToggleButton
+                    onClick={onDuplicate}
+                    icon={<CopyIcon size={16} />}
+                    label={t("view3d.cameras.duplicate")}
+                    tooltip={
+                        list.full
+                            ? t("view3d.cameras.full", { max: MAX_CAMERAS })
+                            : t("view3d.cameras.duplicateTooltip")
+                    }
+                    iconOnly
+                    disabled={!list.ready || list.full}
+                    testId="view3d-camera-duplicate"
                 />
                 <ToggleButton
                     onClick={() =>
