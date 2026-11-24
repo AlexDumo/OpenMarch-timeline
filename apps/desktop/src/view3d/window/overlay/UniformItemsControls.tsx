@@ -465,7 +465,11 @@ function ItemRow({
                             value={sizeBy}
                             onValueChange={(value) => {
                                 const by = value as "width" | "height";
-                                if (by === sizeBy || aspect === null) return;
+                                if (by === sizeBy || aspect === null) {
+                                    // any choice answers the last refusal
+                                    setRefusedBy(null);
+                                    return;
+                                }
                                 // the item keeps its size exactly: its other side's length
                                 const next = sizeBySwitch(item, aspect, by);
                                 // unavailable: say why, where a click or a tap lands
@@ -529,7 +533,10 @@ function ItemRow({
                     max={ITEM_MAX_IN}
                     step={0.25}
                     testId="view3d-uniform-item-size"
-                    onValue={(v) => change({ [sizeBy]: v })}
+                    onValue={(v) => {
+                        setRefusedBy(null);
+                        change({ [sizeBy]: v });
+                    }}
                 />
                 <NumberField
                     label={t("view3d.uniformItems.rotate")}
