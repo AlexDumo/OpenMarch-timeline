@@ -1,5 +1,5 @@
 import tolgee from "@/global/singletons/Tolgee";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
     planCanvasEdit,
@@ -18,6 +18,7 @@ import type { ToolState } from "./toolMachine";
 import { useShapePaletteSource } from "../command/useShapePaletteSource";
 import { GROUP_MIN, groupMarchers } from "../placed/groupMarchers";
 import { useBoxSelectionStore } from "../placed/boxSelectionStore";
+import { useJoinShapes } from "../placed/useJoinShapes";
 import {
     closeShapeTool,
     isShapeHidden,
@@ -64,8 +65,8 @@ export function useApplyShape(): () => Promise<void> {
 }
 
 /**
- * Opens and places the shape tool from shortcuts, buttons and the command palette, and groups the
- * selection (#603)
+ * Opens and places the shape tool from shortcuts, buttons and the command palette, groups the
+ * selection (#603), and joins two placed lines into one (#1220)
  */
 export function useShapeToolActions(): void {
     const { ready, selectedPerformers } = useEditorReadiness();
@@ -111,6 +112,12 @@ export function useShapeToolActions(): void {
                     : undefined,
         },
     );
+    // Two placed lines, curves or arcs joined into one (#1220); not while a shape is open
+    const selectedIds = useMemo(
+        () => selectedPerformers.map((m) => m.id),
+        [selectedPerformers],
+    );
+    useJoinShapes(ready && !shown, selectedIds);
     useActionHandler(
         "applyShape",
         () => {
