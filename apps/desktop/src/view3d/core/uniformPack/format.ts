@@ -69,7 +69,7 @@ const MANIFEST = "manifest.json";
 const hex = z.string().regex(/^#[0-9a-f]{6}$/i);
 
 /** The palette: the colors shown where the art is clear, and on the parts art can't reach */
-const paletteSchema = z.object({
+const paletteSchema = z.strictObject({
     primary: hex,
     secondary: hex,
     accent: hex,
@@ -82,7 +82,7 @@ const paletteSchema = z.object({
     visor: hex,
 });
 
-const layerSchema = z.object({
+const layerSchema = z.strictObject({
     id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,31}$/),
     name: z.string().max(120),
     /** Its image in the pack */
@@ -91,7 +91,7 @@ const layerSchema = z.object({
     covers: z.literal("page"),
 });
 
-const creditsSchema = z.object({
+const creditsSchema = z.strictObject({
     license: z.string().max(200).optional(),
     author: z.string().max(200).optional(),
     source: z.string().max(500).optional(),
@@ -109,7 +109,7 @@ export const uniformPackManifestSchema = z
         kind: z.literal(UNIFORM_ASSET_KIND),
         name: z.string().min(1).max(120),
         /** The flats page, real size */
-        page: z.object({
+        page: z.strictObject({
             width: z.literal(FLATS_PAGE_IN.width),
             height: z.literal(FLATS_PAGE_IN.height),
             unit: z.literal("in"),
@@ -126,7 +126,7 @@ export const uniformPackManifestSchema = z
         ]),
         palette: paletteSchema,
         /** Part options */
-        options: z.object({
+        options: z.strictObject({
             stripe: z.boolean(),
             collar: z.boolean(),
             cuffs: z.boolean(),
@@ -287,10 +287,15 @@ const damaged = (reason: string) => new UniformPackError("damaged", reason);
  */
 function zipDirectory(bytes: Uint8Array): ZipEntry[] {
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    // the end record is the last 22 bytes plus its comment: a signature inside the comment
+    // isn't it, so the record found must end exactly where the file does
     let eocd = -1;
     const lowest = Math.max(0, bytes.length - 22 - 0xffff);
     for (let i = bytes.length - 22; i >= lowest; i--)
-        if (view.getUint32(i, true) === 0x06054b50) {
+        if (
+            view.getUint32(i, true) === 0x06054b50 &&
+            i + 22 + view.getUint16(i + 20, true) === bytes.length
+        ) {
             eocd = i;
             break;
         }
@@ -346,6 +351,8 @@ function zipDirectory(bytes: Uint8Array): ZipEntry[] {
             view.getUint16(local + 28, true);
         if (dataStart + size > bytes.length)
             throw damaged(`${name}: its data overruns the file`);
+        if (entries.some((e) => e.name === name))
+            throw damaged(`${name} is listed twice`);
         entries.push({ name, method, size, originalSize, dataStart });
     }
     return entries;

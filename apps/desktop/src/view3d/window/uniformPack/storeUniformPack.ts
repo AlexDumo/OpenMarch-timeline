@@ -7,7 +7,7 @@ import {
     VIEW3D_UNIFORM_PACK_RESULT_CHANNEL,
     type View3dUniformPackResult,
 } from "@/view3d/sync/protocol";
-import { UNIFORM_PACK_JOB_TIMEOUT_MS } from "@/view3d/uniformPack/runUniformPackJob";
+import { UNIFORM_PACK_JOB_TIMEOUT_MS } from "@/view3d/uniformPack/protocol";
 
 /** The editor reads the pack in its own worker, then writes: give it that long and a margin */
 export const UNIFORM_PACK_STORE_TIMEOUT_MS =

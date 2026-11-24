@@ -30,6 +30,7 @@ import {
     setShowAssetCreditsMutationOptions,
     showAssetsQueryOptions,
     showAssetSizesQueryOptions,
+    uniformsInHistoryQueryOptions,
 } from "@/hooks/queries/useShowAssets";
 import {
     LARGE_SHOW_ASSET_BYTES,
@@ -41,6 +42,7 @@ import { withoutEmpty } from "@/showAssets/modelImport/review/modelImportSession
 import type { ModelCredits } from "@/showAssets/modelImport/types";
 import type { JsonObject } from "@/showAssets/hash";
 import { UNIFORM_ASSET_KIND } from "@/view3d/core/uniformPack/format";
+import { showAssetRefValue } from "@/showAssets/ref";
 
 /**
  * The show's own assets (fork #1001, owner 2026-11-17): every imported model with its picture,
@@ -69,24 +71,54 @@ function useAssetUse() {
     const armed = useItemDrawingStore((state) =>
         state.placing?.kind === "model" ? state.placing.modelValue : null,
     );
+    const uniforms = useMemo(
+        () =>
+            (assets ?? [])
+                .filter((asset) => asset.kind === UNIFORM_ASSET_KIND)
+                .map(showAssetRefValue),
+        [assets],
+    );
+    // uniforms an undo or redo would bring back are never offered for removal
+    const { data: inHistory } = useQuery(
+        uniformsInHistoryQueryOptions(uniforms),
+    );
     return useMemo(() => {
-        if (!assets || !sizes || !items || !cues) return null;
-        const use = showAssetUse(assets, sizes, [
-            ...items.map((item) => item.model),
-            ...cues.map((cue) => cue.value),
-            armed,
-            typeof venue?.uniformArtwork === "string"
+        // `venue` is null with no venue row, undefined while it loads
+        if (
+            !assets ||
+            !sizes ||
+            !items ||
+            !cues ||
+            venue === undefined ||
+            !inHistory
+        )
+            return null;
+        const worn =
+            typeof venue?.uniformArtwork === "string" &&
+            venue.uniformArtwork.startsWith("library:")
                 ? venue.uniformArtwork
-                : null,
-        ]);
+                : null;
+        const use = showAssetUse(
+            assets,
+            sizes,
+            [
+                ...items.map((item) => item.model),
+                ...cues.map((cue) => cue.value),
+                armed,
+                worn,
+            ],
+            inHistory,
+        );
         const known = new Set(use.assets.map((row) => row.value));
         // Props naming a model the show doesn't have: an undo brought one back, say
         const missingProps = items.filter(
             (item) =>
                 item.model?.startsWith("library:") && !known.has(item.model),
         ).length;
-        return { ...use, missingProps };
-    }, [assets, sizes, items, cues, armed, venue]);
+        // The band's uniform when the show doesn't have it (an undo after Remove unused…)
+        const missingUniform = worn !== null && !known.has(worn);
+        return { ...use, missingProps, missingUniform };
+    }, [assets, sizes, items, cues, armed, venue, inHistory]);
 }
 
 export function AssetsContents({
@@ -114,6 +146,7 @@ export function AssetsContents({
                         unusedBytes={use.unusedBytes}
                         totalBytes={use.totalBytes}
                         missingProps={use.missingProps}
+                        missingUniform={use.missingUniform}
                         onRemove={() => setRemoving(true)}
                     />
                 )}
@@ -146,12 +179,14 @@ function AssetNotes({
     unusedBytes,
     totalBytes,
     missingProps,
+    missingUniform,
     onRemove,
 }: {
     unused: readonly AssetUse[];
     unusedBytes: number;
     totalBytes: number;
     missingProps: number;
+    missingUniform: boolean;
     onRemove: () => void;
 }) {
     const sizeText = useSizeText();
@@ -189,6 +224,12 @@ function AssetNotes({
                     keyName="assets.notes.missing"
                     params={{ count: missingProps }}
                 />
+            </li>,
+        );
+    if (missingUniform)
+        notes.push(
+            <li key="missingUniform" data-testid="assets-missing-uniform-note">
+                <T keyName="assets.notes.missingUniform" />
             </li>,
         );
     if (totalBytes > LARGE_SHOW_ASSET_BYTES)

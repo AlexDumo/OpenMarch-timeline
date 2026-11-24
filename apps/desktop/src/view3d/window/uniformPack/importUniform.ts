@@ -39,7 +39,9 @@ export type UniformImportNote =
     /** The image wasn't the template's size; it was scaled to it */
     | "scaled"
     /** The SVG's viewBox isn't the page in inches; it was fitted to the page */
-    | "svgViewBox";
+    | "svgViewBox"
+    /** What the art leaves clear takes the band preset's colors (a PNG or SVG, not a pack) */
+    | "palette";
 
 /** Why a file can't become a uniform */
 export type UniformImportRefusal =
@@ -277,6 +279,8 @@ export async function importUniformFile(
         if (error instanceof UniformImportError) throw error;
         return fromJob(error);
     }
+    // the parts the art leaves clear wear `look`'s colors: say so
+    notes.push("palette");
     const manifest = singleLayerManifest({ name, look });
     const pack = writeUniformPack(manifest, { [manifest.layers[0].file]: png });
     return { name, pack, notes, scaledFrom };

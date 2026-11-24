@@ -349,6 +349,31 @@ export async function getShowAssetReferences({
 }
 
 /**
+ * Which of `values` an undo or redo step could write back: those the history's stored SQL names.
+ * Remove unused… is outside undo, so an asset a step would bring back must stay; the show keeps
+ * an imported uniform the venue named before (fork #1257). The values are asset references
+ * (`library:<id>@<hash>`), which history stores verbatim inside the venue's JSON.
+ */
+export async function valuesNamedInHistory({
+    db,
+    values,
+}: {
+    db: DbConnection | DbTransaction;
+    values: readonly string[];
+}): Promise<Set<string>> {
+    const named = new Set<string>();
+    for (const value of values) {
+        const hit = await db.get<{ found: number } | undefined>(sql`
+            SELECT 1 AS found FROM history_undo WHERE instr(sql, ${value}) > 0
+            UNION ALL
+            SELECT 1 AS found FROM history_redo WHERE instr(sql, ${value}) > 0
+            LIMIT 1`);
+        if (hit) named.add(value);
+    }
+    return named;
+}
+
+/**
  * Removes these asset Versions, then the blobs no Version left in the show uses: bytes another
  * asset shares stay. Outside undo, like adding (the tables have no history triggers); a prop an
  * undo points back at a removed asset draws as a block. Returns how many Versions it removed.

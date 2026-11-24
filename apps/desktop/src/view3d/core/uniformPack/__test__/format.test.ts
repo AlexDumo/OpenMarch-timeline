@@ -1,3 +1,4 @@
+// cspell:words jsoo
 import { describe, expect, it } from "vitest";
 import { strToU8, zipSync } from "fflate";
 import { SAMPLE_FLATS } from "@/view3d/core/marchers/uniformArtwork";
@@ -101,6 +102,65 @@ describe("uniform pack file", () => {
                 }),
             ),
         ).toBeNull();
+    });
+
+    it("refuses unknown keys in nested objects too", () => {
+        const base = sampleManifest();
+        const cases = [
+            {
+                layers: [
+                    { ...base.layers[0], blend: "multiply", opacity: 0.5 },
+                ],
+            },
+            { page: { ...base.page, bleed: 1 } },
+            { options: { ...base.options, plume: true } },
+            { palette: { ...base.palette, lining: "#000000" } },
+            { credits: { ...base.credits, year: "2026" } },
+        ];
+        for (const nested of cases)
+            expect(
+                codeOf(() =>
+                    readUniformPack(
+                        zipOf({
+                            "manifest.json": strToU8(
+                                JSON.stringify({ ...base, ...nested }),
+                            ),
+                            "layers/base.png": fakePng(),
+                        }),
+                    ),
+                ),
+            ).toBe("damaged");
+    });
+
+    it("refuses a zip that lists a name twice", () => {
+        const bytes = zipSync({
+            "manifest.json": strToU8(JSON.stringify(sampleManifest())),
+            "manifest.jsoo": strToU8(JSON.stringify({ name: "other" })),
+            "layers/base.png": [fakePng(), { level: 0 }],
+        });
+        // rename the second manifest, in its local header and the directory
+        const text = new TextEncoder();
+        const from = text.encode("manifest.jsoo");
+        const to = text.encode("manifest.json");
+        for (let p = 0; p + from.length <= bytes.length; p++)
+            if (from.every((b, i) => bytes[p + i] === b)) bytes.set(to, p);
+        expect(codeOf(() => readUniformPack(bytes))).toBe("damaged");
+    });
+
+    it("reads a zip whose comment holds the end record's signature", () => {
+        const plain = pack();
+        // a comment of 40 bytes with "PK\5\6" inside it
+        const comment = new Uint8Array(40);
+        comment.set([0x50, 0x4b, 0x05, 0x06], 10);
+        const out = new Uint8Array(plain.length + comment.length);
+        out.set(plain);
+        out.set(comment, plain.length);
+        new DataView(out.buffer).setUint16(
+            plain.length - 2,
+            comment.length,
+            true,
+        );
+        expect(readUniformPack(out).manifest.name).toBe("Home uniform");
     });
 
     it("refuses layers that repeat an id", () => {

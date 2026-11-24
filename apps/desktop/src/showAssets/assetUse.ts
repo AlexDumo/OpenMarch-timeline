@@ -59,6 +59,8 @@ export function showAssetUse(
     assets: readonly ShowAsset[],
     sizes: ReadonlyMap<string, number>,
     references: readonly (string | null | undefined)[],
+    /** Values never called unused though nothing names them now: an undo could bring them back */
+    keep: ReadonlySet<string> = new Set(),
 ): ShowAssetUse {
     const counts = new Map<string, number>();
     for (const value of references)
@@ -73,7 +75,10 @@ export function showAssetUse(
         return { asset, value, bytes, uses: counts.get(value) ?? 0 };
     });
     const unused = rows.filter(
-        (row) => row.uses === 0 && REMOVABLE_ASSET_KINDS.has(row.asset.kind),
+        (row) =>
+            row.uses === 0 &&
+            REMOVABLE_ASSET_KINDS.has(row.asset.kind) &&
+            !keep.has(row.value),
     );
 
     const kept = new Set<string>();

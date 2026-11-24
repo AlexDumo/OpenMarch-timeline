@@ -7,14 +7,14 @@
  * response (`src/security/appCsp.ts`). Used by the 3D View window and the editor.
  */
 import UniformPackWorker from "./uniformPack.worker.ts?worker";
-import type {
-    UniformPackRefusal,
-    UniformPackRequest,
-    UniformPackResponse,
+import {
+    UNIFORM_PACK_JOB_TIMEOUT_MS,
+    type UniformPackRefusal,
+    type UniformPackRequest,
+    type UniformPackResponse,
 } from "./protocol";
 
-/** How long one job may take */
-export const UNIFORM_PACK_JOB_TIMEOUT_MS = 60_000;
+export { UNIFORM_PACK_JOB_TIMEOUT_MS } from "./protocol";
 
 /** A job the worker refused, or that failed or ran out of time */
 export class UniformPackJobError extends Error {

@@ -8,7 +8,9 @@ import {
     getShowAssetReferences,
     getShowAssets,
     readShowAssetBlob,
+    valuesNamedInHistory,
 } from "../showAssets";
+import { sql } from "drizzle-orm";
 import { setUniformPack } from "../view3dUniformPack";
 import { parseShowAssetRef } from "@/showAssets/ref";
 import { REMOVABLE_ASSET_KINDS, showAssetUse } from "@/showAssets/assetUse";
@@ -136,6 +138,34 @@ describeDbTests("view3dUniformPack", (it) => {
             expect(await getShowAssetReferences({ db })).toContain(value);
         });
 
+        it("keeps a uniform an undo would dress the band in again", async ({
+            db,
+        }) => {
+            // wear A, then B: undo would put A back, so A isn't offered for removal
+            const a = await store(db, packFile("A", 1));
+            const b = await store(db, packFile("B", 2));
+            const inHistory = await valuesNamedInHistory({
+                db,
+                values: [a, b],
+            });
+            expect(inHistory.has(a)).toBe(true);
+            const use = showAssetUse(
+                await getShowAssets({ db }),
+                new Map(),
+                await getShowAssetReferences({ db }),
+                inHistory,
+            );
+            expect(use.unused).toEqual([]);
+            // undo: the band wears A again, which is still in the show
+            await performUndo(db);
+            expect((await getStoredVenueSettings({ db }))?.uniformArtwork).toBe(
+                a,
+            );
+            expect(
+                await getShowAsset({ db, ref: parseShowAssetRef(a)! }),
+            ).toBeDefined();
+        });
+
         it("is never removed while the band wears it, and can be once it doesn't", async ({
             db,
         }) => {
@@ -150,10 +180,19 @@ describeDbTests("view3dUniformPack", (it) => {
             const venue = (await getStoredVenueSettings({ db }))!;
             const { uniformArtwork: _worn, ...preset } = venue;
             await updateVenueSettings({ db, settings: preset });
+            // history still names it (the undo step that set it): kept until that's gone
+            const inHistory = await valuesNamedInHistory({
+                db,
+                values: [value],
+            });
+            expect(inHistory.has(value)).toBe(true);
+            await db.run(sql`DELETE FROM history_undo`);
+            await db.run(sql`DELETE FROM history_redo`);
             const after = showAssetUse(
                 await getShowAssets({ db }),
                 new Map(),
                 await getShowAssetReferences({ db }),
+                await valuesNamedInHistory({ db, values: [value] }),
             );
             expect(after.unused.map((row) => row.value)).toEqual([value]);
         });

@@ -10,6 +10,9 @@ import type {
     PageRegions,
 } from "@/view3d/core/uniformPack/pageChecks";
 
+/** How long one worker job may take */
+export const UNIFORM_PACK_JOB_TIMEOUT_MS = 60_000;
+
 export type UniformPackRequest =
     /** A picked PNG page: checked, scaled to the template's size if it isn't, re-encoded */
     | { type: "png"; bytes: Uint8Array; regions: PageRegions }

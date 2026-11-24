@@ -172,8 +172,16 @@ export function UniformPicker() {
         ...uniformPacksQueryOptions(),
         enabled: flats,
     });
-    const worn =
+    const named =
         flats && settings ? flatsArtworkOf(settings.uniformArtwork) : null;
+    // a uniform the show no longer has (an undo after Remove unused…): the band wears its preset
+    const worn =
+        named &&
+        isUniformPackValue(named) &&
+        packs &&
+        !packs.some((pack) => pack.value === named)
+            ? null
+            : named;
     type Value = UniformPresetId | typeof FLATS_SAMPLE | UniformPackValue;
     return (
         <Segmented<Value>

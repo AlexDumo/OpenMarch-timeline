@@ -11,7 +11,9 @@ import {
     readShowAssetBlob,
     removeShowAssetsInTransaction,
     setShowAssetCreditsInTransaction,
+    valuesNamedInHistory,
 } from "@/db-functions/showAssets";
+import { UNIFORM_ASSET_KIND } from "@/view3d/core/uniformPack/format";
 import type { JsonObject } from "@/showAssets/hash";
 import type { ShowAssetRef } from "@/showAssets/ref";
 import { showAssetRefValue } from "@/showAssets/ref";
@@ -56,6 +58,18 @@ export const showAssetBlobCache = createShowBlobCache({
     read: async (hash) => await readShowAssetBlob({ db, hash }),
 });
 
+/**
+ * The show's imported uniforms an undo or redo step names (fork #1257): never offered by Remove
+ * unused…, which is outside undo. History changes with every edit, so this is read fresh each
+ * time it's shown; the removal checks again inside its transaction.
+ */
+export const uniformsInHistoryQueryOptions = (values: readonly string[]) =>
+    queryOptions({
+        queryKey: [KEY_BASE, "inHistory", ...values],
+        queryFn: async () => await valuesNamedInHistory({ db, values }),
+        staleTime: 0,
+    });
+
 /** Every blob's size in bytes, by hash (fork #1001). Under the same key, so any change refreshes it. */
 export const showAssetSizesQueryOptions = () =>
     queryOptions({
@@ -76,18 +90,30 @@ export const removeUnusedShowAssetsMutationOptions = (qc: QueryClient) =>
                     ...(await getShowAssetReferences({ db: tx })),
                     ...armedModelValues(),
                 ]);
+                const assets = await getShowAssets({ db: tx });
                 const removable = new Set(
-                    (await getShowAssets({ db: tx }))
+                    assets
                         .filter((asset) =>
                             REMOVABLE_ASSET_KINDS.has(asset.kind),
                         )
                         .map(showAssetRefValue),
                 );
+                // an imported uniform an undo or redo would dress the band in again stays
+                const kept = await valuesNamedInHistory({
+                    db: tx,
+                    values: assets
+                        .filter((asset) => asset.kind === UNIFORM_ASSET_KIND)
+                        .map(showAssetRefValue),
+                });
                 return await removeShowAssetsInTransaction({
                     tx,
                     refs: refs.filter((ref) => {
                         const value = showAssetRefValue(ref);
-                        return removable.has(value) && !named.has(value);
+                        return (
+                            removable.has(value) &&
+                            !named.has(value) &&
+                            !kept.has(value)
+                        );
                     }),
                 });
             }),

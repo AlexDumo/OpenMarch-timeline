@@ -12,10 +12,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslate } from "@tolgee/react";
 import { Button } from "@openmarch/ui";
 import { touchSafeAccept } from "@/utilities/fileAccept";
-import { uniformPackQueryOptions } from "@/hooks/queries/useUniformPack";
+import {
+    uniformPackQueryOptions,
+    uniformPacksQueryOptions,
+} from "@/hooks/queries/useUniformPack";
 import {
     UNIFORM_PRESETS,
     uniformPresetOf,
+    type UniformPresetId,
 } from "@/view3d/core/marchers/uniformPresets";
 import {
     flatsArtworkOf,
@@ -49,11 +53,21 @@ export function UniformImportControls() {
     const input = useRef<HTMLInputElement>(null);
     const [busy, setBusy] = useState(false);
     const [problem, setProblem] = useState<string | null>(null);
-    const [done, setDone] = useState<UniformImport | null>(null);
+    const [done, setDone] = useState<{
+        result: UniformImport;
+        /** The band preset whose colors the clear parts take */
+        preset: UniformPresetId;
+    } | null>(null);
 
     const worn = flatsArtworkOf(settings?.uniformArtwork);
     const wornPack = worn && isUniformPackValue(worn) ? worn : null;
-    const { data: pack } = useQuery(uniformPackQueryOptions(wornPack));
+    const { data: pack, isSuccess: packRead } = useQuery(
+        uniformPackQueryOptions(wornPack),
+    );
+    const { data: packs } = useQuery(uniformPacksQueryOptions());
+    // the venue names a uniform the show doesn't have (an undo after Remove unused…) or that
+    // doesn't read: the band wears its preset
+    const missing = wornPack !== null && packRead && pack === null;
 
     if (!uniformArtworkAvailable()) return null;
 
@@ -70,12 +84,12 @@ export function UniformImportControls() {
         setDone(null);
         try {
             const { regions } = await loadFlatsGeometry();
-            const look =
-                UNIFORM_PRESETS[uniformPresetOf(settings.uniforms)].band;
+            const preset = uniformPresetOf(settings.uniforms);
+            const look = UNIFORM_PRESETS[preset].band;
             const result = await importUniformFile(file, look, regions);
             // the band wears it once the editor has stored it
             await storeUniformPack(result.pack);
-            setDone(result);
+            setDone({ result, preset });
         } catch (error) {
             console.warn("3D View: couldn't import the uniform", error);
             setProblem(
@@ -88,7 +102,7 @@ export function UniformImportControls() {
         }
     };
 
-    const noteText = (result: UniformImport): string[] =>
+    const noteText = ({ result, preset }: NonNullable<typeof done>): string[] =>
         result.notes.map((note) =>
             note === "scaled"
                 ? t("view3d.uniformImport.note.scaled", {
@@ -97,16 +111,23 @@ export function UniformImportControls() {
                       templateWidth: FLATS_PAGE_PX.width,
                       templateHeight: FLATS_PAGE_PX.height,
                   })
-                : t(`view3d.uniformImport.note.${note}`),
+                : note === "palette"
+                  ? t("view3d.uniformImport.note.palette", {
+                        preset: t(`view3d.uniformPreset.${preset}`),
+                    })
+                  : t(`view3d.uniformImport.note.${note}`),
         );
 
     // greyed out only until the show's settings have loaded; it says so
     const importReason = settings
         ? null
         : t("view3d.uniformImport.importNeedsSettings");
+    // nothing to save yet, or one to pick first: each says so
     const saveReason = pack
         ? null
-        : t("view3d.uniformImport.saveNeedsImported");
+        : packs && packs.length > 0
+          ? t("view3d.uniformImport.saveNeedsImported")
+          : t("view3d.uniformImport.saveNeedsImport");
     const save = () => {
         if (!pack) {
             setProblem(saveReason);
@@ -177,7 +198,7 @@ export function UniformImportControls() {
                 >
                     <span>
                         {t("view3d.uniformImport.imported", {
-                            name: done.name,
+                            name: done.result.name,
                         })}
                     </span>
                     {noteText(done).map((note) => (
@@ -186,6 +207,15 @@ export function UniformImportControls() {
                         </span>
                     ))}
                 </div>
+            )}
+            {missing && (
+                <p
+                    className="text-sub text-yellow"
+                    role="status"
+                    data-testid="view3d-uniform-missing"
+                >
+                    {t("view3d.uniformImport.missing")}
+                </p>
             )}
             {problem && (
                 <p className="text-sub text-red" role="alert">

@@ -78,7 +78,7 @@ describe("importing a uniform", () => {
         );
         expect(requests.map((r) => r.type)).toEqual(["png"]);
         expect(result.name).toBe("Home Uniform");
-        expect(result.notes).toEqual(["scaled", "template"]);
+        expect(result.notes).toEqual(["scaled", "template", "palette"]);
         expect(result.scaledFrom).toEqual({ width: 1680, height: 1408 });
         const pack = readUniformPack(result.pack);
         expect(pack.manifest.name).toBe("Home Uniform");
@@ -105,7 +105,8 @@ describe("importing a uniform", () => {
             width: 3360,
             height: 2816,
         });
-        expect(result.notes).toEqual([]);
+        // the parts the art leaves clear take the preset's colors, and it says so
+        expect(result.notes).toEqual(["palette"]);
         expect(readUniformPack(result.pack).manifest.name).toBe("away");
     });
 
@@ -118,7 +119,7 @@ describe("importing a uniform", () => {
             regions,
             { runJob, drawSvg },
         );
-        expect(result.notes).toEqual(["svgViewBox"]);
+        expect(result.notes).toEqual(["svgViewBox", "palette"]);
     });
 
     it("reads a saved uniform file in the worker and keeps it exactly as it is", async () => {
@@ -147,6 +148,7 @@ describe("importing a uniform", () => {
         expect(requests.map((r) => r.type)).toEqual(["pack"]);
         expect(Array.from(result.pack)).toEqual(Array.from(bytes));
         expect(result.name).toBe("Saved");
+        // a saved file carries its own palette: no palette note
         expect(result.notes).toEqual(["opaque"]);
     });
 

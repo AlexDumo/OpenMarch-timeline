@@ -58,7 +58,7 @@ import { showCamerasSchema } from "@/view3d/core/cameraList";
 import { setSilkArtworkMutationOptions } from "@/hooks/queries/useSilkArtwork";
 import { silkArtworkImportSchema } from "@/view3d/core/silkArtwork";
 import { setUniformPackMutationOptions } from "@/hooks/queries/useUniformPack";
-import { z } from "zod";
+import { storeUniformPackRequest } from "./uniformPackRequest";
 import { pressAction, type ReleaseReason } from "@/shortcuts/registry";
 import { subscribeTimelineChanges } from "@/db-functions/timelineChanges";
 import { useTimelineDisplayStore } from "@/db-functions/timelineDisplay";
@@ -72,8 +72,6 @@ import {
     VIEW3D_HIDDEN_PROPS_CHANNEL,
     VIEW3D_CAMERA_WANTED_CHANNEL,
     VIEW3D_HOLD_STYLES_QUERY_KEY,
-    VIEW3D_UNIFORM_PACK_RESULT_CHANNEL,
-    type View3dUniformPackResult,
     VIEW3D_INVALIDATE_CHANNEL,
     VIEW3D_SELECTION_CHANNEL,
     VIEW3D_TIMELINE_QUERY_KEY,
@@ -85,44 +83,6 @@ import {
     type View3dPlaybackAction,
     type View3dSelection,
 } from "./protocol";
-
-/** The window's request to store a uniform pack (`View3dVenueChangeRequest.uniformPack`) */
-const uniformPackRequestSchema = z.object({
-    id: z.string().min(1).max(64),
-    bytes: z.instanceof(Uint8Array),
-});
-
-/**
- * Stores the uniform pack the window sent (fork #1257) and answers it on
- * `VIEW3D_UNIFORM_PACK_RESULT_CHANNEL`. The write reads the pack in the uniform pack worker and
- * refuses one that doesn't read.
- */
-function storeUniformPackRequest(
-    raw: unknown,
-    setUniformPack: (
-        pack: Uint8Array,
-        callbacks: { onSuccess: (value: string) => void; onError: () => void },
-    ) => void,
-): void {
-    const asked = uniformPackRequestSchema.safeParse(raw);
-    if (!asked.success) {
-        console.warn(
-            "3D View: ignored an invalid uniform pack request",
-            asked.error,
-        );
-        return;
-    }
-    const { id, bytes } = asked.data;
-    const answer = (result: View3dUniformPackResult) =>
-        window.electron.publishToView3d(
-            VIEW3D_UNIFORM_PACK_RESULT_CHANNEL,
-            result,
-        );
-    setUniformPack(bytes, {
-        onSuccess: (value) => answer({ id, ok: true, value }),
-        onError: () => answer({ id, ok: false }),
-    });
-}
 
 /** How often the clock is re-sent while playing, to correct drift. */
 export const CLOCK_HEARTBEAT_MS = 1000;
@@ -220,7 +180,7 @@ export function useView3dPublisher() {
         setSilkArtworkMutationOptions(queryClient),
     );
     // With history: dressing the band in an imported uniform is one undo step.
-    const { mutate: setUniformPack } = useMutation(
+    const { mutateAsync: setUniformPack } = useMutation(
         setUniformPackMutationOptions(queryClient),
     );
     const windowOpen = useView3dWindowStore((s) => s.open);
@@ -335,7 +295,7 @@ export function useView3dPublisher() {
             }),
             electron.onView3dVenueChangeRequest((request) => {
                 if (request?.uniformPack !== undefined) {
-                    storeUniformPackRequest(
+                    void storeUniformPackRequest(
                         request.uniformPack,
                         setUniformPack,
                     );
