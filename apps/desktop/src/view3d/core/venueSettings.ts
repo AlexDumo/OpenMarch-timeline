@@ -110,6 +110,20 @@ export const venueSettingsSchema = z.object({
      * version bump, like `brassFinish`: older builds ignore it.
      */
     fieldLines: z.enum(["show", "stadium"]).optional(),
+    /**
+     * The flats uniform the band wears in place of its preset
+     * (`marchers/uniformArtwork.ts`, docs/3d/uniform-artwork.md); absent
+     * means the preset. A string names a built-in flats uniform (only the
+     * sample, "sample", offered in preview builds); a number will name a
+     * show asset of kind `uniform` (fork #1257), like `silkArtwork` names a
+     * row. Read through `uniformArtworkOf`: an id this build doesn't know,
+     * and for now any number, falls back to the preset instead of failing
+     * the whole venue. Added 2026-11-24 without a version bump (ADR 0010
+     * D-5): older builds ignore it, and drop it if they save a venue change.
+     */
+    uniformArtwork: z
+        .union([z.string().min(1).max(64), z.number().int().positive()])
+        .optional(),
 });
 
 export type VenueSettings = z.infer<typeof venueSettingsSchema>;

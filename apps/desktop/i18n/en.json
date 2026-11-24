@@ -570,6 +570,7 @@
         "noMarcher": "No marcher provided",
         "noMarcherPages": "No marcher pages provided",
         "noPages": "No pages provided",
+        "noDrillChartsMade": "No marcher's drill chart could be made",
         "showInFolder": "Show in folder",
         "openExportDirectoryError": "Could not open export directory: {error}",
         "organizeBySection": "Organize by Section",
@@ -3599,6 +3600,7 @@
         },
         "uniformPreset": {
             "fade": "Ultraviolet Fade",
+            "flatsSample": "Sample flats (preview)",
             "military": "Night Watch",
             "plastron": "Lilac Plastron",
             "prism": "Prism Split",
