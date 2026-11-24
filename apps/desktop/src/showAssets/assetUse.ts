@@ -135,3 +135,53 @@ export function sizeParts(bytes: number): {
     if (bytes >= KB) return { value: one(bytes / KB), unit: "kb" };
     return { value: String(bytes), unit: "bytes" };
 }
+
+/** One asset as the Assets view lists it: the version it shows, and its other versions */
+export interface AssetGroup {
+    /** The version in use, else the newest */
+    row: AssetUse;
+    /** Every other version, in the store's order */
+    others: AssetUse[];
+    /** Whether every other version is older than `row` */
+    allOlder: boolean;
+    /** The other versions' bytes, each blob once and none `row` holds */
+    othersBytes: number;
+}
+
+/**
+ * The Assets view's rows: one per asset, however many versions it has (editing a uniform's
+ * items adds versions, fork #1258), in the order each asset first appears. The row shows the
+ * version in use (the newest one in use, if several are), else the newest; the others are
+ * counted beside it, and Remove unused… still takes out the ones nothing names.
+ */
+export function groupAssetVersions(
+    rows: readonly AssetUse[],
+    sizes: ReadonlyMap<string, number>,
+): AssetGroup[] {
+    const byId = new Map<string, AssetUse[]>();
+    for (const row of rows) {
+        const list = byId.get(row.asset.id);
+        if (list) list.push(row);
+        else byId.set(row.asset.id, [row]);
+    }
+    return [...byId.values()].map((versions) => {
+        const used = versions.filter((v) => v.uses > 0);
+        const row = (used.length ? used : versions).at(-1)!;
+        const others = versions.filter((v) => v !== row);
+        const own = new Set(Object.values(row.asset.parts));
+        const blobs = new Set<string>();
+        for (const v of others)
+            for (const hash of Object.values(v.asset.parts))
+                if (!own.has(hash)) blobs.add(hash);
+        let othersBytes = 0;
+        for (const hash of blobs) othersBytes += sizes.get(hash) ?? 0;
+        return {
+            row,
+            others,
+            allOlder: others.every(
+                (v) => versions.indexOf(v) < versions.indexOf(row),
+            ),
+            othersBytes,
+        };
+    });
+}

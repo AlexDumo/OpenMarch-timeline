@@ -24,13 +24,19 @@ import {
     UnitInput,
 } from "@openmarch/ui";
 import { touchSafeAccept } from "@/utilities/fileAccept";
-import { uniformPackQueryOptions } from "@/hooks/queries/useUniformPack";
+import {
+    keepSameUniform,
+    uniformPackQueryOptions,
+} from "@/hooks/queries/useUniformPack";
 import {
     flatsArtworkOf,
     isUniformPackValue,
+    ITEM_MAX_IN,
+    itemFieldMin,
     itemPresets,
-    itemSize,
+    itemSizeAdvice,
     regionUnder,
+    sizeBySwitch,
     type FlatsRegions,
     type ItemPreset,
 } from "@/view3d/core/marchers/uniformArtwork";
@@ -67,6 +73,9 @@ const CUSTOM = "custom";
 const NEW_ITEM_IN = 6;
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
+/** A length for a note: two decimals, or three significant digits when smaller */
+const fmt = (v: number) =>
+    v >= 0.1 ? String(round2(v)) : String(Number(v.toPrecision(2)));
 
 /** The preset an item sits on, if any */
 const presetOf = (presets: ItemPreset[], item: UniformPackItem) =>
@@ -90,7 +99,11 @@ export function UniformItemsControls() {
 
     const worn = flatsArtworkOf(settings?.uniformArtwork);
     const wornPack = worn && isUniformPackValue(worn) ? worn : null;
-    const { data: pack } = useQuery(uniformPackQueryOptions(wornPack));
+    // each save is a new version: keep the list while the band moves to it
+    const { data: pack } = useQuery({
+        ...uniformPackQueryOptions(wornPack),
+        placeholderData: keepSameUniform(wornPack),
+    });
     useEffect(() => observeWorn(wornPack), [wornPack, draft]);
     useEffect(() => {
         let live = true;
@@ -312,7 +325,8 @@ function ItemRow({
     const change = onChange;
     // its box on the median body; null when the image's shape makes a side too long (or, for a
     // tile, too short) to draw
-    const box = aspect === null ? undefined : itemSize(item, aspect);
+    // drawn and visible at its size? If not, what size would be (`itemSizeAdvice`)
+    const advice = aspect === null ? null : itemSizeAdvice(item, aspect);
 
     return (
         <li
@@ -411,14 +425,17 @@ function ItemRow({
                             value={sizeBy}
                             onValueChange={(value) => {
                                 const by = value as "width" | "height";
-                                if (by === sizeBy) return;
-                                // the item keeps its box: the other side's length becomes the number
-                                const other = box
-                                    ? round2(by === "width" ? box.w : box.h)
-                                    : size;
+                                if (by === sizeBy || aspect === null) return;
+                                // the item keeps its size exactly: its other side's length
+                                const next = sizeBySwitch(item, aspect, by);
+                                if (!next.ok) return;
                                 onChange({
-                                    width: by === "width" ? other : undefined,
-                                    height: by === "height" ? other : undefined,
+                                    width:
+                                        by === "width" ? next.value : undefined,
+                                    height:
+                                        by === "height"
+                                            ? next.value
+                                            : undefined,
                                 });
                             }}
                         >
@@ -427,12 +444,38 @@ function ItemRow({
                                 label={t(`view3d.uniformItems.${sizeBy}`)}
                             />
                             <SelectContent>
-                                <SelectItem value="width">
-                                    {t("view3d.uniformItems.width")}
-                                </SelectItem>
-                                <SelectItem value="height">
-                                    {t("view3d.uniformItems.height")}
-                                </SelectItem>
+                                {(["width", "height"] as const).map((by) => {
+                                    const next =
+                                        aspect === null || by === sizeBy
+                                            ? null
+                                            : sizeBySwitch(item, aspect, by);
+                                    const refused = next !== null && !next.ok;
+                                    return (
+                                        <SelectItem
+                                            key={by}
+                                            value={by}
+                                            disabled={refused}
+                                            title={
+                                                refused
+                                                    ? t(
+                                                          "view3d.uniformItems.sizeByRefused",
+                                                          {
+                                                              value: fmt(
+                                                                  next.value,
+                                                              ),
+                                                              min: itemFieldMin(
+                                                                  grade,
+                                                              ),
+                                                              max: ITEM_MAX_IN,
+                                                          },
+                                                      )
+                                                    : undefined
+                                            }
+                                        >
+                                            {t(`view3d.uniformItems.${by}`)}
+                                        </SelectItem>
+                                    );
+                                })}
                             </SelectContent>
                         </Select>
                     )}
@@ -441,8 +484,8 @@ function ItemRow({
                     label={t("view3d.uniformItems.size")}
                     unit="in"
                     value={size}
-                    min={grade === "tile" ? ITEM_MIN_TILE_IN : 0.25}
-                    max={120}
+                    min={itemFieldMin(grade)}
+                    max={ITEM_MAX_IN}
                     step={0.25}
                     testId="view3d-uniform-item-size"
                     onValue={(v) => change({ [sizeBy]: v })}
@@ -481,17 +524,44 @@ function ItemRow({
                 </Field>
             </div>
             {grade === "tile" && <TileRegions item={item} onChange={change} />}
-            {box === null && (
+            {advice && advice.state !== "ok" && (
                 <p
                     className="text-sub text-yellow"
                     role="status"
                     data-testid="view3d-uniform-item-not-drawn"
                 >
-                    {t(
-                        grade === "tile"
-                            ? "view3d.uniformItems.notDrawnTile"
-                            : "view3d.uniformItems.notDrawn",
-                    )}
+                    {[
+                        advice.state === "tooThin"
+                            ? t("view3d.uniformItems.tooThin", {
+                                  thickness: fmt(advice.thickness),
+                              })
+                            : t(
+                                  grade === "tile"
+                                      ? "view3d.uniformItems.notDrawnTile"
+                                      : "view3d.uniformItems.notDrawn",
+                              ),
+                        advice.fix.kind === "range"
+                            ? t("view3d.uniformItems.fixRange", {
+                                  lo: fmt(advice.fix.lo),
+                                  hi: fmt(advice.fix.hi),
+                              })
+                            : advice.fix.kind === "otherSide"
+                              ? t(
+                                    advice.fix.side === "width"
+                                        ? "view3d.uniformItems.fixByWidth"
+                                        : "view3d.uniformItems.fixByHeight",
+                                    {
+                                        lo: fmt(advice.fix.lo),
+                                        hi: fmt(advice.fix.hi),
+                                    },
+                                )
+                              : t(
+                                    grade === "tile"
+                                        ? "view3d.uniformItems.noSizeTile"
+                                        : "view3d.uniformItems.noSize",
+                                    { ratio: Math.round(advice.fix.ratio) },
+                                ),
+                    ].join(" ")}
                 </p>
             )}
         </li>

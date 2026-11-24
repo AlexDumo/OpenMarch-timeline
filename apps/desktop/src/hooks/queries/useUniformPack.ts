@@ -12,9 +12,9 @@ import {
     type QueryClient,
 } from "@tanstack/react-query";
 import { db } from "@/global/database/db";
-import { getShowAsset } from "@/db-functions/showAssets";
 import {
     UniformPackSupersededError,
+    resolveStoredUniformPack,
     saveUniformItemsPack,
     setUniformPack,
 } from "@/db-functions/view3dUniformPack";
@@ -55,6 +55,8 @@ export interface StoredUniformPack extends StoredUniformPackBytes {
 
 /** One of the show's uniforms: its newest version, and every version's value */
 export interface UniformPackEntry {
+    /** The uniform asset's id, the same for all its versions */
+    id: string;
     /** The newest version (`library:<id>@<hash>`) */
     value: string;
     name: string;
@@ -78,6 +80,7 @@ export const uniformPacksQueryOptions = () =>
                     entry.versions.push(value);
                 } else
                     byId.set(asset.id, {
+                        id: asset.id,
                         value,
                         name: asset.name,
                         versions: [value],
@@ -94,13 +97,11 @@ export const uniformPacksQueryOptions = () =>
 export async function readStoredUniformPackBytes(
     value: string | null | undefined,
 ): Promise<StoredUniformPackBytes | null> {
-    const ref = parseShowAssetRef(value);
-    if (!ref || !value) return null;
-    const asset = await getShowAsset({ db, ref });
-    const hash = asset?.parts[UNIFORM_PACK_PART];
-    if (!asset || asset.kind !== UNIFORM_ASSET_KIND || !hash) return null;
-    const bytes = await showAssetBlobCache.get(hash);
-    return bytes ? { value, name: asset.name, bytes } : null;
+    // a version an editing burst just replaced reads as its uniform's newest one
+    const stored = await resolveStoredUniformPack({ db, value });
+    if (!stored) return null;
+    const bytes = await showAssetBlobCache.get(stored.hash);
+    return bytes ? { value: stored.value, name: stored.name, bytes } : null;
 }
 
 /** A pack file's manifest, read and checked in the worker; throws when it isn't a pack */
@@ -189,8 +190,12 @@ export const setUniformPackMutationOptions = (qc: QueryClient) =>
             };
         },
         onSuccess: async () => {
-            await qc.invalidateQueries({ queryKey: showAssetKeys.all() });
-            await qc.invalidateQueries({ queryKey: venueSettingsKeys.all() });
+            // together: the 3D View hears of both at once, so it never reads the new assets
+            // against the old venue for the seconds the asset refetch can take
+            await Promise.all([
+                qc.invalidateQueries({ queryKey: venueSettingsKeys.all() }),
+                qc.invalidateQueries({ queryKey: showAssetKeys.all() }),
+            ]);
         },
         onError: (error) => {
             // an item edit the venue had moved on from: dropped on purpose, nothing failed
@@ -198,3 +203,28 @@ export const setUniformPackMutationOptions = (qc: QueryClient) =>
             conToastError(tolgee.t("view3d.uniformImport.saveFailed"), error);
         },
     });
+
+/**
+ * The show's uniform that `value` names a version of, by its asset id: a version an editing
+ * burst just replaced still finds its uniform (see `resolveStoredUniformPack`)
+ */
+export function uniformEntryOf(
+    packs: readonly UniformPackEntry[] | undefined,
+    value: string | null | undefined,
+): UniformPackEntry | undefined {
+    const id = parseShowAssetRef(value)?.id;
+    return id ? packs?.find((p) => p.id === id) : undefined;
+}
+
+/**
+ * Keeps a uniform pack query's last data while the value it reads moves to another version of
+ * the same uniform (an item edit's save), so what shows it doesn't blink out; never across
+ * different uniforms
+ */
+export const keepSameUniform =
+    (value: string | null | undefined) =>
+    (previous: StoredUniformPack | null | undefined) =>
+        previous &&
+        parseShowAssetRef(previous.value)?.id === parseShowAssetRef(value)?.id
+            ? previous
+            : undefined;

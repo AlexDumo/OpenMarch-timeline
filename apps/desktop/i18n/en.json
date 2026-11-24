@@ -3763,8 +3763,15 @@
                 "cape": "Cape"
             },
             "needsRegion": "A repeating print needs at least one part.",
-            "notDrawn": "This image is too long or thin to show at this size, so it isn't drawn. Change its size, or size it by its other side.",
-            "notDrawnTile": "Each copy of this print would be under 1 in or over 120 in on one side, so it isn't drawn. Change its size, or size it by its other side."
+            "notDrawn": "At this size one side would be over 120 in, so it isn't drawn.",
+            "notDrawnTile": "At this size each copy would be under 1 in or over 120 in on one side, so the print isn't drawn.",
+            "tooThin": "At this size it's {thickness} in thick, too thin to see.",
+            "fixRange": "Set Size between {lo} and {hi} in.",
+            "fixByWidth": "Set Size by to Width, then Size between {lo} and {hi} in.",
+            "fixByHeight": "Set Size by to Height, then Size between {lo} and {hi} in.",
+            "noSize": "No size works: the image is {ratio} times longer than it is wide. Use a less thin image.",
+            "noSizeTile": "No size works for a repeating print: the image is {ratio} times longer than it is wide, so a copy 1 in on its short side would be over 120 in on its long side. Use a less thin image, or choose another option under On other builds.",
+            "sizeByRefused": "Sized that way, this item would be {value} in, outside the {min}–{max} in Size takes."
         }
     },
     "web": {
@@ -5279,6 +5286,8 @@
         "errors": {
             "remove": "Couldn't remove the unused assets",
             "credits": "Couldn't save the credits"
-        }
+        },
+        "olderVersions": "{count, plural, one {# older version} other {# older versions}}, {size}",
+        "otherVersions": "{count, plural, one {# other version} other {# other versions}}, {size}"
     }
 }

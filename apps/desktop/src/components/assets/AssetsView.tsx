@@ -34,6 +34,8 @@ import {
     uniformsInHistoryQueryOptions,
 } from "@/hooks/queries/useShowAssets";
 import {
+    groupAssetVersions,
+    type AssetGroup,
     LARGE_SHOW_ASSET_BYTES,
     keptForHistory,
     showAssetUse,
@@ -49,7 +51,7 @@ import {
     type WornPackProblem,
 } from "@/view3d/core/uniformPack/wornPack";
 import { uniformPackQueryOptions } from "@/hooks/queries/useUniformPack";
-import { showAssetRefValue } from "@/showAssets/ref";
+import { parseShowAssetRef, showAssetRefValue } from "@/showAssets/ref";
 
 /**
  * The show's own assets (fork #1001, owner 2026-11-17): every imported model with its picture,
@@ -121,12 +123,25 @@ function useAssetUse() {
         ).length;
         // The band's uniform when the show doesn't have it (an undo after Remove unused…), or
         // has it but its file doesn't read
+        // any version of it: a version an item edit just replaced still counts (fork #1258)
+        const wornId = parseShowAssetRef(worn)?.id;
         const uniformProblem = wornPackProblem(
             worn,
-            known.has(worn ?? ""),
+            known.has(worn ?? "") ||
+                use.assets.some(
+                    (row) =>
+                        row.asset.id === wornId &&
+                        row.asset.kind === UNIFORM_ASSET_KIND,
+                ),
             wornPack,
         );
-        return { ...use, missingProps, uniformProblem, historyFailed };
+        return {
+            ...use,
+            groups: groupAssetVersions(use.assets, sizes),
+            missingProps,
+            uniformProblem,
+            historyFailed,
+        };
     }, [
         assets,
         sizes,
@@ -195,8 +210,12 @@ export function AssetsContents({
                     </p>
                 )}
                 <ul className="flex flex-col gap-8">
-                    {use?.assets.map((row) => (
-                        <AssetRow key={row.value} row={row} />
+                    {use?.groups.map((group) => (
+                        <AssetRow
+                            key={group.row.asset.id}
+                            row={group.row}
+                            group={group}
+                        />
                     ))}
                 </ul>
             </div>
@@ -316,7 +335,7 @@ const licenseOf = (credits: JsonObject): string | null => {
 };
 
 /** One asset: its picture, name, kind, size and use, and its credits to read or edit */
-function AssetRow({ row }: { row: AssetUse }) {
+function AssetRow({ row, group }: { row: AssetUse; group: AssetGroup }) {
     const { t } = useTranslate();
     const sizeText = useSizeText();
     const [open, setOpen] = useState(false);
@@ -354,6 +373,22 @@ function AssetRow({ row }: { row: AssetUse }) {
                                 : t("assets.unused"),
                         ].join(" · ")}
                     </span>
+                    {group.others.length > 0 && (
+                        <span
+                            className="text-sub text-text-subtitle"
+                            data-testid="asset-other-versions"
+                        >
+                            {t(
+                                group.allOlder
+                                    ? "assets.olderVersions"
+                                    : "assets.otherVersions",
+                                {
+                                    count: group.others.length,
+                                    size: sizeText(group.othersBytes),
+                                },
+                            )}
+                        </span>
+                    )}
                     <span className="text-sub text-text-subtitle flex items-center gap-4">
                         {license ? (
                             license === "LicenseRef-Proprietary" ? (

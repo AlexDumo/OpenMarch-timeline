@@ -15,7 +15,9 @@ import {
 } from "./view3dVenue";
 import {
     addShowAssetInTransaction,
+    getShowAsset,
     getShowAssets,
+    type ShowAsset,
     hashShowAsset,
     type ShowAssetHashes,
     removeShowAssetsInTransaction,
@@ -236,4 +238,43 @@ export async function saveUniformItemsPack({
         },
     );
     return { value, token };
+}
+
+/**
+ * The stored uniform pack `value` names, for drawing it: its own version, or, when that version
+ * is gone, the newest version of the same uniform. Null when the show has no uniform of that id.
+ *
+ * Why the fallback: an editing burst's save removes the version it replaces in the same
+ * transaction that points the venue at the new one, so the venue in the database never names a
+ * removed version. But the 3D View learns of the asset change and of the venue change
+ * separately, and for a moment its venue can still name the version just removed. Reading that
+ * as "the show has no such uniform" made the band drop to its preset for seconds (fork #1287).
+ * The removed version's successor is the newest version of the same uniform, which the venue
+ * names a moment later.
+ */
+export async function resolveStoredUniformPack({
+    db,
+    value,
+}: {
+    db: DbConnection | DbTransaction;
+    value: string | null | undefined;
+}): Promise<{ value: string; name: string; hash: string } | null> {
+    const ref = parseShowAssetRef(value);
+    if (!ref || !value) return null;
+    const exact = await getShowAsset({ db, ref });
+    const pick = (asset: ShowAsset | undefined) =>
+        asset &&
+        asset.kind === UNIFORM_ASSET_KIND &&
+        asset.parts[UNIFORM_PACK_PART]
+            ? {
+                  value: showAssetRefValue(asset),
+                  name: asset.name,
+                  hash: asset.parts[UNIFORM_PACK_PART],
+              }
+            : null;
+    if (exact) return pick(exact);
+    const versions = (await getShowAssets({ db })).filter(
+        (asset) => asset.id === ref.id && asset.kind === UNIFORM_ASSET_KIND,
+    );
+    return pick(versions.at(-1));
 }
