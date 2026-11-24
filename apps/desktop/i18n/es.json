@@ -18,8 +18,7 @@
             "snapOn": "Ajuste desactivado: actívalo de nuevo",
             "snapToCustomFraction": "Ajustar a la cuadrícula",
             "toggleSnap": "Activar o desactivar el ajuste",
-            "toggleSnapKeywords": "ajuste ajustar imán cuadrícula libre snap magnet grid free",
-            "propsOnly": "Solo hay utilería seleccionada: la utilería no se alinea ni se espacia"
+            "toggleSnapKeywords": "ajuste ajustar imán cuadrícula libre snap magnet grid free"
         },
         "batchEdit": {
             "clearPage": "Vaciar la página {page}",
@@ -798,8 +797,6 @@
         "marcher": {
             "drillNumber": "Número de drill",
             "errorLoadingCoords": "Error al cargar las coordenadas",
-            "itemsSelected": "{count, plural, one {# elemento de utilería seleccionado. Edítalo en el panel Utilería.} other {# elementos de utilería seleccionados. Edítalos en el panel Utilería.}}",
-            "equipmentSelected": "{count, plural, =1 {# equipo seleccionado. Haz clic derecho en él para editarlo.} other {# equipos seleccionados. Haz clic derecho en uno para editarlo.}}",
             "playing": "Reproduciendo. Pausa para ver y editar a los integrantes seleccionados.",
             "maxStepSize": "Tamaño de paso más grande",
             "minStepSize": "Tamaño de paso más pequeño",
@@ -1530,15 +1527,10 @@
             },
             "groups": {
                 "cantImport": "No se puede importar",
-                "needsChoice": "Necesita tu elección",
                 "fixed": "Corregido automáticamente",
                 "notes": "Notas"
             },
             "tryAgain": "Reintentar",
-            "rotate": {
-                "title": "Ponerlo de pie (archivo Z-up)",
-                "detail": "Algunos programas exportan con Z hacia arriba, así que el modelo queda acostado de espaldas."
-            },
             "name": "Nombre",
             "saveFailed": "No se pudo agregar el modelo al show.",
             "cancel": "Cancelar",

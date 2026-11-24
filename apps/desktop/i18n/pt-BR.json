@@ -18,8 +18,7 @@
             "snapOn": "Ajuste desativado: ativar novamente",
             "snapToCustomFraction": "Ajustar à grade",
             "toggleSnap": "Ativar/desativar ajuste",
-            "toggleSnapKeywords": "ajustar ajuste ímã grade livre snap magnet grid free",
-            "propsOnly": "Só há adereços selecionados: adereços não são alinhados nem espaçados"
+            "toggleSnapKeywords": "ajustar ajuste ímã grade livre snap magnet grid free"
         },
         "batchEdit": {
             "clearPage": "Limpar página {page}",
@@ -798,8 +797,6 @@
         "marcher": {
             "drillNumber": "Número na coreografia",
             "errorLoadingCoords": "Erro ao carregar as coordenadas",
-            "itemsSelected": "{count, plural, one {# adereço selecionado. Edite-o no painel Adereços.} other {# adereços selecionados. Edite-os no painel Adereços.}}",
-            "equipmentSelected": "{count, plural, =1 {# equipamento selecionado. Clique nele com o botão direito para editá-lo.} other {# equipamentos selecionados. Clique em um com o botão direito para editá-lo.}}",
             "playing": "Reproduzindo. Pause para ver e editar os integrantes selecionados.",
             "maxStepSize": "Maior tamanho de passo",
             "minStepSize": "Menor tamanho de passo",
@@ -1530,15 +1527,10 @@
             },
             "groups": {
                 "cantImport": "Não é possível importar",
-                "needsChoice": "Precisa da sua escolha",
                 "fixed": "Corrigido automaticamente",
                 "notes": "Observações"
             },
             "tryAgain": "Tentar novamente",
-            "rotate": {
-                "title": "Colocar em pé (arquivo Z-up)",
-                "detail": "Alguns programas exportam com Z para cima, então o modelo fica deitado de costas."
-            },
             "name": "Nome",
             "saveFailed": "Não foi possível adicionar o modelo ao show.",
             "cancel": "Cancelar",
