@@ -707,7 +707,8 @@ function DrillChartExport() {
                 : [];
 
             // One PDF per marcher, or one combined "MAIN" chart. Throws when the combined
-            // chart or every individual one fails, so the export shows as failed
+            // chart fails, at the first save error, or when no individual chart was made,
+            // so the export shows as failed
             return await makeDrillChartFiles({
                 count: individualCharts ? svgPages.length : 1,
                 individualCharts,
