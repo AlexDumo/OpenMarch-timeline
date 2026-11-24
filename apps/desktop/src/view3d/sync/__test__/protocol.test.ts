@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
     hiddenPropsOf,
@@ -185,4 +187,20 @@ describe("parseCameraMove", () => {
         expect(isView3dCameraWanted({ wanted: true })).toBe(true);
         expect(isView3dCameraWanted({ wanted: "yes" })).toBe(false);
     });
+});
+
+describe("the preloads' copies of the publish channels", () => {
+    // Preloads keep their own list (they can't import the app's code at run time): a channel
+    // missing there throws in the 3D View, or never reaches it
+    it.each(["index.ts", "view3d.ts"])(
+        "electron/preload/%s lists every channel",
+        (file) => {
+            const source = readFileSync(
+                resolve(__dirname, "../../../../electron/preload", file),
+                "utf8",
+            );
+            for (const channel of VIEW3D_PUBLISH_CHANNELS)
+                expect(source).toContain(`"${channel}"`);
+        },
+    );
 });
