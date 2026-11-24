@@ -11,7 +11,7 @@ questions:
   - "Drag a marcher off the circle. Did it pull out into a trail with the others following, the way you expected?"
   - "Drag around a few spots first, then off the circle, in one drag. Did the trail carry on from where the line had slid to? Is that useful, or would you rather it started from where they stand?"
   - "New (2026-11-23): click a marcher, let go, and move the mouse without holding the button. Did the line follow, and did the next click keep it? Would you rather it worked another way?"
-  - "New (2026-11-23): while a trail is drawn, the bar has Straight | Curve. Did you find it, and did Curve bend the trail the way you wanted?"
+  - "New (2026-11-23): while a trail is drawn, the bar has Straight | Curved. Did you find it, and did Curved bend the trail the way you wanted?"
   - "New (2026-11-23): put marchers on a closed shape that isn't a circle or box (a closed Curve, or by hand in a loop) and press Shift+L. Did they go around the shape you expected? Anywhere the loop cut a corner or bulged?"
   - "New (2026-11-23): the mode now shows in the top bar (Following, with a live line). Did you see it, and did you miss the note over the field? Was not being able to switch tabs fine, or in the way?"
   - "New (2026-11-23): after clicking a marcher, could you tell at once that you were holding the line?"
@@ -58,11 +58,10 @@ show.
   marcher, let go, and move the mouse: the line slides around or pulls out just as it does
   when you drag. **Click again** to keep it, **Enter** also keeps it, **Esc** puts it back.
   Holding and dragging still works. On a tablet it stays press and drag.
-- **Straight | Curve (2026-11-23).** While a trail is drawn (also after pulling out of a
-  circle) the bar has **Straight | Curve**: the next click places a corner or a smooth point,
-  Alt + Click the other kind, and the choice is kept for the next drawing. Points you've
-  already placed keep their kind. Pressing and dragging a point still rounds that one point.
-  After finishing, **Edit path** and a click on a point give Corner | Smooth for it.
+- **Straight | Curved (2026-11-23).** While a trail is drawn (also after pulling out of a
+  circle) the bar has **Straight | Curved**: clicks place corners or smooth points, and the
+  points you've placed change with it. Pressing and dragging a point still rounds that one
+  point. After finishing, **Edit path** and a click on a point give Corner | Smooth for it.
 - **No order needed.** Follow no longer asks you to set the march order first. With none set
   it takes their places around the outline, and shows who it would lead with until you grab
   someone.
