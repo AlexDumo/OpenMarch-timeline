@@ -24,6 +24,7 @@ import {
     type SilkArtworkImport,
 } from "@/view3d/core/silkArtwork";
 import { silkShape, silkShapeOf } from "@/view3d/core/sizes/silkShapes";
+import { saveFile } from "./saveFile";
 import { useVenueRequest } from "./VenueControls";
 
 const FORMATS: readonly TemplateFormat[] = ["png", "svg", "pdf"];
@@ -34,21 +35,6 @@ async function deflate(data: Uint8Array): Promise<Uint8Array> {
         .stream()
         .pipeThrough(new CompressionStream("deflate"));
     return new Uint8Array(await new Response(stream).arrayBuffer());
-}
-
-function saveFile(name: string, mimeType: string, data: string | Uint8Array) {
-    const blob = new Blob(
-        [typeof data === "string" ? data : (data as Uint8Array<ArrayBuffer>)],
-        { type: mimeType },
-    );
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /**

@@ -3959,5 +3959,9 @@
     "actions.ui.hideView3dCameraOnField": "Command palette label of the 3D View camera action while it shows. Verb.",
     "field.view3dCamera.name": "Small chip on the 2D field shown while hovering or dragging the purple camera marker. The marker is where the separate 3D View window's camera stands. Names it.",
     "field.view3dCamera.move": "Accessible label of the purple camera marker on the 2D field: dragging it moves the 3D View window's camera across the field (it keeps looking the same way).",
-    "field.view3dCamera.aim": "Accessible label of the small ring at the end of the 3D View camera's dashed line of sight on the 2D field: dragging it turns the camera to look at that spot."
+    "field.view3dCamera.aim": "Accessible label of the small ring at the end of the 3D View camera's dashed line of sight on the 2D field: dragging it turns the camera to look at that spot.",
+    "view3d.uniformTemplate.label": "Label before the download buttons (PNG, SVG, PDF, JSON) under the band uniform choice in the 3D View settings panel. The template is a page with the uniform's front and back drawn flat, which an artist paints in an image editor to design the band's own uniform.",
+    "view3d.uniformTemplate.preparing": "Shown on a uniform template download button while the file is being made, which can take a moment for the PNG.",
+    "view3d.uniformTemplate.jsonTooltip": "Tooltip on the JSON download button for the uniform template: a data file with the template's region outlines and side seams in inches, for people writing scripts and for AI agents that draw uniforms.",
+    "view3d.uniformTemplate.failed": "Error shown under the uniform template download buttons when the file couldn't be made."
 }
