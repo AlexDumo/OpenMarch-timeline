@@ -183,8 +183,8 @@ export async function saveUniformItemsPack({
             db,
             amend,
             ["view3d_venue"],
-            async (tx) => {
-                const value = await setUniformPackInTransaction({
+            async (tx) =>
+                await setUniformPackInTransaction({
                     tx,
                     pack,
                     manifest,
@@ -192,8 +192,10 @@ export async function saveUniformItemsPack({
                     versionOf,
                     expect,
                     hashes,
-                });
-                // the version this one replaces, unless the history still names it
+                }),
+            // once the venue's change has left the history: the version this one replaces,
+            // unless the history still names it
+            async (tx, value) => {
                 const replaced = parseShowAssetRef(expect);
                 if (
                     replaced &&
@@ -209,7 +211,6 @@ export async function saveUniformItemsPack({
                         tx,
                         refs: [replaced],
                     });
-                return value;
             },
         );
         if (amended.amended) return { value: amended.result, token: amend };

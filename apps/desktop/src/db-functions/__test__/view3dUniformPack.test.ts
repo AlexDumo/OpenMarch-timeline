@@ -1,7 +1,13 @@
 import { describe, expect } from "vitest";
 import { describeDbTests } from "@/test/base";
 import FootballTemplates from "@/global/classes/fieldTemplates/Football";
-import { performRedo, performUndo } from "../history";
+import {
+    amendLatestUndoEntry,
+    getLatestUndoEntryToken,
+    performRedo,
+    performUndo,
+} from "../history";
+import { updateVenueSettingsInTransaction } from "../view3dVenue";
 import { getStoredVenueSettings, updateVenueSettings } from "../view3dVenue";
 import {
     getShowAsset,
@@ -335,6 +341,104 @@ describeDbTests("view3dUniformPack", (it) => {
             expect((await getStoredVenueSettings({ db }))?.uniformArtwork).toBe(
                 first.value,
             );
+        });
+
+        it("makes an undo pressed during an amend wait, then undo the whole burst (#1258)", async ({
+            db,
+        }) => {
+            const origin = await store(db, packFile("Home uniform", 1));
+            const first = await saveUniformItemsPack({
+                db,
+                pack: crestPack(4),
+                manifest: readUniformPack(crestPack(4)).manifest,
+                field,
+                versionOf: parseShowAssetRef(origin)!.id,
+                expect: origin,
+            });
+            let release: () => void = () => undefined;
+            const gate = new Promise<void>((r) => (release = r));
+            const venue = (await getStoredVenueSettings({ db }))!;
+            const amending = amendLatestUndoEntry(
+                db,
+                first.token!,
+                ["view3d_venue"],
+                async (tx) => {
+                    await updateVenueSettingsInTransaction({
+                        tx,
+                        settings: { ...venue, crowd: !venue.crowd },
+                    });
+                    await gate;
+                    return "done";
+                },
+            );
+            let undone = false;
+            const undo = performUndo(db).then((r) => {
+                undone = true;
+                return r;
+            });
+            await new Promise((r) => setTimeout(r, 30));
+            // the undo waits for the amend instead of failing inside its transaction
+            expect(undone).toBe(false);
+            release();
+            expect(await amending).toEqual({ amended: true, result: "done" });
+            expect((await undo).success).toBe(true);
+            // one step back: before the burst, the amend's change included
+            const back = (await getStoredVenueSettings({ db }))!;
+            expect(back.uniformArtwork).toBe(origin);
+            expect(back.crowd).toBe(venue.crowd);
+        });
+
+        it("never deletes the history of an edit made while an amend runs (#1258)", async ({
+            db,
+        }) => {
+            const origin = await store(db, packFile("Home uniform", 1));
+            await saveUniformItemsPack({
+                db,
+                pack: crestPack(4),
+                manifest: readUniformPack(crestPack(4)).manifest,
+                field,
+                versionOf: parseShowAssetRef(origin)!.id,
+                expect: origin,
+            });
+            const token = (await getLatestUndoEntryToken(db))!;
+            let release: () => void = () => undefined;
+            const gate = new Promise<void>((r) => (release = r));
+            const amending = amendLatestUndoEntry(
+                db,
+                token,
+                ["view3d_venue"],
+                async () => {
+                    await gate;
+                    return null;
+                },
+            );
+            // an edit asked for during the amend
+            const before = (await getStoredVenueSettings({ db }))!;
+            const edit = updateVenueSettings({
+                db,
+                settings: { ...before, crowd: !before.crowd },
+            });
+            await new Promise((r) => setTimeout(r, 30));
+            release();
+            await amending;
+            await edit;
+            expect((await getStoredVenueSettings({ db }))?.crowd).toBe(
+                !before.crowd,
+            );
+            // the edit is its own undo step, and still undoes
+            await performUndo(db);
+            expect((await getStoredVenueSettings({ db }))?.crowd).toBe(
+                before.crowd,
+            );
+            expect((await getStoredVenueSettings({ db }))?.uniformArtwork).toBe(
+                before.uniformArtwork,
+            );
+            // and the token it left is no longer the burst's: a late amend starts a new step
+            expect(
+                await amendLatestUndoEntry(db, token, ["view3d_venue"], () =>
+                    Promise.resolve(1),
+                ),
+            ).toEqual({ amended: false });
         });
 
         it("refuses a manifest that doesn't parse, changing nothing", async ({

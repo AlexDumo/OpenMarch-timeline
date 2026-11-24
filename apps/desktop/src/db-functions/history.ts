@@ -876,6 +876,8 @@ export async function amendLatestUndoEntry<T>(
     token: string,
     tables: readonly string[],
     func: (tx: DbTransaction) => Promise<T>,
+    /** Runs in the same transaction once those rows are gone, for clean-up that reads history */
+    after?: (tx: DbTransaction, result: T) => Promise<void>,
 ): Promise<{ amended: true; result: T } | { amended: false }> {
     return await withTransactionWithHistoryLock(async () => {
         const outcome = await db.transaction(async (tx) => {
@@ -910,6 +912,7 @@ export async function amendLatestUndoEntry<T>(
                         ),
                     )
                     .run();
+            await after?.(tx, result);
             return { result };
         });
         if (outcome === null) return { amended: false as const };
