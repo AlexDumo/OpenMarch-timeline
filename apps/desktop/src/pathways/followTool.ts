@@ -31,6 +31,7 @@ import {
     rippleFormProblem,
     rippleRefusal,
 } from "@/db-functions/timelineTrailRipplePlan";
+import { mapCells } from "@/db-functions/timelineTrailSnake";
 import type { DbConnection } from "@/db-functions/types";
 import { isBasicMode } from "@/stores/EditorModeStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
@@ -111,9 +112,8 @@ export async function followKeepAt(
     const along = await followOrderAt(
         database,
         sorted,
-        move.start,
+        { start: move.start, end: move.end },
         at,
-        move.end,
     );
     // Each end spot from its slot's stored destination, as Ripple in's write reads it (step 9)
     const stored = await database.transaction((tx) =>
@@ -139,6 +139,10 @@ export async function followKeepAt(
                           ]),
                       ),
                       order: tailFirstOf(along).map((i) => sorted[i]!),
+                      // A box with no remembered order there snakes from a corner (step 11)
+                      ...(along.box
+                          ? { box: mapCells(along.box, (i) => sorted[i]!) }
+                          : {}),
                   },
               }
             : {}),
@@ -211,16 +215,12 @@ export async function openFollowTool(
         const [x, y] = resolver.positionAt(m, window.start);
         return [x, y];
     });
-    // The order set by hand (up to the window's end), or else the one their positions suggest
-    const along = await followOrderAt(
-        db,
-        sorted,
-        window.start,
-        starts,
-        window.end,
-    );
+    // The order set by hand (read up to the window's end, where Set order is made), or else the
+    // one their positions suggest (step 4f), a box's default snake included (step 11)
+    const along = await followOrderAt(db, sorted, window, starts);
     const tailFirst = along ? tailFirstOf(along).map((i) => sorted[i]!) : null;
-    const set = along?.leaderFirst ? tailFirst : null;
+    // Set by hand: a box's default snake (step 11) runs leader first too, but isn't a set order
+    const set = along?.leaderFirst && !along.box ? tailFirst : null;
     const at = new Map<number, XY>(
         sorted.map((m, i) => [m, { x: starts[i]![0], y: starts[i]![1] }]),
     );
@@ -246,6 +246,13 @@ export async function openFollowTool(
         formWhy,
         step,
         around,
+        // A box with no remembered order (step 11, SN-2): every corner an end, row by row first.
+        // One only two deep stands all the way round its outline too, and goes around (DO-1)
+        box:
+            along?.box && !around
+                ? mapCells(along.box, (i) => sorted[i]!)
+                : null,
+        snakeBy: "rows",
     };
     // Round an outline, the line is the ring as it's walked, whatever line their places suggest
     const order = around

@@ -15,6 +15,7 @@ import {
 import { TimelineEditRefusedError } from "../timelineEditRefusals";
 import { createTimelineShapesInTransaction } from "@/db-functions/timelineShapes";
 import { saveShapeRecipeInTransaction } from "@/db-functions/shapeRecipes";
+import { followTrail, readTrails } from "@/db-functions/timelineTrails";
 import {
     setTimelineTransitionDestinationInTransaction,
     updateTimelineTransitionsInTransaction,
@@ -680,6 +681,44 @@ describeDbTests("set marchers to the previous or next page", (it) => {
         );
         expect(await timelineRows(db)).toEqual(before);
         expect(await undoRows(db)).toHaveLength(undoBefore);
+    });
+
+    it("Clear this page on part of a drawn trail takes the whole trail, counts the cleared marchers, and notes who walks straight now (owner, 2026-11-18)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await convertPagesToTimeline(db);
+        await startTimelineResolver(db);
+        const pages = await sortedPages(db);
+        const page = pages[3]!;
+        const transition = await pageMoveEndingAt(db, pageEndBeat(page));
+        const line = resolver().marcherIds().slice(0, 4);
+        await followTrail({
+            db,
+            timelineId: transition.timeline_id,
+            marcherIds: line,
+            points: [{ at: [40, 40] }],
+        });
+        await timelineResolverSettled();
+
+        const { result, notify } = await runTimeline(db, {
+            page,
+            pages,
+            direction: "previous",
+            scope: "selected",
+            selected: line.slice(0, 2),
+        });
+
+        expect(result).toBe(2);
+        expect(await readTrails(db)).toEqual([]);
+        expect(notify.note).toHaveBeenCalledExactlyOnceWith(
+            expect.stringMatching(
+                /^actions\.batchEdit\.clearThisPageTrailToo \{"count":2,/,
+            ),
+        );
+        expect(notify.note).not.toHaveBeenCalledWith(
+            expect.stringMatching(/follows the leader/),
+        );
     });
 
     it("no resolver yet: the planning error is reported and nothing is written", async ({

@@ -612,7 +612,7 @@ describeDbTests("Follow by dragging out a trail (AP-T8, AP-T9)", (it) => {
         await expectRefused(
             db,
             () => drag([1, 2, 3, 5], 5),
-            /line, curve or arc/,
+            /line, curve, arc or box/,
         );
         expect(
             refusalText(
@@ -629,7 +629,7 @@ describeDbTests("Follow by dragging out a trail (AP-T8, AP-T9)", (it) => {
                     ))!,
                 ),
             ),
-        ).toMatch(/line, curve or arc/);
+        ).toMatch(/line, curve, arc or box/);
         // A member with a drawn path in the window
         const move = (await db
             .select()

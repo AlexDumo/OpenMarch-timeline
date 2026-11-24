@@ -1538,6 +1538,16 @@
         "category": "path",
         "bindings": []
     },
+    "followSnakeRows": {
+        "label": "Snake row by row",
+        "category": "path",
+        "bindings": []
+    },
+    "followSnakeColumns": {
+        "label": "Snake column by column",
+        "category": "path",
+        "bindings": []
+    },
     "reverseTrail": {
         "label": "Reverse leader",
         "category": "path",
@@ -1557,6 +1567,11 @@
                 }
             }
         ]
+    },
+    "trailShapeControls": {
+        "label": "Shape controls",
+        "category": "path",
+        "bindings": []
     },
     "toggleMarcherOrder": {
         "label": "Show order",
@@ -1605,6 +1620,16 @@
     },
     "clearMarcherOrder": {
         "label": "Clear order",
+        "category": "path",
+        "bindings": []
+    },
+    "pathDrawStraight": {
+        "label": "Draw straight",
+        "category": "path",
+        "bindings": []
+    },
+    "pathDrawCurve": {
+        "label": "Draw curves",
         "category": "path",
         "bindings": []
     },

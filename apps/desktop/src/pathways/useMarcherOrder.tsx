@@ -24,6 +24,7 @@ import {
     cancelOrderSweep,
     openOrderSweep,
     shownOrderOf,
+    takeBackLastPick,
     useMarcherOrderStore,
 } from "./marcherOrderStore";
 import {
@@ -187,7 +188,7 @@ export function useMarcherOrderActions(): void {
 
 /**
  * The keys Set order takes while it's on, over everything else: Enter keeps what's picked (the
- * rest after, in the order they had), Escape cancels, and so do undo and redo, undo bringing back
+ * rest after, in the order they had), Backspace takes the newest pick back, Escape cancels, and so do undo and redo, undo bringing back
  * a shape tool opening it discarded
  */
 export function OrderSweepKeys(): null {
@@ -197,6 +198,10 @@ export function OrderSweepKeys(): null {
     });
     useActionHandler("applyShape", () => void keepOrderSweep(queryClient), {
         label: tolgee.t("pathways.order.done", "Keep this order"),
+    });
+    // Backspace (owner, 2026-11-17): the newest pick taken back, again and again, newest first
+    useActionHandler("shapeRemoveLastPoint", () => void takeBackLastPick(), {
+        label: tolgee.t("pathways.order.removeLast", "Remove last"),
     });
     // Undo and redo cancel it rather than undo a show edit behind it (`undoInOrderSweep`)
     useActionHandler("performUndo", () => undoInOrderSweep());

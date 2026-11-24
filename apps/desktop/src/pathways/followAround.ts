@@ -44,7 +44,7 @@ import {
     type FollowDrag,
     type FollowMarchers,
 } from "./followDrag";
-import type { PathPoint } from "./pathEdit";
+import type { PathPoint } from "@/shapes/pen/penPath";
 import { usePathPenStore, type PathSession } from "./pathPenStore";
 import type { PathTarget } from "./pathTarget";
 

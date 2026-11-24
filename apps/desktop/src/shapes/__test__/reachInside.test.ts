@@ -173,6 +173,44 @@ describe("the selected box's field mode and reach inside", () => {
         expect(under.cursorAt).not.toHaveBeenCalled();
     });
 
+    it("a press outside the box that the path under it claims (a trail's head, AP-T16) is the path's to its release, the path's drawing shown meanwhile", () => {
+        const drawn = { outline: null, spots: [], walks: [], handles: [] };
+        const under = {
+            takeClick: vi.fn(() => false),
+            fieldMenuAt: vi.fn(() => null),
+            cursorAt: vi.fn(() => "grab" as const),
+            claims: vi.fn(() => true),
+            press: vi.fn(),
+            move: vi.fn(),
+            release: vi.fn(),
+            cancel: vi.fn(),
+            longPress: vi.fn(() => false),
+            drawing: vi.fn(() => drawn),
+            subscribe: vi.fn(() => () => {}),
+        };
+        const withPath = new LiveBoxMode(box, new QueryClient(), under);
+        const outside = pointer({ x: member.x + 400, y: member.y + 400 });
+        expect(withPath.claims(outside, editorSays(false))).toBe(true);
+        withPath.press(outside, editorSays(false));
+        expect(under.press).toHaveBeenCalledWith(outside, expect.anything());
+        expect(withPath.drawing()).toBe(drawn);
+        withPath.move(outside);
+        expect(under.move).toHaveBeenCalledWith(outside);
+        expect(withPath.longPress(outside)).toBe(false);
+        withPath.release(outside, null);
+        expect(under.release).toHaveBeenCalledWith(outside, null);
+        expect(withPath.drawing()).not.toBe(drawn);
+        // Lost mid-press: the path's press is cancelled, not the box's
+        withPath.press(outside, editorSays(false));
+        withPath.cancel();
+        expect(under.cancel).toHaveBeenCalledTimes(1);
+        // On the box, the box's own, whatever the path says
+        under.press.mockClear();
+        withPath.press(pointer(member), editorSays(false));
+        expect(under.press).not.toHaveBeenCalled();
+        withPath.cancel();
+    });
+
     it("without anything under it, takes no click and offers no menu", () => {
         const outside = pointer({ x: member.x + 400, y: member.y + 400 });
         expect(mode().takeClick(outside, false)).toBe(false);
@@ -708,5 +746,52 @@ describe("reaching inside through the field editor", () => {
             expect(params.center.x).toBeGreaterThan(big.params.center.x + STEP);
             expect(params.center.y).toBeCloseTo(big.params.center.y);
         });
+    });
+});
+
+describe("a shown trail's end shape keeps only its body (pathways, owner 2026-11-17)", () => {
+    const under = (tucked: boolean) => ({
+        takeClick: vi.fn(() => false),
+        fieldMenuAt: vi.fn(() => ["editPath"]),
+        cursorAt: vi.fn(() => null),
+        tucks: vi.fn(() => tucked),
+    });
+
+    it("QA-CT-3: tucked, it draws no outline, handles, move dot or knob, and they take no press; with Shape controls on they're back", () => {
+        const big = placed(15);
+        members = membersOf(big);
+        const tucked = new LiveBoxMode(big, new QueryClient(), under(true));
+        const d = tucked.drawing()!;
+        expect(d.outline).toBeNull();
+        expect(d.handles).toEqual([]);
+        expect(d.addHandles).toEqual([]);
+        expect(d.knob).toBeUndefined();
+        expect(d.centerDot).toBeUndefined();
+        // A corner handle over marcher 1 and the center dot under 8 aren't there to press: the
+        // editor's rules have them (select or drag the marcher)
+        expect(tucked.claims(pointer(members.get(1)!), editorSays(false))).toBe(
+            false,
+        );
+        expect(tucked.claims(pointer(members.get(8)!), editorSays(false))).toBe(
+            false,
+        );
+        expect(tucked.openMenu(pointer(members.get(1)!))).toBe(false);
+        // The trail's menu where the hidden handle was
+        expect(tucked.fieldMenuAt(pointer(members.get(1)!))).toEqual([
+            "editPath",
+        ]);
+        // Its body still drags it whole
+        expect(tucked.claims(pointer(members.get(7)!), editorSays(false))).toBe(
+            true,
+        );
+
+        const shown = new LiveBoxMode(big, new QueryClient(), under(false));
+        const e = shown.drawing()!;
+        expect(e.handles.length).toBeGreaterThan(0);
+        expect(e.centerDot).toBeDefined();
+        expect(e.knob).toBeDefined();
+        expect(shown.claims(pointer(members.get(1)!), editorSays(false))).toBe(
+            true,
+        );
     });
 });

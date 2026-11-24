@@ -6,29 +6,33 @@ import { T } from "@tolgee/react";
 import {
     ArrowClockwiseIcon,
     ArrowCounterClockwiseIcon,
-    ArrowsLeftRightIcon,
     ArrowsMergeIcon,
     ArrowsOutLineHorizontalIcon,
     ArrowsSplitIcon,
     BackspaceIcon,
     BezierCurveIcon,
+    CheckIcon,
+    ColumnsIcon,
     DotsThreeIcon,
-    FlagPennantIcon,
     PlayIcon,
     LineSegmentsIcon,
     PathIcon,
     PencilSimpleIcon,
     PenNibIcon,
+    RowsIcon,
+    ShapesIcon,
     TrashIcon,
     UsersThreeIcon,
     WarningIcon,
     WaveSineIcon,
-    XIcon,
 } from "@phosphor-icons/react";
 import type { FieldProperties } from "@openmarch/core";
 import tolgee from "@/global/singletons/Tolgee";
 import Shortcut from "@/components/ui/Shortcut";
 import { RichTips, Tip } from "@/components/ui/Tip";
+import { ScrubNumber } from "@/shapes/editor/ScrubNumber";
+import { scrubValue, spacingRate } from "@/shapes/editor/scrub";
+import { formatSteps, parseSteps } from "@/shapes/editor/format";
 import { runAction } from "@/shortcuts/registry";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import { getActionShortcutKeys } from "@/shortcuts/labels";
@@ -47,16 +51,21 @@ import {
 import {
     Divider,
     EDITOR_BAR,
-    EditorButton,
     IconButton,
 } from "@/shapes/editor/EditorBarParts";
 import type { XY } from "@/shapes/types";
 import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
 import { refitNeeded } from "./pathTarget";
+import { PenBarActions, PenClickHow } from "@/shapes/pen/PenBar";
 import { useShapeToolStore } from "@/shapes/tool/shapeToolStore";
 import { selectOnField } from "@/shapes/placed/boxSelection";
 import { setInsideBox } from "@/shapes/placed/boxSelectionStore";
-import { OffCountWarning, TrailCornerCounts } from "./TrailCornerCounts";
+import {
+    CornerSummary,
+    OffCountWarning,
+    TrailCornerCounts,
+} from "./TrailCornerCounts";
+import { useTrailEndShape, useTrailShapeControls } from "./trailShape";
 import { trailOffReason, useFollowTheLeader } from "./followTheLeader";
 import { isFollowing } from "./FollowStatus";
 import { useIsTouchMode } from "@/stores/InputModeStore";
@@ -65,6 +74,7 @@ import {
     EVEN_FIRST,
     EVEN_STEP,
     evenLimitOf,
+    evenStepsWithin,
     followFootprint,
     followMarchersOf,
     followPlanOf,
@@ -72,6 +82,9 @@ import {
     rippleDrawnPlanOf,
     ripplesIn,
     setFollowSpacing,
+    lineOf,
+    snakeByOf,
+    snakesThroughBox,
 } from "./followDrag";
 import {
     aroundPlanOf,
@@ -107,34 +120,13 @@ import {
     isSmooth,
     pathOutline,
     pointOf,
-} from "./pathEdit";
+} from "@/shapes/pen/penPath";
 
 // Big steps lives with the inspector's line, which mustn't load the field mode (pathways round 2)
 export { bigSteps, trailDistances, type BigSteps } from "./pathBigSteps";
 
 /** Under a marcher: the field's note there (offset and pill), which the path bar leaves room for */
 const FIELD_NOTE_ROOM_PX = 40;
-/**
- * Reverse leader's tooltip, or why it's off: a dragged-out line ends along its trail, so the
- * other end can't lead (owner, 2026-11-10)
- */
-function reverseLabel(along: boolean | undefined, around?: boolean): string {
-    if (around)
-        return tolgee.t(
-            "pathways.trail.reverseAroundTip",
-            "Go the other way around the outline, as far. The one at the back leads.",
-        );
-    return along
-        ? tolgee.t(
-              "timeline.refusals.trail.reverseAlong",
-              "Reverse leader is off for a trail dragged out of a line. Drag the trail out of the other end instead.",
-          )
-        : tolgee.t(
-              "pathways.trail.reverseTip",
-              "Make the other end of the line lead. Everyone keeps their end spot.",
-          );
-}
-
 /**
  * The path pen's hint and floating editor (pathways steps 1 and 2). While drawing, a hint over the field
  * says how the pen works, as the shape tool's hint does while a Line's points are clicked. Beside
@@ -180,24 +172,29 @@ export function PathEditor({
             />
         ) : null;
     // A quiet path (closed, interaction system rule 4) has the compact bar: Edit path, the member
-    // commands and Remove path, so they're found without its menu. A trail keeps its leader's
-    // mark, which says who leads and turns the line around (step 4). Not drawn, nothing shows
+    // commands and Remove path, so they're found without its menu. A trail's band says who leads
+    // (it darkens toward the leader, with an arrow at the head), so no mark names the leader
+    // (owner, 2026-11-18). Not drawn, nothing shows
     if (session.phase === "closed")
         return hidden || shapeToolOpen ? null : (
             <RichTips>
                 {groupLabel}
-                {trailMarks && (
-                    <>
-                        <TrailLeaderMark session={session} />
-                        <TrailCornerCounts session={session} />
-                    </>
-                )}
+                {trailMarks && <TrailCornerCounts session={session} />}
                 {session.target.routeId !== null && (
                     <PathEditorBar
                         session={session}
                         fieldProperties={fieldProperties}
                     />
                 )}
+            </RichTips>
+        );
+    // A trail's head dragged on or back (AP-T16): the hand is busy, so no banner or bar; the
+    // corners' counts follow the drag, as they do the Follow tool's. Drawn on with clicks, the
+    // pen's banner and bar show, Finish for a finger (owner, 2026-11-17)
+    if (session.follow?.head && !session.follow.head.clicks)
+        return (
+            <RichTips>
+                <TrailCornerCounts session={session} />
             </RichTips>
         );
     return (
@@ -208,13 +205,6 @@ export function PathEditor({
             {session.phase === "drawing" &&
                 !(isFollowing(session) && !touch) && (
                     <PathPenBanner session={session} />
-                )}
-            {trailMarks &&
-                (session.follow?.grabbed !== null ||
-                    goingRound(session.follow)) && (
-                    <RichTips>
-                        <TrailLeaderMark session={session} />
-                    </RichTips>
                 )}
             {trailMarks && <TrailCornerCounts session={session} />}
             <RichTips>
@@ -324,52 +314,6 @@ function useBarSize(
 }
 
 /**
- * The leader's mark (pathways step 4): a chip by where the leader starts, naming who leads. On a
- * stored trail its button turns the line around (Reverse, one undo step), also the way for a
- * finger or a pencil. It sits above the leader's dot and takes no room in the path bar.
- */
-function TrailLeaderMark({ session }: { session: PathSession }) {
-    const view = useFieldViewStore();
-    const trail = session.target.trail!;
-    const leader = trail.members.at(-1)!;
-    const at = fieldToElement(view, leader.from.x, leader.from.y);
-    const stored =
-        session.target.routeId !== null && session.phase !== "drawing";
-    return (
-        <div
-            className="rounded-6 border-stroke bg-modal text-sub text-text shadow-modal absolute z-10 flex -translate-x-1/2 items-center gap-4 border py-2 pr-2 pl-6 whitespace-nowrap"
-            style={{ left: at.x, top: at.y - 40 }}
-            data-testid="trail-leader"
-            data-leader={leader.marcherId}
-            onPointerDown={(e) => e.stopPropagation()}
-        >
-            <FlagPennantIcon
-                size={12}
-                weight="fill"
-                className="text-accent"
-                aria-hidden
-            />
-            <span className={stored ? undefined : "pr-4"}>
-                {tolgee.t("pathways.trail.leader", "Leader · {marcher}", {
-                    marcher: leader.drill,
-                })}
-            </span>
-            {stored && (
-                <IconButton
-                    label={reverseLabel(trail.along, trail.around)}
-                    disabled={trail.along}
-                    action="reverseTrail"
-                    onClick={() => runAction("reverseTrail")}
-                    testId="trail-reverse"
-                >
-                    <ArrowsLeftRightIcon size={14} />
-                </IconButton>
-            )}
-        </div>
-    );
-}
-
-/**
  * The group path's name by its line (interaction round 2): "Group path · 16", over the line's
  * highest point, so the line reads as the middle the members' lanes follow, not as one more
  * marcher's path. With only some of its marchers picked (`picksGroup`, sim round 3) it's a button
@@ -446,13 +390,26 @@ function PathPenBanner({ session }: { session: PathSession }) {
     const overrides = useShortcutOverridesStore((s) => s.overrides);
     const keys = getActionShortcutKeys("shapeRemoveLastPoint", { overrides });
     const esc = () => <Shortcut action="cancelAlignmentUpdates" />;
+    const how = () => <PenClickHow />;
     return (
         <div
             className="rounded-6 border-stroke bg-bg-1 bg-modal text-body text-text shadow-modal pointer-events-none absolute top-12 left-1/2 z-10 -translate-x-1/2 border px-12 py-6"
             data-testid="path-pen-banner"
         >
             {/* With the key unbound, only the right-click is said */}
-            {goingRound(session.follow) ? (
+            {session.follow?.head?.clicks ? (
+                <T
+                    keyName="pathways.banner.headDrawing"
+                    defaultValue="Drawing on the trail, {marcher} leading: <how></how> · Back along it to shorten · <enter></enter> or double-click to finish · <esc></esc> to cancel"
+                    params={{
+                        marcher:
+                            session.target.trail?.members.at(-1)?.drill ?? "",
+                        how,
+                        enter: () => <Shortcut action="applyShape" />,
+                        esc,
+                    }}
+                />
+            ) : goingRound(session.follow) ? (
                 <T
                     keyName="pathways.banner.followOutline"
                     defaultValue="Follow: click or drag any marcher around the {shape}, or out of it to lead a trail, and the rest follow · or type how far · <enter></enter> to finish · <esc></esc> to leave"
@@ -474,6 +431,14 @@ function PathPenBanner({ session }: { session: PathSession }) {
                         esc,
                     }}
                 />
+            ) : session.follow &&
+              session.follow.grabbed === null &&
+              lineOf(session.follow).box ? (
+                <T
+                    keyName="pathways.banner.followGrabBox"
+                    defaultValue="Follow: drag a trail out of a corner of the box, and the box snakes out after it · <esc></esc> to leave"
+                    params={{ esc }}
+                />
             ) : session.follow && session.follow.grabbed === null ? (
                 <T
                     keyName="pathways.banner.followGrab"
@@ -493,11 +458,12 @@ function PathPenBanner({ session }: { session: PathSession }) {
             ) : session.target.trail ? (
                 <T
                     keyName="pathways.banner.trailDrawing"
-                    defaultValue="Trail for {count} marchers, {marcher} leading: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
+                    defaultValue="Trail for {count} marchers, {marcher} leading: <how></how> · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
                     params={{
                         count: session.target.trail.members.length,
                         marcher:
                             session.target.trail.members.at(-1)?.drill ?? "",
+                        how,
                         esc,
                     }}
                 />
@@ -508,27 +474,29 @@ function PathPenBanner({ session }: { session: PathSession }) {
               ) ? (
                 <T
                     keyName="pathways.banner.groupDrawing"
-                    defaultValue="Group path for {count} marchers: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
+                    defaultValue="Group path for {count} marchers: <how></how> · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
                     params={{
                         count: session.target.group.members.length,
+                        how,
                         esc,
                     }}
                 />
             ) : keys ? (
                 <T
                     keyName="pathways.banner.drawingPoints"
-                    defaultValue="{marcher}'s path: click for a corner, drag for a smooth point · Right-click or <keys></keys> removes the last · Double-click to finish · <esc></esc> to cancel"
+                    defaultValue="{marcher}'s path: <how></how> · Right-click or <keys></keys> removes the last · Double-click to finish · <esc></esc> to cancel"
                     params={{
                         marcher: session.drill,
                         keys: () => <Shortcut action="shapeRemoveLastPoint" />,
+                        how,
                         esc,
                     }}
                 />
             ) : (
                 <T
                     keyName="pathways.banner.drawingPointsClick"
-                    defaultValue="{marcher}'s path: click for a corner, drag for a smooth point · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
-                    params={{ marcher: session.drill, esc }}
+                    defaultValue="{marcher}'s path: <how></how> · Right-click removes the last · Double-click to finish · <esc></esc> to cancel"
+                    params={{ marcher: session.drill, how, esc }}
                 />
             )}
         </div>
@@ -555,6 +523,8 @@ function PathEditorBar({
         const lines = drawn?.outline
             ? [
                   ...drawn.outline,
+                  // A trail's whole way, through the box it left too
+                  ...(drawn.walked ?? []),
                   ...(drawn.lanes?.flat() ?? []),
                   ...(session.target.group && !session.target.trail
                       ? [...(drawn.rings ?? []), ...drawn.spots]
@@ -604,9 +574,11 @@ function PathEditorBar({
     const faded =
         drawing && (session.dragging !== null || !!session.follow?.roundSlide);
     const quiet = session.phase === "closed";
-    // Step 6 (TC-7): a trail's turns that fall between counts (Follow-the-leader on, #1095)
+    // Step 6 (TC-7): a trail's turns that fall between counts. Selected (closed), the bar sums
+    // them up after Edit path, and the chips wait for a hover or a click on it (owner, 2026-11-17).
+    // Follow-the-leader off (#1095): none
     const offCount =
-        quiet || !followTheLeader
+        (quiet && !session.target.trail) || !followTheLeader
             ? { turns: 0, corners: 0 }
             : offCountTally(trailCornersOf(session));
     const stored = session.target.routeId !== null;
@@ -628,6 +600,8 @@ function PathEditorBar({
     const controls = drawing || stored;
     // While a new path is drawn for two or more marchers: Together (a group path) or Follow (a
     // trail), switched without losing the points placed (pathways step 4)
+    // Drawing on from a trail's head (AP-T16): its spacing and ends are the trail's own
+    const headClicks = drawing && !!session.follow?.head?.clicks;
     const kindChoice =
         followTheLeader &&
         drawing &&
@@ -635,7 +609,6 @@ function PathEditorBar({
         !session.follow &&
         (!!session.target.trail ||
             (!!session.target.group && session.target.routeId === null));
-    const trail = session.target.trail ?? null;
     return (
         <div
             ref={ref}
@@ -650,8 +623,10 @@ function PathEditorBar({
             data-phase={session.phase}
             onPointerDown={(e) => e.stopPropagation()}
         >
-            {offCount.turns > 0 && <OffCountWarning tally={offCount} />}
-            {offCount.turns > 0 && controls && <Divider />}
+            {!quiet && offCount.turns > 0 && (
+                <OffCountWarning tally={offCount} />
+            )}
+            {!quiet && offCount.turns > 0 && controls && <Divider />}
             {drawing ? (
                 <>
                     {kindChoice && (
@@ -700,65 +675,43 @@ function PathEditorBar({
                     {goingRound(session.follow) && (
                         <GoRoundControls session={session} />
                     )}
-                    {session.follow && session.follow.grabbed !== null && (
-                        <FollowControls session={session} />
-                    )}
-                    {/* What clicks place while a path or trail is drawn (owner, 2026-11-23):
-                        corners, a straight-legged path, or smooth points, a curved one */}
-                    {!goingRound(session.follow) &&
-                        (!session.follow ||
-                            session.follow.grabbed !== null) && (
-                            <>
-                                <PointTypeButtons
-                                    smooth={!!session.smooth}
-                                    cornerOnly={false}
-                                    drawing
-                                />
-                                <Divider />
-                            </>
+                    {session.follow &&
+                        !headClicks &&
+                        !goingRound(session.follow) &&
+                        snakesThroughBox(session.follow) && (
+                            <SnakeChoice session={session} />
+                        )}
+                    {session.follow &&
+                        !headClicks &&
+                        session.follow.grabbed !== null && (
+                            <FollowControls session={session} />
                         )}
                     {/* Going around ends where the outline takes them, so Ends has no say */}
-                    {session.follow && !goingRound(session.follow) && (
-                        <FollowEndsControls session={session} />
-                    )}
-                    <span className="flex items-center gap-2">
-                        {/* Going around draws nothing, so there's no point to take back */}
-                        {!goingRound(session.follow) && (
-                            <IconButton
-                                label={tolgee.t(
-                                    "pathways.editor.removeLastPoint",
-                                    "Remove last point",
-                                )}
-                                action="shapeRemoveLastPoint"
-                                disabled={session.points.length === 0}
-                                onClick={() =>
-                                    runAction("shapeRemoveLastPoint")
-                                }
-                                testId="path-remove-last"
-                            >
-                                <BackspaceIcon size={14} />
-                            </IconButton>
+                    {session.follow &&
+                        !headClicks &&
+                        !goingRound(session.follow) && (
+                            <FollowEndsControls session={session} />
                         )}
-                        <IconButton
-                            label={tolgee.t("pathways.editor.cancel", "Cancel")}
-                            action="cancelAlignmentUpdates"
-                            onClick={() => runAction("cancelAlignmentUpdates")}
-                            testId="path-cancel"
-                        >
-                            <XIcon size={14} />
-                        </IconButton>
-                    </span>
-                    <Divider />
-                    <EditorButton
-                        onClick={() => runAction("applyShape")}
-                        testId="path-finish"
-                    >
-                        {tolgee.t("pathways.editor.finish", "Finish")}
-                    </EditorButton>
+                    {/* Going around draws nothing, so no click places a point, and there's none
+                        to take back */}
+                    <PenBarActions
+                        points={!goingRound(session.follow)}
+                        canRemoveLast={
+                            headClicks
+                                ? !!session.follow?.head?.history?.length
+                                : session.points.length > 0
+                        }
+                    />
                 </>
             ) : (
                 <>
                     <PathSlots session={session} />
+                    {quiet && offCount.turns > 0 && (
+                        <>
+                            <Divider />
+                            <CornerSummary session={session} tally={offCount} />
+                        </>
+                    )}
                     {picked >= 0 && (
                         <>
                             <Divider />
@@ -821,24 +774,8 @@ function PathEditorBar({
                             </Tip>
                         </>
                     )}
-                    {stored && trail && followTheLeader && (
-                        <>
-                            <Divider />
-                            <IconButton
-                                label={reverseLabel(trail.along, trail.around)}
-                                disabled={trail.along}
-                                action="reverseTrail"
-                                onClick={() => runAction("reverseTrail")}
-                                testId="path-reverse"
-                            >
-                                <ArrowsLeftRightIcon size={14} />
-                                {tolgee.t(
-                                    "actions.path.reverse",
-                                    "Reverse leader",
-                                )}
-                            </IconButton>
-                        </>
-                    )}
+                    {/* A stored trail's Reverse is the leader's mark's ⇆, selected or open: one place
+                        for it (owner, 2026-11-17) */}
                     {stored && (
                         <>
                             <Divider />
@@ -878,19 +815,31 @@ function PathSlots({ session }: { session: PathSession }) {
     const locked = !!session.target.trail && !followTheLeader;
     return (
         <>
+            {/* The tooltip is the command's name, its shortcut and one short line (owner,
+                2026-11-17: a sentence across the field was too much) */}
             <IconButton
                 label={
+                    group
+                        ? editGroupPathLabel()
+                        : tolgee.t("actions.path.edit", "Edit path")
+                }
+                hint={
                     locked
                         ? trailOffReason()
                         : group
                           ? tolgee.t(
-                                "pathways.editor.editGroupTip",
-                                "Show the group path's points to drag. Every marcher on it follows",
+                                "pathways.editor.editGroupHint",
+                                "Every marcher on it follows",
                             )
-                          : tolgee.t(
-                                "pathways.editor.editTip",
-                                "Show this path's points to drag. A click on its line does it too",
-                            )
+                          : session.target.trail
+                            ? tolgee.t(
+                                  "pathways.editor.editTrailHint",
+                                  "Drag its points, or its head to draw on",
+                              )
+                            : tolgee.t(
+                                  "pathways.editor.editHint",
+                                  "A click on its line does it too",
+                              )
                 }
                 action="editPath"
                 disabled={locked}
@@ -909,12 +858,12 @@ function PathSlots({ session }: { session: PathSession }) {
                 <>
                     <Divider />
                     <IconButton
-                        label={
+                        label={editLineLabel(lineDrill)}
+                        hint={
                             lineReason ??
                             tolgee.t(
-                                "pathways.editor.editLineTip",
-                                "Bend only {marcher}'s line, by its handles. It keeps following the group path's edits. A click on the line does it too",
-                                { marcher: lineDrill ?? "" },
+                                "pathways.editor.editLineHint",
+                                "Bend this line only. It still follows the group path",
                             )
                         }
                         action="editLine"
@@ -933,9 +882,10 @@ function PathSlots({ session }: { session: PathSession }) {
                         holds its place (rounds 7 and sim 3) */}
                     {slots.backIsRejoin ? (
                         <IconButton
-                            label={tolgee.t(
-                                "pathways.editor.rejoinTip",
-                                "Put the selected marchers back on the group path. A detached marcher's copy goes, and so do any bends on its line",
+                            label={tolgee.t("actions.path.rejoin", "Rejoin")}
+                            hint={tolgee.t(
+                                "pathways.editor.rejoinHint",
+                                "Back on the group path. Copies and bends go",
                             )}
                             action="rejoinPath"
                             onClick={() => runAction("rejoinPath")}
@@ -959,11 +909,15 @@ function PathSlots({ session }: { session: PathSession }) {
                         />
                     ) : (
                         <IconButton
-                            label={
+                            label={tolgee.t(
+                                "actions.path.adjustResetSpot",
+                                "Match group",
+                            )}
+                            hint={
                                 slots.matchReason ??
                                 tolgee.t(
-                                    "pathways.editor.resetTip",
-                                    "Take this marcher's bends off, so it walks the group path like the others again",
+                                    "pathways.editor.resetHint",
+                                    "Takes this marcher's bends off",
                                 )
                             }
                             action="adjustResetSpot"
@@ -1002,47 +956,30 @@ const SLOT_WIDTH = "min-w-[104px] justify-start";
 function PointTypeButtons({
     smooth,
     cornerOnly,
-    drawing = false,
 }: {
     smooth: boolean;
     cornerOnly: boolean;
-    /** While drawing: what clicks place, named on the buttons so the choice is seen */
-    drawing?: boolean;
 }) {
     return (
         <span
             className="flex items-center gap-2"
             role="group"
             aria-label={tolgee.t("pathways.editor.pointType", "Point type")}
-            data-testid={drawing ? "path-drawing-point-type" : undefined}
         >
             <IconButton
-                label={
-                    drawing
-                        ? tolgee.t(
-                              "pathways.editor.drawCornersTip",
-                              "Straight: clicks place corners, with straight legs between them",
-                          )
-                        : tolgee.t("actions.path.pointCorner", "Corner point")
-                }
+                label={tolgee.t("actions.path.pointCorner", "Corner point")}
                 action="pathPointCorner"
                 pressed={!smooth}
                 onClick={() => runAction("pathPointCorner")}
                 testId="path-point-corner"
             >
                 <LineSegmentsIcon size={14} />
-                {drawing && tolgee.t("pathways.menu.straight", "Straight")}
             </IconButton>
             <IconButton
                 label={
                     cornerOnly
                         ? besideArcReason()
-                        : drawing
-                          ? tolgee.t(
-                                "pathways.editor.drawSmoothTip",
-                                "Curved: clicks place smooth points, and the path curves through them",
-                            )
-                          : tolgee.t("actions.path.pointSmooth", "Smooth point")
+                        : tolgee.t("actions.path.pointSmooth", "Smooth point")
                 }
                 action="pathPointSmooth"
                 disabled={cornerOnly}
@@ -1051,7 +988,6 @@ function PointTypeButtons({
                 testId="path-point-smooth"
             >
                 <WaveSineIcon size={14} />
-                {drawing && tolgee.t("pathways.menu.curved", "Curved")}
             </IconButton>
         </span>
     );
@@ -1096,6 +1032,12 @@ function PathMoreMenu({ session }: { session: PathSession }) {
                   "The path already fits where its marcher stands",
               );
     const more = tolgee.t("pathways.editor.more", "More path commands");
+    // A trail's end shape (owner, 2026-11-17): its controls, tucked away while the trail is shown.
+    // They edit a trail: gone with Follow-the-leader off (#1095), as the switch takes their
+    // command away
+    const followTheLeader = useFollowTheLeader();
+    const endShape = useTrailEndShape();
+    const shapeControls = useTrailShapeControls();
     return (
         <DropdownMenu.Root open={open} onOpenChange={setOpen} modal={false}>
             <Tip label={more}>
@@ -1165,6 +1107,40 @@ function PathMoreMenu({ session }: { session: PathSession }) {
                                         "Re-fit path",
                                     )}
                         </MenuItemWithReason>
+                    )}
+                    {trail && endShape && followTheLeader && (
+                        <>
+                            <DropdownMenu.CheckboxItem
+                                className={clsx(MENU_ITEM_CLASS, "items-start")}
+                                checked={shapeControls}
+                                onSelect={() => runAction("trailShapeControls")}
+                                data-testid="path-shape-controls"
+                            >
+                                <ShapesIcon
+                                    size={14}
+                                    aria-hidden
+                                    className="mt-2 shrink-0"
+                                />
+                                <span className="flex flex-col">
+                                    {tolgee.t(
+                                        "actions.path.shapeControls",
+                                        "Shape controls",
+                                    )}
+                                    <span className="text-sub text-text-subtitle">
+                                        {tolgee.t(
+                                            "pathways.editor.shapeControlsNote",
+                                            "The end shape's spacing, size, turn and handles",
+                                        )}
+                                    </span>
+                                </span>
+                                <DropdownMenu.ItemIndicator className="mt-2 ml-auto shrink-0">
+                                    <CheckIcon size={14} aria-hidden />
+                                </DropdownMenu.ItemIndicator>
+                            </DropdownMenu.CheckboxItem>
+                            <DropdownMenu.Separator
+                                className={MENU_SEPARATOR_CLASS}
+                            />
+                        </>
                     )}
                     {(rejoinHere || !trail) && (
                         <DropdownMenu.Separator
@@ -1538,6 +1514,61 @@ function GoRoundControls({ session }: { session: PathSession }) {
 }
 
 /**
+ * Snake order on the path bar (step 11, SN-2): a box with no remembered order snakes row by row
+ * (the default) or column by column from the corner dragged out of, and Ripple in deals into a
+ * box the same way (SN-4). Each a registered command. Set order (Shift+O) sets any other order.
+ */
+function SnakeChoice({ session }: { session: PathSession }) {
+    const by = snakeByOf(session.follow!);
+    return (
+        <>
+            <span
+                className="flex items-center gap-2"
+                role="group"
+                aria-label={tolgee.t("pathways.editor.snake", "Snake order")}
+                data-testid="follow-snake"
+            >
+                <IconButton
+                    label={tolgee.t(
+                        "actions.path.snakeRows",
+                        "Snake row by row",
+                    )}
+                    hint={tolgee.t(
+                        "pathways.editor.snakeRowsHint",
+                        "Along the corner's row, then back along the next",
+                    )}
+                    action="followSnakeRows"
+                    pressed={by === "rows"}
+                    onClick={() => runAction("followSnakeRows")}
+                    testId="follow-snake-rows"
+                >
+                    <RowsIcon size={14} />
+                    {tolgee.t("pathways.editor.snakeRows", "Rows")}
+                </IconButton>
+                <IconButton
+                    label={tolgee.t(
+                        "actions.path.snakeColumns",
+                        "Snake column by column",
+                    )}
+                    hint={tolgee.t(
+                        "pathways.editor.snakeColumnsHint",
+                        "Along the corner's column, then back along the next",
+                    )}
+                    action="followSnakeColumns"
+                    pressed={by === "columns"}
+                    onClick={() => runAction("followSnakeColumns")}
+                    testId="follow-snake-columns"
+                >
+                    <ColumnsIcon size={14} />
+                    {tolgee.t("pathways.editor.snakeColumns", "Columns")}
+                </IconButton>
+            </span>
+            <Divider />
+        </>
+    );
+}
+
+/**
  * The Follow tool's choices on the path bar (pathways step 4b): Spacing, Keep spacing or Even N
  * steps, Even held to the largest N that keeps everyone walking forward (DL-7, AP-T8); ▶ Preview,
  * the line looping its walk (step 4c, DL-17); and, when the line already has end spots here, Ends:
@@ -1566,14 +1597,15 @@ function FollowControls({ session }: { session: PathSession }) {
           )
         : null;
     const reducedMotion = prefersReducedMotion();
+    // −/+, typing and a drag on the number all write the same spacing (owner, 2026-11-17: "could I
+    // not type it like I can with the step size input")
     const setEven = (steps: number) =>
         setFollowSpacing({
             kind: "even",
-            steps: Math.max(
-                EVEN_STEP,
-                limit === null ? steps : Math.min(steps, limit),
-            ),
+            steps: evenStepsWithin(steps, limit),
         });
+    // Where a drag on the number started, so letting go off it puts it back
+    const scrubFrom = useRef<number | null>(null);
     return (
         <>
             {fromTrail && (
@@ -1641,10 +1673,48 @@ function FollowControls({ session }: { session: PathSession }) {
                                 >
                                     −
                                 </IconButton>
-                                <span data-testid="follow-even-steps">
+                                {/* The shape tool's step number: click to type (Enter or
+                                    clicking away applies, Esc cancels), drag to change */}
+                                <ScrubNumber
+                                    display={formatSteps(even)}
+                                    axis="x"
+                                    label={tolgee.t(
+                                        "pathways.editor.evenSpacing",
+                                        "Even spacing, in steps",
+                                    )}
+                                    testId="follow-even-steps"
+                                    onScrubStart={() => {
+                                        scrubFrom.current = even;
+                                    }}
+                                    onScrub={(move) =>
+                                        setEven(
+                                            scrubValue(
+                                                scrubFrom.current ?? even,
+                                                move.dx,
+                                                move.dy,
+                                                spacingRate(
+                                                    !move.roles.fine,
+                                                    "x",
+                                                ),
+                                            ),
+                                        )
+                                    }
+                                    onScrubEnd={(keep) => {
+                                        if (!keep && scrubFrom.current !== null)
+                                            setEven(scrubFrom.current);
+                                        scrubFrom.current = null;
+                                    }}
+                                    onType={(text) => {
+                                        const steps = parseSteps(text);
+                                        if (steps === null) return false;
+                                        setEven(steps);
+                                        return true;
+                                    }}
+                                />
+                                <span className="text-text-subtitle">
                                     {tolgee.t(
-                                        "pathways.editor.evenSteps",
-                                        "{steps} steps",
+                                        "pathways.editor.evenStepsUnit",
+                                        "{steps, plural, one {step} other {steps}}",
                                         { steps: even },
                                     )}
                                 </span>

@@ -374,6 +374,24 @@ export type FieldModeDrawing = {
      */
     pathLine?: "shown" | "quiet" | "edited" | "selected" | "context";
     /**
+     * The way a trail's line walks (pathways, owner 2026-11-17, "how the marchers got there"): from
+     * the tail's start along the line-up (a box's snake, in exit order) to the leader's start, on
+     * along the trail to its head, and into a form's end spots when it ends in one. One continuous
+     * way, drawn as a faint lane in the order band's ink under everything, so it reads as the
+     * band's own pale end running back to where the line started.
+     */
+    walked?: readonly FieldPoint[];
+    /**
+     * The outline isn't drawn, only kept as the line a press hits: a selected trail's route, which
+     * `walked` and the order band already draw (pathways, owner 2026-11-17)
+     */
+    outlineHidden?: boolean;
+    /**
+     * The spots a marcher of `ringIds` stands on aren't drawn (pathways, owner 2026-11-17): a
+     * trail's end spots, where the marchers who reached them already show it
+     */
+    spotsClear?: boolean;
+    /**
      * Circles the shape is drawn on, quiet solid lines under it: an Arc's whole circle (#634)
      */
     construction?: readonly {
@@ -451,7 +469,12 @@ export type FieldModeDrawing = {
      * out along `dir` (a unit vector, the line's own way at that end) that slide outward and fade
      * on a loop, until an end is grabbed
      */
-    pullArrows?: readonly { at: FieldPoint; dir: FieldPoint }[];
+    pullArrows?: readonly {
+        at: FieldPoint;
+        dir: FieldPoint;
+        /** Faded: another end is hovered, its order previewed (owner, 2026-11-17) */
+        dim?: boolean;
+    }[];
     /**
      * Spots the shape leaves empty on purpose, drawn as dashed rings: an odd-count outline's gap
      * (#390), which a click on another spot between corners moves
@@ -569,12 +592,16 @@ export type FieldModePress = {
     readonly isMac: boolean;
     /** Whether a marcher's dot (or an item) is under the press, so it is the dot's (P-1) */
     onDot(): boolean;
+    /** The marcher (or item) whose dot is under the press, or null */
+    marcher?(): number | null;
 };
 
 /** What the editor knows of the pointer when it asks a mode for its cursor. */
 export type FieldModeHover = {
     /** Whether a marcher's dot (or an item) is under the pointer, so a press there is the marcher's */
     onDot(): boolean;
+    /** The marcher (or item) whose dot is under the pointer, or null */
+    marcher?(): number | null;
 };
 
 /**
@@ -906,6 +933,7 @@ export class FieldEditor {
             const modeCursor =
                 this.mode?.cursorAt(pointer, {
                     onDot: () => this.marcherAt(pointer) !== null,
+                    marcher: () => this.marcherAt(pointer),
                 }) ?? null;
             if (modeCursor) {
                 this.setHoverHandle(null);
@@ -1146,6 +1174,7 @@ export class FieldEditor {
                 this.reachInside(pointer, this.marcherAt(pointer)) !== null,
             isMac: this.options.isMac ?? false,
             onDot: () => this.marcherAt(pointer) !== null,
+            marcher: () => this.marcherAt(pointer),
         };
     }
 

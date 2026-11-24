@@ -2,6 +2,7 @@ import type { PivotKey } from "../frame/frame";
 import type { QueryClient } from "@tanstack/react-query";
 import type {
     FieldMode,
+    FieldModeDrawing,
     FieldModeHover,
     FieldModePress,
     FieldPointer,
@@ -90,92 +91,121 @@ interface Shown {
     readonly groupMenu: GroupMenuState | null;
     /** A number setting the kind's step is engaged: the step drawn (owner on #596) */
     readonly stepShown: boolean;
+    /**
+     * The shape is a shown trail's end shape with its controls tucked away (pathways, owner
+     * 2026-11-17): only its body, no outline, handles, move dot, knob or pivot
+     */
+    readonly tucked: boolean;
 }
 
-const drawingOf = memoDrawing(
-    ({
-        live: saved,
-        preview,
+/** A tucked shape's drawing: what a gesture shows of where its marchers go, none of its controls */
+function tuckedDrawing(drawing: FieldModeDrawing): FieldModeDrawing {
+    return {
+        ...drawing,
+        outline: null,
+        construction: [],
+        handles: [],
+        addHandles: [],
+        selectedHandles: [],
+        barHandles: [],
+        gaps: [],
+        knob: undefined,
+        centerDot: undefined,
+        pivotMark: undefined,
+        pivotPreview: undefined,
+    };
+}
+
+/** The targets a tucked shape still takes: its body, which a drag moves */
+const TUCKED_TARGETS: ReadonlySet<ShapeTarget["type"]> = new Set(["move"]);
+
+const drawingOf = memoDrawing((shown: Shown) => {
+    const drawing = fullDrawingOf(shown);
+    return drawing && shown.tucked ? tuckedDrawing(drawing) : drawing;
+});
+
+function fullDrawingOf({
+    live: saved,
+    preview,
+    calm,
+    scrubbing,
+    groupMenu,
+    stepShown,
+}: Shown): FieldModeDrawing | null {
+    const live =
+        preview && !saved.gesture ? { ...saved, params: preview } : saved;
+    const changing = live.gesture !== null || preview !== null;
+    const field = currentShapeField();
+    if (!field) return null;
+    const { kind, spots: n } = live.box;
+    const ctx = shapeContextFor(field);
+    // Each member keeps their spot (or the box is laid out again for a new count across); a
+    // spread drafts its spots while a handle is dragged (#439), and the commit lays them out
+    const targets = changing
+        ? liveTargets(
+              live.box,
+              live.params,
+              live.gesture ? { ...ctx, draft: true } : ctx,
+          ).members
+        : [];
+    const names = drillNumbers(field);
+    const env = toolEnvFor(field);
+    return {
+        stage: "open" as const,
+        outline: shapeOutline(kind, live.params, n),
+        openOutline: kind.outlineOpen?.(live.params, n) ?? false,
+        construction: kind.construction?.(live.params, n) ?? [],
+        // While a gesture goes, where the marchers will stand, and who
+        spots: targets,
+        walks: [],
+        labels:
+            targets.length <= SPOT_LABEL_LIMIT
+                ? targets.map((t) => ({
+                      at: t,
+                      text: names.get(t.marcherId) ?? "",
+                  }))
+                : [],
         calm,
-        scrubbing,
-        groupMenu,
-        stepShown,
-    }: Shown) => {
-        const live =
-            preview && !saved.gesture ? { ...saved, params: preview } : saved;
-        const changing = live.gesture !== null || preview !== null;
-        const field = currentShapeField();
-        if (!field) return null;
-        const { kind, spots: n } = live.box;
-        const ctx = shapeContextFor(field);
-        // Each member keeps their spot (or the box is laid out again for a new count across); a
-        // spread drafts its spots while a handle is dragged (#439), and the commit lays them out
-        const targets = changing
-            ? liveTargets(
-                  live.box,
+        ...handleDrawing(kind, live.params, n, live.selected),
+        gaps: gapsOf(kind, live.params, n),
+        ...stepDrawing(
+            kind,
+            live.params,
+            n,
+            stepShown,
+            live.gesture,
+            env.stepPx,
+        ),
+        ...frameDrawing(
+            kind,
+            live.params,
+            n,
+            live.gesture,
+            live.pointer ?? null,
+            env,
+        ),
+        ...guideDrawing(
+            kind,
+            live.params,
+            n,
+            targets,
+            guideGesture(live.gesture, scrubbing),
+            env,
+            field,
+        ),
+        // The members stand on the spots, laid out in order along the shape
+        ...(groupMenu
+            ? groupDrawing(
+                  kind,
                   live.params,
-                  live.gesture ? { ...ctx, draft: true } : ctx,
-              ).members
-            : [];
-        const names = drillNumbers(field);
-        const env = toolEnvFor(field);
-        return {
-            stage: "open" as const,
-            outline: shapeOutline(kind, live.params, n),
-            openOutline: kind.outlineOpen?.(live.params, n) ?? false,
-            construction: kind.construction?.(live.params, n) ?? [],
-            // While a gesture goes, where the marchers will stand, and who
-            spots: targets,
-            walks: [],
-            labels:
-                targets.length <= SPOT_LABEL_LIMIT
-                    ? targets.map((t) => ({
-                          at: t,
-                          text: names.get(t.marcherId) ?? "",
-                      }))
-                    : [],
-            calm,
-            ...handleDrawing(kind, live.params, n, live.selected),
-            gaps: gapsOf(kind, live.params, n),
-            ...stepDrawing(
-                kind,
-                live.params,
-                n,
-                stepShown,
-                live.gesture,
-                env.stepPx,
-            ),
-            ...frameDrawing(
-                kind,
-                live.params,
-                n,
-                live.gesture,
-                live.pointer ?? null,
-                env,
-            ),
-            ...guideDrawing(
-                kind,
-                live.params,
-                n,
-                targets,
-                guideGesture(live.gesture, scrubbing),
-                env,
-                field,
-            ),
-            // The members stand on the spots, laid out in order along the shape
-            ...(groupMenu
-                ? groupDrawing(
-                      kind,
-                      live.params,
-                      n,
-                      kind.shape.generate(live.params, n, ctx),
-                      groupMenu,
-                      env.stepPx,
-                  )
-                : {}),
-        };
-    },
-);
+                  n,
+                  kind.shape.generate(live.params, n, ctx),
+                  groupMenu,
+                  env.stepPx,
+              )
+            : {}),
+    };
+}
 
 /** The live mode of the selected placed shape, for its keys; null with none selected */
 let activeLive: LiveBoxMode | null = null;
@@ -227,6 +257,8 @@ export class LiveBoxMode implements FieldMode {
     private readDuringGesture: PlacedBox | null = null;
     /** What made the last press: a held key's rerun goes on with its reach (tablet 1.4) */
     private pressKind: PointerKind = "mouse";
+    /** The press under way is `under`'s (a trail's head, AP-T16), to its release */
+    private underPress = false;
 
     constructor(
         box: PlacedBox,
@@ -234,11 +266,32 @@ export class LiveBoxMode implements FieldMode {
         /**
          * What's drawn under the box and clickable outside it (the group path its members walk,
          * pathways AP-O3): it's asked what the box doesn't claim. Inside the box stays the box's.
+         * A press the box doesn't take that it claims is its own to the release (a dragged-out
+         * trail's head, AP-T16).
          */
         private readonly under?: Pick<
             FieldMode,
             "takeClick" | "fieldMenuAt" | "cursorAt"
-        >,
+        > & {
+            /**
+             * Whether a placed shape on exactly these marchers has its controls tucked away under
+             * what's drawn (a shown trail's end shape, pathways, owner 2026-11-17): only its body
+             * is drawn and pressed
+             */
+            tucks?(ids: readonly number[]): boolean;
+        } & Partial<
+                Pick<
+                    FieldMode,
+                    | "claims"
+                    | "press"
+                    | "move"
+                    | "release"
+                    | "cancel"
+                    | "longPress"
+                    | "drawing"
+                    | "subscribe"
+                >
+            >,
     ) {
         this.live = openLive(box);
     }
@@ -286,9 +339,65 @@ export class LiveBoxMode implements FieldMode {
     }
 
     claims(pointer: FieldPointer, press: FieldModePress): boolean {
+        return this.underFirst(pointer, press) || this.boxTakes(pointer, press);
+    }
+
+    /**
+     * Whether what's drawn under the box takes this press before the box: where the box doesn't
+     * take it, or, tucked away under a shown trail, on a marcher's dot (owner, 2026-11-17: a drag
+     * on a trail's marcher reshapes the trail's form; the box's body between them moves it whole)
+     */
+    private underFirst(pointer: FieldPointer, press: FieldModePress): boolean {
+        if (!this.underTakes(pointer, press)) return false;
+        return (
+            !this.boxTakes(pointer, press) || (this.tucked() && press.onDot())
+        );
+    }
+
+    /** Whether the box takes a press: its controls and inside it, unless it reaches inside */
+    private boxTakes(pointer: FieldPointer, press: FieldModePress): boolean {
         return (
             !this.yieldsToEditor(pointer, press) &&
-            this.pressed(pointer) !== null
+            this.pressed(pointer) !== null &&
+            this.reachable(pointer)
+        );
+    }
+
+    /** Whether its controls are tucked away under a shown trail (pathways, owner 2026-11-17) */
+    private tucked(): boolean {
+        return (
+            this.under?.tucks?.(
+                this.live.box.recipe.members.map((m) => m.marcherId),
+            ) ?? false
+        );
+    }
+
+    /** What's under `pointer` of the box, or null */
+    private targetAt(pointer: FieldPointer): ShapeTarget | null {
+        const field = currentShapeField();
+        if (!field) return null;
+        return shapeTargetAt(
+            this.live.box.kind,
+            this.live.params,
+            this.live.box.spots,
+            pointer.field,
+            toolEnvFor(field, undefined, { kind: pointer.kind }),
+            this.live.selected,
+        );
+    }
+
+    /** Whether the box's part under `pointer` can be pressed: tucked, only its body */
+    private reachable(pointer: FieldPointer): boolean {
+        if (!this.tucked()) return true;
+        const target = this.targetAt(pointer);
+        return target !== null && TUCKED_TARGETS.has(target.type);
+    }
+
+    /** Whether what's drawn under the box takes a press the box doesn't (a trail's head) */
+    private underTakes(pointer: FieldPointer, press: FieldModePress): boolean {
+        return (
+            !!this.under?.press &&
+            (this.under.claims?.(pointer, press) ?? false)
         );
     }
 
@@ -322,7 +431,16 @@ export class LiveBoxMode implements FieldMode {
         return !target || !OWN_CONTROLS.has(target.type);
     }
 
-    press(pointer: FieldPointer, { isMac }: FieldModePress): void {
+    press(pointer: FieldPointer, modePress: FieldModePress): void {
+        const { isMac } = modePress;
+        this.underPress = false;
+        if (this.underFirst(pointer, modePress)) {
+            this.underPress = true;
+            this.under!.press!(pointer, modePress);
+            // The trail's drawing shows where the line will stand, in place of the box's old spots
+            this.emit();
+            return;
+        }
         const field = currentShapeField();
         this.endHeld();
         if (!field) return;
@@ -360,6 +478,10 @@ export class LiveBoxMode implements FieldMode {
     }
 
     move(pointer: FieldPointer): void {
+        if (this.underPress) {
+            this.under?.move?.(pointer);
+            return;
+        }
         const field = currentShapeField();
         if (!field) return;
         this.live = moveLive(
@@ -388,6 +510,15 @@ export class LiveBoxMode implements FieldMode {
     }
 
     release(pointer: FieldPointer, click: LiveClick | null): void {
+        if (this.underPress) {
+            this.underPress = false;
+            this.under?.release?.(
+                pointer,
+                click && { double: click.double, ownFirst: !!click.ownFirst },
+            );
+            this.emit();
+            return;
+        }
         this.endHeld();
         const before = this.live;
         const out = releaseLive(
@@ -417,14 +548,17 @@ export class LiveBoxMode implements FieldMode {
      * there opens: a handle's, else the field's for the box's marchers. Cancelled, it saves
      * nothing.
      */
-    longPress(): boolean {
+    longPress(pointer?: FieldPointer): boolean {
+        if (this.underPress && pointer)
+            return this.under?.longPress?.(pointer) ?? true;
         return true;
     }
 
     /** A right-click on a handle with a menu (a Line's point or segment, #569) opens it */
     openMenu(pointer: FieldPointer): boolean {
         const field = currentShapeField();
-        if (!field || this.live.gesture) return false;
+        // Tucked away, its handles aren't drawn, so they have no menu
+        if (!field || this.live.gesture || this.tucked()) return false;
         const { kind, spots } = this.live.box;
         const target = shapeTargetAt(
             kind,
@@ -474,11 +608,18 @@ export class LiveBoxMode implements FieldMode {
 
     /** A right-click outside the box may be on what's drawn under it; inside it's the box's */
     fieldMenuAt(pointer: FieldPointer): readonly string[] | null {
-        if (this.pressed(pointer) !== null) return null;
+        if (this.pressed(pointer) !== null && this.reachable(pointer))
+            return null;
         return this.under?.fieldMenuAt?.(pointer) ?? null;
     }
 
     cancel(): void {
+        if (this.underPress) {
+            this.underPress = false;
+            this.under?.cancel?.();
+            this.emit();
+            return;
+        }
         this.endHeld();
         this.live = openLive(this.live.box, this.live.selected);
         this.catchUp();
@@ -498,7 +639,7 @@ export class LiveBoxMode implements FieldMode {
         const field = currentShapeField();
         if (!field) return null;
         const { kind } = this.live.box;
-        const target = shapeTargetAt(
+        const at = shapeTargetAt(
             kind,
             this.live.params,
             this.live.box.spots,
@@ -506,6 +647,9 @@ export class LiveBoxMode implements FieldMode {
             toolEnvFor(field, undefined, { kind: pointer.kind }),
             this.live.selected,
         );
+        // Tucked away under a trail, only the body is there to point at
+        const target =
+            at && (!this.tucked() || TUCKED_TARGETS.has(at.type)) ? at : null;
         // The editor asks for the cursor as the pointer moves, so this is where hovering is seen
         setShapePointerOver(target !== null);
         return target
@@ -520,11 +664,15 @@ export class LiveBoxMode implements FieldMode {
     }
 
     drawing() {
+        // The press is the trail's (AP-T16): its drawing, the line live, in place of the box's
+        if (this.underPress) return this.under?.drawing?.() ?? null;
         const preview = usePlacedBoxPreviewStore.getState().params;
         const calm = shapeCalm(this.live.gesture !== null);
         const { pivotPreview, scrubbing, groupMenu, stepShown } =
             useShapePointerStore.getState();
+        const tucked = this.tucked();
         if (
+            this.shown?.tucked !== tucked ||
             this.shown?.live !== this.live ||
             this.shown.preview !== preview ||
             this.shown.calm !== calm ||
@@ -541,6 +689,7 @@ export class LiveBoxMode implements FieldMode {
                 scrubbing,
                 groupMenu,
                 stepShown,
+                tucked,
             };
         return drawingOf(this.shown);
     }
@@ -549,10 +698,14 @@ export class LiveBoxMode implements FieldMode {
         this.listeners.add(listener);
         const unsubscribe = usePlacedBoxPreviewStore.subscribe(listener);
         const offPointer = useShapePointerStore.subscribe(listener);
+        // While a press is the trail's, its drawing changes with the drag; and the trail shown or
+        // its Shape controls tuck the box's controls away or bring them back
+        const offUnder = this.under?.subscribe?.(listener);
         return () => {
             this.listeners.delete(listener);
             unsubscribe();
             offPointer();
+            offUnder?.();
         };
     }
 

@@ -36,12 +36,12 @@ import {
 import {
     addPoint,
     finishDrawing,
-    setDrawingSmooth,
     setPointer,
     usePathPenStore,
 } from "../pathPenStore";
 import { offCountTally, trailCornersOf } from "../trailCorners";
 import { followStatusOf, isFollowing } from "../FollowStatus";
+import { clickPlacesSmooth, setDrawKind } from "@/shapes/pen/penKind";
 import type { PathTarget } from "../pathTarget";
 
 /**
@@ -872,7 +872,8 @@ describe("Follow on a circle: grab any marcher, drag it around or out (owner, 20
         await done;
     });
 
-    it("Straight | Curved while a trail is drawn (owner, 2026-11-23): clicks place corners or smooth points, the outline's arcs kept", () => {
+    it("Straight | Curved while a trail is drawn (DC-1, owner 2026-11-23): the next click follows the pen's switch, the points placed keep their kind", () => {
+        setDrawKind("straight");
         openOn();
         press(1);
         dragAlong(1, 0, 3);
@@ -882,34 +883,32 @@ describe("Follow on a circle: grab any marcher, drag it around or out (owner, 20
         const carried = now().points.length;
         expect(carried).toBeGreaterThan(0);
         // Straight is the default: a click places a corner
-        addPoint(out);
+        expect(clickPlacesSmooth()).toBe(false);
+        addPoint(out, clickPlacesSmooth());
         expect(now().points.at(-1)!.tension).toBeUndefined();
-        // Curved: the points placed turn smooth, but not the stretch of outline (arcs' ends
-        // stay corners), and the next click places a smooth point
-        setDrawingSmooth(true);
-        expect(now().smooth).toBe(true);
+        const before = now().points;
+        // Curve: the next click places a smooth point; the points placed so far keep their kind,
+        // the stretch of outline its arcs
+        setDrawKind("curve");
+        expect(now().points).toBe(before);
+        const next = { x: out.x + 4, y: out.y + 3 };
+        addPoint(next, clickPlacesSmooth());
+        expect(now().points.at(-1)!.tension).toBeGreaterThan(0);
+        expect(now().points[carried]!.tension).toBeUndefined();
         now()
             .points.slice(0, carried)
             .forEach((p) => {
                 expect(p.bulge).toBeTruthy();
                 expect(p.tension).toBeUndefined();
             });
-        expect(now().points[carried]!.tension).toBeGreaterThan(0);
-        const next = { x: out.x + 4, y: out.y + 3 };
-        addPoint(next);
-        expect(now().points.at(-1)!.tension).toBeGreaterThan(0);
         // and the line's plan follows the curve: it still ends at the last point
         const plan = followDrawnPlanOf(now())!;
         near({ x: plan.spots.at(-1)![0], y: plan.spots.at(-1)![1] }, next, 6);
-        // Straight again: corners, the arcs untouched
-        setDrawingSmooth(false);
-        expect(now().smooth).toBe(false);
-        expect(now().points.every((p) => !p.tension)).toBe(true);
-        expect(
-            now()
-                .points.slice(0, carried)
-                .every((p) => !!p.bulge),
-        ).toBe(true);
+        // Straight again: the smooth point stays smooth, the next click a corner
+        setDrawKind("straight");
+        expect(now().points.at(-1)!.tension).toBeGreaterThan(0);
+        addPoint({ x: next.x + 4, y: next.y }, clickPlacesSmooth());
+        expect(now().points.at(-1)!.tension).toBeUndefined();
     });
 
     it("Following in the top bar (owner, 2026-11-23): the status follows the tool, and the one pressed leads at once", () => {

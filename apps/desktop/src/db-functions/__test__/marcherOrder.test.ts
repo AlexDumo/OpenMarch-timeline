@@ -509,9 +509,7 @@ describeDbTests("A line's order set by hand", (it) => {
         );
         const order = [ids[2]!, ids[0]!, ids[3]!, ids[1]!];
         await setMarcherOrder(db, { beat: window.end, order });
-        expect(
-            await followOrderAt(db, ids, window.start, starts, window.end),
-        ).toEqual({
+        expect(await followOrderAt(db, ids, window, starts)).toEqual({
             order: order.map((id) => ids.indexOf(id)),
             leaderFirst: true,
         });
@@ -523,8 +521,7 @@ describeDbTests("A line's order set by hand", (it) => {
         await clearMarcherOrder(db, { beat: window.end, marcherIds: ids });
         await setMarcherOrder(db, { beat: 33, order });
         expect(
-            (await followOrderAt(db, ids, window.start, starts, window.end))
-                ?.leaderFirst,
+            (await followOrderAt(db, ids, window, starts))?.leaderFirst,
         ).toBe(false);
     });
 

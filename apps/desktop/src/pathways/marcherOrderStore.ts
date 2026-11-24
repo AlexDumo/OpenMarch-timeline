@@ -18,7 +18,7 @@ import {
     type OrderForm,
     type OrderInForce,
 } from "@/db-functions/rememberedOrder";
-import { followSource } from "@/db-functions/timelineTrailDrag";
+import { guessedOrder } from "@/db-functions/timelineTrailDrag";
 import { readAllMarcherIds } from "@/db-functions/marcherOrder";
 import { orderAfterSweep, type XY } from "./orderSweep";
 
@@ -34,8 +34,18 @@ export interface OrderSweep {
     readonly before: readonly number[] | null;
     /** Picked so far, leader first */
     readonly picked: readonly number[];
-    /** The pointer while a drag is held: the line grows behind it */
+    /** The pointer while a drag is held, or while it follows with the button up: the line grows behind it */
     readonly pointer: XY | null;
+    /**
+     * Clicked, then moved (owner, 2026-11-17): the sweep follows the pointer with the button up,
+     * picking whoever it passes, until a click or Enter keeps the order. False until a click.
+     */
+    readonly following: boolean;
+    /**
+     * Taken back by Backspace, newest last: not picked again until the pointer has left them, so
+     * the one under a still pointer doesn't come straight back
+     */
+    readonly takenBack: readonly number[];
 }
 
 /** Whose forms are read: every marcher's (`all`, for Always), or these marchers' */
@@ -113,21 +123,59 @@ export const formsCover = (
 /** A line to draw: its marchers, leader first, and whether the order is only guessed */
 export interface ShownOrder {
     readonly order: readonly number[];
-    /** Nothing remembers it: guessed from where they stand (`followSource`), drawn faded and dashed */
+    /**
+     * Nothing remembers it: guessed from where they stand (`guessedOrder`: a box's snake, else
+     * `followSource`), drawn faded and dashed
+     */
     readonly guessed: boolean;
 }
 
+/** A stored trail shown on the field (selected, or in Edit path): its move and its line */
+export interface ShownTrail {
+    /** The move's start and end beats */
+    readonly start: number;
+    readonly end: number;
+    /** Its marchers, leader first */
+    readonly order: readonly number[];
+}
+
 /**
- * The order shown for `ids` at `beat` (DL-31): the one remembered (`rememberedOrder`), or else the
- * one guessed from where they stand (`at`, by id), or null when neither has one
+ * The shown trail's own order for exactly its marchers at `beat` inside its move, or null. A
+ * trail's order is remembered from its move's end (`rememberedOrder`), but while the trail is shown
+ * its line walks in that order the whole move, so the band keeps its dark leader end and its tip
+ * from the start flag on (owner, 2026-11-17: the band lost its direction mid-move).
+ */
+export function shownTrailOrder(
+    trail: ShownTrail | null | undefined,
+    ids: readonly number[],
+    beat: number,
+): ShownOrder | null {
+    if (!trail || trail.order.length !== ids.length || ids.length < 2)
+        return null;
+    if (beat < trail.start - 1e-9 || beat >= trail.end - 1e-9) return null;
+    const want = new Set(ids);
+    return trail.order.every((m) => want.has(m))
+        ? { order: trail.order, guessed: false }
+        : null;
+}
+
+/**
+ * The order shown for `ids` at `beat` (DL-31): the shown trail's inside its move
+ * (`shownTrailOrder`), else the one remembered (`rememberedOrder`), or else the one guessed from
+ * where they stand (`at`, by id), or null when neither has one. A box's guess is its default
+ * snake, row by row from the top left (step 11, SN-2), which the Follow tool runs from whichever
+ * corner is dragged out of.
  */
 export function shownOrderOf(
     forms: readonly OrderForm[] | null,
     ids: readonly number[],
     beat: number,
     at: ReadonlyMap<number, XY>,
+    trail?: ShownTrail | null,
 ): ShownOrder | null {
     if (ids.length < 2) return null;
+    const ofTrail = shownTrailOrder(trail, ids, beat);
+    if (ofTrail) return ofTrail;
     const remembered = forms ? rememberedOrder(forms, ids, beat) : null;
     if (remembered && remembered.length === ids.length)
         return { order: remembered, guessed: false };
@@ -137,7 +185,7 @@ export function shownOrderOf(
         return p ? [[p.x, p.y] as [number, number]] : [];
     });
     if (starts.length !== sorted.length) return null;
-    const guess = followSource(starts);
+    const guess = guessedOrder(starts);
     return guess
         ? { order: guess.order.map((i) => sorted[i]!), guessed: true }
         : null;
@@ -194,19 +242,47 @@ export function withOwnOrder(
 }
 
 /** Opens Set order on `ids` (two or more), standing at `at` at `beat` */
-export function openOrderSweep(sweep: Omit<OrderSweep, "picked" | "pointer">) {
+export function openOrderSweep(
+    sweep: Omit<OrderSweep, "picked" | "pointer" | "following" | "takenBack">,
+) {
     useMarcherOrderStore.setState({
-        sweep: { ...sweep, picked: [], pointer: null },
+        sweep: {
+            ...sweep,
+            picked: [],
+            pointer: null,
+            following: false,
+            takenBack: [],
+        },
     });
 }
 
 /** Picks and the pointer, as the sweep goes */
 export function updateOrderSweep(
-    change: Partial<Pick<OrderSweep, "picked" | "pointer">>,
+    change: Partial<
+        Pick<OrderSweep, "picked" | "pointer" | "following" | "takenBack">
+    >,
 ) {
     const { sweep } = useMarcherOrderStore.getState();
     if (!sweep) return;
     useMarcherOrderStore.setState({ sweep: { ...sweep, ...change } });
+}
+
+/**
+ * Backspace while Set order is on (owner, 2026-11-17): the marcher picked last is taken back, and
+ * can be swept again once the pointer has left it. False when nobody is picked.
+ */
+export function takeBackLastPick(): boolean {
+    const { sweep } = useMarcherOrderStore.getState();
+    const last = sweep?.picked.at(-1);
+    if (!sweep || last === undefined) return false;
+    useMarcherOrderStore.setState({
+        sweep: {
+            ...sweep,
+            picked: sweep.picked.slice(0, -1),
+            takenBack: [...sweep.takenBack.filter((id) => id !== last), last],
+        },
+    });
+    return true;
 }
 
 /** Leaves Set order with nothing kept (Escape, Cancel). True when it was on */

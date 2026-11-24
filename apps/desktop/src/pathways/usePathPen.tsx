@@ -25,6 +25,8 @@ import {
     followMarchersOf,
     ripplesIn,
     setFollowEnds,
+    setFollowSnake,
+    snakesThroughBox,
     setFollowPreview,
 } from "./followDrag";
 import {
@@ -39,6 +41,9 @@ import {
     typeRoundDigit,
 } from "./followAround";
 import { isTrailLineAt, openFollowTool } from "./followTool";
+import { usePenKeys, usePenKindActions } from "@/shapes/pen/usePenKeys";
+import { currentPenSubject } from "./penSubjects";
+import { toggleTrailShapeControls, useTrailEndShape } from "./trailShape";
 import { trailOffReason, useFollowTheLeader } from "./followTheLeader";
 import {
     closeShapeTool,
@@ -95,7 +100,6 @@ import {
     switchDrawing,
     selectPoint,
     setPathHidden,
-    setDrawingSmooth,
     setPointSmooth,
     showPath,
     startDrawing,
@@ -424,6 +428,8 @@ export function usePathPenActions(): void {
         "pathways.editor.endsNeedSpots",
         "Ripple in and Keep end spots follow into end spots the line already has on this page. Place them first (a shape tool, or move the marchers), then choose Follow",
     );
+    // Straight | Curve (owner, 2026-11-17): a setting of the user's, so it can be set any time
+    usePenKindActions();
     useActionHandler("followEndsTrail", () => setFollowEnds("trail"), {
         enabled: followOpen && hasKeep,
         disabledReason: followOpen ? noSpots : undefined,
@@ -439,6 +445,25 @@ export function usePathPenActions(): void {
             : hasKeep
               ? (formWhy ?? noSpots)
               : noSpots,
+    });
+    // Snake order (step 11, SN-2): with a box that has no remembered order, or Ripple in into one
+    const snakes = usePathPenStore(
+        (s) =>
+            !!s.session?.follow &&
+            !goingRound(s.session.follow) &&
+            snakesThroughBox(s.session.follow),
+    );
+    const noBox = tolgee.t(
+        "pathways.refusals.snakeNeedsBox",
+        "Snake order is for a box with no order of its own: open Follow on marchers standing in a box, or ripple into one",
+    );
+    useActionHandler("followSnakeRows", () => setFollowSnake("rows"), {
+        enabled: snakes,
+        disabledReason: noBox,
+    });
+    useActionHandler("followSnakeColumns", () => setFollowSnake("columns"), {
+        enabled: snakes,
+        disabledReason: noBox,
     });
     useActionHandler(
         "followPreview",
@@ -464,6 +489,17 @@ export function usePathPenActions(): void {
                 : undefined,
         },
     );
+
+    // Shape controls (owner, 2026-11-17): the trail's end shape's own controls, tucked away
+    // while the trail is selected, shown again or tucked back
+    const endShape = useTrailEndShape();
+    useActionHandler("trailShapeControls", toggleTrailShapeControls, {
+        enabled: endShape,
+        disabledReason: tolgee.t(
+            "pathways.refusals.noEndShape",
+            "Select a trail at the end of its move, where its marchers stand in a shape",
+        ),
+    });
 
     // The selected marchers' paths always show, whatever start flag positions' paths level says:
     // that level is for the marchers not selected (interaction round 2: with Paths Off, testers
@@ -500,11 +536,19 @@ export function usePathPenActions(): void {
         slots.shown && why !== null ? why : undefined;
     // On a group path it's named for what it edits: the line every member follows (round 3)
     const editLabel = slots.group ? editGroupPathLabel() : undefined;
-    useActionHandler("editPath", () => void openPath(), {
-        enabled: (phase === "closed" || lineEdited) && !trailLocked,
-        label: editLabel,
-        disabledReason: trailLocked ? trailOffReason() : undefined,
-    });
+    // A toggle (owner, 2026-11-17): on shows the points to drag and a trail's head to draw on; off
+    // (as Escape or a click on empty field turns it) a click only selects
+    const editing = phase === "open" && !lineEdited;
+    useActionHandler(
+        "editPath",
+        () => (editing ? closePath() : void openPath()),
+        {
+            enabled: (phase === "closed" || phase === "open") && !trailLocked,
+            checked: editing,
+            label: editLabel,
+            disabledReason: trailLocked ? trailOffReason() : undefined,
+        },
+    );
     // Edit <name>'s line (interaction round 3, was Adjust): the one selected member's line alone,
     // its handles shown at once
     const lineId = slots.lineId;
@@ -1008,14 +1052,15 @@ export function PathPenKeys(): null {
                     : tolgee.t("actions.path.close", "Close path"),
         },
     );
-    useActionHandler(
-        "applyShape",
-        () => void finishDrawing(),
-        {
-            label: tolgee.t("actions.path.finish", "Finish path"),
-        },
+    // The pen's keys while drawing: Enter finishes (a trail's head drawn on writes as its drag
+    // does, AP-T16), undo takes points back first, Alt shows on the next point's cue
+    usePenKeys({
         drawing,
-    );
+        subject: currentPenSubject,
+        finishElse: () => void finishDrawing(),
+        undoElse: closePath,
+        finishLabel: tolgee.t("actions.path.finish", "Finish path"),
+    });
     useActionHandler(
         "shapeRemoveLastPoint",
         () => {
@@ -1047,43 +1092,22 @@ export function PathPenKeys(): null {
         },
         drawing || phase === "open",
     );
-    // While drawing, undo takes points back first, as a Line's points are; with none left it
-    // cancels
-    useActionHandler(
-        "performUndo",
-        () => {
-            const s = usePathPenStore.getState().session;
-            if (s && s.points.length > 0) removeLastPoint();
-            else closePath();
-        },
-        {},
-        drawing,
-    );
     // Corner and Smooth for the selected point of the open path (the editor bar's either/or, the
     // palette); no keys of their own, as a Line's corner type has none
     const pickedIndex =
         !drawing && picked !== null ? Number(picked.slice(1)) : -1;
     const pointPicked = phase === "open" && pickedIndex >= 0;
-    // While a path or a trail is drawn they choose what clicks place (owner, 2026-11-23: "switch
-    // between straight and curved"); not round an outline, where nothing is drawn
-    const placing = drawing && !round;
     useActionHandler(
         "pathPointCorner",
-        () =>
-            placing
-                ? setDrawingSmooth(false)
-                : void setPointSmooth(pickedIndex, false),
+        () => void setPointSmooth(pickedIndex, false),
         {},
-        pointPicked || placing,
+        pointPicked,
     );
     useActionHandler(
         "pathPointSmooth",
-        () =>
-            placing
-                ? setDrawingSmooth(true)
-                : void setPointSmooth(pickedIndex, true),
+        () => void setPointSmooth(pickedIndex, true),
         {},
-        pointPicked || placing,
+        pointPicked,
     );
     return null;
 }

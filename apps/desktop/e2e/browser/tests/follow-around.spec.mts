@@ -27,12 +27,24 @@ import type { FieldTestShapeOverlay } from "../../../src/field/fieldTestApi";
 // step on letting go); dragged off the outline it's pulled out into a trail the rest follow. A
 // march order set by hand (Set order, Shift+O) is the one walked. Spec Appendix L.11.
 
-// Fifteen trumpets scattered, all in view, on three pages
-const HOME: SeedPosition[] = Array.from({ length: 15 }, (_, i) => [
-    i + 1,
-    460 + (i % 5) * 90,
-    280 + Math.floor(i / 5) * 90 + (i % 2) * 20,
-]);
+// Fifteen trumpets scattered, all in view, on three pages: no line, curve, arc or box among them
+const HOME: SeedPosition[] = [
+    [1, 470, 300],
+    [2, 610, 262],
+    [3, 545, 410],
+    [4, 720, 330],
+    [5, 498, 505],
+    [6, 812, 455],
+    [7, 655, 488],
+    [8, 905, 290],
+    [9, 760, 560],
+    [10, 580, 600],
+    [11, 870, 610],
+    [12, 455, 640],
+    [13, 690, 395],
+    [14, 950, 470],
+    [15, 525, 335],
+];
 const ALL = HOME.map(([id]) => id);
 
 test.use({
@@ -97,6 +109,43 @@ const turn = (a: number, b: number) => {
  * flag (home's spots), from three past the one at the far right, so neither clockwise nor the
  * guess Follow once fell back to
  */
+/** Field points from `a` to `b` whose straight legs pass none of `others` within `clear` */
+function legAround(
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+    others: readonly { x: number; y: number }[],
+    clear: number,
+): { x: number; y: number }[] {
+    const near = (p: { x: number; y: number }, q: { x: number; y: number }) =>
+        others.some((o) => {
+            if (Math.hypot(o.x - p.x, o.y - p.y) < 1) return false;
+            const dx = q.x - p.x;
+            const dy = q.y - p.y;
+            const t = Math.max(
+                0,
+                Math.min(
+                    1,
+                    ((o.x - p.x) * dx + (o.y - p.y) * dy) /
+                        (dx * dx + dy * dy || 1),
+                ),
+            );
+            return Math.hypot(p.x + t * dx - o.x, p.y + t * dy - o.y) < clear;
+        });
+    if (!near(a, b)) return [b];
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const n = { x: -(b.y - a.y) / len, y: (b.x - a.x) / len };
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    for (let k = 1; k <= 40; k++)
+        for (const side of [1, -1]) {
+            const via = {
+                x: mid.x + side * k * (clear / 2) * n.x,
+                y: mid.y + side * k * (clear / 2) * n.y,
+            };
+            if (!near(a, via) && !near(via, b)) return [via, b];
+        }
+    throw new Error("no clear way between two marchers");
+}
+
 async function setOrder(show: Show): Promise<number[]> {
     const { page } = show;
     const at = await savedPositions(show, 1);
@@ -114,11 +163,26 @@ async function setOrder(show: Show): Promise<number[]> {
         "aria-pressed",
         "true",
     );
-    for (const id of order) {
-        const p = at.find((q) => q.id === id)!;
-        const s = await toScreen(page, p);
-        await page.mouse.click(s.x, s.y);
+    // One drag through them in the order (a click, then a move, sweeps too, picking whoever the
+    // pointer passes): each leg goes round everyone else, on the field, so only the next is picked
+    const field = new Map(at.map((q) => [q.id, { x: q.x, y: q.y }]));
+    const clear = 1.5 * (await fieldGrid(show)).pixelsPerStep;
+    const start = await toScreen(page, field.get(order[0]!)!);
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    let here = field.get(order[0]!)!;
+    for (const id of order.slice(1)) {
+        const to = field.get(id)!;
+        const others = [...field.entries()]
+            .filter(([m]) => m !== id)
+            .map(([, xy]) => xy);
+        for (const via of legAround(here, to, others, clear)) {
+            const v = await toScreen(page, via);
+            await page.mouse.move(v.x, v.y);
+        }
+        here = to;
     }
+    await page.mouse.up();
     // every one picked: kept, one undo step
     await expect.poll(() => undoSteps(show)).toBe(steps + 1);
     await waitForIdle(page);
@@ -301,9 +365,7 @@ test("change: dragging a marcher off the outline pulls it out into a trail the r
     // pulled out: the trail's controls, not the count around
     await expect(page.getByTestId("follow-round")).toBeHidden();
     await expect(page.getByTestId("follow-spacing")).toBeVisible();
-    await expect(page.getByTestId("follow-status")).toContainText(
-        "pulled out",
-    );
+    await expect(page.getByTestId("follow-status")).toContainText("pulled out");
     // the one grabbed leads the trail
     await expect
         .poll(
@@ -400,9 +462,7 @@ test("change: click a marcher, let go, then move: the line slides with no button
     // a click, not a drag: nothing written; the top bar says it's held, the marcher is haloed
     // and leads at once, and the guess's arrows are gone
     await page.mouse.click(from.x, from.y);
-    await expect(page.getByTestId("follow-status")).toContainText(
-        "Holding T",
-    );
+    await expect(page.getByTestId("follow-status")).toContainText("Holding T");
     await expect(page.getByTestId("follow-status")).toContainText(
         "click to drop",
     );
@@ -447,14 +507,13 @@ test("change: click a marcher, let go, then move: the line slides with no button
     await expect(page.getByTestId("follow-spacing")).toBeVisible();
     await page.mouse.click(out.x, out.y);
     expect(await undoSteps(show)).toBe(steps);
-    // Straight | Curved on the bar while the trail is drawn
-    await expect(page.getByTestId("path-drawing-point-type")).toBeVisible();
-    await expect(page.getByTestId("path-point-corner")).toHaveAttribute(
+    // Straight | Curve on the bar while the trail is drawn (the pen's switch, DC-1)
+    await expect(page.getByTestId("path-draw-straight")).toHaveAttribute(
         "aria-pressed",
         "true",
     );
-    await page.getByTestId("path-point-smooth").click();
-    await expect(page.getByTestId("path-point-smooth")).toHaveAttribute(
+    await page.getByTestId("path-draw-curve").click();
+    await expect(page.getByTestId("path-draw-curve")).toHaveAttribute(
         "aria-pressed",
         "true",
     );
@@ -467,7 +526,7 @@ test("change: click a marcher, let go, then move: the line slides with no button
     await expect(page.getByTestId("follow-spacing")).toBeHidden();
     await expect.poll(() => undoSteps(show)).toBe(steps + 1);
     await waitForIdle(page);
-    // the trail kept its curve: its first point is stored smooth
+    // the trail kept its curve: the point clicked in Curve is stored smooth
     const routes = await show.query<{ geometry: string }>(
         "SELECT geometry FROM timeline_routes",
     );
