@@ -389,6 +389,58 @@ export function itemDraw(
     return { w, h, sx, sy };
 }
 
+/** One horizontal strip of a placed item as the atlas draws it. */
+export interface ItemStrip {
+    /** Its top, inches below the item's centre (negative above). */
+    top: number;
+    height: number;
+    /** How wide it is drawn: `target / k` of its row. */
+    sx: number;
+}
+
+/**
+ * How to draw a `proportional` or `fixed` item on body `body`'s atlas so it
+ * keeps its shape row by row. The table widens each atlas row by its own k,
+ * and k changes fast down the chest of the fuller bodies (on `neutral-full`
+ * from 1.02 to 1.40 over 7 in), so one scale per item would leave a round
+ * crest egg-shaped. Instead the item is cut into strips `strip` inches tall,
+ * each drawn `target / k(row)` as wide, so on the body every row is `target`
+ * times its width: `target` is the k under the centre for `proportional`
+ * (scaled with the body, aspect kept) and 1 for `fixed` (real size).
+ *
+ * `half` is half the item's drawn height. Rows off the garment keep the
+ * centre's factor.
+ */
+export function itemStrips(
+    layout: FlatsLayout,
+    regions: FlatsRegions,
+    body: string,
+    panel: FlatsPanel,
+    at: readonly [number, number],
+    half: number,
+    target: number,
+    strip: number,
+): ItemStrip[] {
+    const [cx, cy] = at;
+    const centre = gradeAt(layout, regions, body, panel, cx, cy).k;
+    const n = Math.max(1, Math.ceil((2 * half) / strip));
+    const out: ItemStrip[] = [];
+    for (let i = 0; i < n; i++) {
+        const top = -half + i * strip;
+        const height = Math.min(strip, half - top);
+        const row = gradeAt(
+            layout,
+            regions,
+            body,
+            panel,
+            cx,
+            cy + top + height / 2,
+        );
+        out.push({ top, height, sx: target / (row.region ? row.k : centre) });
+    }
+    return out;
+}
+
 /** An item's size on the median body from its width or height and its image's aspect. */
 export function itemSize(
     item: Pick<FlatsItem, "width" | "height">,

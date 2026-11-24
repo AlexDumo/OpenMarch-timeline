@@ -24,6 +24,7 @@ import {
     gradeAt,
     itemDraw,
     itemSize,
+    itemStrips,
     tileLayout,
     type FlatsItem,
     type FlatsLayout,
@@ -528,15 +529,77 @@ function drawItem(
         ctx.restore();
         return;
     }
-    const [x, y] = item.at;
-    const { k } = gradeAt(layout, regions, body, panel, x, y);
+    const [cx, cy] = item.at;
+    const { k } = gradeAt(layout, regions, body, panel, cx, cy);
     const d = itemDraw(item, aspect, k);
     ctx.beginPath();
     ctx.rect(o[0] * dpi, o[1] * dpi, P.w * dpi, P.h * dpi);
     ctx.clip();
-    ctx.translate((o[0] + item.at[0]) * dpi, (o[1] + item.at[1]) * dpi);
+    const grade = item.grade ?? "proportional";
+    const angle = ((item.rotate ?? 0) * Math.PI) / 180;
+    if (grade === "proportional" || grade === "fixed") {
+        // drawn upright (rotated, and k times taller when proportional) on a
+        // canvas of its own, then copied in strips, each as wide as its row
+        // needs (`itemStrips`)
+        const bw =
+            Math.abs(d.w * Math.cos(angle)) + Math.abs(d.h * Math.sin(angle));
+        const bh =
+            (Math.abs(d.w * Math.sin(angle)) +
+                Math.abs(d.h * Math.cos(angle))) *
+            d.sy;
+        const W = Math.max(1, Math.ceil(bw * dpi));
+        const H = Math.max(1, Math.ceil(bh * dpi));
+        const off = document.createElement("canvas");
+        off.width = W;
+        off.height = H;
+        const itemCtx = off.getContext("2d")!;
+        itemCtx.translate(W / 2, H / 2);
+        itemCtx.scale(1, d.sy);
+        itemCtx.rotate(angle);
+        itemCtx.drawImage(
+            image,
+            (-d.w / 2) * dpi,
+            (-d.h / 2) * dpi,
+            d.w * dpi,
+            d.h * dpi,
+        );
+        const stripPx = Math.max(1, Math.round(dpi / 8));
+        const half = H / 2 / dpi;
+        const strips = itemStrips(
+            layout,
+            regions,
+            body,
+            panel,
+            item.at,
+            half,
+            grade === "proportional" ? k : 1,
+            stripPx / dpi,
+        );
+        const X = (o[0] + cx) * dpi;
+        const Y = (o[1] + cy) * dpi;
+        for (const s of strips) {
+            const sy = Math.round((s.top + half) * dpi);
+            const sh = Math.min(H - sy, Math.round(s.height * dpi));
+            if (sh <= 0) continue;
+            ctx.drawImage(
+                off,
+                0,
+                sy,
+                W,
+                sh,
+                X - (W * s.sx) / 2,
+                Y - H / 2 + sy,
+                W * s.sx,
+                sh,
+            );
+        }
+        off.width = 0;
+        ctx.restore();
+        return;
+    }
+    ctx.translate((o[0] + cx) * dpi, (o[1] + cy) * dpi);
     ctx.scale(d.sx, d.sy);
-    ctx.rotate(((item.rotate ?? 0) * Math.PI) / 180);
+    ctx.rotate(angle);
     if (d.ly !== undefined) ctx.scale(1, d.ly);
     ctx.drawImage(
         image,

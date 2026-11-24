@@ -53,7 +53,7 @@ describe("uniform pack file", () => {
         expect(Array.from(rewritten)).toEqual(Array.from(a));
     });
 
-    it("is a self-contained version 1 preview of kind uniform, with room for items, modes and variants", () => {
+    it("is a self-contained version 1 preview of kind uniform while it has no items, with room for modes and variants", () => {
         const { manifest } = readUniformPack(pack());
         expect(manifest).toMatchObject({
             format: "openmarch-asset",
@@ -208,7 +208,7 @@ describe("uniform pack file", () => {
                     zipOf({
                         "manifest.json": manifestJson({
                             ...sampleManifest(),
-                            formatVersion: 2,
+                            formatVersion: 3,
                         }),
                     }),
                 ),

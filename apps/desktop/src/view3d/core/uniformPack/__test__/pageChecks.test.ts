@@ -98,4 +98,38 @@ describe("imported page notes", () => {
         expect(WRAP_BAND_FILL).toBe(parseInt(COLORS.band.slice(1), 16));
         expect(FLATS_PAGE_DPI).toBe(32);
     });
+
+    it("notes a logo-like shape painted on the chest, and not stripes or a plain jacket", () => {
+        const chest = { x: front.x + 17, y: front.y + 25.32 };
+        const navy: [number, number, number, number] = [20, 20, 70, 255];
+        const gold: [number, number, number, number] = [220, 180, 60, 255];
+        const jacket = (paint: (xIn: number, yIn: number) => boolean) =>
+            pageNotes(
+                page((x, y) =>
+                    inFrontPanel(x, y)
+                        ? paint(x / DPI, y / DPI)
+                            ? gold
+                            : navy
+                        : [0, 0, 0, 0],
+                ),
+                W,
+                H,
+                DPI,
+                regions,
+            );
+        // a 6 in round crest on the chest
+        expect(
+            jacket((x, y) => Math.hypot(x - chest.x, y - chest.y) < 3),
+        ).toEqual(["paintedLogo"]);
+        // a band across the chest touches the side seams: fabric, not a logo
+        expect(jacket((_, y) => Math.abs(y - chest.y) < 1.5)).toEqual([]);
+        // a stripe down the front
+        expect(jacket((x) => Math.abs(x - chest.x) < 0.75)).toEqual([]);
+        // a button is too small
+        expect(
+            jacket((x, y) => Math.hypot(x - chest.x, y - chest.y) < 0.5),
+        ).toEqual([]);
+        // nothing at all
+        expect(jacket(() => false)).toEqual([]);
+    });
 });

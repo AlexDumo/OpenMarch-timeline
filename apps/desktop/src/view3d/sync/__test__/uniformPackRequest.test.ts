@@ -8,7 +8,10 @@ describe("storeUniformPackRequest", () => {
         const publish = vi.fn();
         const bytes = new Uint8Array([7]);
         await storeUniformPackRequest({ id: "r1", bytes }, store, publish);
-        expect(store).toHaveBeenCalledWith(bytes);
+        expect(store).toHaveBeenCalledWith({
+            pack: bytes,
+            versionOf: undefined,
+        });
         expect(publish).toHaveBeenCalledWith(
             VIEW3D_UNIFORM_PACK_RESULT_CHANNEL,
             { id: "r1", ok: true, value: "library:a@b" },

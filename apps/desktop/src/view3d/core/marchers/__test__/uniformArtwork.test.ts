@@ -19,6 +19,9 @@ import {
     gradeAt,
     insidePolygon,
     itemDraw,
+    itemPresets,
+    itemStrips,
+    tileLayout,
     uniformArtworkOf,
     flatsArtworkOf,
     SAMPLE_FLATS,
@@ -448,5 +451,172 @@ describe("a look with flats", () => {
         expect("artwork" in plain.options).toBe(false);
         expect(bodyKey(plain)).not.toContain("artwork");
         expect(bodyKey(band)).toContain("sample");
+    });
+});
+
+/**
+ * Placed items on all 7 body types (fork #1258): the table widens every atlas row by its own
+ * grade factor k, so an item's width on the body is each row's chord times that row's k, and its
+ * height is real.
+ */
+describe("placed items on the 7 body types", () => {
+    it("keeps a round item round within 1% at every preset on every body, row by row", () => {
+        const presets = itemPresets(regions);
+        expect(presets.map((p) => p.id)).toEqual([
+            "chest",
+            "backNumber",
+            "sleeveLeft",
+            "sleeveRight",
+        ]);
+        // the atlas draws strips of 2 px at 16 px/in
+        const strip = 2 / 16;
+        for (const preset of presets) {
+            // a crest on the chest or back, a patch on a sleeve
+            const size = preset.id.startsWith("sleeve") ? 3 : 6;
+            for (const body of BODY_TYPES) {
+                const [cx, cy] = preset.at;
+                const { region, k } = gradeAt(
+                    layout,
+                    regions,
+                    body,
+                    preset.panel,
+                    cx,
+                    cy,
+                );
+                expect(region, `${preset.id} is on the uniform`).not.toBeNull();
+                const crest = { file: "crest.png", at: preset.at, width: size };
+                const d = itemDraw(crest, 1, k);
+                const half = (d.h * d.sy) / 2;
+                const strips = itemStrips(
+                    layout,
+                    regions,
+                    body,
+                    preset.panel,
+                    preset.at,
+                    half,
+                    k,
+                    strip,
+                );
+                // on the body: as tall as k × its size, every row k × its chord
+                const tall = 2 * half;
+                let worst = 0;
+                let wide = 0;
+                for (const s of strips) {
+                    const mid = s.top + s.height / 2;
+                    const f = mid / half;
+                    const chord = d.w * Math.sqrt(Math.max(0, 1 - f * f));
+                    const row = gradeAt(
+                        layout,
+                        regions,
+                        body,
+                        preset.panel,
+                        cx,
+                        cy + mid,
+                    );
+                    const onBody = chord * s.sx * (row.region ? row.k : k);
+                    wide = Math.max(wide, onBody);
+                    if (chord > 0.5)
+                        worst = Math.max(
+                            worst,
+                            Math.abs(onBody / (chord * k) - 1),
+                        );
+                }
+                const label = `${preset.id} on ${body}: ${wide.toFixed(3)} × ${tall.toFixed(3)} in`;
+                expect(worst, label).toBeLessThan(0.01);
+                expect(wide / tall, label).toBeGreaterThan(0.99);
+                expect(wide / tall, label).toBeLessThan(1.01);
+                expect(tall).toBeCloseTo(size * k, 6);
+                if (body === "neutral-average")
+                    expect(tall).toBeCloseTo(size, 6);
+            }
+        }
+    });
+
+    it("keeps a fixed item at its real size, and a stretched one widens with the fabric", () => {
+        for (const body of BODY_TYPES) {
+            const item = {
+                file: "p.png",
+                at: [17, CHEST_CENTRE_Y] as const,
+                width: 3,
+            };
+            const { k } = gradeAt(
+                layout,
+                regions,
+                body,
+                "front",
+                17,
+                CHEST_CENTRE_Y,
+            );
+            const fixed = itemDraw({ ...item, grade: "fixed" }, 1, k);
+            expect(fixed.w * fixed.sx * k).toBeCloseTo(3, 6);
+            expect(fixed.h * fixed.sy).toBeCloseTo(3, 6);
+            const stretch = itemDraw({ ...item, grade: "stretch" }, 1, k);
+            expect(stretch.w * stretch.sx * k).toBeCloseTo(3 * k, 6);
+        }
+    });
+
+    it("keeps a line's width at any angle while its length follows the fabric", () => {
+        for (const body of BODY_TYPES)
+            for (const rotate of [0, 30, 45, 90, 135]) {
+                const { k } = gradeAt(layout, regions, body, "back", 17, 30);
+                const d = itemDraw(
+                    {
+                        file: "braid.png",
+                        at: [17, 30],
+                        width: 10,
+                        height: 0.5,
+                        rotate,
+                        grade: "line",
+                    },
+                    20,
+                    k,
+                );
+                // the line's direction and its width's direction on the atlas, then on the body
+                const a = (rotate * Math.PI) / 180;
+                const along = [Math.cos(a), Math.sin(a)];
+                const across = [-Math.sin(a) * d.ly!, Math.cos(a) * d.ly!];
+                const onBody = (v: number[]) => [v[0] * k, v[1]];
+                const l = onBody(along);
+                const w = onBody(across);
+                // the width on the body: the part of `across` perpendicular to the line
+                const len = Math.hypot(l[0], l[1]);
+                const width = (Math.abs(l[0] * w[1] - l[1] * w[0]) / len) * d.h;
+                expect(width, `${body} at ${rotate}°`).toBeCloseTo(0.5, 6);
+            }
+    });
+
+    it("tiles a print at its real size on every body", () => {
+        const item = {
+            at: [17, 30] as const,
+            regions: ["back-torso", "back-sleeve-L", "back-leg-R"],
+        };
+        for (const body of BODY_TYPES) {
+            const tiles = tileLayout(layout, regions, body, "back", item, 4, 2);
+            expect(tiles.map((t) => t.region)).toEqual(item.regions);
+            for (const t of tiles) {
+                // on the body, at the region's middle row, each tile is 4 × 2 in
+                expect(t.w * t.k).toBeCloseTo(4, 6);
+                expect(t.h).toBe(2);
+                if (body === "neutral-full") expect(t.k).toBeGreaterThan(1.05);
+                // the tiles cover the region
+                const xs = t.polygon.map((q) => q[0]);
+                const ys = t.polygon.map((q) => q[1]);
+                const ox = t.origins.map((o) => o[0]);
+                const oy = t.origins.map((o) => o[1]);
+                expect(Math.min(...ox)).toBeLessThanOrEqual(Math.min(...xs));
+                expect(Math.max(...ox) + t.w).toBeGreaterThanOrEqual(
+                    Math.max(...xs),
+                );
+                expect(Math.min(...oy)).toBeLessThanOrEqual(Math.min(...ys));
+                expect(Math.max(...oy) + t.h).toBeGreaterThanOrEqual(
+                    Math.max(...ys),
+                );
+                // the rows line up with one centred on the item's height
+                for (const y of oy) {
+                    const off = (((y + 1 - 30) % 2) + 2) % 2;
+                    expect(Math.min(off, 2 - off)).toBeLessThan(1e-9);
+                }
+            }
+        }
     });
 });

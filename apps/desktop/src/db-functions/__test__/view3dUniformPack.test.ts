@@ -26,6 +26,27 @@ import { defaultVenueForField } from "@/view3d/core/venueSettings";
 
 const field = FootballTemplates.HIGH_SCHOOL_FOOTBALL_FIELD_WITH_END_ZONES;
 
+/** The tag-1 "Home uniform" with a crest on the chest: format version 2 */
+const packWithItemsFixture = () =>
+    writeUniformPack(
+        {
+            ...sampleManifest("Home uniform"),
+            items: [
+                {
+                    id: "crest",
+                    file: "items/crest.png",
+                    panel: "front",
+                    at: [17, 25.32],
+                    width: 6,
+                },
+            ],
+        },
+        {
+            "layers/base.png": fakePng(3360, 2816, 1),
+            "items/crest.png": fakePng(512, 512, 9),
+        },
+    );
+
 const packFile = (name = "Home uniform", tag = 0) =>
     writeUniformPack(sampleManifest(name), {
         "layers/base.png": fakePng(3360, 2816, tag),
@@ -117,6 +138,48 @@ describeDbTests("view3dUniformPack", (it) => {
                     (a) => a.kind === "uniform",
                 ),
             ).toHaveLength(2);
+        });
+
+        it("saves an item edit as a new version of the same uniform, undone like a venue change (#1258)", async ({
+            db,
+        }) => {
+            const plain = await store(db, packFile("Home uniform", 1));
+            const read = readUniformPack(packWithItemsFixture());
+            const withCrest = await setUniformPack({
+                db,
+                pack: packWithItemsFixture(),
+                manifest: read.manifest,
+                field,
+                versionOf: parseShowAssetRef(plain)!.id,
+            });
+            const a = parseShowAssetRef(plain)!;
+            const b = parseShowAssetRef(withCrest)!;
+            // the same uniform, a new version
+            expect(b.id).toBe(a.id);
+            expect(b.versionHash).not.toBe(a.versionHash);
+            expect((await getShowAsset({ db, ref: b }))?.sidecar).toEqual({
+                formatVersion: 2,
+            });
+            expect((await getStoredVenueSettings({ db }))?.uniformArtwork).toBe(
+                withCrest,
+            );
+            await performUndo(db);
+            expect((await getStoredVenueSettings({ db }))?.uniformArtwork).toBe(
+                plain,
+            );
+            await performRedo(db);
+            expect((await getStoredVenueSettings({ db }))?.uniformArtwork).toBe(
+                withCrest,
+            );
+            // a versionOf the show doesn't have is a uniform of its own
+            const other = await setUniformPack({
+                db,
+                pack: packFile("Away", 3),
+                manifest: readUniformPack(packFile("Away", 3)).manifest,
+                field,
+                versionOf: "00000000-0000-4000-8000-000000000000",
+            });
+            expect(parseShowAssetRef(other)!.id).not.toBe(a.id);
         });
 
         it("refuses a manifest that doesn't parse, changing nothing", async ({
