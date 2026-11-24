@@ -19,6 +19,7 @@ import regionsUrl from "@/view3d/assets/uniform-flats/regions.json?url";
 import {
     FLATS_BLEED_IN,
     UNIFORM_ARTWORK,
+    bleedPlan,
     flatsAtlasLayout,
     gradeAt,
     itemDraw,
@@ -139,8 +140,7 @@ const bleedMaps = new Map<
     { W: number; H: number; dst: Int32Array; from: Int32Array }
 >();
 /**
- * For every atlas pixel within the bleed of a region (and outside all of
- * them), the nearest region pixel (8-connected breadth-first), per layout.
+ * The atlas's bleed (`bleedPlan`), per layout and resolution.
  */
 function bleedMap(
     regions: FlatsRegions,
@@ -171,46 +171,12 @@ function bleedMap(
         x.fill();
     }
     const a = x.getImageData(0, 0, W, H).data;
-    const src = new Int32Array(W * H).fill(-1);
-    let queue = new Int32Array(W * H);
-    let qn = 0;
-    for (let i = 0; i < W * H; i++)
-        if (a[i * 4 + 3] > 127) {
-            src[i] = i;
-            queue[qn++] = i;
-        }
-    const steps = Math.round(FLATS_BLEED_IN * dpi);
-    const dst: number[] = [];
-    const from: number[] = [];
-    for (let step = 0; step < steps && qn; step++) {
-        const next = new Int32Array(qn * 8);
-        let nn = 0;
-        for (let k = 0; k < qn; k++) {
-            const i = queue[k];
-            const ix = i % W;
-            const iy = (i / W) | 0;
-            for (let dy = -1; dy <= 1; dy++)
-                for (let dx = -1; dx <= 1; dx++) {
-                    if (!dx && !dy) continue;
-                    const jx = ix + dx;
-                    const jy = iy + dy;
-                    if (jx < 0 || jy < 0 || jx >= W || jy >= H) continue;
-                    const j = jy * W + jx;
-                    if (src[j] >= 0) continue;
-                    src[j] = src[i];
-                    dst.push(j);
-                    from.push(src[i]);
-                    next[nn++] = j;
-                }
-        }
-        queue = next;
-        qn = nn;
-    }
+    const mask = new Uint8Array(W * H);
+    for (let i = 0; i < W * H; i++) mask[i] = a[i * 4 + 3] > 127 ? 1 : 0;
     const out = {
         W,
         H,
-        dst: Int32Array.from(dst),
-        from: Int32Array.from(from),
+        ...bleedPlan(mask, W, H, Math.round(FLATS_BLEED_IN * dpi)),
     };
     bleedMaps.set(key, out);
     return out;

@@ -27,7 +27,7 @@
 // Table texel (row r, column i), all half floats:
 //   R  U on the front flat, inches from the panel's centre line toward the performer's left (+X)
 //   G  U on the back flat, the same sense
-//   B  the row's centre front-to-back (m), torso and hips only
+//   B  torso and hips: the row's centre front to back (m); limbs: how far forward the axis moves (m)
 //   A  added to the flat's y (inches): the shoulder tops' extra length, torso only
 // Column i is psi = -pi + (i + 0.5) * 2 pi / LUT_ANGLES.
 import fs from "node:fs";
@@ -302,8 +302,13 @@ function frame(seg, t, zc) {
             fwd: [0, 0, 1],
             side: [1, 0, 0],
         };
+    // limbs: zc moves the axis forward (m), so a thigh's side seams meet the hips' (thighOffset)
     const L = LIMBS[seg];
-    return { o: add(L.head, mul(L.dir, t)), fwd: L.fwd, side: L.side };
+    return {
+        o: add(add(L.head, mul(L.dir, t)), mul(L.fwd, zc)),
+        fwd: L.fwd,
+        side: L.side,
+    };
 }
 const psiOf = (i) => -PI + ((i + 0.5) * TAU) / N_A;
 /** Radii at N_A angles (psi from the segment's front, toward +side); misses filled round the ring. */
@@ -334,10 +339,26 @@ function castRing(bt, seg, t, zc) {
         }
     return { r, coverage: hits / N_A };
 }
+/** The hips' last row's centre front to back, per body (m), once the hips are measured. */
+const HIPS_ZC = {};
+/**
+ * How far forward (m) a thigh's ring is centred at t: at the crotch on the hips' own centre, so the thigh's
+ * side seams (psi = +-90 deg) are the hips' side seams and art down the side of the pants has no jog there;
+ * easing back to the bone over LEG_EASE_M.
+ */
+function thighOffset(bt, seg, t) {
+    if (!seg.startsWith("thigh") || HIPS_ZC[bt] === undefined) return 0;
+    const L = LIMBS[seg];
+    const axisZ = L.head[2] + L.dir[2] * t;
+    const w = smooth((t - tRange[seg].min) / LEG_EASE_M);
+    return ((HIPS_ZC[bt] - axisZ) / L.fwd[2]) * (1 - w);
+}
 /** Torso and hips: each row centred front to back on its own cross-section (one re-cast). */
 function ringAt(bt, seg, t) {
-    if (seg !== "torso" && seg !== "hips")
-        return { ...castRing(bt, seg, t, 0), zc: 0 };
+    if (seg !== "torso" && seg !== "hips") {
+        const off = thighOffset(bt, seg, t);
+        return { ...castRing(bt, seg, t, off), zc: off };
+    }
     let zc = 0;
     let rg = castRing(bt, seg, t, zc);
     if (rg.coverage > 0.3) {
@@ -492,6 +513,8 @@ for (const bt of BODY_TYPES) {
                 copiedFrom: rows[k].copiedFrom,
             };
         });
+        if (seg === "hips")
+            HIPS_ZC[bt] = RAW[bt].hips[RAW[bt].hips.length - 1].zc;
     }
     process.stdout.write(`${bt} `);
 }
@@ -731,9 +754,7 @@ for (const bt of BODY_TYPES) {
                 buf[o + 1] = toHalf(
                     flatX(seg, k, "B", b.UB[i] * (pos ? sc.Bp : sc.Bm)),
                 );
-                buf[o + 2] = toHalf(
-                    seg === "torso" || seg === "hips" ? b.zc : 0,
-                );
+                buf[o + 2] = toHalf(b.zc);
                 buf[o + 3] = toHalf(seg === "torso" ? DV[k][i] : 0);
             }
         }
@@ -1043,6 +1064,7 @@ const layoutJson = {
         dir: LIMBS[id].dir.map(r5),
         fwd: LIMBS[id].fwd.map(r5),
         side: LIMBS[id].side.map(r5),
+        length: r5(LIMBS[id].length),
     })),
     planes: PLANE_ORDER.map((id) => ({
         id,

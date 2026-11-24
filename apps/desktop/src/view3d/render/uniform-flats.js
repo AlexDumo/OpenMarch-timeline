@@ -23,7 +23,7 @@
 const FLATS_GLSL = /* glsl */ `
 uniform sampler2D uFlatArt;
 uniform vec2 uFlatAtlas;          // atlas size, inches
-uniform sampler2D uFlatLut;       // R U front, G U back (in, from the centre line, +X); B row centre z (m); A extra y (in)
+uniform sampler2D uFlatLut;       // R U front, G U back (in, from the centre line, +X); B row centre z or axis shift (m); A extra y (in)
 uniform float uFlatLutRows;
 uniform vec4 uFlatSeg[10];        // rowStart, rows, tStart, tEnd (m)
 uniform float uFlatY0[10];        // flat y (in) of the segment's t = 0
@@ -33,6 +33,7 @@ uniform vec4 uFlatTops;           // torso top, hips top, crotch, collar (m)
 uniform vec2 uFlatPanF, uFlatPanB, uFlatPanC; // where each panel's origin sits in the atlas (in)
 uniform float uFlatCx;            // the panels' centre line (in)
 uniform vec4 uFlatCape;           // cape grade, cape mid-plane z, cape top (m), 1 when the atlas has a cape
+uniform vec2 uFlatWrist;          // t along the left and right forearm (m) below which the glove is sleeve
 const float OM_FLAT_IN = 0.0254;
 const float OM_FLAT_PI = 3.14159265;
 float omFlatRow(int s, float t) {
@@ -40,13 +41,35 @@ float omFlatRow(int s, float t) {
   float f = clamp((t - g.z) / (g.w - g.z), 0.0, 1.0);
   return (g.x + 0.5 + f * (g.y - 1.0)) / uFlatLutRows;
 }
+// Whether jacket point p lies on upper arm i: past the shoulder joint, close to the bone and not on its
+// inner side. The bodies' jacket reaches over the top of each arm in a wedge, which the sleeve's art covers.
+bool omFlatOnArm(vec3 p, int i) {
+  vec3 d = p - uFlatHead[i];
+  float t = dot(d, uFlatDir[i]);
+  vec3 r = d - uFlatDir[i] * t;
+  float outward = dot(r, uFlatSide[i]) * (i == 0 ? 1.0 : -1.0);
+  return t > 0.01 && outward > -0.012 && length(r) < 0.1;
+}
+// The part a fragment is drawn as. The bodies' jacket reaches over the top of each arm and their gloves
+// reach halfway up each forearm in thin slivers: both are sleeve, for the art and the palette.
+int omFlatPart() {
+  int part = int(vPart + 0.5);
+  vec3 p = vRest;
+  if (part == 1 && omFlatOnArm(p, p.x >= 0.0 ? 0 : 2)) return 2;
+  if (part == 5) {
+    int i = p.x >= 0.0 ? 1 : 3;
+    if (dot(p - uFlatHead[i], uFlatDir[i]) < (i == 1 ? uFlatWrist.x : uFlatWrist.y)) return 2;
+  }
+  return part;
+}
 // The art over the palette (premultiplied), or transparent where the part takes palette colors only.
 vec4 omFlatArt() {
-  int part = int(vPart + 0.5);
+  int part = omFlatPart();
   vec3 p = vRest;
   int s = -1;
   float t = 0.0, psi = 0.0, valid = 1.0;
   vec2 q = vec2(0.0), org = uFlatPanF;
+  bool front = true;
   if (part == 1 || (part == 3 && p.y > uFlatTops.z)) {
     s = part == 1 ? 0 : 1;
     t = (part == 1 ? uFlatTops.x : uFlatTops.y) - p.y;
@@ -60,9 +83,11 @@ vec4 omFlatArt() {
     int i = (part == 2 ? 0 : 4) + side * 2 + (dot(p - uFlatPlaneAt[pl], uFlatPlaneN[pl]) > 0.0 ? 1 : 0);
     vec3 d = p - uFlatHead[i];
     t = dot(d, uFlatDir[i]);
-    vec3 r = d - uFlatDir[i] * t;
-    psi = atan(dot(r, uFlatSide[i]), dot(r, uFlatFwd[i]));
     s = 2 + i;
+    // the ring's centre moves forward at the top of each thigh, onto the hips' (table B)
+    float off = textureLod(uFlatLut, vec2(0.5, omFlatRow(s, t)), 0.0).b;
+    vec3 r = d - uFlatDir[i] * t - uFlatFwd[i] * off;
+    psi = atan(dot(r, uFlatSide[i]), dot(r, uFlatFwd[i]));
   } else if (part == 12) {
     org = uFlatPanC;
     q = vec2(0.5 * OM_FLAT_CAPE_W - p.x / uFlatCape.x / OM_FLAT_IN, (uFlatCape.z - p.y) / OM_FLAT_IN);
@@ -72,7 +97,7 @@ vec4 omFlatArt() {
     vec4 g = uFlatSeg[s];
     float row = omFlatRow(s, t);
     vec4 lut = textureLod(uFlatLut, vec2((psi + OM_FLAT_PI) / (2.0 * OM_FLAT_PI), row), 0.0);
-    bool front = abs(psi) <= 0.5 * OM_FLAT_PI;
+    front = abs(psi) <= 0.5 * OM_FLAT_PI;
     org = front ? uFlatPanF : uFlatPanB;
     // down the segment: inches along its axis, kept to its rows so ends (the sleeve cap over the shoulder,
     // the cuff) never reach past the region into a neighbor's art
@@ -85,6 +110,12 @@ vec4 omFlatArt() {
   float lim = 6.0 * max(length(dFdx(vRest)), length(dFdy(vRest))) / OM_FLAT_IN + 1e-5;
   if (length(gx) > lim) gx *= lim / length(gx);
   if (length(gy) > lim) gy *= lim / length(gy);
+  // where a pixel block straddles a side seam or a segment's end, q jumps across the page: filter by the
+  // body's own footprint instead (the flats are drawn at about body scale)
+  if (fwidth(float(s) * 2.0 + (front ? 1.0 : 0.0)) > 0.0) {
+    gx = vec2(length(dFdx(vRest)) / OM_FLAT_IN, 0.0);
+    gy = vec2(0.0, length(dFdy(vRest)) / OM_FLAT_IN);
+  }
   if (valid < 0.5) return vec4(0.0);
   return textureGrad(uFlatArt, (org + q) / uFlatAtlas, gx / uFlatAtlas, gy / uFlatAtlas);
 }
@@ -102,6 +133,10 @@ const LIMB_ORDER = [
 ];
 const PLANE_ORDER = ["elbowL", "elbowR", "kneeL", "kneeR"];
 const SEGMENT_ORDER = ["torso", "hips", ...LIMB_ORDER];
+/** m short of the wrist joint where the glove starts being glove. */
+const WRIST_MARGIN = 0.025;
+/** The uniform shader's part line in `uniformColor`. */
+const PART_LINE = "int part = int(vPart + 0.5);";
 /** The uniform shader's line the art is mixed into. */
 export const FLATS_DIFFUSE_LINE =
     "vec4 diffuseColor = vec4( uniformColor(), opacity );";
@@ -164,6 +199,13 @@ export function flatsUniforms(THREE, { layout, lut, atlas, atlasRect, cape }) {
         uFlatPanB: { value: at(atlasRect.back) },
         uFlatPanC: { value: at(atlasRect.cape) },
         uFlatCx: { value: layout.centreX },
+        uFlatWrist: {
+            // just short of the wrist joint: the hand itself stays glove
+            value: new THREE.Vector2(
+                limb[1].length - WRIST_MARGIN,
+                limb[3].length - WRIST_MARGIN,
+            ),
+        },
         uFlatCape: {
             value: new THREE.Vector4(
                 cape?.k ?? 1,
@@ -187,19 +229,26 @@ export function withFlats(THREE, material, params) {
     material.onBeforeCompile = (shader, renderer) => {
         base.call(material, shader, renderer);
         Object.assign(shader.uniforms, u);
-        if (
-            !shader.fragmentShader.includes(FLATS_DIFFUSE_LINE) ||
-            !shader.fragmentShader.includes("vec3 uniformColor() {")
-        )
+        const head = "vec3 uniformColor() {";
+        const fs = shader.fragmentShader;
+        const at = fs.indexOf(head);
+        const partAt = at < 0 ? -1 : fs.indexOf(PART_LINE, at);
+        if (at < 0 || partAt < 0 || !fs.includes(FLATS_DIFFUSE_LINE))
             throw new Error(
-                "uniform flats: the uniform shader changed; its diffuse line was not found",
+                "uniform flats: the uniform shader changed; uniformColor() or its diffuse line was not found",
             );
-        shader.fragmentShader = shader.fragmentShader
-            .replace("vec3 uniformColor() {", code + "\nvec3 uniformColor() {")
-            .replace(
-                FLATS_DIFFUSE_LINE,
-                "vec4 omArt = omFlatArt();\n  vec4 diffuseColor = vec4( uniformColor() * (1.0 - omArt.a) + omArt.rgb, opacity );",
-            );
+        // uniformColor() takes its part from omFlatPart(), declared just before it
+        shader.fragmentShader = (
+            fs.slice(0, at) +
+            code +
+            "\n" +
+            fs.slice(at, partAt) +
+            "int part = omFlatPart();" +
+            fs.slice(partAt + PART_LINE.length)
+        ).replace(
+            FLATS_DIFFUSE_LINE,
+            "vec4 omArt = omFlatArt();\n  vec4 diffuseColor = vec4( uniformColor() * (1.0 - omArt.a) + omArt.rgb, opacity );",
+        );
     };
     material.customProgramCacheKey = () => key + "|flats";
     material.userData.flatUniforms = u;

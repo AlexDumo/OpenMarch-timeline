@@ -42,6 +42,8 @@ export interface FlatsLayout {
         dir: number[];
         fwd: number[];
         side: number[];
+        /** Bone length, m. */
+        length: number;
     }[];
     planes: { id: string; at: number[]; n: number[] }[];
     cape: { yTop: number; w: number; h: number };
@@ -333,4 +335,76 @@ export function itemDraw(
               ? [1 / k, 1]
               : [1, 1];
     return { w, h, sx, sy };
+}
+
+/** Pixels of each region's rim that take their color from further in (anti-aliased art edges). */
+export const FLATS_RIM_PX = 2;
+
+/**
+ * Where an atlas's bleed copies from: every pixel outside the regions
+ * within `steps` pixels of one, and every region pixel within `rim` pixels
+ * of its edge, takes the color of the nearest pixel further in (8-connected
+ * breadth-first). The rim matters because art clipped to a region is
+ * semi-transparent along its edge, and copying that outward would leave the
+ * palette showing through along the side seams.
+ *
+ * `mask` is 1 inside a region. Returns pairs: `dst[k]` takes `from[k]`.
+ */
+export function bleedPlan(
+    mask: Uint8Array,
+    W: number,
+    H: number,
+    steps: number,
+    rim = FLATS_RIM_PX,
+): { dst: Int32Array; from: Int32Array } {
+    const src = new Int32Array(W * H).fill(-1);
+    let queue = new Int32Array(W * H);
+    let qn = 0;
+    // sources: region pixels at least `rim` pixels from anything outside
+    for (let y = 0; y < H; y++)
+        for (let x = 0; x < W; x++) {
+            const i = y * W + x;
+            if (!mask[i]) continue;
+            let rimPixel = false;
+            for (let dy = -rim; dy <= rim && !rimPixel; dy++)
+                for (let dx = -rim; dx <= rim; dx++) {
+                    const jx = x + dx;
+                    const jy = y + dy;
+                    if (jx < 0 || jy < 0 || jx >= W || jy >= H) continue;
+                    if (!mask[jy * W + jx]) {
+                        rimPixel = true;
+                        break;
+                    }
+                }
+            if (rimPixel) continue;
+            src[i] = i;
+            queue[qn++] = i;
+        }
+    const dst: number[] = [];
+    const from: number[] = [];
+    for (let step = 0; step < steps + rim && qn; step++) {
+        const next = new Int32Array(qn * 8);
+        let nn = 0;
+        for (let k = 0; k < qn; k++) {
+            const i = queue[k];
+            const ix = i % W;
+            const iy = (i / W) | 0;
+            for (let dy = -1; dy <= 1; dy++)
+                for (let dx = -1; dx <= 1; dx++) {
+                    if (!dx && !dy) continue;
+                    const jx = ix + dx;
+                    const jy = iy + dy;
+                    if (jx < 0 || jy < 0 || jx >= W || jy >= H) continue;
+                    const j = jy * W + jx;
+                    if (src[j] >= 0) continue;
+                    src[j] = src[i];
+                    dst.push(j);
+                    from.push(src[i]);
+                    next[nn++] = j;
+                }
+        }
+        queue = next;
+        qn = nn;
+    }
+    return { dst: Int32Array.from(dst), from: Int32Array.from(from) };
 }
