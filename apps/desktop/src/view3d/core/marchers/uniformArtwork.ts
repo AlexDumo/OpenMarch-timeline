@@ -122,14 +122,48 @@ export const UNIFORM_ARTWORK_IDS = ["sample"] as const;
 export type UniformArtworkId = (typeof UNIFORM_ARTWORK_IDS)[number];
 
 /**
- * `id` if it names a built-in flats uniform, otherwise null: the venue's
- * `uniformArtwork` may also hold a show asset's id (a number, fork #1257),
- * which this build doesn't read yet, so the band wears its preset.
+ * `id` if it names a built-in flats uniform, otherwise null.
  */
 export function uniformArtworkOf(id: unknown): UniformArtworkId | null {
     return (UNIFORM_ARTWORK_IDS as readonly unknown[]).includes(id)
         ? (id as UniformArtworkId)
         : null;
+}
+
+/**
+ * A show's imported uniform as the venue's `uniformArtwork` names it: the
+ * show asset of kind `uniform` it is stored as, `library:<id>@<version hash>`
+ * (fork #1257, `src/showAssets/ref.ts`).
+ */
+export type UniformPackValue = `library:${string}`;
+
+/** What flats a look wears: a built-in's id, or a show's pack. */
+export type FlatsArtworkKey = UniformArtworkId | UniformPackValue;
+
+/**
+ * What the venue's `uniformArtwork` dresses the band in: a built-in's id, a
+ * show's pack (`library:…`), or null for the preset. Anything else this build
+ * doesn't know (a number, a later build's id) falls back to the preset
+ * instead of failing the whole venue.
+ */
+export function flatsArtworkOf(value: unknown): FlatsArtworkKey | null {
+    const builtIn = uniformArtworkOf(value);
+    if (builtIn) return builtIn;
+    return typeof value === "string" &&
+        /^library:[^@\s]+@[0-9a-f]{64}$/.test(value)
+        ? (value as UniformPackValue)
+        : null;
+}
+
+/** True for a key that names a show's pack rather than a built-in. */
+export const isUniformPackValue = (
+    key: FlatsArtworkKey,
+): key is UniformPackValue => key.startsWith("library:");
+
+/** A flats uniform as a look wears it: which art, and the palette around it. */
+export interface FlatsWear {
+    key: FlatsArtworkKey;
+    look: PresetLook;
 }
 
 /** Landmarks of the flats template (`regions.json`), panel inches. */

@@ -8,14 +8,17 @@
  */
 import type { ShowAsset } from "@/db-functions/showAssets";
 import { MODEL_ASSET_KIND } from "./modelImport/rules";
+import { UNIFORM_ASSET_KIND } from "@/view3d/core/uniformPack/format";
 import { showAssetRefValue } from "./ref";
 
 /**
- * The kinds whose every use this build can find (props' models, cue values). Another kind, such
+ * The kinds whose every use this build can find (props' models, cue values, the venue's uniform). Another kind, such
  * as one a later build names from elsewhere, is never called unused, so never removed.
  */
 export const REMOVABLE_ASSET_KINDS: ReadonlySet<string> = new Set([
     MODEL_ASSET_KIND,
+    // imported uniforms (fork #1257): the venue's `uniformArtwork` is their use
+    UNIFORM_ASSET_KIND,
 ]);
 
 /** Past this many bytes of assets, the show says it's large (ADR 0010 D-19) */
@@ -56,6 +59,8 @@ export function showAssetUse(
     assets: readonly ShowAsset[],
     sizes: ReadonlyMap<string, number>,
     references: readonly (string | null | undefined)[],
+    /** Values never called unused though nothing names them now: an undo could bring them back */
+    keep: ReadonlySet<string> = new Set(),
 ): ShowAssetUse {
     const counts = new Map<string, number>();
     for (const value of references)
@@ -70,7 +75,10 @@ export function showAssetUse(
         return { asset, value, bytes, uses: counts.get(value) ?? 0 };
     });
     const unused = rows.filter(
-        (row) => row.uses === 0 && REMOVABLE_ASSET_KINDS.has(row.asset.kind),
+        (row) =>
+            row.uses === 0 &&
+            REMOVABLE_ASSET_KINDS.has(row.asset.kind) &&
+            !keep.has(row.value),
     );
 
     const kept = new Set<string>();

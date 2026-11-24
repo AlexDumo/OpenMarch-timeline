@@ -63,25 +63,40 @@ export function UniformTemplateControls() {
                 <span className="text-sub text-text/60">
                     {t("view3d.uniformTemplate.label")}
                 </span>
-                {UNIFORM_TEMPLATE_FORMATS.map((format) => (
-                    <Button
-                        key={format}
-                        variant="secondary"
-                        size="compact"
-                        disabled={busy !== null}
-                        data-testid={`view3d-uniform-template-${format}`}
-                        onClick={() => void download(format)}
-                    >
-                        {busy === format
-                            ? t("view3d.uniformTemplate.preparing")
-                            : format.toUpperCase()}
-                    </Button>
-                ))}
-                <InfoTip
-                    content={t("view3d.uniformTemplate.jsonInfo")}
-                    label={t("view3d.uniformTemplate.jsonInfoLabel")}
-                    side="bottom"
-                />
+                {UNIFORM_TEMPLATE_FORMATS.map((format) => {
+                    const button = (
+                        <Button
+                            key={format}
+                            variant="secondary"
+                            size="compact"
+                            disabled={busy !== null}
+                            data-testid={`view3d-uniform-template-${format}`}
+                            onClick={() => void download(format)}
+                        >
+                            {busy === format
+                                ? t("view3d.uniformTemplate.preparing")
+                                : format.toUpperCase()}
+                        </Button>
+                    );
+                    // the tip explains the JSON button: it wraps with it, never onto a line alone
+                    return format === "json" ? (
+                        <span
+                            key={format}
+                            className="inline-flex shrink-0 items-center gap-4"
+                        >
+                            {button}
+                            <InfoTip
+                                content={t("view3d.uniformTemplate.jsonInfo")}
+                                label={t(
+                                    "view3d.uniformTemplate.jsonInfoLabel",
+                                )}
+                                side="bottom"
+                            />
+                        </span>
+                    ) : (
+                        button
+                    );
+                })}
             </div>
             {problem && (
                 <p className="text-sub text-red" role="alert">

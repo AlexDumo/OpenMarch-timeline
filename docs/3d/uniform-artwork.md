@@ -1,6 +1,6 @@
 # Uniform artwork: front/back flats and the hybrid wrap
 
-<!-- cspell:words unitard tabard tabards paintable -->
+<!-- cspell:words unitard tabard tabards paintable omasset -->
 
 - Status: proposed 2026-11-24, pending owner review
 - Decision record: [ADR 0010](../adr/0010-3d-view.md), amendment of 2026-11-24
@@ -199,6 +199,25 @@ The internal form is one **uniform pack**, stored as a show asset (ADR 0010, ame
   rotation, an opacity and a grade. A tile item has a tile size and a list of regions.
 - **modes:** named lists of layers, plus palette and option overrides
 - **attachments:** built-in hanging pieces with their own art (see below)
+
+### The pack file (format version 1, a preview)
+
+Built in step 3 (fork #1257); ADR 0010's amendment of 2026-11-24 has the full contract.
+
+- **One file:** a zip with the extension `.omasset`. It holds `manifest.json` and one transparent
+  page-size PNG per layer under `layers/`, and names nothing outside itself.
+- **The manifest:**
+  - the asset format and version, the kind `uniform`, the name and the page size in inches
+  - the palette, the pattern style and the part options
+  - the layers, bottom first
+  - credits (license, author, source)
+  - `items`, `modes`, `variants` and `attachments`, reserved for later steps. Version 1 refuses
+    anything in them and any key it doesn't know; a later field that changes what is drawn bumps
+    the format version.
+- **The same bytes in a show.** A show stores the file as its asset of kind `uniform`, unchanged,
+  and Save uniform file writes it back out. This is the first kind of the portable asset file in
+  fork #1262.
+- **Preview.** The format can still change until the human test (#1259).
 
 ### Ways in
 

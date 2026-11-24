@@ -40,7 +40,7 @@ import { createUniformMaterial } from "@/view3d/render/uniform-shader.js";
 import { withFlats } from "@/view3d/render/uniform-flats.js";
 import type {
     FlatsLayout,
-    UniformArtworkId,
+    FlatsArtworkKey,
 } from "@/view3d/core/marchers/uniformArtwork";
 import type { FlatsAtlas } from "./flatsAtlas";
 import {
@@ -256,7 +256,7 @@ export interface FlatsResource {
 }
 /** Flats art by {@link flatsResourceKey}. */
 export type FlatsResources = ReadonlyMap<string, FlatsResource>;
-export const flatsResourceKey = (id: UniformArtworkId, body: BodyType) =>
+export const flatsResourceKey = (id: FlatsArtworkKey, body: BodyType) =>
     `${id}|${body}`;
 /**
  * The body type whose table and atlas a marcher's flats use: its own at

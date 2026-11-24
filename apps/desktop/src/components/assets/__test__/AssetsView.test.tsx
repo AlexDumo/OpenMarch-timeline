@@ -26,6 +26,25 @@ import { saveImportedModel } from "@/showAssets/modelImport/saveImportedModel";
 import { env, picked } from "@/showAssets/modelImport/__test__/fixtures";
 import { openItemEditor } from "@/components/items/openItemEditor";
 import { showAssetsView } from "../openAssets";
+import { sql } from "drizzle-orm";
+import { setUniformPack } from "@/db-functions/view3dUniformPack";
+import {
+    getStoredVenueSettings,
+    updateVenueSettings,
+} from "@/db-functions/view3dVenue";
+import { tableNamesToQueryKeys } from "@/hooks/queries/utils";
+import {
+    readUniformPack,
+    writeUniformPack,
+} from "@/view3d/core/uniformPack/format";
+import {
+    fakePng,
+    sampleManifest,
+} from "@/view3d/core/uniformPack/__test__/fixtures";
+import FootballTemplates from "@/global/classes/fieldTemplates/Football";
+
+const fieldPropertiesOf = async (_db: DbConnection) =>
+    FootballTemplates.HIGH_SCHOOL_FOOTBALL_FIELD_WITH_END_ZONES;
 
 /**
  * The Assets view (fork #1001): the show's imported assets with their size, use and credits,
@@ -263,5 +282,94 @@ describeDbTests("Assets view", (it) => {
         await act(async () => showAssetsView({ openRemove: true }));
         expect(await screen.findByTestId("assets-remove-dialog")).toBeTruthy();
         void db;
+    });
+
+    it("refreshes which uniforms undo names when the venue changes, undo runs, or Remove unused… opens", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        const field = await fieldPropertiesOf(db);
+        const wear = async (name: string, tag: number) => {
+            const pack = writeUniformPack(sampleManifest(name), {
+                "layers/base.png": fakePng(3360, 2816, tag),
+            });
+            return await setUniformPack({
+                db,
+                pack,
+                manifest: readUniformPack(pack).manifest,
+                field,
+            });
+        };
+        // what the app's venue write and undo refresh: the venue's key, by table name
+        const venueChanged = () =>
+            act(async () => {
+                for (const queryKey of tableNamesToQueryKeys(
+                    new Set(["view3d_venue"]),
+                ))
+                    await harnessQueryClient()!.invalidateQueries({ queryKey });
+            });
+        const assetsChanged = () =>
+            act(async () =>
+                harnessQueryClient()!.invalidateQueries({
+                    queryKey: ["show_assets"],
+                }),
+            );
+
+        // the band wears A, and the Assets view is open
+        await wear("Uniform A", 1);
+        await setUpFeature(<SidebarModal />, 1, []);
+        await act(async () => showAssetsView());
+        const view = await screen.findByTestId("assets-view");
+        await waitFor(() =>
+            expect(within(view).getAllByTestId("asset-row")).toHaveLength(1),
+        );
+        expect(screen.queryByTestId("assets-unused-note")).toBeNull();
+
+        // The band switches to a preset in the 3D View: undo would dress it in A again, so A
+        // isn't called unused
+        const venue = (await getStoredVenueSettings({ db }))!;
+        const { uniformArtwork: _a, ...preset } = venue;
+        await updateVenueSettings({ db, settings: preset });
+        await venueChanged();
+        await waitFor(() =>
+            expect(within(view).getByTestId("asset-row")).toHaveTextContent(
+                "Not used",
+            ),
+        );
+        expect(screen.queryByTestId("assets-unused-note")).toBeNull();
+
+        // Import B, then undo: only redo names B now, so B isn't called unused either
+        await wear("Uniform B", 2);
+        await assetsChanged();
+        await venueChanged();
+        await waitFor(() =>
+            expect(within(view).getAllByTestId("asset-row")).toHaveLength(2),
+        );
+        await performUndo(db);
+        await venueChanged();
+        await waitFor(() =>
+            expect(
+                within(view)
+                    .getAllByTestId("asset-row")
+                    .map((row) => row.textContent?.includes("Not used")),
+            ).toEqual([true, true]),
+        );
+        expect(screen.queryByTestId("assets-unused-note")).toBeNull();
+
+        // An edit elsewhere clears history without touching the venue: Remove unused… reads
+        // again as it opens, and lists both
+        await db.run(sql`DELETE FROM history_undo`);
+        await db.run(sql`DELETE FROM history_redo`);
+        await act(async () => showAssetsView({ openRemove: true }));
+        const list = await screen.findByTestId("assets-remove-list");
+        expect(
+            within(list)
+                .getAllByRole("listitem")
+                .map((row) => row.textContent),
+        ).toEqual([
+            expect.stringContaining("Uniform A"),
+            expect.stringContaining("Uniform B"),
+        ]);
     });
 });

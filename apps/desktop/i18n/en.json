@@ -3677,6 +3677,39 @@
             "jsonInfo": "JSON holds the template's shapes and seams as numbers, for scripts and AI agents.",
             "jsonInfoLabel": "About the JSON file",
             "failed": "The uniform template couldn't be made."
+        },
+        "uniformImport": {
+            "import": "Import uniform…",
+            "importing": "Importing…",
+            "save": "Save uniform file",
+            "saveNeedsImported": "Pick an imported uniform above to save it as a file.",
+            "saveNeedsImport": "Import a uniform first.",
+            "missing": "The band's uniform isn't in this show anymore, so the band wears its preset. Import it again to bring it back.",
+            "hint": "Paint on the template, hide the template layer, then import a transparent PNG or an SVG. A saved uniform file imports too.",
+            "imported": "The band now wears “{name}”.",
+            "saveFailed": "Couldn't save the imported uniform",
+            "storeFailed": "The uniform couldn't be stored in the show. The editor window says why.",
+            "importNeedsSettings": "The show's 3D View settings are still loading.",
+            "note": {
+                "scaled": "The image is {width} × {height} px, not the template's {templateWidth} × {templateHeight} px, so it was scaled to fit.",
+                "svgViewBox": "The SVG's viewBox isn't the template page (0 0 105 88), so it was fitted to the page.",
+                "template": "The template looks like it's still showing. Hide the template layer before you export.",
+                "empty": "Nothing is painted on the uniform's front or back.",
+                "opaque": "The page has no transparent areas. Only the uniform's front and back are used.",
+                "palette": "Parts you didn't paint use {preset}'s colors."
+            },
+            "refused": {
+                "unsupported": "Import a PNG, an SVG or a uniform file.",
+                "pdf": "PDFs can't be imported yet. Export your design as PNG or SVG and import that.",
+                "notPng": "That file isn't a PNG. Export your design as PNG and import it again.",
+                "notSvg": "That file isn't an SVG.",
+                "tooLarge": "That file is too large. Export it at the template's size and import it again.",
+                "unreadable": "That file couldn't be read.",
+                "notPack": "That file isn't an OpenMarch uniform file.",
+                "newer": "That uniform file is from a newer version of OpenMarch. Update OpenMarch to import it.",
+                "damaged": "That uniform file is damaged.",
+                "timedOut": "Importing took too long. Try a smaller file."
+            }
         }
     },
     "web": {
@@ -5160,21 +5193,25 @@
         "notes": {
             "unused": "{count, plural, one {# asset isn't used} other {# assets aren't used}} anywhere in the show · {size}",
             "missing": "{count, plural, one {# prop names a model this show doesn't have, so it draws as a block.} other {# props name models this show doesn't have, so they draw as blocks.}}",
-            "large": "Assets make this show large: {size}. Large shows are slower to open, save and share."
+            "large": "Assets make this show large: {size}. Large shows are slower to open, save and share.",
+            "missingUniform": "The band's uniform isn't in this show anymore, so the band wears its preset. Import it again in the 3D View settings to bring it back."
         },
         "removeUnused": {
             "button": "Remove unused…",
             "title": "{count, plural, one {Remove # unused asset?} other {Remove # unused assets?}}",
             "description": "Nothing in the show uses these. Removing them makes the show {size} smaller. Undo doesn't bring them back.",
             "none": "Every asset is in use, so there's nothing to remove.",
+            "checking": "Checking what nothing uses…",
             "cancel": "Cancel",
             "confirm": "{count, plural, one {Remove # asset} other {Remove # assets}}"
         },
         "kind": {
-            "model": "3D model"
+            "model": "3D model",
+            "uniform": "Uniform"
         },
         "uses": "{count, plural, one {Used once} other {Used # times}}",
         "unused": "Not used",
+        "uniformCreditsFixed": "An imported uniform's credits come from its file. Change them in the file and import it again.",
         "shareNote": "Unknown license: you may not have the right to share it",
         "size": {
             "bytes": "{value} bytes",

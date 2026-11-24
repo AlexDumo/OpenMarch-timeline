@@ -5,6 +5,7 @@
  * editor saves it with undo, and the relayed invalidation updates the scene.
  */
 import { useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslate } from "@tolgee/react";
 import { useVenueSettings } from "@/hooks/queries/useVenueSettings";
 import type { LightingPreset, VenueKitId } from "@/view3d/core/types";
@@ -38,7 +39,12 @@ import {
     type SilkShapeId,
 } from "@/view3d/core/sizes/silkShapes";
 import { cutPathBounds, cutPathData } from "@/view3d/core/sizes/silkCuts";
-import { uniformArtworkOf } from "@/view3d/core/marchers/uniformArtwork";
+import {
+    flatsArtworkOf,
+    isUniformPackValue,
+    type UniformPackValue,
+} from "@/view3d/core/marchers/uniformArtwork";
+import { uniformPacksQueryOptions } from "@/hooks/queries/useUniformPack";
 import { uniformArtworkAvailable } from "@/view3d/window/uniformArtworkPreview";
 import { ToggleGroup, ToggleGroupItem } from "@openmarch/ui";
 import { Segmented } from "./Panel";
@@ -155,34 +161,54 @@ const FLATS_SAMPLE = "flats:sample" as const;
 
 /**
  * The band's uniform: every built-in preset, two to a row, then (in preview
- * builds) the sample uniform drawn as flats.
+ * builds) the sample uniform drawn as flats and each uniform imported into
+ * the show (fork #1257), by its name.
  */
 export function UniformPicker() {
     const { t } = useTranslate();
     const { settings, request } = useVenueRequest();
     const flats = uniformArtworkAvailable();
-    const wearsFlats =
-        flats && settings && uniformArtworkOf(settings.uniformArtwork);
+    const { data: packs } = useQuery({
+        ...uniformPacksQueryOptions(),
+        enabled: flats,
+    });
+    const named =
+        flats && settings ? flatsArtworkOf(settings.uniformArtwork) : null;
+    // a uniform the show no longer has (an undo after Remove unused…): the band wears its preset
+    const worn =
+        named &&
+        isUniformPackValue(named) &&
+        packs &&
+        !packs.some((pack) => pack.value === named)
+            ? null
+            : named;
+    type Value = UniformPresetId | typeof FLATS_SAMPLE | UniformPackValue;
     return (
-        <Segmented<UniformPresetId | typeof FLATS_SAMPLE>
+        <Segmented<Value>
             value={
                 settings
-                    ? wearsFlats
-                        ? FLATS_SAMPLE
+                    ? worn
+                        ? isUniformPackValue(worn)
+                            ? worn
+                            : FLATS_SAMPLE
                         : uniformPresetOf(settings.uniforms)
                     : null
             }
             options={[
                 ...UNIFORM_PRESET_IDS.map((preset) => ({
-                    value: preset,
+                    value: preset as Value,
                     label: t(`view3d.uniformPreset.${preset}`),
                 })),
                 ...(flats
                     ? [
                           {
-                              value: FLATS_SAMPLE,
+                              value: FLATS_SAMPLE as Value,
                               label: t("view3d.uniformPreset.flatsSample"),
                           },
+                          ...(packs ?? []).map((pack) => ({
+                              value: pack.value as Value,
+                              label: pack.name,
+                          })),
                       ]
                     : []),
             ]}
@@ -192,7 +218,15 @@ export function UniformPicker() {
                           kind: "uniformArtwork",
                           uniformArtwork: "sample",
                       })
-                    : request({ kind: "uniforms", uniforms: next })
+                    : next.startsWith("library:")
+                      ? request({
+                            kind: "uniformArtwork",
+                            uniformArtwork: next as UniformPackValue,
+                        })
+                      : request({
+                            kind: "uniforms",
+                            uniforms: next as UniformPresetId,
+                        })
             }
             label={t("view3d.settings.uniforms")}
             testId="view3d-uniform-picker"

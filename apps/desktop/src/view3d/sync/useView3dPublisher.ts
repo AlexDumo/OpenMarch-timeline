@@ -57,6 +57,8 @@ import { updateShowCamerasMutationOptions } from "@/hooks/queries/useShowCameras
 import { showCamerasSchema } from "@/view3d/core/cameraList";
 import { setSilkArtworkMutationOptions } from "@/hooks/queries/useSilkArtwork";
 import { silkArtworkImportSchema } from "@/view3d/core/silkArtwork";
+import { setUniformPackMutationOptions } from "@/hooks/queries/useUniformPack";
+import { storeUniformPackRequest } from "./uniformPackRequest";
 import { pressAction, type ReleaseReason } from "@/shortcuts/registry";
 import { subscribeTimelineChanges } from "@/db-functions/timelineChanges";
 import { useTimelineDisplayStore } from "@/db-functions/timelineDisplay";
@@ -177,6 +179,10 @@ export function useView3dPublisher() {
     const { mutate: setSilkArtwork } = useMutation(
         setSilkArtworkMutationOptions(queryClient),
     );
+    // With history: dressing the band in an imported uniform is one undo step.
+    const { mutateAsync: setUniformPack } = useMutation(
+        setUniformPackMutationOptions(queryClient),
+    );
     const windowOpen = useView3dWindowStore((s) => s.open);
     const setWindowOpen = useView3dWindowStore((s) => s.setOpen);
     // The window goes with the show
@@ -288,6 +294,13 @@ export function useView3dPublisher() {
                 sendCameraWanted();
             }),
             electron.onView3dVenueChangeRequest((request) => {
+                if (request?.uniformPack !== undefined) {
+                    void storeUniformPackRequest(
+                        request.uniformPack,
+                        setUniformPack,
+                    );
+                    return;
+                }
                 if (request?.silkArtwork !== undefined) {
                     if (request.silkArtwork === null) {
                         setSilkArtwork(null);
@@ -341,6 +354,7 @@ export function useView3dPublisher() {
         updateVenue,
         updateCameras,
         setSilkArtwork,
+        setUniformPack,
         setWindowOpen,
     ]);
 

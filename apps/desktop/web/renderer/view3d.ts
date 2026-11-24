@@ -52,6 +52,7 @@ type FromView3d =
     | { type: "venue"; settings: unknown }
     | { type: "cameras"; cameras: unknown }
     | { type: "silkArtwork"; silkArtwork: unknown }
+    | { type: "uniformPack"; uniformPack: unknown }
     | { type: "playback"; action: unknown; release?: unknown; speed?: unknown }
     | { type: "camera"; pose: unknown }
     | {
@@ -202,6 +203,11 @@ export function registerView3dHost() {
                 case "silkArtwork":
                     emit(VIEW3D_VENUE_CHANGE_REQUEST_CHANNEL, {
                         silkArtwork: message.silkArtwork,
+                    });
+                    break;
+                case "uniformPack":
+                    emit(VIEW3D_VENUE_CHANGE_REQUEST_CHANNEL, {
+                        uniformPack: message.uniformPack,
                     });
                     break;
                 case "playback":
@@ -401,6 +407,8 @@ export function installView3dApi() {
         requestCamerasChange: (cameras) => post({ type: "cameras", cameras }),
         requestSilkArtwork: (silkArtwork) =>
             post({ type: "silkArtwork", silkArtwork }),
+        requestUniformPack: (uniformPack) =>
+            post({ type: "uniformPack", uniformPack }),
         // A browser blocks a window opened without a click: the web editor never opens it by
         // itself, so the window never asks
         autoOpen: {

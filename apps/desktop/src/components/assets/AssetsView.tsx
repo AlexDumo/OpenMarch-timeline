@@ -24,11 +24,14 @@ import { ModelThumbnail } from "@/components/items/modelImport/ImportedModels";
 import { CreditFields } from "@/components/items/modelImport/ModelImportReview";
 import { allItemsQueryOptions } from "@/hooks/queries/useItems";
 import { allCuesQueryOptions } from "@/hooks/queries/useCues";
+import { storedVenueSettingsQueryOptions } from "@/hooks/queries/useVenueSettings";
 import {
     removeUnusedShowAssetsMutationOptions,
     setShowAssetCreditsMutationOptions,
     showAssetsQueryOptions,
     showAssetSizesQueryOptions,
+    uniformsInHistoryKeys,
+    uniformsInHistoryQueryOptions,
 } from "@/hooks/queries/useShowAssets";
 import {
     LARGE_SHOW_ASSET_BYTES,
@@ -39,6 +42,8 @@ import {
 import { withoutEmpty } from "@/showAssets/modelImport/review/modelImportSession";
 import type { ModelCredits } from "@/showAssets/modelImport/types";
 import type { JsonObject } from "@/showAssets/hash";
+import { UNIFORM_ASSET_KIND } from "@/view3d/core/uniformPack/format";
+import { showAssetRefValue } from "@/showAssets/ref";
 
 /**
  * The show's own assets (fork #1001, owner 2026-11-17): every imported model with its picture,
@@ -62,24 +67,59 @@ function useAssetUse() {
     const { data: sizes } = useQuery(showAssetSizesQueryOptions());
     const { data: items } = useQuery(allItemsQueryOptions());
     const { data: cues } = useQuery(allCuesQueryOptions());
+    // the band's imported uniform is a use too (fork #1257)
+    const { data: venue } = useQuery(storedVenueSettingsQueryOptions());
     const armed = useItemDrawingStore((state) =>
         state.placing?.kind === "model" ? state.placing.modelValue : null,
     );
+    const uniforms = useMemo(
+        () =>
+            (assets ?? [])
+                .filter((asset) => asset.kind === UNIFORM_ASSET_KIND)
+                .map(showAssetRefValue),
+        [assets],
+    );
+    // uniforms an undo or redo would bring back are never offered for removal
+    const { data: inHistory } = useQuery(
+        uniformsInHistoryQueryOptions(uniforms),
+    );
     return useMemo(() => {
-        if (!assets || !sizes || !items || !cues) return null;
-        const use = showAssetUse(assets, sizes, [
-            ...items.map((item) => item.model),
-            ...cues.map((cue) => cue.value),
-            armed,
-        ]);
+        // `venue` is null with no venue row, undefined while it loads
+        if (
+            !assets ||
+            !sizes ||
+            !items ||
+            !cues ||
+            venue === undefined ||
+            !inHistory
+        )
+            return null;
+        const worn =
+            typeof venue?.uniformArtwork === "string" &&
+            venue.uniformArtwork.startsWith("library:")
+                ? venue.uniformArtwork
+                : null;
+        const use = showAssetUse(
+            assets,
+            sizes,
+            [
+                ...items.map((item) => item.model),
+                ...cues.map((cue) => cue.value),
+                armed,
+                worn,
+            ],
+            inHistory,
+        );
         const known = new Set(use.assets.map((row) => row.value));
         // Props naming a model the show doesn't have: an undo brought one back, say
         const missingProps = items.filter(
             (item) =>
                 item.model?.startsWith("library:") && !known.has(item.model),
         ).length;
-        return { ...use, missingProps };
-    }, [assets, sizes, items, cues, armed]);
+        // The band's uniform when the show doesn't have it (an undo after Remove unused…)
+        const missingUniform = worn !== null && !known.has(worn);
+        return { ...use, missingProps, missingUniform };
+    }, [assets, sizes, items, cues, armed, venue, inHistory]);
 }
 
 export function AssetsContents({
@@ -90,6 +130,23 @@ export function AssetsContents({
 }) {
     const use = useAssetUse();
     const [removing, setRemoving] = useState(openRemove);
+    // Remove unused… reads again which uniforms undo or redo names: an edit elsewhere may have
+    // cleared the redo steps since. Its list and size wait for that read.
+    const queryClient = useQueryClient();
+    const [checked, setChecked] = useState(false);
+    useEffect(() => {
+        setChecked(false);
+        if (!removing) return;
+        let live = true;
+        void queryClient
+            .refetchQueries({ queryKey: uniformsInHistoryKeys.all() })
+            .finally(() => {
+                if (live) setChecked(true);
+            });
+        return () => {
+            live = false;
+        };
+    }, [removing, queryClient]);
     const { setContent } = useSidebarModalStore();
     return (
         <div className="animate-scale-in text-text flex h-full w-fit flex-col gap-16">
@@ -107,6 +164,7 @@ export function AssetsContents({
                         unusedBytes={use.unusedBytes}
                         totalBytes={use.totalBytes}
                         missingProps={use.missingProps}
+                        missingUniform={use.missingUniform}
                         onRemove={() => setRemoving(true)}
                     />
                 )}
@@ -125,6 +183,7 @@ export function AssetsContents({
                 <RemoveUnusedDialog
                     open={removing}
                     onOpenChange={setRemoving}
+                    checking={!checked}
                     unused={use.unused}
                     unusedBytes={use.unusedBytes}
                 />
@@ -139,12 +198,14 @@ function AssetNotes({
     unusedBytes,
     totalBytes,
     missingProps,
+    missingUniform,
     onRemove,
 }: {
     unused: readonly AssetUse[];
     unusedBytes: number;
     totalBytes: number;
     missingProps: number;
+    missingUniform: boolean;
     onRemove: () => void;
 }) {
     const sizeText = useSizeText();
@@ -182,6 +243,12 @@ function AssetNotes({
                     keyName="assets.notes.missing"
                     params={{ count: missingProps }}
                 />
+            </li>,
+        );
+    if (missingUniform)
+        notes.push(
+            <li key="missingUniform" data-testid="assets-missing-uniform-note">
+                <T keyName="assets.notes.missingUniform" />
             </li>,
         );
     if (totalBytes > LARGE_SHOW_ASSET_BYTES)
@@ -278,7 +345,11 @@ function AssetRow({ row }: { row: AssetUse }) {
             </button>
             {open && (
                 <div id={panelId}>
-                    <AssetCredits row={row} />
+                    {asset.kind === UNIFORM_ASSET_KIND ? (
+                        <FixedCredits credits={asset.credits} />
+                    ) : (
+                        <AssetCredits row={row} />
+                    )}
                 </div>
             )}
         </li>
@@ -297,6 +368,43 @@ const textCredits = (credits: JsonObject): ModelCredits => {
         if (typeof credits[key] === "string") out[key] = credits[key];
     return out;
 };
+
+/**
+ * An imported uniform's credits, read only: they live in its pack file too, and Save uniform
+ * file writes the stored file as it is, so an edit here would leave the two disagreeing (fork
+ * #1257). Editable once a uniform can be re-packed.
+ */
+function FixedCredits({ credits }: { credits: JsonObject }) {
+    const { t } = useTranslate();
+    const text = (key: string) =>
+        typeof credits[key] === "string" && credits[key] !== ""
+            ? (credits[key] as string)
+            : null;
+    const rows = [
+        ["license", text("license")],
+        ["author", text("author")],
+        ["sourceUrl", text("source")],
+    ] as const;
+    return (
+        <div className="flex flex-col gap-6" data-testid="asset-fixed-credits">
+            <dl className="text-sub grid grid-cols-[auto_1fr] gap-x-12 gap-y-4">
+                {rows.map(([key, value]) => (
+                    <div key={key} className="contents">
+                        <dt className="text-text-subtitle">
+                            {t(`props.import.credits.${key}`)}
+                        </dt>
+                        <dd className="min-w-0 break-words">
+                            {value ?? t("props.import.credits.unknown")}
+                        </dd>
+                    </div>
+                ))}
+            </dl>
+            <p className="text-sub text-text-subtitle">
+                {t("assets.uniformCreditsFixed")}
+            </p>
+        </div>
+    );
+}
 
 /** Saves after typing pauses, so each keystroke isn't a write */
 const SAVE_AFTER_MS = 600;
@@ -348,14 +456,18 @@ function AssetCredits({ row }: { row: AssetUse }) {
 function RemoveUnusedDialog({
     open,
     onOpenChange,
-    unused,
+    checking,
+    unused: given,
     unusedBytes,
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    /** Still reading what undo or redo names: lists nothing and offers nothing yet */
+    checking: boolean;
     unused: readonly AssetUse[];
     unusedBytes: number;
 }) {
+    const unused = checking ? [] : given;
     const queryClient = useQueryClient();
     const sizeText = useSizeText();
     const { mutate, isPending } = useMutation(
@@ -365,13 +477,19 @@ function RemoveUnusedDialog({
         <AlertDialog open={open} onOpenChange={onOpenChange}>
             <AlertDialogContent data-testid="assets-remove-dialog">
                 <AlertDialogTitle>
-                    <T
-                        keyName="assets.removeUnused.title"
-                        params={{ count: unused.length }}
-                    />
+                    {checking ? (
+                        <T keyName="assets.removeUnused.button" />
+                    ) : (
+                        <T
+                            keyName="assets.removeUnused.title"
+                            params={{ count: unused.length }}
+                        />
+                    )}
                 </AlertDialogTitle>
                 <AlertDialogDescription>
-                    {unused.length > 0 ? (
+                    {checking ? (
+                        <T keyName="assets.removeUnused.checking" />
+                    ) : unused.length > 0 ? (
                         <T
                             keyName="assets.removeUnused.description"
                             params={{ size: sizeText(unusedBytes) }}

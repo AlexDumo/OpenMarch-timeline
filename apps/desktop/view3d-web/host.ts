@@ -16,6 +16,7 @@ import {
     VIEW3D_CLOCK_CHANNEL,
     VIEW3D_INVALIDATE_CHANNEL,
     VIEW3D_SELECTION_CHANNEL,
+    VIEW3D_UNIFORM_PACK_RESULT_CHANNEL,
     wallNowMs,
     showTimeAt,
     type View3dClock,
@@ -168,6 +169,18 @@ class WebHost {
         // The demo shows don't take imported Artwork
         requestSilkArtwork: () =>
             console.warn("3D View demo: silk Artwork can't be imported here"),
+        requestUniformPack: (request) => {
+            console.warn("3D View demo: uniforms can't be imported here");
+            // answer at once, so the window says so instead of waiting
+            const id = (request as { id?: unknown } | null)?.id;
+            if (typeof id === "string")
+                queueMicrotask(() =>
+                    this.emit(VIEW3D_UNIFORM_PACK_RESULT_CHANNEL, {
+                        id,
+                        ok: false,
+                    }),
+                );
+        },
         // The demo has no app settings: never asks to open on launch
         autoOpen: {
             get: () => Promise.resolve(null),

@@ -245,3 +245,57 @@ describe("a kit's starting params", () => {
         );
     });
 });
+
+describe("the band's flats uniform (uniformArtwork)", () => {
+    const pack = `library:3f2b1c9e-0000-4000-8000-000000000001@${"b".repeat(64)}`;
+
+    it("parses older settings that have none", () => {
+        // what builds before the flats uniform wrote
+        const older = {
+            version: 1,
+            kit: "hs",
+            lighting: "night",
+            crowd: true,
+            params: valid.params,
+            uniforms: "prism",
+        };
+        const parsed = parseVenueSettingsJson(JSON.stringify(older));
+        expect(parsed).toBeDefined();
+        expect(parsed?.uniformArtwork).toBeUndefined();
+        expect(parsed?.uniforms).toBe("prism");
+    });
+
+    it("holds a show's imported uniform by its asset reference", () => {
+        const parsed = parseVenueSettingsJson(
+            JSON.stringify({ ...valid, uniformArtwork: pack }),
+        );
+        expect(parsed?.uniformArtwork).toBe(pack);
+    });
+
+    it("drops a bad value on its own, keeping every other setting", () => {
+        const withExtras: VenueSettings = {
+            ...valid,
+            uniforms: "prism",
+            guardUniforms: "fade",
+        };
+        for (const bad of ["x".repeat(500), "", -1, 2.5, { id: 1 }, [pack]]) {
+            const parsed = parseVenueSettingsJson(
+                JSON.stringify({ ...withExtras, uniformArtwork: bad }),
+            );
+            expect(parsed).toBeDefined();
+            expect(parsed?.uniformArtwork).toBeUndefined();
+            expect(parsed).toEqual(withExtras);
+        }
+    });
+
+    it("still parses the built-in sample and an earlier preview's number", () => {
+        expect(
+            parseVenueSettings({ ...valid, uniformArtwork: "sample" }),
+        ).toMatchObject({ uniformArtwork: "sample" });
+        expect(
+            parseVenueSettings({ ...valid, uniformArtwork: 3 }),
+        ).toMatchObject({
+            uniformArtwork: 3,
+        });
+    });
+});

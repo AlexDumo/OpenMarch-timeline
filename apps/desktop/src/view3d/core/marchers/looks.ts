@@ -45,7 +45,7 @@ import {
     type GuardUniformPresetId,
     type UniformPresetId,
 } from "./uniformPresets";
-import { UNIFORM_ARTWORK, type UniformArtworkId } from "./uniformArtwork";
+import type { FlatsArtworkKey, FlatsWear } from "./uniformArtwork";
 
 const withOptions = (
     carry: Carry | null,
@@ -234,10 +234,10 @@ export interface UniformLook {
         finish: Finish;
         hold: HoldState;
         /**
-         * The built-in flats artwork painted over the palette
-         * (`uniformArtwork.ts`); absent or null for palette only.
+         * The flats artwork painted over the palette (`uniformArtwork.ts`): a
+         * built-in's id or a show's pack; absent or null for palette only.
          */
-        artwork?: UniformArtworkId | null;
+        artwork?: FlatsArtworkKey | null;
     };
 }
 
@@ -280,7 +280,7 @@ export function sectionUniform(
         silkShape?: SilkShapeId;
         silkArtwork?: boolean;
     } = {},
-    artwork: UniformArtworkId | null = null,
+    artwork: FlatsWear | null = null,
 ): UniformLook {
     const inGuard = isGuard(section);
     const dressedBy: UniformPresetId = inGuard ? guardPreset : preset;
@@ -289,7 +289,7 @@ export function sectionUniform(
     const base = inGuard
         ? guardLookOf(guardPreset)
         : flats
-          ? UNIFORM_ARTWORK[flats].look
+          ? flats.look
           : dress.band;
     const carry =
         guard && inGuard
@@ -321,7 +321,7 @@ export function sectionUniform(
             silkArtwork: flag6 && winds.silkArtwork === true,
             finish: finishFor(carry, winds.finish ?? "brass"),
             hold,
-            ...(flats ? { artwork: flats } : {}),
+            ...(flats ? { artwork: flats.key } : {}),
         },
     };
 }
