@@ -17,6 +17,7 @@ import {
     notifyTimelineBatch,
 } from "./timelineChanges";
 import { timelineHistoryFocus } from "./timelineHistoryFocus";
+import { changedShapeRecipes, shapeRecipeStates } from "./shapeRecipes";
 import {
     keepHeldMarksTrueInTransaction,
     readHeldUpkeepBefore,
@@ -1058,6 +1059,8 @@ export async function performHistoryAction(
     // the state after the second)
     const { response, timelineFocus } = await withTransactionWithHistoryLock(
         async () => {
+            // The placed shapes before and after, so one the action changed is selected whole
+            const shapesBefore = await shapeRecipeStates(db);
             const response = await executeHistoryActionUnlocked(db, type);
             const timelineFocus = response.success
                 ? await timelineHistoryFocus(
@@ -1067,6 +1070,10 @@ export async function performHistoryAction(
                           currentPageId: options.currentPageId,
                           beatsChanged: response.tableNames.has(
                               getTableName(schema.beats),
+                          ),
+                          shapes: changedShapeRecipes(
+                              shapesBefore,
+                              await shapeRecipeStates(db),
                           ),
                       },
                   )

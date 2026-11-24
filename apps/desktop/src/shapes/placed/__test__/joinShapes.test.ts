@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it as unitIt } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
-import { describeDbTests, schema } from "@/test/base";
+import { type DbConnection, describeDbTests, schema } from "@/test/base";
 import { readShowTiming } from "@/timeline/showTiming";
 import {
     startTimelineResolver,
@@ -9,7 +9,11 @@ import {
     useTimelineResolverStore,
 } from "@/timeline/timelineStore";
 import type { CanvasEditPlan } from "@/timeline/timelineCoordinateWrites";
-import { performUndo } from "@/db-functions/history";
+import {
+    performHistoryAction,
+    performRedo,
+    performUndo,
+} from "@/db-functions/history";
 import { createLastPage, deletePages } from "@/db-functions/page";
 import { moveMarchersInTarget } from "@/db-functions/timelineMoves";
 import {
@@ -26,7 +30,7 @@ import { writePlacement } from "../../tool/shapePlacement";
 import type { ToolEnv } from "../../tool/toolKind";
 import type { ShapeContext, XY } from "../../types";
 import { boxesAt, type PlacedBox, type PlacedRecipe } from "../placedBox";
-import { joinCheck, joinedPlacement } from "../joinShapes";
+import { joinCheck, joinedPlacement, type JoinCheck } from "../joinShapes";
 
 /**
  * Join into one line (#1220): which selections can join and why not, what the join saves, and
@@ -269,63 +273,89 @@ const PAGE2_PLAN: CanvasEditPlan = {
 };
 const resolver = () => useTimelineResolverStore.getState().resolver!;
 
+/** Two shapes placed on page 2 in one move, `first` on the first three marchers, `second` on the next three */
+async function placeTwo(
+    db: DbConnection,
+    shapes: (ids: readonly number[]) => readonly [PlacedRecipe, PlacedRecipe],
+) {
+    const pages = [...(await readShowTiming(db)).pages].sort(
+        (a, b) => a.order - b.order,
+    );
+    await deletePages({
+        db,
+        pageIds: new Set(pages.filter((p) => p.order >= 2).map((p) => p.id)),
+    });
+    for (let i = 0; i < 2; i++) await createLastPage({ db, newPageCounts: 8 });
+    await startTimelineResolver(db);
+    const ids = resolver().marcherIds().slice(0, 6);
+    const saved: PlacedRecipe[] = [];
+    const both = shapes(ids);
+    await moveMarchersInTarget({
+        db,
+        target: { kind: "range", ...PAGE2 },
+        moves: both.flatMap((r) =>
+            r.members.map(({ marcherId, x, y }) => ({ marcherId, x, y })),
+        ),
+        afterWrite: async (tx, timelineId) => {
+            for (const r of both) {
+                const record: ShapeRecipeRecord = r;
+                const id = await saveShapeRecipeInTransaction({
+                    tx,
+                    timelineId,
+                    recipe: record,
+                    members: r.members,
+                });
+                saved.push({ ...r, id, timelineId });
+            }
+        },
+    });
+    await timelineResolverSettled();
+    expect(await readAllShapeRecipes(db)).toHaveLength(2);
+    const check = joinCheck(new Set(ids), placed(...saved));
+    if (!check.ok) throw new Error(check.reason);
+    return { ids, check };
+}
+
+/** What `joinShapes` writes once the queue reaches it */
+const writeJoin = (check: Extract<JoinCheck, { ok: true }>) =>
+    writePlacement(
+        {
+            ...joinedPlacement(check.a, check.b, ctx),
+            replaces: check.a.recipe,
+            setAll: false,
+        },
+        new QueryClient(),
+        "Couldn't join the shapes",
+        PAGE2_PLAN,
+    );
+
+const sorted = (ids: Iterable<number>) => [...ids].sort((x, y) => x - y);
+
+const bySlot = (r: PlacedRecipe) =>
+    [...r.members]
+        .sort((x, y) => x.slot - y.slot)
+        .map(({ marcherId, slot, x, y }) => ({ marcherId, slot, x, y }));
+
 describeDbTests("joining two placed lines", (it) => {
-    it("leaves one Line with every member, as one undo step that undo takes back", async ({
+    it("leaves one Line with every member, as one undo step that undo takes back and redo brings back", async ({
         db,
         marchersAndPages: _,
     }) => {
-        const pages = [...(await readShowTiming(db)).pages].sort(
-            (a, b) => a.order - b.order,
-        );
-        await deletePages({
-            db,
-            pageIds: new Set(
-                pages.filter((p) => p.order >= 2).map((p) => p.id),
-            ),
-        });
-        for (let i = 0; i < 2; i++)
-            await createLastPage({ db, newPageCounts: 8 });
-        await startTimelineResolver(db);
-        const ids = resolver().marcherIds().slice(0, 6);
-
         // A line and an arc placed on page 2, in the same move
-        const lineRecipe = recipe(
-            0,
-            lineShape,
-            straight({ x: 100, y: 100 }, { x: 148, y: 100 }),
-            ids.slice(0, 3),
-        );
-        const arcRecipe = recipe(
-            0,
-            arcShape,
-            arc({ x: 148, y: 100 }, { x: 188, y: 100 }),
-            ids.slice(3),
-        );
-        const saved: PlacedRecipe[] = [];
-        await moveMarchersInTarget({
-            db,
-            target: { kind: "range", ...PAGE2 },
-            moves: [...lineRecipe.members, ...arcRecipe.members].map(
-                ({ marcherId, x, y }) => ({ marcherId, x, y }),
+        const { ids, check } = await placeTwo(db, (ids) => [
+            recipe(
+                0,
+                lineShape,
+                straight({ x: 100, y: 100 }, { x: 148, y: 100 }),
+                ids.slice(0, 3),
             ),
-            afterWrite: async (tx, timelineId) => {
-                for (const r of [lineRecipe, arcRecipe]) {
-                    const record: ShapeRecipeRecord = r;
-                    const id = await saveShapeRecipeInTransaction({
-                        tx,
-                        timelineId,
-                        recipe: record,
-                        members: r.members,
-                    });
-                    saved.push({ ...r, id, timelineId });
-                }
-            },
-        });
-        await timelineResolverSettled();
-        expect(await readAllShapeRecipes(db)).toHaveLength(2);
-
-        const check = joinCheck(new Set(ids), placed(...saved));
-        if (!check.ok) throw new Error(check.reason);
+            recipe(
+                0,
+                arcShape,
+                arc({ x: 148, y: 100 }, { x: 188, y: 100 }),
+                ids.slice(3),
+            ),
+        ]);
         const undoSteps = async () =>
             new Set(
                 (await db.select().from(schema.history_undo).all()).map(
@@ -334,19 +364,7 @@ describeDbTests("joining two placed lines", (it) => {
             ).size;
         const steps = await undoSteps();
 
-        // What `joinShapes` writes once the queue reaches it
-        expect(
-            await writePlacement(
-                {
-                    ...joinedPlacement(check.a, check.b, ctx),
-                    replaces: check.a.recipe,
-                    setAll: false,
-                },
-                new QueryClient(),
-                "Couldn't join the shapes",
-                PAGE2_PLAN,
-            ),
-        ).toBe(true);
+        expect(await writeJoin(check)).toBe(true);
         await timelineResolverSettled();
 
         const after = await readAllShapeRecipes(db);
@@ -364,5 +382,67 @@ describeDbTests("joining two placed lines", (it) => {
         const undone = await readAllShapeRecipes(db);
         expect(undone.map((r) => r.kind).sort()).toEqual(["arc", "line"]);
         expect(undone.map((r) => r.members.length)).toEqual([3, 3]);
+
+        // Redo brings back the joined line as saved: the same recipe, params and members
+        await performRedo(db);
+        await timelineResolverSettled();
+        const redone = await readAllShapeRecipes(db);
+        expect(redone).toHaveLength(1);
+        expect(redone[0]!.id).toBe(after[0]!.id);
+        expect(redone[0]!.kind).toBe("line");
+        expect(redone[0]!.params).toEqual(after[0]!.params);
+        expect(bySlot(redone[0]!)).toEqual(bySlot(after[0]!));
+        // And read back as the joined line, every member on its spot
+        const shown = placed(redone[0]!);
+        expect(shown).toHaveLength(1);
+        expect(shown[0]!.kind.shape.id).toBe("line");
+        expect(shown[0]!.recipe.members).toHaveLength(6);
+        expect((shown[0]!.params as LineParams).points).toHaveLength(3);
+    });
+
+    it("undo selects the shape it brings back whole, and redo the joined line, though some of their marchers never moved", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        // Spaced so the joined line keeps the first line's marchers where they stand: 25 apart,
+        // the joined line's interval. The second line's last marcher stays put too.
+        const { ids, check } = await placeTwo(db, (ids) => [
+            recipe(
+                0,
+                lineShape,
+                straight({ x: 100, y: 100 }, { x: 150, y: 100 }),
+                ids.slice(0, 3),
+            ),
+            recipe(
+                0,
+                lineShape,
+                straight({ x: 150, y: 100 }, { x: 225, y: 100 }),
+                ids.slice(3),
+            ),
+        ]);
+        expect(await writeJoin(check)).toBe(true);
+        await timelineResolverSettled();
+        const [joined] = await readAllShapeRecipes(db);
+        // Only two of the six moved
+        const unmoved = check.a.recipe.members
+            .concat(check.b.recipe.members)
+            .filter((m) =>
+                joined!.members.some(
+                    (j) =>
+                        j.marcherId === m.marcherId &&
+                        Math.hypot(j.x - m.x, j.y - m.y) < 1e-6,
+                ),
+            );
+        expect(unmoved).toHaveLength(4);
+
+        const undo = await performHistoryAction("undo", db);
+        await timelineResolverSettled();
+        expect(sorted(undo.marcherIdsToSelect ?? [])).toEqual(
+            sorted(ids.slice(3)),
+        );
+
+        const redo = await performHistoryAction("redo", db);
+        await timelineResolverSettled();
+        expect(sorted(redo.marcherIdsToSelect ?? [])).toEqual(sorted(ids));
     });
 });
