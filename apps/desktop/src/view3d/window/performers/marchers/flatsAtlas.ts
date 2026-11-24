@@ -35,9 +35,11 @@ import {
     type FlatsArtworkKey,
     type UniformArtworkId,
     isUniformPackValue,
+    splitMode,
 } from "@/view3d/core/marchers/uniformArtwork";
 import {
     FLATS_PAGE_IN,
+    drawnInMode,
     type UniformPackItem,
 } from "@/view3d/core/uniformPack/format";
 import {
@@ -237,18 +239,29 @@ interface PackPage {
 const packPages = new Map<string, PackPage>();
 
 /**
+ * Which layers a page draws: a pack's mode (its default when null), or, for
+ * a draft, the layer files it names, with any new ones' PNGs
+ */
+type PageLayers =
+    | { mode: string | null }
+    | { files: string[]; extra: Record<string, Uint8Array> };
+
+/**
  * A show's pack's layers flattened onto one bitmap of the whole page at
  * `dpi`, and its item images decoded, read in the uniform pack worker (never
  * in the window: the show may come from anyone). The window holds one bitmap
- * per pack, not one per layer, plus one per item image. Shared while atlases
- * are composed from it, then closed.
+ * per (pack, mode), not one per layer, plus one per item image. Shared while
+ * atlases are composed from it, then closed.
  */
 async function withPackPage<T>(
     key: string,
     dpi: number,
+    which: PageLayers,
     use: (drawing: PackDrawing) => Promise<T>,
 ): Promise<T> {
-    const cacheKey = `${key}|${dpi}`;
+    const cacheKey = `${key}|${dpi}|${
+        "files" in which ? which.files.join("+") : `#${which.mode ?? ""}`
+    }`;
     let entry = packPages.get(cacheKey);
     if (!entry) {
         const promise = (async (): Promise<PackDrawing> => {
@@ -261,6 +274,18 @@ async function withPackPage<T>(
                 bytes: stored.bytes.slice(),
                 width: Math.round(FLATS_PAGE_IN.width * dpi),
                 height: Math.round(FLATS_PAGE_IN.height * dpi),
+                ...("files" in which
+                    ? {
+                          layers: which.files,
+                          // copies: the draft keeps its own
+                          extra: Object.fromEntries(
+                              Object.entries(which.extra).map(([f, png]) => [
+                                  f,
+                                  png.slice(),
+                              ]),
+                          ),
+                      }
+                    : { mode: which.mode }),
             });
             if (result.type !== "flattened")
                 throw new Error("3D View: the uniform didn't draw");
@@ -306,11 +331,25 @@ async function composeAtlas(
     dpi: number,
 ): Promise<FlatsAtlas> {
     if (isUniformPackValue(id)) {
-        // an item draft (`itemDrafts.ts`) draws over the pack it started from
-        const draft = drawnDraft(id);
+        // the mode it's worn in (step 5 of fork #1257): its layers, items and palette
+        const { pack, mode } = splitMode(id);
+        // a draft (`itemDrafts.ts`) draws over the pack it started from
+        const draft = drawnDraft(pack);
+        const inMode = draft ? drawnInMode(draft.contents, mode) : null;
+        const which: PageLayers = inMode
+            ? {
+                  files: inMode.layers.map((layer) => layer.file),
+                  extra: Object.fromEntries(
+                      inMode.layers.flatMap((layer) => {
+                          const png = draft?.layerImages[layer.file];
+                          return png ? [[layer.file, png]] : [];
+                      }),
+                  ),
+              }
+            : { mode };
         const draw = async (drawing: PackDrawing): Promise<FlatsAtlas> => {
             const { layout, regions } = await loadFlatsGeometry();
-            const items = draft ? draft.items : drawing.items;
+            const items = inMode ? inMode.items : drawing.items;
             const imageOf = (file: string) =>
                 draft?.images[file]?.bitmap ?? drawing.images.get(file);
             const rect = flatsAtlasLayout(
@@ -353,14 +392,14 @@ async function composeAtlas(
                 return Promise.resolve();
             });
         };
-        const from = draftOrigin(id);
+        const from = draftOrigin(pack);
         try {
-            return await withPackPage(from, dpi, draw);
+            return await withPackPage(from, dpi, which, draw);
         } catch (error) {
             // a burst's save removed that version while this composed: read the newest
-            const now = draftOrigin(id);
+            const now = draftOrigin(pack);
             if (!draft || now === from) throw error;
-            return await withPackPage(now, dpi, draw);
+            return await withPackPage(now, dpi, which, draw);
         }
     }
     return await composeBuiltIn(id, body, dpi);

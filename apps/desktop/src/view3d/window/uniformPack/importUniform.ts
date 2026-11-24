@@ -202,26 +202,30 @@ async function importPackFile(
     }
 }
 
-/**
- * The pack for a picked file. A PNG or SVG becomes a one-layer pack named after the file,
- * dressed around its art in `look` (the band's preset, so the hat, gloves and shoes keep their
- * colors). Throws {@link UniformImportError}.
- */
-export async function importUniformFile(
-    file: { name: string; size: number; arrayBuffer(): Promise<ArrayBuffer> },
-    look: PresetLook,
-    regions: PageRegions,
-    {
-        runJob = runUniformPackJob,
-        drawSvg = drawSvgPage,
-    }: {
-        /** Runs a worker job; tests stand in for the worker */
-        runJob?: typeof runUniformPackJob;
-        /** Draws an SVG page; tests stand in for the browser */
-        drawSvg?: (text: string) => Promise<Uint8ClampedArray>;
-    } = {},
-): Promise<UniformImport> {
-    const bytes = new Uint8Array(await file.arrayBuffer());
+/** A picked PNG or SVG page, checked and encoded as the pack stores a layer */
+export interface ImportedPage {
+    name: string;
+    /** The page PNG at the template's size */
+    png: Uint8Array;
+    notes: UniformImportNote[];
+    scaledFrom: { width: number; height: number } | null;
+}
+
+interface ImportDeps {
+    /** Runs a worker job; tests stand in for the worker */
+    runJob?: typeof runUniformPackJob;
+    /** Draws an SVG page; tests stand in for the browser */
+    drawSvg?: (text: string) => Promise<Uint8ClampedArray>;
+}
+
+type PickedFile = {
+    name: string;
+    size: number;
+    arrayBuffer(): Promise<ArrayBuffer>;
+};
+
+/** What a picked file is, refusing PDFs and files that are none of the kinds read */
+function kindOf(file: PickedFile, bytes: Uint8Array) {
     const kind = uniformFileKind(file.name, bytes.subarray(0, 4));
     if (kind === "pdf")
         throw new UniformImportError("pdf", "PDFs aren't read yet");
@@ -231,13 +235,18 @@ export async function importUniformFile(
         if (!/<svg\b/i.test(head))
             throw new UniformImportError("unsupported", file.name);
     }
+    return kind;
+}
 
-    if (kind === "pack") return await importPackFile(bytes, regions, runJob);
-
-    const name = uniformNameFromFile(file.name);
-    let png: Uint8Array;
+/** A PNG's or SVG's bytes as a page, decoded in the worker (an SVG drawn in the window first) */
+async function pageOf(
+    bytes: Uint8Array,
+    kind: "png" | "svg" | null,
+    fileName: string,
+    regions: PageRegions,
+    { runJob = runUniformPackJob, drawSvg = drawSvgPage }: ImportDeps,
+): Promise<Omit<ImportedPage, "name">> {
     const notes: UniformImportNote[] = [];
-    let scaledFrom: UniformImport["scaledFrom"] = null;
     try {
         if (kind === "png") {
             const result = await runJob({ type: "png", bytes, regions }, [
@@ -245,40 +254,89 @@ export async function importUniformFile(
             ]);
             if (result.type !== "page")
                 throw new UniformImportError("unreadable", "no page");
-            png = result.png;
-            scaledFrom = result.scaledFrom;
-            if (scaledFrom) notes.push("scaled");
+            if (result.scaledFrom) notes.push("scaled");
             notes.push(...result.notes);
-        } else {
-            if (bytes.byteLength > UNIFORM_SVG_MAX_BYTES)
-                throw new UniformImportError(
-                    "tooLarge",
-                    `${bytes.byteLength} bytes`,
-                );
-            const text = new TextDecoder().decode(bytes);
-            if (!/<svg\b/i.test(text))
-                throw new UniformImportError("notSvg", file.name);
-            if (!isPageViewBox(svgViewBox(text))) notes.push("svgViewBox");
-            const pixels = await drawSvg(text);
-            const result = await runJob(
-                {
-                    type: "pixels",
-                    width: FLATS_PAGE_PX.width,
-                    height: FLATS_PAGE_PX.height,
-                    pixels,
-                    regions,
-                },
-                [pixels.buffer],
-            );
-            if (result.type !== "page")
-                throw new UniformImportError("unreadable", "no page");
-            png = result.png;
-            notes.push(...result.notes);
+            return { png: result.png, notes, scaledFrom: result.scaledFrom };
         }
+        if (bytes.byteLength > UNIFORM_SVG_MAX_BYTES)
+            throw new UniformImportError(
+                "tooLarge",
+                `${bytes.byteLength} bytes`,
+            );
+        const text = new TextDecoder().decode(bytes);
+        if (!/<svg\b/i.test(text))
+            throw new UniformImportError("notSvg", fileName);
+        if (!isPageViewBox(svgViewBox(text))) notes.push("svgViewBox");
+        const pixels = await drawSvg(text);
+        const result = await runJob(
+            {
+                type: "pixels",
+                width: FLATS_PAGE_PX.width,
+                height: FLATS_PAGE_PX.height,
+                pixels,
+                regions,
+            },
+            [pixels.buffer],
+        );
+        if (result.type !== "page")
+            throw new UniformImportError("unreadable", "no page");
+        notes.push(...result.notes);
+        return { png: result.png, notes, scaledFrom: null };
     } catch (error) {
         if (error instanceof UniformImportError) throw error;
         return fromJob(error);
     }
+}
+
+/**
+ * A picked PNG or SVG as an overlay layer for a mode (step 5 of fork #1257): checked and encoded
+ * like a uniform's page. An overlay holds only what changes, so the notes about clear parts of
+ * the page are left out; only `scaled` and `svgViewBox` are kept. A uniform file or a PDF is
+ * refused (`unsupported`, `pdf`). Throws {@link UniformImportError}.
+ */
+export async function importLayerFile(
+    file: PickedFile,
+    regions: PageRegions,
+    deps: ImportDeps = {},
+): Promise<ImportedPage> {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const kind = kindOf(file, bytes);
+    if (kind === "pack") throw new UniformImportError("unsupported", file.name);
+    const page = await pageOf(bytes, kind, file.name, regions, deps);
+    return {
+        ...page,
+        name: uniformNameFromFile(file.name),
+        notes: page.notes.filter((n) => n === "scaled" || n === "svgViewBox"),
+    };
+}
+
+/**
+ * The pack for a picked file. A PNG or SVG becomes a one-layer pack named after the file,
+ * dressed around its art in `look` (the band's preset, so the hat, gloves and shoes keep their
+ * colors). Throws {@link UniformImportError}.
+ */
+export async function importUniformFile(
+    file: PickedFile,
+    look: PresetLook,
+    regions: PageRegions,
+    deps: ImportDeps = {},
+): Promise<UniformImport> {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const kind = kindOf(file, bytes);
+    if (kind === "pack")
+        return await importPackFile(
+            bytes,
+            regions,
+            deps.runJob ?? runUniformPackJob,
+        );
+    const name = uniformNameFromFile(file.name);
+    const { png, notes, scaledFrom } = await pageOf(
+        bytes,
+        kind,
+        file.name,
+        regions,
+        deps,
+    );
     // the parts the art leaves clear wear `look`'s colors: say so
     notes.push("palette");
     const manifest = singleLayerManifest({ name, look });

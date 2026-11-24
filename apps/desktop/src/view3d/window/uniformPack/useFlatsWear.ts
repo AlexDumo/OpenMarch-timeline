@@ -5,8 +5,13 @@
  * band's preset, outside preview builds, and while a pack is still loading
  * (the band shows its preset until the pack is read).
  *
- * While its items are being edited (fork #1258), the pack's key is the item
- * draft's (`itemDrafts.ts`), so the 3D View shows each change at once.
+ * While its items or modes are being edited (fork #1258), the pack's key is
+ * the draft's (`itemDrafts.ts`), so the 3D View shows each change at once.
+ *
+ * A pack with modes (step 5 of fork #1257) is worn in the venue's
+ * `uniformMode`, or its default mode when that names none it has: the key
+ * names the mode, so each mode gets its own atlas, and the palette takes the
+ * mode's changes.
  */
 import { useEffect, useMemo } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -14,14 +19,23 @@ import {
     UNIFORM_ARTWORK,
     flatsArtworkOf,
     isUniformPackValue,
+    withMode,
     type FlatsWear,
 } from "@/view3d/core/marchers/uniformArtwork";
-import { lookOfManifest } from "@/view3d/core/uniformPack/format";
+import { lookOfManifest, modeOf } from "@/view3d/core/uniformPack/format";
 import { uniformPackQueryOptions } from "@/hooks/queries/useUniformPack";
 import { uniformArtworkAvailable } from "@/view3d/window/uniformArtworkPreview";
-import { observeWorn, useItemDrafts, wornKey } from "./itemDrafts";
+import {
+    draftApplies,
+    observeWorn,
+    useItemDrafts,
+    wornKey,
+} from "./itemDrafts";
 
-export function useFlatsWear(value: unknown): FlatsWear | null {
+export function useFlatsWear(
+    value: unknown,
+    modeId?: string | null,
+): FlatsWear | null {
     const key = uniformArtworkAvailable() ? flatsArtworkOf(value) : null;
     const packValue = key && isUniformPackValue(key) ? key : null;
     // a saved item edit is a new pack: keep the last one's palette while it loads
@@ -36,8 +50,15 @@ export function useFlatsWear(value: unknown): FlatsWear | null {
         if (!key) return null;
         if (!isUniformPackValue(key))
             return { key, look: UNIFORM_ARTWORK[key].look };
-        return manifest
-            ? { key: wornKey(draft, key), look: lookOfManifest(manifest) }
-            : null;
-    }, [key, manifest, draft]);
+        if (!manifest) return null;
+        // the draft's modes while it applies, so a mode edit shows at once
+        const edited = draftApplies(draft, key)
+            ? { ...manifest, ...draft.contents }
+            : manifest;
+        const mode = modeOf(edited, modeId)?.id ?? null;
+        return {
+            key: withMode(wornKey(draft, key), mode),
+            look: lookOfManifest(edited, mode),
+        };
+    }, [key, manifest, draft, modeId]);
 }

@@ -55,6 +55,7 @@ import {
     useItemDrafts,
 } from "@/view3d/window/uniformPack/itemDrafts";
 import { importItemFile } from "@/view3d/window/uniformPack/importItem";
+import { contentsOf } from "@/view3d/core/uniformPack/modeEdits";
 import { UniformImportError } from "@/view3d/window/uniformPack/importUniform";
 import { Segmented, SegmentedMany } from "./Panel";
 import { useVenueRequest } from "./VenueControls";
@@ -103,7 +104,7 @@ export function UniformItemsControls() {
     }, []);
 
     if (!uniformArtworkAvailable() || !wornPack || !pack) return null;
-    const stored = pack.manifest.items ?? [];
+    const stored = contentsOf(pack.manifest);
     const items = itemsFor(draft, wornPack, stored);
     const presets = regions ? itemPresets(regions) : [];
     const full = items.length >= UNIFORM_PACK_MAX_ITEMS;

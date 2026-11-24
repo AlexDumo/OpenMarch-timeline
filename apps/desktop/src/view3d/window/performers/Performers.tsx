@@ -184,7 +184,10 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     const uniformPreset = uniformPresetOf(venue?.uniforms);
     // the band's flats uniform, a preview (docs/3d/uniform-artwork.md): a
     // built-in, or the show's imported pack (fork #1257)
-    const uniformArtwork = useFlatsWear(venue?.uniformArtwork);
+    const uniformArtwork = useFlatsWear(
+        venue?.uniformArtwork,
+        venue?.uniformMode,
+    );
     const guardUniformPreset = guardUniformPresetOf(venue?.guardUniforms);
     // the brass line's finish and the tubas' horn, from the same settings
     const brassFinish = brassFinishOf(venue?.brassFinish);
