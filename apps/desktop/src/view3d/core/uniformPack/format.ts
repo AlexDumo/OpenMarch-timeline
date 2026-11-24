@@ -1,4 +1,4 @@
-// cspell:words fflate omasset IHDR zippable Zippable
+// cspell:words fflate omasset IHDR zippable Zippable eocd
 /**
  * The uniform pack, format version 1, a **preview** (docs/3d/uniform-artwork.md, "The uniform
  * pack"; ADR 0010 amendment 2026-11-24, fork #1257). It can still change, and freezes only after a
@@ -16,10 +16,19 @@
  * fork #1262, so the outer fields (`format`, `formatVersion`, `kind`, `name`, `credits`) are
  * meant for every kind; the rest is the uniform's.
  *
- * Pure: no DOM, no database. fflate reads and writes the zip, with limits checked before anything
- * is inflated.
+ * Version 1 is strict: unknown top-level keys are refused, and so are non-empty `items`, `modes`,
+ * `variants` and `attachments`, which are reserved. A later field that changes what is drawn
+ * bumps `formatVersion`, so an older build refuses that pack instead of drawing it wrong.
+ *
+ * Reading never trusts the zip's sizes: only the manifest and the layers it names are inflated,
+ * each one streamed and stopped as soon as it passes its declared size, and an entry whose
+ * compressed size couldn't have come from its declared size is refused before inflating. The app
+ * reads untrusted packs only in `uniformPack.worker`, so even the bounded work stays off the
+ * window's and the editor's main threads.
+ *
+ * Pure: no DOM, no database. fflate writes the zip and inflates entries.
  */
-import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from "fflate";
+import { Inflate, strFromU8, strToU8, zipSync, type Zippable } from "fflate";
 import { z } from "zod";
 import type { PresetLook } from "@/view3d/core/marchers/uniformPresets";
 
@@ -45,8 +54,10 @@ export const FLATS_PAGE_PX = {
 
 /** A pack file larger than this isn't read */
 export const UNIFORM_PACK_MAX_BYTES = 64 * 1024 * 1024;
-/** What its entries may hold once inflated, together */
+/** What the entries it reads may hold once inflated, together */
 export const UNIFORM_PACK_MAX_UNZIPPED_BYTES = 256 * 1024 * 1024;
+/** The manifest is text; more than this is no manifest */
+export const UNIFORM_MANIFEST_MAX_BYTES = 1024 * 1024;
 export const UNIFORM_PACK_MAX_ENTRIES = 64;
 export const UNIFORM_PACK_MAX_LAYERS = 16;
 /** A layer image with more pixels than this isn't decoded (4× the page) */
@@ -86,47 +97,61 @@ const creditsSchema = z.object({
     source: z.string().max(500).optional(),
 });
 
-export const uniformPackManifestSchema = z.object({
-    format: z.literal(ASSET_FILE_FORMAT),
-    formatVersion: z.literal(UNIFORM_PACK_VERSION),
-    /** True while the format can still change (fork #1259) */
-    preview: z.boolean().optional(),
-    kind: z.literal(UNIFORM_ASSET_KIND),
-    name: z.string().min(1).max(120),
-    /** The flats page, real size */
-    page: z.object({
-        width: z.literal(FLATS_PAGE_IN.width),
-        height: z.literal(FLATS_PAGE_IN.height),
-        unit: z.literal("in"),
-    }),
-    /** The pattern the palette draws where the art is clear */
-    style: z.enum([
-        "classic",
-        "sash",
-        "plastron",
-        "military",
-        "split",
-        "fade",
-        "cadet",
-    ]),
-    palette: paletteSchema,
-    /** Part options */
-    options: z.object({
-        stripe: z.boolean(),
-        collar: z.boolean(),
-        cuffs: z.boolean(),
-        gloves: z.boolean(),
-        hat: z.boolean(),
-    }),
-    /** Bottom first. Every layer this build draws, in this order. */
-    layers: z.array(layerSchema).min(1).max(UNIFORM_PACK_MAX_LAYERS),
-    /** Reserved for placed logos and numbers (fork #1258); not read yet */
-    items: z.array(z.unknown()).optional(),
-    /** Reserved for modes and variants (step 5 of fork #1257); not read yet */
-    modes: z.array(z.unknown()).optional(),
-    variants: z.array(z.unknown()).optional(),
-    credits: creditsSchema,
-});
+/** A reserved list: version 1 writes it empty or leaves it out, and refuses anything in it */
+const reserved = z.array(z.unknown()).max(0).optional();
+
+export const uniformPackManifestSchema = z
+    .strictObject({
+        format: z.literal(ASSET_FILE_FORMAT),
+        formatVersion: z.literal(UNIFORM_PACK_VERSION),
+        /** True while the format can still change (fork #1259) */
+        preview: z.boolean().optional(),
+        kind: z.literal(UNIFORM_ASSET_KIND),
+        name: z.string().min(1).max(120),
+        /** The flats page, real size */
+        page: z.object({
+            width: z.literal(FLATS_PAGE_IN.width),
+            height: z.literal(FLATS_PAGE_IN.height),
+            unit: z.literal("in"),
+        }),
+        /** The pattern the palette draws where the art is clear */
+        style: z.enum([
+            "classic",
+            "sash",
+            "plastron",
+            "military",
+            "split",
+            "fade",
+            "cadet",
+        ]),
+        palette: paletteSchema,
+        /** Part options */
+        options: z.object({
+            stripe: z.boolean(),
+            collar: z.boolean(),
+            cuffs: z.boolean(),
+            gloves: z.boolean(),
+            hat: z.boolean(),
+        }),
+        /** Bottom first, ids unique. Every layer this build draws, in this order. */
+        layers: z.array(layerSchema).min(1).max(UNIFORM_PACK_MAX_LAYERS),
+        /** Reserved for placed logos and numbers (fork #1258) */
+        items: reserved,
+        /** Reserved for modes and variants (step 5 of fork #1257) */
+        modes: reserved,
+        variants: reserved,
+        /** Reserved for hanging pieces (fork #1261) */
+        attachments: reserved,
+        credits: creditsSchema,
+    })
+    .superRefine((manifest, ctx) => {
+        const ids = manifest.layers.map((layer) => layer.id);
+        const files = manifest.layers.map((layer) => layer.file);
+        if (new Set(ids).size !== ids.length)
+            ctx.addIssue({ code: "custom", message: "layer ids repeat" });
+        if (new Set(files).size !== files.length)
+            ctx.addIssue({ code: "custom", message: "layer files repeat" });
+    });
 
 export type UniformPackManifest = z.infer<typeof uniformPackManifestSchema>;
 export type UniformPackCredits = UniformPackManifest["credits"];
@@ -239,64 +264,131 @@ export function writeUniformPack(
     return zipSync(zippable);
 }
 
-/** The manifest and layer entries of a pack's zip, inflated within the limits */
-function unzipPack(bytes: Uint8Array): Record<string, Uint8Array> {
-    let entries = 0;
-    let total = 0;
-    const want = (name: string) =>
-        name === MANIFEST ||
-        /^layers\/[a-z0-9][a-z0-9-]{0,31}\.png$/.test(name);
-    try {
-        return unzipSync(bytes, {
-            filter: (entry) => {
-                entries += 1;
-                if (entries > UNIFORM_PACK_MAX_ENTRIES)
-                    throw new UniformPackError(
-                        "tooLarge",
-                        `more than ${UNIFORM_PACK_MAX_ENTRIES} entries`,
-                    );
-                if (!want(entry.name)) return false;
-                total += Math.max(entry.size, entry.originalSize);
-                if (total > UNIFORM_PACK_MAX_UNZIPPED_BYTES)
-                    throw new UniformPackError(
-                        "tooLarge",
-                        `over ${UNIFORM_PACK_MAX_UNZIPPED_BYTES} bytes inflated`,
-                    );
-                return true;
-            },
-        });
-    } catch (error) {
-        if (error instanceof UniformPackError) throw error;
-        throw new UniformPackError(
-            "notPack",
-            `the zip can't be opened (${error instanceof Error ? error.message : String(error)})`,
-        );
-    }
+/** One entry of a zip's central directory */
+interface ZipEntry {
+    name: string;
+    /** 0 stored, 8 deflated */
+    method: number;
+    /** Compressed size, bytes */
+    size: number;
+    /** Size once inflated, as the zip declares it */
+    originalSize: number;
+    /** Where its data starts in the file */
+    dataStart: number;
 }
 
+const damaged = (reason: string) => new UniformPackError("damaged", reason);
+
 /**
- * Reads a pack file: its manifest, checked, and each layer's PNG. Sizes and entry counts are
- * checked from the zip's directory before anything is inflated, and only the manifest and the
- * layers it names are inflated. Throws {@link UniformPackError}.
+ * The zip's entries from its central directory, read without inflating anything. Refuses
+ * encrypted and zip64 entries, and an entry whose sizes can't be true: a stored entry whose
+ * compressed and declared sizes differ, or a deflated one larger than deflate makes for its
+ * declared size.
  */
-export function readUniformPack(bytes: Uint8Array): UniformPack {
-    if (bytes.byteLength > UNIFORM_PACK_MAX_BYTES)
+function zipDirectory(bytes: Uint8Array): ZipEntry[] {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    let eocd = -1;
+    const lowest = Math.max(0, bytes.length - 22 - 0xffff);
+    for (let i = bytes.length - 22; i >= lowest; i--)
+        if (view.getUint32(i, true) === 0x06054b50) {
+            eocd = i;
+            break;
+        }
+    if (eocd < 0) throw new UniformPackError("notPack", "no zip directory");
+    const count = view.getUint16(eocd + 10, true);
+    const dirSize = view.getUint32(eocd + 12, true);
+    const dirStart = view.getUint32(eocd + 16, true);
+    if (count === 0xffff || dirStart === 0xffffffff)
+        throw new UniformPackError("notPack", "zip64 isn't read");
+    if (count > UNIFORM_PACK_MAX_ENTRIES)
         throw new UniformPackError(
             "tooLarge",
-            `${bytes.byteLength} bytes is over ${UNIFORM_PACK_MAX_BYTES}`,
+            `more than ${UNIFORM_PACK_MAX_ENTRIES} entries`,
         );
-    if (bytes[0] !== 0x50 || bytes[1] !== 0x4b)
-        throw new UniformPackError("notPack", "not a zip");
-    const opened = unzipPack(bytes);
-    const manifestBytes = opened[MANIFEST];
-    if (!manifestBytes)
-        throw new UniformPackError("notPack", "no manifest.json");
-    let json: unknown;
-    try {
-        json = JSON.parse(strFromU8(manifestBytes));
-    } catch {
-        throw new UniformPackError("damaged", "manifest.json isn't JSON");
+    if (dirStart + dirSize > eocd) throw damaged("the directory overruns");
+    const names = new TextDecoder();
+    const entries: ZipEntry[] = [];
+    let p = dirStart;
+    for (let i = 0; i < count; i++) {
+        if (p + 46 > eocd || view.getUint32(p, true) !== 0x02014b50)
+            throw damaged("a directory entry is cut short");
+        const flags = view.getUint16(p + 8, true);
+        const method = view.getUint16(p + 10, true);
+        const size = view.getUint32(p + 20, true);
+        const originalSize = view.getUint32(p + 24, true);
+        const nameLength = view.getUint16(p + 28, true);
+        const skip =
+            nameLength +
+            view.getUint16(p + 30, true) +
+            view.getUint16(p + 32, true);
+        const local = view.getUint32(p + 42, true);
+        const name = names.decode(bytes.subarray(p + 46, p + 46 + nameLength));
+        p += 46 + skip;
+        if (flags & 1) throw new UniformPackError("notPack", "encrypted");
+        if (method !== 0 && method !== 8)
+            throw damaged(`${name}: compression ${method}`);
+        if (method === 0 && size !== originalSize)
+            throw damaged(`${name}: stored, but its sizes differ`);
+        // deflate never grows data by more than a few bytes per 16 KB block
+        if (method === 8 && size > originalSize * 1.01 + 1024)
+            throw damaged(
+                `${name}: more compressed bytes than its size allows`,
+            );
+        if (
+            local + 30 > bytes.length ||
+            view.getUint32(local, true) !== 0x04034b50
+        )
+            throw damaged(`${name}: no local header`);
+        const dataStart =
+            local +
+            30 +
+            view.getUint16(local + 26, true) +
+            view.getUint16(local + 28, true);
+        if (dataStart + size > bytes.length)
+            throw damaged(`${name}: its data overruns the file`);
+        entries.push({ name, method, size, originalSize, dataStart });
     }
+    return entries;
+}
+
+/** Compressed bytes handed to the inflater at a time: each push can make at most ~1000× this */
+const INFLATE_CHUNK = 4096;
+
+/**
+ * One entry's bytes, inflated and stopped the moment the output passes its declared size, so a
+ * zip that lies about sizes costs no more than what it declares.
+ */
+function inflateEntry(bytes: Uint8Array, entry: ZipEntry): Uint8Array {
+    const data = bytes.subarray(entry.dataStart, entry.dataStart + entry.size);
+    if (entry.method === 0) return data.slice();
+    const out = new Uint8Array(entry.originalSize);
+    let written = 0;
+    const inflater = new Inflate((chunk) => {
+        if (written + chunk.length > entry.originalSize)
+            throw damaged(`${entry.name}: inflates past its declared size`);
+        out.set(chunk, written);
+        written += chunk.length;
+    });
+    try {
+        for (let i = 0; i < data.length; i += INFLATE_CHUNK)
+            inflater.push(
+                data.subarray(i, i + INFLATE_CHUNK),
+                i + INFLATE_CHUNK >= data.length,
+            );
+        if (data.length === 0) inflater.push(new Uint8Array(0), true);
+    } catch (error) {
+        if (error instanceof UniformPackError) throw error;
+        throw damaged(
+            `${entry.name}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+    }
+    if (written !== entry.originalSize)
+        throw damaged(`${entry.name}: shorter than its declared size`);
+    return out;
+}
+
+/** Checks a parsed manifest's head, then the whole of it */
+function parseManifest(json: unknown): UniformPackManifest {
     const head = z
         .object({
             format: z.literal(ASSET_FILE_FORMAT),
@@ -318,19 +410,51 @@ export function readUniformPack(bytes: Uint8Array): UniformPack {
         );
     const parsed = uniformPackManifestSchema.safeParse(json);
     if (!parsed.success)
+        throw damaged(`manifest.json: ${parsed.error.message}`);
+    return parsed.data;
+}
+
+/**
+ * Reads a pack file: its manifest, checked, and each layer's PNG. Entry counts and sizes are
+ * checked from the zip's directory first; then only the manifest and the layers it names are
+ * inflated, each stopped at its declared size (see the module comment). Throws
+ * {@link UniformPackError}. The app calls it only in `uniformPack.worker`.
+ */
+export function readUniformPack(bytes: Uint8Array): UniformPack {
+    if (bytes.byteLength > UNIFORM_PACK_MAX_BYTES)
         throw new UniformPackError(
-            "damaged",
-            `manifest.json: ${parsed.error.message}`,
+            "tooLarge",
+            `${bytes.byteLength} bytes is over ${UNIFORM_PACK_MAX_BYTES}`,
         );
-    const manifest = parsed.data;
+    if (bytes[0] !== 0x50 || bytes[1] !== 0x4b)
+        throw new UniformPackError("notPack", "not a zip");
+    const entries = new Map(zipDirectory(bytes).map((e) => [e.name, e]));
+    const manifestEntry = entries.get(MANIFEST);
+    if (!manifestEntry)
+        throw new UniformPackError("notPack", "no manifest.json");
+    if (manifestEntry.originalSize > UNIFORM_MANIFEST_MAX_BYTES)
+        throw new UniformPackError("tooLarge", "manifest.json is too large");
+    let json: unknown;
+    try {
+        json = JSON.parse(strFromU8(inflateEntry(bytes, manifestEntry)));
+    } catch (error) {
+        if (error instanceof UniformPackError) throw error;
+        throw damaged("manifest.json isn't JSON");
+    }
+    const manifest = parseManifest(json);
+    let total = manifestEntry.originalSize;
     const layers = manifest.layers.map((layer) => {
-        const png = opened[layer.file];
-        const size = png && pngHeaderSize(png);
-        if (!png || !size)
+        const entry = entries.get(layer.file);
+        if (!entry) throw damaged(`layer ${layer.file} is missing`);
+        total += entry.originalSize;
+        if (total > UNIFORM_PACK_MAX_UNZIPPED_BYTES)
             throw new UniformPackError(
-                "damaged",
-                `layer ${layer.file} is missing or isn't a PNG`,
+                "tooLarge",
+                `over ${UNIFORM_PACK_MAX_UNZIPPED_BYTES} bytes inflated`,
             );
+        const png = inflateEntry(bytes, entry);
+        const size = pngHeaderSize(png);
+        if (!size) throw damaged(`layer ${layer.file} isn't a PNG`);
         if (size.width * size.height > UNIFORM_LAYER_MAX_PIXELS)
             throw new UniformPackError(
                 "tooLarge",
@@ -390,6 +514,7 @@ export function singleLayerManifest({
         items: [],
         modes: [],
         variants: [],
+        attachments: [],
         credits,
     };
 }

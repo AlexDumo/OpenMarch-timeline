@@ -121,11 +121,14 @@ export const venueSettingsSchema = z.object({
      * through `flatsArtworkOf`: a value this build doesn't know falls back to
      * the preset instead of failing the whole venue. Added 2026-11-24 without
      * a version bump (ADR 0010 D-5): older builds ignore it, and drop it if
-     * they save a venue change.
+     * they save a venue change. A value that doesn't parse (too long, the
+     * wrong type) is dropped on its own, so it never resets the rest of the
+     * venue.
      */
     uniformArtwork: z
         .union([z.string().min(1).max(200), z.number().int().positive()])
-        .optional(),
+        .optional()
+        .catch(undefined),
 });
 
 export type VenueSettings = z.infer<typeof venueSettingsSchema>;

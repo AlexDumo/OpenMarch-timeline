@@ -11,6 +11,7 @@ import {
 } from "../showAssets";
 import { setUniformPack } from "../view3dUniformPack";
 import { parseShowAssetRef } from "@/showAssets/ref";
+import { REMOVABLE_ASSET_KINDS, showAssetUse } from "@/showAssets/assetUse";
 import {
     readUniformPack,
     writeUniformPack,
@@ -28,13 +29,25 @@ const packFile = (name = "Home uniform", tag = 0) =>
         "layers/base.png": fakePng(3360, 2816, tag),
     });
 
+/** What the editor passes: the file, and its manifest as the worker read it */
+const store = (
+    db: Parameters<typeof setUniformPack>[0]["db"],
+    pack: Uint8Array,
+) =>
+    setUniformPack({
+        db,
+        pack,
+        manifest: readUniformPack(pack).manifest,
+        field,
+    });
+
 describeDbTests("view3dUniformPack", (it) => {
     describe("setUniformPack", () => {
         it("stores the pack file unchanged as a uniform asset and dresses the band in it", async ({
             db,
         }) => {
             const bytes = packFile();
-            const value = await setUniformPack({ db, pack: bytes, field });
+            const value = await store(db, bytes);
             const venue = await getStoredVenueSettings({ db });
             expect(venue?.uniformArtwork).toBe(value);
 
@@ -66,15 +79,15 @@ describeDbTests("view3dUniformPack", (it) => {
                     crowd: false,
                 },
             });
-            await setUniformPack({ db, pack: packFile(), field });
+            await store(db, packFile());
             const venue = await getStoredVenueSettings({ db });
             expect(venue?.uniforms).toBe("prism");
             expect(venue?.crowd).toBe(false);
         });
 
         it("reuses the asset when the same file comes back", async ({ db }) => {
-            const first = await setUniformPack({ db, pack: packFile(), field });
-            const again = await setUniformPack({ db, pack: packFile(), field });
+            const first = await store(db, packFile());
+            const again = await store(db, packFile());
             expect(again).toBe(first);
             expect(
                 (await getShowAssets({ db })).filter(
@@ -86,16 +99,8 @@ describeDbTests("view3dUniformPack", (it) => {
         it("undoes and redoes like other venue changes, keeping the asset", async ({
             db,
         }) => {
-            const first = await setUniformPack({
-                db,
-                pack: packFile("One", 1),
-                field,
-            });
-            const second = await setUniformPack({
-                db,
-                pack: packFile("Two", 2),
-                field,
-            });
+            const first = await store(db, packFile("One", 1));
+            const second = await store(db, packFile("Two", 2));
             await performUndo(db);
             expect((await getStoredVenueSettings({ db }))?.uniformArtwork).toBe(
                 first,
@@ -112,23 +117,45 @@ describeDbTests("view3dUniformPack", (it) => {
             ).toHaveLength(2);
         });
 
-        it("refuses bytes that aren't a uniform pack, changing nothing", async ({
+        it("refuses a manifest that doesn't parse, changing nothing", async ({
             db,
         }) => {
+            const manifest = {
+                ...sampleManifest(),
+                items: [{ file: "crest.svg" }],
+            };
             await expect(
-                setUniformPack({ db, pack: fakePng(), field }),
+                setUniformPack({ db, pack: packFile(), manifest, field }),
             ).rejects.toThrow();
             expect(await getStoredVenueSettings({ db })).toBeUndefined();
             expect(await getShowAssets({ db })).toEqual([]);
         });
 
         it("counts as a use of the asset", async ({ db }) => {
-            const value = await setUniformPack({
-                db,
-                pack: packFile(),
-                field,
-            });
+            const value = await store(db, packFile());
             expect(await getShowAssetReferences({ db })).toContain(value);
+        });
+
+        it("is never removed while the band wears it, and can be once it doesn't", async ({
+            db,
+        }) => {
+            const value = await store(db, packFile());
+            const named = new Set(await getShowAssetReferences({ db }));
+            const use = showAssetUse(await getShowAssets({ db }), new Map(), [
+                ...named,
+            ]);
+            expect(REMOVABLE_ASSET_KINDS.has("uniform")).toBe(true);
+            expect(use.unused).toEqual([]);
+            // back to a preset: the uniform is unused, so Remove unused… may take it
+            const venue = (await getStoredVenueSettings({ db }))!;
+            const { uniformArtwork: _worn, ...preset } = venue;
+            await updateVenueSettings({ db, settings: preset });
+            const after = showAssetUse(
+                await getShowAssets({ db }),
+                new Map(),
+                await getShowAssetReferences({ db }),
+            );
+            expect(after.unused.map((row) => row.value)).toEqual([value]);
         });
     });
 });

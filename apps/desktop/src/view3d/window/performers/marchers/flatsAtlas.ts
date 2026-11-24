@@ -31,8 +31,8 @@ import {
     isUniformPackValue,
 } from "@/view3d/core/marchers/uniformArtwork";
 import { FLATS_PAGE_IN } from "@/view3d/core/uniformPack/format";
-import { readStoredUniformPack } from "@/hooks/queries/useUniformPack";
-import { runUniformPackJob } from "@/view3d/window/uniformPack/runUniformPackJob";
+import { readStoredUniformPackBytes } from "@/hooks/queries/useUniformPack";
+import { runUniformPackJob } from "@/view3d/uniformPack/runUniformPackJob";
 import type { BodyType } from "@/view3d/core/marchers/looks";
 import type { FlatsAtlasRect } from "@/view3d/render/uniform-flats.js";
 import FlatsBleedWorker from "./flatsBleed.worker.ts?worker";
@@ -252,44 +252,47 @@ function bleed(
     });
 }
 
-interface PackLayers {
-    promise: Promise<ImageBitmap[]>;
+interface PackPage {
+    promise: Promise<ImageBitmap>;
     users: number;
 }
-const packLayers = new Map<string, PackLayers>();
+const packPages = new Map<string, PackPage>();
 
 /**
- * A show's pack's layers as bitmaps of the whole page at `dpi`, decoded in the
- * uniform pack worker (never in the window: the show may come from anyone).
- * Shared while atlases are being composed from them, then closed.
+ * A show's pack's layers flattened onto one bitmap of the whole page at
+ * `dpi`, read and decoded in the uniform pack worker (never in the window:
+ * the show may come from anyone). The window holds one bitmap per pack, not
+ * one per layer. Shared while atlases are composed from it, then closed.
  */
-async function withPackLayers<T>(
+async function withPackPage<T>(
     key: string,
     dpi: number,
-    use: (layers: ImageBitmap[]) => Promise<T>,
+    use: (page: ImageBitmap) => Promise<T>,
 ): Promise<T> {
     const cacheKey = `${key}|${dpi}`;
-    let entry = packLayers.get(cacheKey);
+    let entry = packPages.get(cacheKey);
     if (!entry) {
         const promise = (async () => {
-            const pack = await readStoredUniformPack(key);
-            if (!pack)
+            const stored = await readStoredUniformPackBytes(key);
+            if (!stored)
                 throw new Error(`3D View: the show has no uniform ${key}`);
-            const bitmaps: ImageBitmap[] = [];
-            for (const layer of pack.layers) {
-                const result = await runUniformPackJob({
-                    type: "decode",
-                    // a copy: the stored bytes are shared through the blob cache
-                    png: layer.png.slice(),
-                    width: Math.round(FLATS_PAGE_IN.width * dpi),
-                    height: Math.round(FLATS_PAGE_IN.height * dpi),
-                });
-                if (result.type === "bitmap") bitmaps.push(result.bitmap);
-            }
-            return bitmaps;
+            const result = await runUniformPackJob({
+                type: "flatten",
+                // a copy: the stored bytes are shared through the blob cache
+                bytes: stored.bytes.slice(),
+                width: Math.round(FLATS_PAGE_IN.width * dpi),
+                height: Math.round(FLATS_PAGE_IN.height * dpi),
+            });
+            if (result.type !== "bitmap")
+                throw new Error("3D View: the uniform didn't draw");
+            return result.bitmap;
         })();
         entry = { promise, users: 0 };
-        packLayers.set(cacheKey, entry);
+        packPages.set(cacheKey, entry);
+        // a failed read isn't kept, so the next try reads again
+        promise.catch(() => {
+            if (packPages.get(cacheKey) === entry) packPages.delete(cacheKey);
+        });
     }
     const held = entry;
     held.users++;
@@ -297,13 +300,11 @@ async function withPackLayers<T>(
         return await use(await held.promise);
     } finally {
         held.users--;
-        // the next body type usually asks within moments; keep them that long
+        // the next body type usually asks within moments; keep it that long
         setTimeout(() => {
-            if (held.users > 0 || packLayers.get(cacheKey) !== held) return;
-            packLayers.delete(cacheKey);
-            held.promise
-                .then((bitmaps) => bitmaps.forEach((b) => b.close()))
-                .catch(() => undefined);
+            if (held.users > 0 || packPages.get(cacheKey) !== held) return;
+            packPages.delete(cacheKey);
+            held.promise.then((b) => b.close()).catch(() => undefined);
         }, 3000);
     }
 }
@@ -315,26 +316,25 @@ async function composeAtlas(
     dpi: number,
 ): Promise<FlatsAtlas> {
     if (isUniformPackValue(id))
-        return await withPackLayers(id, dpi, async (layers) => {
+        return await withPackPage(id, dpi, async (page) => {
             const { regions } = await loadFlatsGeometry();
             const rect = flatsAtlasLayout(regions, false);
             return await composeFrom(rect, dpi, (ctx) => {
-                // each layer covers the page: copy each panel's part of it
+                // the page covers everything: copy each panel's part of it
                 for (const panel of ["front", "back"] as const) {
                     const o = rect[panel];
                     const P = regions.panels[panel];
-                    for (const bitmap of layers)
-                        ctx.drawImage(
-                            bitmap,
-                            P.x * dpi,
-                            P.y * dpi,
-                            P.w * dpi,
-                            P.h * dpi,
-                            o[0] * dpi,
-                            o[1] * dpi,
-                            P.w * dpi,
-                            P.h * dpi,
-                        );
+                    ctx.drawImage(
+                        page,
+                        P.x * dpi,
+                        P.y * dpi,
+                        P.w * dpi,
+                        P.h * dpi,
+                        o[0] * dpi,
+                        o[1] * dpi,
+                        P.w * dpi,
+                        P.h * dpi,
+                    );
                 }
                 return Promise.resolve();
             });

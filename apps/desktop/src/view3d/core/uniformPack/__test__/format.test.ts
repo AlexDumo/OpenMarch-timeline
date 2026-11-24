@@ -74,15 +74,52 @@ describe("uniform pack file", () => {
         expect(lookOfManifest(manifest)).toEqual(SAMPLE_FLATS.look);
     });
 
-    it("reads a pack a later step wrote with items and modes, ignoring them", () => {
-        const manifest = {
+    it("refuses what version 1 doesn't know: unknown keys, and anything in the reserved lists", () => {
+        const withExtra = (extra: object) => () =>
+            readUniformPack(
+                zipOf({
+                    "manifest.json": strToU8(
+                        JSON.stringify({ ...sampleManifest(), ...extra }),
+                    ),
+                    "layers/base.png": fakePng(),
+                }),
+            );
+        // a later field that changes what is drawn bumps formatVersion instead
+        expect(codeOf(withExtra({ tint: "#ff0000" }))).toBe("damaged");
+        for (const reserved of ["items", "modes", "variants", "attachments"])
+            expect(codeOf(withExtra({ [reserved]: [{ id: "x" }] }))).toBe(
+                "damaged",
+            );
+        // empty reserved lists are what version 1 writes
+        expect(
+            codeOf(
+                withExtra({
+                    items: [],
+                    modes: [],
+                    variants: [],
+                    attachments: [],
+                }),
+            ),
+        ).toBeNull();
+    });
+
+    it("refuses layers that repeat an id", () => {
+        const base = sampleManifest().layers[0];
+        const twice = {
             ...sampleManifest(),
-            items: [{ file: "items/crest.svg" }],
-            modes: [{ id: "sash-out", layers: ["base"] }],
+            layers: [base, { ...base, file: "layers/other.png" }],
         };
-        expect(readUniformPack(pack(manifest)).manifest.name).toBe(
-            "Home uniform",
-        );
+        expect(
+            codeOf(() =>
+                readUniformPack(
+                    zipOf({
+                        "manifest.json": strToU8(JSON.stringify(twice)),
+                        "layers/base.png": fakePng(),
+                        "layers/other.png": fakePng(),
+                    }),
+                ),
+            ),
+        ).toBe("damaged");
     });
 
     it("refuses what isn't a uniform pack this build reads", () => {
@@ -170,6 +207,72 @@ describe("uniform pack file", () => {
         for (let i = 0; i <= UNIFORM_PACK_MAX_ENTRIES; i++)
             files[`junk/${i}.txt`] = strToU8("x");
         expect(codeOf(() => readUniformPack(zipOf(files)))).toBe("tooLarge");
+    });
+
+    it("never inflates past what a zip declares, however its directory lies", () => {
+        // a layer that really inflates to 8 MB
+        const big = new Uint8Array(8 * 1024 * 1024);
+        big.set(fakePng());
+        const honest = zipSync({
+            "manifest.json": strToU8(JSON.stringify(sampleManifest())),
+            "layers/base.png": [big, { level: 9 }],
+        });
+        const lie = (bytes: Uint8Array, name: string, size: number) => {
+            const out = bytes.slice();
+            const view = new DataView(out.buffer);
+            // every central directory entry for `name`: set its declared size
+            for (let p = 0; p + 46 < out.length; p++) {
+                if (view.getUint32(p, true) !== 0x02014b50) continue;
+                const n = view.getUint16(p + 28, true);
+                const entry = new TextDecoder().decode(
+                    out.subarray(p + 46, p + 46 + n),
+                );
+                if (entry === name) view.setUint32(p + 24, size, true);
+            }
+            return out;
+        };
+        // declared as 8 KB: its compressed bytes fit that, so it gets as far as inflating, and
+        // stops at 8 KB instead of making 8 MB
+        const small = lie(honest, "layers/base.png", 8 * 1024);
+        const t0 = performance.now();
+        expect(codeOf(() => readUniformPack(small))).toBe("damaged");
+        expect(performance.now() - t0).toBeLessThan(1000);
+        // compressed bytes that couldn't come from the declared size are refused before inflating
+        expect(
+            codeOf(() => readUniformPack(lie(honest, "layers/base.png", 1))),
+        ).toBe("damaged");
+        // a stored entry whose sizes differ
+        const stored = zipSync({
+            "manifest.json": strToU8(JSON.stringify(sampleManifest())),
+            "layers/base.png": [fakePng(), { level: 0 }],
+        });
+        expect(
+            codeOf(() => readUniformPack(lie(stored, "layers/base.png", 4))),
+        ).toBe("damaged");
+    });
+
+    it("inflates only the manifest and the layers it names", () => {
+        // a junk entry that would fail to inflate is never touched
+        const bytes = zipSync({
+            "manifest.json": strToU8(JSON.stringify(sampleManifest())),
+            "layers/base.png": [fakePng(), { level: 0 }],
+            "junk.bin": [
+                new Uint8Array(65536).map((_, i) => i * 7),
+                { level: 6 },
+            ],
+        });
+        const view = new DataView(bytes.buffer);
+        for (let p = 0; p + 46 < bytes.length; p++) {
+            if (view.getUint32(p, true) !== 0x04034b50) continue;
+            const n = view.getUint16(p + 26, true);
+            const name = new TextDecoder().decode(
+                bytes.subarray(p + 30, p + 30 + n),
+            );
+            // its compressed data becomes garbage that can't inflate
+            if (name === "junk.bin")
+                bytes.fill(0xff, p + 30 + n, p + 30 + n + 64);
+        }
+        expect(readUniformPack(bytes).manifest.name).toBe("Home uniform");
     });
 
     it("refuses a layer too large to decode, from its header", () => {

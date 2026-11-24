@@ -22,27 +22,33 @@ import {
     UNIFORM_ASSET_KIND,
     UNIFORM_PACK_PART,
     UNIFORM_PACK_VERSION,
-    readUniformPack,
+    uniformPackManifestSchema,
+    type UniformPackManifest,
 } from "@/view3d/core/uniformPack/format";
 import { showAssetRefValue } from "@/showAssets/ref";
 import type { JsonObject } from "@/showAssets/hash";
 
 /**
  * Adds the pack file `pack` to the show's assets (reusing it if the show has these bytes already)
- * and dresses the band in it. Throws when `pack` isn't a pack this build reads. Returns the
- * value now in `uniformArtwork`.
+ * and dresses the band in it. Returns the value now in `uniformArtwork`.
+ *
+ * `manifest` is the pack's, read from these bytes by the caller: the editor reads untrusted packs
+ * only in the uniform pack worker (`readPackManifest`), never inside a transaction on its main
+ * thread. It is checked again here, which costs nothing.
  */
 export async function setUniformPackInTransaction({
     tx,
     pack,
+    manifest: given,
     field,
 }: {
     tx: DbTransaction;
     pack: Uint8Array;
+    manifest: UniformPackManifest;
     /** For the default venue, when the show has no venue row yet */
     field: VenueFieldInfo;
 }): Promise<string> {
-    const { manifest } = readUniformPack(pack);
+    const manifest = uniformPackManifestSchema.parse(given);
     const { ref } = await addShowAssetInTransaction({
         tx,
         asset: {
@@ -68,15 +74,18 @@ export async function setUniformPackInTransaction({
 export async function setUniformPack({
     db,
     pack,
+    manifest,
     field,
 }: {
     db: DbConnection;
     pack: Uint8Array;
+    manifest: UniformPackManifest;
     field: VenueFieldInfo;
 }): Promise<string> {
     return await transactionWithHistory(
         db,
         "setUniformPack",
-        async (tx) => await setUniformPackInTransaction({ tx, pack, field }),
+        async (tx) =>
+            await setUniformPackInTransaction({ tx, pack, manifest, field }),
     );
 }

@@ -34,6 +34,10 @@ import {
     importUniformFile,
     type UniformImport,
 } from "@/view3d/window/uniformPack/importUniform";
+import {
+    UniformPackStoreError,
+    storeUniformPack,
+} from "@/view3d/window/uniformPack/storeUniformPack";
 import { saveFile } from "./saveFile";
 import { useVenueRequest } from "./VenueControls";
 
@@ -69,11 +73,16 @@ export function UniformImportControls() {
             const look =
                 UNIFORM_PRESETS[uniformPresetOf(settings.uniforms)].band;
             const result = await importUniformFile(file, look, regions);
-            window.view3d.requestUniformPack(result.pack);
+            // the band wears it once the editor has stored it
+            await storeUniformPack(result.pack);
             setDone(result);
         } catch (error) {
             console.warn("3D View: couldn't import the uniform", error);
-            setProblem(refusal(error));
+            setProblem(
+                error instanceof UniformPackStoreError
+                    ? t("view3d.uniformImport.storeFailed")
+                    : refusal(error),
+            );
         } finally {
             setBusy(false);
         }
@@ -91,6 +100,10 @@ export function UniformImportControls() {
                 : t(`view3d.uniformImport.note.${note}`),
         );
 
+    // greyed out only until the show's settings have loaded; it says so
+    const importReason = settings
+        ? null
+        : t("view3d.uniformImport.importNeedsSettings");
     const saveReason = pack
         ? null
         : t("view3d.uniformImport.saveNeedsImported");
@@ -111,9 +124,17 @@ export function UniformImportControls() {
                 <Button
                     variant="secondary"
                     size="compact"
-                    disabled={busy || !settings}
+                    disabled={busy}
+                    aria-disabled={!settings || undefined}
+                    tooltipText={importReason ?? undefined}
+                    className={
+                        settings ? undefined : "cursor-not-allowed opacity-50"
+                    }
                     data-testid="view3d-uniform-import-button"
-                    onClick={() => input.current?.click()}
+                    onClick={() => {
+                        if (importReason) setProblem(importReason);
+                        else input.current?.click();
+                    }}
                 >
                     {busy
                         ? t("view3d.uniformImport.importing")

@@ -272,6 +272,22 @@ describe("the band's flats uniform (uniformArtwork)", () => {
         expect(parsed?.uniformArtwork).toBe(pack);
     });
 
+    it("drops a bad value on its own, keeping every other setting", () => {
+        const withExtras: VenueSettings = {
+            ...valid,
+            uniforms: "prism",
+            guardUniforms: "fade",
+        };
+        for (const bad of ["x".repeat(500), "", -1, 2.5, { id: 1 }, [pack]]) {
+            const parsed = parseVenueSettingsJson(
+                JSON.stringify({ ...withExtras, uniformArtwork: bad }),
+            );
+            expect(parsed).toBeDefined();
+            expect(parsed?.uniformArtwork).toBeUndefined();
+            expect(parsed).toEqual(withExtras);
+        }
+    });
+
     it("still parses the built-in sample and an earlier preview's number", () => {
         expect(
             parseVenueSettings({ ...valid, uniformArtwork: "sample" }),

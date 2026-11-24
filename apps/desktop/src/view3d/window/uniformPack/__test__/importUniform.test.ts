@@ -11,10 +11,13 @@ import {
     fakePng,
     sampleManifest,
 } from "@/view3d/core/uniformPack/__test__/fixtures";
-import type { UniformPackRequest, UniformPackResponse } from "../protocol";
+import type {
+    UniformPackRequest,
+    UniformPackResponse,
+} from "@/view3d/uniformPack/protocol";
 
 // the worker itself needs a browser; these tests stand in for it
-vi.mock("../runUniformPackJob", () => ({
+vi.mock("@/view3d/uniformPack/runUniformPackJob", () => ({
     runUniformPackJob: vi.fn(),
     UniformPackJobError: class extends Error {},
 }));
@@ -118,17 +121,30 @@ describe("importing a uniform", () => {
         expect(result.notes).toEqual(["svgViewBox"]);
     });
 
-    it("keeps a saved uniform file exactly as it is", async () => {
+    it("reads a saved uniform file in the worker and keeps it exactly as it is", async () => {
         const bytes = writeUniformPack(sampleManifest("Saved"), {
             "layers/base.png": fakePng(),
         });
-        const { runJob } = worker(fakePng(), ["opaque"]);
+        const requests: UniformPackRequest[] = [];
+        const runJob = vi.fn(async (request: UniformPackRequest) => {
+            requests.push(request);
+            // the worker reads the pack it's given
+            const read = readUniformPack(
+                (request as { bytes: Uint8Array }).bytes,
+            );
+            return {
+                type: "pack",
+                manifest: read.manifest,
+                notes: ["opaque"],
+            } as Exclude<UniformPackResponse, { type: "refused" }>;
+        });
         const result = await importUniformFile(
             fileOf("Saved.omasset", bytes),
             look,
             regions,
             { runJob },
         );
+        expect(requests.map((r) => r.type)).toEqual(["pack"]);
         expect(Array.from(result.pack)).toEqual(Array.from(bytes));
         expect(result.name).toBe("Saved");
         expect(result.notes).toEqual(["opaque"]);

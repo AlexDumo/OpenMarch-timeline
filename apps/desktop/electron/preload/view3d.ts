@@ -23,6 +23,7 @@ const PUBLISH_CHANNELS: readonly View3dPublishChannel[] = [
     "view3d:hidden-props",
     "view3d:camera-wanted",
     "view3d:camera-move",
+    "view3d:uniform-pack-result",
 ];
 
 const isPublishChannel = (channel: unknown): channel is View3dPublishChannel =>
@@ -115,13 +116,14 @@ const VIEW3D_API = {
         } satisfies View3dVenueChangeRequest),
 
     /**
-     * Asks the editor to store a uniform pack file (`Uint8Array`) in the show and dress the band
-     * in it (fork #1257). The editor reads it, stores it as a show asset and points the venue
-     * at it with history, then invalidates the assets and venue queries.
+     * Asks the editor to store a uniform pack file in the show and dress the band in it
+     * (fork #1257), as `{ id, bytes }`. The editor reads it in its uniform pack worker, stores it
+     * as a show asset and points the venue at it with history, then answers on
+     * `view3d:uniform-pack-result` with the same `id`.
      */
-    requestUniformPack: (pack: unknown) =>
+    requestUniformPack: (request: unknown) =>
         ipcRenderer.send("view3d:venue-change-request", {
-            uniformPack: pack,
+            uniformPack: request,
         } satisfies View3dVenueChangeRequest),
 
     /**

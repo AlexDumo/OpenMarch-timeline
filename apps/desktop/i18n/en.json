@@ -3686,6 +3686,8 @@
             "hint": "Paint on the template, hide the template layer, then import a transparent PNG or an SVG. A saved uniform file imports too.",
             "imported": "The band now wears “{name}”.",
             "saveFailed": "Couldn't save the imported uniform",
+            "storeFailed": "The uniform couldn't be stored in the show. The editor window says why.",
+            "importNeedsSettings": "The show's 3D View settings are still loading.",
             "note": {
                 "scaled": "The image is {width} × {height} px, not the template's {templateWidth} × {templateHeight} px, so it was scaled to fit.",
                 "svgViewBox": "The SVG's viewBox isn't the template page (0 0 105 88), so it was fitted to the page.",
@@ -5204,6 +5206,7 @@
         },
         "uses": "{count, plural, one {Used once} other {Used # times}}",
         "unused": "Not used",
+        "uniformCreditsFixed": "An imported uniform's credits come from its file. Change them in the file and import it again.",
         "shareNote": "Unknown license: you may not have the right to share it",
         "size": {
             "bytes": "{value} bytes",

@@ -4,11 +4,13 @@
  *
  * - **PNG:** a transparent page at the template's size (3360 × 2816). Checked, scaled if it's
  *   another size, and re-encoded in the uniform pack worker; the window never decodes it.
- * - **SVG:** a page whose viewBox is the page in inches (`0 0 105 88`). The browser draws it as
- *   an image (no scripts, nothing fetched) at the template's size, then the worker checks and
- *   encodes the pixels like a PNG's.
- * - **Pack file** (`.omasset`): read and stored as it is, so a pack that left a show comes back
- *   unchanged.
+ * - **SVG:** a page whose viewBox is the page in inches (`0 0 105 88`). A worker can't draw SVG,
+ *   so the window draws it as an image at the template's size: image mode runs no scripts and
+ *   fetches nothing, but the drawing itself, and any `data:` images inside the SVG, are decoded
+ *   in the window, and drawing has no timeout. The worker then checks and encodes the pixels
+ *   like a PNG's.
+ * - **Pack file** (`.omasset`): read and checked in the worker, and stored as it is, so a pack
+ *   that left a show comes back unchanged.
  *
  * PDF isn't read: the app doesn't render PDFs anywhere yet.
  */
@@ -18,8 +20,6 @@ import {
     FLATS_PAGE_IN,
     FLATS_PAGE_PX,
     UNIFORM_PACK_MAX_BYTES,
-    UniformPackError,
-    readUniformPack,
     singleLayerManifest,
     uniformNameFromFile,
     writeUniformPack,
@@ -28,7 +28,10 @@ import type {
     PageNote,
     PageRegions,
 } from "@/view3d/core/uniformPack/pageChecks";
-import { UniformPackJobError, runUniformPackJob } from "./runUniformPackJob";
+import {
+    UniformPackJobError,
+    runUniformPackJob,
+} from "@/view3d/uniformPack/runUniformPackJob";
 
 /** A note about an import, worded where it's shown */
 export type UniformImportNote =
@@ -129,7 +132,8 @@ export function sizedSvg(text: string, width: number, height: number): string {
 
 /**
  * Draws an SVG at the template's size as an image: the browser's image mode runs no scripts and
- * fetches nothing, so the SVG can only draw itself. Returns RGBA pixels, not premultiplied.
+ * fetches nothing, so the SVG can only draw itself. It draws in the window, with no timeout (see
+ * the module comment). Returns RGBA pixels, not premultiplied.
  */
 async function drawSvgPage(text: string): Promise<Uint8ClampedArray> {
     const { width, height } = FLATS_PAGE_PX;
@@ -164,12 +168,10 @@ async function drawSvgPage(text: string): Promise<Uint8ClampedArray> {
 const fromJob = (error: unknown): never => {
     if (error instanceof UniformPackJobError)
         throw new UniformImportError(error.code, error.message);
-    if (error instanceof UniformPackError)
-        throw new UniformImportError(error.code, error.message);
     throw error;
 };
 
-/** A uniform file saved from a show: read, its first layer checked, kept as it is */
+/** A uniform file saved from a show: read and its first layer checked in the worker, kept as it is */
 async function importPackFile(
     bytes: Uint8Array,
     regions: PageRegions,
@@ -177,25 +179,25 @@ async function importPackFile(
 ): Promise<UniformImport> {
     if (bytes.byteLength > UNIFORM_PACK_MAX_BYTES)
         throw new UniformImportError("tooLarge", `${bytes.byteLength} bytes`);
-    let pack;
     try {
-        pack = readUniformPack(bytes);
-    } catch (error) {
-        return fromJob(error);
-    }
-    // decode the first layer in the worker, for the same notes a picked page gets
-    const notes: UniformImportNote[] = [];
-    try {
+        // a copy goes to the worker: these bytes are what the show will store
         const result = await runJob({
-            type: "png",
-            bytes: pack.layers[0].png.slice(),
+            type: "pack",
+            bytes: bytes.slice(),
             regions,
         });
-        if (result.type === "page") notes.push(...result.notes);
+        if (result.type !== "pack")
+            throw new UniformImportError("unreadable", "no pack");
+        return {
+            name: result.manifest.name,
+            pack: bytes,
+            notes: result.notes,
+            scaledFrom: null,
+        };
     } catch (error) {
-        fromJob(error);
+        if (error instanceof UniformImportError) throw error;
+        return fromJob(error);
     }
-    return { name: pack.manifest.name, pack: bytes, notes, scaledFrom: null };
 }
 
 /**

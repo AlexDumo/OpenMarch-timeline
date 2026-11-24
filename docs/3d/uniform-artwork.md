@@ -211,7 +211,9 @@ Built in step 3 (fork #1257); ADR 0010's amendment of 2026-11-24 has the full co
   - the palette, the pattern style and the part options
   - the layers, bottom first
   - credits (license, author, source)
-  - `items`, `modes` and `variants`, reserved for steps 4 and 5
+  - `items`, `modes`, `variants` and `attachments`, reserved for later steps. Version 1 refuses
+    anything in them and any key it doesn't know; a later field that changes what is drawn bumps
+    the format version.
 - **The same bytes in a show.** A show stores the file as its asset of kind `uniform`, unchanged,
   and Save uniform file writes it back out. This is the first kind of the portable asset file in
   fork #1262.

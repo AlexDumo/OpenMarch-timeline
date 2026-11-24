@@ -24,6 +24,7 @@ import { ModelThumbnail } from "@/components/items/modelImport/ImportedModels";
 import { CreditFields } from "@/components/items/modelImport/ModelImportReview";
 import { allItemsQueryOptions } from "@/hooks/queries/useItems";
 import { allCuesQueryOptions } from "@/hooks/queries/useCues";
+import { storedVenueSettingsQueryOptions } from "@/hooks/queries/useVenueSettings";
 import {
     removeUnusedShowAssetsMutationOptions,
     setShowAssetCreditsMutationOptions,
@@ -39,6 +40,7 @@ import {
 import { withoutEmpty } from "@/showAssets/modelImport/review/modelImportSession";
 import type { ModelCredits } from "@/showAssets/modelImport/types";
 import type { JsonObject } from "@/showAssets/hash";
+import { UNIFORM_ASSET_KIND } from "@/view3d/core/uniformPack/format";
 
 /**
  * The show's own assets (fork #1001, owner 2026-11-17): every imported model with its picture,
@@ -62,6 +64,8 @@ function useAssetUse() {
     const { data: sizes } = useQuery(showAssetSizesQueryOptions());
     const { data: items } = useQuery(allItemsQueryOptions());
     const { data: cues } = useQuery(allCuesQueryOptions());
+    // the band's imported uniform is a use too (fork #1257)
+    const { data: venue } = useQuery(storedVenueSettingsQueryOptions());
     const armed = useItemDrawingStore((state) =>
         state.placing?.kind === "model" ? state.placing.modelValue : null,
     );
@@ -71,6 +75,9 @@ function useAssetUse() {
             ...items.map((item) => item.model),
             ...cues.map((cue) => cue.value),
             armed,
+            typeof venue?.uniformArtwork === "string"
+                ? venue.uniformArtwork
+                : null,
         ]);
         const known = new Set(use.assets.map((row) => row.value));
         // Props naming a model the show doesn't have: an undo brought one back, say
@@ -79,7 +86,7 @@ function useAssetUse() {
                 item.model?.startsWith("library:") && !known.has(item.model),
         ).length;
         return { ...use, missingProps };
-    }, [assets, sizes, items, cues, armed]);
+    }, [assets, sizes, items, cues, armed, venue]);
 }
 
 export function AssetsContents({
@@ -278,7 +285,11 @@ function AssetRow({ row }: { row: AssetUse }) {
             </button>
             {open && (
                 <div id={panelId}>
-                    <AssetCredits row={row} />
+                    {asset.kind === UNIFORM_ASSET_KIND ? (
+                        <FixedCredits credits={asset.credits} />
+                    ) : (
+                        <AssetCredits row={row} />
+                    )}
                 </div>
             )}
         </li>
@@ -297,6 +308,43 @@ const textCredits = (credits: JsonObject): ModelCredits => {
         if (typeof credits[key] === "string") out[key] = credits[key];
     return out;
 };
+
+/**
+ * An imported uniform's credits, read only: they live in its pack file too, and Save uniform
+ * file writes the stored file as it is, so an edit here would leave the two disagreeing (fork
+ * #1257). Editable once a uniform can be re-packed.
+ */
+function FixedCredits({ credits }: { credits: JsonObject }) {
+    const { t } = useTranslate();
+    const text = (key: string) =>
+        typeof credits[key] === "string" && credits[key] !== ""
+            ? (credits[key] as string)
+            : null;
+    const rows = [
+        ["license", text("license")],
+        ["author", text("author")],
+        ["sourceUrl", text("source")],
+    ] as const;
+    return (
+        <div className="flex flex-col gap-6" data-testid="asset-fixed-credits">
+            <dl className="text-sub grid grid-cols-[auto_1fr] gap-x-12 gap-y-4">
+                {rows.map(([key, value]) => (
+                    <div key={key} className="contents">
+                        <dt className="text-text-subtitle">
+                            {t(`props.import.credits.${key}`)}
+                        </dt>
+                        <dd className="min-w-0 break-words">
+                            {value ?? t("props.import.credits.unknown")}
+                        </dd>
+                    </div>
+                ))}
+            </dl>
+            <p className="text-sub text-text-subtitle">
+                {t("assets.uniformCreditsFixed")}
+            </p>
+        </div>
+    );
+}
 
 /** Saves after typing pauses, so each keystroke isn't a write */
 const SAVE_AFTER_MS = 600;
