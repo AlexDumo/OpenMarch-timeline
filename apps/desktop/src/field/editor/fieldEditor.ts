@@ -75,7 +75,14 @@ import { isPanButton } from "./view";
  * inspector's and the timeline's) through {@link FieldEditorPorts.selection}.
  */
 
+/**
+ * An item Outline narrower on screen than this many handle reaches is small: a press inside it
+ * moves the item rather than taking a size handle (`pressMovesSmallItem`).
+ */
+const SMALL_ITEM_REACHES = 6;
+
 /** A point in field units, as the timeline stores positions. */
+
 export type FieldPoint = { x: number; y: number };
 
 /**
@@ -2010,6 +2017,9 @@ export class FieldEditor {
             thresholdsFor(pointer.kind).handleReach,
         );
         if (handle === null) return null;
+        const reach = thresholdsFor(pointer.kind).handleReach;
+        if (handle !== "rot" && this.pressMovesSmallItem(pointer, zoom, reach))
+            return null;
         const hit = this.marcherAt(pointer);
         // A box standing clear of an order lane (step 4j) draws its middle handles only while
         // they're pointed at, so one gives way to a marcher under the pointer: the grown box's
@@ -2036,6 +2046,25 @@ export class FieldEditor {
         })
             ? handle
             : null;
+    }
+
+    /**
+     * Whether a press inside the selected item's Outline moves it instead of taking a size handle:
+     * on an Outline too small on screen for room between its handles (a cube at normal zoom), the
+     * handles would cover it all and a drag meant to move it would squash it (props epic, fork
+     * #1239). Its handles still take a press from outside the Outline.
+     */
+    private pressMovesSmallItem(
+        pointer: FieldPointer,
+        zoom: number,
+        reach: number,
+    ): boolean {
+        const item = this.selectedItem();
+        if (!item) return false;
+        const { width, depth } = item.frame;
+        if (Math.min(width, depth) * zoom >= SMALL_ITEM_REACHES * reach)
+            return false;
+        return this.ports.itemAt?.(pointer.field) === item.id;
     }
 
     /**

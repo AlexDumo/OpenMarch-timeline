@@ -891,7 +891,7 @@
         "marcher": {
             "drillNumber": "Drill Number",
             "errorLoadingCoords": "Error loading coordinates",
-            "propsLook": "{count, plural, one {# prop selected. Change its size and look in the Props panel.} other {# props selected. Change their size and look in the Props panel.}}",
+            "propsLook": "Prop size and look: Props panel",
             "lockedSelected": "{count, plural, one {# locked item selected. It stays where it is: right-click it to edit it.} other {# locked items selected. They stay where they are: right-click one to edit it.}}",
             "playing": "Playing. Pause to see and edit the selected marchers.",
             "maxStepSize": "Largest step size",
@@ -925,6 +925,8 @@
             },
             "title": "{count} Marchers",
             "titleSingle": "Marcher {drillNumber}",
+            "titleProp": "Prop {name}",
+            "titleWithProps": "{marchers, plural, one {# marcher} other {# marchers}} and {props, plural, one {# prop} other {# props}}",
             "addToTagCaption": "Add to tag",
             "alignHorizontallyCaption": "Horizontal",
             "alignVerticallyCaption": "Vertical",
@@ -1846,6 +1848,8 @@
             "tuba": "Tuba"
         },
         "other": "Other",
+        "prop": "Prop",
+        "equipment": "Equipment",
         "pit": {
             "auxPercussion": "Aux Percussion",
             "drumSet": "Drum Set",

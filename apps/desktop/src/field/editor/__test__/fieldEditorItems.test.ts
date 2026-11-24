@@ -22,6 +22,8 @@ function setup({
     save = "saved" as DropResult,
     locked = false,
     keepsProportions = false,
+    /** A cube-sized Outline, 10 field units across (20 CSS px): its handles cover it */
+    small = false,
 } = {}) {
     const state = {
         selected: [...selected] as readonly number[],
@@ -33,8 +35,8 @@ function setup({
     };
     const frame: ItemFrame = {
         center: { x: 300, y: 100 },
-        width: 100,
-        depth: 40,
+        width: small ? 10 : 100,
+        depth: small ? 10 : 40,
         rotation,
         ...(keepsProportions ? { keepsProportions } : {}),
     };
@@ -52,7 +54,8 @@ function setup({
         isItem: (id) => id === 2,
         isLocked: (id) => locked && id === 2,
         itemAt: (point: FieldPoint) =>
-            point.x >= 250 && point.x <= 350 && point.y >= 80 && point.y <= 120
+            Math.abs(point.x - 300) <= frame.width / 2 &&
+            Math.abs(point.y - 100) <= frame.depth / 2
                 ? 2
                 : null,
         itemFrame: (id) => (id === 2 ? frame : null),
@@ -243,6 +246,29 @@ describe("FieldEditor with items", () => {
             await Promise.resolve();
             expect(state.preview).toBeNull();
             expect(ports.showPositions).toHaveBeenLastCalledWith(null);
+        });
+
+        it("moves a small selected item pressed inside it, though its handles cover it", () => {
+            // Marcher 3 stands on it; dimmed, the press finds the item
+            const { editor, state } = setup({
+                selected: [2],
+                small: true,
+                dimmed: [3],
+            });
+            // Just inside the south-east corner, where its handle reaches
+            editor.pointerDown(at(304, 104));
+            editor.pointerMove(at(330, 104));
+            expect(editor.activeGesture()).not.toBe("scale");
+            editor.pointerUp(at(330, 104));
+            expect(state.saves).toEqual([]);
+            expect(state.drops).toEqual([[{ id: 2, x: 326, y: 100 }]]);
+        });
+
+        it("still resizes a small item from a handle pressed outside it", () => {
+            const { editor, state } = setup({ selected: [2], small: true });
+            drag(editor, { x: 306, y: 106 }, { x: 316, y: 116 });
+            expect(state.saves).toHaveLength(1);
+            expect(state.drops).toEqual([]);
         });
 
         it("resizes it about its center with from center (Alt), without moving it", () => {

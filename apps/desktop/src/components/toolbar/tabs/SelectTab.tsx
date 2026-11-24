@@ -351,8 +351,8 @@ function SelectTapModeSwitch({
 }
 
 function SelectTabContents() {
-    // Performers by section, prefix and family; tags take props too (props epic, fork #1239),
-    // never a locked item
+    // Sections, prefixes and tags take props too (props epic, fork #1239), never a locked item;
+    // families are the performers'
     const { data: marchers, isSuccess: marchersLoaded } = useQuery(
         allMarchersQueryOptions(),
     );
@@ -385,13 +385,13 @@ function SelectTabContents() {
     let Selector: React.JSX.Element;
     switch (selectByOption) {
         case "section":
-            Selector = <SectionSelector marchers={marchers ?? []} />;
+            Selector = <SectionSelector marchers={tagged} />;
             break;
         case "tag":
             Selector = <TagSelector marchers={tagged} />;
             break;
         case "drillPrefix":
-            Selector = <DrillPrefixSelector marchers={marchers ?? []} />;
+            Selector = <DrillPrefixSelector marchers={tagged} />;
             break;
         case "family":
             Selector = <FamilySelector marchers={marchers ?? []} />;

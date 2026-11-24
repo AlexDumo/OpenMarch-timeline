@@ -13,6 +13,7 @@ import { Button, getButtonClassName, Input } from "@openmarch/ui";
 import StepSizeWarningBadge from "./StepSizeWarningBadge";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useUnlockedOnly } from "@/items/lockedItems";
+import { isPerformer } from "@/global/classes/Marcher";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { clsx } from "clsx";
@@ -548,10 +549,7 @@ function MarcherEditor() {
                     className="text-sub text-text/60 px-6"
                     data-testid="inspector-items-selected"
                 >
-                    <T
-                        keyName="inspector.marcher.propsLook"
-                        params={{ count: selectedPropCount }}
-                    />
+                    <T keyName="inspector.marcher.propsLook" />
                 </p>
             )}
             {selectedLockedCount > 0 && (
@@ -572,8 +570,17 @@ function MarcherEditor() {
                         <InspectorCollapsible
                             defaultOpen
                             translatableTitle={{
-                                keyName: "inspector.marcher.title",
-                                parameters: { count: selectedMarchers.length },
+                                keyName:
+                                    selectedPropCount > 0
+                                        ? "inspector.marcher.titleWithProps"
+                                        : "inspector.marcher.title",
+                                parameters: {
+                                    count: selectedMarchers.length,
+                                    marchers:
+                                        selectedMarchers.length -
+                                        selectedPropCount,
+                                    props: selectedPropCount,
+                                },
                             }}
                             className="mt-12 flex flex-col gap-16"
                         >
@@ -709,9 +716,14 @@ function MarcherEditor() {
                         <InspectorCollapsible
                             defaultOpen
                             translatableTitle={{
-                                keyName: "inspector.marcher.titleSingle",
+                                keyName: isPerformer(selectedMarchers[0])
+                                    ? "inspector.marcher.titleSingle"
+                                    : "inspector.marcher.titleProp",
                                 parameters: {
                                     drillNumber:
+                                        selectedMarchers[0].drill_number,
+                                    name:
+                                        selectedMarchers[0].name?.trim() ||
                                         selectedMarchers[0].drill_number,
                                 },
                             }}

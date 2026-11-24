@@ -708,8 +708,6 @@ describeDbTests("Front ensemble panel", (it) => {
         );
         expect(
             screen.getByTestId("inspector-items-selected"),
-        ).toHaveTextContent(
-            "1 prop selected. Change its size and look in the Props panel.",
-        );
+        ).toHaveTextContent("Prop size and look: Props panel");
     });
 });
