@@ -109,6 +109,43 @@ const turn = (a: number, b: number) => {
  * flag (home's spots), from three past the one at the far right, so neither clockwise nor the
  * guess Follow once fell back to
  */
+/** Field points from `a` to `b` whose straight legs pass none of `others` within `clear` */
+function legAround(
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+    others: readonly { x: number; y: number }[],
+    clear: number,
+): { x: number; y: number }[] {
+    const near = (p: { x: number; y: number }, q: { x: number; y: number }) =>
+        others.some((o) => {
+            if (Math.hypot(o.x - p.x, o.y - p.y) < 1) return false;
+            const dx = q.x - p.x;
+            const dy = q.y - p.y;
+            const t = Math.max(
+                0,
+                Math.min(
+                    1,
+                    ((o.x - p.x) * dx + (o.y - p.y) * dy) /
+                        (dx * dx + dy * dy || 1),
+                ),
+            );
+            return Math.hypot(p.x + t * dx - o.x, p.y + t * dy - o.y) < clear;
+        });
+    if (!near(a, b)) return [b];
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const n = { x: -(b.y - a.y) / len, y: (b.x - a.x) / len };
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    for (let k = 1; k <= 40; k++)
+        for (const side of [1, -1]) {
+            const via = {
+                x: mid.x + side * k * (clear / 2) * n.x,
+                y: mid.y + side * k * (clear / 2) * n.y,
+            };
+            if (!near(a, via) && !near(via, b)) return [via, b];
+        }
+    throw new Error("no clear way between two marchers");
+}
+
 async function setOrder(show: Show): Promise<number[]> {
     const { page } = show;
     const at = await savedPositions(show, 1);
@@ -126,11 +163,26 @@ async function setOrder(show: Show): Promise<number[]> {
         "aria-pressed",
         "true",
     );
-    for (const id of order) {
-        const p = at.find((q) => q.id === id)!;
-        const s = await toScreen(page, p);
-        await page.mouse.click(s.x, s.y);
+    // One drag through them in the order (a click, then a move, sweeps too, picking whoever the
+    // pointer passes): each leg goes round everyone else, on the field, so only the next is picked
+    const field = new Map(at.map((q) => [q.id, { x: q.x, y: q.y }]));
+    const clear = 1.5 * (await fieldGrid(show)).pixelsPerStep;
+    const start = await toScreen(page, field.get(order[0]!)!);
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    let here = field.get(order[0]!)!;
+    for (const id of order.slice(1)) {
+        const to = field.get(id)!;
+        const others = [...field.entries()]
+            .filter(([m]) => m !== id)
+            .map(([, xy]) => xy);
+        for (const via of legAround(here, to, others, clear)) {
+            const v = await toScreen(page, via);
+            await page.mouse.move(v.x, v.y);
+        }
+        here = to;
     }
+    await page.mouse.up();
     // every one picked: kept, one undo step
     await expect.poll(() => undoSteps(show)).toBe(steps + 1);
     await waitForIdle(page);
