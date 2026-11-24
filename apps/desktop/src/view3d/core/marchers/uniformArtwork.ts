@@ -1,0 +1,425 @@
+/**
+ * Uniform artwork drawn as front/back flats (docs/3d/uniform-artwork.md):
+ * what a look's flats are, the built-in sample, and the pure math the
+ * renderer composes them with (the atlas layout, grading placed items for a
+ * body type, the region under a point).
+ *
+ * The geometry (region outlines, lookup tables, grade factors) is generated
+ * by `scripts/view3d-assets/uniform-flats.mjs` into
+ * `assets/uniform-flats/`; `regions.json` there is the template's numbers.
+ *
+ * Pure: no three.js, React or database.
+ */
+import type { PresetLook } from "./uniformPresets";
+import type { BodyType } from "./looks";
+
+/** A segment of the hybrid wrap, as `layout.json` lists it. */
+export interface FlatsSegment {
+    id: string;
+    rowStart: number;
+    rows: number;
+    /** t range (m) along the segment's axis. */
+    tStart: number;
+    tEnd: number;
+    /** Flat y (in) of the segment's t = 0. */
+    y0: number;
+}
+
+/** `assets/uniform-flats/layout.json`: what the renderer needs. */
+export interface FlatsLayout {
+    angles: number;
+    rows: number;
+    median: BodyType;
+    bodies: BodyType[];
+    sheet: { w: number; h: number };
+    panels: Record<FlatsPanel, PanelRect>;
+    centreX: number;
+    segments: FlatsSegment[];
+    /** Heights (m), and how far down each thigh it blends from the hips (`legEase`, m). */
+    tops: { torso: number; hips: number; crotch: number; legEase: number };
+    /** Per body type: the jacket closer than this (m) to the neck's axis is the neck. */
+    neckR: Record<string, number>;
+    limbs: {
+        id: string;
+        head: number[];
+        dir: number[];
+        fwd: number[];
+        side: number[];
+        /** Bone length, m. */
+        length: number;
+    }[];
+    planes: { id: string; at: number[]; n: number[] }[];
+    cape: { yTop: number; w: number; h: number };
+    /** Grade factor per body, segment and row: [front, back]. */
+    k: Record<string, Record<string, [number, number][]>>;
+}
+
+export type FlatsPanel = "front" | "back" | "cape";
+
+export interface PanelRect {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+}
+
+/** A region of `regions.json` (panel inches). */
+export interface FlatsRegion {
+    id: string;
+    panel: FlatsPanel;
+    part: string;
+    polygon: [number, number][];
+}
+
+/** The part of `regions.json` the renderer reads. */
+export interface FlatsRegions {
+    panels: Record<FlatsPanel, PanelRect>;
+    centreX: number;
+    regions: FlatsRegion[];
+    landmarks: Record<string, unknown>;
+}
+
+/**
+ * How a placed item follows the body types (docs/3d/uniform-artwork.md,
+ * "Grading"): `proportional` scales by the girth factor k and keeps its
+ * aspect, `fixed` keeps its real size, `stretch` widens with the girth like
+ * fabric.
+ */
+export type ItemGrade = "proportional" | "fixed" | "stretch";
+
+/** Art placed over the flats: a logo, crest or number. */
+export interface FlatsItem {
+    /** File name in the artwork's folder. */
+    file: string;
+    /** Centre, panel inches. */
+    at: readonly [number, number];
+    /** Size as worn by the median body, inches; one of them is enough. */
+    width?: number;
+    height?: number;
+    /** Degrees, clockwise as seen on the panel. */
+    rotate?: number;
+    opacity?: number;
+    /** Default `proportional`. */
+    grade?: ItemGrade;
+}
+
+/** A look's flats: one image per panel (exactly the panel) plus placed items. */
+export interface FlatsArt {
+    front?: string;
+    back?: string;
+    cape?: string;
+    items?: Partial<Record<FlatsPanel, FlatsItem[]>>;
+}
+
+/** A uniform with flats: its palette (shown where the art is clear) and its art. */
+export interface FlatsUniform {
+    look: PresetLook;
+    art: FlatsArt;
+}
+
+/** The built-in flats uniforms. "sample" is the preview's original design. */
+export const UNIFORM_ARTWORK_IDS = ["sample"] as const;
+export type UniformArtworkId = (typeof UNIFORM_ARTWORK_IDS)[number];
+
+/**
+ * `id` if it names a built-in flats uniform, otherwise null: the venue's
+ * `uniformArtwork` may also hold a show asset's id (a number, fork #1257),
+ * which this build doesn't read yet, so the band wears its preset.
+ */
+export function uniformArtworkOf(id: unknown): UniformArtworkId | null {
+    return (UNIFORM_ARTWORK_IDS as readonly unknown[]).includes(id)
+        ? (id as UniformArtworkId)
+        : null;
+}
+
+/** Landmarks of the flats template (`regions.json`), panel inches. */
+export const FLATS_CENTRE_X = 17;
+export const CHEST_CENTRE_Y = 25.32;
+export const BACK_NUMBER_CENTRE_Y = 28.47;
+
+// the sample's palette: OpenMarch's midnight and purple, gold trim
+const OM = 0x6442ff;
+const OM_NIGHT = 0x170d4a;
+const GOLD = 0xd8b04a;
+const WHITE = 0xf2f2ee;
+const SHOE_BLACK = 0x0b0b0d;
+
+/**
+ * The sample uniform (an original design): a midnight jacket with a purple
+ * chevron and a crest on the chest, a gold band round each forearm, a gold
+ * stripe down each leg and a number on the back. The art is generated by
+ * `scripts/view3d-assets/uniform-flats-sample.mjs`.
+ */
+export const SAMPLE_FLATS: FlatsUniform = {
+    look: {
+        style: "classic",
+        colors: {
+            primary: OM_NIGHT,
+            secondary: WHITE,
+            accent: GOLD,
+            trim: GOLD,
+            pants: OM_NIGHT,
+            shoes: SHOE_BLACK,
+            gloves: WHITE,
+            hat: OM_NIGHT,
+            plume: OM,
+            visor: GOLD,
+        },
+        // the art draws the stripe; the palette keeps the collar and cuffs
+        options: {
+            stripe: false,
+            collar: true,
+            cuffs: true,
+            gloves: true,
+            hat: true,
+        },
+    },
+    art: {
+        front: "front.svg",
+        back: "back.svg",
+        items: {
+            front: [
+                {
+                    file: "crest.svg",
+                    at: [FLATS_CENTRE_X, CHEST_CENTRE_Y],
+                    width: 6,
+                },
+            ],
+            back: [
+                {
+                    file: "number.svg",
+                    at: [FLATS_CENTRE_X, BACK_NUMBER_CENTRE_Y],
+                    height: 8,
+                },
+            ],
+        },
+    },
+};
+
+export const UNIFORM_ARTWORK: Readonly<Record<UniformArtworkId, FlatsUniform>> =
+    { sample: SAMPLE_FLATS };
+
+/** How far each region's edge pixels are copied outward, inches. */
+export const FLATS_BLEED_IN = 1.5;
+
+/** Atlas pixels per inch: 16 at `low`, 32 at `high`. */
+export function flatsDpi(quality: "low" | "high"): number {
+    return quality === "high" ? 32 : 16;
+}
+
+/**
+ * Where each panel sits in a look's atlas (inches): the front and back
+ * panels side by side, cropped to the garment regions plus the bleed, then
+ * the cape panel when the look has cape art.
+ */
+export function flatsAtlasLayout(
+    regions: FlatsRegions,
+    hasCape: boolean,
+): {
+    w: number;
+    h: number;
+    front: [number, number];
+    back: [number, number];
+    cape: [number, number] | null;
+    /** The panel y the atlas's top row shows. */
+    yTop: number;
+} {
+    let y0 = Infinity;
+    let y1 = -Infinity;
+    for (const r of regions.regions) {
+        if (r.panel === "cape") continue;
+        for (const [, y] of r.polygon) {
+            y0 = Math.min(y0, y);
+            y1 = Math.max(y1, y);
+        }
+    }
+    const pad = FLATS_BLEED_IN + 0.5;
+    const yTop = Math.max(0, Math.floor(y0 - pad));
+    const yBottom = Math.min(regions.panels.front.h, Math.ceil(y1 + pad));
+    const pw = regions.panels.front.w;
+    const cape = regions.panels.cape;
+    return {
+        w: 2 * pw + (hasCape ? cape.w : 0),
+        h: Math.max(yBottom - yTop, hasCape ? cape.h : 0),
+        front: [0, -yTop],
+        back: [pw, -yTop],
+        cape: hasCape ? [2 * pw, 0] : null,
+        yTop,
+    };
+}
+
+/** Even-odd point in polygon. */
+export function insidePolygon(
+    poly: readonly (readonly [number, number])[],
+    x: number,
+    y: number,
+): boolean {
+    let c = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const [xi, yi] = poly[i];
+        const [xj, yj] = poly[j];
+        const crosses = yi > y ? yj <= y : yj > y;
+        if (crosses && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c;
+    }
+    return c;
+}
+
+const REGION_SEGMENTS: Record<string, string[]> = {
+    torso: ["torso"],
+    hips: ["hips"],
+    "sleeve-L": ["upper-arm-L", "forearm-L"],
+    "sleeve-R": ["upper-arm-R", "forearm-R"],
+    "leg-L": ["thigh-L", "shin-L"],
+    "leg-R": ["thigh-R", "shin-R"],
+};
+const IN = 0.0254;
+
+/**
+ * The region under panel point (x, y) and body `body`'s grade factor k
+ * there (its girth against the median's), or region null and k 1.
+ */
+export function gradeAt(
+    layout: FlatsLayout,
+    regions: FlatsRegions,
+    body: string,
+    panel: FlatsPanel,
+    x: number,
+    y: number,
+): { region: string | null; k: number } {
+    if (panel === "cape") return { region: "cape", k: 1 };
+    const hit = regions.regions.find(
+        (r) => r.panel === panel && insidePolygon(r.polygon, x, y),
+    );
+    if (!hit) return { region: null, k: 1 };
+    // the segment of the region at this height: the one whose rows cover y
+    let best: { s: FlatsSegment; f: number; d: number } | null = null;
+    for (const id of REGION_SEGMENTS[hit.part] ?? []) {
+        const s = layout.segments.find((q) => q.id === id);
+        if (!s) continue;
+        const t = (y - s.y0) * IN;
+        const f = (t - s.tStart) / (s.tEnd - s.tStart);
+        const d = f < 0 ? -f : f > 1 ? f - 1 : 0;
+        if (!best || d < best.d)
+            best = { s, f: Math.min(1, Math.max(0, f)), d };
+    }
+    const rows = best && layout.k[body]?.[best.s.id];
+    if (!best || !rows) return { region: hit.id, k: 1 };
+    const k =
+        rows[Math.round(best.f * (rows.length - 1))][panel === "front" ? 0 : 1];
+    return { region: hit.id, k };
+}
+
+/**
+ * How to draw a placed item on body `body`'s atlas: its box as worn by the
+ * median body (`w`, `h`, inches) and the scale to draw it with (`sx`, `sy`).
+ * The lookup tables already widen everything by the girth factor k, so a
+ * proportional item is drawn k times taller (k times its size on the body,
+ * aspect kept), a fixed one 1/k as wide (its real size), a stretched one as
+ * is.
+ */
+export function itemDraw(
+    item: FlatsItem,
+    aspect: number,
+    k: number,
+): { w: number; h: number; sx: number; sy: number } {
+    let w: number;
+    let h: number;
+    if (item.width && item.height) {
+        w = item.width;
+        h = item.height;
+    } else if (item.width) {
+        w = item.width;
+        h = item.width / aspect;
+    } else if (item.height) {
+        h = item.height;
+        w = item.height * aspect;
+    } else throw new Error(`uniform flats: item ${item.file} needs a size`);
+    const grade = item.grade ?? "proportional";
+    const [sx, sy] =
+        grade === "proportional"
+            ? [1, k]
+            : grade === "fixed"
+              ? [1 / k, 1]
+              : [1, 1];
+    return { w, h, sx, sy };
+}
+
+/** Pixels of each region's rim that take their color from further in (anti-aliased art edges). */
+export const FLATS_RIM_PX = 2;
+
+/**
+ * Where an atlas's bleed copies from: every pixel outside the regions
+ * within `steps` pixels of one, and every region pixel within `rim` pixels
+ * of its edge, takes the color of the nearest pixel further in (8-connected
+ * breadth-first). The rim matters because art clipped to a region is
+ * semi-transparent along its edge, and copying that outward would leave the
+ * palette showing through along the side seams. Where two regions touch
+ * (the hips and a leg at the crotch line), each one's rim is filled from its
+ * own inside.
+ *
+ * `mask` holds each pixel's region, numbered from 1; 0 is outside every
+ * region. Returns pairs: `dst[k]` takes `from[k]`.
+ */
+export function bleedPlan(
+    mask: Uint8Array,
+    W: number,
+    H: number,
+    steps: number,
+    rim = FLATS_RIM_PX,
+): { dst: Int32Array; from: Int32Array } {
+    const src = new Int32Array(W * H).fill(-1);
+    let queue = new Int32Array(W * H);
+    let qn = 0;
+    // sources: region pixels at least `rim` pixels from anything outside
+    for (let y = 0; y < H; y++)
+        for (let x = 0; x < W; x++) {
+            const i = y * W + x;
+            const own = mask[i];
+            if (!own) continue;
+            let rimPixel = false;
+            for (let dy = -rim; dy <= rim && !rimPixel; dy++)
+                for (let dx = -rim; dx <= rim; dx++) {
+                    const jx = x + dx;
+                    const jy = y + dy;
+                    if (jx < 0 || jy < 0 || jx >= W || jy >= H) continue;
+                    if (mask[jy * W + jx] !== own) {
+                        rimPixel = true;
+                        break;
+                    }
+                }
+            if (rimPixel) continue;
+            src[i] = i;
+            queue[qn++] = i;
+        }
+    const dst: number[] = [];
+    const from: number[] = [];
+    // the rim first takes the pixel straight inward (4-connected), so the edges of art that crosses a
+    // region's edge stay straight; then the bleed spreads 8-connected
+    for (let step = 0; step < steps + 2 * rim && qn; step++) {
+        const straight = step < rim;
+        const next = new Int32Array(qn * 8);
+        let nn = 0;
+        for (let k = 0; k < qn; k++) {
+            const i = queue[k];
+            const ix = i % W;
+            const iy = (i / W) | 0;
+            for (let dy = -1; dy <= 1; dy++)
+                for (let dx = -1; dx <= 1; dx++) {
+                    if (!dx && !dy) continue;
+                    if (straight && dx && dy) continue;
+                    const jx = ix + dx;
+                    const jy = iy + dy;
+                    if (jx < 0 || jy < 0 || jx >= W || jy >= H) continue;
+                    const j = jy * W + jx;
+                    if (src[j] >= 0) continue;
+                    src[j] = src[i];
+                    dst.push(j);
+                    from.push(src[i]);
+                    next[nn++] = j;
+                }
+        }
+        queue = next;
+        qn = nn;
+    }
+    return { dst: Int32Array.from(dst), from: Int32Array.from(from) };
+}

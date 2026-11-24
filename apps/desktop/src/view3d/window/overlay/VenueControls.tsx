@@ -38,6 +38,8 @@ import {
     type SilkShapeId,
 } from "@/view3d/core/sizes/silkShapes";
 import { cutPathBounds, cutPathData } from "@/view3d/core/sizes/silkCuts";
+import { uniformArtworkOf } from "@/view3d/core/marchers/uniformArtwork";
+import { uniformArtworkAvailable } from "@/view3d/window/uniformArtworkPreview";
 import { ToggleGroup, ToggleGroupItem } from "@openmarch/ui";
 import { Segmented } from "./Panel";
 import {
@@ -148,19 +150,49 @@ export function FieldLinesControl() {
     );
 }
 
-/** The band's uniform: every built-in preset, two to a row. */
+/** The picker's value for the sample flats uniform (a preview, `uniformArtworkAvailable`). */
+const FLATS_SAMPLE = "flats:sample" as const;
+
+/**
+ * The band's uniform: every built-in preset, two to a row, then (in preview
+ * builds) the sample uniform drawn as flats.
+ */
 export function UniformPicker() {
     const { t } = useTranslate();
     const { settings, request } = useVenueRequest();
+    const flats = uniformArtworkAvailable();
+    const wearsFlats =
+        flats && settings && uniformArtworkOf(settings.uniformArtwork);
     return (
-        <Segmented
-            value={settings ? uniformPresetOf(settings.uniforms) : null}
-            options={UNIFORM_PRESET_IDS.map((preset) => ({
-                value: preset,
-                label: t(`view3d.uniformPreset.${preset}`),
-            }))}
-            onChange={(uniforms: UniformPresetId) =>
-                request({ kind: "uniforms", uniforms })
+        <Segmented<UniformPresetId | typeof FLATS_SAMPLE>
+            value={
+                settings
+                    ? wearsFlats
+                        ? FLATS_SAMPLE
+                        : uniformPresetOf(settings.uniforms)
+                    : null
+            }
+            options={[
+                ...UNIFORM_PRESET_IDS.map((preset) => ({
+                    value: preset,
+                    label: t(`view3d.uniformPreset.${preset}`),
+                })),
+                ...(flats
+                    ? [
+                          {
+                              value: FLATS_SAMPLE,
+                              label: t("view3d.uniformPreset.flatsSample"),
+                          },
+                      ]
+                    : []),
+            ]}
+            onChange={(next) =>
+                next === FLATS_SAMPLE
+                    ? request({
+                          kind: "uniformArtwork",
+                          uniformArtwork: "sample",
+                      })
+                    : request({ kind: "uniforms", uniforms: next })
             }
             label={t("view3d.settings.uniforms")}
             testId="view3d-uniform-picker"

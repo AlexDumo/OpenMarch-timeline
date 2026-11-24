@@ -1,6 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { defaultVenueForKit } from "@/view3d/core/venueSettings";
+import {
+    defaultVenueForKit,
+    parseVenueSettingsJson,
+} from "@/view3d/core/venueSettings";
+import { uniformArtworkOf } from "@/view3d/core/marchers/uniformArtwork";
 import type { LightingPreset } from "@/view3d/core/types";
 import { applyVenueChange, venueChanged } from "../venueChange";
 
@@ -161,5 +165,42 @@ describe("venueChanged", () => {
         expect(
             venueChanged(hsDusk, { ...hsDusk, params: { ...hsDusk.params } }),
         ).toBe(false);
+    });
+});
+
+describe("the band's flats uniform (fork #1255)", () => {
+    const venue = defaultVenueForKit("hs");
+
+    it("is set by picking the sample and cleared by picking a preset", () => {
+        const flats = applyVenueChange(venue, {
+            kind: "uniformArtwork",
+            uniformArtwork: "sample",
+        });
+        expect(flats.uniformArtwork).toBe("sample");
+        expect(venueChanged(venue, flats)).toBe(true);
+        const preset = applyVenueChange(flats, {
+            kind: "uniforms",
+            uniforms: "sash",
+        });
+        expect("uniformArtwork" in preset).toBe(false);
+        expect(preset.uniforms).toBe("sash");
+    });
+
+    it("holds a built-in id or a show asset's id, and older venues parse without it", () => {
+        expect(
+            parseVenueSettingsJson(
+                JSON.stringify({ ...venue, uniformArtwork: 12 }),
+            )?.uniformArtwork,
+        ).toBe(12);
+        expect(
+            parseVenueSettingsJson(
+                JSON.stringify({ ...venue, uniformArtwork: "later-pack" }),
+            )?.uniformArtwork,
+        ).toBe("later-pack");
+        expect(parseVenueSettingsJson(JSON.stringify(venue))).toBeDefined();
+        // ids this build can't draw fall back to the preset
+        expect(uniformArtworkOf(12)).toBeNull();
+        expect(uniformArtworkOf("later-pack")).toBeNull();
+        expect(uniformArtworkOf("sample")).toBe("sample");
     });
 });

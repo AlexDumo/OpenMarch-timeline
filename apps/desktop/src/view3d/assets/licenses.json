@@ -8,6 +8,14 @@
         {
             "path": "src/view3d/assets/pit",
             "license": "CC0-1.0"
+        },
+        {
+            "path": "src/view3d/assets/uniform-flats",
+            "license": "LicenseRef-Counsel-Gate"
+        },
+        {
+            "path": "src/view3d/assets/uniform-flats/sample",
+            "license": "CC0-1.0"
         }
     ],
     "entries": []

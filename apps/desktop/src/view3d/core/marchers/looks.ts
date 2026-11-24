@@ -45,6 +45,7 @@ import {
     type GuardUniformPresetId,
     type UniformPresetId,
 } from "./uniformPresets";
+import { UNIFORM_ARTWORK, type UniformArtworkId } from "./uniformArtwork";
 
 const withOptions = (
     carry: Carry | null,
@@ -232,6 +233,11 @@ export interface UniformLook {
         /** Gold lacquer ("brass") or silver lacquer. */
         finish: Finish;
         hold: HoldState;
+        /**
+         * The built-in flats artwork painted over the palette
+         * (`uniformArtwork.ts`); absent or null for palette only.
+         */
+        artwork?: UniformArtworkId | null;
     };
 }
 
@@ -257,6 +263,8 @@ export function fillToNumber(c: RgbaColor): number {
  * finish and whether the tubas carry marching tubas or sousaphones
  * (woodwinds keep the finish they are made in); for the 6 ft flag, the
  * shape of its silk and whether the show's Artwork paints it (fork #973).
+ * `artwork`, when set, dresses the band (not the guard) in that flats
+ * uniform instead of the band preset's look (docs/3d/uniform-artwork.md).
  */
 export function sectionUniform(
     section: string,
@@ -272,11 +280,17 @@ export function sectionUniform(
         silkShape?: SilkShapeId;
         silkArtwork?: boolean;
     } = {},
+    artwork: UniformArtworkId | null = null,
 ): UniformLook {
     const inGuard = isGuard(section);
     const dressedBy: UniformPresetId = inGuard ? guardPreset : preset;
     const dress = UNIFORM_PRESETS[dressedBy];
-    const base = inGuard ? guardLookOf(guardPreset) : dress.band;
+    const flats = !inGuard && artwork ? artwork : null;
+    const base = inGuard
+        ? guardLookOf(guardPreset)
+        : flats
+          ? UNIFORM_ARTWORK[flats].look
+          : dress.band;
     const carry =
         guard && inGuard
             ? guardCarry(guard)
@@ -307,6 +321,7 @@ export function sectionUniform(
             silkArtwork: flag6 && winds.silkArtwork === true,
             finish: finishFor(carry, winds.finish ?? "brass"),
             hold,
+            ...(flats ? { artwork: flats } : {}),
         },
     };
 }

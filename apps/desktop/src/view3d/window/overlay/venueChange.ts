@@ -25,6 +25,7 @@ import {
     type GuardUniformPresetId,
     type UniformPresetId,
 } from "@/view3d/core/marchers/uniformPresets";
+import type { UniformArtworkId } from "@/view3d/core/marchers/uniformArtwork";
 
 export type VenueChange =
     | { kind: "kit"; kit: VenueKitId }
@@ -32,6 +33,7 @@ export type VenueChange =
     | { kind: "crowd"; crowd: boolean }
     | { kind: "params"; params: Partial<VenueParams> }
     | { kind: "uniforms"; uniforms: UniformPresetId }
+    | { kind: "uniformArtwork"; uniformArtwork: UniformArtworkId }
     | { kind: "guardUniforms"; guardUniforms: GuardUniformPresetId }
     | { kind: "brassFinish"; brassFinish: Finish }
     | { kind: "tuba"; tuba: TubaModelId }
@@ -74,10 +76,16 @@ export function applyVenueChange(
                 ...current,
                 fieldLines: change.fieldLines,
             });
-        case "uniforms":
+        case "uniforms": {
+            // a preset takes the band out of any flats uniform
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars -- left out
+            const { uniformArtwork, ...rest } = current;
+            return parseVenueSettings({ ...rest, uniforms: change.uniforms });
+        }
+        case "uniformArtwork":
             return parseVenueSettings({
                 ...current,
-                uniforms: change.uniforms,
+                uniformArtwork: change.uniformArtwork,
             });
         case "guardUniforms":
             return parseVenueSettings({
@@ -111,6 +119,7 @@ export function venueChanged(a: VenueSettings, b: VenueSettings): boolean {
         a.lighting !== b.lighting ||
         a.crowd !== b.crowd ||
         uniformPresetOf(a.uniforms) !== uniformPresetOf(b.uniforms) ||
+        (a.uniformArtwork ?? null) !== (b.uniformArtwork ?? null) ||
         guardUniformPresetOf(a.guardUniforms) !==
             guardUniformPresetOf(b.guardUniforms) ||
         brassFinishOf(a.brassFinish) !== brassFinishOf(b.brassFinish) ||
