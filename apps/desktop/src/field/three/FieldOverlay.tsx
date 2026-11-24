@@ -674,6 +674,9 @@ const GROUP_RING = "rgb(59, 130, 246)";
 const OWN_RING = "rgb(249, 115, 22)";
 const MEMBER_RING_SCALE = 1.9;
 const MEMBER_RING_WIDTH = 2;
+/** The halo round the marcher the Follow tool holds: the accent, wider than its ring */
+const HELD_HALO = "rgb(100, 66, 255)";
+const HELD_HALO_SCALE = 3.1;
 /** A detached member's ring: dashed, off the group path (interaction system, rule 5) */
 const MEMBER_RING_DASH = "3 2";
 /** An adjusted lane, in the group ring's color: quieter than the line being edited */
@@ -1188,6 +1191,31 @@ const ShapeBody = memo(function ShapeBody({
                     data-testid="fieldShapeEmptySpot"
                 />
             ))}
+            {drawing.memberRings
+                ?.flatMap((ring) => (ring.held ? [ring.held] : []))
+                .map((at, i) => (
+                    // Picked up (owner, 2026-11-23): an accent halo round the marcher held
+                    <g key={`held${i}`} data-testid="pathHeldHalo">
+                        <circle
+                            cx={at.x}
+                            cy={at.y}
+                            r={DOT_RADIUS * scale * HELD_HALO_SCALE}
+                            fill={HELD_HALO}
+                            fillOpacity={0.16}
+                            stroke="none"
+                            className="animate-pulse"
+                        />
+                        <circle
+                            cx={at.x}
+                            cy={at.y}
+                            r={DOT_RADIUS * scale * (MEMBER_RING_SCALE + 0.45)}
+                            fill="none"
+                            stroke={HELD_HALO}
+                            strokeWidth={3}
+                            vectorEffect="non-scaling-stroke"
+                        />
+                    </g>
+                ))}
             {drawing.memberRings?.map((ring, i) => (
                 // In the marcher's shape, as its selection ring is
                 <MarkerSvg

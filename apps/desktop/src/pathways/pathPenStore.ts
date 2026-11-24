@@ -63,12 +63,14 @@ import {
     intoEndSpots,
     rippleDrawnPlanOf,
     ripplesIn,
+    trailLine,
     type FollowDrag,
 } from "./followDrag";
 import { goRound } from "@/db-functions/timelineTrailAround";
 import {
     aroundLine,
     aroundPlanOf,
+    endRoundSlide,
     goingRound,
     roundChanged,
 } from "./followAround";
@@ -106,6 +108,12 @@ export interface PathSession {
      * is: the preview's leg goes there
      */
     readonly pointer: XY | null;
+    /**
+     * While drawing, Smooth chosen on the bar (owner, 2026-11-23): clicks place smooth points, a
+     * curved path, where they otherwise place corners. A press-and-drag shapes its own point
+     * either way.
+     */
+    readonly smooth?: boolean;
     /** The point's handle a click picked (open, `p<i>`), which Backspace deletes */
     readonly selected: string | null;
     /**
@@ -1239,9 +1247,35 @@ export function clearPath(): void {
 export const isDrawing = () =>
     usePathPenStore.getState().session?.phase === "drawing";
 
-/** While drawing, a corner placed at `at` */
+/** While drawing, a point placed at `at`: a corner, or smooth with Smooth chosen on the bar */
 export function addPoint(at: XY): void {
-    update((s) => ({ ...s, points: [...s.points, { at }] }));
+    update((s) => ({
+        ...s,
+        points: [...s.points, s.smooth ? { at, tension: SMOOTH } : { at }],
+    }));
+}
+
+/**
+ * While drawing, Corner | Smooth on the bar (owner, 2026-11-23: "switch between straight and
+ * curved"): the points placed so far and every click from here are corners (a straight-legged
+ * path) or smooth (a curved one). A point at an end of an arc leg stays a corner (R-14″), so a
+ * stretch of outline a trail starts with keeps its arcs.
+ */
+export function setDrawingSmooth(smooth: boolean): void {
+    update((s) => {
+        if (s.phase !== "drawing" || !!s.smooth === smooth) return s;
+        const shape = { points: s.points } as PathShape;
+        return {
+            ...s,
+            smooth,
+            points: s.points.map((point, i) => {
+                const { tension: _tension, ...corner } = point;
+                return smooth && !besideArc(shape, i)
+                    ? { ...corner, tension: SMOOTH }
+                    : corner;
+            }),
+        };
+    });
 }
 
 /**
@@ -1393,6 +1427,8 @@ async function saveFollow(
     session: PathSession,
     enter: number | null,
 ): Promise<void> {
+    // A leader pulled out of a closed outline needn't be an end of the line: the ring as shown
+    const line = follow.peel ? trailLine(follow) : null;
     if (ripplesIn(follow))
         await rippleTrail({
             db,
@@ -1402,6 +1438,8 @@ async function saveFollow(
             points,
             keepMove: follow.keep?.timelineId ?? null,
             enter,
+            line,
+            step: follow.step,
         });
     else
         await dragTrail({
@@ -1409,6 +1447,7 @@ async function saveFollow(
             window: follow.window,
             marcherIds: follow.ids,
             leaderId,
+            line,
             points,
             spacing: followSpacingOf(session),
             step: follow.step,
@@ -1698,8 +1737,22 @@ export async function finishDrawing(
     /** Ripple in: the marcher whose spot the finish was on (RP-4) */
     enter: number | null = null,
 ): Promise<void> {
-    const { session } = usePathPenStore.getState();
-    if (!session || session.phase !== "drawing") return;
+    const held = usePathPenStore.getState().session;
+    if (!held || held.phase !== "drawing") return;
+    // A leader carried out of the outline by the pointer, no button held (owner, 2026-11-23):
+    // Enter ends it where the pointer is, the trail's last point, as a click there would
+    const carried =
+        held.follow?.roundSlide?.loose && held.follow.grabbed !== null;
+    if (carried) {
+        // Pulled out with the pointer since gone off the field: the last spot the leader
+        // followed stands in, so the trail isn't thrown away (#1178 review)
+        const at =
+            held.pointer ??
+            (held.follow?.peel ? held.follow.roundSlide!.pointer : null);
+        endRoundSlide();
+        if (at) addPoint(at);
+    }
+    const session = carried ? usePathPenStore.getState().session! : held;
     // Going round (step 10, AP-T13): nothing is drawn; the line goes round as the bar says. With
     // nobody moved (not dragged round, no count typed), or just what's stored, nothing is
     // written: it closes as Escape does (owner, 2026-11-22)

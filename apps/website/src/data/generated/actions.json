@@ -1503,11 +1503,6 @@
         "category": "path",
         "bindings": []
     },
-    "followGoRound": {
-        "label": "Go around",
-        "category": "path",
-        "bindings": []
-    },
     "followRoundMore": {
         "label": "Go around farther",
         "category": "path",

@@ -58,6 +58,8 @@ import { selectOnField } from "@/shapes/placed/boxSelection";
 import { setInsideBox } from "@/shapes/placed/boxSelectionStore";
 import { OffCountWarning, TrailCornerCounts } from "./TrailCornerCounts";
 import { trailOffReason, useFollowTheLeader } from "./followTheLeader";
+import { isFollowing } from "./FollowStatus";
+import { useIsTouchMode } from "@/stores/InputModeStore";
 import { offCountTally, trailCornersOf } from "./trailCorners";
 import {
     EVEN_FIRST,
@@ -75,7 +77,6 @@ import {
     aroundPlanOf,
     goingRound,
     roundMaxOf,
-    setGoRound,
     setRoundAmount,
 } from "./followAround";
 import { rippleArrivalCount } from "@/db-functions/timelineTrailRipplePlan";
@@ -154,6 +155,7 @@ export function PathEditor({
     const ownLines = usePathPenStore((s) => s.ownLines);
     // A trail's leader mark and corner counts only with Follow-the-leader on (#1095)
     const followTheLeader = useFollowTheLeader();
+    const touch = useIsTouchMode();
     const trailMarks = !!session?.target.trail && followTheLeader;
     if (!session) {
         // Several marchers each on their own path (after Detach all, sim round 3): the bar
@@ -201,7 +203,12 @@ export function PathEditor({
     return (
         <>
             {groupLabel}
-            {session.phase === "drawing" && <PathPenBanner session={session} />}
+            {/* Following says what's happening in the top bar's Paths tab (owner, 2026-11-23); the
+                touch layout keeps the note over the field, its tab panel being closed most of the time */}
+            {session.phase === "drawing" &&
+                !(isFollowing(session) && !touch) && (
+                    <PathPenBanner session={session} />
+                )}
             {trailMarks &&
                 (session.follow?.grabbed !== null ||
                     goingRound(session.follow)) && (
@@ -447,12 +454,9 @@ function PathPenBanner({ session }: { session: PathSession }) {
             {/* With the key unbound, only the right-click is said */}
             {goingRound(session.follow) ? (
                 <T
-                    keyName="pathways.banner.goRound"
-                    defaultValue="Go around: drag {marcher} around the {shape} and the {count} marchers follow, or type how far · <enter></enter> to finish · <esc></esc> to leave"
+                    keyName="pathways.banner.followOutline"
+                    defaultValue="Follow: click or drag any marcher around the {shape}, or out of it to lead a trail, and the rest follow · or type how far · <enter></enter> to finish · <esc></esc> to leave"
                     params={{
-                        count: session.follow!.ids.length,
-                        marcher:
-                            session.target.trail?.members.at(-1)?.drill ?? "",
                         shape:
                             session.follow!.around!.outline.kind === "circle"
                                 ? tolgee.t("pathways.banner.circle", "circle")
@@ -589,7 +593,10 @@ function PathEditorBar({
     )
         pinned.current = { left: place.left, top: place.top };
     const { left, top } = (drawing && pinned.current) || place;
-    const faded = drawing && session.dragging !== null;
+    // It also steps back while the line is held or carried round an outline (owner, 2026-11-23):
+    // the marchers and the note by the pointer show through it, and it can't take the drop's click
+    const faded =
+        drawing && (session.dragging !== null || !!session.follow?.roundSlide);
     const quiet = session.phase === "closed";
     // Step 6 (TC-7): a trail's turns that fall between counts (Follow-the-leader on, #1095)
     const offCount =
@@ -684,16 +691,26 @@ function PathEditorBar({
                             <Divider />
                         </>
                     )}
-                    {session.follow?.around?.canDrag &&
-                        session.follow.grabbed === null && (
-                            <FollowModeChoice session={session} />
-                        )}
                     {goingRound(session.follow) && (
                         <GoRoundControls session={session} />
                     )}
                     {session.follow && session.follow.grabbed !== null && (
                         <FollowControls session={session} />
                     )}
+                    {/* What clicks place while a path or trail is drawn (owner, 2026-11-23):
+                        corners, a straight-legged path, or smooth points, a curved one */}
+                    {!goingRound(session.follow) &&
+                        (!session.follow ||
+                            session.follow.grabbed !== null) && (
+                            <>
+                                <PointTypeButtons
+                                    smooth={!!session.smooth}
+                                    cornerOnly={false}
+                                    drawing
+                                />
+                                <Divider />
+                            </>
+                        )}
                     {/* Going around ends where the outline takes them, so Ends has no say */}
                     {session.follow && !goingRound(session.follow) && (
                         <FollowEndsControls session={session} />
@@ -979,30 +996,47 @@ const SLOT_WIDTH = "min-w-[104px] justify-start";
 function PointTypeButtons({
     smooth,
     cornerOnly,
+    drawing = false,
 }: {
     smooth: boolean;
     cornerOnly: boolean;
+    /** While drawing: what clicks place, named on the buttons so the choice is seen */
+    drawing?: boolean;
 }) {
     return (
         <span
             className="flex items-center gap-2"
             role="group"
             aria-label={tolgee.t("pathways.editor.pointType", "Point type")}
+            data-testid={drawing ? "path-drawing-point-type" : undefined}
         >
             <IconButton
-                label={tolgee.t("actions.path.pointCorner", "Corner point")}
+                label={
+                    drawing
+                        ? tolgee.t(
+                              "pathways.editor.drawCornersTip",
+                              "Straight: clicks place corners, with straight legs between them",
+                          )
+                        : tolgee.t("actions.path.pointCorner", "Corner point")
+                }
                 action="pathPointCorner"
                 pressed={!smooth}
                 onClick={() => runAction("pathPointCorner")}
                 testId="path-point-corner"
             >
                 <LineSegmentsIcon size={14} />
+                {drawing && tolgee.t("pathways.menu.straight", "Straight")}
             </IconButton>
             <IconButton
                 label={
                     cornerOnly
                         ? besideArcReason()
-                        : tolgee.t("actions.path.pointSmooth", "Smooth point")
+                        : drawing
+                          ? tolgee.t(
+                                "pathways.editor.drawSmoothTip",
+                                "Curved: clicks place smooth points, and the path curves through them",
+                            )
+                          : tolgee.t("actions.path.pointSmooth", "Smooth point")
                 }
                 action="pathPointSmooth"
                 disabled={cornerOnly}
@@ -1011,6 +1045,7 @@ function PointTypeButtons({
                 testId="path-point-smooth"
             >
                 <WaveSineIcon size={14} />
+                {drawing && tolgee.t("pathways.menu.curved", "Curved")}
             </IconButton>
         </span>
     );
@@ -1296,58 +1331,10 @@ function countText(count: number): string {
 }
 
 /**
- * The Follow tool on a circle or box outline (step 10, DO-1): Go round, or drag a trail out of
- * the line instead. Each a registered command (`followGoRound` switches).
- */
-function FollowModeChoice({ session }: { session: PathSession }) {
-    const on = goingRound(session.follow);
-    return (
-        <>
-            <span
-                className="flex items-center gap-2"
-                role="group"
-                aria-label={tolgee.t(
-                    "pathways.editor.followMode",
-                    "How the line follows",
-                )}
-                data-testid="follow-mode"
-            >
-                <IconButton
-                    label={tolgee.t(
-                        "pathways.editor.goRoundTip",
-                        "Go around: everyone follows the one ahead around the outline they stand on",
-                    )}
-                    action="followGoRound"
-                    pressed={on}
-                    onClick={() => setGoRound(true)}
-                    testId="follow-go-round"
-                >
-                    <ArrowClockwiseIcon size={14} />
-                    {tolgee.t("actions.path.goRound", "Go around")}
-                </IconButton>
-                <IconButton
-                    label={tolgee.t(
-                        "pathways.editor.dragOutTip",
-                        "Drag out: drag a trail out of an end of the line, and the line follows it",
-                    )}
-                    action="followGoRound"
-                    pressed={!on}
-                    onClick={() => setGoRound(false)}
-                    testId="follow-drag-out"
-                >
-                    <PathIcon size={14} />
-                    {tolgee.t("pathways.editor.dragOut", "Drag out")}
-                </IconButton>
-            </span>
-            <Divider />
-        </>
-    );
-}
-
-/**
- * Go around's choices on the path bar (step 10, DO-3 to DO-5): how far (a number of the outline's
+ * The loop's choices on the path bar (step 10, DO-3 to DO-5): how far (a number of the outline's
  * spots or of steps; − and +, Spots and Steps are commands; the field can be cleared while typing,
- * and goes no further than Finish allows), which way around (Reverse leader turns it), ▶ Preview,
+ * and goes no further than Finish allows), which way around (Reverse leader turns it, as a drag
+ * along the outline does), ▶ Preview,
  * a readout from a whole time around, and a note when marchers stand off the outline and step
  * onto it first.
  */
@@ -1469,16 +1456,17 @@ function GoRoundControls({ session }: { session: PathSession }) {
                 )}
             </span>
             <Divider />
+            {/* Which way around: a drag along the outline sets it too (owner, 2026-11-22) */}
             <IconButton
                 label={
                     clockwise
                         ? tolgee.t(
                               "pathways.editor.roundClockwiseTip",
-                              "Going clockwise around. Reverse leader goes the other way around",
+                              "Going clockwise around. Press to go the other way around (Reverse leader), or drag a marcher the way you want",
                           )
                         : tolgee.t(
                               "pathways.editor.roundCounterTip",
-                              "Going counterclockwise around. Reverse leader goes the other way around",
+                              "Going counterclockwise around. Press to go the other way around (Reverse leader), or drag a marcher the way you want",
                           )
                 }
                 action="reverseTrail"
