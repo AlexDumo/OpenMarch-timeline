@@ -293,7 +293,7 @@ describe("FieldEditor with items", () => {
             expect(ports.showPositions).toHaveBeenLastCalledWith(null);
         });
 
-        it("moves a small selected item pressed inside it, though its handles cover it", () => {
+        it("resizes a small item from a handle pressed inside it: its handles were asked for", () => {
             // Marcher 3 stands on it; dimmed, the press finds the item
             const { editor, state } = setup({
                 selected: [2],
@@ -301,12 +301,9 @@ describe("FieldEditor with items", () => {
                 dimmed: [3],
             });
             // Just inside the south-east corner, where its handle reaches
-            editor.pointerDown(at(304, 104));
-            editor.pointerMove(at(330, 104));
-            expect(editor.activeGesture()).not.toBe("scale");
-            editor.pointerUp(at(330, 104));
-            expect(state.saves).toEqual([]);
-            expect(state.drops).toEqual([[{ id: 2, x: 326, y: 100 }]]);
+            drag(editor, { x: 304, y: 104 }, { x: 314, y: 114 });
+            expect(state.saves).toHaveLength(1);
+            expect(state.drops).toEqual([]);
         });
 
         it("still resizes a small item from a handle pressed outside it", () => {

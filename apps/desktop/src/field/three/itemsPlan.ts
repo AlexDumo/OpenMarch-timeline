@@ -126,9 +126,9 @@ export function planItems(
         strokes.push(...drawn.strokes);
         detailStrokes.push(...drawn.details);
         badgeFills.push(...drawn.marks);
-        // Equipment drawn from its model is locked as a rule (a pit stays put), so a badge on every
-        // piece would only be noise; a drawn prop that's locked still gets one
-        if (outline.locked && !outline.plan) {
+        // Every locked item, pit equipment too: a click passes over it, so the badge says why
+        // (props epic step 2: equipment can be unlocked, and one that is shows none)
+        if (outline.locked) {
             const corner = topLeft(outline.points);
             locks.push(corner);
             badgeFills.push(

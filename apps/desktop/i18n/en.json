@@ -713,7 +713,13 @@
         "areaCount": {
             "add": "{count, plural, one {+# marcher} other {+# marchers}}",
             "select": "{count, plural, one {# marcher} other {# marchers}}",
-            "subtract": "{count, plural, one {−# marcher} other {−# marchers}}"
+            "subtract": "{count, plural, one {−# marcher} other {−# marchers}}",
+            "addProps": "{props, plural, one {+# prop} other {+# props}}",
+            "addBoth": "{marchers, plural, one {+# marcher} other {+# marchers}} and {props, plural, one {# prop} other {# props}}",
+            "selectProps": "{props, plural, one {# prop} other {# props}}",
+            "selectBoth": "{marchers, plural, one {# marcher} other {# marchers}} and {props, plural, one {# prop} other {# props}}",
+            "subtractProps": "{props, plural, one {−# prop} other {−# props}}",
+            "subtractBoth": "{marchers, plural, one {−# marcher} other {−# marchers}} and {props, plural, one {# prop} other {# props}}"
         },
         "view3dCamera": {
             "name": "3D View camera",
@@ -1587,7 +1593,7 @@
         },
         "locked": "Locked",
         "lockLabel": "Locked",
-        "lockHint": "Can't be selected or moved on the field",
+        "lockHint": "Clicks and drags on the field pass over it",
         "imported": {
             "title": "Imported",
             "import": "Import…",

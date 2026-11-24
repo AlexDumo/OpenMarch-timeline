@@ -240,9 +240,11 @@ describe("planItems for the front ensemble", () => {
             expect(drawn.strokes[0].width).toBe(SELECTED_ITEM_STROKE_WIDTH);
         });
 
-        it("draws no lock badge on locked equipment", () => {
+        it("marks locked equipment with a lock, and unlocked equipment with none", () => {
+            const unlocked = planItems([equipment], options);
+            expect(unlocked.locks).toEqual([]);
             const drawn = planItems([{ ...equipment, locked: true }], options);
-            expect(drawn.fills).toHaveLength(plan.outlines.length);
+            expect(drawn.locks).toHaveLength(1);
         });
     });
 });
