@@ -287,7 +287,8 @@ numbers** section shows while the band wears a uniform imported into the show.
 - Each item is a row:
   - **Place:** Chest center, Back number, Left sleeve or Right sleeve (the upper arm on the front
     panel, a fifth of the way down the sleeve). It says Custom once the item is moved by number.
-  - **Side:** Front, Back or Cape.
+  - **Side:** Front or Back. No look draws a cape yet, so Cape shows only for an item a file
+    already put there.
   - **Across** and **Down:** the centre in panel inches.
   - **Size by** width or height, and **Size** in inches.
   - **Rotation** in degrees.

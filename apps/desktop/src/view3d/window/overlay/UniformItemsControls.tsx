@@ -358,7 +358,10 @@ function ItemRow({
             </Field>
             <Segmented<Panel>
                 value={item.panel}
-                options={FLATS_PANELS.map((panel) => ({
+                // no look draws a cape yet, so Cape shows only for an item already on it
+                options={FLATS_PANELS.filter(
+                    (panel) => panel !== "cape" || item.panel === "cape",
+                ).map((panel) => ({
                     value: panel,
                     label: t(`view3d.uniformItems.panel.${panel}`),
                 }))}
