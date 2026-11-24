@@ -482,6 +482,27 @@ describe("buildCrowd", () => {
             expect(gone).toContain(index(0, 10));
             expect(gone).not.toContain(index(29, 10));
             expect(at(29, 10)).toBe(index(29, 10));
+
+            // Orbiting out of the seat brings them back; the radius stays.
+            crowd.follow([eye[0], eye[1] + 2, eye[2] + 2]);
+            const back = zeroed();
+            expect(back.length).toBeLessThan(gone.length);
+            for (const k of back) {
+                const dx = barr[k * 16 + 12] - eye[0];
+                const dy = barr[k * 16 + 13] - eye[1];
+                const dz = barr[k * 16 + 14] - eye[2];
+                expect(Math.hypot(dx, dy, dz)).toBeLessThan(1);
+            }
+            let hiddenNear = 0;
+            for (let k = 0; k < total; k++) {
+                const dx = barr[k * 16 + 12] - eye[0];
+                const dy = barr[k * 16 + 13] - eye[1];
+                const dz = barr[k * 16 + 14] - eye[2];
+                if (Math.hypot(dx, dy, dz) < 1) hiddenNear++;
+            }
+            expect(crowd.visibleCount()).toBe(total - hiddenNear);
+            if (style === "blocks") expect(back.length).toBe(hiddenNear);
+            else expect(back).toEqual([]);
             base.dispose();
 
             // Up in the air, with nobody near: only the radius applies.
