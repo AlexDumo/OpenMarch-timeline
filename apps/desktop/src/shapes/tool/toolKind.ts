@@ -496,26 +496,73 @@ export interface ToolClickPoints<P> {
     close?(points: readonly XY[], n: number, env: ToolEnv): P | undefined;
 }
 
+/** One row in the Rows menu (spec #1190), as it lists them */
+export interface RowView {
+    /** Which row it is, for the menu's edits */
+    readonly index: number;
+    /** 0 for the drawn line; 1, 2… away from it on its side */
+    readonly away: number;
+    /** Behind (or to the left) of the drawn line, in front (or to the right), or the drawn line */
+    readonly side: "far" | "near" | null;
+    /** Marchers in it */
+    readonly count: number;
+    /** Its spots as the menu shows them, left to right: true where a marcher stands */
+    readonly spots: readonly boolean[];
+    /** Where it sits from centered, in half spots: + to the right, or toward the back */
+    readonly shift: number;
+    /** Shorter than the longest row */
+    readonly short: boolean;
+}
+
+/** What the Rows menu shows (spec #1190) */
+export interface RowsView {
+    /** Rows across the field are behind and in front; up and down it, left and right */
+    readonly words: "across" | "upDown";
+    /** Every row, the far side (behind or left) first */
+    readonly rows: readonly RowView[];
+    /** Spots left empty in all */
+    readonly empty: number;
+    /** Box sizes one press lays out: so many in a row, so many rows, the last row's own */
+    readonly picks: readonly {
+        readonly perRow: number;
+        readonly rows: number;
+        readonly last: number;
+        readonly on: boolean;
+    }[];
+}
+
 /**
- * A kind's copies (spec #1190): rows that repeat the drawn shape, set in the editor's Copies menu.
- * Its numbers take the whole spot count, as the host gives it.
+ * A kind's rows (spec #1190): its marchers split into rows alongside the drawn shape, set in the
+ * editor's Rows menu. Everything takes the whole spot count, as the host gives it; every edit keeps
+ * every marcher in a row.
  */
-export interface ToolCopies<P> {
-    /** The menu's numbers, in order: behind, in front and their spacing, then left and right */
-    readonly params: readonly ToolParam<P>[];
-    /** What the menu's button says: "2 behind · 1 in front", or null with no copies */
-    summary(params: P, n: number): string | null;
-    /** The shape with its copies taken off */
+export interface ToolRows<P> {
+    /** What the menu shows; null when the shape can't have rows (a closed line) */
+    view(params: P, n: number): RowsView | null;
+    /** A row added on `side`, the marchers shared out again; null when there's no room */
+    add(params: P, n: number, side: "far" | "near", env: ToolEnv): P | null;
+    /** Row `index` taken off, its marchers going to the shortest rows */
+    remove(params: P, n: number, index: number): P;
+    /** The marchers in row `index`, typed, dragged or stepped: one at a time from or to another row */
+    count(index: number): ToolParam<P>;
+    /** Spot `spot` of row `index` (as the menu shows it) left empty, or filled again */
+    toggleSpot(
+        params: P,
+        n: number,
+        index: number,
+        spot: number,
+        env: ToolEnv,
+    ): P | null;
+    /** Row `index` moved half a spot right (or back), left (or forward), or centered again (0) */
+    shift(params: P, n: number, index: number, by: -1 | 0 | 1): P;
+    /** The box size `perRow` in a row laid out, the rows in front kept in front */
+    pick(params: P, n: number, perRow: number, env: ToolEnv): P;
+    /** Back to the one drawn line */
     clear(params: P): P;
-    /**
-     * Which way behind and left are (#1192): the field's, or the shape's own, turning with it.
-     * Absent for a kind whose copies only go the field's way.
-     */
-    readonly direction?: {
-        shown(params: P): boolean;
-        current(params: P): "field" | "shape";
-        pick(params: P, way: "field" | "shape"): P;
-    };
+    /** How far apart the rows are */
+    readonly apart: ToolParam<P>;
+    /** How much further along each row starts than the one in front */
+    readonly slant: ToolParam<P>;
 }
 
 /**
@@ -739,12 +786,13 @@ export interface ToolKind<P> {
     emptySpots?(params: P, n: number): readonly XY[];
     /** The params as placing saves them, when the open shape holds more than a recipe keeps */
     forPlacing?(params: P): P;
-    /** Its copies' menu (spec #1190); absent for a kind without */
-    readonly copies?: ToolCopies<P>;
+    /** Its Rows menu (spec #1190); absent for a kind without */
+    readonly rows?: ToolRows<P>;
     /**
-     * The outlines of its copies, drawn like its own outline (spec #1190). None when absent.
+     * The outlines of its rows besides the drawn one, drawn like its own outline (spec #1190).
+     * None when absent.
      */
-    copyOutlines?(params: P, n: number): readonly (readonly XY[])[];
+    rowOutlines?(params: P, n: number): readonly (readonly XY[])[];
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

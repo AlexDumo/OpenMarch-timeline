@@ -123,7 +123,7 @@ const drawingOf = memoDrawing(
             stage: "open" as const,
             outline: shapeOutline(kind, live.params, n),
             openOutline: kind.outlineOpen?.(live.params, n) ?? false,
-            copies: kind.copyOutlines?.(live.params, n) ?? [],
+            rows: kind.rowOutlines?.(live.params, n) ?? [],
             construction: kind.construction?.(live.params, n) ?? [],
             // While a gesture goes, where the marchers will stand, and who
             spots: targets,

@@ -22,7 +22,7 @@ import {
     lineToolBase,
     pivoted,
 } from "../line/lineTool";
-import { withCopies } from "../line/lineCopies";
+import { withRows } from "../line/lineRows";
 import { lineFillSpots } from "../line/lineFill";
 import {
     lineFrame,
@@ -432,7 +432,7 @@ const MENU: ToolHandleMenu<LineParams> = {
  * both ends always hold a marcher. It never turns more than 359°; closed, by its chord or round to
  * a whole circle, it fills as a closed Line does.
  */
-export const arcTool: ToolKind<LineParams> = withCopies({
+export const arcTool: ToolKind<LineParams> = withRows({
     ...lineToolBase,
     shape: arcShape,
     keywords: ["arc", "bow", "semicircle"],

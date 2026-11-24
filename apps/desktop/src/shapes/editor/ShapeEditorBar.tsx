@@ -67,8 +67,11 @@ import {
     EyeIcon,
     EyeSlashIcon,
     SelectionSlashIcon,
-    CopySimpleIcon,
+    RowsIcon,
     CaretDownIcon,
+    CaretLeftIcon,
+    CaretRightIcon,
+    XIcon,
 } from "@phosphor-icons/react";
 import * as Popover from "@radix-ui/react-popover";
 import { Tip } from "@/components/ui/Tip";
@@ -105,6 +108,7 @@ import {
     paramGlyph,
     toolId,
     type AnyToolKind,
+    type RowView,
     type ParamGlyph,
     type ToolEnv,
 } from "../tool/toolKind";
@@ -1497,9 +1501,8 @@ const fillShown = (kind: AnyToolKind, params: unknown, spots: number) => {
         ]),
         flipX,
         flipY,
-        // The Copies menu's button says how many (spec #1190)
-        kind.copies ? kind.copies.summary(params, spots) : null,
-        kind.copies ? (params as { copies?: unknown }).copies : null,
+        // The Rows menu lists every row (spec #1190)
+        kind.rows ? kind.rows.view(params, spots) : null,
     ]);
 };
 
@@ -1532,8 +1535,8 @@ const FillPill = memo(function FillPill({
         >
             {/* The kind's own menus (a Line's spacing, #523) */}
             <ChoiceMenus target={target} envFor={env} />
-            {/* Rows that copy the shape (spec #1190) */}
-            <CopiesMenu target={target} />
+            {/* The marchers split into rows alongside the shape (spec #1190) */}
+            <RowsMenu target={target} />
             {/* Who goes where on a Line (#528) */}
             <OrderMenu target={target} />
             <ModeMenu target={target} envFor={env} />
@@ -1567,14 +1570,16 @@ const FillPill = memo(function FillPill({
 });
 
 /**
- * The Copies menu (spec #1190): rows that repeat a Line, Curve or Arc behind or in front of it,
- * one shape with it. Its button says how many; its numbers are typed, dragged or stepped like the
- * editor's, each change one undo step (one save for a placed shape). None for a kind without.
+ * The Rows menu (spec #1190): the marchers of a Line, Curve or Arc split into rows alongside it,
+ * one shape with it. Its button says how many rows; it lists them in field order, each with its
+ * spots (a press leaves one empty), its marchers (typed, dragged or stepped, one at a time from or
+ * to another row, so nobody is ever left out) and, when it's short or moved, arrows that move it
+ * half a spot. Each change is one undo step (one save for a placed shape). None for a kind without.
  */
-function CopiesMenu({ target }: { target: ShapeEditTarget }) {
+function RowsMenu({ target }: { target: ShapeEditTarget }) {
     const [open, setOpen] = useEditorMenu();
     const focus = useMenuFocus((el) =>
-        el.querySelector<HTMLElement>("[data-testid^='shape-editor-copies']"),
+        el.querySelector<HTMLElement>("[data-testid^='shape-rows-']"),
     );
     const run = useRef<SizeRun | null>(null);
     const chips = useRef<{ layout: ChipLayout; anchor: XY }>({
@@ -1587,7 +1592,7 @@ function CopiesMenu({ target }: { target: ShapeEditTarget }) {
         },
         anchor: { x: 0, y: 0 },
     });
-    const copies = target.kind.copies;
+    const rows = target.kind.rows;
     const said = useRef<string | null>(null);
     const actions = useMemo(() => {
         const base = numberActions(target, run, chips);
@@ -1603,30 +1608,57 @@ function CopiesMenu({ target }: { target: ShapeEditTarget }) {
             more: (param: Param) => step(param, 1),
         };
     }, [target]);
-    if (!copies) return null;
+    if (!rows) return null;
     const { params, spots } = target;
-    const stepPx = envFor()?.stepPx ?? 1;
-    const shown = copies.params.filter((p) => p.shown?.(params, spots) ?? true);
-    if (shown.length === 0) return null;
-    const summary = copies.summary(params, spots);
-    // The button keeps what it said while its menu is open, so the menu doesn't slide out from
-    // under the pointer as its numbers change the button's width (sim study of #1190)
-    if (!open) said.current = summary;
-    const label = tolgee.t("shapes.copies.label", "Copies");
+    const view = rows.view(params, spots);
+    if (!view) return null;
     const env = envFor();
+    const stepPx = env?.stepPx ?? 1;
+    const many = view.rows.length > 1;
+    const label = tolgee.t("shapes.rows.label", "Rows");
+    const summary = many
+        ? tolgee.t("shapes.rows.summary", "Rows · {count}", {
+              count: view.rows.length,
+          })
+        : label;
+    // The button keeps what it said while its menu is open, so the menu doesn't slide out from
+    // under the pointer as its rows change the button's width (sim study of #1190)
+    if (!open) said.current = summary;
+    const across = view.words === "across";
+    const apply = (next: unknown) => {
+        if (next) target.apply(next);
+    };
+    const can = (param: Param, by: -1 | 1) =>
+        env !== null &&
+        (param.stepper?.by(params, spots, by, env) ?? null) !== null;
+    const canAdd = env !== null && rows.add(params, spots, "far", env) !== null;
+    const addTip = canAdd
+        ? null
+        : tolgee.t(
+              "shapes.rows.addNone",
+              "No room for another row: every row needs a marcher",
+          );
+    const longest = Math.max(...view.rows.map((r) => r.spots.length));
+    const dot = Math.max(4, Math.min(8, Math.floor(132 / longest) - 3));
+    const removable = many || view.empty > 0;
     return (
         <Popover.Root open={open} onOpenChange={setOpen}>
-            <Tip label={label}>
+            <Tip
+                label={tolgee.t(
+                    "shapes.rows.tip",
+                    "Split these marchers into rows alongside the line",
+                )}
+            >
                 <Popover.Trigger asChild>
                     <button
                         type="button"
-                        aria-label={summary ? `${label}: ${summary}` : label}
+                        aria-label={summary}
                         {...focus.trigger}
-                        data-testid="shape-copies"
+                        data-testid="shape-rows"
                         className="rounded-4 hover:bg-text/10 flex min-h-24 items-center gap-4 px-4 py-2"
                     >
-                        <CopySimpleIcon size={14} />
-                        <span>{said.current ?? label}</span>
+                        <RowsIcon size={14} />
+                        <span>{said.current ?? summary}</span>
                         <CaretDownIcon size={10} />
                     </button>
                 </Popover.Trigger>
@@ -1638,15 +1670,252 @@ function CopiesMenu({ target }: { target: ShapeEditTarget }) {
                     sideOffset={6}
                     {...focus.content}
                     onPointerDown={(e) => e.stopPropagation()}
-                    className="rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal z-50 border p-8"
-                    data-testid="shape-copies-content"
+                    className="rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal z-50 flex w-[340px] flex-col gap-2 border p-8"
+                    data-testid="shape-rows-content"
                 >
-                    <div className="grid grid-cols-[auto_auto] items-center gap-x-12 gap-y-4">
-                        {shown.map((param) => (
-                            <Fragment key={param.key}>
-                                <span className="text-text/60">
-                                    {COPY_ROW_WORDS[param.key]?.() ??
-                                        param.label}
+                    <div className="flex min-h-24 items-center justify-between gap-8 px-4">
+                        <span
+                            className={many ? "" : "text-text/60"}
+                            data-testid="shape-rows-heading"
+                        >
+                            {many
+                                ? view.empty > 0
+                                    ? tolgee.t(
+                                          "shapes.rows.headingEmpty",
+                                          "{count} marchers in {rows} rows · {empty} empty spots",
+                                          {
+                                              count: spots,
+                                              rows: view.rows.length,
+                                              empty: view.empty,
+                                          },
+                                      )
+                                    : tolgee.t(
+                                          "shapes.rows.heading",
+                                          "{count} marchers in {rows} rows",
+                                          {
+                                              count: spots,
+                                              rows: view.rows.length,
+                                          },
+                                      )
+                                : tolgee.t(
+                                      "shapes.rows.splits",
+                                      "Splits your {count} marchers. Adds none.",
+                                      { count: spots },
+                                  )}
+                        </span>
+                    </div>
+                    {view.picks.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-4 px-4">
+                            <span className="text-text/60">
+                                {tolgee.t("shapes.rows.picks", "Quick picks")}
+                            </span>
+                            {view.picks.map((pick) => (
+                                <Tip
+                                    key={pick.perRow}
+                                    label={
+                                        pick.last === pick.perRow
+                                            ? tolgee.t(
+                                                  "shapes.rows.pickTip",
+                                                  "{perRow} in a row, {rows} rows",
+                                                  pick,
+                                              )
+                                            : tolgee.t(
+                                                  "shapes.rows.pickTipLast",
+                                                  "{perRow} in a row, {rows} rows, the last row {last}",
+                                                  pick,
+                                              )
+                                    }
+                                >
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            env &&
+                                            apply(
+                                                rows.pick(
+                                                    target.params,
+                                                    target.spots,
+                                                    pick.perRow,
+                                                    env,
+                                                ),
+                                            )
+                                        }
+                                        data-testid={`shape-rows-pick-${pick.perRow}`}
+                                        aria-pressed={pick.on}
+                                        className={clsx(
+                                            "border-stroke bg-fg-2 rounded-full border px-8 py-1 tabular-nums",
+                                            pick.on
+                                                ? "border-accent text-accent"
+                                                : "hover:text-accent",
+                                        )}
+                                    >
+                                        {`${pick.perRow} × ${pick.rows}`}
+                                    </button>
+                                </Tip>
+                            ))}
+                        </div>
+                    )}
+                    <div className="bg-stroke my-4 h-px" />
+                    <div className="flex min-h-24 items-center justify-between gap-8 pl-4">
+                        <span className="text-text/60">{label}</span>
+                        <span className="flex items-center gap-2">
+                            {(["far", "near"] as const).map((side) => (
+                                <Tip
+                                    key={side}
+                                    label={
+                                        addTip ??
+                                        (side === "far"
+                                            ? across
+                                                ? tolgee.t(
+                                                      "shapes.rows.addBehindTip",
+                                                      "A row behind, the marchers shared out again",
+                                                  )
+                                                : tolgee.t(
+                                                      "shapes.rows.addLeftTip",
+                                                      "A row to the left, the marchers shared out again",
+                                                  )
+                                            : across
+                                              ? tolgee.t(
+                                                    "shapes.rows.addFrontTip",
+                                                    "A row in front, the marchers shared out again",
+                                                )
+                                              : tolgee.t(
+                                                    "shapes.rows.addRightTip",
+                                                    "A row to the right, the marchers shared out again",
+                                                ))
+                                    }
+                                >
+                                    <button
+                                        type="button"
+                                        aria-disabled={!canAdd || undefined}
+                                        onClick={() =>
+                                            canAdd &&
+                                            env &&
+                                            apply(
+                                                rows.add(
+                                                    target.params,
+                                                    target.spots,
+                                                    side,
+                                                    env,
+                                                ),
+                                            )
+                                        }
+                                        data-testid={`shape-rows-add-${side}`}
+                                        className={clsx(
+                                            "rounded-4 flex min-h-24 items-center gap-4 px-4 py-2",
+                                            canAdd
+                                                ? "hover:text-accent"
+                                                : "opacity-40",
+                                        )}
+                                    >
+                                        <PlusIcon size={12} />
+                                        {side === "far"
+                                            ? across
+                                                ? tolgee.t(
+                                                      "shapes.rows.addBehind",
+                                                      "Behind",
+                                                  )
+                                                : tolgee.t(
+                                                      "shapes.rows.addLeft",
+                                                      "Left",
+                                                  )
+                                            : across
+                                              ? tolgee.t(
+                                                    "shapes.rows.addFront",
+                                                    "In front",
+                                                )
+                                              : tolgee.t(
+                                                    "shapes.rows.addRight",
+                                                    "Right",
+                                                )}
+                                    </button>
+                                </Tip>
+                            ))}
+                        </span>
+                    </div>
+                    {view.rows.map((row, i) => {
+                        const param = rows.count(row.index);
+                        const name = rowName(row, across);
+                        const moves = row.short || row.shift !== 0;
+                        return (
+                            <div
+                                key={row.index}
+                                className="rounded-4 hover:bg-text/5 grid min-h-24 grid-cols-[52px_minmax(0,1fr)_auto_44px_24px] items-center gap-4 pl-4"
+                                data-testid={`shape-rows-row-${i}`}
+                            >
+                                <span
+                                    className={clsx(
+                                        "truncate",
+                                        row.side === null && "text-accent",
+                                    )}
+                                >
+                                    {name}
+                                </span>
+                                <span
+                                    className="flex items-center justify-center overflow-hidden"
+                                    style={{
+                                        transform: `translateX(${(row.shift * (dot + 2)) / 2}px)`,
+                                    }}
+                                >
+                                    {row.spots.map((filled, j) => (
+                                        <button
+                                            key={j}
+                                            type="button"
+                                            aria-label={
+                                                filled
+                                                    ? tolgee.t(
+                                                          "shapes.rows.leaveEmpty",
+                                                          "Leave this spot empty",
+                                                      )
+                                                    : tolgee.t(
+                                                          "shapes.rows.fillSpot",
+                                                          "Empty spot: press to take it out",
+                                                      )
+                                            }
+                                            title={
+                                                filled
+                                                    ? tolgee.t(
+                                                          "shapes.rows.leaveEmpty",
+                                                          "Leave this spot empty",
+                                                      )
+                                                    : tolgee.t(
+                                                          "shapes.rows.fillSpot",
+                                                          "Empty spot: press to take it out",
+                                                      )
+                                            }
+                                            onClick={() =>
+                                                env &&
+                                                apply(
+                                                    rows.toggleSpot(
+                                                        target.params,
+                                                        target.spots,
+                                                        row.index,
+                                                        j,
+                                                        env,
+                                                    ),
+                                                )
+                                            }
+                                            data-testid={`shape-rows-dot-${i}-${j}`}
+                                            className={clsx(
+                                                "group flex h-24 items-center justify-center px-1",
+                                                row.side === null
+                                                    ? "text-accent"
+                                                    : "text-text",
+                                            )}
+                                        >
+                                            <span
+                                                className={clsx(
+                                                    "block rounded-full group-hover:scale-125",
+                                                    filled
+                                                        ? "bg-current"
+                                                        : "border border-current opacity-60",
+                                                )}
+                                                style={{
+                                                    width: dot,
+                                                    height: dot,
+                                                }}
+                                            />
+                                        </button>
+                                    ))}
                                 </span>
                                 <NumberChip
                                     param={param}
@@ -1656,139 +1925,201 @@ function CopiesMenu({ target }: { target: ShapeEditTarget }) {
                                         stepPx,
                                     )}
                                     note={null}
-                                    after={
-                                        param.unit === "steps"
-                                            ? tolgee.t(
-                                                  "shapes.edit.steps",
-                                                  "steps",
-                                              )
-                                            : null
-                                    }
-                                    canLess={
-                                        env !== null &&
-                                        (param.stepper?.by(
-                                            params,
-                                            spots,
-                                            -1,
-                                            env,
-                                        ) ?? null) !== null
-                                    }
-                                    canMore={
-                                        env !== null &&
-                                        (param.stepper?.by(
-                                            params,
-                                            spots,
-                                            1,
-                                            env,
-                                        ) ?? null) !== null
-                                    }
+                                    canLess={can(param, -1)}
+                                    canMore={can(param, 1)}
                                     glyph={null}
                                     actions={actions}
                                 />
-                            </Fragment>
-                        ))}
-                    </div>
-                    {copies.direction?.shown(params) && (
-                        <CopiesDirection
-                            current={copies.direction.current(params)}
-                            pick={(way) =>
-                                target.apply(
-                                    copies.direction!.pick(target.params, way),
-                                )
-                            }
-                        />
+                                <span className="flex items-center justify-center">
+                                    {moves &&
+                                        ([-1, 1] as const).map((by) => (
+                                            <IconButton
+                                                key={by}
+                                                label={sitsTip(
+                                                    row.shift,
+                                                    by,
+                                                    across,
+                                                )}
+                                                onClick={() =>
+                                                    apply(
+                                                        rows.shift(
+                                                            target.params,
+                                                            target.spots,
+                                                            row.index,
+                                                            by,
+                                                        ),
+                                                    )
+                                                }
+                                                testId={`shape-rows-sits-${by < 0 ? "less" : "more"}-${i}`}
+                                            >
+                                                {by < 0 ? (
+                                                    <CaretLeftIcon size={10} />
+                                                ) : (
+                                                    <CaretRightIcon size={10} />
+                                                )}
+                                            </IconButton>
+                                        ))}
+                                </span>
+                                {row.side === null ? (
+                                    <span />
+                                ) : (
+                                    <IconButton
+                                        label={tolgee.t(
+                                            "shapes.rows.remove",
+                                            "Remove {name}: its marchers go to the shortest rows",
+                                            { name },
+                                        )}
+                                        onClick={() =>
+                                            apply(
+                                                rows.remove(
+                                                    target.params,
+                                                    target.spots,
+                                                    row.index,
+                                                ),
+                                            )
+                                        }
+                                        testId={`shape-rows-remove-${i}`}
+                                    >
+                                        <XIcon size={10} />
+                                    </IconButton>
+                                )}
+                            </div>
+                        );
+                    })}
+                    <span className="text-text/60 px-4">
+                        {tolgee.t(
+                            "shapes.rows.dotHint",
+                            "Press a dot to leave that spot empty",
+                        )}
+                    </span>
+                    {many && (
+                        <>
+                            <div className="bg-stroke my-4 h-px" />
+                            <span className="text-text/60 px-4">
+                                {tolgee.t("shapes.rows.spacing", "Spacing")}
+                            </span>
+                            {[rows.apart, rows.slant].map((param) => (
+                                <div
+                                    key={param.key}
+                                    className="flex min-h-24 items-center justify-between gap-8 pl-4"
+                                >
+                                    <span>
+                                        {param === rows.apart
+                                            ? tolgee.t(
+                                                  "shapes.rows.rowApart",
+                                                  "Rows apart",
+                                              )
+                                            : tolgee.t(
+                                                  "shapes.rows.rowSlant",
+                                                  "Slant",
+                                              )}
+                                    </span>
+                                    <NumberChip
+                                        param={param}
+                                        display={param.display(
+                                            params,
+                                            spots,
+                                            stepPx,
+                                        )}
+                                        note={null}
+                                        after={tolgee.t(
+                                            "shapes.edit.steps",
+                                            "steps",
+                                        )}
+                                        canLess={false}
+                                        canMore={false}
+                                        glyph={null}
+                                        actions={actions}
+                                    />
+                                </div>
+                            ))}
+                        </>
                     )}
-                    {summary !== null && (
+                    <div className="bg-stroke my-4 h-px" />
+                    <Tip
+                        label={
+                            removable
+                                ? tolgee.t(
+                                      "shapes.rows.clearTip",
+                                      "Back to the one line you drew",
+                                  )
+                                : tolgee.t(
+                                      "shapes.rows.clearNone",
+                                      "No rows yet",
+                                  )
+                        }
+                    >
                         <button
                             type="button"
+                            aria-disabled={!removable || undefined}
                             onClick={() => {
-                                target.apply(copies.clear(target.params));
+                                if (!removable) return;
+                                apply(rows.clear(target.params));
                                 setOpen(false);
                             }}
-                            data-testid="shape-copies-clear"
-                            className="rounded-4 hover:text-accent mt-6 min-h-24 px-4 py-2"
+                            data-testid="shape-rows-clear"
+                            className={clsx(
+                                "rounded-4 min-h-24 px-4 py-2 text-left",
+                                removable ? "hover:text-accent" : "opacity-40",
+                            )}
                         >
-                            {tolgee.t("shapes.copies.clear", "Remove copies")}
+                            {tolgee.t("shapes.rows.clear", "Remove rows")}
                         </button>
-                    )}
+                    </Tip>
                 </Popover.Content>
             </Popover.Portal>
         </Popover.Root>
     );
 }
 
-/** The Copies menu's row names, shorter than the numbers' own labels */
-const COPY_ROW_WORDS: Record<string, () => string> = {
-    copiesBehind: () => tolgee.t("shapes.copies.rowBehind", "Behind"),
-    copiesFront: () => tolgee.t("shapes.copies.rowFront", "In front"),
-    copiesApart: () => tolgee.t("shapes.copies.rowApart", "Apart"),
-    copiesStagger: () => tolgee.t("shapes.copies.rowStagger", "Stagger"),
-    copiesLeft: () => tolgee.t("shapes.copies.rowLeft", "Left"),
-    copiesRight: () => tolgee.t("shapes.copies.rowRight", "Right"),
-    copiesGap: () => tolgee.t("shapes.copies.rowGap", "Gap"),
-};
+/** A row's name in the Rows menu: the drawn line, or so many behind, in front, left or right */
+function rowName(row: RowView, across: boolean): string {
+    if (row.side === null) return tolgee.t("shapes.rows.drawn", "Drawn");
+    const count = { count: row.away };
+    if (row.side === "far")
+        return across
+            ? tolgee.t("shapes.rows.behindN", "Behind {count}", count)
+            : tolgee.t("shapes.rows.leftN", "Left {count}", count);
+    return across
+        ? tolgee.t("shapes.rows.frontN", "Front {count}", count)
+        : tolgee.t("shapes.rows.rightN", "Right {count}", count);
+}
 
-/**
- * Which way the copies go (#1192): the field's (behind is toward the back sideline) or the
- * shape's own, turning with it. Two buttons, the one in use lit; a press is one change.
- */
-function CopiesDirection({
-    current,
-    pick,
-}: {
-    current: "field" | "shape";
-    pick: (way: "field" | "shape") => void;
-}) {
-    const label = tolgee.t("shapes.copies.direction", "Direction");
-    const ways = [
+/** What a row's arrow does, and where the row sits now */
+function sitsTip(shift: number, by: -1 | 1, across: boolean): string {
+    const way =
+        by > 0
+            ? across
+                ? tolgee.t("shapes.rows.sitsRight", "Half a spot to the right")
+                : tolgee.t(
+                      "shapes.rows.sitsBack",
+                      "Half a spot toward the back",
+                  )
+            : across
+              ? tolgee.t("shapes.rows.sitsLeft", "Half a spot to the left")
+              : tolgee.t(
+                    "shapes.rows.sitsForward",
+                    "Half a spot toward the front",
+                );
+    if (shift === 0)
+        return tolgee.t("shapes.rows.sitsCentered", "{way} (now centered)", {
+            way,
+        });
+    return tolgee.t(
+        "shapes.rows.sitsNow",
+        "{way} (now {half} half spots {side})",
         {
-            value: "field" as const,
-            text: tolgee.t("shapes.copies.directionField", "Field"),
-            tip: tolgee.t(
-                "shapes.copies.directionFieldTip",
-                "Behind is toward the back sideline, however the line is turned",
-            ),
+            way,
+            half: Math.abs(shift),
+            side:
+                shift > 0
+                    ? across
+                        ? tolgee.t("shapes.rows.sideRight", "right")
+                        : tolgee.t("shapes.rows.sideBack", "back")
+                    : across
+                      ? tolgee.t("shapes.rows.sideLeft", "left")
+                      : tolgee.t("shapes.rows.sideForward", "forward"),
         },
-        {
-            value: "shape" as const,
-            text: tolgee.t("shapes.copies.directionShape", "Shape"),
-            tip: tolgee.t(
-                "shapes.copies.directionShapeTip",
-                "Behind is behind the line as drawn: turning the line turns its copies",
-            ),
-        },
-    ];
-    return (
-        <div className="mt-6 flex items-center gap-12">
-            <span className="text-text/60">{label}</span>
-            <div
-                role="radiogroup"
-                aria-label={label}
-                className="rounded-4 border-stroke flex border"
-            >
-                {ways.map((way) => (
-                    <Tip key={way.value} label={way.tip}>
-                        <button
-                            type="button"
-                            role="radio"
-                            aria-checked={current === way.value}
-                            onClick={() =>
-                                current !== way.value && pick(way.value)
-                            }
-                            data-testid={`shape-copies-direction-${way.value}`}
-                            className={clsx(
-                                "min-h-24 px-8 py-2",
-                                current === way.value
-                                    ? "bg-fg-2 text-accent"
-                                    : "hover:text-accent",
-                            )}
-                        >
-                            {way.text}
-                        </button>
-                    </Tip>
-                ))}
-            </div>
-        </div>
     );
 }
 

@@ -371,8 +371,8 @@ export type FieldModeDrawing = {
     barHandles?: readonly { at: FieldPoint; from: FieldPoint }[];
     /** The outline is open: drawn without joining its last point to its first (a line, #524) */
     openOutline?: boolean;
-    /** The outlines of the shape's copies (spec #1190), open lines drawn like its outline */
-    copies?: readonly (readonly FieldPoint[])[];
+    /** The shape's other rows (spec #1190), open lines drawn like its outline */
+    rows?: readonly (readonly FieldPoint[])[];
     /**
      * The outline is a drawn path (pathways): drawn solid and heavier than a shape's outline, so it
      * reads over a group's faint lanes; heaviest while drawn or open (`edited`), a little lighter
