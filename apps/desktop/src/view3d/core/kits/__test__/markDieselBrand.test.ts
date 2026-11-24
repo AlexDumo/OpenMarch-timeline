@@ -17,7 +17,7 @@ import {
 } from "../../environment";
 import { planField } from "../../field";
 import { MARCHER_MARK, OPENMARCH_LOGO } from "../../field/brandMark";
-import { DEFAULT_VENUE_PARAMS } from "../../venueSettings";
+import { DEFAULT_VENUE_PARAMS, KIT_VENUE_PARAMS } from "../../venueSettings";
 import type { FieldFootprint, VenueParams } from "../../types";
 import { bowlOutline } from "../bowl";
 import {
@@ -33,11 +33,11 @@ import {
     dieselBoardYaw,
 } from "../markDiesel/boards";
 import { DIESEL_RING } from "../markDiesel/bowl";
+import { paintStadiumSign } from "../markDiesel/stadiumSign";
 import {
     DIESEL_VENUE_PARAMS,
     dieselClock,
     dieselFieldArt,
-    OPENMARCH_SIGN,
     paintAppIcon,
     paintBoardCard,
     paintBoardHeader,
@@ -52,7 +52,6 @@ import {
     paintRibbonUpper,
     paintSponsorPanel,
     paintWallPad,
-    paintWordmark,
     RAFTER_BANNERS,
     SPONSOR_PANELS,
 } from "../markDiesel/brand";
@@ -196,12 +195,9 @@ describe("Venue brand painters", () => {
         expect(written((g) => paintAppIcon(g, 256, 256, 256))).toBe(
             "[marcher]",
         );
-        expect(
-            written((g) => paintWordmark(g, 0, 64, 40, { color: "#fff" })),
-        ).toBe("[marcher] | OPENMARCH");
     });
 
-    it("carries OpenMarch on every face, and no other brand", () => {
+    it("keeps OpenMarch to the back, and names no other brand", () => {
         const state = { title: "", time: "8:43 PM", year: 2026 };
         const faces: Record<string, string> = {
             logoPanel: written((g) => paintLogoPanel(g, 512, 512)),
@@ -211,13 +207,12 @@ describe("Venue brand painters", () => {
             ribbonLower: written((g) => paintRibbonLower(g, 4096, 128, state)),
             ribbonUpper: written((g) => paintRibbonUpper(g, 4096, 128)),
             header: written((g) => paintBoardHeader(g, 2048, 256)),
-            card: written((g) => paintBoardCard(g, 1024, 560, { title: "" })),
+            card: written((g) => paintBoardCard(g, 1024, 560, { title: "x" })),
             flag: written((g) => paintDieselFlag(g, 512, 768)),
             monument: written((g) => paintMonument(g, 1040, 400)),
+            sign: written((g) => paintStadiumSign(g, 1152, 152)),
         };
         SPONSOR_PANELS.forEach((panel, i) => {
-            // The On The Move logo is an image the test DOM never loads.
-            if (panel.face === "otm") return;
             faces[`sponsor${i}`] = written((g) =>
                 paintSponsorPanel(g, panel, panel.width * 128, 128),
             );
@@ -227,18 +222,30 @@ describe("Venue brand painters", () => {
                 paintRafterBanner(g, banner, 256, 640),
             );
         });
-        for (const [face, text] of Object.entries(faces)) {
-            expect(text, face).toMatch(/\[logo\]|\[marcher\]|openmarch/i);
+        // OpenMarch's marks: the drape, the flags and two sideline boards.
+        const branded = Object.entries(faces)
+            .filter(([, text]) => /\[logo\]|\[marcher\]|openmarch/i.test(text))
+            .map(([face]) => face);
+        const logoBoards = SPONSOR_PANELS.map((p, i) =>
+            p.face === "logo" ? `sponsor${i}` : null,
+        ).filter((f) => f !== null);
+        expect(logoBoards).toHaveLength(2);
+        expect(branded.sort()).toEqual(
+            ["logoPanel", "banner", "flag", ...logoBoards].sort(),
+        );
+        for (const [face, text] of Object.entries(faces))
             expect(text, face).not.toMatch(
-                /diesel|lucas|colts|yamaha|bands of america|\bboa\b/i,
+                /lucas|colts|yamaha|bands of america|\bboa\b|openmarch\.com/i,
             );
-        }
         expect(faces.banner).toBe("[logo] | GRAND NATIONAL CHAMPIONSHIPS");
         expect(faces.ribbonUpper).toContain(
             "GRAND NATIONAL CHAMPIONSHIPS – PRELIMS",
         );
-        expect(faces.monument).toContain("[logo] | openmarch.com");
-        expect(SPONSOR_PANELS.some((p) => p.face === "otm")).toBe(true);
+        expect(faces.sign).toContain("MARK DIESEL");
+        expect(faces.header).toBe("MARK DIESEL");
+        expect(faces.monument).toBe(
+            "MARK DIESEL | STADIUM | GRAND NATIONAL CHAMPIONSHIPS",
+        );
     });
 
     it("shows the year, the clock and the show on the lower ribbon", () => {
@@ -249,11 +256,12 @@ describe("Venue brand painters", () => {
                 year: 2026,
             }),
         );
-        expect(untitled).toContain("[logo] | openmarch.com");
-        expect(untitled).toContain("2026 GRAND NATIONAL CHAMPIONSHIPS");
+        expect(untitled).toMatch(
+            /^MARK DIESEL \| 2026 GRAND NATIONAL CHAMPIONSHIPS/,
+        );
         expect(untitled).toContain("PRELIMS");
         expect(untitled).toContain("8:43 PM");
-        expect(untitled).toContain("[marcher] | OPENMARCH");
+        expect(untitled).toMatch(/MARK DIESEL STADIUM$/);
         expect(untitled).not.toContain("NOW PERFORMING");
 
         const titled = written((g) =>
@@ -265,7 +273,7 @@ describe("Venue brand painters", () => {
         );
         expect(titled).toContain("NOW PERFORMING | Finals");
         expect(titled).toContain("12:05 AM");
-        expect(titled).not.toContain("OPENMARCH");
+        expect(titled).not.toContain("MARK DIESEL STADIUM");
     });
 
     it("puts the show and the window's own words on the board's card", () => {
@@ -295,9 +303,12 @@ describe("Venue brand painters", () => {
         expect(dieselClock(new Date(2027, 0, 1, 12, 0)).time).toBe("12:00 PM");
     });
 
-    it("defaults the end zones to OpenMarch's, as every kit does", () => {
-        expect(DIESEL_VENUE_PARAMS).toEqual(DEFAULT_VENUE_PARAMS);
-        expect(DIESEL_VENUE_PARAMS.endZoneText).toBe(OPENMARCH_SIGN);
+    it("letters the end zones with the event, in OpenMarch's colors", () => {
+        expect(DIESEL_VENUE_PARAMS).toEqual(KIT_VENUE_PARAMS.markDiesel);
+        expect(DIESEL_VENUE_PARAMS).toEqual({
+            ...DEFAULT_VENUE_PARAMS,
+            endZoneText: "GRAND NATIONALS",
+        });
     });
 });
 
@@ -330,11 +341,13 @@ describe("Mark Diesel midfield art", () => {
         expect(written((g) => dieselFieldArt.paint(g, 256, 256))).toBe(
             "[marcher]",
         );
-        // The end zones say OPENMARCH, with the marcher (`field/paint.ts`).
+        // The end zones say GRAND NATIONALS.
         const zones = plan.items.filter((i) => i.role === "endZoneText");
         expect(zones).toHaveLength(2);
         expect(
-            zones.every((z) => z.type === "text" && z.text === OPENMARCH_SIGN),
+            zones.every(
+                (z) => z.type === "text" && z.text === "GRAND NATIONALS",
+            ),
         ).toBe(true);
     });
 

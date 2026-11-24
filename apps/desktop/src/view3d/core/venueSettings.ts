@@ -165,7 +165,7 @@ export const KIT_VENUE_PARAMS: Readonly<
     markDiesel: Object.freeze({
         homeColor: "#6442ff",
         awayColor: "#c23b3b",
-        endZoneText: "OPENMARCH",
+        endZoneText: "GRAND NATIONALS",
         endZoneColor: "#6442ff",
     }),
 };
