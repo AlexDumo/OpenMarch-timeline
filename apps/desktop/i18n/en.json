@@ -662,7 +662,9 @@
         "viewFrom": "View from",
         "viewFromAudience": "Audience",
         "viewFromPerformers": "Performers",
-        "viewFromTooltip": "Performers turns the field around, as marchers see it facing the front: the front sideline is at the top and side 1 is on the right. Text stays upright."
+        "viewFromTooltip": "Performers turns the field around, as marchers see it facing the front: the front sideline is at the top and side 1 is on the right. Yard numbers turn with the field; the labels around it stay upright.",
+        "drillChartPreviewLoading": "Drawing the preview…",
+        "drillChartPreviewUnavailable": "The preview couldn't be drawn."
     },
     "field": {
         "benchmark": {

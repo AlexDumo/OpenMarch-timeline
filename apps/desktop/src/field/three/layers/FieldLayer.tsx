@@ -200,7 +200,10 @@ export default function FieldLayer({
     viewFrom = "audience",
 }: {
     fieldProperties: FieldProperties;
-    /** The side the field is seen from: the performers' turns it (exports only, #1265) */
+    /**
+     * The side the field is seen from: the performers' turns it (exports only, #1265). The pit
+     * area `strips` aren't turned, so don't pass both.
+     */
     viewFrom?: FieldViewFrom;
     /** The pit areas in front of and behind the field (`pitAreasOf`) */
     strips?: readonly FieldRect[];

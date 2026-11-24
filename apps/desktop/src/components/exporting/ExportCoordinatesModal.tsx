@@ -1608,7 +1608,16 @@ function VideoExport() {
                 </Form.Field>
                 <ViewFromChoice
                     value={viewFrom}
-                    onChange={setViewFrom}
+                    onChange={(next) => {
+                        if (next === viewFrom) return;
+                        // The field turns about the frame's center: keep the same part in view
+                        setFieldFraming((framing) => ({
+                            ...framing,
+                            offsetX: -framing.offsetX,
+                            offsetY: -framing.offsetY,
+                        }));
+                        setViewFrom(next);
+                    }}
                     className="col-span-2"
                 />
             </Form.Root>

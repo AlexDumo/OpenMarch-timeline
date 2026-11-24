@@ -98,4 +98,42 @@ describe("drill charts seen from the performers' side", () => {
         expect(SVGs[1]).toHaveLength(sortedPages.length);
         expect(dotCenters(SVGs[1]![0]!).size).toBe(marchers.length);
     });
+
+    it("turns the walked paths, their midpoints and the previous and next marks", async () => {
+        const { marchers, sortedPages, marcherPagesMap } = show();
+        const walk = { d: "M 10 10 A 5 5 0 0 1 20 10", mid: { x: 15, y: 12 } };
+        const { SVGs } = await generateDrillChartExportSVGs({
+            fieldProperties,
+            marchers,
+            sortedPages,
+            marcherPagesMap,
+            walkedPaths: () => walk,
+            sectionAppearances: [],
+            individualCharts: true,
+            viewFrom: "performer",
+        });
+        const { width, height } = fieldProperties;
+        const r = (n: number) => String(Math.round(n * 1000) / 1000);
+        const svg = SVGs[0]![1]!;
+        expect(svg).toContain(
+            `<path d="M ${r(width - 10)} ${r(height - 10)} A 5 5 0 0 1 ${r(width - 20)} ${r(height - 10)}"`,
+        );
+        expect(svg).toContain(`cx="${r(width - 15)}" cy="${r(height - 12)}"`);
+        // The box on the previous position and the circle on the next, at their turned points
+        const at = (pageIndex: number) => {
+            const p =
+                marcherPagesMap.marcherPagesByPage[sortedPages[pageIndex]!.id]![
+                    marchers[0]!.id
+                ]!;
+            return { x: width - p.x, y: height - p.y };
+        };
+        const previous = at(0);
+        const next = at(2);
+        expect(svg).toContain(
+            `<rect x="${r(previous.x - 10)}" y="${r(previous.y - 10)}" width="20" height="20"`,
+        );
+        expect(svg).toContain(
+            `<circle cx="${r(next.x)}" cy="${r(next.y)}" r="10"`,
+        );
+    });
 });
