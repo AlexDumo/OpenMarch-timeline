@@ -60,11 +60,11 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 **Goal:** front and back Artwork on Top, Bottoms and Overlay.
 
-**Scope:** projection in rest-pose meters inside the uniform shader, no UVs, on all seven body types and the block bodies; Artwork sized as worn by the median body and graded proportionally; Artwork layers in a texture array indexed per look.
+**Scope (amended 2026-11-24, proposed):** front/back flats rendered by the hybrid wrap, per [../uniform-artwork.md](../uniform-artwork.md), replacing the earlier rest-pose projection. It covers the per-body lookup tables, the composed flats atlas per look and body type, items (logos, numbers, prints) with their grades, the flats template, and the uniform pack with its ways in (PNG, SVG, PDF) and modes. It runs on all seven body types; the block bodies take palette colors only. The work is split into fork issues under #975.
 
 **Tickets:** 04, 08, 09.
 
-**Done when:** a 10 in chest logo measures 10 in on the median body and scales with each body type.
+**Done when:** a 10 in chest logo measures 10 in on the median body and keeps its aspect on every body type, and a band drawn across a sleeve on both flats closes all the way round.
 
 **Checks:** pixel tests; screenshots on every body type; type-check, lint, format, spellcheck.
 
