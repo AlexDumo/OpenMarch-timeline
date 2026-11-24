@@ -19,6 +19,10 @@ import {
     type PostPipeline,
 } from "@/view3d/core/post";
 import { requestDraw } from "./drawWake";
+import { useView3dSceneStore } from "./sceneStore";
+
+/** The widest focus blur in low quality, px: a narrower blur gathers fewer samples. */
+const LOW_QUALITY_MAX_BLUR_PX = 16;
 
 let active: PostPipeline | null = null;
 
@@ -79,6 +83,11 @@ export default function PostFx({ settings }: { settings: BloomSettings }) {
                       focusM,
                       fStop: store.focus.fStop,
                       focalMm: focalLengthFromFov(camera.fov),
+                      // Low quality keeps the blur narrower, so cheaper
+                      maxRadiusPx:
+                          useView3dSceneStore.getState().quality === "high"
+                              ? undefined
+                              : LOW_QUALITY_MAX_BLUR_PX,
                   }
                 : null,
         );

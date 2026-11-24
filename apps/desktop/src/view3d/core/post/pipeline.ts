@@ -92,6 +92,8 @@ export interface FocusFrame {
     focusM: number;
     focalMm: number;
     fStop: number;
+    /** Caps the widest blur, px (lower quality); the pipeline's own cap otherwise. */
+    maxRadiusPx?: number;
 }
 
 export interface PostPipeline {
@@ -217,30 +219,21 @@ void main() {
 
 /** Scene plus bloom plus ghosts, then tone mapping and the color space. */
 /** The most gather taps a pixel takes (the spiral stops at the widest blur first). */
-const DOF_MAX_TAPS = 256;
+const DOF_MAX_TAPS = 192;
 /** The widest blur, as a share of the picture's height, and at most this many pixels. */
 const DOF_MAX_SHARE = 0.02;
 const DOF_MAX_PX = 32;
 
-/**
- * Depth of field: gathers along a golden-angle spiral out to the widest
- * blur. A sample counts where its own blur circle reaches this pixel; one
- * behind a sharper pixel only spreads as far as twice this pixel's blur, so
- * the background doesn't spill over a sharp performer.
- */
-const DEPTH_OF_FIELD = /* glsl */ `
+/** Depth and blur size, shared by the gather and the mix. Sizes are full-size pixels. */
+const DOF_COMMON = /* glsl */ `
 precision highp float;
-uniform sampler2D tScene;
 uniform sampler2D tDepth;
-uniform vec2 uTexel;
 uniform float uNear;
 uniform float uFar;
 uniform float uFocus;
 uniform float uScale;
 uniform float uMaxRadius;
 varying vec2 vUv;
-const float GOLDEN_ANGLE = 2.39996323;
-const float STEP = 1.5;
 float viewZ(vec2 uv) {
     float z = texture2D(tDepth, uv).x * 2.0 - 1.0;
     return 2.0 * uNear * uFar / (uFar + uNear - z * (uFar - uNear));
@@ -248,12 +241,29 @@ float viewZ(vec2 uv) {
 float blur(float z) {
     return min(uMaxRadius, uScale * abs(z - uFocus) / z);
 }
+`;
+
+/**
+ * Depth of field, drawn at half size: gathers along a golden-angle spiral
+ * out to the widest blur, samples spaced for the half-size picture. A sample
+ * counts where its own blur circle reaches this pixel; one behind a sharper
+ * pixel only spreads as far as twice this pixel's blur, so the background
+ * doesn't spill over a sharp performer. Alpha is how far nearer, blurred
+ * things reach over this pixel (a share of the widest blur), so the mix can
+ * soften a sharp background's edge behind them.
+ */
+const DEPTH_OF_FIELD = /* glsl */ `${DOF_COMMON}
+uniform sampler2D tScene;
+uniform vec2 uTexel;
+const float GOLDEN_ANGLE = 2.39996323;
+const float STEP = 3.0;
 void main() {
     float z = viewZ(vUv);
     float size = blur(z);
     vec3 color = texture2D(tScene, vUv).rgb;
     float total = 1.0;
-    float radius = STEP;
+    float reach = 0.0;
+    float radius = STEP * 0.5;
     float angle = 0.0;
     for (int i = 0; i < ${DOF_MAX_TAPS}; i++) {
         if (radius >= uMaxRadius) break;
@@ -262,13 +272,30 @@ void main() {
         float sz = viewZ(uv);
         float sampleSize = blur(sz);
         if (sz > z) sampleSize = clamp(sampleSize, 0.0, size * 2.0);
-        float m = smoothstep(radius - 0.5, radius + 0.5, sampleSize);
+        float m = smoothstep(radius - 1.0, radius + 1.0, sampleSize);
+        if (sz < z) reach = max(reach, m * sampleSize);
         color += mix(color / total, tap, m);
         total += 1.0;
         radius += STEP / radius;
         angle += GOLDEN_ANGLE;
     }
-    gl_FragColor = vec4(color / total, 1.0);
+    gl_FragColor = vec4(color / total, reach / uMaxRadius);
+}
+`;
+
+/**
+ * The full-size picture with the half-size blur laid over it where it's out
+ * of focus: by this pixel's own blur, or how far a nearer blur reaches over
+ * it. What's in focus keeps every pixel.
+ */
+const DEPTH_OF_FIELD_MIX = /* glsl */ `${DOF_COMMON}
+uniform sampler2D tScene;
+uniform sampler2D tBlur;
+void main() {
+    vec3 sharp = texture2D(tScene, vUv).rgb;
+    vec4 blurred = texture2D(tBlur, vUv);
+    float size = max(blur(viewZ(vUv)), blurred.a * uMaxRadius);
+    gl_FragColor = vec4(mix(sharp, blurred.rgb, smoothstep(0.5, 1.5, size)), 1.0);
 }
 `;
 
@@ -384,8 +411,13 @@ export function createPostPipeline(
         depthTexture: new DepthTexture(size.x, size.y),
     });
     sceneTarget.texture.name = "view3d.post.scene";
-    // The scene with depth of field, made only once a camera focuses.
+    // The scene with depth of field (and its half-size blur), made only once a camera focuses.
     let focusTarget: WebGLRenderTarget | null = null;
+    let focusBlurTarget: WebGLRenderTarget | null = null;
+    const halfSize = (width: number, height: number): [number, number] => [
+        Math.max(1, Math.ceil(width / 2)),
+        Math.max(1, Math.ceil(height / 2)),
+    ];
 
     const blurTarget = () =>
         new WebGLRenderTarget(1, 1, {
@@ -403,6 +435,7 @@ export function createPostPipeline(
     const resize = (width: number, height: number) => {
         sceneTarget.setSize(width, height);
         focusTarget?.setSize(width, height);
+        focusBlurTarget?.setSize(...halfSize(width, height));
         sizes = bloomLevelSizes(width, height);
         [...down, ...up].forEach((t) => t.dispose());
         down = sizes.map(blurTarget);
@@ -436,15 +469,22 @@ export function createPostPipeline(
         uTexel: new Vector2(),
         uSpread: 1,
     });
-    const depthOfField = pass(DEPTH_OF_FIELD, {
+    const dofUniforms = () => ({
         tScene: null,
         tDepth: null,
-        uTexel: new Vector2(),
         uNear: 0.1,
         uFar: 1000,
         uFocus: 10,
         uScale: 0,
         uMaxRadius: 1,
+    });
+    const depthOfField = pass(DEPTH_OF_FIELD, {
+        ...dofUniforms(),
+        uTexel: new Vector2(),
+    });
+    const depthOfFieldMix = pass(DEPTH_OF_FIELD_MIX, {
+        ...dofUniforms(),
+        tBlur: null,
     });
     const composite = pass(COMPOSITE, {
         tScene: null,
@@ -480,26 +520,42 @@ export function createPostPipeline(
             height,
         );
         if (scale <= 0.05) return sceneTarget.texture;
-        if (!focusTarget) {
-            focusTarget = new WebGLRenderTarget(width, height, {
+        const target = () =>
+            new WebGLRenderTarget(1, 1, {
                 type: HalfFloatType,
                 minFilter: LinearFilter,
                 magFilter: LinearFilter,
                 depthBuffer: false,
                 stencilBuffer: false,
             });
+        if (!focusTarget || !focusBlurTarget) {
+            focusTarget = target();
             focusTarget.texture.name = "view3d.post.focus";
+            focusTarget.setSize(width, height);
+            focusBlurTarget = target();
+            focusBlurTarget.texture.name = "view3d.post.focusBlur";
+            focusBlurTarget.setSize(...halfSize(width, height));
         }
-        const u = depthOfField.uniforms;
-        u.tScene.value = sceneTarget.texture;
-        u.tDepth.value = sceneTarget.depthTexture;
-        u.uTexel.value.set(1 / width, 1 / height);
-        u.uNear.value = sceneCamera.near;
-        u.uFar.value = sceneCamera.far;
-        u.uFocus.value = focus.focusM;
-        u.uScale.value = scale;
-        u.uMaxRadius.value = Math.min(DOF_MAX_PX, height * DOF_MAX_SHARE);
-        draw(depthOfField, focusTarget);
+        const maxRadius = Math.min(
+            focus.maxRadiusPx ?? DOF_MAX_PX,
+            DOF_MAX_PX,
+            height * DOF_MAX_SHARE,
+        );
+        for (const material of [depthOfField, depthOfFieldMix]) {
+            const u = material.uniforms;
+            u.tScene.value = sceneTarget.texture;
+            u.tDepth.value = sceneTarget.depthTexture;
+            u.uNear.value = sceneCamera.near;
+            u.uFar.value = sceneCamera.far;
+            u.uFocus.value = focus.focusM;
+            u.uScale.value = scale;
+            u.uMaxRadius.value = maxRadius;
+        }
+        // Radii are full-size pixels, so the gather steps in those.
+        depthOfField.uniforms.uTexel.value.set(1 / width, 1 / height);
+        draw(depthOfField, focusBlurTarget);
+        depthOfFieldMix.uniforms.tBlur.value = focusBlurTarget.texture;
+        draw(depthOfFieldMix, focusTarget);
         return focusTarget.texture;
     };
 
@@ -606,11 +662,17 @@ export function createPostPipeline(
             sceneTarget.depthTexture?.dispose();
             sceneTarget.dispose();
             focusTarget?.dispose();
+            focusBlurTarget?.dispose();
             [...down, ...up].forEach((t) => t.dispose());
             geometry.dispose();
-            [prefilter, downsample, upsample, depthOfField, composite].forEach(
-                (m) => m.dispose(),
-            );
+            [
+                prefilter,
+                downsample,
+                upsample,
+                depthOfField,
+                depthOfFieldMix,
+                composite,
+            ].forEach((m) => m.dispose());
         },
     };
     return pipeline;

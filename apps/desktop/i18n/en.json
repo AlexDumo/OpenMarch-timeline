@@ -3808,7 +3808,9 @@
         },
         "cameraSettings": {
             "does": "Camera",
-            "fixed": "Fixed",
+            "follows": "Follows",
+            "nobody": "Nobody",
+            "followView": "View",
             "behind": "Behind",
             "eyes": "Eyes",
             "performer": "Performer",

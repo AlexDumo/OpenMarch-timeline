@@ -2,8 +2,8 @@
 /**
  * A camera's exact settings, opened from its row in the Cameras panel.
  *
- * - What it does: stays put, follows a performer from behind, or looks out
- *   of their eyes (with which performer).
+ * - Who it follows: nobody (it stays put), or a performer, from behind
+ *   them or out of their eyes.
  * - Where it is: the camera and the point it looks at, in feet or meters by
  *   the field's measurement system, with where that is on the field in
  *   drill terms; then pan, tilt and roll.
@@ -14,8 +14,9 @@
  *   looks sharp.
  *
  * Typing a number and pressing Enter (or leaving the field) saves it and
- * puts the view there. Dragging a field's label scrubs the value and moves
- * the view as it goes; letting go saves. Arrow keys step it (Shift for ten
+ * puts the view there. Dragging a field (or its label) left or right
+ * changes the value and moves the view as it goes; letting go saves; a
+ * click without a drag types in it. Arrow keys step it (Shift for ten
  * steps, Alt for a tenth). A default camera becomes the show's own once a
  * setting changes, as "Set to current view" does.
  */
@@ -218,37 +219,45 @@ export function CameraSettings({
             data-testid="view3d-camera-settings"
         >
             <Section title={t("view3d.cameraSettings.does")}>
-                <SegmentedTextSwitch
-                    ariaLabel={t("view3d.cameraSettings.does")}
-                    testId="view3d-camera-follow-mode"
-                    className="self-start"
-                    selected={followChoice}
-                    setSelected={(value) => setFollow(value as FollowChoice)}
-                    options={[
-                        {
-                            value: "fixed",
-                            label: t("view3d.cameraSettings.fixed"),
-                        },
-                        {
-                            value: "third",
-                            label: t("view3d.cameraSettings.behind"),
-                            disabled: followedId === undefined,
-                        },
-                        {
-                            value: "pov",
-                            label: t("view3d.cameraSettings.eyes"),
-                            disabled: followedId === undefined,
-                        },
-                    ]}
-                />
+                <Row label={t("view3d.cameraSettings.follows")}>
+                    <PerformerSelect
+                        label={t("view3d.cameraSettings.follows")}
+                        value={saved.follow?.marcherId ?? null}
+                        noneLabel={t("view3d.cameraSettings.nobody")}
+                        marchers={marchers}
+                        testId="view3d-camera-follow-performer"
+                        onChange={(id) =>
+                            id === null
+                                ? setFollow("fixed")
+                                : setFollow(
+                                      followChoice === "fixed"
+                                          ? "third"
+                                          : followChoice,
+                                      id,
+                                  )
+                        }
+                    />
+                </Row>
                 {saved.follow && (
-                    <Row label={t("view3d.cameraSettings.performer")}>
-                        <PerformerSelect
-                            label={t("view3d.cameraSettings.performer")}
-                            value={saved.follow.marcherId}
-                            marchers={marchers}
-                            testId="view3d-camera-follow-performer"
-                            onChange={(id) => setFollow(followChoice, id)}
+                    <Row label={t("view3d.cameraSettings.followView")}>
+                        <SegmentedTextSwitch
+                            ariaLabel={t("view3d.cameraSettings.followView")}
+                            testId="view3d-camera-follow-mode"
+                            className="self-start justify-self-start"
+                            selected={followChoice}
+                            setSelected={(value) =>
+                                setFollow(value as FollowChoice)
+                            }
+                            options={[
+                                {
+                                    value: "third",
+                                    label: t("view3d.cameraSettings.behind"),
+                                },
+                                {
+                                    value: "pov",
+                                    label: t("view3d.cameraSettings.eyes"),
+                                },
+                            ]}
                         />
                     </Row>
                 )}
@@ -433,6 +442,7 @@ export function CameraSettings({
                             marchers={marchers}
                             testId="view3d-camera-focus-performer"
                             onChange={(marcherId) =>
+                                marcherId !== null &&
                                 save(
                                     withFocus({
                                         on: { kind: "performer", marcherId },
@@ -501,33 +511,42 @@ export function CameraSettings({
     );
 }
 
+const NOBODY = "nobody";
+
 /** Chooses a performer by drill number and name. */
 function PerformerSelect({
     label,
     value,
+    noneLabel,
     marchers,
     testId,
     onChange,
 }: {
     label: string;
-    value: number;
+    /** Null for nobody (only with `noneLabel`). */
+    value: number | null;
+    /** Adds a first choice for nobody, with this name. */
+    noneLabel?: string;
     marchers:
         | { id: number; drill_number: string; name?: string | null }[]
         | undefined;
     testId: string;
-    onChange: (marcherId: number) => void;
+    onChange: (marcherId: number | null) => void;
 }) {
     return (
         <div data-testid={testId} className="min-w-0">
             <Select
-                value={String(value)}
-                onValueChange={(v) => onChange(Number(v))}
+                value={value === null ? NOBODY : String(value)}
+                onValueChange={(v) => onChange(v === NOBODY ? null : Number(v))}
             >
                 <SelectTriggerCompact
                     label={label}
                     className="w-full justify-start"
                 />
                 <SelectContent>
+                    {noneLabel && (
+                        <SelectItem value={NOBODY}>{noneLabel}</SelectItem>
+                    )}
                     {(marchers ?? []).map((m) => (
                         <SelectItem key={m.id} value={String(m.id)}>
                             {m.name
@@ -621,7 +640,7 @@ interface NumberFieldProps {
 
 /**
  * A number typed and saved on Enter or blur (Esc puts it back), stepped
- * with the arrow keys, or scrubbed by dragging its label.
+ * with the arrow keys, or changed by dragging the box or its label.
  */
 function NumberField({
     label,
@@ -644,7 +663,12 @@ function NumberField({
         startX: number;
         start: number;
         last: number;
+        /** Past the few pixels that tell a drag from a click. */
+        moved: boolean;
+        /** Started on the box itself: a click without a drag types in it. */
+        onBox: boolean;
     } | null>(null);
+    const box = useRef<HTMLInputElement>(null);
     useEffect(() => {
         if (!scrub.current) setDraft(String(shown));
     }, [shown]);
@@ -659,16 +683,18 @@ function NumberField({
 
     const input = (
         <input
+            ref={box}
             type="text"
             inputMode="decimal"
             value={draft}
             aria-label={label}
             data-testid={testId}
             className={clsx(
-                "rounded-6 border-stroke bg-fg-2 text-body text-text focus:border-accent h-26 w-full min-w-0 border pl-6 text-right tabular-nums outline-hidden",
+                "rounded-6 border-stroke bg-fg-2 text-body text-text focus:border-accent h-26 w-full min-w-0 cursor-ew-resize touch-pan-y border pl-6 text-right tabular-nums outline-hidden focus:cursor-text",
                 !unit ? "pr-6" : unit.length > 1 ? "pr-32" : "pr-20",
             )}
             onChange={(event) => setDraft(event.target.value)}
+            {...dragHandlers(true)}
             onBlur={() => {
                 const v = Number(draft.replace(",", "."));
                 if (draft.trim() === "" || !Number.isFinite(v))
@@ -696,41 +722,57 @@ function NumberField({
             }}
         />
     );
-    const scrubHandlers = {
-        onPointerDown: (event: React.PointerEvent<HTMLElement>) => {
-            if (event.pointerType === "mouse" && event.button !== 0) return;
-            event.preventDefault();
-            event.currentTarget.setPointerCapture?.(event.pointerId);
-            scrub.current = {
-                startX: event.clientX,
-                start: shown,
-                last: shown,
-            };
-        },
-        onPointerMove: (event: React.PointerEvent<HTMLElement>) => {
-            const s = scrub.current;
-            if (!s) return;
-            const k = event.shiftKey ? 10 : event.altKey ? 0.1 : 1;
-            const v = round(
-                clamp(s.start + (event.clientX - s.startX) * scrubPerPx * k),
-                digits,
-            );
-            if (v === s.last) return;
-            s.last = v;
-            setDraft(String(v));
-            onScrub(v);
-        },
-        onPointerUp: () => {
-            const s = scrub.current;
-            scrub.current = null;
-            if (s && s.last !== s.start) onCommit(s.last);
-        },
-        onPointerCancel: () => {
-            const s = scrub.current;
-            scrub.current = null;
-            if (s && s.last !== s.start) onCommit(s.last);
-        },
-    };
+    /**
+     * Dragging left or right changes the value and moves the view as it
+     * goes; letting go saves. On the box, a click without a drag types in it
+     * instead, and a box already being typed in keeps its own pointer.
+     */
+    // A declaration, so the box above can use it.
+    function dragHandlers(onBox: boolean) {
+        return {
+            onPointerDown: (event: React.PointerEvent<HTMLElement>) => {
+                if (event.pointerType === "mouse" && event.button !== 0) return;
+                if (onBox && document.activeElement === box.current) return;
+                event.preventDefault();
+                event.currentTarget.setPointerCapture?.(event.pointerId);
+                scrub.current = {
+                    startX: event.clientX,
+                    start: shown,
+                    last: shown,
+                    moved: false,
+                    onBox,
+                };
+            },
+            onPointerMove: (event: React.PointerEvent<HTMLElement>) => {
+                const s = scrub.current;
+                if (!s) return;
+                const dx = event.clientX - s.startX;
+                if (!s.moved && Math.abs(dx) < DRAG_START_PX) return;
+                s.moved = true;
+                const k = event.shiftKey ? 10 : event.altKey ? 0.1 : 1;
+                const v = round(clamp(s.start + dx * scrubPerPx * k), digits);
+                if (v === s.last) return;
+                s.last = v;
+                setDraft(String(v));
+                onScrub(v);
+            },
+            onPointerUp: () => {
+                const s = scrub.current;
+                scrub.current = null;
+                if (!s) return;
+                if (s.last !== s.start) onCommit(s.last);
+                else if (!s.moved && s.onBox) {
+                    box.current?.focus();
+                    box.current?.select();
+                }
+            },
+            onPointerCancel: () => {
+                const s = scrub.current;
+                scrub.current = null;
+                if (s && s.last !== s.start) onCommit(s.last);
+            },
+        };
+    }
 
     if (hideLabel)
         return (
@@ -745,7 +787,7 @@ function NumberField({
                 className="text-sub text-text/80 cursor-ew-resize truncate select-none"
                 title={tooltip}
                 data-testid={`${testId}-scrub`}
-                {...scrubHandlers}
+                {...dragHandlers(false)}
             >
                 {label}
             </span>
@@ -764,6 +806,9 @@ function Unit({ unit }: { unit: string }) {
         </span>
     );
 }
+
+/** How far a press moves before it's a drag rather than a click, px. */
+const DRAG_START_PX = 3;
 
 function round(v: number, digits: number): number {
     const k = 10 ** digits;
