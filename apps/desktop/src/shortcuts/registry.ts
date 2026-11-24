@@ -161,7 +161,7 @@ function runHandler(
     const handler = top(id);
     if (!handler || !handler.isEnabled() || isActionOffInWorkspace(id))
         return null;
-    runListeners.forEach((listener) => listener(id, byKey ? "key" : source));
+    runListeners.forEach((listener) => listener(id, source));
     const run = byKey && handler.press ? handler.press : handler.run;
     const own = getActionDefinition(id).args;
     run(args ? { ...own, ...args } : own);
@@ -183,8 +183,9 @@ export function runAction(
  */
 export function pressAction(
     id: ActionId,
+    source: ActionRunSource = "key",
 ): ((reason: ReleaseReason) => void) | null {
-    const release = runHandler(id, true)?.release;
+    const release = runHandler(id, true, undefined, source)?.release;
     if (!release) return null;
     return (reason) => release(reason);
 }

@@ -39,14 +39,18 @@ describe("createUsageTracker", () => {
         advance(90_000);
         tracker.flush();
         expect(capture).toHaveBeenCalledTimes(1);
-        expect(capture).toHaveBeenCalledWith("actions used", {
-            actions: { createPageAtPlayhead: 2, splitPage: 1 },
-            actions_by_key: { createPageAtPlayhead: 1 },
-            sources: { key: 1, button: 1, palette: 1 },
-            undone_quickly: {},
-            total_actions: 3,
-            window_seconds: 90,
-        });
+        expect(capture).toHaveBeenCalledWith(
+            "actions used",
+            {
+                actions: { createPageAtPlayhead: 2, splitPage: 1 },
+                actions_by_key: { createPageAtPlayhead: 1 },
+                sources: { key: 1, button: 1, palette: 1 },
+                undone_quickly: {},
+                total_actions: 3,
+                window_seconds: 90,
+            },
+            { sendNow: false },
+        );
 
         tracker.flush();
         expect(capture).toHaveBeenCalledTimes(1);
@@ -65,6 +69,25 @@ describe("createUsageTracker", () => {
         tracker.flush();
         expect(capture.mock.calls[0][1].undone_quickly).toEqual({
             splitPage: 1,
+        });
+    });
+
+    it("puts a quick undo on the last edit, not on views or playback in between", () => {
+        let time = 0;
+        const capture = vi.fn();
+        const tracker = createUsageTracker(
+            capture,
+            () => time,
+            (id) => id === "alignHorizontally",
+        );
+        tracker.actionRan("alignHorizontally", "button");
+        tracker.actionRan("openCommandPalette", "key");
+        tracker.actionRan("playPause", "key");
+        time += 1_000;
+        tracker.actionRan("performUndo", "palette");
+        tracker.flush();
+        expect(capture.mock.calls[0][1].undone_quickly).toEqual({
+            alignHorizontally: 1,
         });
     });
 
@@ -110,9 +133,10 @@ describe("createUsageTracker", () => {
         expect(capture).toHaveBeenCalledTimes(MAX_REFUSALS);
     });
 
-    it("sends each empty palette search once, trimmed and lowercased", () => {
+    it("sends each empty palette search once, trimmed and lowercased, without words that hold digits", () => {
         const { capture, tracker } = setup();
-        tracker.paletteSearchFoundNothing("  Rotate Block ");
+        tracker.paletteSearchFoundNothing("B12");
+        tracker.paletteSearchFoundNothing("  Rotate Block 3 ");
         tracker.paletteSearchFoundNothing("rotate block");
         tracker.paletteSearchFoundNothing("x");
         tracker.paletteSearchFoundNothing("a".repeat(300));
@@ -129,7 +153,7 @@ describe("installUsageEvents", () => {
     it("counts runs from the registry with how they started, and sends on hide and stop", () => {
         vi.useFakeTimers();
         const capture = vi.fn();
-        const stop = installUsageEvents(capture, {
+        const stop = installUsageEvents(capture, () => true, {
             subscribeToActionRuns,
             subscribeToActionRefusals,
         });
@@ -152,6 +176,7 @@ describe("installUsageEvents", () => {
         const summary = capture.mock.calls.find(
             ([event]) => event === "actions used",
         );
+        expect(summary?.[2]).toEqual({ sendNow: true });
         expect(summary?.[1]).toMatchObject({
             actions: { swapMarchers: 3 },
             actions_by_key: { swapMarchers: 1 },
@@ -171,6 +196,7 @@ describe("installUsageEvents", () => {
         expect(capture).toHaveBeenLastCalledWith(
             "actions used",
             expect.objectContaining({ sources: { other: 1 } }),
+            { sendNow: true },
         );
         expect(usageTracker()).toBeNull();
         unregister();

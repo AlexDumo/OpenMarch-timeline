@@ -11,9 +11,14 @@
  */
 import type { ActionRunSource } from "@/shortcuts/registry";
 
+/**
+ * Sends an event. `sendNow` means the window may be about to go away (hidden, reloaded or closed):
+ * send it at once rather than in the next batch, which would die with the page.
+ */
 export type CaptureFn = (
     event: string,
     properties: Record<string, unknown>,
+    options?: { sendNow?: boolean },
 ) => void;
 
 /** How long after an action an undo counts as undoing it. */
@@ -21,14 +26,25 @@ export const QUICK_UNDO_MS = 5_000;
 /** The same refusal again within this time isn't sent again (held keys, repeated clicks). */
 export const REFUSAL_REPEAT_MS = 10_000;
 /** At most this many refusal events per window load. */
-export const MAX_REFUSALS = 100;
+export const MAX_REFUSALS = 30;
 /** At most this many palette searches per window load. */
-export const MAX_EMPTY_SEARCHES = 50;
+export const MAX_EMPTY_SEARCHES = 20;
 /** Longer texts are cut to this length. */
 const MAX_TEXT = 120;
 
 const UNDO = "performUndo";
 const REDO = "performRedo";
+
+/**
+ * A palette search without the words that hold digits (marcher labels such as "B12", set and page
+ * numbers, counts), so what's left says what was looked for without naming marchers or places.
+ */
+export function searchWithoutNumbers(query: string): string {
+    return query
+        .split(/\s+/)
+        .filter((word) => word !== "" && !/\d/.test(word))
+        .join(" ");
+}
 
 function clip(text: string): string {
     const trimmed = text.trim();
@@ -43,13 +59,19 @@ export interface UsageTracker {
     actionRan(id: string, source: ActionRunSource): void;
     actionRefused(id: string, source: ActionRunSource, reason: string): void;
     paletteSearchFoundNothing(query: string): void;
-    /** Sends the counts gathered so far, if any, and starts a new window. */
-    flush(): void;
+    /** Sends the counts gathered so far, if any, and starts a new window (`sendNow`: see `CaptureFn`). */
+    flush(sendNow?: boolean): void;
 }
 
+/**
+ * `isEdit` says which actions change the show: only those can be "undone quickly", so opening the
+ * palette or pressing play between an edit and its undo doesn't take the blame. An edit made by
+ * dragging on the field isn't an action, so an undo of it can still be put on the action before.
+ */
 export function createUsageTracker(
     capture: CaptureFn,
     now: () => number = Date.now,
+    isEdit: (id: string) => boolean = () => true,
 ): UsageTracker {
     let actions: Record<string, number> = {};
     let byKey: Record<string, number> = {};
@@ -71,7 +93,7 @@ export function createUsageTracker(
                 if (last && at - last.at <= QUICK_UNDO_MS)
                     bump(undoneQuickly, last.id);
                 last = null;
-            } else if (id !== REDO) {
+            } else if (id !== REDO && isEdit(id)) {
                 last = { id, at };
             }
         },
@@ -91,24 +113,28 @@ export function createUsageTracker(
             });
         },
         paletteSearchFoundNothing(query) {
-            const text = clip(query).toLowerCase();
+            const text = clip(searchWithoutNumbers(query)).toLowerCase();
             if (text.length < 2 || searchesSent.has(text)) return;
             if (searchesSent.size >= MAX_EMPTY_SEARCHES) return;
             searchesSent.add(text);
             capture("palette search found nothing", { query: text });
         },
-        flush() {
+        flush(sendNow = false) {
             const total = Object.values(actions).reduce((a, b) => a + b, 0);
             const at = now();
             if (total > 0)
-                capture("actions used", {
-                    actions,
-                    actions_by_key: byKey,
-                    sources,
-                    undone_quickly: undoneQuickly,
-                    total_actions: total,
-                    window_seconds: Math.round((at - windowStart) / 1000),
-                });
+                capture(
+                    "actions used",
+                    {
+                        actions,
+                        actions_by_key: byKey,
+                        sources,
+                        undone_quickly: undoneQuickly,
+                        total_actions: total,
+                        window_seconds: Math.round((at - windowStart) / 1000),
+                    },
+                    { sendNow },
+                );
             actions = {};
             byKey = {};
             sources = {};
@@ -139,6 +165,7 @@ export const FLUSH_EVERY_MS = 5 * 60_000;
  */
 export function installUsageEvents(
     capture: CaptureFn,
+    isEdit: (id: string) => boolean,
     registry: {
         subscribeToActionRuns: (
             listener: (id: string, source: ActionRunSource) => void,
@@ -152,7 +179,7 @@ export function installUsageEvents(
         ) => () => void;
     },
 ): () => void {
-    const tracker = createUsageTracker(capture);
+    const tracker = createUsageTracker(capture, Date.now, isEdit);
     installed = tracker;
     const stopRuns = registry.subscribeToActionRuns((id, source) =>
         tracker.actionRan(id, source),
@@ -162,13 +189,14 @@ export function installUsageEvents(
     );
     const timer = setInterval(() => tracker.flush(), FLUSH_EVERY_MS);
     const onHidden = () => {
-        if (document.visibilityState === "hidden") tracker.flush();
+        if (document.visibilityState === "hidden") tracker.flush(true);
     };
-    const onPageHide = () => tracker.flush();
+    // PostHog's own pagehide handler has already sent its queue by now: send this one at once
+    const onPageHide = () => tracker.flush(true);
     document.addEventListener("visibilitychange", onHidden);
     window.addEventListener("pagehide", onPageHide);
     return () => {
-        tracker.flush();
+        tracker.flush(true);
         stopRuns();
         stopRefusals();
         clearInterval(timer);

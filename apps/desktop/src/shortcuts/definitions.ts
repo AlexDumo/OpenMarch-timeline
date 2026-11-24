@@ -1708,3 +1708,21 @@ export const EXPORT_ACTION_IDS = [
 export function getActionDefinition(id: ActionId): ActionDefinition {
     return ACTIONS[id];
 }
+
+/** Categories of actions that don't change the show (for usage analytics: what an undo right after can blame). */
+const NON_EDIT_CATEGORIES: ReadonlySet<ActionCategory> = new Set([
+    "file",
+    "navigation",
+    "playback",
+    "ui",
+    "cursor",
+    "select",
+]);
+
+/** Whether the action changes the show, judged by its category. Unknown ids are not edits. */
+export function isEditAction(id: string): boolean {
+    const action = (
+        ACTIONS as Partial<Record<string, { category: ActionCategory }>>
+    )[id];
+    return action !== undefined && !NON_EDIT_CATEGORIES.has(action.category);
+}

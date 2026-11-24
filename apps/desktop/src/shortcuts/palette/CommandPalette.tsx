@@ -290,7 +290,12 @@ export default function CommandPalette() {
     const pendingDock = useRef(false);
     const choose = (item: PaletteItem | undefined) => {
         if (item?.disabled && item.disabledReason)
-            reportRefusedAction(item.id, "palette", item.disabledReason);
+            reportRefusedAction(
+                // The bare action id, as keys and buttons report it
+                item.id.replace(/^action:/, "").replace(/:filled$/, ""),
+                "palette",
+                item.disabledReason,
+            );
         if (!item || item.disabled) return;
         const choice = choices.get(item) ?? {};
         const above = choice.path ?? path;

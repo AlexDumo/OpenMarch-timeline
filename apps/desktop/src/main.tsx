@@ -29,6 +29,7 @@ import tolgee from "@/global/singletons/Tolgee";
 import { installClickFocusMarker } from "@/utilities/clickFocus";
 import { initEditorModeStore } from "@/stores/EditorModeStore";
 import { installUsageEvents } from "@/analytics/usageEvents";
+import { isEditAction } from "@/shortcuts/definitions";
 import {
     subscribeToActionRefusals,
     subscribeToActionRuns,
@@ -100,7 +101,15 @@ function mountEditor() {
         // Which actions people use and where they get stuck (sent only after an opt-in)
         if (!isSettingsWindow)
             installUsageEvents(
-                (event, properties) => posthog.capture(event, properties),
+                (event, properties, options) =>
+                    posthog.capture(
+                        event,
+                        properties,
+                        options?.sendNow
+                            ? { send_instantly: true, transport: "sendBeacon" }
+                            : undefined,
+                    ),
+                isEditAction,
                 { subscribeToActionRuns, subscribeToActionRefusals },
             );
     }
