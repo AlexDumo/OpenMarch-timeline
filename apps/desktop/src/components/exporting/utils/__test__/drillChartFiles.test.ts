@@ -96,23 +96,38 @@ describe("makeDrillChartFiles", () => {
                 answers: [
                     { success: true },
                     { success: false, error: "file is open" },
-                    new Error("Error invoking remote method 'x': Error: EBUSY"),
                     { success: true },
                     { success: true },
                 ],
-                skipped: [4],
+                skipped: [3],
             });
             expect(error).toBeUndefined();
             expect(count).toBe(2);
             expect(failed).toEqual([
                 [1, "file is open"],
-                [2, "EBUSY"],
-                [4, "no positions"],
+                [3, "no positions"],
             ]);
-            // A thrown error doesn't stop the remaining marchers; a skipped one isn't tried
-            expect(attempted).toEqual([0, 1, 2, 3]);
+            // A skipped marcher isn't tried
+            expect(attempted).toEqual([0, 1, 2]);
             // Progress moves on for failed charts too, not for skipped ones
-            expect(progressed).toEqual([0, 1, 2, 3]);
+            expect(progressed).toEqual([0, 1, 2]);
+        });
+
+        it("stops at the first save error with its reason, even after charts were made", async () => {
+            const { error, failed, attempted } = await run({
+                individualCharts: true,
+                answers: [
+                    { success: true },
+                    new Error(
+                        "Error invoking remote method 'export:generateDocForMarcher': Error: ENOSPC: no space left on device",
+                    ),
+                    { success: true },
+                ],
+            });
+            expect(error).toBe("ENOSPC: no space left on device");
+            // One failure notification from the caller, none per marcher
+            expect(failed).toEqual([]);
+            expect(attempted).toEqual([0, 1]);
         });
 
         it("fails when there are no marchers to chart", async () => {
@@ -129,13 +144,13 @@ describe("makeDrillChartFiles", () => {
                 individualCharts: true,
                 answers: [
                     { success: false, error: "ENOSPC" },
-                    new Error("EACCES"),
+                    { success: false },
                 ],
             });
             expect(error).toBe("none made");
             expect(failed).toEqual([
                 [0, "ENOSPC"],
-                [1, "EACCES"],
+                [1, "unknown"],
             ]);
         });
 

@@ -4,11 +4,7 @@ export type DrillChartPdfResult = { success: boolean; error?: string };
 /** Electron's prefix on errors thrown by an IPC handler */
 const IPC_ERROR_PREFIX = /^Error invoking remote method '[^']+': (Error: )?/;
 
-/**
- * The reason a PDF failed, from a `{ success: false }` answer or a thrown error. Saving
- * errors (no space, no permission, file open elsewhere) reach the renderer as a rejected
- * IPC call, so both count as one failed PDF.
- */
+/** The reason in a thrown error, without Electron's IPC prefix */
 const pdfFailureReason = (error: unknown): string | undefined => {
     if (error instanceof Error)
         return error.message.replace(IPC_ERROR_PREFIX, "") || undefined;
@@ -20,10 +16,15 @@ const pdfFailureReason = (error: unknown): string | undefined => {
  * Makes the drill chart PDFs: one combined chart, or one per marcher when `individualCharts`
  * is on. Returns how many PDFs were made.
  *
- * Throws, with the reason as the message, when the combined chart fails or when individual
- * charts are on and none was made, so the caller shows the export as failed. With individual
- * charts, each failed or skipped marcher is reported through `onFailed` and the rest still
- * get their PDFs.
+ * Throws, with the reason as the message, so the caller shows the export as failed, when:
+ * - the combined chart fails;
+ * - a save throws. Saving errors (no space, no permission, file open elsewhere) reach the
+ *   renderer as a rejected IPC call and would fail every marcher after it the same way, so
+ *   the export stops at the first one rather than reporting each marcher;
+ * - individual charts are on and none was made.
+ *
+ * Otherwise, with individual charts, each skipped marcher or `{ success: false }` answer is
+ * reported through `onFailed` and the rest still get their PDFs.
  */
 export async function makeDrillChartFiles({
     count,
@@ -72,18 +73,16 @@ export async function makeDrillChartFiles({
             onFailed(index, skipped);
             continue;
         }
-        let reason: string | undefined;
-        let success = false;
+        let result: DrillChartPdfResult;
         try {
-            const result = await makePdf(index);
-            success = result.success;
-            reason = result.error;
+            result = await makePdf(index);
         } catch (error) {
-            reason = pdfFailureReason(error);
+            throw new Error(pdfFailureReason(error) || unknownErrorMessage);
         }
-        if (success) made += 1;
+        if (result.success) made += 1;
         onAttempted(index);
-        if (!success) onFailed(index, reason || unknownErrorMessage);
+        if (!result.success)
+            onFailed(index, result.error || unknownErrorMessage);
         if (isCancelled()) throw new Error(cancelledMessage);
     }
     if (made === 0) throw new Error(noneMadeMessage);
