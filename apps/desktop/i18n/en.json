@@ -3600,6 +3600,7 @@
         },
         "uniformPreset": {
             "fade": "Ultraviolet Fade",
+            "flatsSample": "Sample flats (preview)",
             "military": "Night Watch",
             "plastron": "Lilac Plastron",
             "prism": "Prism Split",
