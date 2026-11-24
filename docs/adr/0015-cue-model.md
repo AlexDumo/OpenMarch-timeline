@@ -3,7 +3,9 @@
 <!-- cspell:words shako -->
 
 - Status: accepted by the owner on 2026-11-15, decision by decision, in a
-  design pass (the record is under "Decisions with the owner").
+  design pass (the record is under "Decisions with the owner"). Amended on
+  2026-11-24: a transition starts on its cue's count (see the amendment at
+  the end).
 - Date: 2026-11-15
 - Supersedes in part: [ADR 0004](0004-performer-cues.md) D-1 to D-3 and its
   channels, including those of its 2026-10-11 amendment, and the Feet default
@@ -105,7 +107,9 @@ file on fork main holds cues.
   momentary only.
 - **Transition length:** a cue may say how many counts its change takes
   ("horns down over 2", "turn to the back over 4"). Each value has a default,
-  such as a snap for horns and 2 counts for a facing change.
+  such as a snap for horns. Amended 2026-11-24: the change starts on the
+  cue's count and runs for its length; a Facing cue is instant until given
+  counts (see the amendment).
 - Before a performer's first cue of a type, the parameter has its
   **default**: a show setting or the section's, never stored as a cue.
 
@@ -316,3 +320,56 @@ Worked through one at a time on 2026-11-15.
 - End to end: set a rifle for the selection at a count; the 2D field and the
   3D View show it from that count; "Select Rifles" picks those performers
   there and not before.
+
+## Amendment 2026-11-24: a transition starts on its cue's count
+
+Settled with the owner on 2026-11-24 while designing Facing cues (fork
+#993). It changes D-2's transition rule, D-3's Facing row and the Facing
+default.
+
+### Decision
+
+- **A cue's change starts on its count** and runs for its transition length
+  in counts, like a keyframe tween that begins where it's placed. Before
+  this, a transition led into the cue's count and landed on it. The cue's
+  bar in its lane shows the change from where it starts: the stretch in
+  which it changes, then the value it holds.
+- **It changes at an even speed** per count (linear). A renderer doesn't
+  ease a timed change; an instant change (no length) still lands on its
+  count.
+- **A new cue is instant** until its length is set (by dragging the end of
+  its change in its lane, or in its editor).
+- **This rule is the one every changing type uses.** Facing uses it now
+  (#993). Position follows it when it's built (#1297): "horns down over 2"
+  starts going down on its count and is down 2 counts later. Posture and
+  any later type that changes over counts use it too. Until a type is built
+  to this rule, the compile keeps the old lead-in for it, so nothing stored
+  changes meaning: no file holds a Position or Posture cue yet.
+- **Facing** (D-3's row, as built):
+  - A facing is an angle in **plain degrees**: 0 front, 90 side 2, 180
+    back, 270 (or −90) side 1. Angles aren't wrapped: 360 is a full spin,
+    and −270 ends where 90 does after turning the other way. A positive
+    angle turns toward the performer's own left as they face front (side 2
+    is the audience's right).
+  - **Each performer turns from their own angle.** Front, Back, Side 1 and
+    Side 2 go to the nearest equivalent angle from it (after a 360° spin,
+    Front stays at 360°; half a turn either way goes left), Turn left 45°
+    and Turn right 45° go from it, and an angle goes to exactly that angle.
+    So one cue can be a different-sized turn for each performer.
+  - Facing cues are **lasting only**. "Look to side 1 for 2 counts, then
+    back" is two cues.
+  - Before a performer's first Facing cue they face front (0°).
+  - Direction of travel and toward a point stay in the library, not yet
+    offered.
+- **The feet follow the path for any facing.** A facing that differs from
+  the travel is a slide, backmarch or crab step whichever way the body
+  faces, and the 3D View works out which.
+
+### Consequences
+
+- The compiled Facing segments carry each performer's angle (`degrees`,
+  and a turn's `fromDegrees`), and `facingAt` answers the angle at any
+  time.
+- A cue that starts inside the turn before it cuts that turn where it got
+  to, and is flagged (`transition_cut`), as before.
+- Equipment stays an instant swap on its count.
