@@ -35,6 +35,7 @@ import {
 import { worldToPixels } from "@openmarch/core";
 import {
     MAX_F_STOP,
+    MAX_FOCUS_M,
     MAX_FOLLOW_DISTANCE_M,
     MAX_FOLLOW_TILT_DEG,
     MAX_FOV_DEG,
@@ -134,14 +135,20 @@ export function CameraSettings({
     const toShown = (m: number) => (metric ? m : m / METERS_PER_FOOT);
     const fromShown = (v: number) => (metric ? v : v * METERS_PER_FOOT);
 
-    const saved = settingsOf(camera);
+    // The last saved settings, shown until the show's copy comes back, so
+    // quick edits (a held arrow key, a second field) build on each other.
+    const [pending, setPending] = useState<Settings | null>(null);
+    useEffect(() => setPending(null), [camera]);
+    const saved = pending ?? settingsOf(camera);
     const aim = aimOf(saved.position, saved.target);
 
-    const save = (next: Settings) =>
+    const save = (next: Settings) => {
+        setPending(next);
         list.setExact(camera.id, poseOf(next), {
             follow: next.follow,
             focus: next.focus,
         });
+    };
     /** Shows settings without saving them (a drag): a follow camera re-aims, others jump. */
     const show = (next: Settings) => {
         const camera = useCameraStore.getState();
@@ -531,11 +538,17 @@ export function CameraSettings({
                             value: "lookAt",
                             label: t("view3d.cameraSettings.focusLookAt"),
                         },
-                        {
-                            value: "performer",
-                            label: t("view3d.cameraSettings.focusPerformer"),
-                            disabled: followedId === undefined,
-                        },
+                        // A show without performers has nobody to focus on
+                        ...(followedId === undefined
+                            ? []
+                            : [
+                                  {
+                                      value: "performer",
+                                      label: t(
+                                          "view3d.cameraSettings.focusPerformer",
+                                      ),
+                                  },
+                              ]),
                         {
                             value: "distance",
                             label: t("view3d.cameraSettings.focusDistance"),
@@ -581,12 +594,13 @@ export function CameraSettings({
                                 tooltip: t(
                                     "view3d.cameraSettings.focusDistanceTooltip",
                                 ),
-                                unit: metric ? "m" : "ft",
+                                unit,
                                 value: toShown(saved.focus.on.meters),
                                 digits: 1,
                                 step: 1,
                                 scrubPerPx: 0.25,
                                 min: toShown(0.1),
+                                max: toShown(MAX_FOCUS_M),
                                 build: (v) =>
                                     withFocus({
                                         on: {

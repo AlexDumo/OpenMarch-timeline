@@ -90,6 +90,9 @@ import {
 
 /** Pointer travel (px) under which a press counts as a click, for picking. */
 const CLICK_SLOP_PX = 6;
+/** Focus out of someone's eyes: where the look meets the ground, kept to this range (m). */
+const POV_FOCUS_MIN_M = 1;
+const POV_FOCUS_MAX_M = 60;
 /** Input keeps the scene drawing this long (ms), covering eases and coasts that start from it. */
 const INPUT_WAKE_MS = 1500;
 /** Zoom per pinch delta unit (a trackpad pinch reports small deltas). */
@@ -254,6 +257,9 @@ export default function CameraRig() {
                 return;
             }
         }
+        // A follow camera whose performer isn't drawn flies to where it was
+        // saved, and is still the camera chosen.
+        if (seat.follow) useCameraStore.getState()._setActive(seat.id);
         useCameraStore.getState()._setFocus(seat.focus ?? null);
         const aim = seatAim(seat);
         rig.flyTo(aim.position, aim.target, {
@@ -351,12 +357,31 @@ export default function CameraRig() {
             hasEye: false,
         };
         const eye = new Vector3();
+        const look = new Vector3();
         store._setFocusSource(() => {
             const focus = useCameraStore.getState().focus;
             if (!focus) return null;
             camera.getWorldPosition(eye);
             const on = focus.on;
             if (on.kind === "distance") return on.meters;
+            // Out of someone's eyes, the look-at point is a hand's width
+            // ahead and their own body is at the lens: focus where the look
+            // meets the ground instead.
+            const followed = useFollowStore.getState().follow;
+            if (
+                followed?.mode === "pov" &&
+                (on.kind === "lookAt" ||
+                    (on.kind === "performer" &&
+                        on.marcherId === followed.marcherId))
+            ) {
+                camera.getWorldDirection(look);
+                return look.y < -0.01
+                    ? Math.min(
+                          POV_FOCUS_MAX_M,
+                          Math.max(POV_FOCUS_MIN_M, eye.y / -look.y),
+                      )
+                    : POV_FOCUS_MAX_M;
+            }
             const point =
                 on.kind === "performer" && performerPoseInto(on.marcherId, pose)
                     ? followTarget(pose)

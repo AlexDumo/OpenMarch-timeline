@@ -135,7 +135,10 @@ export class RigController {
             fromFov,
             toFov: options.fovDeg ?? fromFov,
             fromRoll: this.rollDeg,
-            toRoll: options.rollDeg ?? 0,
+            // The short way round: +170° to −170° turns 20°, not 340°.
+            toRoll:
+                this.rollDeg +
+                shortestTurnDeg(this.rollDeg, options.rollDeg ?? 0),
             onArrive: options.onArrive,
             currentTarget: [...this.target],
         };
@@ -485,4 +488,10 @@ export class RigController {
         this.camera.fov = fov;
         this.camera.updateProjectionMatrix();
     }
+}
+
+/** The shortest signed turn from `from` to `to`, degrees, in [-180, 180). */
+function shortestTurnDeg(from: number, to: number): number {
+    const d = (((to - from) % 360) + 540) % 360;
+    return d - 180;
 }

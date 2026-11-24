@@ -73,6 +73,8 @@ export type CameraFollow = z.infer<typeof cameraFollowSchema>;
 /** The f-numbers a camera can focus at, widest first. */
 export const MIN_F_STOP = 0.95;
 export const MAX_F_STOP = 32;
+/** The farthest a camera can focus at a set distance (m). */
+export const MAX_FOCUS_M = 10000;
 
 /**
  * What a camera keeps sharp: the point it looks at, a distance from it
@@ -85,7 +87,7 @@ export const cameraFocusSchema = z.object({
         z.object({ kind: z.literal("lookAt") }),
         z.object({
             kind: z.literal("distance"),
-            meters: z.number().positive().max(10000),
+            meters: z.number().positive().max(MAX_FOCUS_M),
         }),
         z.object({ kind: z.literal("performer"), marcherId: z.number().int() }),
     ]),
@@ -286,7 +288,16 @@ function viewFields(
                               Math.round(focus.fStop * 100) / 100,
                           ),
                       ),
-                      on: { ...focus.on },
+                      on:
+                          focus.on.kind === "distance"
+                              ? {
+                                    kind: "distance",
+                                    meters: Math.min(
+                                        MAX_FOCUS_M,
+                                        Math.max(0.1, focus.on.meters),
+                                    ),
+                                }
+                              : { ...focus.on },
                   },
               }
             : {}),

@@ -21,6 +21,7 @@ import {
     povPose,
     THIRD_PERSON_DISTANCE,
     THIRD_PERSON_TILT_DEG,
+    FOLLOW_MIN_HEIGHT,
     thirdPersonFraming,
     thirdPersonPose,
     type PerformerPose,
@@ -595,5 +596,23 @@ describe("follow camera aim", () => {
         );
         const read = controller.framing();
         expect(read?.angleDeg).toBeCloseTo(180, 3);
+    });
+});
+
+describe("follow camera limits", () => {
+    it("keeps an outside camera looking up from below above the ground", () => {
+        const view = thirdPersonPose(pose(), { tiltDeg: -85 });
+        expect(view.position[1]).toBeCloseTo(FOLLOW_MIN_HEIGHT, 9);
+    });
+
+    it("rolls the short way round when flying", () => {
+        const camera = new PerspectiveCamera();
+        const rig = new RigController(camera);
+        rig.jumpTo([0, 10, 10], [0, 0, 0], SEAT_FOV_DEG, 170);
+        rig.flyTo([0, 10, 10], [0, 0, 0], { nowMs: 0, rollDeg: -170 });
+        rig.update(0);
+        rig.update(FLY_MS / 2);
+        // Halfway from 170° to −170° the short way is 180°, not 0°.
+        expect(Math.abs(rig.rollDeg)).toBeGreaterThan(170);
     });
 });

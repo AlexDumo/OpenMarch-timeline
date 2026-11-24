@@ -104,6 +104,9 @@ export function followTarget(pose: PerformerPose): Vector3Tuple {
 
 const DEG = Math.PI / 180;
 
+/** The third-person camera stays at least this high above the performer's feet (m). */
+export const FOLLOW_MIN_HEIGHT = 0.3;
+
 /** How high the third-person camera looks down from by default (degrees). */
 export const THIRD_PERSON_TILT_DEG =
     Math.asin(THIRD_PERSON_RISE / THIRD_PERSON_DISTANCE) / DEG;
@@ -132,7 +135,11 @@ export function thirdPersonPose(
     return {
         position: [
             target[0] + Math.sin(bearing) * flat,
-            target[1] + Math.sin(tilt) * distance,
+            // Looking up at them from low down stops at the ground.
+            Math.max(
+                target[1] + Math.sin(tilt) * distance,
+                pose.y + FOLLOW_MIN_HEIGHT,
+            ),
             target[2] + Math.cos(bearing) * flat,
         ],
         target,
