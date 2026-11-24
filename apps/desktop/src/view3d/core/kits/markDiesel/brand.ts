@@ -15,9 +15,9 @@ import type { ShowCredits, VenueParams } from "../../types";
 /**
  * The venue's identity: everything in the hall that carries a name or a
  * logo is painted here, on canvas. The hall is Mark Diesel Stadium, dressed
- * for the GRAND NATIONAL CHAMPIONSHIPS; OpenMarch's marks stay few and at
- * the back of the field: the drape's logo panel and banner, two sideline
- * boards, the flags in the roof and the marcher on the midfield helmet. No
+ * for the GRAND NATIONAL CHAMPIONSHIPS; OpenMarch's marks stay few: the
+ * drape's logo panel, two back sideline boards, the flags in the roof, the
+ * end zones and the marcher on the midfield helmet. No
  * other brand, real or made up. The marks are OpenMarch's own, never
  * redrawn:
  *
@@ -31,7 +31,8 @@ import type { ShowCredits, VenueParams } from "../../types";
  * near-black of the app's dark theme (`packages/ui/src/tailwind.css`); the
  * type is DM Sans, the app's face.
  *
- * Everywhere else the hall names itself and the event: the LED ribbons,
+ * Everywhere else the hall names itself and the event: the drape's banner,
+ * the LED ribbons,
  * the video boards' header and card, the field wall's pads, the other
  * sideline boards, the rafter banners, the ring of legends and the plaza's
  * monument signs. The boards and ribbons show the show's own title when it
@@ -65,20 +66,19 @@ export const OPENMARCH_SIGN = "OPENMARCH";
 export const DIESEL_NAME = "MARK DIESEL";
 export const DIESEL_STADIUM = "MARK DIESEL STADIUM";
 export const DIESEL_EVENT = "GRAND NATIONAL CHAMPIONSHIPS";
-/** The event's short name, for the end zones and the smaller signs. */
+/** The event's short name, for the smaller signs. */
 export const DIESEL_EVENT_SHORT = "GRAND NATIONALS";
 /** The round of the event the hall is dressed for. */
 export const DIESEL_ROUND = "PRELIMS";
 
 /**
  * The venue's colors and end-zone lettering for a show that has not chosen
- * its own (`KIT_VENUE_PARAMS`): the event's name, as a championship paints
- * its end zones, in OpenMarch's colors.
+ * its own (`KIT_VENUE_PARAMS`): OpenMarch's, the same as every kit's.
  */
 export const DIESEL_VENUE_PARAMS: Readonly<VenueParams> = Object.freeze({
     homeColor: OM.violet,
     awayColor: "#c23b3b",
-    endZoneText: DIESEL_EVENT_SHORT,
+    endZoneText: OPENMARCH_SIGN,
     endZoneColor: OM.violet,
 });
 
@@ -102,13 +102,24 @@ export interface SignTextOptions {
     weight?: number;
     /** Shrinks the text to fit this width. */
     maxWidth?: number;
+    /** Leans the letters right by this much width per height (an oblique). */
+    slant?: number;
+    /** A font family in place of DM Sans. */
+    family?: string;
 }
 
-const signFont = (cap: number) => `700 ${cap / CAP}px ${TEXTURE_FONT}`;
+const signFont = (cap: number, family = TEXTURE_FONT) =>
+    `700 ${cap / CAP}px ${family}`;
 
 /** Width of `text` as `signText` sets it at this cap height. */
-function signWidth(g: G, text: string, cap: number, spacing = 0.04): number {
-    g.font = signFont(cap);
+function signWidth(
+    g: G,
+    text: string,
+    cap: number,
+    spacing = 0.04,
+    family?: string,
+): number {
+    g.font = signFont(cap, family);
     tracking(g, (spacing * cap) / CAP);
     const width = g.measureText(text).width;
     tracking(g, 0);
@@ -128,8 +139,8 @@ export function signText(
     cap: number,
     options: SignTextOptions,
 ): number {
-    const { color, align = "left", spacing = 0.04 } = options;
-    let width = signWidth(g, text, cap, spacing);
+    const { color, align = "left", spacing = 0.04, family } = options;
+    let width = signWidth(g, text, cap, spacing, family);
     if (options.maxWidth && width > options.maxWidth) {
         cap *= options.maxWidth / width;
         width = options.maxWidth;
@@ -137,7 +148,12 @@ export function signText(
     const left =
         align === "center" ? x - width / 2 : align === "right" ? x - width : x;
     g.save();
-    g.font = signFont(cap);
+    // Lean the letters about their baseline's middle, so the run stays
+    // centered where it was set.
+    const slant = options.slant ?? 0;
+    g.translate(left + (slant * cap) / 2, cy + cap / 2);
+    if (slant) g.transform(1, 0, -slant, 1, 0, 0);
+    g.font = signFont(cap, family);
     tracking(g, (spacing * cap) / CAP);
     g.textAlign = "left";
     g.textBaseline = "alphabetic";
@@ -145,8 +161,8 @@ export function signText(
     g.strokeStyle = color;
     g.lineJoin = "round";
     g.lineWidth = ((options.weight ?? 0.025) * cap) / CAP;
-    g.fillText(text, left, cy + cap / 2);
-    if (g.lineWidth > 0) g.strokeText(text, left, cy + cap / 2);
+    g.fillText(text, -(slant * cap) / 2, 0);
+    if (g.lineWidth > 0) g.strokeText(text, -(slant * cap) / 2, 0);
     tracking(g, 0);
     g.restore();
     return width;
@@ -292,8 +308,8 @@ export function paintLogoPanel(g: G, w: number, h: number): void {
 export const DIESEL_BANNER_ASPECT = 10;
 
 /**
- * The drape's banner: the logo, a lavender rule, and GRAND NATIONAL
- * CHAMPIONSHIPS, white on black.
+ * The drape's banner: GRAND NATIONAL CHAMPIONSHIPS, white on black, between
+ * two lavender rules.
  */
 export function paintChampionshipBanner(g: G, w: number, h: number): void {
     g.fillStyle = OM.ink;
@@ -301,24 +317,21 @@ export function paintChampionshipBanner(g: G, w: number, h: number): void {
     g.strokeStyle = "rgba(207,203,230,0.18)";
     g.lineWidth = Math.max(2, h * 0.012);
     g.strokeRect(h * 0.05, h * 0.05, w - h * 0.1, h - h * 0.1);
-    const logoH = h * 0.66;
-    const logoW = logoH * LOGO_ASPECT;
     const gap = h * 0.55;
-    const cap = h * 0.34;
-    const textW = Math.min(
-        signWidth(g, DIESEL_EVENT, cap, 0.06),
-        w - h * 1.2 - logoW - 2 * gap,
-    );
-    let at = (w - (logoW + 2 * gap + textW)) / 2;
-    paintLogo(g, at + logoW / 2, h / 2, logoH, OM.white);
-    at += logoW + gap;
-    g.fillStyle = OM.lavender;
-    g.fillRect(at - h * 0.015, h * 0.22, h * 0.03, h * 0.56);
-    signText(g, DIESEL_EVENT, at + gap, h / 2, cap, {
+    const textW = signText(g, DIESEL_EVENT, w / 2, h / 2, h * 0.34, {
         color: OM.white,
+        align: "center",
         spacing: 0.06,
-        maxWidth: textW,
+        maxWidth: w - h * 2 - 2 * gap,
     });
+    g.fillStyle = OM.lavender;
+    for (const side of [-1, 1])
+        g.fillRect(
+            w / 2 + side * (textW / 2 + gap) - h * 0.015,
+            h * 0.22,
+            h * 0.03,
+            h * 0.56,
+        );
 }
 
 /**
@@ -377,10 +390,13 @@ export function paintNameRing(g: G, w: number, h: number): void {
     g.fillRect(0, 0, w, 2);
     g.fillRect(0, h - 2, w, 2);
     const slot = w / RING_LEGENDS.length;
+    // A diamond at each slot's edge; the one on the tile's seam is drawn at
+    // both ends, so its halves meet where the tile repeats.
+    g.fillStyle = OM.lavender;
+    for (let i = 0; i <= RING_LEGENDS.length; i++)
+        diamond(g, i * slot, h / 2, h * 0.22);
     RING_LEGENDS.forEach((legend, i) => {
         const x = i * slot;
-        g.fillStyle = OM.lavender;
-        diamond(g, x, h / 2, h * 0.22);
         signText(g, legend, x + slot / 2, h / 2, h * 0.24, {
             color: "#eceaf4",
             align: "center",

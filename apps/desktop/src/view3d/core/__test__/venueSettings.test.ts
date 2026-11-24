@@ -220,10 +220,10 @@ describe("defaultVenueForField", () => {
 });
 
 describe("a kit's starting params", () => {
-    it("gives Mark Diesel the event in its end zones, as the kit paints them", () => {
+    it("gives Mark Diesel OpenMarch's name and colors, as the kit paints them", () => {
         const params = defaultVenueForKit("markDiesel").params;
         expect(params).toEqual({ ...DIESEL_VENUE_PARAMS });
-        expect(params.endZoneText).toBe("GRAND NATIONALS");
+        expect(params.endZoneText).toBe("OPENMARCH");
         expect(defaultParamsForKit("hs")).toEqual({ ...DEFAULT_VENUE_PARAMS });
         // A fresh object each time.
         expect(defaultParamsForKit("markDiesel")).not.toBe(

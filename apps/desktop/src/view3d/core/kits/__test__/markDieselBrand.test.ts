@@ -222,7 +222,7 @@ describe("Venue brand painters", () => {
                 paintRafterBanner(g, banner, 256, 640),
             );
         });
-        // OpenMarch's marks: the drape, the flags and two sideline boards.
+        // OpenMarch's marks: the drape's panel, the flags and two boards.
         const branded = Object.entries(faces)
             .filter(([, text]) => /\[logo\]|\[marcher\]|openmarch/i.test(text))
             .map(([face]) => face);
@@ -231,13 +231,13 @@ describe("Venue brand painters", () => {
         ).filter((f) => f !== null);
         expect(logoBoards).toHaveLength(2);
         expect(branded.sort()).toEqual(
-            ["logoPanel", "banner", "flag", ...logoBoards].sort(),
+            ["logoPanel", "flag", ...logoBoards].sort(),
         );
         for (const [face, text] of Object.entries(faces))
             expect(text, face).not.toMatch(
                 /lucas|colts|yamaha|bands of america|\bboa\b|openmarch\.com/i,
             );
-        expect(faces.banner).toBe("[logo] | GRAND NATIONAL CHAMPIONSHIPS");
+        expect(faces.banner).toBe("GRAND NATIONAL CHAMPIONSHIPS");
         expect(faces.ribbonUpper).toContain(
             "GRAND NATIONAL CHAMPIONSHIPS – PRELIMS",
         );
@@ -303,12 +303,10 @@ describe("Venue brand painters", () => {
         expect(dieselClock(new Date(2027, 0, 1, 12, 0)).time).toBe("12:00 PM");
     });
 
-    it("letters the end zones with the event, in OpenMarch's colors", () => {
+    it("defaults the end zones to OpenMarch's, as every kit does", () => {
+        expect(DIESEL_VENUE_PARAMS).toEqual(DEFAULT_VENUE_PARAMS);
         expect(DIESEL_VENUE_PARAMS).toEqual(KIT_VENUE_PARAMS.markDiesel);
-        expect(DIESEL_VENUE_PARAMS).toEqual({
-            ...DEFAULT_VENUE_PARAMS,
-            endZoneText: "GRAND NATIONALS",
-        });
+        expect(DIESEL_VENUE_PARAMS.endZoneText).toBe("OPENMARCH");
     });
 });
 
@@ -341,13 +339,11 @@ describe("Mark Diesel midfield art", () => {
         expect(written((g) => dieselFieldArt.paint(g, 256, 256))).toBe(
             "[marcher]",
         );
-        // The end zones say GRAND NATIONALS.
+        // The end zones say OPENMARCH.
         const zones = plan.items.filter((i) => i.role === "endZoneText");
         expect(zones).toHaveLength(2);
         expect(
-            zones.every(
-                (z) => z.type === "text" && z.text === "GRAND NATIONALS",
-            ),
+            zones.every((z) => z.type === "text" && z.text === "OPENMARCH"),
         ).toBe(true);
     });
 
