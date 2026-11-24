@@ -197,7 +197,10 @@ export class FollowController {
         this.lastMs = null;
         if (next.mode === "pov") {
             this.look = { yaw: 0, pitch: POV_DEFAULT_PITCH };
-            this.fovDeg = POV_FOV_DEG;
+            this.fovDeg = Math.min(
+                POV_FOV_MAX,
+                Math.max(POV_FOV_MIN, next.fovDeg ?? POV_FOV_DEG),
+            );
             this.heading = pose.heading;
             this.hideForEyes(next.marcherId);
             const view = povPose(pose, this.look, this.hooks.showOwnBody());
@@ -220,7 +223,7 @@ export class FollowController {
         this.rig.flyTo(view.position, view.target, {
             nowMs,
             instant: this.hooks.instant(),
-            fovDeg: SEAT_FOV_DEG,
+            fovDeg: next.fovDeg ?? SEAT_FOV_DEG,
             onArrive: () => {
                 if (leavingEyes && generation === this.generation)
                     this.hooks.setHidden(null);

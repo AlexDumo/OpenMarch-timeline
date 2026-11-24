@@ -87,6 +87,10 @@ export interface CameraSeat {
     target: Vector3Tuple;
     /** Vertical field of view; defaults to the window's. */
     fovDeg?: number;
+    /** Saved views only: the camera's roll, degrees clockwise as seen from behind. */
+    rollDeg?: number;
+    /** Saved views only: follow this performer instead of staying put. */
+    follow?: { marcherId: number; mode: "third" | "pov" };
 }
 
 /**

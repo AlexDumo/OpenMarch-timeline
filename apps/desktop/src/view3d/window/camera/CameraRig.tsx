@@ -8,7 +8,10 @@
  *   view;
  * - flies to a listed camera (`useView3dSceneStore().cameras`) on
  *   `useCameraStore().selectCamera(id)` and on keys 1–9, over 1.1 s with an
- *   upward arc, or jumps under reduced motion;
+ *   upward arc, or jumps under reduced motion; a camera that follows a
+ *   performer follows them instead, and goes to its saved place when they
+ *   aren't drawn; jumps to a pose the overlay shows (`showPose`, typed
+ *   camera settings);
  * - tells `useCameraStore().currentPose()` where the view is, for saving
  *   cameras;
  * - moves on drag and scroll as the viewer's control scheme says
@@ -220,12 +223,34 @@ export default function CameraRig() {
             );
     }, [directing, hasTrack, countGrid]);
 
+    /** True while a camera starts following, so the follow doesn't clear the active camera. */
+    const cameraFollowRef = useRef(false);
     const flyToSeat = (seat: CameraSeat) => {
+        if (seat.follow) {
+            cameraFollowRef.current = true;
+            try {
+                useFollowStore
+                    .getState()
+                    .followMarcher(
+                        seat.follow.marcherId,
+                        seat.follow.mode,
+                        seat.fovDeg,
+                    );
+            } finally {
+                cameraFollowRef.current = false;
+            }
+            // Following started (the performer is drawn): it moves the camera.
+            if (useFollowStore.getState().follow) {
+                useCameraStore.getState()._setActive(seat.id);
+                return;
+            }
+        }
         const aim = seatAim(seat);
         rig.flyTo(aim.position, aim.target, {
             nowMs: performance.now(),
             instant: prefersReducedMotion(),
             fovDeg: seat.fovDeg ?? SEAT_FOV_DEG,
+            rollDeg: seat.rollDeg,
             onArrive: clearCrowdAround,
         });
     };
@@ -296,6 +321,7 @@ export default function CameraRig() {
                     camera instanceof PerspectiveCamera
                         ? camera.fov
                         : SEAT_FOV_DEG,
+                rollDeg: rig.rollDeg,
             };
         });
         return () => store._setPoseSource(null);
@@ -310,9 +336,19 @@ export default function CameraRig() {
                     useCameraStore.getState().setPickMode(false);
                 if (state.follow === prev.follow) return;
                 requestDraw(INPUT_WAKE_MS);
+                const cameraStore = useCameraStore.getState();
                 if (state.follow) {
                     useDirectorStore.getState().setDirecting(false);
-                    useCameraStore.getState()._setActive(null);
+                    // Following from a camera keeps it the active camera.
+                    if (!cameraFollowRef.current) cameraStore._setActive(null);
+                } else if (cameraStore.activeCameraId !== null) {
+                    // Stopping a follow camera leaves a free view.
+                    const active = useView3dSceneStore
+                        .getState()
+                        .cameras.find(
+                            (c) => c.id === cameraStore.activeCameraId,
+                        );
+                    if (active?.follow) cameraStore._setActive(null);
                 }
                 if (!follow.change(state.follow, performance.now()))
                     state.stop();
@@ -345,6 +381,26 @@ export default function CameraRig() {
                 store.setPickMode(false);
                 if (store.activeCameraId !== null) store._setActive(null);
                 rig.jumpTo(move.position, move.target);
+                requestDraw(INPUT_WAKE_MS);
+            }),
+        [rig],
+    );
+
+    // showPose() from the overlay: typed or scrubbed settings, shown at once.
+    useEffect(
+        () =>
+            useCameraStore.subscribe((state, prev) => {
+                const shown = state._shown;
+                if (!shown || shown === prev._shown) return;
+                endFollowRef.current();
+                useDirectorStore.getState().setDirecting(false);
+                const { pose } = shown;
+                rig.jumpTo(
+                    pose.position,
+                    pose.target,
+                    pose.fovDeg,
+                    pose.rollDeg,
+                );
                 requestDraw(INPUT_WAKE_MS);
             }),
         [rig],

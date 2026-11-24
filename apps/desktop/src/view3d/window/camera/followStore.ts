@@ -38,6 +38,8 @@ export type FollowMode = "third" | "pov";
 export interface Follow {
     marcherId: number;
     mode: FollowMode;
+    /** Field of view to start with (a saved follow camera's); the mode's own when omitted. */
+    fovDeg?: number;
 }
 
 export const TURN_WITH_PERFORMER_STORAGE_KEY = "view3d.followTurns";
@@ -65,7 +67,11 @@ export interface FollowState {
     picking: boolean;
     setPicking: (on: boolean) => void;
     follow: Follow | null;
-    followMarcher: (marcherId: number, mode?: FollowMode) => void;
+    followMarcher: (
+        marcherId: number,
+        mode?: FollowMode,
+        fovDeg?: number,
+    ) => void;
     setMode: (mode: FollowMode) => void;
     toggleMode: () => void;
     stop: () => void;
@@ -87,12 +93,18 @@ export const useFollowStore = create<FollowState>()((set, get) => ({
     picking: false,
     setPicking: (on) => set({ picking: on }),
     follow: null,
-    followMarcher: (marcherId, mode = "third") =>
-        set({ follow: { marcherId, mode }, picking: false }),
+    followMarcher: (marcherId, mode = "third", fovDeg) =>
+        set({
+            follow:
+                fovDeg === undefined
+                    ? { marcherId, mode }
+                    : { marcherId, mode, fovDeg },
+            picking: false,
+        }),
     setMode: (mode) => {
         const { follow } = get();
         if (!follow || follow.mode === mode) return;
-        set({ follow: { ...follow, mode } });
+        set({ follow: { marcherId: follow.marcherId, mode } });
     },
     toggleMode: () => {
         const { follow } = get();

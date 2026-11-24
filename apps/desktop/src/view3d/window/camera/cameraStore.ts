@@ -6,7 +6,8 @@
  * - `activeCameraId`: the kit camera the view is at or flying to, or null
  *   after the viewer orbits, pans, zooms or picks a seat. Highlight its chip.
  * - `selectCamera(id)`: fly to one of the listed cameras
- *   (`useView3dSceneStore().cameras`, in menu order). Ids not listed are
+ *   (`useView3dSceneStore().cameras`, in menu order). A camera that follows
+ *   a performer goes to them and keeps following. Ids not listed are
  *   ignored.
  * - `pickMode` and `setPickMode(on)`: pick-a-seat. While on, the canvas shows
  *   a crosshair and the next click on a stand moves there; the rig turns it
@@ -15,8 +16,11 @@
  *   `defaultPrevented`.
  * - `markActive(id)`: the view is already at camera `id` (it was just saved
  *   there), so highlight it without flying.
+ * - `showPose(pose)`: puts the view at `pose` at once, as a free view
+ *   (typed or scrubbed camera settings, before they are saved). It stops
+ *   following and the Director.
  * - `currentPose()`: the view right now (eye, look-at point, field of
- *   view), for saving it as a camera. Null before the rig mounts.
+ *   view, roll), for saving it as a camera. Null before the rig mounts.
  *
  * Fields starting with `_` are for the rig only.
  */
@@ -36,7 +40,10 @@ export interface CameraState {
     pickMode: boolean;
     setPickMode: (on: boolean) => void;
     markActive: (id: string) => void;
+    showPose: (pose: ViewPose) => void;
     currentPose: () => ViewPose | null;
+    /** Rig only: the latest `showPose` call. */
+    _shown: { pose: ViewPose; seq: number } | null;
     /** Rig only: sets where `currentPose` reads from. */
     _setPoseSource: (source: (() => ViewPose) | null) => void;
     /** Rig only: the latest `selectCamera` call. */
@@ -61,6 +68,12 @@ export const useCameraStore = create<CameraState>()((set, get) => ({
     pickMode: false,
     setPickMode: (on) => set({ pickMode: on }),
     markActive: (id) => set({ activeCameraId: id, pickMode: false }),
+    showPose: (pose) =>
+        set({
+            pickMode: false,
+            _shown: { pose, seq: (get()._shown?.seq ?? 0) + 1 },
+        }),
+    _shown: null,
     currentPose: () => poseSource?.() ?? null,
     _setPoseSource: (source) => {
         poseSource = source;

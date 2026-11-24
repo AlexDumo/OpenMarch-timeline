@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { CameraSeat } from "../types";
 import {
     cameraListSchema,
+    normalizeRoll,
     defaultCameraList,
     EMPTY_SHOW_CAMERAS,
     parseShowCamerasJson,
@@ -157,6 +158,34 @@ describe("editCameraList", () => {
         expect(next.slice(1)).toEqual(list.slice(1));
     });
 
+    it("stores roll and follow, and setView without follow makes a fixed camera again", () => {
+        const following = editCameraList([], {
+            kind: "add",
+            id: "view1",
+            name: "Drum major",
+            pose: { ...pose, rollDeg: 370 },
+            follow: { marcherId: 7, mode: "pov" },
+        });
+        expect(following[0]).toMatchObject({
+            rollDeg: 10,
+            follow: { marcherId: 7, mode: "pov" },
+        });
+        expect(cameraListSchema.safeParse(following).success).toBe(true);
+        const fixed = editCameraList(following, {
+            kind: "setView",
+            id: "view1",
+            pose,
+        });
+        expect(fixed[0]).not.toHaveProperty("follow");
+        // Level is the default, so a zero roll isn't stored.
+        expect(fixed[0]).not.toHaveProperty("rollDeg");
+        const resolved = resolveCameras([], following)[0];
+        expect(resolved).toMatchObject({
+            rollDeg: 10,
+            follow: { marcherId: 7, mode: "pov" },
+        });
+    });
+
     it("moves within bounds and removes", () => {
         expect(
             editCameraList(list, { kind: "move", id: "topDown", by: -1 }).map(
@@ -258,5 +287,15 @@ describe("the show's cameras", () => {
                 }),
             ),
         ).toEqual({ version: 1, venues: { hs: { list } } });
+    });
+});
+
+describe("normalizeRoll", () => {
+    it("wraps into -180..180 and drops non-numbers", () => {
+        expect(normalizeRoll(190)).toBe(-170);
+        expect(normalizeRoll(-190)).toBe(170);
+        expect(normalizeRoll(45.678)).toBe(45.68);
+        expect(normalizeRoll(Number.NaN)).toBe(0);
+        expect(Object.is(normalizeRoll(-0), 0)).toBe(true);
     });
 });

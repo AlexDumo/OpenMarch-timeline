@@ -12,7 +12,11 @@
  *   name. Its position comes from the kit, so it still fits when the field's
  *   size changes. Entries the kit no longer has are skipped.
  * - A `view` entry is a snapshot of the view: the eye, the point it looks
- *   at and the field of view, in world meters and degrees.
+ *   at and the field of view, in world meters and degrees, with an optional
+ *   roll (the picture tilted about the line of sight). A view can instead
+ *   follow a performer (`follow`): from behind them, or out of their eyes.
+ *   Then the camera goes to them and keeps up as they move, and its
+ *   position and look-at point are only where it was saved.
  *
  * Plain TypeScript and zod only, like the rest of `view3d/core/`.
  */
@@ -27,8 +31,17 @@ export const CAMERA_NAME_MAX = 40;
 /** Field of view limits for a saved view, in degrees. */
 export const MIN_FOV_DEG = 5;
 export const MAX_FOV_DEG = 120;
+/** Roll limit for a saved view, in degrees either way. */
+export const MAX_ROLL_DEG = 180;
 
 const pointSchema = z.tuple([z.number(), z.number(), z.number()]);
+
+/** A camera that follows a performer: from behind them (`third`) or out of their eyes (`pov`). */
+export const cameraFollowSchema = z.object({
+    marcherId: z.number().int(),
+    mode: z.enum(["third", "pov"]),
+});
+export type CameraFollow = z.infer<typeof cameraFollowSchema>;
 
 export const savedCameraSchema = z.discriminatedUnion("kind", [
     z.object({
@@ -45,6 +58,10 @@ export const savedCameraSchema = z.discriminatedUnion("kind", [
         position: pointSchema,
         target: pointSchema,
         fovDeg: z.number().min(MIN_FOV_DEG).max(MAX_FOV_DEG),
+        /** The camera turned about its line of sight, degrees; positive rolls it clockwise as seen from behind. Level when omitted. */
+        rollDeg: z.number().min(-MAX_ROLL_DEG).max(MAX_ROLL_DEG).optional(),
+        /** Follows this performer instead of staying put. */
+        follow: cameraFollowSchema.optional(),
     }),
 ]);
 
@@ -70,6 +87,8 @@ export interface ViewPose {
     position: Vector3Tuple;
     target: Vector3Tuple;
     fovDeg: number;
+    /** Degrees; positive rolls the camera clockwise as seen from behind. Level when omitted. */
+    rollDeg?: number;
 }
 
 /** The kit's defaults as an editable list. */
@@ -104,6 +123,8 @@ export function resolveCameras(
                 position: [...entry.position],
                 target: [...entry.target],
                 fovDeg: entry.fovDeg,
+                ...(entry.rollDeg ? { rollDeg: entry.rollDeg } : {}),
+                ...(entry.follow ? { follow: { ...entry.follow } } : {}),
             });
         }
     }
@@ -137,11 +158,48 @@ function clampFov(fovDeg: number): number {
     return Math.min(MAX_FOV_DEG, Math.max(MIN_FOV_DEG, fovDeg));
 }
 
+/** Wraps a roll into -180..180 degrees, to a hundredth of a degree. */
+export function normalizeRoll(rollDeg: number): number {
+    if (!Number.isFinite(rollDeg)) return 0;
+    const r = rollDeg - 360 * Math.round(rollDeg / 360);
+    return Math.round(r * 100) / 100 || 0;
+}
+
+/** The stored fields of a pose (and follow) for a view entry. */
+function viewFields(
+    pose: ViewPose,
+    follow: CameraFollow | null | undefined,
+): Pick<SavedView, "position" | "target" | "fovDeg" | "rollDeg" | "follow"> {
+    const roll = normalizeRoll(pose.rollDeg ?? 0);
+    return {
+        position: roundPoint(pose.position),
+        target: roundPoint(pose.target),
+        fovDeg: clampFov(pose.fovDeg),
+        ...(roll !== 0 ? { rollDeg: roll } : {}),
+        ...(follow ? { follow: { ...follow } } : {}),
+    };
+}
+
 /** Edits to a camera list. Each returns a new list. */
 export type CameraListEdit =
-    | { kind: "add"; id: string; name: string; pose: ViewPose }
+    | {
+          kind: "add";
+          id: string;
+          name: string;
+          pose: ViewPose;
+          follow?: CameraFollow | null;
+      }
     | { kind: "rename"; id: string; name: string }
-    | { kind: "setView"; id: string; pose: ViewPose }
+    /**
+     * Sets the camera's pose and whether it follows a performer (none when
+     * omitted): "Set to current view" and the exact settings both use it.
+     */
+    | {
+          kind: "setView";
+          id: string;
+          pose: ViewPose;
+          follow?: CameraFollow | null;
+      }
     | { kind: "move"; id: string; by: -1 | 1 }
     | { kind: "remove"; id: string };
 
@@ -166,9 +224,7 @@ export function editCameraList(
                     kind: "view",
                     id: edit.id,
                     name: edit.name.trim().slice(0, CAMERA_NAME_MAX),
-                    position: roundPoint(edit.pose.position),
-                    target: roundPoint(edit.pose.target),
-                    fovDeg: clampFov(edit.pose.fovDeg),
+                    ...viewFields(edit.pose, edit.follow),
                 },
             ];
         case "rename": {
@@ -190,9 +246,7 @@ export function editCameraList(
                 kind: "view",
                 id: camera.id,
                 name: camera.kind === "view" ? camera.name : label(camera),
-                position: roundPoint(edit.pose.position),
-                target: roundPoint(edit.pose.target),
-                fovDeg: clampFov(edit.pose.fovDeg),
+                ...viewFields(edit.pose, edit.follow),
             };
             return list.map((c, i) => (i === index ? next : c));
         }

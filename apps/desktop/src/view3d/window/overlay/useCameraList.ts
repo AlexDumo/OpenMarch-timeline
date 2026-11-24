@@ -13,14 +13,17 @@ import {
     newCameraId,
     newCameraName,
     withVenueCameras,
+    type CameraFollow,
     type CameraListEdit,
     type SavedCamera,
     type VenueCameras,
     type ViewCamera,
+    type ViewPose,
 } from "@/view3d/core/cameraList";
 import type { VenueKitId } from "@/view3d/core/types";
 import { useShowCameras } from "@/hooks/queries/useShowCameras";
 import { useCameraStore } from "../camera/cameraStore";
+import { useFollowStore } from "../camera/followStore";
 import { useView3dSceneStore } from "../sceneStore";
 
 export interface CameraList {
@@ -43,14 +46,25 @@ export interface CameraList {
     edit: (edit: Exclude<CameraListEdit, { kind: "add" }>) => void;
     /** Saves the current view as a new camera; returns its id. */
     addCurrentView: () => string | null;
-    /** Moves a camera to the current view. */
+    /** Moves a camera to the current view (following whoever the view follows). */
     setToCurrentView: (id: string) => void;
+    /** Sets a camera's exact settings and jumps the view there. */
+    setExact: (id: string, pose: ViewPose, follow: CameraFollow | null) => void;
+    /** Replaces the venue's cameras with `list` (an imported file's). */
+    replaceAll: (list: SavedCamera[]) => void;
     /** Puts the venue's cameras back as they were (undo for a remove). */
     restore: (cameras: VenueCameras | undefined) => void;
     /** Back to the venue's default cameras. */
     chooseDefaults: () => void;
 }
 
+/** Who the view follows now, as a camera's follow setting; null for nobody. */
+function currentFollow(): CameraFollow | null {
+    const follow = useFollowStore.getState().follow;
+    return follow ? { marcherId: follow.marcherId, mode: follow.mode } : null;
+}
+
+// eslint-disable-next-line max-lines-per-function
 export function useCameraList(): CameraList {
     const { t } = useTranslate();
     const { data: show } = useShowCameras();
@@ -98,7 +112,15 @@ export function useCameraList(): CameraList {
         const name = newCameraName(cameras.map(label), (n) =>
             t("view3d.cameras.newName", { n }),
         );
-        saveList(editCameraList(list, { kind: "add", id, name, pose }));
+        saveList(
+            editCameraList(list, {
+                kind: "add",
+                id,
+                name,
+                pose,
+                follow: currentFollow(),
+            }),
+        );
         useCameraStore.getState().markActive(id);
         return id;
     };
@@ -106,8 +128,32 @@ export function useCameraList(): CameraList {
     const setToCurrentView = (id: string) => {
         const pose = useCameraStore.getState().currentPose();
         if (!pose) return;
-        edit({ kind: "setView", id, pose });
+        edit({ kind: "setView", id, pose, follow: currentFollow() });
         useCameraStore.getState().markActive(id);
+    };
+
+    const setExact: CameraList["setExact"] = (id, pose, follow) => {
+        const list = currentList();
+        if (!list) return;
+        const next = editCameraList(
+            list,
+            { kind: "setView", id, pose, follow },
+            labelOf,
+        );
+        saveList(next);
+        // Show it now: the saved list takes a moment to come back.
+        const camera = useCameraStore.getState();
+        if (follow) {
+            const current = useFollowStore.getState().follow;
+            if (
+                current?.marcherId !== follow.marcherId ||
+                current?.mode !== follow.mode
+            )
+                useFollowStore
+                    .getState()
+                    .followMarcher(follow.marcherId, follow.mode, pose.fovDeg);
+        } else camera.showPose(pose);
+        camera.markActive(id);
     };
 
     return {
@@ -122,6 +168,8 @@ export function useCameraList(): CameraList {
         edit,
         addCurrentView,
         setToCurrentView,
+        setExact,
+        replaceAll: (next) => saveList(next.slice(0, MAX_CAMERAS)),
         restore: write,
         chooseDefaults: () => write(undefined),
     };

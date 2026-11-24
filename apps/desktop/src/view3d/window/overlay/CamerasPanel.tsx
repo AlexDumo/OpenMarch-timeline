@@ -6,8 +6,12 @@
  * - Each row is one camera, in menu order (the number is its key, and the
  *   view opens on the first): go there, rename it, set it to the current
  *   view, move it up or down, or remove it (with Undo for a few seconds).
- * - "Add current view" saves where the view is now; "Reset to defaults" puts
- *   the venue's own cameras back.
+ * - A row's settings button opens its exact settings (`CameraSettings.tsx`):
+ *   follow a performer, position and aim, lens.
+ * - "Add current view" saves where the view is now (following whoever the
+ *   view follows); "Reset to defaults" puts the venue's own cameras back.
+ * - "Export…" saves the venue's cameras as a JSON file; "Import…" replaces
+ *   them with a file's (asking first, with Undo after).
  *
  * Camera edits are saved with the show but aren't undoable from the editor,
  * so anything that would throw away a list not saved anywhere else asks
@@ -26,7 +30,12 @@ import {
     ArrowDownIcon,
     ArrowUpIcon,
     CrosshairSimpleIcon,
+    DownloadSimpleIcon,
+    PersonSimpleWalkIcon,
+    EyeIcon,
     PlusIcon,
+    SlidersHorizontalIcon,
+    UploadSimpleIcon,
     TrashIcon,
     XIcon,
 } from "@phosphor-icons/react";
@@ -35,9 +44,17 @@ import clsx from "clsx";
 import {
     CAMERA_NAME_MAX,
     MAX_CAMERAS,
+    type SavedCamera,
     type VenueCameras,
     type ViewCamera,
 } from "@/view3d/core/cameraList";
+import {
+    camerasFile,
+    camerasFileName,
+    parseCamerasFile,
+} from "@/view3d/core/cameraSettings";
+import { SEAT_FOV_DEG, seatAim } from "../camera/rigMath";
+import { CameraSettings } from "./CameraSettings";
 import { useCameraStore } from "../camera/cameraStore";
 import { ToggleButton } from "./Panel";
 import { useCameraList, type CameraList } from "./useCameraList";
@@ -66,10 +83,15 @@ export function CamerasPanel({
     // A camera just added, whose name field takes focus to name it
     const [focusId, setFocusId] = useState<string | null>(null);
     const onFocused = useCallback(() => setFocusId(null), []);
+    // A change that Undo can take back: a remove or an import.
     const [removed, setRemoved] = useState<{
-        name: string;
+        message: string;
         previous: VenueCameras | undefined;
     } | null>(null);
+    // The camera whose settings are open.
+    const [openId, setOpenId] = useState<string | null>(null);
+    const [importError, setImportError] = useState<string | null>(null);
+    const fileInput = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (!removed) return;
@@ -80,6 +102,8 @@ export function CamerasPanel({
     useEffect(() => {
         setPending(null);
         setRemoved(null);
+        setOpenId(null);
+        setImportError(null);
     }, [list.kitId]);
 
     /** Back to the venue's defaults, asking first when the show has its own list. */
@@ -96,8 +120,63 @@ export function CamerasPanel({
         else list.chooseDefaults();
     };
     const remove = (camera: ViewCamera) => {
-        setRemoved({ name: list.label(camera), previous: list.venueCameras });
+        setRemoved({
+            message: t("view3d.cameras.removed", { name: list.label(camera) }),
+            previous: list.venueCameras,
+        });
         list.edit({ kind: "remove", id: camera.id });
+    };
+
+    const exportCameras = () => {
+        if (!list.kitId) return;
+        const file = camerasFile(
+            // Where each camera actually looks, as the view shows it.
+            list.cameras.map((camera) => ({ ...camera, ...seatAim(camera) })),
+            list.kitId,
+            list.label,
+            SEAT_FOV_DEG,
+        );
+        downloadJson(JSON.stringify(file, null, 2), camerasFileName(undefined));
+    };
+
+    const importCameras = async (file: File) => {
+        setImportError(null);
+        let text: string;
+        try {
+            text = await file.text();
+        } catch {
+            setImportError(t("view3d.cameras.importUnreadable"));
+            return;
+        }
+        const result = parseCamerasFile(text);
+        if (!result.ok) {
+            setImportError(
+                result.reason === "invalid"
+                    ? t("view3d.cameras.importInvalid")
+                    : t("view3d.cameras.importNotCameras"),
+            );
+            return;
+        }
+        const replace = (cameras: SavedCamera[]) => {
+            setRemoved({
+                message: t("view3d.cameras.imported", {
+                    count: cameras.length,
+                }),
+                previous: list.venueCameras,
+            });
+            setOpenId(null);
+            list.replaceAll(cameras);
+        };
+        setRemoved(null);
+        if (list.customized)
+            setPending({
+                message: t("view3d.cameras.importConfirm", {
+                    count: result.cameras.length,
+                }),
+                confirm: t("view3d.cameras.replace"),
+                run: () => replace(result.cameras),
+            });
+        else replace(result.cameras);
     };
 
     return (
@@ -145,6 +224,12 @@ export function CamerasPanel({
                                 onRemove={() => remove(camera)}
                                 focus={camera.id === focusId}
                                 onFocused={onFocused}
+                                settingsOpen={camera.id === openId}
+                                onToggleSettings={() =>
+                                    setOpenId((id) =>
+                                        id === camera.id ? null : camera.id,
+                                    )
+                                }
                             />
                         ))}
                     </ol>
@@ -172,9 +257,7 @@ export function CamerasPanel({
                                 data-testid="view3d-cameras-removed"
                             >
                                 <span className="truncate">
-                                    {t("view3d.cameras.removed", {
-                                        name: removed.name,
-                                    })}
+                                    {removed.message}
                                 </span>
                                 <LinkButton
                                     onClick={() => {
@@ -219,6 +302,53 @@ export function CamerasPanel({
                                 testId="view3d-cameras-reset"
                             />
                         </div>
+                        {importError && (
+                            <p
+                                role="alert"
+                                className="text-sub text-red px-4"
+                                data-testid="view3d-cameras-import-error"
+                            >
+                                {importError}
+                            </p>
+                        )}
+                        <div className="flex items-center justify-between gap-8">
+                            <ToggleButton
+                                onClick={exportCameras}
+                                icon={<DownloadSimpleIcon size={16} />}
+                                label={t("view3d.cameras.export")}
+                                tooltip={
+                                    list.cameras.length === 0
+                                        ? t("view3d.cameras.exportEmpty")
+                                        : t("view3d.cameras.exportTooltip")
+                                }
+                                tooltipSide="top"
+                                disabled={
+                                    !list.ready || list.cameras.length === 0
+                                }
+                                testId="view3d-cameras-export"
+                            />
+                            <ToggleButton
+                                onClick={() => fileInput.current?.click()}
+                                icon={<UploadSimpleIcon size={16} />}
+                                label={t("view3d.cameras.import")}
+                                tooltip={t("view3d.cameras.importTooltip")}
+                                tooltipSide="top"
+                                disabled={!list.ready}
+                                testId="view3d-cameras-import"
+                            />
+                            <input
+                                ref={fileInput}
+                                type="file"
+                                accept=".json,application/json"
+                                className="hidden"
+                                data-testid="view3d-cameras-import-file"
+                                onChange={(event) => {
+                                    const file = event.target.files?.[0];
+                                    event.target.value = "";
+                                    if (file) void importCameras(file);
+                                }}
+                            />
+                        </div>
                     </>
                 )}
             </footer>
@@ -235,6 +365,8 @@ function CameraRow({
     onRemove,
     focus,
     onFocused,
+    settingsOpen,
+    onToggleSettings,
 }: {
     camera: ViewCamera;
     index: number;
@@ -244,6 +376,8 @@ function CameraRow({
     onRemove: () => void;
     focus: boolean;
     onFocused: () => void;
+    settingsOpen: boolean;
+    onToggleSettings: () => void;
 }) {
     const { t } = useTranslate();
     const selectCamera = useCameraStore((s) => s.selectCamera);
@@ -253,76 +387,106 @@ function CameraRow({
     return (
         <li
             className={clsx(
-                "rounded-4 flex items-center gap-4 p-2",
+                "rounded-4 flex flex-col p-2",
                 active && "bg-accent/10",
+                settingsOpen && "bg-text/5",
             )}
             data-testid="view3d-camera-row"
             data-value={camera.id}
             data-state={active ? "on" : "off"}
+            data-follow={camera.follow?.mode ?? ""}
         >
-            <button
-                type="button"
-                onClick={() => selectCamera(camera.id)}
-                aria-label={t("view3d.cameras.goTo", { name })}
-                title={t("view3d.cameras.goTo", { name })}
-                className={clsx(
-                    "rounded-4 border-stroke text-sub hover:bg-text/10 focus-visible:outline-accent flex size-28 shrink-0 items-center justify-center border font-mono outline-hidden focus-visible:outline-2",
-                    active && "border-accent text-accent",
+            <div className="flex items-center gap-4">
+                <button
+                    type="button"
+                    onClick={() => selectCamera(camera.id)}
+                    aria-label={t("view3d.cameras.goTo", { name })}
+                    title={t("view3d.cameras.goTo", { name })}
+                    className={clsx(
+                        "rounded-4 border-stroke text-sub hover:bg-text/10 focus-visible:outline-accent flex size-28 shrink-0 items-center justify-center border font-mono outline-hidden focus-visible:outline-2",
+                        active && "border-accent text-accent",
+                    )}
+                >
+                    {index < 9 ? index + 1 : "·"}
+                </button>
+                {camera.follow && (
+                    <span
+                        className="text-text/60 shrink-0"
+                        title={
+                            camera.follow.mode === "pov"
+                                ? t("view3d.cameras.followsEyes")
+                                : t("view3d.cameras.followsBehind")
+                        }
+                    >
+                        {camera.follow.mode === "pov" ? (
+                            <EyeIcon size={14} />
+                        ) : (
+                            <PersonSimpleWalkIcon size={14} />
+                        )}
+                    </span>
                 )}
-            >
-                {index < 9 ? index + 1 : "·"}
-            </button>
-            <NameField
-                value={name}
-                placeholder={defaultName}
-                focus={focus}
-                onFocused={onFocused}
-                maxLength={CAMERA_NAME_MAX}
-                label={t("view3d.cameras.name")}
-                testId="view3d-camera-name"
-                onCommit={(next) =>
-                    list.edit({ kind: "rename", id: camera.id, name: next })
-                }
-            />
-            <ToggleButton
-                onClick={() => list.setToCurrentView(camera.id)}
-                icon={<CrosshairSimpleIcon size={16} />}
-                label={t("view3d.cameras.setView")}
-                tooltip={t("view3d.cameras.setViewTooltip")}
-                iconOnly
-                testId="view3d-camera-set-view"
-            />
-            <ToggleButton
-                onClick={() =>
-                    list.edit({ kind: "move", id: camera.id, by: -1 })
-                }
-                icon={<ArrowUpIcon size={14} />}
-                label={t("view3d.cameras.moveUp")}
-                tooltip={t("view3d.cameras.moveUp")}
-                iconOnly
-                disabled={index === 0}
-                testId="view3d-camera-up"
-            />
-            <ToggleButton
-                onClick={() =>
-                    list.edit({ kind: "move", id: camera.id, by: 1 })
-                }
-                icon={<ArrowDownIcon size={14} />}
-                label={t("view3d.cameras.moveDown")}
-                tooltip={t("view3d.cameras.moveDown")}
-                iconOnly
-                disabled={index === count - 1}
-                testId="view3d-camera-down"
-            />
-            <ToggleButton
-                onClick={onRemove}
-                icon={<TrashIcon size={16} />}
-                label={t("view3d.cameras.remove")}
-                tooltip={t("view3d.cameras.remove")}
-                tooltipSide="left"
-                iconOnly
-                testId="view3d-camera-remove"
-            />
+                <NameField
+                    value={name}
+                    placeholder={defaultName}
+                    focus={focus}
+                    onFocused={onFocused}
+                    maxLength={CAMERA_NAME_MAX}
+                    label={t("view3d.cameras.name")}
+                    testId="view3d-camera-name"
+                    onCommit={(next) =>
+                        list.edit({ kind: "rename", id: camera.id, name: next })
+                    }
+                />
+                <ToggleButton
+                    onClick={onToggleSettings}
+                    icon={<SlidersHorizontalIcon size={16} />}
+                    label={t("view3d.cameras.settings")}
+                    tooltip={t("view3d.cameras.settingsTooltip")}
+                    iconOnly
+                    pressed={settingsOpen}
+                    testId="view3d-camera-settings-toggle"
+                />
+                <ToggleButton
+                    onClick={() => list.setToCurrentView(camera.id)}
+                    icon={<CrosshairSimpleIcon size={16} />}
+                    label={t("view3d.cameras.setView")}
+                    tooltip={t("view3d.cameras.setViewTooltip")}
+                    iconOnly
+                    testId="view3d-camera-set-view"
+                />
+                <ToggleButton
+                    onClick={() =>
+                        list.edit({ kind: "move", id: camera.id, by: -1 })
+                    }
+                    icon={<ArrowUpIcon size={14} />}
+                    label={t("view3d.cameras.moveUp")}
+                    tooltip={t("view3d.cameras.moveUp")}
+                    iconOnly
+                    disabled={index === 0}
+                    testId="view3d-camera-up"
+                />
+                <ToggleButton
+                    onClick={() =>
+                        list.edit({ kind: "move", id: camera.id, by: 1 })
+                    }
+                    icon={<ArrowDownIcon size={14} />}
+                    label={t("view3d.cameras.moveDown")}
+                    tooltip={t("view3d.cameras.moveDown")}
+                    iconOnly
+                    disabled={index === count - 1}
+                    testId="view3d-camera-down"
+                />
+                <ToggleButton
+                    onClick={onRemove}
+                    icon={<TrashIcon size={16} />}
+                    label={t("view3d.cameras.remove")}
+                    tooltip={t("view3d.cameras.remove")}
+                    tooltipSide="left"
+                    iconOnly
+                    testId="view3d-camera-remove"
+                />
+            </div>
+            {settingsOpen && <CameraSettings camera={camera} list={list} />}
         </li>
     );
 }
@@ -446,4 +610,18 @@ function NameField({
             }}
         />
     );
+}
+
+/** Hands the viewer a file to save (a download in the browser, a save dialog in the app). */
+function downloadJson(json: string, fileName: string) {
+    const url = URL.createObjectURL(
+        new Blob([json], { type: "application/json" }),
+    );
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
