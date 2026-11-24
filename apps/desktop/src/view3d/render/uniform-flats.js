@@ -12,6 +12,7 @@
 //
 //   const mat = withFlats(THREE, createUniformMaterial(THREE, look), {
 //       layout,          // assets/uniform-flats/layout.json
+//       body,            // the body type the table is for (its neck radius)
 //       lut,             // the body's table: a 128 x rows RGBA half-float DataTexture (flatsLutTexture)
 //       atlas,           // the composed art, premultiplied alpha
 //       atlasRect,       // { w, h, front: [x, y], back: [x, y], cape: [x, y] | null } in inches (flatsAtlasLayout)
@@ -29,17 +30,22 @@ uniform vec4 uFlatSeg[10];        // rowStart, rows, tStart, tEnd (m)
 uniform float uFlatY0[10];        // flat y (in) of the segment's t = 0
 uniform vec3 uFlatHead[8], uFlatDir[8], uFlatFwd[8], uFlatSide[8];
 uniform vec3 uFlatPlaneAt[4], uFlatPlaneN[4];
-uniform vec4 uFlatTops;           // torso top, hips top, crotch, collar (m)
+uniform vec4 uFlatTops;           // torso top, hips top, crotch (m), how far below the crotch the thigh blends from the hips (m)
 uniform vec2 uFlatPanF, uFlatPanB, uFlatPanC; // where each panel's origin sits in the atlas (in)
 uniform float uFlatCx;            // the panels' centre line (in)
 uniform vec4 uFlatCape;           // cape grade, cape mid-plane z, cape top (m), 1 when the atlas has a cape
 uniform vec2 uFlatWrist;          // t along the left and right forearm (m) below which the glove is sleeve
+uniform float uFlatNeckR;         // the jacket closer than this (m) to the neck's axis is the neck
 const float OM_FLAT_IN = 0.0254;
 const float OM_FLAT_PI = 3.14159265;
 float omFlatRow(int s, float t) {
   vec4 g = uFlatSeg[s];
   float f = clamp((t - g.z) / (g.w - g.z), 0.0, 1.0);
   return (g.x + 0.5 + f * (g.y - 1.0)) / uFlatLutRows;
+}
+// The table at angle psi (S repeats round the body) and row.
+vec4 omFlatLut(float psi, float row) {
+  return textureLod(uFlatLut, vec2((psi + OM_FLAT_PI) / (2.0 * OM_FLAT_PI), row), 0.0);
 }
 // Whether jacket point p lies on upper arm i: past the shoulder joint, close to the bone and not on its
 // inner side. The bodies' jacket reaches over the top of each arm in a wedge, which the sleeve's art covers.
@@ -62,48 +68,85 @@ int omFlatPart() {
   }
   return part;
 }
+// How far jacket point p is from the neck's axis at its height (m).
+float omFlatNeckDist(vec3 p) {
+  float zc = omFlatLut(0.0, omFlatRow(0, uFlatTops.x - p.y)).b;
+  return length(vec2(p.x, p.z - zc));
+}
+// 1 on the neck (the jacket's standing collar), antialiased: it takes the palette collar and no art.
+float omFlatNeck() {
+  if (omFlatPart() != 1) return 0.0;
+  float d = uFlatNeckR - omFlatNeckDist(vRest);
+  float fw = fwidth(d) + 1e-5;
+  return smoothstep(-fw, fw, d);
+}
+// A spine segment (0 torso, 1 hips) at t (m down from its top): its point on the flats.
+vec2 omFlatSpine(int s, vec3 p, float t, out bool front) {
+  vec4 g = uFlatSeg[s];
+  float row = omFlatRow(s, t);
+  float zc = omFlatLut(0.0, row).b;
+  float psi = atan(p.x, p.z - zc);
+  vec4 lut = omFlatLut(psi, row);
+  front = abs(psi) <= 0.5 * OM_FLAT_PI;
+  // down the segment: inches, kept to its rows so its ends never reach past the region
+  return vec2(uFlatCx + (front ? lut.r : -lut.g), uFlatY0[s] + clamp(t, g.z, g.w) / OM_FLAT_IN + lut.a);
+}
+// Limb segment i (0..7, as uFlatHead): its point on the flats, and t along its bone (m).
+vec2 omFlatLimb(int i, vec3 p, out float t, out float psi, out bool front) {
+  int s = 2 + i;
+  vec4 g = uFlatSeg[s];
+  vec3 d = p - uFlatHead[i];
+  t = dot(d, uFlatDir[i]);
+  float row = omFlatRow(s, t);
+  // the ring's centre moves forward at the top of each thigh, onto the hips' (table B)
+  vec3 r = d - uFlatDir[i] * t - uFlatFwd[i] * omFlatLut(0.0, row).b;
+  psi = atan(dot(r, uFlatSide[i]), dot(r, uFlatFwd[i]));
+  vec4 lut = omFlatLut(psi, row);
+  front = abs(psi) <= 0.5 * OM_FLAT_PI;
+  return vec2(uFlatCx + (front ? lut.r : -lut.g), uFlatY0[s] + clamp(t, g.z, g.w) / OM_FLAT_IN + lut.a);
+}
 // The art over the palette (premultiplied), or transparent where the part takes palette colors only.
 vec4 omFlatArt() {
   int part = omFlatPart();
   vec3 p = vRest;
   int s = -1;
-  float t = 0.0, psi = 0.0, valid = 1.0;
+  float valid = 1.0;
   vec2 q = vec2(0.0), org = uFlatPanF;
   bool front = true;
   if (part == 1 || (part == 3 && p.y > uFlatTops.z)) {
     s = part == 1 ? 0 : 1;
-    t = (part == 1 ? uFlatTops.x : uFlatTops.y) - p.y;
-    // the neck: above the collar line the palette collar shows
-    if (part == 1 && p.y > uFlatTops.w) valid = 0.0;
-    float zc = textureLod(uFlatLut, vec2(0.5, omFlatRow(s, t)), 0.0).b;
-    psi = atan(p.x, p.z - zc);
+    q = omFlatSpine(s, p, (part == 1 ? uFlatTops.x : uFlatTops.y) - p.y, front);
+    if (part == 1 && omFlatNeckDist(p) < uFlatNeckR) valid = 0.0;
   } else if (part == 2 || part == 3) {
     int side = p.x >= 0.0 ? 0 : 1;
     int pl = (part == 2 ? 0 : 2) + side;
     int i = (part == 2 ? 0 : 4) + side * 2 + (dot(p - uFlatPlaneAt[pl], uFlatPlaneN[pl]) > 0.0 ? 1 : 0);
-    vec3 d = p - uFlatHead[i];
-    t = dot(d, uFlatDir[i]);
     s = 2 + i;
-    // the ring's centre moves forward at the top of each thigh, onto the hips' (table B)
-    float off = textureLod(uFlatLut, vec2(0.5, omFlatRow(s, t)), 0.0).b;
-    vec3 r = d - uFlatDir[i] * t - uFlatFwd[i] * off;
-    psi = atan(dot(r, uFlatSide[i]), dot(r, uFlatFwd[i]));
+    float t, psi;
+    q = omFlatLimb(i, p, t, psi, front);
+    // The outer side of each thigh's top blends from the hips' mapping (continued below the crotch) into its
+    // own, so art down the side of the pants has no step or barbs at the crotch line. The weight runs by
+    // height below the crotch (0 on the line all round) and fades out toward the inseam, where the hips'
+    // mapping folds onto the spine's axis.
+    if (i == 4 || i == 6) {
+      float lateral = sin(psi) * (i == 4 ? 1.0 : -1.0);
+      float hw = (1.0 - smoothstep(0.0, uFlatTops.w, uFlatTops.z - p.y)) * smoothstep(0.0, 0.5, lateral);
+      if (hw > 0.0) {
+        bool hipsFront;
+        float th = uFlatTops.y - p.y;
+        vec2 qh = omFlatSpine(1, p, th, hipsFront);
+        qh.y = uFlatY0[1] + th / OM_FLAT_IN;
+        if (hipsFront == front) q = mix(q, qh, hw);
+        else if (hw > 0.5) { q = qh; front = hipsFront; }
+        if (hw > 0.5) s = 1;
+      }
+    }
   } else if (part == 12) {
     org = uFlatPanC;
     q = vec2(0.5 * OM_FLAT_CAPE_W - p.x / uFlatCape.x / OM_FLAT_IN, (uFlatCape.z - p.y) / OM_FLAT_IN);
     if (p.z >= uFlatCape.y || uFlatCape.w < 0.5) valid = 0.0;
   } else valid = 0.0;
-  if (s >= 0) {
-    vec4 g = uFlatSeg[s];
-    float row = omFlatRow(s, t);
-    vec4 lut = textureLod(uFlatLut, vec2((psi + OM_FLAT_PI) / (2.0 * OM_FLAT_PI), row), 0.0);
-    front = abs(psi) <= 0.5 * OM_FLAT_PI;
-    org = front ? uFlatPanF : uFlatPanB;
-    // down the segment: inches along its axis, kept to its rows so ends (the sleeve cap over the shoulder,
-    // the cuff) never reach past the region into a neighbor's art
-    float y = uFlatY0[s] + clamp(t, g.z, g.w) / OM_FLAT_IN + lut.a;
-    q = vec2(uFlatCx + (front ? lut.r : -lut.g), y);
-  }
+  if (s >= 0) org = front ? uFlatPanF : uFlatPanB;
   // screen-space gradients in uniform control flow, capped by the rest-pose footprint so a segment change
   // inside a pixel quad can't blow the filter up
   vec2 gx = dFdx(q), gy = dFdy(q);
@@ -137,6 +180,8 @@ const SEGMENT_ORDER = ["torso", "hips", ...LIMB_ORDER];
 const WRIST_MARGIN = 0.025;
 /** The uniform shader's part line in `uniformColor`. */
 const PART_LINE = "int part = int(vPart + 0.5);";
+/** The uniform shader's palette collar: everything above its collar line. Flats looks put it on the neck. */
+const COLLAR_LINE = /c = mix\(c, uTrim, over\(p\.y - [0-9.]+\) \* uCollar\);/;
 /** The uniform shader's line the art is mixed into. */
 export const FLATS_DIFFUSE_LINE =
     "vec4 diffuseColor = vec4( uniformColor(), opacity );";
@@ -152,7 +197,10 @@ export function flatsGlsl(layout) {
 /**
  * The uniforms for one body's table and one atlas.
  */
-export function flatsUniforms(THREE, { layout, lut, atlas, atlasRect, cape }) {
+export function flatsUniforms(
+    THREE,
+    { layout, body, lut, atlas, atlasRect, cape },
+) {
     const v3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
     const seg = SEGMENT_ORDER.map((id) => {
         const s = layout.segments.find((x) => x.id === id);
@@ -192,7 +240,7 @@ export function flatsUniforms(THREE, { layout, lut, atlas, atlasRect, cape }) {
                 layout.tops.torso,
                 layout.tops.hips,
                 layout.tops.crotch,
-                layout.tops.collar,
+                layout.tops.legEase,
             ),
         },
         uFlatPanF: { value: at(atlasRect.front) },
@@ -205,6 +253,9 @@ export function flatsUniforms(THREE, { layout, lut, atlas, atlasRect, cape }) {
                 limb[1].length - WRIST_MARGIN,
                 limb[3].length - WRIST_MARGIN,
             ),
+        },
+        uFlatNeckR: {
+            value: layout.neckR[body] ?? layout.neckR[layout.median],
         },
         uFlatCape: {
             value: new THREE.Vector4(
@@ -233,11 +284,17 @@ export function withFlats(THREE, material, params) {
         const fs = shader.fragmentShader;
         const at = fs.indexOf(head);
         const partAt = at < 0 ? -1 : fs.indexOf(PART_LINE, at);
-        if (at < 0 || partAt < 0 || !fs.includes(FLATS_DIFFUSE_LINE))
+        if (
+            at < 0 ||
+            partAt < 0 ||
+            !fs.includes(FLATS_DIFFUSE_LINE) ||
+            !COLLAR_LINE.test(fs)
+        )
             throw new Error(
                 "uniform flats: the uniform shader changed; uniformColor() or its diffuse line was not found",
             );
-        // uniformColor() takes its part from omFlatPart(), declared just before it
+        // uniformColor() takes its part from omFlatPart(), declared just before it, and its collar color
+        // only on the neck (the yoke and shoulders take art)
         shader.fragmentShader = (
             fs.slice(0, at) +
             code +
@@ -245,10 +302,12 @@ export function withFlats(THREE, material, params) {
             fs.slice(at, partAt) +
             "int part = omFlatPart();" +
             fs.slice(partAt + PART_LINE.length)
-        ).replace(
-            FLATS_DIFFUSE_LINE,
-            "vec4 omArt = omFlatArt();\n  vec4 diffuseColor = vec4( uniformColor() * (1.0 - omArt.a) + omArt.rgb, opacity );",
-        );
+        )
+            .replace(COLLAR_LINE, "c = mix(c, uTrim, omFlatNeck() * uCollar);")
+            .replace(
+                FLATS_DIFFUSE_LINE,
+                "vec4 omArt = omFlatArt();\n  vec4 diffuseColor = vec4( uniformColor() * (1.0 - omArt.a) + omArt.rgb, opacity );",
+            );
     };
     material.customProgramCacheKey = () => key + "|flats";
     material.userData.flatUniforms = u;

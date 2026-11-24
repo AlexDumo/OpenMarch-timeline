@@ -47,7 +47,11 @@ export function useMarcherFlats(
         map: FlatsResources;
     } | null>(null);
     useEffect(() => {
-        if (!wantedKey) return;
+        if (!wantedKey) {
+            // back to presets: let go of the last set (its atlases free once unused)
+            setReady(null);
+            return;
+        }
         let live = true;
         const dpi = flatsDpi(quality);
         const pairs = wantedKey

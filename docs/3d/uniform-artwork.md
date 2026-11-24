@@ -60,7 +60,7 @@ PNG, SVG and PDF, together with `regions.json`.
   - The back panel is seen as you stand behind them, so their left is on your left.
   - Text drawn upright reads correctly on the body on both panels.
 - **Regions** on each of the front and back panels:
-  - `torso`
+  - `torso`, from the neckline down, with the yoke and the shoulder tops
   - `sleeve-L` and `sleeve-R`, with the elbow line marked
   - `hips`, from the belt to the crotch
   - `leg-L` and `leg-R`, with the knee line marked
@@ -69,6 +69,11 @@ PNG, SVG and PDF, together with `regions.json`.
   front flat meets the back flat. The figure is a front view widened a little at the sides: the
   torso about 11%, and the sleeves and legs about 23%. Arms and legs are spread apart so no two
   regions touch.
+  - The torso's **top edge** runs round the neck and over the shoulders. The shoulder tops are
+    drawn at their real length, so the shoulders rise above the neckline on the flats (up to about
+    5 in at the outer corners), like a sewing pattern's front piece.
+  - Each leg's outline starts at the crotch line, where the hips end. Its outer seam continues the
+    hips' side seam, so a stripe down the side of the pants is one line on the flats.
 
 - **Not paintable:** the head, neck, hands, shoes and hat. They are drawn grey for orientation and
   take palette colors only.
@@ -84,7 +89,9 @@ one of those problems.
   be met exactly on the back flat.
 - **Edge labels** on every limb, "outside" and "inseam" (or "underarm"), on both panels. Left and
   right swap between the front and back panels, and authors lost track of which edge was which.
-- The **neck** is outside every region. It used to be paintable, which hid the palette collar.
+- The **neck** is outside every region. It used to be paintable, which hid the palette collar. Only
+  the neck is cut out, by its girth: the yoke and shoulder tops round it are paintable, so
+  epaulets and contrasting yokes work.
 - The `hips` region is labeled "pants, belt to crotch", not just "pants".
 - A **dashed safe area** for anything that must not be squeezed, and a 10 in scale bar.
 
@@ -94,19 +101,25 @@ This file is for agents. Region outlines are given in **panel inches**, so they 
 clip paths with no offset arithmetic. It holds:
 
 - for every region: its outline polygon, its bounding box, and the side seam's x at every 0.25 in
-  of height for both edges
+  of height for both edges (`seams.rows`). The torso's polygon is its two side seams, then its top
+  edge.
 - guide heights:
 
-  | Guide               | Height (in) |
-  | ------------------- | ----------- |
-  | collar              | 19.15       |
-  | chest               | 25.32       |
-  | jacket hem and belt | 38.31       |
-  | crotch              | 43.24       |
-  | knee                | 56.3        |
-  | elbow               | 29.28       |
+  | Guide                                | Height (in) |
+  | ------------------------------------ | ----------- |
+  | neckline (centre front; id `collar`) | 18.84       |
+  | chest                                | 25.32       |
+  | jacket hem and belt                  | 38.31       |
+  | crotch                               | 43.24       |
+  | knee                                 | 56.3        |
+  | elbow                                | 29.28       |
 
 - landmarks: chest centre, back number centre, and each limb's centre line and cuff
+- the grey context figure (head, shako, visor and shoes as triangles, hands as ellipses), for
+  drawing the template
+
+It is generated with the lookup tables by `apps/desktop/scripts/view3d-assets/uniform-flats.mjs`,
+and lives at `apps/desktop/src/view3d/assets/uniform-flats/regions.json`.
 
 ## Rendering: the hybrid wrap
 

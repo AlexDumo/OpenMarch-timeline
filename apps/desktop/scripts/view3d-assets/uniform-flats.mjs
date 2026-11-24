@@ -1,4 +1,4 @@
-// cspell:ignore gltf krows perim tris verts wsum
+// cspell:ignore gltf krows paintable perim tris verts wsum
 // Measures the seven om-pose bodies for uniform artwork drawn as front/back FLATS (docs/3d/uniform-artwork.md,
 // "Rendering: the hybrid wrap") and writes, under src/view3d/assets/uniform-flats/:
 //
@@ -60,8 +60,12 @@ const MARGIN = 1.5; // in, round the figure inside a panel
 const GUTTER = 4; // in, between panels and round the page
 const HEADER = 6; // in, legend band at the top of the page
 const Y_CROTCH = 0.845; // m: pants above are the hips (the legs part below about 0.84 on every body)
-/** The uniform shader's collar line (render/uniform-shader.js `L.collar`): the torso's art stops here. */
-const Y_COLLAR = 1.42;
+/** The jacket's standing collar (the neck) is measured from here up, m. */
+const Y_NECK_FROM = 1.465;
+/** Added to each body's collar radius (m): the neck is what lies closer than that to the neck's axis. */
+const NECK_MARGIN = 0.006;
+/** The hips' rings are cast down to here (m); below it, to the crotch, the last one carries on. */
+const Y_HIPS_RING_FLOOR = 0.87;
 /** Above this height the torso's flat y follows the body's surface instead of the height (shoulder tops). */
 const Y_ARC_FROM = 1.3;
 /** Over this length (m) from the crotch a thigh's outline eases from the hips' outline to the spread leg. */
@@ -210,6 +214,23 @@ const partMin = (part, axis) =>
 const Y_TOP_TORSO = partMax(1, 1);
 const Y_TOP_HIPS = partMax(3, 1);
 
+// ---------------------------------------------------------------- the neck
+/**
+ * Per body, how far from the neck's axis (m) the jacket is still neck: its standing collar's radius plus a
+ * margin. The neck is out of every region (palette only); the yoke and shoulder tops round it are paintable.
+ */
+const NECK_R = {};
+for (const bt of BODY_TYPES) {
+    const ring = MD[bt].verts.filter(
+        (v) => v.part === 1 && v.p[1] >= Y_NECK_FROM,
+    );
+    const zs = ring.map((v) => v.p[2]);
+    const zc = (Math.min(...zs) + Math.max(...zs)) / 2;
+    NECK_R[bt] =
+        Math.max(...ring.map((v) => Math.hypot(v.p[0], v.p[2] - zc))) +
+        NECK_MARGIN;
+}
+
 // ---------------------------------------------------------------- segments
 function segmentOf(p, part) {
     const s = p[0] >= 0 ? "L" : "R";
@@ -231,7 +252,6 @@ function tOf(seg, p) {
     if (seg === "hips") return Y_TOP_HIPS - p[1];
     return dot(sub(p, LIMBS[seg].head), LIMBS[seg].dir);
 }
-const T_CUT = Y_TOP_TORSO - Y_COLLAR; // torso: no art above the collar line
 const tRange = {};
 for (const seg of SEGMENTS) {
     const ts = MD[MEDIAN].verts
@@ -242,7 +262,7 @@ for (const seg of SEGMENTS) {
         max: Math.max(...ts) + 0.005,
     };
 }
-tRange.torso.min = T_CUT;
+tRange.torso.min = 0;
 tRange.hips.min = 0;
 tRange.hips.max = Y_TOP_HIPS - Y_CROTCH;
 // a thigh starts where the crotch plane crosses its axis, less a little for the tilt
@@ -467,6 +487,13 @@ for (const bt of BODY_TYPES) {
             if (x && Math.abs(width[k] - medW[k]) > 0.15 * medW[k])
                 rows[k] = null;
         });
+        // the hips' lowest rings: by the crotch the spine's axis sits between the legs, and rays from it
+        // meet the inner thighs, so below Y_HIPS_RING_FLOOR the last ring above carries on
+        if (seg === "hips")
+            rows.forEach((_, k) => {
+                if (Y_TOP_HIPS - rowT(seg, k) < Y_HIPS_RING_FLOOR)
+                    rows[k] = null;
+            });
         const good = rows.map((x, i) => (x ? i : -1)).filter((i) => i >= 0);
         if (!good.length) throw new Error(`${bt} ${seg}: no ring hits`);
         for (let k = 0; k < rows.length; k++)
@@ -777,52 +804,169 @@ const dvAt = (k, psi) => {
     return DV[k][i0] * (1 - f) + DV[k][i0 + 1] * f;
 };
 /**
+ * Per torso column, the first row (from the top) that is not neck on the median body: where the region's top
+ * edge is. Rows above it at that angle only meet the standing collar.
+ */
+const K_TOP = Array.from({ length: N_A }, (_, i) => {
+    const k = M.torso.findIndex((row) => row.r[i] > NECK_R[MEDIAN]);
+    return k < 0 ? 0 : k;
+});
+/** The torso column at each side seam on each flat (the one just inside the half). */
+const SEAM_COL = {
+    F: { p: N_A * 0.75 - 1, m: N_A * 0.25 },
+    B: { p: N_A * 0.75, m: N_A * 0.25 - 1 },
+};
+/**
+ * A segment's two side seams on a flat, each a list of [x, y] downward: `left` and `right` as seen on that
+ * panel. Front panel: x = CX + flat x; back panel: x = CX - flat x (seen from behind).
+ */
+/** Column value of a per-angle array at psi, linear between columns, wrapping round the body. */
+function atPsi(arr, psi) {
+    const x = ((psi + PI) / TAU) * N_A - 0.5;
+    const i0 = Math.floor(x);
+    const f = x - i0;
+    return arr[(i0 + N_A) % N_A] * (1 - f) + arr[(i0 + 1) % N_A] * f;
+}
+/**
+ * Where the shader puts a thigh's side seam (the outer one blended from the hips, the inseam its own) (sgn +1: psi = +90 deg, -1: -90 deg) at row k on the flats:
+ * blended from the hips' mapping at the crotch line into the thigh's own over LEG_EASE_M below it, as
+ * `omFlatArt` does,
+ * so the leg's outline is where the body really samples. Returns x (inches from the centre line, +X sense, as
+ * flatX) and y on each flat.
+ */
+function thighSeam(seg, k, sgn) {
+    const L = LIMBS[seg];
+    const t = rowT(seg, k);
+    const raw = M[seg][k];
+    const r = atPsi(raw.r, (sgn * PI) / 2);
+    const p = add(
+        add(add(L.head, mul(L.dir, t)), mul(L.fwd, raw.zc)),
+        mul(L.side, sgn * r),
+    );
+    const row = TARGET[seg][k];
+    const own = {
+        F: flatX(seg, k, "F", sgn > 0 ? row.Fp : row.Fm),
+        B: flatX(seg, k, "B", sgn > 0 ? row.Bp : row.Bm),
+        y: rowY(seg, k),
+    };
+    const w = smooth((Y_CROTCH - p[1]) / LEG_EASE_M);
+    // the hips' mapping, its last row continued below the crotch
+    const hk = M.hips.length - 1;
+    const hb = M.hips[hk];
+    const hm = TARGET.hips[hk];
+    const psi = Math.atan2(p[0], p[2] - hb.zc);
+    const pos = psi >= 0;
+    const hips = {
+        F: toIn(atPsi(hb.UF, psi) * (pos ? hm.Fp / hb.Fp : hm.Fm / hb.Fm)),
+        B: toIn(atPsi(hb.UB, psi) * (pos ? hm.Bp / hb.Bp : hm.Bm / hb.Bm)),
+        y: segY0("hips") + toIn(Y_TOP_HIPS - p[1]),
+    };
+    // the hips' share: only on the outer side (the inseam's hips mapping folds onto the spine's axis)
+    const lateral = sgn * (seg.endsWith("-L") ? 1 : -1) > 0;
+    const hw = lateral ? 1 - w : 0;
+    const mix = (a, b) => b + (a - b) * hw;
+    return {
+        F: mix(hips.F, own.F),
+        B: mix(hips.B, own.B),
+        y: mix(hips.y, own.y),
+    };
+}
+/**
  * A segment's two side seams on a flat, each a list of [x, y] downward: `left` and `right` as seen on that
  * panel. Front panel: x = CX + flat x; back panel: x = CX - flat x (seen from behind).
  */
 function seams(seg, panel) {
     const left = [];
     const right = [];
+    // the torso's seams start below the neck, at their own column's top row
+    const side = panel === "front" ? "F" : "B";
+    const kp = seg === "torso" ? K_TOP[SEAM_COL[side].p] : 0;
+    const km = seg === "torso" ? K_TOP[SEAM_COL[side].m] : 0;
+    const thigh = seg.startsWith("thigh");
+    const crotchY = toIn(Y_PANEL_TOP - Y_CROTCH);
+    let prev = null;
     TARGET[seg].forEach((row, k) => {
+        if (thigh) {
+            // the leg starts at the crotch line, where the hips end
+            const sp = thighSeam(seg, k, 1);
+            const sm = thighSeam(seg, k, -1);
+            if (sp.y < crotchY - 1e-6 || sm.y < crotchY - 1e-6) {
+                prev = { sp, sm };
+                return;
+            }
+            if (prev && !left.length) {
+                // the first point exactly on the crotch line, between the last row above it and this one
+                const lerp = (a, b) => {
+                    const f = (crotchY - a.y) / (b.y - a.y);
+                    return {
+                        F: a.F + (b.F - a.F) * f,
+                        B: a.B + (b.B - a.B) * f,
+                        y: crotchY,
+                    };
+                };
+                const p0 = lerp(prev.sp, sp);
+                const m0 = lerp(prev.sm, sm);
+                if (panel === "front") {
+                    left.push([CX + m0.F, crotchY]);
+                    right.push([CX + p0.F, crotchY]);
+                } else {
+                    left.push([CX - p0.B, crotchY]);
+                    right.push([CX - m0.B, crotchY]);
+                }
+            }
+            if (panel === "front") {
+                left.push([CX + sm.F, sm.y]);
+                right.push([CX + sp.F, sp.y]);
+            } else {
+                left.push([CX - sp.B, sp.y]);
+                right.push([CX - sm.B, sm.y]);
+            }
+            return;
+        }
         const yp =
             seg === "torso" ? rowY(seg, k) + dvAt(k, PI / 2) : rowY(seg, k);
         const ym =
             seg === "torso" ? rowY(seg, k) + dvAt(k, -PI / 2) : rowY(seg, k);
         if (panel === "front") {
-            left.push([CX + flatX(seg, k, "F", row.Fm), ym]);
-            right.push([CX + flatX(seg, k, "F", row.Fp), yp]);
+            if (k >= km) left.push([CX + flatX(seg, k, "F", row.Fm), ym]);
+            if (k >= kp) right.push([CX + flatX(seg, k, "F", row.Fp), yp]);
         } else {
-            left.push([CX - flatX(seg, k, "B", row.Bp), yp]);
-            right.push([CX - flatX(seg, k, "B", row.Bm), ym]);
+            if (k >= kp) left.push([CX - flatX(seg, k, "B", row.Bp), yp]);
+            if (k >= km) right.push([CX - flatX(seg, k, "B", row.Bm), ym]);
         }
     });
     return { left, right };
 }
-/** The torso's top edge on a flat (the collar line, raised over the shoulders), right to left. */
+/** The torso's top edge on a flat (round the neck, over the shoulders), right to left. */
 function torsoTop(panel) {
     const pts = [];
-    const b = M.torso[0];
-    const m = TARGET.torso[0];
-    // front half columns, from +90 deg down to -90 deg (front: right to left on the panel)
-    for (let i = N_A - 1; i >= 0; i--) {
-        const psi = psiOf(i);
-        const front = Math.abs(psi) <= PI / 2;
-        if (panel === "front" ? !front : front) continue;
-        const pos = psi >= 0;
+    const m = (k) => TARGET.torso[k];
+    const b = (k) => M.torso[k];
+    // front: psi from +90 down to -90 deg; back: from -90 down to -180, then 180 down to 90
+    const cols =
+        panel === "front"
+            ? Array.from({ length: N_A / 2 }, (_, j) => N_A * 0.75 - 1 - j)
+            : [
+                  ...Array.from({ length: N_A / 4 }, (_, j) => N_A / 4 - 1 - j),
+                  ...Array.from({ length: N_A / 4 }, (_, j) => N_A - 1 - j),
+              ];
+    for (const i of cols) {
+        const k = K_TOP[i];
+        const pos = psiOf(i) >= 0;
         if (panel === "front") {
-            const u = b.UF[i] * (pos ? m.Fp / b.Fp : m.Fm / b.Fm);
-            pts.push([CX + flatX("torso", 0, "F", u), torsoY(0, i)]);
+            const u =
+                b(k).UF[i] * (pos ? m(k).Fp / b(k).Fp : m(k).Fm / b(k).Fm);
+            pts.push([CX + flatX("torso", k, "F", u), torsoY(k, i)]);
         } else {
-            const u = b.UB[i] * (pos ? m.Bp / b.Bp : m.Bm / b.Bm);
-            pts.push([CX - flatX("torso", 0, "B", u), torsoY(0, i)]);
+            const u =
+                b(k).UB[i] * (pos ? m(k).Bp / b(k).Bp : m(k).Bm / b(k).Bm);
+            pts.push([CX - flatX("torso", k, "B", u), torsoY(k, i)]);
         }
     }
-    // right to left as seen on the panel
-    pts.sort((p, q) => q[0] - p[0]);
     return pts;
 }
 const REGION_LABEL = {
-    torso: "Jacket body, collar line to hem",
+    torso: "Jacket body, neckline to hem",
     "sleeve-L": "Left sleeve, shoulder to cuff",
     "sleeve-R": "Right sleeve, shoulder to cuff",
     hips: "Pants, belt to crotch",
@@ -910,8 +1054,8 @@ const yWorld = (y) => r2(toIn(Y_PANEL_TOP - y));
 const GUIDES = [
     {
         id: "collar",
-        y: yWorld(Y_COLLAR),
-        label: "collar line (above it: collar and neck, palette colors only)",
+        y: r2(torsoY(K_TOP[N_A / 2], N_A / 2)),
+        label: "neckline at the centre front (above it: the neck, palette colors only)",
     },
     { id: "chest", y: yWorld(1.3), label: "chest" },
     { id: "hem", y: yWorld(Y_TOP_HIPS), label: "jacket hem and belt" },
@@ -1004,7 +1148,7 @@ const regionsJson = {
         ...(r.seams ? { seams: r.seams } : {}),
     })),
     regionNotes:
-        "Each garment polygon is its left side seam top to bottom, then its right side seam bottom to top; the torso's then runs along its top edge (the collar line, raised over the shoulders) back to the start. seams.rows are [y, left x, right x] every 0.25 in. Both edges of every region are side seams, where the front flat meets the back flat. The head, neck, hands, shoes and hat are outside every region: they take palette colors only.",
+        "Each garment polygon is its left side seam top to bottom, then its right side seam bottom to top; the torso's then runs along its top edge (round the neck and over the shoulders) back to the start. seams.rows are [y, left x, right x] every 0.25 in. Both edges of every region are side seams, where the front flat meets the back flat. The head, neck, hands, shoes and hat are outside every region: they take palette colors only.",
     guides: GUIDES,
     landmarks: {
         "chest centre": { panel: "front", x: r2(CX), y: yWorld(1.3) },
@@ -1056,8 +1200,10 @@ const layoutJson = {
         torso: r5(Y_TOP_TORSO),
         hips: r5(Y_TOP_HIPS),
         crotch: Y_CROTCH,
-        collar: Y_COLLAR,
+        legEase: LEG_EASE_M,
     },
+    /** Per body: how far from the neck's axis (m) the jacket is the neck (no art; the palette collar). */
+    neckR: Object.fromEntries(BODY_TYPES.map((bt) => [bt, r5(NECK_R[bt])])),
     limbs: LIMB_ORDER.map((id) => ({
         id,
         head: LIMBS[id].head.map(r5),

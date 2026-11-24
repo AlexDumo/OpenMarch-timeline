@@ -15,6 +15,8 @@ export interface FlatsAtlasRect {
 
 export interface FlatsParams {
     layout: FlatsLayout;
+    /** The body type `lut` is for. */
+    body: string;
     lut: Texture;
     atlas: Texture;
     atlasRect: FlatsAtlasRect;

@@ -25,10 +25,7 @@ import {
     type GuardUniformPresetId,
     type UniformPresetId,
 } from "@/view3d/core/marchers/uniformPresets";
-import {
-    uniformArtworkOf,
-    type UniformArtworkId,
-} from "@/view3d/core/marchers/uniformArtwork";
+import type { UniformArtworkId } from "@/view3d/core/marchers/uniformArtwork";
 
 export type VenueChange =
     | { kind: "kit"; kit: VenueKitId }
@@ -122,8 +119,7 @@ export function venueChanged(a: VenueSettings, b: VenueSettings): boolean {
         a.lighting !== b.lighting ||
         a.crowd !== b.crowd ||
         uniformPresetOf(a.uniforms) !== uniformPresetOf(b.uniforms) ||
-        uniformArtworkOf(a.uniformArtwork) !==
-            uniformArtworkOf(b.uniformArtwork) ||
+        (a.uniformArtwork ?? null) !== (b.uniformArtwork ?? null) ||
         guardUniformPresetOf(a.guardUniforms) !==
             guardUniformPresetOf(b.guardUniforms) ||
         brassFinishOf(a.brassFinish) !== brassFinishOf(b.brassFinish) ||

@@ -8,8 +8,9 @@
  * - An atlas holds the front and back panels (and the cape's, when the look
  *   has one), cropped to the garment regions. Placed items are graded for
  *   the body type, so each (look, body type, resolution) has its own atlas;
- *   then every region's edge pixels are copied 1.5 in outward so filtering
- *   at the side seams never reaches the empty page.
+ *   then a worker copies every region's edge pixels 1.5 in outward so
+ *   filtering at the side seams never reaches the empty page, and hands back
+ *   an ImageBitmap: no canvas or pixel copy stays in the window.
  * - Atlases are shared while in use (`acquireFlats`) and freed when the last
  *   user lets go.
  */
@@ -19,7 +20,6 @@ import regionsUrl from "@/view3d/assets/uniform-flats/regions.json?url";
 import {
     FLATS_BLEED_IN,
     UNIFORM_ARTWORK,
-    bleedPlan,
     flatsAtlasLayout,
     gradeAt,
     itemDraw,
@@ -30,6 +30,11 @@ import {
 } from "@/view3d/core/marchers/uniformArtwork";
 import type { BodyType } from "@/view3d/core/marchers/looks";
 import type { FlatsAtlasRect } from "@/view3d/render/uniform-flats.js";
+import FlatsBleedWorker from "./flatsBleed.worker.ts?worker";
+import type {
+    FlatsBleedRequest,
+    FlatsBleedResponse,
+} from "./flatsBleed.worker";
 
 const lutUrls = import.meta.glob<string>(
     "../../../assets/uniform-flats/lut/*.bin",
@@ -100,7 +105,8 @@ export function flatsLutTexture(
     );
     t.magFilter = THREE.LinearFilter;
     t.minFilter = THREE.LinearFilter;
-    t.wrapS = THREE.ClampToEdgeWrapping;
+    // round the body: the back centre (psi = +-pi) sits between the last and first columns
+    t.wrapS = THREE.RepeatWrapping;
     t.wrapT = THREE.ClampToEdgeWrapping;
     t.generateMipmaps = false;
     t.needsUpdate = true;
@@ -135,51 +141,110 @@ export interface FlatsAtlas {
     bytes: number;
 }
 
-const bleedMaps = new Map<
-    string,
-    { W: number; H: number; dst: Int32Array; from: Int32Array }
->();
 /**
- * The atlas's bleed (`bleedPlan`), per layout and resolution.
+ * The region map of an atlas layout: each pixel's region, numbered from 1
+ * (0 outside), each region drawn the way the art is clipped to it.
  */
-function bleedMap(
+function regionMask(
     regions: FlatsRegions,
     rect: ReturnType<typeof flatsAtlasLayout>,
     dpi: number,
-) {
-    const key = `${dpi}|${rect.w}|${rect.h}|${rect.cape ? 1 : 0}`;
-    const have = bleedMaps.get(key);
-    if (have) return have;
-    const W = Math.round(rect.w * dpi);
-    const H = Math.round(rect.h * dpi);
+    W: number,
+    H: number,
+): Uint8Array {
     const c = document.createElement("canvas");
     c.width = W;
     c.height = H;
     const x = c.getContext("2d", { willReadFrequently: true })!;
     x.fillStyle = "#fff";
-    for (const r of regions.regions) {
+    const mask = new Uint8Array(W * H);
+    regions.regions.forEach((r, n) => {
         const o = rect[r.panel];
-        if (!o) continue;
+        if (!o) return;
+        // each region on its own, read back over its bounding box only
+        const xs = r.polygon.map(([px]) => (o[0] + px) * dpi);
+        const ys = r.polygon.map(([, py]) => (o[1] + py) * dpi);
+        const x0 = Math.max(0, Math.floor(Math.min(...xs)) - 1);
+        const y0 = Math.max(0, Math.floor(Math.min(...ys)) - 1);
+        const x1 = Math.min(W, Math.ceil(Math.max(...xs)) + 1);
+        const y1 = Math.min(H, Math.ceil(Math.max(...ys)) + 1);
+        x.clearRect(x0, y0, x1 - x0, y1 - y0);
         x.beginPath();
-        r.polygon.forEach(([px, py], i) => {
-            const X = (o[0] + px) * dpi;
-            const Y = (o[1] + py) * dpi;
-            if (i) x.lineTo(X, Y);
-            else x.moveTo(X, Y);
-        });
+        xs.forEach((X, i) => (i ? x.lineTo(X, ys[i]) : x.moveTo(X, ys[i])));
         x.closePath();
         x.fill();
-    }
-    const a = x.getImageData(0, 0, W, H).data;
-    const mask = new Uint8Array(W * H);
-    for (let i = 0; i < W * H; i++) mask[i] = a[i * 4 + 3] > 127 ? 1 : 0;
-    const out = {
-        W,
-        H,
-        ...bleedPlan(mask, W, H, Math.round(FLATS_BLEED_IN * dpi)),
+        const a = x.getImageData(x0, y0, x1 - x0, y1 - y0).data;
+        for (let yy = y0; yy < y1; yy++)
+            for (let xx = x0; xx < x1; xx++)
+                if (a[((yy - y0) * (x1 - x0) + (xx - x0)) * 4 + 3] > 127)
+                    mask[yy * W + xx] = n + 1;
+    });
+    c.width = 0;
+    return mask;
+}
+
+let worker: Worker | null = null;
+let nextId = 1;
+const pending = new Map<
+    number,
+    { resolve: (b: ImageBitmap) => void; reject: (e: Error) => void }
+>();
+/** Plan keys the worker has been sent a mask for. */
+const planned = new Set<string>();
+function bleedWorker(): Worker {
+    if (worker) return worker;
+    const w = new FlatsBleedWorker();
+    w.onmessage = (e: MessageEvent<FlatsBleedResponse>) => {
+        const p = pending.get(e.data.id);
+        if (!p) return;
+        pending.delete(e.data.id);
+        if ("bitmap" in e.data) p.resolve(e.data.bitmap);
+        else p.reject(new Error(`3D View: flats bleed: ${e.data.error}`));
     };
-    bleedMaps.set(key, out);
-    return out;
+    w.onerror = (e) => {
+        for (const p of pending.values())
+            p.reject(new Error(`3D View: flats bleed worker: ${e.message}`));
+        pending.clear();
+        planned.clear();
+        w.terminate();
+        worker = null;
+    };
+    worker = w;
+    return w;
+}
+
+/**
+ * Bleeds composed pixels in the worker (`flatsBleed.worker.ts`) and returns
+ * them as a premultiplied ImageBitmap. The worker works the plan out from the
+ * region mask the first time it sees a layout and resolution.
+ */
+function bleed(
+    regions: FlatsRegions,
+    rect: ReturnType<typeof flatsAtlasLayout>,
+    dpi: number,
+    W: number,
+    H: number,
+    pixels: ArrayBuffer,
+): Promise<ImageBitmap> {
+    const key = `${dpi}|${rect.w}|${rect.h}|${rect.cape ? 1 : 0}`;
+    const steps = Math.round(FLATS_BLEED_IN * dpi);
+    const mask = planned.has(key) ? null : regionMask(regions, rect, dpi, W, H);
+    const w = bleedWorker();
+    planned.add(key);
+    const id = nextId++;
+    return new Promise<ImageBitmap>((resolve, reject) => {
+        pending.set(id, { resolve, reject });
+        const request: FlatsBleedRequest = {
+            id,
+            key,
+            W,
+            H,
+            steps,
+            mask,
+            pixels,
+        };
+        w.postMessage(request, [pixels, ...(mask ? [mask.buffer] : [])]);
+    });
 }
 
 /** Composes artwork `id` for body type `body` at `dpi` pixels per inch. */
@@ -241,16 +306,15 @@ async function composeAtlas(
             ctx.restore();
         }
     }
-    // bleed every region's edge outward
-    const map = bleedMap(regions, rect, dpi);
-    const img = ctx.getImageData(0, 0, W, H);
-    const px = new Uint32Array(img.data.buffer);
-    for (let k = 0; k < map.dst.length; k++) px[map.dst[k]] = px[map.from[k]];
-    ctx.putImageData(img, 0, 0);
-
-    const texture = new THREE.CanvasTexture(canvas);
+    // the canvas goes once its pixels are read; the worker bleeds them and
+    // hands back a bitmap to upload
+    const pixels = ctx.getImageData(0, 0, W, H).data.buffer as ArrayBuffer;
+    canvas.width = 0;
+    const bitmap = await bleed(regions, rect, dpi, W, H, pixels);
+    const texture = new THREE.Texture(bitmap);
     texture.colorSpace = THREE.SRGBColorSpace;
-    texture.premultiplyAlpha = true;
+    // the bitmap is premultiplied already; ImageBitmaps upload as they are
+    texture.premultiplyAlpha = false;
     texture.flipY = false;
     texture.generateMipmaps = true;
     texture.minFilter = THREE.LinearMipmapLinearFilter;
@@ -259,6 +323,7 @@ async function composeAtlas(
     texture.wrapS = THREE.ClampToEdgeWrapping;
     texture.wrapT = THREE.ClampToEdgeWrapping;
     texture.needsUpdate = true;
+    texture.addEventListener("dispose", () => bitmap.close());
     // the shader reads panel inches: atlas uv = (origin + q) / size, top row first
     return {
         texture,

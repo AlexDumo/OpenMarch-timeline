@@ -35,6 +35,7 @@ function compile(material: THREE.Material) {
 describe("withFlats", () => {
     const params = {
         layout,
+        body: "neutral-average",
         lut: new THREE.DataTexture(),
         atlas: new THREE.Texture(),
         atlasRect: {
@@ -58,6 +59,12 @@ describe("withFlats", () => {
         expect(body).toContain("int part = omFlatPart();");
         expect(fs.indexOf("int omFlatPart()")).toBeLessThan(
             fs.indexOf("vec3 uniformColor() {"),
+        );
+        // the palette collar only on the neck: the yoke takes art
+        expect(body).toContain("c = mix(c, uTrim, omFlatNeck() * uCollar);");
+        expect(body).not.toMatch(/over\(p\.y - [0-9.]+\) \* uCollar/);
+        expect(shader.uniforms.uFlatNeckR.value).toBe(
+            layout.neckR["neutral-average"],
         );
         expect(shader.uniforms.uFlatLut.value).toBe(params.lut);
         expect(shader.uniforms.uFlatArt.value).toBe(params.atlas);

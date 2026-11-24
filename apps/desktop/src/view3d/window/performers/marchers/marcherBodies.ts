@@ -459,6 +459,7 @@ export class MarcherBodies {
                     art
                         ? withFlats(THREE, base, {
                               layout: art.layout,
+                              body: flatsBody(g.type, quality),
                               lut: art.lut,
                               atlas: art.atlas.texture,
                               atlasRect: art.atlas.rect,

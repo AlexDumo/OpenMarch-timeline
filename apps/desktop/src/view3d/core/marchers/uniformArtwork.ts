@@ -35,7 +35,10 @@ export interface FlatsLayout {
     panels: Record<FlatsPanel, PanelRect>;
     centreX: number;
     segments: FlatsSegment[];
-    tops: { torso: number; hips: number; crotch: number; collar: number };
+    /** Heights (m), and how far down each thigh it blends from the hips (`legEase`, m). */
+    tops: { torso: number; hips: number; crotch: number; legEase: number };
+    /** Per body type: the jacket closer than this (m) to the neck's axis is the neck. */
+    neckR: Record<string, number>;
     limbs: {
         id: string;
         head: number[];
@@ -118,7 +121,11 @@ export interface FlatsUniform {
 export const UNIFORM_ARTWORK_IDS = ["sample"] as const;
 export type UniformArtworkId = (typeof UNIFORM_ARTWORK_IDS)[number];
 
-/** `id` if it names a built-in flats uniform, otherwise null. */
+/**
+ * `id` if it names a built-in flats uniform, otherwise null: the venue's
+ * `uniformArtwork` may also hold a show asset's id (a number, fork #1257),
+ * which this build doesn't read yet, so the band wears its preset.
+ */
 export function uniformArtworkOf(id: unknown): UniformArtworkId | null {
     return (UNIFORM_ARTWORK_IDS as readonly unknown[]).includes(id)
         ? (id as UniformArtworkId)
@@ -346,9 +353,12 @@ export const FLATS_RIM_PX = 2;
  * of its edge, takes the color of the nearest pixel further in (8-connected
  * breadth-first). The rim matters because art clipped to a region is
  * semi-transparent along its edge, and copying that outward would leave the
- * palette showing through along the side seams.
+ * palette showing through along the side seams. Where two regions touch
+ * (the hips and a leg at the crotch line), each one's rim is filled from its
+ * own inside.
  *
- * `mask` is 1 inside a region. Returns pairs: `dst[k]` takes `from[k]`.
+ * `mask` holds each pixel's region, numbered from 1; 0 is outside every
+ * region. Returns pairs: `dst[k]` takes `from[k]`.
  */
 export function bleedPlan(
     mask: Uint8Array,
@@ -364,14 +374,15 @@ export function bleedPlan(
     for (let y = 0; y < H; y++)
         for (let x = 0; x < W; x++) {
             const i = y * W + x;
-            if (!mask[i]) continue;
+            const own = mask[i];
+            if (!own) continue;
             let rimPixel = false;
             for (let dy = -rim; dy <= rim && !rimPixel; dy++)
                 for (let dx = -rim; dx <= rim; dx++) {
                     const jx = x + dx;
                     const jy = y + dy;
                     if (jx < 0 || jy < 0 || jx >= W || jy >= H) continue;
-                    if (!mask[jy * W + jx]) {
+                    if (mask[jy * W + jx] !== own) {
                         rimPixel = true;
                         break;
                     }
@@ -382,7 +393,10 @@ export function bleedPlan(
         }
     const dst: number[] = [];
     const from: number[] = [];
-    for (let step = 0; step < steps + rim && qn; step++) {
+    // the rim first takes the pixel straight inward (4-connected), so the edges of art that crosses a
+    // region's edge stay straight; then the bleed spreads 8-connected
+    for (let step = 0; step < steps + 2 * rim && qn; step++) {
+        const straight = step < rim;
         const next = new Int32Array(qn * 8);
         let nn = 0;
         for (let k = 0; k < qn; k++) {
@@ -392,6 +406,7 @@ export function bleedPlan(
             for (let dy = -1; dy <= 1; dy++)
                 for (let dx = -1; dx <= 1; dx++) {
                     if (!dx && !dy) continue;
+                    if (straight && dx && dy) continue;
                     const jx = ix + dx;
                     const jy = iy + dy;
                     if (jx < 0 || jy < 0 || jx >= W || jy >= H) continue;

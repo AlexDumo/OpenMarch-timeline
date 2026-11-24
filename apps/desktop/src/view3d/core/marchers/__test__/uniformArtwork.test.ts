@@ -130,25 +130,33 @@ describe("uniform flats tables", () => {
         }
     });
 
-    it("keeps stripe counts equal on all seven bodies", () => {
-        // vertical stripes 1 in apart on the front flat, crossed round the front of each segment's middle
-        for (const s of layout.segments) {
-            const row = s.rowStart + (s.rows >> 1);
-            const counts = BODY_TYPES.map((body) => {
-                const lut = table(body);
-                let lo = Infinity;
-                let hi = -Infinity;
-                for (let i = 0; i < N_A; i++)
-                    if (front(i)) {
-                        lo = Math.min(lo, lut(row, i)[0]);
-                        hi = Math.max(hi, lut(row, i)[0]);
-                    }
-                return Math.floor(hi + 0.5) - Math.ceil(lo + 0.5) + 1;
-            });
-            expect(new Set(counts).size, `${s.id}: ${counts.join(", ")}`).toBe(
-                1,
-            );
-        }
+    it("keeps stripe counts equal on all seven bodies, front and back, down every segment", () => {
+        // vertical stripes 1 in apart on each flat, counted across each half at five rows per segment
+        // (the torso's from below the neck)
+        for (const s of layout.segments)
+            for (const f of s.id === "torso"
+                ? [0.3, 0.45, 0.6, 0.75, 0.9]
+                : [0.1, 0.3, 0.5, 0.7, 0.9]) {
+                const row = s.rowStart + Math.round(f * (s.rows - 1));
+                for (const half of ["front", "back"] as const) {
+                    const counts = BODY_TYPES.map((body) => {
+                        const lut = table(body);
+                        let lo = Infinity;
+                        let hi = -Infinity;
+                        for (let i = 0; i < N_A; i++)
+                            if (front(i) === (half === "front")) {
+                                const u = lut(row, i)[half === "front" ? 0 : 1];
+                                lo = Math.min(lo, u);
+                                hi = Math.max(hi, u);
+                            }
+                        return Math.floor(hi + 0.5) - Math.ceil(lo + 0.5) + 1;
+                    });
+                    expect(
+                        new Set(counts).size,
+                        `${s.id} ${half} f=${f}: ${counts.join(", ")}`,
+                    ).toBe(1);
+                }
+            }
     });
 
     it("closes a band drawn across a sleeve or a leg on both flats all the way round", () => {
@@ -238,7 +246,7 @@ describe("a placed logo", () => {
         return best!;
     }
 
-    it("measures 10 in on the median body and keeps its aspect on every body", async () => {
+    it("measures 10 in on the median body and keeps its aspect within 1% on every body", async () => {
         const width = 10;
         const y = layout.panels.front.y; // unused, documents panel inches
         void y;
@@ -302,8 +310,8 @@ describe("a placed logo", () => {
             expect(
                 measured / tall,
                 `${body}: ${measured.toFixed(2)} wide, ${tall.toFixed(2)} tall`,
-            ).toBeGreaterThan(0.94);
-            expect(measured / tall).toBeLessThan(1.06);
+            ).toBeGreaterThan(0.99);
+            expect(measured / tall).toBeLessThan(1.01);
         }
     }, 60_000);
 });
@@ -360,6 +368,24 @@ describe("uniform flats math", () => {
         // two pixels out is filled, five out isn't
         expect(source.has(1 * W + 4)).toBe(true);
         expect(source.has(0 * W + 0)).toBe(false);
+    });
+
+    it("fills the rim where two regions touch from each one's own inside, straight in", () => {
+        // regions 1 (x < 5) and 2 (x >= 5) side by side, 10 x 10
+        const W = 10;
+        const mask = new Uint8Array(W * W);
+        for (let y = 0; y < W; y++)
+            for (let x = 0; x < W; x++) mask[y * W + x] = x < 5 ? 1 : 2;
+        const { dst, from } = bleedPlan(mask, W, W, 2, 2);
+        const source = new Map<number, number>();
+        dst.forEach((d, k) => source.set(d, from[k]));
+        for (const y of [3, 4, 5, 6]) {
+            // the last two columns of region 1 take column 2, the first two of region 2 take column 7
+            for (const x of [3, 4])
+                expect(source.get(y * W + x)).toBe(y * W + 2);
+            for (const x of [5, 6])
+                expect(source.get(y * W + x)).toBe(y * W + 7);
+        }
     });
 
     it("reads only built-in flats ids", () => {
