@@ -219,6 +219,11 @@ export function normalizeRoll(rollDeg: number): number {
     return Math.round(r * 100) / 100 || 0;
 }
 
+/** An angle in degrees as -180 (exclusive) to 180, so straight round is 180. */
+export function wrapAngle(deg: number): number {
+    return deg - 360 * Math.ceil((deg - 180) / 360);
+}
+
 /** How a view camera behaves besides its pose: following and focus. None when omitted. */
 export interface ViewExtras {
     follow?: CameraFollow | null;
@@ -232,7 +237,7 @@ export function followFields(follow: CameraFollow): CameraFollow {
         mode: follow.mode,
     };
     if (follow.angleDeg !== undefined) {
-        const angle = normalizeRoll(follow.angleDeg);
+        const angle = Math.round(wrapAngle(follow.angleDeg) * 100) / 100 || 0;
         if (angle !== 0) out.angleDeg = angle;
     }
     if (follow.tiltDeg !== undefined && Number.isFinite(follow.tiltDeg))

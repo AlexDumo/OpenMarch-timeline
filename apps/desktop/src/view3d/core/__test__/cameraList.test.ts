@@ -389,5 +389,9 @@ describe("followFields", () => {
                 distanceM: 5,
             }),
         ).toEqual({ marcherId: 3, mode: "pov" });
+        expect(
+            followFields({ marcherId: 3, mode: "third", angleDeg: -180 })
+                .angleDeg,
+        ).toBe(180);
     });
 });

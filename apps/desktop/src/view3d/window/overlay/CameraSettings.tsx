@@ -39,10 +39,10 @@ import {
     MAX_FOLLOW_TILT_DEG,
     MAX_FOV_DEG,
     MIN_FOLLOW_DISTANCE_M,
-    MAX_ROLL_DEG,
     MIN_F_STOP,
     MIN_FOV_DEG,
     normalizeRoll,
+    wrapAngle,
     type CameraFocus,
     type CameraFollow,
     type ViewCamera,
@@ -318,8 +318,7 @@ export function CameraSettings({
                             digits: 1,
                             step: 5,
                             scrubPerPx: 0.5,
-                            min: -180,
-                            max: 180,
+                            wrap: true,
                             build: (v) => withFollow({ angleDeg: v }),
                         })}
                         {fieldNumber("follow-tilt", {
@@ -451,6 +450,7 @@ export function CameraSettings({
                             digits: 1,
                             step: 1,
                             scrubPerPx: 0.25,
+                            wrap: true,
                             build: withAim("panDeg"),
                         })}
                         {fieldNumber("tilt", {
@@ -473,8 +473,7 @@ export function CameraSettings({
                             digits: 1,
                             step: 1,
                             scrubPerPx: 0.25,
-                            min: -MAX_ROLL_DEG,
-                            max: MAX_ROLL_DEG,
+                            wrap: true,
                             build: (v) => ({
                                 ...saved,
                                 rollDeg: normalizeRoll(v),
@@ -742,6 +741,8 @@ interface NumberFieldProps {
     scrubPerPx: number;
     min?: number;
     max?: number;
+    /** An angle: goes round past ±180° instead of stopping. */
+    wrap?: boolean;
     testId: string;
     onCommit: (value: number) => void;
     onScrub: (value: number) => void;
@@ -762,6 +763,7 @@ function NumberField({
     scrubPerPx,
     min,
     max,
+    wrap = false,
     testId,
     onCommit,
     onScrub,
@@ -783,7 +785,9 @@ function NumberField({
     }, [shown]);
 
     const clamp = (v: number) =>
-        Math.min(max ?? Infinity, Math.max(min ?? -Infinity, v));
+        wrap
+            ? wrapAngle(v)
+            : Math.min(max ?? Infinity, Math.max(min ?? -Infinity, v));
     const commit = (v: number) => {
         const next = round(clamp(v), digits);
         setDraft(String(next));
