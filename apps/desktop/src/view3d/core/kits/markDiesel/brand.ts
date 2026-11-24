@@ -17,7 +17,7 @@ import type { ShowCredits, VenueParams } from "../../types";
  * The venue's identity: everything in the hall that carries a name or a
  * logo is painted here, on canvas. The hall is Mark Diesel Stadium, dressed
  * for the GRAND NATIONAL CHAMPIONSHIPS; OpenMarch's marks stay few: the
- * drape's logo panel, the back sideline boards' logos, the flags in the
+ * drape's logo panel, one back sideline board, the flags in the
  * roof, the end zones and the marcher on the midfield helmet. No
  * other brand, real or made up. The marks are OpenMarch's own, never
  * redrawn:
@@ -32,7 +32,8 @@ import type { ShowCredits, VenueParams } from "../../types";
  *
  * The colors are the app's: brand violet, its dark-theme lavender, and the
  * near-black of the app's dark theme (`packages/ui/src/tailwind.css`); the
- * type is DM Sans, the app's face.
+ * type is DM Sans, the app's face, but for the red suite signs' leaning
+ * serif (`stadiumSign.ts`).
  *
  * Everywhere else the hall names itself and the event: the drape's banner,
  * the LED ribbons,
@@ -143,7 +144,10 @@ export function signText(
     options: SignTextOptions,
 ): number {
     const { color, align = "left", spacing = 0.04, family } = options;
-    let width = signWidth(g, text, cap, spacing, family);
+    // Leaning letters reach `slant` cap heights further right at the top:
+    // count that in the width, so the run fits and centers as a whole.
+    const slant = options.slant ?? 0;
+    let width = signWidth(g, text, cap, spacing, family) + slant * cap;
     if (options.maxWidth && width > options.maxWidth) {
         cap *= options.maxWidth / width;
         width = options.maxWidth;
@@ -151,10 +155,8 @@ export function signText(
     const left =
         align === "center" ? x - width / 2 : align === "right" ? x - width : x;
     g.save();
-    // Lean the letters about their baseline's middle, so the run stays
-    // centered where it was set.
-    const slant = options.slant ?? 0;
-    g.translate(left + (slant * cap) / 2, cy + cap / 2);
+    // Lean the letters about the run's baseline.
+    g.translate(left, cy + cap / 2);
     if (slant) g.transform(1, 0, -slant, 1, 0, 0);
     g.font = signFont(cap, family);
     tracking(g, (spacing * cap) / CAP);
@@ -164,8 +166,8 @@ export function signText(
     g.strokeStyle = color;
     g.lineJoin = "round";
     g.lineWidth = ((options.weight ?? 0.025) * cap) / CAP;
-    g.fillText(text, -(slant * cap) / 2, 0);
-    if (g.lineWidth > 0) g.strokeText(text, -(slant * cap) / 2, 0);
+    g.fillText(text, 0, 0);
+    if (g.lineWidth > 0) g.strokeText(text, 0, 0);
     tracking(g, 0);
     g.restore();
     return width;

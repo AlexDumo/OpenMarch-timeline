@@ -131,6 +131,8 @@ export interface DieselRibbons extends DieselPart {
 export interface RibbonOptions {
     /** The time shown on the clock; the system's by default. */
     now?: () => Date;
+    /** Draws the made-up bands (`dieselBandNames`); `Math.random` by default. */
+    random?: () => number;
 }
 
 export function buildDieselRibbons(
@@ -143,7 +145,7 @@ export function buildDieselRibbons(
     const object = new Group();
     object.name = "markDiesel.ribbons";
 
-    let state: DieselRibbonState = dieselRibbonState(now());
+    let state: DieselRibbonState = dieselRibbonState(now(), options.random);
     const paintLower = (g: CanvasRenderingContext2D, w: number, h: number) =>
         paintRibbonLower(g, w, h, state);
 

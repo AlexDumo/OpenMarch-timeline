@@ -513,6 +513,20 @@ describe("Mark Diesel LED ribbons", () => {
         expect(now).toHaveBeenCalledTimes(2);
         expect(() => part.setCredits({ title: "Finals" })).not.toThrow();
     });
+
+    it("draws its bands once, not on every clock tick", () => {
+        let minute = 43;
+        const now = () => new Date(2026, 10, 13, 20, minute);
+        const random = vi.fn(() => 0.5);
+        const part = keep(buildDieselRibbons(context("low"), { now, random }));
+        const drawn = random.mock.calls.length;
+        expect(drawn).toBeGreaterThan(0);
+        // A new minute repaints the clock; the bands stay.
+        for (minute = 44; minute < 47; minute++)
+            part.onFrame?.({ cameraPosition: [0, 5, 40], dt: 1.1 });
+        part.setCredits({ title: "Finals" });
+        expect(random).toHaveBeenCalledTimes(drawn);
+    });
 });
 
 describe("Mark Diesel field surround", () => {
