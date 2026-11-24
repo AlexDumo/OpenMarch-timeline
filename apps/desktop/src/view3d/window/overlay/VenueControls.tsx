@@ -97,7 +97,8 @@ export function VenuePicker() {
     const { t } = useTranslate();
     const { settings, request } = useVenueRequest();
     const { data: field } = useQuery(fieldPropertiesQueryOptions());
-    const [refused, setRefused] = useState<string | null>(null);
+    // The venue last refused; its reason is worked out afresh, so it goes when the field fits.
+    const [refused, setRefused] = useState<VenueKitId | null>(null);
     const footprint = field ? fieldFootprint(field) : undefined;
 
     const fieldWidth = footprint ? feet(footprint.maxX - footprint.minX) : 0;
@@ -126,7 +127,7 @@ export function VenuePicker() {
                   fallback: t(`view3d.kit.${KIT_FIXED_FLOOR_FALLBACK}`),
               })
             : null;
-    const note = refused ?? fallback;
+    const note = (refused && reasonFor(refused)) || fallback;
     const sizeOf = (kit: VenueKitId): string | undefined => {
         const real = REAL_VENUES[kit];
         if (!real) return undefined;
@@ -163,7 +164,7 @@ export function VenuePicker() {
                         setRefused(null);
                         request({ kind: "kit", kit });
                     }}
-                    onUnavailable={(_kit, reason) => setRefused(reason)}
+                    onUnavailable={(kit) => setRefused(kit)}
                     label={t(`view3d.venueKind.${kind}`)}
                     className="grid! grid-cols-2 [&>*]:justify-start"
                 />

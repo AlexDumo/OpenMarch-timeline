@@ -1333,7 +1333,7 @@ export function buildBowl(ctx: NightpoundCtx): NightpoundBowl {
 
     const unit = own(new BoxGeometry(1, 1, 1));
     const steelMat = matte({ vertexColors: false });
-    object.add(steel.build(unit, steelMat, "nightpound.rails"));
+    object.add(own(steel.build(unit, steelMat, "nightpound.rails")));
 
     const glassMat = own(
         new MeshBasicMaterial({

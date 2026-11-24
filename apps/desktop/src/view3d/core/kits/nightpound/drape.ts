@@ -241,6 +241,7 @@ export function buildDrape(ctx: NightpoundCtx): NightpoundPart {
         object,
         setLighting() {},
         dispose() {
+            steelMesh.dispose();
             geos.forEach((g) => g.dispose());
             mats.forEach((m) => m.dispose());
         },
