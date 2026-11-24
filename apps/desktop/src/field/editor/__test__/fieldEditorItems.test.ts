@@ -69,6 +69,7 @@ function setup({
                 : null,
         itemHandlesShown: () => handles,
         openMenu: vi.fn(),
+        lockedItemClicked: vi.fn(),
         itemFrame: (id) => (id === 2 ? frame : null),
         previewItem: (id, size) => {
             state.preview = size;
@@ -190,6 +191,8 @@ describe("FieldEditor with items", () => {
         const clicked = setup({ locked: true, selected: [1] });
         click(clicked.editor, 340, 115);
         expect(clicked.state.selected).toEqual([]);
+        // It says why: the item is locked (no dead click)
+        expect(clicked.ports.lockedItemClicked).toHaveBeenCalledWith(2);
         // A drag from inside it is a marquee, which takes the marchers and never the item
         const { editor, state } = setup({ locked: true });
         editor.pointerDown(at(340, 115));

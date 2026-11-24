@@ -217,6 +217,11 @@ export type FieldEditorPorts = {
      * is meant to move it (owner, 2026-11-24). Absent, they always are.
      */
     itemHandlesShown?(id: number): boolean;
+    /**
+     * A click on locked item `id`, which passes over it: says it's locked and how to unlock it,
+     * so the click isn't dead (props epic step 2)
+     */
+    lockedItemClicked?(id: number): void;
     /** Item `id`'s Outline as drawn, or null when it isn't drawn. */
     itemFrame?(id: number): ItemFrame | null;
     /** Draws item `id` at this size and turn while a handle drags it; null draws it as stored. */
@@ -2490,6 +2495,10 @@ export class FieldEditor {
     }
 
     private click(press: FieldPress, shift: boolean) {
+        if (press.hit === null) {
+            const locked = this.lockedItemAt(press.start);
+            if (locked !== null) this.ports.lockedItemClicked?.(locked);
+        }
         const chosen =
             press.hit === null
                 ? null

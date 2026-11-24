@@ -13,7 +13,7 @@ import { useFieldTopInset } from "@/components/canvas/fieldLayers";
 import { useShallow } from "zustand/react/shallow";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import type { OrthographicCamera, WebGLRenderer } from "three";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DEFAULT_FIELD_THEME, type FieldProperties } from "@openmarch/core";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
@@ -130,6 +130,7 @@ import { GlyphAtlas } from "./sdfText";
 import { selectionBoxPadding } from "./selectionRing";
 import { useSelectionCoverStore } from "@/field/editor/selectionCoverStore";
 import { itemHandlesShown } from "@/items/itemHandlesStore";
+import { noticeLockedItemClick } from "@/items/lockedItemNotice";
 import { drawnSelectionBox, selectionHandles } from "./selectionFrame";
 import { fieldObstacleSource } from "./fieldObstacles";
 import { createThreeFieldTestApi } from "./threeFieldTestApi";
@@ -237,6 +238,7 @@ export default function ThreeField() {
  * through React state.
  */
 function ThreeFieldView() {
+    const queryClient = useQueryClient();
     const databaseReady = useDatabaseReady();
     const { data: fieldProperties } = useQuery(
         fieldPropertiesQueryOptions(databaseReady),
@@ -568,6 +570,8 @@ function ThreeFieldView() {
                     itemAt: (point, accept) => items.itemAt(point, accept),
                     // Shown once asked for, with an item's Resize and turn (props epic step 2)
                     itemHandlesShown,
+                    lockedItemClicked: (id) =>
+                        noticeLockedItemClick(queryClient, id),
                     itemFrame: (id) => items.frameOf(id),
                     previewItem: (id, size) =>
                         items.setPreview(
