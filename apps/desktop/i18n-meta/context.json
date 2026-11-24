@@ -3925,6 +3925,7 @@
     "assets.removeUnused.title": "Title of the confirmation that lists the imported files nothing uses, before removing them.",
     "assets.removeUnused.description": "Text of that confirmation. {size} is how much smaller the show gets, already formatted (e.g. '4.1 MB'). Removing can't be undone with Undo.",
     "assets.removeUnused.none": "Shown in that confirmation when every imported file is in use.",
+    "assets.removeUnused.checking": "Shown for a moment in the Remove unused… dialog of the show's Assets list while it checks which assets nothing in the show uses, before it lists them.",
     "assets.removeUnused.cancel": "Button that closes the confirmation without removing anything.",
     "assets.removeUnused.confirm": "Button that removes the listed unused files. {count} is how many.",
     "assets.kind.model": "What kind of file an asset is, in the Assets panel's list: an imported 3D model. Short.",

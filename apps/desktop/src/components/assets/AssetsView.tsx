@@ -30,6 +30,7 @@ import {
     setShowAssetCreditsMutationOptions,
     showAssetsQueryOptions,
     showAssetSizesQueryOptions,
+    uniformsInHistoryKeys,
     uniformsInHistoryQueryOptions,
 } from "@/hooks/queries/useShowAssets";
 import {
@@ -129,6 +130,23 @@ export function AssetsContents({
 }) {
     const use = useAssetUse();
     const [removing, setRemoving] = useState(openRemove);
+    // Remove unused… reads again which uniforms undo or redo names: an edit elsewhere may have
+    // cleared the redo steps since. Its list and size wait for that read.
+    const queryClient = useQueryClient();
+    const [checked, setChecked] = useState(false);
+    useEffect(() => {
+        setChecked(false);
+        if (!removing) return;
+        let live = true;
+        void queryClient
+            .refetchQueries({ queryKey: uniformsInHistoryKeys.all() })
+            .finally(() => {
+                if (live) setChecked(true);
+            });
+        return () => {
+            live = false;
+        };
+    }, [removing, queryClient]);
     const { setContent } = useSidebarModalStore();
     return (
         <div className="animate-scale-in text-text flex h-full w-fit flex-col gap-16">
@@ -165,6 +183,7 @@ export function AssetsContents({
                 <RemoveUnusedDialog
                     open={removing}
                     onOpenChange={setRemoving}
+                    checking={!checked}
                     unused={use.unused}
                     unusedBytes={use.unusedBytes}
                 />
@@ -437,14 +456,18 @@ function AssetCredits({ row }: { row: AssetUse }) {
 function RemoveUnusedDialog({
     open,
     onOpenChange,
-    unused,
+    checking,
+    unused: given,
     unusedBytes,
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    /** Still reading what undo or redo names: lists nothing and offers nothing yet */
+    checking: boolean;
     unused: readonly AssetUse[];
     unusedBytes: number;
 }) {
+    const unused = checking ? [] : given;
     const queryClient = useQueryClient();
     const sizeText = useSizeText();
     const { mutate, isPending } = useMutation(
@@ -454,13 +477,19 @@ function RemoveUnusedDialog({
         <AlertDialog open={open} onOpenChange={onOpenChange}>
             <AlertDialogContent data-testid="assets-remove-dialog">
                 <AlertDialogTitle>
-                    <T
-                        keyName="assets.removeUnused.title"
-                        params={{ count: unused.length }}
-                    />
+                    {checking ? (
+                        <T keyName="assets.removeUnused.button" />
+                    ) : (
+                        <T
+                            keyName="assets.removeUnused.title"
+                            params={{ count: unused.length }}
+                        />
+                    )}
                 </AlertDialogTitle>
                 <AlertDialogDescription>
-                    {unused.length > 0 ? (
+                    {checking ? (
+                        <T keyName="assets.removeUnused.checking" />
+                    ) : unused.length > 0 ? (
                         <T
                             keyName="assets.removeUnused.description"
                             params={{ size: sizeText(unusedBytes) }}

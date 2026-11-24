@@ -24,6 +24,7 @@ import { useItemDrawingStore } from "@/stores/ItemDrawingStore";
 import tolgee from "@/global/singletons/Tolgee";
 import { createShowBlobCache } from "@/showAssets/blobCache";
 import { DEFAULT_STALE_TIME } from "./constants";
+import { venueSettingsKeys } from "./useVenueSettings";
 
 /**
  * The key base matches the table name, as for the other tables. Assets aren't in the undo
@@ -59,13 +60,24 @@ export const showAssetBlobCache = createShowBlobCache({
 });
 
 /**
- * The show's imported uniforms an undo or redo step names (fork #1257): never offered by Remove
- * unused…, which is outside undo. History changes with every edit, so this is read fresh each
- * time it's shown; the removal checks again inside its transaction.
+ * Keys for which of the show's imported uniforms an undo or redo step names (fork #1257). They
+ * sit under the venue's key, not the assets': only venue changes move a uniform's reference in
+ * or out of history, and undo, redo and every venue write refresh `view3d_venue` (undo and redo
+ * by table name), so this refreshes with them.
+ */
+export const uniformsInHistoryKeys = {
+    all: () => [...venueSettingsKeys.all(), "uniformsInHistory"] as const,
+};
+
+/**
+ * The show's imported uniforms an undo or redo step names: never offered by Remove unused…,
+ * which is outside undo. An edit elsewhere can clear the redo steps without touching the venue,
+ * so Remove unused… reads it again when it opens; the removal checks again inside its
+ * transaction.
  */
 export const uniformsInHistoryQueryOptions = (values: readonly string[]) =>
     queryOptions({
-        queryKey: [KEY_BASE, "inHistory", ...values],
+        queryKey: [...uniformsInHistoryKeys.all(), ...values],
         queryFn: async () => await valuesNamedInHistory({ db, values }),
         staleTime: 0,
     });

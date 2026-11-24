@@ -5201,6 +5201,7 @@
             "title": "{count, plural, one {Remove # unused asset?} other {Remove # unused assets?}}",
             "description": "Nothing in the show uses these. Removing them makes the show {size} smaller. Undo doesn't bring them back.",
             "none": "Every asset is in use, so there's nothing to remove.",
+            "checking": "Checking what nothing uses…",
             "cancel": "Cancel",
             "confirm": "{count, plural, one {Remove # asset} other {Remove # assets}}"
         },
