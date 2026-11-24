@@ -1,5 +1,5 @@
 import { threeZoomControls } from "@/field/three/fieldNavigation";
-import { reportMilestone } from "@/analytics/usageEvents";
+import { reportWindowLoaded } from "@/analytics/usageEvents";
 import Toolbar, { PreviewToolbar } from "@/components/toolbar/Toolbar";
 import Inspector from "@/components/inspector/Inspector";
 import SidebarModal from "@/components/sidebar/SidebarModal";
@@ -164,15 +164,13 @@ function App() {
         console.log("🎭 React app running in Playwright Codegen mode");
     }
 
-    // Each time a show becomes the open one in this window
-    useEffect(() => {
-        if (databaseIsReady) reportMilestone("show opened");
-    }, [databaseIsReady]);
-
     useEffect(() => {
         // Check if database is ready
         void window.electron.databaseIsReady().then((result: boolean) => {
             setDatabaseIsReady(result);
+            // Only here, as the window loads: opening, creating or closing a show reloads it,
+            // and the page being left must not report the show it hands over
+            reportWindowLoaded(result);
         });
     }, []);
 

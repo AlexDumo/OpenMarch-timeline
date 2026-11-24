@@ -152,7 +152,10 @@ export function useFileActionHandlers() {
                     await window.electron.launchInsertAudioFileDialogue();
                 if (response?.cancelled) return;
                 if (response?.success) {
-                    reportMilestone("music imported", { kind: "audio" });
+                    reportMilestone("music imported", {
+                        kind: "audio",
+                        source: "editor",
+                    });
                     AudioFile.getSelectedAudioFile().then((audioFile) => {
                         const selectedAudioFileWithoutAudio = {
                             ...audioFile,

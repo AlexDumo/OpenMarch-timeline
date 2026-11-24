@@ -111,7 +111,10 @@ export const createMarchersMutationOptions = (qc: QueryClient) => {
         mutationFn: (newMarchers: NewMarcherArgs[]) =>
             createMarchers({ db, newMarchers }),
         onSuccess: async (_, variables) => {
-            reportMilestone("marchers added", { count: variables.length });
+            reportMilestone("marchers added", {
+                count: variables.length,
+                source: "editor",
+            });
             // Invalidate all marcher queries
             await qc.invalidateQueries({
                 queryKey: [KEY_BASE],

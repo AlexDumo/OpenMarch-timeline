@@ -24,6 +24,7 @@ export function showMusicXmlImportResult(
     reportMilestone("music imported", {
         kind: "musicxml",
         checks: checks.length,
+        source: "editor",
     });
     if (checks.length === 0) {
         toast.dismiss(CHECKS_TOAST_ID);
