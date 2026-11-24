@@ -38,6 +38,7 @@ export function EditorButton({
         readonly action?: ActionId;
         readonly hint?: ReactNode;
         readonly hintText?: string;
+        readonly oneLine?: boolean;
     };
     children: ReactNode;
 }) {

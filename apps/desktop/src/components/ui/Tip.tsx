@@ -60,6 +60,7 @@ export function Tip({
     action,
     hint,
     hintText,
+    oneLine,
     disabled,
     side,
     children,
@@ -76,6 +77,11 @@ export function Tip({
     hint?: ReactNode;
     /** What the long press reads for a rich `hint` */
     hintText?: string;
+    /**
+     * A rich `hint` kept on one line, wider than the usual cap if it must be: a short line
+     * whose keycap would otherwise push it onto two (Place's Shift line)
+     */
+    oneLine?: boolean;
     /** Never opens, while keeping the control's place in the tree */
     disabled?: boolean;
     /** Where it opens; above the control by default */
@@ -102,7 +108,7 @@ export function Tip({
             disabled={disabled}
             side={side}
             closeOnPress
-            className={TIP_MAX_WIDTH}
+            className={oneLine ? "max-w-none" : TIP_MAX_WIDTH}
         >
             {control}
         </ShortcutTooltip>

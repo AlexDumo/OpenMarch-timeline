@@ -1406,10 +1406,13 @@ const TurnControls = memo(function TurnControls({
     );
 });
 
-/** Place's second tooltip line: Shift+Enter (or Shift-click) places the marchers, keeping no shape */
+/**
+ * Place's second tooltip line, kept on one line: Shift-click or Shift+Enter places the marchers,
+ * keeping no shape
+ */
 function PlaceLooseHint() {
     return (
-        <span className="text-text-subtitle text-sub flex max-w-320 items-center gap-4">
+        <span className="text-text-subtitle text-sub block whitespace-nowrap">
             <T
                 keyName="shapes.edit.placeLoose"
                 params={{ keys: () => <Shortcut action="applyShapeLoose" /> }}
@@ -1469,6 +1472,7 @@ const EndControls = memo(function EndControls({
                             action: "applyShape",
                             hint: <PlaceLooseHint />,
                             hintText: tolgee.t("actions.shape.applyLoose"),
+                            oneLine: true,
                         }}
                     >
                         {tolgee.t("shapes.edit.place", "Place")}
