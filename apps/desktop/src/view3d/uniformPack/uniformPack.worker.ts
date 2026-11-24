@@ -153,7 +153,8 @@ async function finishItem(source: OffscreenCanvas) {
         Math.max(1, Math.round(w * scale)),
         Math.max(1, Math.round(h * scale)),
     );
-    const outCtx = out.getContext("2d")!;
+    // CPU-backed, so the bitmap the window gets outlives this worker (see "flatten")
+    const outCtx = out.getContext("2d", { willReadFrequently: true })!;
     outCtx.imageSmoothingQuality = "high";
     outCtx.drawImage(source, x0, y0, w, h, 0, 0, out.width, out.height);
     const blob = await out.convertToBlob({ type: "image/png" });
@@ -225,7 +226,10 @@ async function handle(request: UniformPackRequest) {
             const w = Math.max(1, Math.min(8192, Math.round(request.width)));
             const h = Math.max(1, Math.min(8192, Math.round(request.height)));
             const canvas = new OffscreenCanvas(w, h);
-            const ctx = canvas.getContext("2d")!;
+            // CPU-backed: a GPU-backed canvas's transferred bitmap lives in this worker's GPU
+            // context, which goes when the worker ends after answering, and the window then
+            // draws it blank (the band lost its fabric while editing items, fork #1287)
+            const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
             for (const layer of pack.layers) {
                 const { bitmap } = await decodePng(layer.png, w, h);
                 ctx.drawImage(bitmap, 0, 0, w, h);

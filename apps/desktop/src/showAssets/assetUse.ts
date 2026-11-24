@@ -185,3 +185,47 @@ export function groupAssetVersions(
         };
     });
 }
+
+/** A line of Remove unused…: one asset's unused versions */
+export interface RemovableLine {
+    id: string;
+    name: string;
+    /** How many of its versions go */
+    count: number;
+    bytes: number;
+    /** Whether another version of it stays (in use or kept for undo): these are older versions */
+    olderOnly: boolean;
+}
+
+/**
+ * Remove unused…'s list, one line per asset (fork #1287): an item edit leaves versions of a
+ * uniform that look alike, so they are counted on one line, as older versions when a version of
+ * the same uniform stays.
+ */
+export function removableLines(
+    unused: readonly AssetUse[],
+    all: readonly AssetUse[],
+): RemovableLine[] {
+    const going = new Set(unused.map((row) => row.value));
+    const lines = new Map<string, RemovableLine>();
+    for (const row of unused) {
+        const line = lines.get(row.asset.id);
+        if (line) {
+            line.count++;
+            line.bytes += row.bytes;
+            line.name = row.asset.name;
+        } else
+            lines.set(row.asset.id, {
+                id: row.asset.id,
+                name: row.asset.name,
+                count: 1,
+                bytes: row.bytes,
+                olderOnly: all.some(
+                    (other) =>
+                        other.asset.id === row.asset.id &&
+                        !going.has(other.value),
+                ),
+            });
+    }
+    return [...lines.values()];
+}

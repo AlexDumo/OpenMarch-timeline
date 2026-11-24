@@ -531,6 +531,7 @@ describeDbTests("Assets view", (it) => {
         await act(async () => showAssetsView({ openRemove: true }));
         const list = await screen.findByTestId("assets-remove-list");
         expect(within(list).getAllByRole("listitem")).toHaveLength(1);
+        expect(list).toHaveTextContent("An older version of fjm-page");
         expect(screen.queryByTestId("assets-missing-uniform-note")).toBeNull();
     });
 

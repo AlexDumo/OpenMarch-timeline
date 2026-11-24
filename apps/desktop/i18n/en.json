@@ -5268,7 +5268,9 @@
             "none": "Every asset is in use, so there's nothing to remove.",
             "checking": "Checking what nothing uses…",
             "cancel": "Cancel",
-            "confirm": "{count, plural, one {Remove # asset} other {Remove # assets}}"
+            "confirm": "{count, plural, one {Remove # asset} other {Remove # assets}}",
+            "olderVersions": "{count, plural, one {An older version of {name}} other {# older versions of {name}}}",
+            "versions": "{name} ({count} versions)"
         },
         "kind": {
             "model": "3D model",

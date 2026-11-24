@@ -3,7 +3,7 @@
  * uniform's items doesn't list the uniform once per save.
  */
 import { describe, expect, it } from "vitest";
-import { groupAssetVersions, type AssetUse } from "../assetUse";
+import { groupAssetVersions, removableLines, type AssetUse } from "../assetUse";
 import type { ShowAsset } from "@/db-functions/showAssets";
 
 const version = (
@@ -74,5 +74,34 @@ describe("groupAssetVersions", () => {
         );
         expect(groups[0].row.value).toBe("library:u@b");
         expect(groups[0].othersBytes).toBe(0);
+    });
+});
+
+describe("removableLines", () => {
+    it("lists an asset's unused versions on one line, as older versions when one stays", () => {
+        const rows = [
+            version("u", "a", 0, "b1"),
+            version("u", "b", 0, "b2"),
+            version("u", "c", 0, "b3"),
+            version("u", "d", 1, "b4"),
+            version("m", "e", 0, "b5"),
+        ];
+        const unused = rows.filter((r) => r.uses === 0);
+        expect(removableLines(unused, rows)).toEqual([
+            {
+                id: "u",
+                name: "fjm-page",
+                count: 3,
+                bytes: 3000,
+                olderOnly: true,
+            },
+            {
+                id: "m",
+                name: "fjm-page",
+                count: 1,
+                bytes: 1000,
+                olderOnly: false,
+            },
+        ]);
     });
 });

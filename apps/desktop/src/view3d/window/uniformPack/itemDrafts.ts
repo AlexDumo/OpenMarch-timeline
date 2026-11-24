@@ -60,6 +60,13 @@ export interface ItemDraft {
     shown: number;
     /** The revision `latest` holds */
     saved: number;
+    /**
+     * A save of this draft is running. Its result can reach the venue before its answer reaches
+     * the window, so meanwhile a version of the same uniform the draft doesn't know yet is taken
+     * as that result, not as an Undo (fork #1287: that ended the draft and lost the edits made
+     * since, and the fields showed the older stored values)
+     */
+    inFlight?: boolean;
 }
 
 interface ItemDraftState {
@@ -141,7 +148,24 @@ export const draftApplies = (
 ): draft is ItemDraft =>
     !!draft &&
     !!worn &&
-    (worn === draft.latest || (!draft.arrived && worn === draft.previous));
+    (worn === draft.latest ||
+        (!draft.arrived && worn === draft.previous) ||
+        (!!draft.inFlight && sameUniform(worn, draft.latest)));
+
+/** Whether two values name versions of the same uniform asset */
+const sameUniform = (a: string, b: string) => {
+    const id = parseShowAssetRef(a)?.id;
+    return id !== undefined && id === parseShowAssetRef(b)?.id;
+};
+
+/** What the venue last named, and whether its pack had loaded, for a save to reconcile with */
+let lastWorn: UniformPackValue | null = null;
+let lastLoaded = false;
+/** What the venue named while the running save ran */
+const seenInFlight = new Set<string>();
+/** How long a saved version has to reach the venue before the draft takes it as gone, ms */
+const ARRIVE_MS = 4000;
+let arriveTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
  * The key the 3D View draws for the band's `worn` pack: the draft's while it applies to it and
@@ -168,7 +192,8 @@ export function itemsFor(
 function end() {
     if (showTimer) clearTimeout(showTimer);
     if (saveTimer) clearTimeout(saveTimer);
-    showTimer = saveTimer = null;
+    if (arriveTimer) clearTimeout(arriveTimer);
+    showTimer = saveTimer = arriveTimer = null;
     useItemDrafts.setState({ draft: null });
 }
 
@@ -185,8 +210,20 @@ export function observeWorn(
      */
     loaded: boolean,
 ) {
+    lastWorn = worn;
+    lastLoaded = loaded;
     const { draft, saving } = useItemDrafts.getState();
     if (!draft) return;
+    if (draft.inFlight && worn) seenInFlight.add(worn);
+    // possibly the running save's result: wait for its answer (`save` reconciles)
+    if (
+        worn !== draft.latest &&
+        worn !== draft.previous &&
+        draft.inFlight &&
+        worn !== null &&
+        sameUniform(worn, draft.latest)
+    )
+        return;
     if (worn === draft.latest) {
         if (!draft.arrived)
             useItemDrafts.setState({ draft: { ...draft, arrived: true } });
@@ -260,7 +297,12 @@ async function save(): Promise<void> {
     if (state.saving || !state.draft) return;
     const draft = state.draft;
     if (draft.saved === draft.revision) return;
-    useItemDrafts.setState({ saving: true });
+    seenInFlight.clear();
+    if (lastWorn) seenInFlight.add(lastWorn);
+    useItemDrafts.setState({
+        saving: true,
+        draft: { ...draft, inFlight: true },
+    });
     const revision = draft.revision;
     try {
         const stored = await readStoredUniformPackBytes(draft.latest);
@@ -292,20 +334,42 @@ async function save(): Promise<void> {
         const value = saved.value as UniformPackValue;
         burst = saved.token ? { value, token: saved.token } : null;
         const now = useItemDrafts.getState().draft;
-        // the draft ended meanwhile (Undo, another uniform): the save stands, the draft doesn't
+        // the draft ended meanwhile (another uniform): the save stands, the draft doesn't
         if (now && now.origin === draft.origin && now.latest === draft.latest) {
             const next: ItemDraft =
                 value === now.latest
-                    ? { ...now, saved: revision }
+                    ? { ...now, saved: revision, inFlight: false }
                     : {
                           ...now,
                           previous: now.latest,
                           latest: value,
-                          arrived: false,
+                          // the venue may have shown it already, before this answer
+                          arrived: lastWorn === value,
                           saved: revision,
+                          inFlight: false,
                       };
             remember(next);
-            useItemDrafts.setState({ draft: next });
+            useItemDrafts.setState({ draft: next, saving: false });
+            if (lastWorn !== value && seenInFlight.has(value)) {
+                // the venue showed this save, then moved on: an Undo after it, which wins
+                end();
+            } else {
+                // what the venue names now: this save's result, or not yet
+                observeWorn(lastWorn, lastLoaded);
+                const d = useItemDrafts.getState().draft;
+                if (d && !d.arrived) {
+                    // a venue that never shows it went elsewhere (an Undo the window saw
+                    // only as no change): end the draft then
+                    if (arriveTimer) clearTimeout(arriveTimer);
+                    const waiting = d.latest;
+                    arriveTimer = setTimeout(() => {
+                        arriveTimer = null;
+                        const now = useItemDrafts.getState().draft;
+                        if (now && !now.arrived && now.latest === waiting)
+                            end();
+                    }, ARRIVE_MS);
+                }
+            }
         }
     } catch (error) {
         burst = null;
@@ -321,7 +385,11 @@ async function save(): Promise<void> {
             end();
         }
     } finally {
-        useItemDrafts.setState({ saving: false });
+        const d = useItemDrafts.getState().draft;
+        useItemDrafts.setState({
+            saving: false,
+            ...(d?.inFlight ? { draft: { ...d, inFlight: false } } : {}),
+        });
     }
     const after = useItemDrafts.getState().draft;
     if (after && after.saved < after.revision && !saveTimer) await save();

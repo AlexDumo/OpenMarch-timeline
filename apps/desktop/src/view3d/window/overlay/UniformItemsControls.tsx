@@ -348,6 +348,13 @@ function ItemRow({
     const size = item[sizeBy] ?? NEW_ITEM_IN;
     const grade = item.grade ?? "proportional";
     const change = onChange;
+    const [refusal, setRefusal] = useState<string | null>(null);
+    const sizeByReason = (value: number) =>
+        t("view3d.uniformItems.sizeByRefused", {
+            value: fmt(value),
+            min: itemFieldMin(grade),
+            max: ITEM_MAX_IN,
+        });
     // its box on the median body; null when the image's shape makes a side too long (or, for a
     // tile, too short) to draw
     // drawn and visible at its size? If not, what size would be (`itemSizeAdvice`)
@@ -453,7 +460,12 @@ function ItemRow({
                                 if (by === sizeBy || aspect === null) return;
                                 // the item keeps its size exactly: its other side's length
                                 const next = sizeBySwitch(item, aspect, by);
-                                if (!next.ok) return;
+                                // unavailable: say why, where a click or a tap lands
+                                if (!next.ok) {
+                                    setRefusal(sizeByReason(next.value));
+                                    return;
+                                }
+                                setRefusal(null);
                                 onChange({
                                     width:
                                         by === "width" ? next.value : undefined,
@@ -479,21 +491,17 @@ function ItemRow({
                                         <SelectItem
                                             key={by}
                                             value={by}
-                                            disabled={refused}
+                                            // not `disabled`: that swallows the pointer, and the
+                                            // reason must show on hover and when tapped
+                                            aria-disabled={refused || undefined}
+                                            className={
+                                                refused
+                                                    ? "cursor-not-allowed opacity-50"
+                                                    : undefined
+                                            }
                                             title={
                                                 refused
-                                                    ? t(
-                                                          "view3d.uniformItems.sizeByRefused",
-                                                          {
-                                                              value: fmt(
-                                                                  next.value,
-                                                              ),
-                                                              min: itemFieldMin(
-                                                                  grade,
-                                                              ),
-                                                              max: ITEM_MAX_IN,
-                                                          },
-                                                      )
+                                                    ? sizeByReason(next.value)
                                                     : undefined
                                             }
                                         >
@@ -549,6 +557,15 @@ function ItemRow({
                 </Field>
             </div>
             {grade === "tile" && <TileRegions item={item} onChange={change} />}
+            {refusal && (
+                <p
+                    className="text-sub text-text/60"
+                    role="status"
+                    data-testid="view3d-uniform-item-size-by-refused"
+                >
+                    {refusal}
+                </p>
+            )}
             {advice && advice.state !== "ok" && (
                 <p
                     className="text-sub text-yellow"

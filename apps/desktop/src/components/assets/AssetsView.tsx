@@ -34,6 +34,7 @@ import {
     uniformsInHistoryQueryOptions,
 } from "@/hooks/queries/useShowAssets";
 import {
+    removableLines,
     groupAssetVersions,
     type AssetGroup,
     LARGE_SHOW_ASSET_BYTES,
@@ -228,6 +229,7 @@ export function AssetsContents({
                     onOpenChange={setRemoving}
                     checking={!checked}
                     unused={use.unused}
+                    all={use.assets}
                     unusedBytes={use.unusedBytes}
                 />
             )}
@@ -534,6 +536,7 @@ function RemoveUnusedDialog({
     onOpenChange,
     checking,
     unused: given,
+    all,
     unusedBytes,
 }: {
     open: boolean;
@@ -541,8 +544,11 @@ function RemoveUnusedDialog({
     /** Still reading what undo or redo names: lists nothing and offers nothing yet */
     checking: boolean;
     unused: readonly AssetUse[];
+    /** Every asset version, to tell older versions of a kept asset from whole assets */
+    all: readonly AssetUse[];
     unusedBytes: number;
 }) {
+    const { t } = useTranslate();
     const unused = checking ? [] : given;
     const queryClient = useQueryClient();
     const sizeText = useSizeText();
@@ -579,16 +585,29 @@ function RemoveUnusedDialog({
                         className="text-body flex max-h-[16rem] flex-col gap-4 overflow-y-auto"
                         data-testid="assets-remove-list"
                     >
-                        {unused.map((row) => (
+                        {removableLines(unused, all).map((line) => (
                             <li
-                                key={row.value}
+                                key={line.id}
                                 className="flex justify-between gap-12"
                             >
                                 <span className="truncate">
-                                    {row.asset.name}
+                                    {line.olderOnly
+                                        ? t(
+                                              "assets.removeUnused.olderVersions",
+                                              {
+                                                  count: line.count,
+                                                  name: line.name,
+                                              },
+                                          )
+                                        : line.count > 1
+                                          ? t("assets.removeUnused.versions", {
+                                                count: line.count,
+                                                name: line.name,
+                                            })
+                                          : line.name}
                                 </span>
                                 <span className="text-text-subtitle shrink-0">
-                                    {sizeText(row.bytes)}
+                                    {sizeText(line.bytes)}
                                 </span>
                             </li>
                         ))}
