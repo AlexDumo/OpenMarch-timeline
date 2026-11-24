@@ -32,8 +32,8 @@
     "3d-front-ensemble-presets": {
         "chapter": "3d-view",
         "kind": "still",
-        "width": 1176,
-        "height": 576
+        "width": 972,
+        "height": 1116
     },
     "3d-front-ensemble-summary": {
         "chapter": "3d-view",
@@ -491,6 +491,12 @@
         "width": 1280,
         "height": 188
     },
+    "shapes-clipboard-card": {
+        "chapter": "shapes",
+        "kind": "still",
+        "width": 664,
+        "height": 344
+    },
     "shapes-curve-bend": {
         "chapter": "shapes",
         "kind": "clip",
@@ -571,6 +577,19 @@
         "kind": "still",
         "width": 1424,
         "height": 892
+    },
+    "shapes-paste": {
+        "chapter": "shapes",
+        "kind": "clip",
+        "width": 1280,
+        "height": 680,
+        "seconds": 6.5
+    },
+    "shapes-paste-mirrored": {
+        "chapter": "shapes",
+        "kind": "still",
+        "width": 1600,
+        "height": 1278
     },
     "shapes-pathways": {
         "chapter": "shapes",
@@ -877,6 +896,24 @@
         "width": 1280,
         "height": 296,
         "seconds": 6.9
+    },
+    "venue-camera-on-field": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 1600,
+        "height": 924
+    },
+    "venue-on-field": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 1600,
+        "height": 924
+    },
+    "venue-on-field-stands": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 1600,
+        "height": 924
     },
     "window-command-palette": {
         "chapter": "workspace",

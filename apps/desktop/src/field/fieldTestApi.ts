@@ -278,6 +278,8 @@ export type FieldTestShapeOverlay = {
     }[];
     /** Spots it leaves empty on purpose (an odd-count outline's gap), field units. */
     gaps: { x: number; y: number }[];
+    /** Spots a paste leaves empty (#961) */
+    emptySpots: { x: number; y: number }[];
     /** Circles it's drawn on (an Arc's whole circle, #634), field units. */
     construction: {
         center: { x: number; y: number };
@@ -306,6 +308,18 @@ export type FieldTestShapeOverlay = {
     pivotMark: ScreenPoint | null;
     /** The pivot a cell of the editor's pivot menu points at (#437), in field units; null without one */
     pivotPreview: { x: number; y: number } | null;
+    /**
+     * A mirrored paste's mirror point (Paste mirrored): where it is in field units and in the
+     * viewport, which ways it mirrors, and the names shown for its lines; null without one
+     */
+    mirror: {
+        at: { x: number; y: number };
+        screen: ScreenPoint;
+        across: boolean;
+        deep: boolean;
+        acrossLabel: string | null;
+        deepLabel: string | null;
+    } | null;
     /** Who will stand on each spot, as labeled. */
     labels: string[];
     /** The readout by the pointer during a gesture ("7½ × 2 steps · ↔ 2½ ↕ 2 apart"), or null. */

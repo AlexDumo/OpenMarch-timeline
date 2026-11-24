@@ -25,9 +25,12 @@ import {
     PropertyType,
     WebIO,
     GLB_BUFFER,
+    VertexLayout,
     type Document,
     type Material,
+    type Mesh,
     type Node,
+    type Primitive,
     type Scene,
     type Texture,
 } from "@gltf-transform/core";
@@ -37,7 +40,7 @@ import {
     dedup,
     getBounds,
     prune,
-    simplify,
+    simplifyPrimitive,
     uninstance,
     weld,
 } from "@gltf-transform/functions";
@@ -45,16 +48,16 @@ import { MeshoptDecoder, MeshoptSimplifier } from "meshoptimizer";
 import { planFromAbove } from "@/view3d/core/pit/planFromAbove";
 import { creditsOf, titleOf } from "./credits";
 import { openPickedFiles, RefusedError, type OpenedModel } from "./files";
-import { isTilt, tiltQuaternion, UPRIGHT, Z_UP_TILT } from "./orientation";
+import { isTilt, tiltQuaternion, UPRIGHT } from "./orientation";
 import type { ImageCodec } from "./imageCodec";
 import { precheck } from "./precheck";
 import {
     DETAILED_TRIANGLE_CAP,
     DISTANT_SIMPLIFY_FROM,
     DISTANT_TEXTURE_CAP,
+    DISTANT_SIMPLIFY_ERRORS,
     DISTANT_TRIANGLE_CAP,
     DISTANT_TRIANGLE_RATIO,
-    FLAT_RATIO,
     IMAGE_TYPES,
     MAX_IMPORT_BYTES,
     MODEL_IMPORT_VERSION,
@@ -64,11 +67,9 @@ import {
     TRIANGLE_CAP,
     TRIANGLE_HARD_LIMIT,
     UNIT_FIXES,
-    Z_UP_FACTOR,
 } from "./rules";
 import {
     primitiveTriangles,
-    sceneNodes,
     sceneOf,
     sceneTriangles,
     topAt,
@@ -89,6 +90,8 @@ import type {
     Vec3,
 } from "./types";
 import { validateModel } from "./validate";
+import { freezeSkins } from "./skins";
+import { openZips } from "./zip";
 
 export interface ModelImportEnv {
     images: ImageCodec;
@@ -114,7 +117,8 @@ export async function importModel(
         notes: [],
     };
     try {
-        const opened = await openAndCheck(files, report);
+        const unzipped = openZips(files);
+        const opened = await openAndCheck(unzipped, report);
         if (!opened) return { ok: false, report };
         const read = await readClean(opened, env, report);
         if (!read) return { ok: false, report };
@@ -136,11 +140,10 @@ export async function importModel(
             prune({ keepAttributes: true, keepSolidTextures: true }),
         );
 
-        const model = await io.writeBinary(doc);
         // A level heavier than Light keeps a Light copy beside it, for devices that can't draw it
         const light =
             detail.row && detail.level !== "light"
-                ? await makeLight(io, doc)
+                ? await makeLight(doc)
                 : null;
         if (detail.row) detail.row.lightTriangles = light?.triangles ?? null;
         // From the Light copy when there is one: the same shapes, without building a record per
@@ -148,6 +151,9 @@ export async function importModel(
         const lighter = light?.doc ?? doc;
         const distant = await makeDistant(io, lighter, env.images);
         const derived = await derive(lighter, env.images, doc);
+        // Each copy's materials are merged last, once nothing simplifies from it any more
+        const model = await writeMerged(io, doc);
+        const lightBytes = light ? await writeMerged(io, light.doc) : null;
         const sidecar: ModelSidecar = {
             format: "openmarch-model/1",
             importVersion: MODEL_IMPORT_VERSION,
@@ -171,12 +177,12 @@ export async function importModel(
             model: {
                 name:
                     titleOf(opened.json) ??
-                    opened.name.replace(/\.(glb|gltf)$/i, ""),
+                    fileTitle(opened.name, unzipped.zipName),
                 parts: {
                     model,
                     distant: distant.bytes,
                     thumbnail: derived.thumbnail,
-                    ...(light ? { light: light.bytes } : {}),
+                    ...(lightBytes ? { light: lightBytes } : {}),
                 },
                 sidecar,
                 credits: creditsOf(opened.json),
@@ -189,12 +195,28 @@ export async function importModel(
     }
 }
 
+/** Names model files get from exporters, which say nothing about the model */
+const GENERIC_NAMES = new Set(["scene", "model", "untitled", "object"]);
+
+/**
+ * A title from the model's file name, or from the zip it came in when the file is only called
+ * `scene` (Sketchfab's `scene.gltf`), as `scaffold stairs` for `scaffold_stairs.zip`.
+ */
+export function fileTitle(path: string, zipName: string | null): string {
+    const name = path
+        .slice(path.lastIndexOf("/") + 1)
+        .replace(/\.(glb|gltf)$/i, "");
+    if (zipName && GENERIC_NAMES.has(name.toLowerCase()))
+        return zipName.replace(/[_]+/g, " ").trim() || name;
+    return name;
+}
+
 /**
  * The checks before decoding, then the validator: the opened model, or null with the refusals
  * in `report`.
  */
 async function openAndCheck(
-    files: readonly PickedFile[],
+    { files, skipped }: { files: readonly PickedFile[]; skipped: string[] },
     report: ModelImportReport,
 ): Promise<OpenedModel | null> {
     const bytes = files.reduce((n, f) => n + f.bytes.byteLength, 0);
@@ -206,7 +228,7 @@ async function openAndCheck(
         });
         return null;
     }
-    const opened = openPickedFiles(files);
+    const opened = openPickedFiles(files, skipped);
     const checked = precheck(opened);
     if (checked.refusals.length) {
         report.cantImport.push(...checked.refusals);
@@ -255,10 +277,13 @@ async function readClean(
         return null;
     }
     const scene = keepOneScene(doc, report);
-    if (sceneNodes(scene).some((n) => n.getSkin() && n.getMesh())) {
+    // A rigged model stands still in the pose it has with no animation playing (#1168)
+    const frozen = freezeSkins(doc, scene);
+    if (frozen === null) {
         report.cantImport.push({ code: "rigged" });
         return null;
     }
+    if (frozen > 0) report.fixedForYou.push({ code: "rigFrozen" });
     await dropExtensions(doc, opened, report);
     if (sceneTriangles(scene) > limit) {
         report.cantImport.push({
@@ -301,7 +326,10 @@ async function readDocument(
     const io = new WebIO()
         .setLogger(new Logger(Logger.Verbosity.ERROR))
         .registerExtensions(ALL_EXTENSIONS)
-        .registerDependencies(dependencies);
+        .registerDependencies(dependencies)
+        // One buffer view per attribute: three reads interleaved ones as attributes the 3D View
+        // can't merge, so every part would be its own draw (#1201)
+        .setVertexLayout(VertexLayout.SEPARATE);
     // Never `read(uri)`: every resource comes from the picked files
     const resources: Record<string, Uint8Array<ArrayBuffer>> = {};
     for (const [uri, bytes] of Object.entries(opened.resources))
@@ -444,19 +472,15 @@ function normalize(
             maxM: PLAUSIBLE_SIZE_M.max,
         });
 
-    // Z-up: suspected when the model stands tallest along Z; a flat one gets no guess. Tipping
-    // is always offered: a file can lie on any side, and a long one (a car) is never suspected
-    const [x, y, z] = size;
-    const flat = Math.min(...size) < FLAT_RATIO * largest;
-    const zUpSuspected = !flat && z > x && z > y && z > y * Z_UP_FACTOR;
-    const preselectedTilt = zUpSuspected ? Z_UP_TILT : UPRIGHT;
-    const tilt =
-        choices.tilt && isTilt(choices.tilt) ? choices.tilt : preselectedTilt;
+    // Upright as the file has it: glTF is Y-up by its spec, and the exporters people use (Blender,
+    // Sketchfab) convert to it. No guess from the model's shape: a car facing glTF's +Z front is
+    // longest along Z, just as a tall Z-up post is. Tipping is always offered for a file that lies
+    // on a side anyway
+    const tilt = choices.tilt && isTilt(choices.tilt) ? choices.tilt : UPRIGHT;
     report.needsChoice.push({
         code: "tilt",
-        preselected: preselectedTilt,
+        preselected: UPRIGHT,
         applied: tilt,
-        zUpSuspected,
     });
 
     // The front: glTF's +Z unless the user turns it; always offered, since no file says
@@ -570,9 +594,8 @@ async function fitTriangles(
  * foot), so the fallback's swap doesn't make it float.
  */
 async function makeLight(
-    io: WebIO,
     doc: Document,
-): Promise<{ bytes: Uint8Array; triangles: number; doc: Document }> {
+): Promise<{ triangles: number; doc: Document }> {
     const light = cloneDocument(doc);
     const scene = sceneOf(light);
     await simplifyTo(light, scene, TRIANGLE_CAP);
@@ -588,37 +611,137 @@ async function makeLight(
     await light.transform(
         prune({ keepAttributes: true, keepSolidTextures: true }),
     );
-    return {
-        bytes: await io.writeBinary(light),
-        triangles: sceneTriangles(scene),
-        doc: light,
-    };
+    return { triangles: sceneTriangles(scene), doc: light };
 }
 
 /**
  * meshoptimizer's simplifier toward `target` triangles: the ratio first, then a wider error
- * limit until it gets there (spike #995). Returns the triangles left.
+ * limit until it gets there (spike #995), up to the last of `errors`. Each limit is a share of a
+ * part's own size, or with `ofModel` of the whole model's (#1180). Returns the triangles left.
  */
 async function simplifyTo(
     doc: Document,
     scene: Scene,
     target: number,
+    errors: readonly number[] = [0.01, 0.05, 0.2, 1],
+    ofModel = false,
 ): Promise<number> {
     await MeshoptSimplifier.ready;
+    await doc.transform(weld({ overwrite: false }));
+    // The floor never takes more than the target between all the parts: a model of hundreds of
+    // small parts still fits its copy's cap, keeping a few triangles of each
+    const parts = doc
+        .getRoot()
+        .listMeshes()
+        .reduce((n, mesh) => n + mesh.listPrimitives().length, 0);
+    const floor = Math.max(
+        1,
+        Math.min(PART_TRIANGLE_FLOOR, Math.floor(target / Math.max(1, parts))),
+    );
+    // A part's share of the model's size: a limit of the model's size is this many times wider
+    // a limit of the part's, which the simplifier measures against
+    const widen = ofModel ? partWidening(doc, scene) : () => 1;
     const start = sceneTriangles(scene);
     let now = start;
-    for (const error of [0.01, 0.05, 0.2, 1]) {
+    for (const error of errors) {
         if (now <= target) break;
-        await doc.transform(
-            simplify({
-                simplifier: MeshoptSimplifier,
-                ratio: Math.min(1, (target / now) * 0.95),
-                error,
-            }),
-        );
+        const ratio = Math.min(1, (target / now) * 0.95);
+        for (const mesh of doc.getRoot().listMeshes())
+            for (const prim of mesh.listPrimitives()) {
+                const triangles = primitiveTriangles(prim);
+                if (triangles <= floor) continue;
+                // The error is relative to the part's own size, so at a wide limit a thin
+                // part (a pole, a rail) would collapse to nothing (#1169): each part keeps
+                // at least the floor
+                simplifyKeeping(
+                    prim,
+                    Math.max(ratio, floor / triangles),
+                    Math.min(1, error * widen(mesh)),
+                );
+            }
         now = sceneTriangles(scene);
     }
     return now;
+}
+
+/**
+ * For each mesh, how many times larger the model is than the mesh as drawn (its largest
+ * instance): a model of many small parts lets each simplify by the model's measure, so its far
+ * copy fits its target, while a large part keeps its shape (#1180)
+ */
+function partWidening(doc: Document, scene: Scene): (mesh: Mesh) => number {
+    const diagonal = (min: number[], max: number[]) =>
+        Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]);
+    const { min, max } = getBounds(scene);
+    const model = diagonal(min, max);
+    const widening = new Map<Mesh, number>();
+    for (const mesh of doc.getRoot().listMeshes()) {
+        const scale = Math.max(
+            0,
+            ...mesh
+                .listParents()
+                .filter((p): p is Node => p.propertyType === PropertyType.NODE)
+                .map((node) => {
+                    const m = node.getWorldMatrix();
+                    return Math.max(
+                        Math.hypot(m[0], m[1], m[2]),
+                        Math.hypot(m[4], m[5], m[6]),
+                        Math.hypot(m[8], m[9], m[10]),
+                    );
+                }),
+        );
+        const size = Math.max(
+            0,
+            ...mesh.listPrimitives().map((prim) => {
+                const position = prim.getAttribute("POSITION");
+                return position
+                    ? diagonal(position.getMin([]), position.getMax([]))
+                    : 0;
+            }),
+        );
+        const drawn = size * scale;
+        widening.set(
+            mesh,
+            drawn > 0 && model > 0 ? Math.max(1, model / drawn) : 1,
+        );
+    }
+    return (mesh) => widening.get(mesh) ?? 1;
+}
+
+/**
+ * Simplifies one part, or leaves it as it was when simplifying would leave nothing of it: the
+ * simplifier's count is a ceiling, so a part asked for a triangle or two can collapse to none,
+ * and an empty part is invalid glTF that won't load. That costs the cap only for models of
+ * hundreds of parts, which keep every part over fitting it.
+ */
+function simplifyKeeping(prim: Primitive, ratio: number, error: number) {
+    // Shares its accessors, so the simplifier keeps them for it
+    const before = prim.clone();
+    simplifyPrimitive(prim, { simplifier: MeshoptSimplifier, ratio, error });
+    if (primitiveTriangles(prim) === 0) prim.copy(before);
+    before.dispose();
+}
+
+/**
+ * The fewest triangles simplifying leaves a part, so no part disappears (#1169); less when a
+ * model has more parts than its copy's target allows this many each
+ */
+export const PART_TRIANGLE_FLOOR = 12;
+
+/**
+ * A finished copy, written so the 3D View can draw it in few draws (#1201). The View merges the
+ * parts that share a material and a vertex layout when it loads a model (`mergeByMaterial`),
+ * each part placed by its own world matrix, so one material is one draw. That needs attributes
+ * written separately (the reader's vertex layout) and copies of one material made one here: the
+ * CarConcept's 109 parts drew 218 times a frame with shadows. Run on each finished copy, after
+ * simplifying. The cleanup is ours, as the worker can't look for solid-color textures.
+ */
+async function writeMerged(io: WebIO, doc: Document): Promise<Uint8Array> {
+    await doc.transform(
+        dedup({ propertyTypes: [PropertyType.MATERIAL] }),
+        prune({ keepAttributes: true, keepSolidTextures: true }),
+    );
+    return io.writeBinary(doc);
 }
 
 function stripExtras(doc: Document): void {
@@ -675,7 +798,10 @@ async function shrinkTextures(
 const textureName = (texture: Texture, index: number) =>
     texture.getName() || texture.getURI() || `texture ${index + 1}`;
 
-/** The distant version: simplified hard, with small textures. */
+/**
+ * The distant version: simplified as far as keeps its shape, with small textures. It may keep
+ * more than its target: a far copy that caves in looks broken from the stands (#1180).
+ */
 async function makeDistant(
     io: WebIO,
     doc: Document,
@@ -692,14 +818,11 @@ async function makeDistant(
                 Math.floor(triangles * DISTANT_TRIANGLE_RATIO),
             ),
         );
-        await simplifyTo(distant, scene, target);
+        await simplifyTo(distant, scene, target, DISTANT_SIMPLIFY_ERRORS, true);
     }
     await shrinkTextures(distant, DISTANT_TEXTURE_CAP, images, null);
-    await distant.transform(
-        prune({ keepAttributes: true, keepSolidTextures: true }),
-    );
     return {
-        bytes: await io.writeBinary(distant),
+        bytes: await writeMerged(io, distant),
         triangles: sceneTriangles(scene),
     };
 }

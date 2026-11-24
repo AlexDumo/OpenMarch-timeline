@@ -214,6 +214,14 @@ const STATIC_ACTIONS = {
         // Electron binds this in the native menu; the web build has none.
         defaultBindings: isWebBuild ? ["$mod+S"] : [],
     },
+    // Working-copy saves (ADR 0018): write the show file now instead of a few seconds later.
+    // No default key yet: Cmd/Ctrl+S swaps marchers on desktop.
+    saveNow: {
+        labelKey: "actions.file.saveNow",
+        category: "file",
+        scope: "global",
+        defaultBindings: [],
+    },
     launchNewFileDialogue: {
         labelKey: "actions.file.newDialogue",
         category: "file",
@@ -623,6 +631,25 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: ["M"],
     },
+    // The show's 3D venue under the 2D grid (#1207), back in the look last picked. Unbound: a
+    // view picked now and then, from the display bar's Venue button or the palette
+    toggleFieldVenue: {
+        labelKey: "actions.ui.toggleFieldVenue",
+        keywordsKey: "actions.ui.toggleFieldVenueKeywords",
+        toggleOnKey: "actions.ui.showFieldVenue",
+        toggleOffKey: "actions.ui.hideFieldVenue",
+        category: "ui",
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    toggleView3dCameraOnField: {
+        labelKey: "actions.ui.toggleView3dCameraOnField",
+        toggleOnKey: "actions.ui.showView3dCameraOnField",
+        toggleOffKey: "actions.ui.hideView3dCameraOnField",
+        category: "ui",
+        scope: "canvas",
+        defaultBindings: [],
+    },
     // #315: the field's right-click menu, from the keyboard, at the selection. Enabled only with
     // a selection
     openFieldMenu: {
@@ -881,9 +908,35 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: [],
     },
+    // A mirrored paste's Mirror choice (Paste mirrored): which ways it mirrors through its point.
+    // No keys: the flip keys switch each way
+    mirrorSideToSide: {
+        labelKey: "actions.shape.mirrorSideToSide",
+        keywordsKey: "actions.shape.mirrorKeywords",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    mirrorFrontToBack: {
+        labelKey: "actions.shape.mirrorFrontToBack",
+        keywordsKey: "actions.shape.mirrorKeywords",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    mirrorBoth: {
+        labelKey: "actions.shape.mirrorBoth",
+        keywordsKey: "actions.shape.mirrorKeywords",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
     // The floating editor's turn and Recalculate (#429), for the open or selected shape only. While
     // one is shown, Alt+F and Alt+Shift+F (flipHorizontal/flipVertical) flip the shape instead of
-    // the marchers (shapes/editor/ShapeEditorBar)
+    // the marchers, or switch a mirrored paste's Mirror ways (shapes/editor/ShapeEditorBar)
     shapeQuarterTurn: {
         labelKey: "actions.shape.quarterTurn",
         keywordsKey: "actions.shape.keywords",
@@ -1205,6 +1258,67 @@ const STATIC_ACTIONS = {
         category: "shape",
         scope: "canvas",
         defaultBindings: [],
+        ignoreRepeat: true,
+    },
+
+    // Copy and paste a formation (#961, owner 2026-11-15): Copy keeps where the selected marchers
+    // stand (one whole placed shape as a shape); Paste shows it on the marchers selected then, as
+    // an open shape centered on them that Enter places, and Paste exactly starts it where it was
+    // copied. Nothing is created, so there's no Cut or Duplicate. The app's own clipboard, not the
+    // system's; in a text field these keys stay the text's (shapes/clipboard)
+    copyFormation: {
+        labelKey: "actions.edit.copy",
+        keywordsKey: "actions.edit.copyKeywords",
+        category: "edit",
+        scope: "canvas",
+        defaultBindings: ["$mod+C", "Control+C"],
+        ignoreRepeat: true,
+    },
+    pasteFormation: {
+        labelKey: "actions.edit.paste",
+        keywordsKey: "actions.edit.pasteKeywords",
+        category: "edit",
+        scope: "canvas",
+        defaultBindings: ["$mod+V", "Control+V"],
+        ignoreRepeat: true,
+    },
+    // A copied shape pasted as its exact positions rather than rebuilt for any count: the
+    // Clipboard card's Shape | Positions switch (owner 2026-11-15). No key
+    pasteAsPositions: {
+        labelKey: "actions.edit.pasteAsPositions",
+        keywordsKey: "actions.edit.pasteAsPositionsKeywords",
+        category: "edit",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    // Empty the formation clipboard: the Clipboard card's Clear. No key
+    clearClipboard: {
+        labelKey: "actions.edit.clearClipboard",
+        keywordsKey: "actions.edit.clearClipboardKeywords",
+        category: "edit",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    pasteFormationInPlace: {
+        labelKey: "actions.edit.pasteInPlace",
+        keywordsKey: "actions.edit.pasteInPlaceKeywords",
+        category: "edit",
+        scope: "canvas",
+        defaultBindings: ["$mod+Shift+V", "Control+Shift+V"],
+        ignoreRepeat: true,
+    },
+    // Paste mirrored: the copy where it was copied, mirrored side to side through a point the
+    // user places (the last one used, the 50 the first time). While it's open, its editor's Mirror
+    // choice (the mirror* actions below) and the flip keys pick which ways it mirrors, and the
+    // arrow keys move the point (shapes/tool/mirror.ts)
+    pasteMirrored: {
+        labelKey: "actions.edit.pasteMirrored",
+        keywordsKey: "actions.edit.pasteMirroredKeywords",
+        category: "edit",
+        scope: "canvas",
+        defaultBindings: ["$mod+Alt+V", "Control+Alt+V"],
         ignoreRepeat: true,
     },
 

@@ -327,9 +327,8 @@ async function sidebarPanelBox(page) {
 
 /** The front ensemble view, opened from its row at the top of the Marchers panel. */
 async function frontEnsembleView(page) {
-    const presets = page.getByTestId("pit-presets-button");
     for (let i = 0; i < 4; i++) {
-        if (await presets.isVisible().catch(() => false)) return;
+        if (await frontEnsembleViewOpen(page)) return;
         const row = page.getByTestId("front-ensemble-summary");
         if (await row.isVisible().catch(() => false))
             await row.getByRole("button").click();
@@ -338,13 +337,35 @@ async function frontEnsembleView(page) {
     }
 }
 
-/** Applies a front ensemble preset from the front ensemble view's header, with its players. */
+/** Whether the front ensemble view is showing: its presets in the body (no pit) or header */
+async function frontEnsembleViewOpen(page) {
+    for (const id of ["pit-preset-start", "pit-presets-button"])
+        if (
+            await page
+                .getByTestId(id)
+                .isVisible()
+                .catch(() => false)
+        )
+            return true;
+    return false;
+}
+
+/**
+ * Applies a front ensemble preset, with its players: from the view's body while the show has no
+ * pit, otherwise from the header's popover.
+ */
 async function applyPitPreset(page, size) {
     await frontEnsembleView(page);
-    await page.getByTestId("pit-presets-button").click();
-    const popover = page.getByRole("dialog", { name: "Presets" });
-    await popover.getByTestId(`pit-preset-${size}`).click();
-    await popover.getByRole("button", { name: "Apply" }).click();
+    const start = page.getByTestId("pit-preset-start");
+    if (await start.isVisible().catch(() => false)) {
+        await start.getByTestId(`pit-preset-card-${size}`).click();
+        await start.getByRole("button", { name: "Use this preset" }).click();
+    } else {
+        await page.getByTestId("pit-presets-button").click();
+        const popover = page.getByRole("dialog", { name: "Presets" });
+        await popover.getByTestId(`pit-preset-${size}`).click();
+        await popover.getByRole("button", { name: "Apply" }).click();
+    }
     await page.waitForTimeout(2500);
 }
 
@@ -352,10 +373,7 @@ async function applyPitPreset(page, size) {
 async function closeMarchersPanel(page) {
     for (let i = 0; i < 3; i++) {
         const open =
-            (await page
-                .getByTestId("pit-presets-button")
-                .isVisible()
-                .catch(() => false)) ||
+            (await frontEnsembleViewOpen(page)) ||
             (await page
                 .getByTestId("front-ensemble-summary")
                 .isVisible()
@@ -812,7 +830,8 @@ const shots = [
         id: "3d-props-import-compare",
         kind: "still",
         // The import review's Compare in 3D for the chair: the Original (39,936 triangles), with
-        // Light beside it in the switch, turned a little so the cushions' detail shows
+        // Light and the far-away copy beside it in the switch, turned a little so the cushions'
+        // detail shows
         async setup(ctx) {
             const { page } = ctx;
             await importChair(page);
@@ -1187,9 +1206,19 @@ const shots = [
         async setup(ctx) {
             const { page } = ctx;
             await frontEnsembleView(page);
+            // The header's Add once there's a pit; an empty view's Add equipment otherwise
             await page
                 .getByRole("button", { name: "Add", exact: true })
+                .or(
+                    page.getByRole("button", {
+                        name: "Add equipment",
+                        exact: true,
+                    }),
+                )
+                .first()
                 .click();
+            // Off the pictures, so none is hovered
+            await page.mouse.move(1596, 996);
             // Let the pictures load
             await ctx.wait(1500);
             return { box: await sidebarPanelBox(page) };
@@ -1266,26 +1295,29 @@ const shots = [
     {
         id: "3d-front-ensemble-presets",
         kind: "still",
-        // The front ensemble view of a show with no pit, the preset chooser open on Medium
+        // The front ensemble view of a show with no pit: the presets (Medium chosen) and Build it
+        // yourself in its body
         async setup(ctx) {
             const { page } = ctx;
             await tidy(page);
             await frontEnsembleView(page);
-            await page.getByTestId("pit-presets-button").click();
-            const popover = page.getByRole("dialog", { name: "Presets" });
-            await popover.waitFor();
-            await popover.getByTestId("pit-preset-medium").click();
+            const presets = page.getByTestId("pit-preset-start");
+            await presets.waitFor();
+            await presets.getByTestId("pit-preset-card-medium").click();
             await page.mouse.move(1596, 996);
             await ctx.wait(800);
-            // The panel's header and the chooser hanging from it; the empty panel below stays out
+            // The panel's header and both ways to start under it; the empty panel below stays out
             const panel = await sidebarPanelBox(page);
-            const pop = await ctx.around(popover, 16);
+            const body = await ctx.around(
+                page.getByRole("region", { name: "Or build it yourself" }),
+                16,
+            );
             return {
                 box: {
                     x: panel.x,
                     y: panel.y,
                     width: panel.width - 12,
-                    height: pop.y + pop.height - panel.y,
+                    height: body.y + body.height - panel.y,
                 },
             };
         },
@@ -1314,6 +1346,132 @@ const shots = [
                     height: r.y + r.height - panel.y,
                 },
             };
+        },
+    },
+    {
+        id: "venue-on-field",
+        kind: "still",
+        // The editor's field with the venue on it (Faint), and the Venue button's menu open
+        // beside the display bar (fork #1207)
+        covers: [
+            "apps/desktop/src/components/canvas/display/VenueButton.tsx",
+            "apps/desktop/src/field/three/venueUnderlay",
+        ],
+        async setup(ctx) {
+            const { page } = ctx;
+            await tidy(page);
+            const button = page.getByTestId("field-display-venue");
+            await button.click();
+            await page.getByTestId("field-display-venue-faint").click();
+            await page.getByTestId("field-display-venue-around-edge").click();
+            await page.mouse.move(4, ctx.window.height / 2);
+            await ctx.wait(1500);
+            const menu = page
+                .locator("[data-radix-popper-content-wrapper]")
+                .first();
+            return {
+                box: ctx.union(
+                    await ctx.around(
+                        page.getByTestId("fieldCanvas").first(),
+                        0,
+                    ),
+                    await ctx.around(menu, 12),
+                ),
+            };
+        },
+    },
+    {
+        id: "venue-on-field-stands",
+        kind: "still",
+        // Zoomed out with Soft and Stands: the stadium around the field, from above
+        async setup(ctx) {
+            const { page } = ctx;
+            await tidy(page);
+            await page.getByTestId("field-display-venue").click();
+            await page.getByTestId("field-display-venue-soft").click();
+            await page.getByTestId("field-display-venue-around-stands").click();
+            await page.keyboard.press("Escape");
+            // No tooltip on the button the menu closed back to
+            await ctx.wait(400);
+            await page.evaluate(() =>
+                /** @type {HTMLElement | null} */ (
+                    document.activeElement
+                )?.blur(),
+            );
+            const canvas = page.getByTestId("fieldCanvas").first();
+            const c = await canvas.boundingBox();
+            // Out about three times (ctrl-wheel, as a trackpad pinch)
+            await page.evaluate(
+                ([x, y]) => {
+                    const target = document.elementFromPoint(x, y);
+                    for (let i = 0; i < 6; i++)
+                        target.dispatchEvent(
+                            new WheelEvent("wheel", {
+                                deltaY: 100,
+                                ctrlKey: true,
+                                clientX: x,
+                                clientY: y,
+                                bubbles: true,
+                                cancelable: true,
+                            }),
+                        );
+                },
+                [c.x + c.width / 2, c.y + c.height / 2],
+            );
+            await page.mouse.move(4, ctx.window.height / 2);
+            await page.keyboard.press("Escape");
+            await ctx.wait(2000);
+            return { box: await ctx.around(canvas, 0) };
+        },
+    },
+    {
+        id: "venue-camera-on-field",
+        kind: "still",
+        // The 3D View's camera on the 2D field (#1227): the camera chip, its wedge and the ring it
+        // looks at, zoomed out, with the 3D View open on its default camera
+        covers: [
+            "apps/desktop/src/field/three/venueUnderlay/CameraHandle.tsx",
+            "apps/desktop/src/field/three/venueUnderlay/CameraMarkerLayer.tsx",
+        ],
+        async setup(ctx) {
+            const { page } = ctx;
+            await tidy(page);
+            await page.getByTestId("field-display-venue").click();
+            await page.getByTestId("field-display-venue-faint").click();
+            await page.getByTestId("field-display-venue-around-edge").click();
+            await page.getByTestId("field-display-venue-camera").click();
+            await page.keyboard.press("Escape");
+            await open3d(ctx);
+            await page.bringToFront();
+            await page.evaluate(() =>
+                /** @type {HTMLElement | null} */ (
+                    document.activeElement
+                )?.blur(),
+            );
+            const canvas = page.getByTestId("fieldCanvas").first();
+            const c = await canvas.boundingBox();
+            // Out (ctrl-wheel, as a trackpad pinch), so the camera in front of the field shows
+            await page.evaluate(
+                ([x, y]) => {
+                    const target = document.elementFromPoint(x, y);
+                    for (let i = 0; i < 5; i++)
+                        target.dispatchEvent(
+                            new WheelEvent("wheel", {
+                                deltaY: 100,
+                                ctrlKey: true,
+                                clientX: x,
+                                clientY: y,
+                                bubbles: true,
+                                cancelable: true,
+                            }),
+                        );
+                },
+                [c.x + c.width / 2, c.y + c.height / 2],
+            );
+            await page.getByTestId("fieldView3dCameraMove").waitFor();
+            await page.mouse.move(4, ctx.window.height / 2);
+            await ctx.wait(1500);
+            return { box: await ctx.around(canvas, 0) };
         },
     },
 ];

@@ -345,6 +345,13 @@ describe("FieldContextMenu", () => {
         }
         expect(groups).toEqual([
             ["editSelectedItem"],
+            // Copy and paste (#961), and Paste mirrored
+            [
+                "copyFormation",
+                "pasteFormation",
+                "pasteFormationInPlace",
+                "pasteMirrored",
+            ],
             ["editPath", "editLine"],
             ["detachPath", "detachAllPath", "removePath"],
             [
@@ -372,6 +379,11 @@ describe("FieldContextMenu", () => {
             ["selectAllMarchers"],
             ["fieldEditMode"],
         ]);
+        expect(item("copyFormation")).toHaveTextContent("Copy");
+        expect(item("pasteFormation")).toHaveTextContent("Paste");
+        expect(item("pasteFormationInPlace")).toHaveTextContent(
+            "Paste exactly",
+        );
         expect(item("timelineHoldFromPrevious")).toHaveTextContent(
             "Hold from last keyframe",
         );

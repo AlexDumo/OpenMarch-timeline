@@ -74,10 +74,12 @@ Spacing doesn't straighten a line: each marcher keeps its other coordinate. Line
 
 ## Flip a group
 
-The last two <Ui k="inspector.marcher.alignHeading" /> buttons mirror the selection about its own middle:
+The last two <Ui k="inspector.marcher.alignHeading" /> buttons mirror the selection about its pivot, which starts in its middle:
 
 - <Ui k="actions.alignment.flipHorizontal" /> (<Kbd action="flipHorizontal" />) swaps its left and right.
 - <Ui k="actions.alignment.flipVertical" /> (<Kbd action="flipVertical" />) swaps its front and back.
+
+To mirror the group across another line, such as a yard line or a marcher, move the pivot there first (see [Turn a group around another point](#turn-a-group-around-another-point)). To mirror a copy and keep the original, use [Paste mirrored](/guides/shapes/copy-and-paste/#paste-mirrored).
 
 ## Turn and resize a group
 
@@ -92,6 +94,7 @@ Select two or more marchers. The frame around them has square handles on its cor
 - Drag a corner handle to stretch or shrink the group both ways. Hold <Kbd keys="Mod" gesture="drag" /> to keep its proportions.
 - Drag a side handle to stretch or shrink it one way. Hold <Kbd keys="Mod" gesture="drag" /> to scale the other way along with it.
 - Hold <Kbd keys="Alt" gesture="drag" /> while resizing to resize about the group's center instead of the opposite edge.
+- The side or corner you drag lands on a yard line, hash or sideline when it comes within a few pixels of one, and an orange guide names the line. With [coordinate rounding](/guides/marchers/move-marchers/#snap-to-a-grid-of-steps) on, it lands on the grid instead. Either way, the marchers inside keep their proportions. With <Kbd keys="Mod" gesture="drag" /> on a corner, one of its two sides lands. Hold <Kbd keys="Shift" gesture="drag" /> to resize finely, still catching lines.
 
 Only positions change: dots and drill numbers stay upright and the same size. One marcher on its own has no handles.
 
@@ -99,7 +102,7 @@ To turn the group by an exact angle, type it in the <Ui k="inspector.marcher.rot
 
 ## Turn a group around another point
 
-The pivot is the point a group turns around. It starts in the middle. To move it:
+The pivot is the point a group turns and flips around. It starts in the middle. To move it:
 
 - Select a dot in the pivot grid under <Ui k="inspector.marcher.rotateHeading" /> to put it on a corner, the middle of a side or the center.
 - Select <Ui k="inspector.arrange.pickPivotButton" />, then click a marcher or any spot on the field.
@@ -118,7 +121,7 @@ Select exactly two marchers, then select <Ui k="inspector.marcher.swapMarchers" 
 
 ## Move marchers to where they stand on the next page
 
-Open <Ui k="toolbar.alignment.placeSelectedMarchers" /> at the bottom of the inspector and choose <Ui k="toolbar.alignment.toNextPageSpots" />, or press <Kbd action="setSelectedMarchersToNextPage" />. For every marcher at once, use <Ui k="toolbar.alignment.placeAllMarchers" /> in the toolbar's <Ui k="inspector.shape.alignmentTab" /> tab (<Kbd action="setAllMarchersToNextPage" />). It moves them like a drag does. On the last page it's greyed out: <Ui k="actions.batchEdit.noPageAfter" />.
+Open <Ui k="toolbar.alignment.selectedMarchers" /> at the bottom of the inspector and choose <Ui k="toolbar.alignment.moveToNextPageSpots" />, or press <Kbd action="setSelectedMarchersToNextPage" />. For every marcher at once, use <Ui k="toolbar.alignment.allMarchers" /> in the toolbar's <Ui k="inspector.shape.alignmentTab" /> tab (<Kbd action="setAllMarchersToNextPage" />). It moves them like a drag does. On the last page it's greyed out: <Ui k="actions.batchEdit.noPageAfter" />.
 
 To have marchers stay where the previous page left them instead, use <Ui k="timeline.terms.clearThisPage" />; see [Reset or lock marchers on a page](/guides/timeline/reset-marchers/#clear-a-pages-positions).
 
