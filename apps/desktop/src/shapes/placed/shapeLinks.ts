@@ -8,6 +8,7 @@ import {
     withAttach,
 } from "../line/lineLinks";
 import { lineTool } from "../line/lineTool";
+import type { AnyToolKind } from "../tool/toolKind";
 import type { XY } from "../types";
 import type { PlacedBox } from "./placedBox";
 
@@ -19,6 +20,13 @@ import type { PlacedBox } from "./placedBox";
  * on the joint. Moving or editing either moves the other's end at the joint, which stretches, its
  * far end staying put. Everything here is pure.
  */
+
+/**
+ * How far from another shape's end the pointer dragging an end (or a moved shape's end) attaches
+ * it, in handle reaches: 16 px for a mouse, further for a pen or finger, at any zoom. The same for
+ * a placed shape's drag and a new shape drawn with the shape tool.
+ */
+export const ATTACH_REACH = 1.6;
 
 /** How close two ends must be to count as one joint, in field units (as a marcher on its spot) */
 export const JOINT_TOLERANCE = 0.01;
@@ -35,10 +43,13 @@ export interface ShapeLink {
     readonly at: XY;
 }
 
+/** Whether `kind` is a Line, a Curve (a Line preset) or an Arc: the kinds whose ends link */
+export const linksKind = (kind: AnyToolKind): boolean =>
+    kind.shape.id === lineTool.shape.id || kind.shape.id === arcTool.shape.id;
+
 /** Whether `box` is an open Line, Curve or Arc, whose ends can be linked */
 export const isLinkable = (box: PlacedBox): box is PlacedBox<LineParams> =>
-    (box.kind === lineTool || box.kind === arcTool) &&
-    hasEnds(box.params as LineParams);
+    linksKind(box.kind) && hasEnds(box.params as LineParams);
 
 const near = (a: XY, b: XY, within: number) =>
     Math.hypot(a.x - b.x, a.y - b.y) <= within;
@@ -149,31 +160,25 @@ export interface AttachSnap {
 }
 
 /** An end of an open Line, Curve or Arc shown on its own page that a dragged end can attach to */
-interface FreeEnd {
+export interface FreeEnd {
     readonly owner: PlacedBox<LineParams>;
     readonly ownerEnd: LineEnd;
     readonly at: XY;
 }
 
 /**
- * The ends `box` can attach to: each end, not linked or attached, of another open Line, Curve or
- * Arc shown on its own page at `beat`, on the same move. None when `box` itself can't link.
+ * Every end, not linked or attached, of an open Line, Curve or Arc shown on its own page at
+ * `beat`, among `boxes` that `among` lets in
  */
-export function freeEnds(
-    box: PlacedBox,
+function openEnds(
     boxes: readonly PlacedBox[],
     links: readonly ShapeLink[],
     beat: number,
+    among: (owner: PlacedBox<LineParams>) => boolean,
 ): FreeEnd[] {
-    if (!isLinkable(box) || !onOwnPage(box, beat)) return [];
     const out: FreeEnd[] = [];
     for (const owner of boxes) {
-        if (
-            owner.recipe.id === box.recipe.id ||
-            !isLinkable(owner) ||
-            owner.recipe.timelineId !== box.recipe.timelineId ||
-            !onOwnPage(owner, beat)
-        )
+        if (!isLinkable(owner) || !onOwnPage(owner, beat) || !among(owner))
             continue;
         for (const ownerEnd of LINE_ENDS) {
             if (
@@ -188,25 +193,68 @@ export function freeEnds(
 }
 
 /**
- * Which end of `box` (as `base`) its handle `key` is, if one is: the handle standing on it. Null
- * for any other handle (a Line's middle point, an Arc's middle), or a shape that can't link.
+ * The ends `box` can attach to: each end, not linked or attached, of another open Line, Curve or
+ * Arc shown on its own page at `beat`, on the same move. None when `box` itself can't link.
  */
-export function handleEnd(
+export function freeEnds(
     box: PlacedBox,
+    boxes: readonly PlacedBox[],
+    links: readonly ShapeLink[],
+    beat: number,
+): FreeEnd[] {
+    if (!isLinkable(box) || !onOwnPage(box, beat)) return [];
+    return openEnds(
+        boxes,
+        links,
+        beat,
+        (owner) =>
+            owner.recipe.id !== box.recipe.id &&
+            owner.recipe.timelineId === box.recipe.timelineId,
+    );
+}
+
+/**
+ * The ends a shape being drawn with the shape tool can attach to (#1235): each end, not linked or
+ * attached, of an open Line, Curve or Arc shown on its own page at `beat`. The new shape has no
+ * move yet: placing it at `beat` puts it in the move there, and a link to a shape on another move
+ * is dead (ADR 0006, linked shapes rule 3).
+ */
+export const drawnFreeEnds = (
+    boxes: readonly PlacedBox[],
+    beat: number,
+): FreeEnd[] => openEnds(boxes, liveLinks(boxes, beat), beat, () => true);
+
+/**
+ * Which end of a Line, Curve or Arc of `kind` (as `base`, `spots` spots) its handle `key` is, if
+ * one is: the handle standing on it. Null for any other handle (a Line's middle point, an Arc's
+ * middle), a closed line, or a kind that can't link.
+ */
+export function handleEndOf(
+    kind: AnyToolKind,
     base: unknown,
+    spots: number,
     key: string,
 ): LineEnd | null {
-    if (!isLinkable(box)) return null;
+    if (!linksKind(kind)) return null;
     const p = base as LineParams;
     if (!hasEnds(p)) return null;
-    const handle = box.kind
-        .handles(p as never, box.spots)
-        .find((h) => h.key === key);
+    const handle = kind.handles(p as never, spots).find((h) => h.key === key);
     if (!handle) return null;
     return (
         LINE_ENDS.find((end) => near(handle.at, endPoint(p, end), 1e-6)) ?? null
     );
 }
+
+/**
+ * Which end of `box` (as `base`) its handle `key` is, if one is: the handle standing on it. Null
+ * for any other handle (a Line's middle point, an Arc's middle), or a shape that can't link.
+ */
+export const handleEnd = (
+    box: PlacedBox,
+    base: unknown,
+    key: string,
+): LineEnd | null =>
+    isLinkable(box) ? handleEndOf(box.kind, base, box.spots, key) : null;
 
 /**
  * Where `box`, drawn now with `params` (mid-drag), would attach on release: an end of it that the
@@ -239,15 +287,43 @@ export function attachSnap({
     if (!isLinkable(box)) return null;
     const p = params as LineParams;
     if (!hasEnds(p)) return null;
-    const targets = freeEnds(box, boxes, links, beat);
-    if (targets.length === 0) return null;
+    return snapEnds({
+        params: p,
+        was: box.params,
+        targets: freeEnds(box, boxes, links, beat),
+        radius,
+        dragged,
+        held: (end) => linkedEnd(box, end, links) || !!p.attach?.[end],
+    });
+}
+
+/**
+ * {@link attachSnap} among `targets`, for a shape as it was (`was`) and is now (`params`): the
+ * shape tool's open shape (#1235) and a placed one alike. An end `held` (in a link already) never
+ * snaps; without `dragged`, only an end that moved from `was` does.
+ */
+export function snapEnds({
+    params: p,
+    was,
+    targets,
+    radius,
+    dragged,
+    held = () => false,
+}: {
+    params: LineParams;
+    was: LineParams;
+    targets: readonly FreeEnd[];
+    radius: number;
+    dragged?: { end: LineEnd; pointer: XY; base: unknown };
+    held?: (end: LineEnd) => boolean;
+}): AttachSnap | null {
+    if (targets.length === 0 || !hasEnds(p)) return null;
     let best: (AttachSnap & { d: number }) | null = null;
     for (const end of dragged ? [dragged.end] : LINE_ENDS) {
-        if (linkedEnd(box, end, links) || p.attach?.[end]) continue;
-        const was = endPoint(box.params, end);
+        if (held(end)) continue;
         const from = dragged ? dragged.pointer : endPoint(p, end);
         // Only an end the drag moved
-        if (!dragged && near(was, from, 1e-9)) continue;
+        if (!dragged && near(endPoint(was, end), from, 1e-9)) continue;
         for (const target of targets) {
             const d = Math.hypot(target.at.x - from.x, target.at.y - from.y);
             if (d <= radius && (!best || d < best.d))
@@ -264,6 +340,103 @@ export function attachSnap({
     )
         return { ...snap, from: dragged.base as LineParams };
     return snap;
+}
+
+/** The free end among `targets` nearest `at`, within `radius`; null with none */
+export function nearestEnd(
+    targets: readonly FreeEnd[],
+    at: XY,
+    radius: number,
+): FreeEnd | null {
+    let best: { target: FreeEnd; d: number } | null = null;
+    for (const target of targets) {
+        const d = Math.hypot(target.at.x - at.x, target.at.y - at.y);
+        if (d <= radius && (!best || d < best.d)) best = { target, d };
+    }
+    return best?.target ?? null;
+}
+
+/**
+ * A new Line, Curve or Arc being drawn by a drag (#1235), `params` from the press at `pressed` to
+ * the pointer at `pointer`: each end whose pointer is within `radius` of a free end among
+ * `targets` lands exactly on it and is attached to it, its first point by where the press was and
+ * its last by where the pointer is. Both can't attach to the same end. `snapped`: the ends that
+ * did, the pointer's last.
+ */
+export function drawnAttach({
+    params,
+    pressed,
+    pointer,
+    targets,
+    radius,
+}: {
+    params: LineParams;
+    pressed: XY;
+    pointer: XY;
+    targets: readonly FreeEnd[];
+    radius: number;
+}): { params: LineParams; snapped: FreeEnd[] } {
+    let p = params.attach
+        ? withAttach(withAttach(params, "start", undefined), "end", undefined)
+        : params;
+    if (!hasEnds(p)) return { params: p, snapped: [] };
+    const start = nearestEnd(targets, pressed, radius);
+    const end = nearestEnd(
+        start ? targets.filter((t) => t !== start) : targets,
+        pointer,
+        radius,
+    );
+    if (!start && !end) return { params: p, snapped: [] };
+    p = stretchEnds(p, {
+        ...(start ? { start: start.at } : {}),
+        ...(end ? { end: end.at } : {}),
+    });
+    for (const [which, t] of [
+        ["start", start],
+        ["end", end],
+    ] as const)
+        if (t)
+            p = withAttach(p, which, {
+                recipe: t.owner.recipe.id,
+                end: t.ownerEnd,
+            });
+    return { params: p, snapped: [start, end].filter((t) => t !== null) };
+}
+
+/**
+ * A shape being drawn (`params`, #1235) with only the attachments that will link once it's placed
+ * at `beat` among the placed shapes there (`boxes`): each names a free end of an open Line, Curve
+ * or Arc on its own page ({@link drawnFreeEnds}) that this end is still on, and no two ends name
+ * the same one. An end moved off its joint (a key, a number, a turn) holds its marcher again. The
+ * same params when nothing changes.
+ */
+export function keepDrawnAttach(
+    params: LineParams,
+    boxes: readonly PlacedBox[],
+    beat: number,
+): LineParams {
+    if (!params.attach) return params;
+    if (!hasEnds(params)) {
+        const { attach: _attach, ...rest } = params;
+        return rest;
+    }
+    const targets = drawnFreeEnds(boxes, beat);
+    const taken = new Set<FreeEnd>();
+    let p = params;
+    for (const end of LINE_ENDS) {
+        const ref = params.attach[end];
+        if (!ref) continue;
+        const target = targets.find(
+            (t) =>
+                !taken.has(t) &&
+                t.owner.recipe.id === ref.recipe &&
+                t.ownerEnd === ref.end &&
+                near(t.at, endPoint(params, end), JOINT_TOLERANCE),
+        );
+        if (target) taken.add(target);
+        else p = withAttach(p, end, undefined);
+    }
+    return p;
 }
 
 /**

@@ -48,7 +48,9 @@ Placed lines, curves and arcs on the same page can be linked at their ends, like
 
 To link two, select one and drag one of its ends (or the whole shape) onto an end of the other. While you drag an end, the readout by the pointer says <Ui k="shapes.links.dropTip" plain />. When the pointer comes near the other shape's end, a ring shows on that end and the readout says <Ui k="shapes.links.releaseTip" values={{ shape: "Line" }} plain />; let go and your end lands exactly there and attaches. An arc's end goes there too, the arc turning and growing about its other end, though dragging its end otherwise only stretches its width. Hold <Kbd keys="Mod" /> while you drag to put the end there without attaching.
 
-One marcher stands on the joint, the one that was already on the end you dragged onto. The shape you dragged holds none there: its first marcher stands one of its own intervals from the joint. A small ring with a diamond marks the joint.
+You can link a new line, curve or arc as you draw it, too. Start the drag that draws it on a placed shape's end, or end the drag there, and the new shape's end lands exactly on that end, with the same ring and readout. Before you select <Ui k="shapes.edit.place" />, you can also drag one of the new shape's end handles onto a placed shape's end. Placing it saves the link, as one step you can undo. Hold <Kbd keys="Mod" /> while you draw to put the end there without linking.
+
+One marcher stands on the joint, the one that was already on the end you dragged onto. The shape you dragged (or drew) holds none there: its first marcher stands one of its own intervals from the joint. While either shape is selected, a small ring with a diamond marks the joint; with nothing selected, linked shapes look like any others.
 
 After that, moving or changing either shape moves the other's end at the joint with it. That shape stretches, its far end staying where it is, and its marchers spread out again along it. Dragging the end at the joint moves both ends. It's all one step you can undo.
 

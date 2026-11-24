@@ -697,7 +697,14 @@ id and end only, so it doesn't depend on how a recipe is anchored to its move.
    a ring marks it during the drag, and on release the end lands exactly on that end and stores the
    attachment, in the same save as the drag. Holding the `constrain` role key ($mod: Ctrl, or Cmd on
    a Mac, or the touch pill's toggle) during the drag skips attaching. Boxes, Circles and groups
-   don't attach.
+   don't attach. A new Line, Curve or Arc drawn with the shape tool attaches the same way, before
+   it's placed: the drag that draws it starting (by the press) or ending (by the pointer) within
+   that reach of a free end, or one of its end handles or the whole shape dragged there before
+   Place. Its end lands exactly on that end, and the attachment is in the recipe Place saves, in
+   the same edit. Until then, any change that takes the end off that end, or a change to the
+   other shape that leaves it no longer free, drops the attachment. The new shape goes into the
+   move placing it at that beat picks; on another move than the shape it's attached to, the
+   attachment is dead (rule 3).
 6. **Detach** (the joint's right-click or long-press menu, the field's menu, the command palette)
    saves the attaching shape without that attachment: its end holds its own marcher again and its
    marchers re-space. Nothing else moves, so its new end marcher stands on the joint with the other
@@ -721,4 +728,8 @@ later page, a shape gone), puts one marcher on the joint, snaps a dragged end an
 attachment through the save (not on a later page), finds the followers of a moved line, a dragged
 joint and a deeper bend (none), and against the database saves the link and reads it back, moves
 the line with the arc following as one undo step that undo and redo take back and bring back with
-the link, and detaches.
+the link, and detaches; a Curve drawn from the line's end through the shape tool's functions
+places linked, one marcher on the joint, as one undo step that undo and redo keep whole.
+`__test__/drawnLinks.test.ts` draws through the shape tool's field mode: from and to a placed
+line's end, an end handle dragged onto it before Place, out of reach and with `constrain` held,
+and the attachment dropped once the end leaves the joint.

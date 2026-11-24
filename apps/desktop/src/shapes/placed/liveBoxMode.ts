@@ -50,6 +50,7 @@ import { outlineGapAt } from "../distribute/outlineGap";
 import type { LineParams } from "../line/lineGeometry";
 import { placedBoxesAt } from "./placedBoxStore";
 import {
+    ATTACH_REACH,
     attachedParams,
     attachSnap,
     followersOf,
@@ -80,12 +81,6 @@ import {
     useShapePointerStore,
     guideGesture,
 } from "../field/shapePointer";
-
-/**
- * How far from another shape's end the pointer dragging an end (or a moved shape's end) attaches
- * it, in handle reaches (#1235): 16 px for a mouse, further for a pen or finger, at any zoom
- */
-const ATTACH_REACH = 1.6;
 
 /** What a press that reaches inside keeps for the box: its pivot, handles and knob */
 const OWN_CONTROLS: ReadonlySet<ShapeTarget["type"]> = new Set([

@@ -20,7 +20,7 @@ import {
     usePlacedBoxBeat,
 } from "./placedBoxStore";
 import { closedOf } from "../distribute/modes";
-import { liveLinks } from "./shapeLinks";
+import { liveLinks, type ShapeLink } from "./shapeLinks";
 import { useLinkDragStore } from "./linkDragStore";
 
 /** One placed shape as the field outlines it, in field units */
@@ -150,6 +150,16 @@ const JOINT_PX = 11;
 /** The snap ring while a dragged end will attach, in CSS px */
 const SNAP_PX = 11;
 
+/**
+ * The joints marked on the field (#1235): only those of a shape selected or being edited
+ * (`picked`), so with nothing selected linked shapes look like any others (owner on #1249)
+ */
+export const jointsShown = (
+    links: readonly ShapeLink[],
+    picked: (box: PlacedBox) => boolean,
+): XY[] =>
+    links.filter((l) => picked(l.attacher) || picked(l.owner)).map((l) => l.at);
+
 /** A link's mark at `at` (CSS px): a ring round the joint's marcher with a diamond in it */
 function JointMark({ at, color }: { at: XY; color: string }) {
     const d = JOINT_PX * 0.45;
@@ -178,8 +188,9 @@ function JointMark({ at, color }: { at: XY; color: string }) {
  * label above it, in the theme's shape color. Hidden during playback and while the Shape tool is open, which draws its
  * own; the selected box draws its own outline and handles (`LiveBoxMode`). Few boxes, so SVG
  * over the field, like the editor's overlay. It takes no pointer events, and exports don't draw
- * it. Linked shapes' joints are marked whenever the setting isn't off (#1235), and a drag of a
- * selected shape draws the ring of the end it will attach to and the shapes following it.
+ * it. The joints of a selected linked shape are marked whenever the setting isn't off (#1235), and
+ * a drag of a selected shape, or of a new one's end in the Shape tool, draws the ring of the end it
+ * will attach to (and the shapes following a placed one).
  */
 export function PlacedBoxesOverlay({
     isPlaying,
@@ -213,16 +224,18 @@ export function PlacedBoxesOverlay({
             return { drawings: [], joints: [] };
         const ids = new Set((selected ?? []).map((m) => m.id));
         const boxes = placedBoxesAt(beat, recipes);
-        const shown = (box: PlacedBox) =>
-            mode === "always" ||
+        const picked = (box: PlacedBox) =>
             box.recipe.id === editing ||
             box.recipe.members.some((m) => ids.has(m.marcherId));
         return {
             drawings: boxes
-                .filter((box) => box.recipe.id !== editing && shown(box))
+                .filter(
+                    (box) =>
+                        box.recipe.id !== editing &&
+                        (mode === "always" || picked(box)),
+                )
                 .map((box) => placedBoxDrawing(box, stepPx)),
-            // Every joint is marked (#1235), so a link shows before either shape is selected
-            joints: liveLinks(boxes, beat).map((l) => l.at),
+            joints: jointsShown(liveLinks(boxes, beat), picked),
         };
         // placedBoxesAt reads the resolver and the move end beats, which these stand for
         // eslint-disable-next-line react-hooks/exhaustive-deps

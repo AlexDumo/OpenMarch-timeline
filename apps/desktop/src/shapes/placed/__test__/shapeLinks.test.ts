@@ -29,13 +29,23 @@ import { liveTargets } from "../liveBox";
 import { arcTool } from "../../arc/arcTool";
 import { bendOf } from "../../arc/arcGeometry";
 import type { ToolEnv } from "../../tool/toolKind";
+import { curveTool, lineTool } from "../../line/lineTool";
+import { boxTool } from "../../box/boxTool";
+import { openTool, pointerMove, press, release } from "../../tool/toolMachine";
+import { placementOf } from "../../tool/shapePlacement";
+import { jointsShown } from "../PlacedBoxesOverlay";
 import {
     attachedParams,
     attachSnap,
     detachedParams,
+    drawnAttach,
+    drawnFreeEnds,
     followersOf,
     freeEnds,
     handleEnd,
+    handleEndOf,
+    keepDrawnAttach,
+    linksKind,
     liveLinks,
     withoutDeadLinks,
 } from "../shapeLinks";
@@ -462,6 +472,174 @@ describe("attachSnap, an end dragged by its handle", () => {
     });
 });
 
+describe("jointsShown", () => {
+    const picking =
+        (...ids: number[]) =>
+        (box: PlacedBox) =>
+            ids.includes(box.recipe.id);
+
+    unitIt("marks no joint with nothing selected", () => {
+        expect(jointsShown(liveLinks(J(), 0), picking())).toEqual([]);
+    });
+
+    unitIt("marks a joint when either shape at it is selected", () => {
+        const links = liveLinks(J(), 0);
+        expect(jointsShown(links, picking(1))).toEqual([{ x: 0, y: 60 }]);
+        expect(jointsShown(links, picking(2))).toEqual([{ x: 0, y: 60 }]);
+        // Another shape selected: not this joint
+        expect(jointsShown(links, picking(3))).toEqual([]);
+    });
+});
+
+describe("linking a shape while it's drawn", () => {
+    // The line straight down, and an arc off to the right on another move
+    const scene = () =>
+        placed([
+            recipe(1, lineShape, LINE, [11, 12, 13, 14]),
+            recipe(
+                2,
+                arcShape,
+                arc({ x: 40, y: 30 }, { x: 80, y: 30 }),
+                [21, 22, 23],
+                6,
+            ),
+        ]);
+
+    unitIt("links the kinds with ends: Line, Curve and Arc", () => {
+        expect(linksKind(lineTool)).toBe(true);
+        expect(linksKind(curveTool)).toBe(true);
+        expect(linksKind(arcTool)).toBe(true);
+        expect(linksKind(boxTool)).toBe(false);
+        const curve = straight({ x: 0, y: 0 }, { x: 30, y: 0 });
+        expect(handleEndOf(curveTool, curve, 3, "p0")).toBe("start");
+        expect(handleEndOf(curveTool, curve, 3, "p1")).toBe("end");
+    });
+
+    unitIt(
+        "offers every free end shown on its own page, whatever its move, not a linked one",
+        () => {
+            const ends = drawnFreeEnds(
+                placed([
+                    ...J().map((b) => b.recipe),
+                    recipe(
+                        3,
+                        arcShape,
+                        arc({ x: 40, y: 30 }, { x: 80, y: 30 }),
+                        [31, 32, 33],
+                        6,
+                    ),
+                ]),
+                0,
+            ).map((e) => `${e.owner.recipe.id}:${e.ownerEnd}`);
+            // The J's joint is taken; the other move's arc counts: the new shape has no move yet
+            expect(ends.sort()).toEqual([
+                "1:start",
+                "2:end",
+                "3:end",
+                "3:start",
+            ]);
+            // On a later page they're only carried onto: none
+            expect(drawnFreeEnds(J(), 8)).toEqual([]);
+        },
+    );
+
+    unitIt(
+        "starts a new line on an end where the press was, and ends it on another where the pointer is",
+        () => {
+            const targets = drawnFreeEnds(scene(), 0);
+            // Drawn from just off the line's bottom end to just off the arc's start
+            const drawn = straight({ x: 1, y: 61 }, { x: 39, y: 31 });
+            const out = drawnAttach({
+                params: drawn,
+                pressed: { x: 1.5, y: 61.5 },
+                pointer: { x: 39, y: 32 },
+                targets,
+                radius: 5,
+            });
+            expect(endPoint(out.params, "start")).toEqual({ x: 0, y: 60 });
+            expect(endPoint(out.params, "end")).toEqual({ x: 40, y: 30 });
+            expect(out.params.attach).toEqual({
+                start: { recipe: 1, end: "end" },
+                end: { recipe: 2, end: "start" },
+            });
+            // The pointer's end last, for the ring
+            expect(out.snapped.map((t) => t.owner.recipe.id)).toEqual([1, 2]);
+        },
+    );
+
+    unitIt(
+        "attaches only the end in reach, its other end where it was drawn",
+        () => {
+            const targets = drawnFreeEnds(scene(), 0);
+            const drawn = straight({ x: 0, y: 90 }, { x: 2, y: 62 });
+            const out = drawnAttach({
+                params: drawn,
+                pressed: { x: 0, y: 90 },
+                pointer: { x: 2, y: 62 },
+                targets,
+                radius: 5,
+            });
+            expect(endPoint(out.params, "start")).toEqual({ x: 0, y: 90 });
+            expect(endPoint(out.params, "end")).toEqual({ x: 0, y: 60 });
+            expect(out.params.attach).toEqual({
+                end: { recipe: 1, end: "end" },
+            });
+            // Out of reach: nothing, and an attachment from a moment ago is gone
+            const far = drawnAttach({
+                params: {
+                    ...drawn,
+                    attach: { end: { recipe: 1, end: "end" } },
+                },
+                pressed: { x: 0, y: 90 },
+                pointer: { x: 9, y: 62 },
+                targets,
+                radius: 5,
+            });
+            expect(far.params.attach).toBeUndefined();
+            expect(far.snapped).toEqual([]);
+            // Both pointers on the same end: only the start takes it
+            const same = drawnAttach({
+                params: straight({ x: 0, y: 60 }, { x: 1, y: 61 }),
+                pressed: { x: 0, y: 60 },
+                pointer: { x: 1, y: 61 },
+                targets,
+                radius: 5,
+            });
+            expect(same.params.attach).toEqual({
+                start: { recipe: 1, end: "end" },
+            });
+        },
+    );
+
+    unitIt(
+        "keeps a drawn end's attachment only while it's on that free end",
+        () => {
+            const boxes = scene();
+            const on: LineParams = {
+                ...straight({ x: 0, y: 60 }, { x: 0, y: 90 }),
+                attach: { start: { recipe: 1, end: "end" } },
+            };
+            expect(keepDrawnAttach(on, boxes, 0)).toBe(on);
+            // Moved off by a key or a number: it holds its marcher again
+            const off = {
+                ...on,
+                points: on.points.map((q) => ({ ...q, x: q.x + 2 })),
+            };
+            expect(keepDrawnAttach(off, boxes, 0).attach).toBeUndefined();
+            // That end taken meanwhile (the arc attached there), or its shape gone
+            const taken = placed([
+                recipe(1, lineShape, LINE, [11, 12, 13, 14]),
+                recipe(2, arcShape, attachedArc, [21, 22, 23]),
+            ]);
+            expect(keepDrawnAttach(on, taken, 0).attach).toBeUndefined();
+            expect(keepDrawnAttach(on, [], 0).attach).toBeUndefined();
+            // Closed, a line has no ends to attach
+            const closed: LineParams = { ...on, closed: true };
+            expect(keepDrawnAttach(closed, boxes, 0).attach).toBeUndefined();
+        },
+    );
+});
+
 describe("followersOf", () => {
     unitIt("stretches the arc when the line moves, its far end staying", () => {
         const boxes = J();
@@ -661,6 +839,92 @@ describeDbTests("linked shapes saved", (it) => {
         const redone = await readAllShapeRecipes(db);
         expect(redone.map((r) => r.params)).toEqual(after.map((r) => r.params));
         expect(liveLinks(placed(redone), 0)).toHaveLength(1);
+    });
+
+    it("places a curve drawn from the line's end linked, one undo step that undo and redo keep whole", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        // The line alone, its bottom end at (200, 260); the arc's marchers draw the new shape
+        const { ids, lineId } = await placeJ(db);
+        const arcRecipe = (await readAllShapeRecipes(db)).find(
+            (r) => r.id !== lineId,
+        )!;
+        await performUndo(db);
+        await timelineResolverSettled();
+        const lineOnly = await readAllShapeRecipes(db);
+        expect(lineOnly.map((r) => r.id)).toEqual([lineId]);
+        const boxes = placed(lineOnly);
+        const env: ToolEnv = {
+            stepPx: STEP,
+            snap: false,
+            pull: false,
+            constrain: false,
+            gridSnap: (p) => p,
+            hitRadius: 3,
+        };
+        const marchers = ids.slice(4).map((id) => {
+            const m = arcRecipe.members.find((a) => a.marcherId === id)!;
+            return { id, at: { x: m.x, y: m.y } };
+        });
+        // A Curve drawn by a drag from just off the line's bottom end out to the left, linked as
+        // the field mode does it each move
+        const pressed = { x: 201, y: 261 };
+        const pointer = { x: 150, y: 270 };
+        let tool = press(openTool(curveTool, marchers), pressed, env);
+        tool = pointerMove(tool, pointer, env);
+        const out = drawnAttach({
+            params: tool.params as LineParams,
+            pressed,
+            pointer,
+            targets: drawnFreeEnds(boxes, 0),
+            radius: 5,
+        });
+        tool = release({ ...tool, params: out.params }, ctx);
+        const placement = placementOf(tool, ctx)!;
+        const params = placement.recipe.params as LineParams;
+        expect(params.attach).toEqual({
+            start: { recipe: lineId, end: "end" },
+        });
+        expect(endPoint(params, "start")).toEqual({ x: 200, y: 260 });
+
+        const steps = await undoSteps(db);
+        expect(
+            await writePlacement(
+                placement,
+                new QueryClient(),
+                "Couldn't place",
+                PAGE2_PLAN,
+            ),
+        ).toBe(true);
+        await timelineResolverSettled();
+        expect(await undoSteps(db)).toBe(steps + 1);
+        const after = await readAllShapeRecipes(db);
+        const links = liveLinks(placed(after), 0);
+        expect(links).toHaveLength(1);
+        expect(links[0]!.owner.recipe.id).toBe(lineId);
+        const joint = links[0]!.at;
+        const onJoint = (recipes: readonly PlacedRecipe[]) =>
+            recipes.flatMap((r) =>
+                r.members.filter(
+                    (m) => Math.hypot(m.x - joint.x, m.y - joint.y) < 1e-6,
+                ),
+            );
+        // The line's marcher alone on the joint
+        expect(onJoint(after)).toHaveLength(1);
+
+        await performUndo(db);
+        await timelineResolverSettled();
+        const undone = await readAllShapeRecipes(db);
+        expect(undone.map((r) => r.id)).toEqual([lineId]);
+        expect(liveLinks(placed(undone), 0)).toEqual([]);
+
+        await performRedo(db);
+        await timelineResolverSettled();
+        const redone = await readAllShapeRecipes(db);
+        expect(redone.map((r) => r.params)).toEqual(after.map((r) => r.params));
+        expect(liveLinks(placed(redone), 0)).toHaveLength(1);
+        expect(onJoint(redone)).toHaveLength(1);
     });
 
     it("detaches: the arc's end holds its own marcher again", async ({
