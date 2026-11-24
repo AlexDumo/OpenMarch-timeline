@@ -111,6 +111,9 @@ function useAssetUse() {
                 ...cues.map((cue) => cue.value),
                 armed,
                 worn,
+                // a version the band wears in place of a removed one the venue names (see
+                // `resolveStoredUniformPack`) is in use too, so Remove unused… never offers it
+                wornPack && wornPack.value !== worn ? wornPack.value : null,
             ],
             // a failed read keeps every uniform, even if an older read succeeded
             keptForHistory(uniforms, historyFailed ? undefined : inHistory),

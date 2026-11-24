@@ -174,15 +174,23 @@ function end() {
 
 /**
  * Tells the drafts what the venue's band wears now. Ends the draft once the venue shows its
- * saved pack with nothing left to save, or when the venue moves anywhere else (Undo wins).
+ * saved pack with nothing left to save and that pack has loaded, or when the venue moves
+ * anywhere else (Undo wins).
  */
-export function observeWorn(worn: UniformPackValue | null) {
+export function observeWorn(
+    worn: UniformPackValue | null,
+    /**
+     * Whether `worn`'s own pack has loaded (not a placeholder from the version before): until it
+     * has, the stored items on screen are the old version's, so the draft keeps showing its own
+     */
+    loaded: boolean,
+) {
     const { draft, saving } = useItemDrafts.getState();
     if (!draft) return;
     if (worn === draft.latest) {
         if (!draft.arrived)
             useItemDrafts.setState({ draft: { ...draft, arrived: true } });
-        if (draft.saved === draft.revision && !saving) end();
+        if (draft.saved === draft.revision && !saving && loaded) end();
         return;
     }
     if (!draft.arrived && worn === draft.previous) return;
@@ -331,4 +339,21 @@ export function newItemId(
         const file = `items/${id}.png`;
         if (!ids.has(id) && !files.has(file)) return { id, file };
     }
+}
+
+/**
+ * What the item list shows for the band's `worn` pack: the draft's items while it applies,
+ * otherwise the stored ones. The list can be edited unless the stored items on screen are a
+ * placeholder (the version before, while `worn`'s own pack loads): an edit made on those would
+ * save the old version's items over the new one, undoing a save or an Undo.
+ */
+export function itemListState(
+    draft: ItemDraft | null,
+    worn: UniformPackValue,
+    stored: UniformPackItem[],
+    placeholder: boolean,
+): { items: UniformPackItem[]; editable: boolean } {
+    if (draftApplies(draft, worn))
+        return { items: draft.items, editable: true };
+    return { items: stored, editable: !placeholder };
 }

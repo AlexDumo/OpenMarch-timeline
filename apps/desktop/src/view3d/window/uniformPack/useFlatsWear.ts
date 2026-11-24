@@ -28,13 +28,14 @@ export function useFlatsWear(value: unknown): FlatsWear | null {
     const key = uniformArtworkAvailable() ? flatsArtworkOf(value) : null;
     const packValue = key && isUniformPackValue(key) ? key : null;
     // a saved item edit is a new pack: keep the last one's palette while it loads
-    const { data: pack } = useQuery({
+    const { data: pack, isPlaceholderData } = useQuery({
         ...uniformPackQueryOptions(packValue),
         placeholderData: keepSameUniform(packValue),
     });
     const manifest = pack?.manifest;
     const draft = useItemDrafts((s) => s.draft);
-    useEffect(() => observeWorn(packValue), [packValue, draft]);
+    const loaded = !!pack && !isPlaceholderData;
+    useEffect(() => observeWorn(packValue, loaded), [packValue, loaded, draft]);
     return useMemo(() => {
         if (!key) return null;
         if (!isUniformPackValue(key))

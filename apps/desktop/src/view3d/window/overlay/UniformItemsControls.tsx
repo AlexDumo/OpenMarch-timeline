@@ -55,6 +55,7 @@ import { uniformArtworkAvailable } from "@/view3d/window/uniformArtworkPreview";
 import { loadFlatsGeometry } from "@/view3d/window/performers/marchers/flatsAtlas";
 import {
     editItems,
+    itemListState,
     itemsFor,
     newItemId,
     observeWorn,
@@ -100,11 +101,12 @@ export function UniformItemsControls() {
     const worn = flatsArtworkOf(settings?.uniformArtwork);
     const wornPack = worn && isUniformPackValue(worn) ? worn : null;
     // each save is a new version: keep the list while the band moves to it
-    const { data: pack } = useQuery({
+    const { data: pack, isPlaceholderData } = useQuery({
         ...uniformPackQueryOptions(wornPack),
         placeholderData: keepSameUniform(wornPack),
     });
-    useEffect(() => observeWorn(wornPack), [wornPack, draft]);
+    const loaded = !!pack && !isPlaceholderData;
+    useEffect(() => observeWorn(wornPack, loaded), [wornPack, loaded, draft]);
     useEffect(() => {
         let live = true;
         void loadFlatsGeometry().then(({ regions: r }) => {
@@ -117,7 +119,14 @@ export function UniformItemsControls() {
 
     if (!uniformArtworkAvailable() || !wornPack || !pack) return null;
     const stored = pack.manifest.items ?? [];
-    const items = itemsFor(draft, wornPack, stored);
+    // while the band's version loads, the stored items on screen are the version before's: shown,
+    // but not editable, unless a draft holds the real ones
+    const { items, editable } = itemListState(
+        draft,
+        wornPack,
+        stored,
+        isPlaceholderData,
+    );
     const presets = regions ? itemPresets(regions) : [];
     const full = items.length >= UNIFORM_PACK_MAX_ITEMS;
     /** An item image's width over height: a new one's bitmap, else its stored PNG's header */
@@ -131,7 +140,9 @@ export function UniformItemsControls() {
     const edit = (
         change: (items: UniformPackItem[]) => UniformPackItem[],
         options?: Parameters<typeof editItems>[3],
-    ) => editItems(wornPack, stored, change, options);
+    ) => {
+        if (editable) editItems(wornPack, stored, change, options);
+    };
     const update = (id: string, patch: Partial<UniformPackItem>) =>
         edit((list) =>
             list.map((item) =>
@@ -184,7 +195,7 @@ export function UniformItemsControls() {
                 <Button
                     variant="secondary"
                     size="compact"
-                    disabled={busy}
+                    disabled={busy || !editable}
                     aria-disabled={full || undefined}
                     tooltipText={
                         full
@@ -211,9 +222,13 @@ export function UniformItemsControls() {
                         ? t("view3d.uniformItems.adding")
                         : t("view3d.uniformItems.add")}
                 </Button>
-                {saving && (
+                {(saving || !editable) && (
                     <span className="text-sub text-text/60" role="status">
-                        {t("view3d.uniformItems.saving")}
+                        {t(
+                            saving
+                                ? "view3d.uniformItems.saving"
+                                : "view3d.uniformItems.loading",
+                        )}
                     </span>
                 )}
                 <input
@@ -234,24 +249,34 @@ export function UniformItemsControls() {
                     {t("view3d.uniformItems.hint")}
                 </p>
             ) : (
-                <ul className="flex flex-col gap-8">
-                    {items.map((item) => (
-                        <ItemRow
-                            key={item.id}
-                            item={item}
-                            aspect={aspectOf(item.file)}
-                            presets={presets}
-                            onChange={(patch) => update(item.id, patch)}
-                            onRemove={() =>
-                                edit(
-                                    (list) =>
-                                        list.filter((i) => i.id !== item.id),
-                                    { now: true },
-                                )
-                            }
-                        />
-                    ))}
-                </ul>
+                // read only while the band's version loads (see `itemListState`)
+                <fieldset
+                    disabled={!editable}
+                    aria-busy={!editable || undefined}
+                    className="contents"
+                    data-testid="view3d-uniform-item-list"
+                >
+                    <ul className="flex flex-col gap-8">
+                        {items.map((item) => (
+                            <ItemRow
+                                key={item.id}
+                                item={item}
+                                aspect={aspectOf(item.file)}
+                                presets={presets}
+                                onChange={(patch) => update(item.id, patch)}
+                                onRemove={() =>
+                                    edit(
+                                        (list) =>
+                                            list.filter(
+                                                (i) => i.id !== item.id,
+                                            ),
+                                        { now: true },
+                                    )
+                                }
+                            />
+                        ))}
+                    </ul>
+                </fieldset>
             )}
             {failed && (
                 <p className="text-sub text-red" role="alert">

@@ -3771,7 +3771,8 @@
             "fixByHeight": "Set Size by to Height, then Size between {lo} and {hi} in.",
             "noSize": "No size works: the image is {ratio} times longer than it is wide. Use a less thin image.",
             "noSizeTile": "No size works for a repeating print: the image is {ratio} times longer than it is wide, so a copy 1 in on its short side would be over 120 in on its long side. Use a less thin image, or choose another option under On other builds.",
-            "sizeByRefused": "Sized that way, this item would be {value} in, outside the {min}–{max} in Size takes."
+            "sizeByRefused": "Sized that way, this item would be {value} in, outside the {min}–{max} in Size takes.",
+            "loading": "Loading…"
         }
     },
     "web": {

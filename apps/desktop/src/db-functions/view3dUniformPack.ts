@@ -249,8 +249,9 @@ export async function saveUniformItemsPack({
  * removed version. But the 3D View learns of the asset change and of the venue change
  * separately, and for a moment its venue can still name the version just removed. Reading that
  * as "the show has no such uniform" made the band drop to its preset for seconds (fork #1287).
- * The removed version's successor is the newest version of the same uniform, which the venue
- * names a moment later.
+ * The removed version's successor is the version of the same uniform the venue names now (or,
+ * if it names another uniform, the last version added), which the window's venue names a moment
+ * later.
  */
 export async function resolveStoredUniformPack({
     db,
@@ -273,6 +274,19 @@ export async function resolveStoredUniformPack({
               }
             : null;
     if (exact) return pick(exact);
+    // the removed version's successor: what the venue names now, when it's the same uniform (a
+    // save whose bytes match an older version reuses that version's row, so the last row added
+    // isn't always the newest look)
+    const now = parseShowAssetRef(
+        (await getStoredVenueSettings({ db }))?.uniformArtwork as
+            | string
+            | undefined,
+    );
+    if (now && now.id === ref.id) {
+        const current = await getShowAsset({ db, ref: now });
+        if (current) return pick(current);
+    }
+    // otherwise the last version added
     const versions = (await getShowAssets({ db })).filter(
         (asset) => asset.id === ref.id && asset.kind === UNIFORM_ASSET_KIND,
     );
