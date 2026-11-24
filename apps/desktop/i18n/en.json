@@ -3400,7 +3400,8 @@
                 "show": "Show's field",
                 "stadium": "Stadium's field"
             },
-            "fieldLinesStadiumNote": "The stadium's own yard numbers and hashes, as on its turf. Marchers stay where you wrote them.",
+            "fieldLinesShowNote": "The lines of your show's field, as set up in Edit field.",
+            "fieldLinesStadiumNote": "The lines really painted in this stadium: its own yard numbers and hashes. Your show's field doesn't change, and marchers stay where you wrote them.",
             "endZoneText": "End-zone lettering",
             "endZoneTextPlaceholder": "No lettering",
             "endZoneColor": "Color",
