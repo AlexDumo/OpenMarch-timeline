@@ -1,0 +1,1763 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Shape over time + Follow (throwaway prototype)</title>
+        <style>
+            :root {
+                --bg: #f6f6f8;
+                --surface: #ffffff;
+                --line: #dcdce3;
+                --text: #17171c;
+                --sub: #62626e;
+                --accent: #6a3df5;
+                --accent-soft: #ece6ff;
+                --p1: #2f7fbf;
+                --p2: #c2410c;
+                --leader: #e8590c;
+                --field: #ffffff;
+                --grid: #e7e7ee;
+                --yard: #c9c9d4;
+                --warn: #b45309;
+                --now: #0b8f6a;
+                --dot: #1c1c22;
+            }
+            @media (prefers-color-scheme: dark) {
+                :root {
+                    --bg: #121216;
+                    --surface: #1b1b21;
+                    --line: #2e2e38;
+                    --text: #ececf1;
+                    --sub: #9a9aa8;
+                    --accent: #a48bff;
+                    --accent-soft: #2a2347;
+                    --p1: #6bb6ee;
+                    --p2: #fb923c;
+                    --leader: #ff8a3d;
+                    --field: #17171c;
+                    --grid: #24242c;
+                    --yard: #3a3a47;
+                    --warn: #fbbf24;
+                    --now: #34d399;
+                    --dot: #f1f1f6;
+                }
+            }
+            * {
+                box-sizing: border-box;
+            }
+            html,
+            body {
+                margin: 0;
+                background: var(--bg);
+                color: var(--text);
+                font:
+                    14px/1.4 system-ui,
+                    -apple-system,
+                    "Segoe UI",
+                    Roboto,
+                    sans-serif;
+            }
+            header {
+                padding: 12px 16px 4px;
+            }
+            h1 {
+                font-size: 17px;
+                margin: 0 0 2px;
+            }
+            header p {
+                margin: 0;
+                color: var(--sub);
+                max-width: 900px;
+            }
+            main {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) 340px;
+                gap: 12px;
+                padding: 10px 16px 24px;
+                align-items: start;
+            }
+            .stage {
+                background: var(--surface);
+                border: 1px solid var(--line);
+                border-radius: 6px;
+                padding: 8px;
+                position: sticky;
+                top: 8px;
+            }
+            #field {
+                display: block;
+                width: 100%;
+                height: min(62vh, 620px);
+                border-radius: 6px;
+                background: var(--field);
+                touch-action: none;
+                cursor: default;
+            }
+            #lanes {
+                display: block;
+                width: 100%;
+                height: 96px;
+                margin-top: 6px;
+                touch-action: none;
+                cursor: ew-resize;
+            }
+            .transport {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-top: 6px;
+            }
+            .transport input[type="range"] {
+                flex: 1;
+            }
+            .readouts {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px 16px;
+                margin-top: 4px;
+                color: var(--sub);
+                font-size: 13px;
+            }
+            .readouts b {
+                color: var(--text);
+                font-weight: 600;
+            }
+            .readouts .warn b {
+                color: var(--warn);
+            }
+            button,
+            select {
+                font: inherit;
+                color: var(--text);
+                background: var(--surface);
+                border: 1px solid var(--line);
+                border-radius: 999px;
+                padding: 5px 12px;
+                cursor: pointer;
+            }
+            button:hover {
+                border-color: var(--accent);
+            }
+            button.on {
+                background: var(--accent-soft);
+                border-color: var(--accent);
+                color: var(--text);
+            }
+            #play {
+                min-width: 76px;
+                background: var(--accent);
+                border-color: var(--accent);
+                color: #fff;
+                font-weight: 600;
+            }
+            @media (prefers-color-scheme: dark) {
+                #play {
+                    color: #14141a;
+                }
+            }
+            .panel {
+                display: grid;
+                gap: 10px;
+            }
+            .group {
+                background: var(--surface);
+                border: 1px solid var(--line);
+                border-radius: 6px;
+                padding: 10px 12px;
+            }
+            .group h2 {
+                font-size: 13px;
+                margin: 0 0 6px;
+                text-transform: none;
+                font-weight: 650;
+            }
+            .group p.note {
+                margin: 6px 0 0;
+                color: var(--sub);
+                font-size: 12.5px;
+            }
+            .chips {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            .row {
+                display: grid;
+                grid-template-columns: 96px minmax(0, 1fr) 58px;
+                align-items: center;
+                gap: 8px;
+                margin-top: 6px;
+            }
+            .row label {
+                color: var(--sub);
+            }
+            .row output {
+                text-align: right;
+                font-variant-numeric: tabular-nums;
+            }
+            input[type="range"] {
+                width: 100%;
+                accent-color: var(--accent);
+                height: 24px;
+            }
+            .modes label {
+                display: grid;
+                grid-template-columns: 18px 1fr;
+                gap: 6px;
+                padding: 6px 4px;
+                border-radius: 6px;
+                cursor: pointer;
+            }
+            .modes label:has(input:checked) {
+                background: var(--accent-soft);
+            }
+            .modes small {
+                display: block;
+                color: var(--sub);
+            }
+            .modes input {
+                accent-color: var(--accent);
+                margin-top: 3px;
+            }
+            .check {
+                display: flex;
+                gap: 8px;
+                align-items: flex-start;
+                margin-top: 8px;
+            }
+            .check input {
+                accent-color: var(--accent);
+                margin-top: 3px;
+            }
+            .tag {
+                display: inline-block;
+                font-size: 11px;
+                padding: 0 6px;
+                border-radius: 999px;
+                border: 1px solid var(--line);
+                color: var(--sub);
+                margin-left: 4px;
+            }
+            @media (max-width: 860px) {
+                main {
+                    grid-template-columns: minmax(0, 1fr);
+                    padding: 6px 8px 24px;
+                }
+                .stage {
+                    top: 0;
+                    z-index: 5;
+                    border-radius: 0 0 6px 6px;
+                    padding: 6px;
+                }
+                #field {
+                    height: 36vh;
+                }
+                #lanes {
+                    height: 74px;
+                }
+                header {
+                    padding: 8px 10px 2px;
+                }
+                header p {
+                    display: none;
+                }
+                h1 {
+                    font-size: 15px;
+                }
+                .readouts {
+                    font-size: 12px;
+                }
+                button,
+                select {
+                    padding: 8px 13px;
+                }
+                input[type="range"] {
+                    height: 32px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <header>
+            <h1>
+                A shape that changes, with marchers following around it
+                <span class="tag">throwaway prototype</span>
+            </h1>
+            <p>
+                Two things stacked: the <b>shape</b> (its outline on page 1 and
+                on page 2, blended between) and the <b>follow</b> (how far each
+                marcher has walked around it). Drag the page 2 shape on the
+                field, or use the sliders, and press Play.
+            </p>
+        </header>
+        <main>
+            <section class="stage">
+                <canvas id="field"></canvas>
+                <canvas id="lanes"></canvas>
+                <div class="transport">
+                    <button id="play" title="Space">Play</button>
+                    <input
+                        id="scrub"
+                        type="range"
+                        min="0"
+                        max="1000"
+                        value="0"
+                        aria-label="Scrub through the move"
+                    />
+                    <span id="countText" style="min-width: 92px"></span>
+                </div>
+                <div class="readouts">
+                    <span id="stepRead"></span>
+                    <span id="gapRead"></span>
+                </div>
+            </section>
+
+            <aside class="panel">
+                <div class="group">
+                    <h2>Try one</h2>
+                    <div class="chips" id="presets"></div>
+                </div>
+
+                <div class="group">
+                    <h2>The shape</h2>
+                    <div class="chips" id="editWhich">
+                        <button data-end="a">Edit page 1</button>
+                        <button data-end="b">Edit page 2</button>
+                    </div>
+                    <div class="chips" id="kinds" style="margin-top: 8px"></div>
+                    <p class="note" id="kindsWhy" hidden>
+                        "Turn, size and move only" carries page 1's outline, so
+                        page 2 can't pick a different one. Choose "Shape over
+                        time + follow" to reshape it.
+                    </p>
+                    <div class="row">
+                        <label for="rot">Turn</label>
+                        <input
+                            id="rot"
+                            type="range"
+                            min="-360"
+                            max="360"
+                            step="1"
+                        />
+                        <output id="rotOut"></output>
+                    </div>
+                    <div class="row">
+                        <label for="size">Size</label>
+                        <input
+                            id="size"
+                            type="range"
+                            min="40"
+                            max="200"
+                            step="1"
+                        />
+                        <output id="sizeOut"></output>
+                    </div>
+                    <div class="row">
+                        <label for="sx">Width</label>
+                        <input
+                            id="sx"
+                            type="range"
+                            min="15"
+                            max="250"
+                            step="1"
+                        />
+                        <output id="sxOut"></output>
+                    </div>
+                    <div class="row">
+                        <label for="sy">Depth</label>
+                        <input
+                            id="sy"
+                            type="range"
+                            min="15"
+                            max="250"
+                            step="1"
+                        />
+                        <output id="syOut"></output>
+                    </div>
+                    <div class="chips" style="margin-top: 8px">
+                        <button id="copyEnd">
+                            Make page 2 the same as page 1
+                        </button>
+                    </div>
+                    <p class="note">
+                        On the field: drag the shape to move it, the round knob
+                        to turn it, the corner to resize, the side squares to
+                        stretch. Click the other page's shape to edit that one.
+                    </p>
+                </div>
+
+                <div class="group">
+                    <h2>The follow</h2>
+                    <div class="row">
+                        <label for="places">Spots around</label>
+                        <input
+                            id="places"
+                            type="range"
+                            min="0"
+                            max="36"
+                            step="1"
+                        />
+                        <output id="placesOut"></output>
+                    </div>
+                    <div class="chips" id="dir" style="margin-top: 6px">
+                        <button data-dir="1">Clockwise</button>
+                        <button data-dir="-1">Counterclockwise</button>
+                    </div>
+                    <div class="row">
+                        <label for="n">Marchers</label>
+                        <input id="n" type="range" min="4" max="32" step="1" />
+                        <output id="nOut"></output>
+                    </div>
+                    <div class="row">
+                        <label for="fill">Line fills</label>
+                        <input
+                            id="fill"
+                            type="range"
+                            min="25"
+                            max="100"
+                            step="5"
+                        />
+                        <output id="fillOut"></output>
+                    </div>
+                    <div class="row">
+                        <label for="counts">Counts</label>
+                        <input
+                            id="counts"
+                            type="range"
+                            min="4"
+                            max="32"
+                            step="4"
+                        />
+                        <output id="countsOut"></output>
+                    </div>
+                </div>
+
+                <div class="group modes">
+                    <h2>How the two combine</h2>
+                    <label
+                        ><input type="radio" name="mode" value="layers" />
+                        <span
+                            ><b>Shape over time + follow</b> (proposed)<small
+                                >The shape turns, moves and reshapes between the
+                                pages; marchers walk around it. Spots are a
+                                share of the way around, so gaps stretch with
+                                the shape.</small
+                            ></span
+                        ></label
+                    >
+                    <label
+                        ><input type="radio" name="mode" value="rigid" />
+                        <span
+                            ><b>Turn, size and move only</b
+                            ><small
+                                >Page 1's outline is carried along as it is. The
+                                page 2 outline pick is ignored, and a stretch
+                                squeezes the gaps unevenly.</small
+                            ></span
+                        ></label
+                    >
+                    <label
+                        ><input type="radio" name="mode" value="straight" />
+                        <span
+                            ><b>Straight blend</b
+                            ><small
+                                >Every point of the outline goes straight to its
+                                match. Nothing turns, so a turned shape pinches
+                                in the middle of the move.</small
+                            ></span
+                        ></label
+                    >
+                    <label
+                        ><input type="radio" name="mode" value="today" />
+                        <span
+                            ><b>Today</b
+                            ><small
+                                >Follow keeps its own copy of page 1's outline:
+                                marchers go around the old shape, then cut
+                                straight to their page 2 spots.</small
+                            ></span
+                        ></label
+                    >
+                </div>
+
+                <div class="group">
+                    <h2>Show</h2>
+                    <div class="chips" id="trails">
+                        <button data-trails="all">All trails</button>
+                        <button data-trails="leader">Leader only</button>
+                        <button data-trails="off">No trails</button>
+                    </div>
+                    <label class="check"
+                        ><input type="checkbox" id="even" /><span
+                            >Keep gaps even on every count
+                            <small style="display: block; color: var(--sub)"
+                                >Re-measures the outline all the way through the
+                                move. Without it, gaps are even on both pages
+                                and close to even between.</small
+                            ></span
+                        ></label
+                    >
+                    <div class="row">
+                        <label for="twist">Twist</label>
+                        <input
+                            id="twist"
+                            type="range"
+                            min="-50"
+                            max="50"
+                            step="1"
+                        />
+                        <output id="twistOut"></output>
+                    </div>
+                    <p class="note">
+                        Twist changes which point of page 1's outline becomes
+                        which point of page 2's. The page 2 spots stay put; only
+                        the way there changes.
+                    </p>
+                </div>
+            </aside>
+        </main>
+
+        <script>
+            "use strict";
+            /* Throwaway prototype. Units are steps (8 steps = 5 yards); y runs down the screen. */
+            const K = 720; // samples round an outline, evenly spaced by distance
+            const TAU = Math.PI * 2;
+            const VIEW_W = 76; // steps shown across the field
+
+            const roundedBox = (a, b, e) => (t) => {
+                const c = Math.cos(t),
+                    s = Math.sin(t);
+                return [
+                    a * Math.sign(c) * Math.abs(c) ** e,
+                    b * Math.sign(s) * Math.abs(s) ** e,
+                ];
+            };
+            const KINDS = {
+                bean: {
+                    name: "Bean",
+                    f: (t) => {
+                        const c = Math.cos(t);
+                        return [14 * c, 6 * Math.sin(t) + 9 * c * c - 4.5];
+                    },
+                },
+                oval: {
+                    name: "Oval",
+                    f: (t) => [14 * Math.cos(t), 8.5 * Math.sin(t)],
+                },
+                flat: {
+                    name: "Flat oval",
+                    f: (t) => [17 * Math.cos(t), 3 * Math.sin(t)],
+                },
+                circle: {
+                    name: "Circle",
+                    f: (t) => [10 * Math.cos(t), 10 * Math.sin(t)],
+                },
+                round: { name: "Rounded box", f: roundedBox(14, 7.5, 0.35) },
+                box: {
+                    name: "Box",
+                    poly: [
+                        [0, -7],
+                        [13, -7],
+                        [13, 7],
+                        [-13, 7],
+                        [-13, -7],
+                    ],
+                },
+            };
+
+            /** A kind's outline as a dense closed run of points, from its top, clockwise as shown */
+            const denseCache = {};
+            function dense(kind) {
+                if (denseCache[kind]) return denseCache[kind];
+                const k = KINDS[kind];
+                const pts = [];
+                if (k.poly) {
+                    for (let i = 0; i < k.poly.length; i++) {
+                        const p = k.poly[i],
+                            q = k.poly[(i + 1) % k.poly.length];
+                        const n = Math.max(
+                            1,
+                            Math.ceil(
+                                Math.hypot(q[0] - p[0], q[1] - p[1]) / 0.05,
+                            ),
+                        );
+                        for (let j = 0; j < n; j++)
+                            pts.push([
+                                p[0] + ((q[0] - p[0]) * j) / n,
+                                p[1] + ((q[1] - p[1]) * j) / n,
+                            ]);
+                    }
+                } else {
+                    const M = 2880;
+                    for (let i = 0; i < M; i++)
+                        pts.push(k.f(-Math.PI / 2 + (TAU * i) / M));
+                }
+                let hx = 0,
+                    hy = 0;
+                for (const p of pts) {
+                    hx = Math.max(hx, Math.abs(p[0]));
+                    hy = Math.max(hy, Math.abs(p[1]));
+                }
+                return (denseCache[kind] = { pts, hx, hy });
+            }
+
+            const S = {
+                mode: "layers",
+                n: 12,
+                fill: 100,
+                places: 3,
+                dir: 1,
+                counts: 24,
+                t: 0,
+                playing: false,
+                edit: "b",
+                a: { kind: "bean", x: -15, y: -3, rot: 0, sx: 1, sy: 1 },
+                b: { kind: "flat", x: -3, y: 2, rot: 40, sx: 0.85, sy: 1 },
+                twist: 0,
+                even: false,
+                trails: "all",
+            };
+
+            const PRESETS = [
+                [
+                    "Turn + flatten + move",
+                    () => ({
+                        b: {
+                            kind: "flat",
+                            x: S.a.x + 12,
+                            y: S.a.y + 5,
+                            rot: S.a.rot + 40,
+                            sx: 0.85,
+                            sy: 1,
+                        },
+                        places: 3,
+                    }),
+                ],
+                [
+                    "Just turn the bean",
+                    () => ({ b: { ...S.a, rot: S.a.rot + 90 }, places: 3 }),
+                ],
+                [
+                    "Just flatten it",
+                    () => ({ b: { ...S.a, kind: "flat" }, places: 3 }),
+                ],
+                [
+                    "Bean to box",
+                    () => ({
+                        b: { ...S.a, kind: "box", x: S.a.x + 14 },
+                        places: 3,
+                    }),
+                ],
+                [
+                    "Grow it",
+                    () => ({
+                        b: {
+                            ...S.a,
+                            sx: S.a.sx * 1.5,
+                            sy: S.a.sy * 1.5,
+                            x: S.a.x + 10,
+                        },
+                        places: 3,
+                    }),
+                ],
+                [
+                    "Turn, nobody walks",
+                    () => ({ b: { ...S.a, rot: S.a.rot + 120 }, places: 0 }),
+                ],
+                [
+                    "No change (same as today)",
+                    () => ({ b: { ...S.a }, places: 3 }),
+                ],
+            ];
+
+            /* ---------- geometry ---------- */
+            const rad = (d) => (d * Math.PI) / 180;
+            const mod1 = (u) => ((u % 1) + 1) % 1;
+
+            /** An end's outline on the field: K points evenly spaced by distance, and the kind's own point for each */
+            function buildEnd(e) {
+                const d = dense(e.kind);
+                const c = Math.cos(rad(e.rot)),
+                    s = Math.sin(rad(e.rot));
+                const n = d.pts.length;
+                const fx = new Float64Array(n + 1),
+                    fy = new Float64Array(n + 1),
+                    cum = new Float64Array(n + 1);
+                for (let i = 0; i <= n; i++) {
+                    const p = d.pts[i % n];
+                    const lx = p[0] * e.sx,
+                        ly = p[1] * e.sy;
+                    fx[i] = e.x + c * lx - s * ly;
+                    fy[i] = e.y + s * lx + c * ly;
+                    if (i)
+                        cum[i] =
+                            cum[i - 1] +
+                            Math.hypot(fx[i] - fx[i - 1], fy[i] - fy[i - 1]);
+                }
+                const total = cum[n];
+                const F = new Float64Array(2 * K),
+                    L = new Float64Array(2 * K);
+                let j = 0;
+                for (let i = 0; i < K; i++) {
+                    const target = (i / K) * total;
+                    while (j < n - 1 && cum[j + 1] < target) j++;
+                    const f =
+                        cum[j + 1] > cum[j]
+                            ? (target - cum[j]) / (cum[j + 1] - cum[j])
+                            : 0;
+                    F[2 * i] = fx[j] + (fx[j + 1] - fx[j]) * f;
+                    F[2 * i + 1] = fy[j] + (fy[j + 1] - fy[j]) * f;
+                    const p = d.pts[j % n],
+                        q = d.pts[(j + 1) % n];
+                    L[2 * i] = p[0] + (q[0] - p[0]) * f;
+                    L[2 * i + 1] = p[1] + (q[1] - p[1]) * f;
+                }
+                return { F, L, total, hx: d.hx * e.sx, hy: d.hy * e.sy };
+            }
+
+            /** The point of a K-sample outline a share `u` of the way around it (by sample) */
+            function sample(O, u) {
+                const x = mod1(u) * K;
+                const i = Math.floor(x) % K,
+                    f = x - Math.floor(x),
+                    j = (i + 1) % K;
+                return [
+                    O[2 * i] + (O[2 * j] - O[2 * i]) * f,
+                    O[2 * i + 1] + (O[2 * j + 1] - O[2 * i + 1]) * f,
+                ];
+            }
+            function lengths(O) {
+                const cum = new Float64Array(K + 1);
+                for (let i = 1; i <= K; i++) {
+                    const a = i - 1,
+                        b = i % K;
+                    cum[i] =
+                        cum[a] +
+                        Math.hypot(
+                            O[2 * b] - O[2 * a],
+                            O[2 * b + 1] - O[2 * a + 1],
+                        );
+                }
+                return cum;
+            }
+            /** The point a share `v` of the outline's real length around it, measured now */
+            function sampleEven(O, cum, v) {
+                const target = mod1(v) * cum[K];
+                let lo = 0,
+                    hi = K;
+                while (hi - lo > 1) {
+                    const m = (lo + hi) >> 1;
+                    if (cum[m] <= target) lo = m;
+                    else hi = m;
+                }
+                const f =
+                    cum[lo + 1] > cum[lo]
+                        ? (target - cum[lo]) / (cum[lo + 1] - cum[lo])
+                        : 0;
+                const j = (lo + 1) % K;
+                return [
+                    O[2 * lo] + (O[2 * j] - O[2 * lo]) * f,
+                    O[2 * lo + 1] + (O[2 * j + 1] - O[2 * lo + 1]) * f,
+                ];
+            }
+
+            /* ---------- the model ---------- */
+            let M = null; // everything worked out from S, rebuilt on each change
+
+            function rebuild() {
+                const A = buildEnd(S.a);
+                // "Turn, size and move only" carries page 1's outline: page 2's pick is ignored
+                const bEnd =
+                    S.mode === "rigid" ? { ...S.b, kind: S.a.kind } : S.b;
+                const B = buildEnd(bEnd);
+                const shift =
+                    S.mode === "layers" || S.mode === "straight"
+                        ? Math.round((S.twist / 100) * K)
+                        : 0;
+                const phi = shift / K;
+                const ca = Math.cos(rad(-S.a.rot)),
+                    sa = Math.sin(rad(-S.a.rot)),
+                    cb = Math.cos(rad(-S.b.rot)),
+                    sb = Math.sin(rad(-S.b.rot));
+                // each end's outline in its own frame: about its own centre, with its own turn taken out
+                const a = new Float64Array(2 * K),
+                    b = new Float64Array(2 * K),
+                    Bs = new Float64Array(2 * K);
+                for (let i = 0; i < K; i++) {
+                    const ax = A.F[2 * i] - S.a.x,
+                        ay = A.F[2 * i + 1] - S.a.y;
+                    a[2 * i] = ca * ax - sa * ay;
+                    a[2 * i + 1] = sa * ax + ca * ay;
+                    const k = (i + shift + K) % K;
+                    Bs[2 * i] = B.F[2 * k];
+                    Bs[2 * i + 1] = B.F[2 * k + 1];
+                    if (S.mode === "rigid") {
+                        // the same point of the page 1 outline, in page 2's size
+                        b[2 * i] = A.L[2 * i] * S.b.sx;
+                        b[2 * i + 1] = A.L[2 * i + 1] * S.b.sy;
+                    } else {
+                        const bx = Bs[2 * i] - S.b.x,
+                            by = Bs[2 * i + 1] - S.b.y;
+                        b[2 * i] = cb * bx - sb * by;
+                        b[2 * i + 1] = sb * bx + cb * by;
+                    }
+                }
+                const gap = S.fill / 100 / S.n; // a spot, as a share of the way around
+                const delta = S.dir * S.places * gap;
+                const starts = Array.from({ length: S.n }, (_, q) => q * gap);
+                const leader = S.dir > 0 ? S.n - 1 : 0;
+                M = {
+                    A,
+                    B,
+                    a,
+                    b,
+                    Bs,
+                    phi,
+                    gap,
+                    delta,
+                    starts,
+                    leader,
+                    frames: new Map(),
+                    today: null,
+                };
+
+                // the page 2 spots: each marcher's spot on page 2's own outline
+                M.spots = starts.map((s) => sample(B.F, s + delta));
+                if (S.mode === "today") M.today = planToday();
+
+                const T = S.counts * 8;
+                M.paths = starts.map((_, q) => {
+                    const pts = new Float64Array(2 * (T + 1));
+                    for (let i = 0; i <= T; i++) {
+                        const p = pos(q, i / T);
+                        pts[2 * i] = p[0];
+                        pts[2 * i + 1] = p[1];
+                    }
+                    return pts;
+                });
+                // the biggest step anyone takes in one count
+                let big = { d: 0, q: 0, c: 0 };
+                M.paths.forEach((pts, q) => {
+                    for (let c = 0; c < S.counts; c++) {
+                        const i = c * 8,
+                            j = (c + 1) * 8;
+                        const d = Math.hypot(
+                            pts[2 * j] - pts[2 * i],
+                            pts[2 * j + 1] - pts[2 * i + 1],
+                        );
+                        if (d > big.d) big = { d, q, c };
+                    }
+                });
+                M.big = big;
+            }
+
+            /** The outline at share `p` of the move, as K points (and its lengths when gaps are kept even) */
+            function outlineAt(p) {
+                const key = Math.round(p * 1e6);
+                let fr = M.frames.get(key);
+                if (fr) return fr;
+                const O = new Float64Array(2 * K);
+                if (S.mode === "today") O.set(M.A.F);
+                else if (S.mode === "straight") {
+                    for (let i = 0; i < 2 * K; i++)
+                        O[i] = M.A.F[i] * (1 - p) + M.Bs[i] * p;
+                } else {
+                    const th = rad(S.a.rot + (S.b.rot - S.a.rot) * p);
+                    const c = Math.cos(th),
+                        s = Math.sin(th);
+                    const cx = S.a.x + (S.b.x - S.a.x) * p,
+                        cy = S.a.y + (S.b.y - S.a.y) * p;
+                    for (let i = 0; i < K; i++) {
+                        const lx = M.a[2 * i] * (1 - p) + M.b[2 * i] * p,
+                            ly = M.a[2 * i + 1] * (1 - p) + M.b[2 * i + 1] * p;
+                        O[2 * i] = cx + c * lx - s * ly;
+                        O[2 * i + 1] = cy + s * lx + c * ly;
+                    }
+                }
+                fr = {
+                    O,
+                    cum: S.even && S.mode !== "today" ? lengths(O) : null,
+                };
+                if (M.frames.size > 600) M.frames.clear();
+                M.frames.set(key, fr);
+                return fr;
+            }
+            function pointOn(p, u) {
+                const fr = outlineAt(p);
+                return fr.cum ? sampleEven(fr.O, fr.cum, u) : sample(fr.O, u);
+            }
+
+            /** Today's rule (R-13‴) once the spots have moved: around the stored outline, then straight to the spot */
+            function planToday() {
+                return M.starts.map((s, q) => {
+                    const P = M.spots[q];
+                    let best = 0,
+                        bd = Infinity;
+                    for (let i = 0; i < K; i++) {
+                        const d =
+                            (M.A.F[2 * i] - P[0]) ** 2 +
+                            (M.A.F[2 * i + 1] - P[1]) ** 2;
+                        if (d < bd) {
+                            bd = d;
+                            best = i;
+                        }
+                    }
+                    const ue = best / K;
+                    const laps = Math.floor(Math.abs(M.delta) + 1e-9);
+                    let around = S.dir > 0 ? mod1(ue - s) : mod1(s - ue);
+                    if (S.places === 0)
+                        around =
+                            Math.min(around, 1 - around) < 1e-9 ? 0 : around;
+                    if (around > 1 - 1e-9) around = 0;
+                    const d1 = (around + laps) * M.A.total;
+                    const off = sample(M.A.F, ue);
+                    const d2 = Math.hypot(P[0] - off[0], P[1] - off[1]);
+                    return { d1, d2, off, P };
+                });
+            }
+
+            /** Where marcher `q` is at share `p` of the move */
+            function pos(q, p) {
+                const s = M.starts[q];
+                if (S.mode === "today") {
+                    const t = M.today[q];
+                    const walked = p * (t.d1 + t.d2);
+                    if (walked <= t.d1 || t.d2 < 1e-9)
+                        return sample(
+                            M.A.F,
+                            s + (S.dir * Math.min(walked, t.d1)) / M.A.total,
+                        );
+                    const f = (walked - t.d1) / t.d2;
+                    return [
+                        t.off[0] + (t.P[0] - t.off[0]) * f,
+                        t.off[1] + (t.P[1] - t.off[1]) * f,
+                    ];
+                }
+                // the follow layer: a share of the way around, growing steadily
+                return pointOn(p, s + (M.delta - M.phi) * p);
+            }
+
+            /* ---------- drawing ---------- */
+            const field = document.getElementById("field");
+            const lanes = document.getElementById("lanes");
+            const fieldCtx = field.getContext("2d");
+            const lanesCtx = lanes.getContext("2d");
+            let css = {};
+            function readCss() {
+                const g = getComputedStyle(document.documentElement);
+                for (const k of [
+                    "bg",
+                    "surface",
+                    "line",
+                    "text",
+                    "sub",
+                    "accent",
+                    "accent-soft",
+                    "p1",
+                    "p2",
+                    "leader",
+                    "field",
+                    "grid",
+                    "yard",
+                    "warn",
+                    "dot",
+                    "now",
+                ])
+                    css[k] = g.getPropertyValue("--" + k).trim();
+            }
+            let view = { w: 0, h: 0, s: 1 };
+            function fit(canvas, ctx) {
+                const r = canvas.getBoundingClientRect();
+                const d = window.devicePixelRatio || 1;
+                canvas.width = Math.round(r.width * d);
+                canvas.height = Math.round(r.height * d);
+                ctx.setTransform(d, 0, 0, d, 0, 0);
+                return r;
+            }
+            const X = (x) => view.w / 2 + x * view.s;
+            const Y = (y) => view.h / 2 + y * view.s;
+            const unX = (px) => (px - view.w / 2) / view.s;
+            const unY = (py) => (py - view.h / 2) / view.s;
+
+            function strokeOutline(ctx, O, sx = X, sy = Y) {
+                ctx.beginPath();
+                for (let i = 0; i < K; i += 2) {
+                    const x = sx(O[2 * i]),
+                        y = sy(O[2 * i + 1]);
+                    if (i) ctx.lineTo(x, y);
+                    else ctx.moveTo(x, y);
+                }
+                ctx.closePath();
+            }
+
+            function handles(which) {
+                const e = S[which];
+                const end = which === "a" ? M.A : M.B;
+                const c = Math.cos(rad(e.rot)),
+                    s = Math.sin(rad(e.rot));
+                const at = (lx, ly) => [
+                    e.x + c * lx - s * ly,
+                    e.y + s * lx + c * ly,
+                ];
+                const reach = 26 / view.s; // the knob stands off the shape by the same number of pixels
+                return {
+                    turn: at(0, -end.hy - reach),
+                    top: at(0, -end.hy),
+                    wide: at(end.hx, 0),
+                    deep: at(0, end.hy),
+                    corner: at(end.hx, end.hy),
+                    centre: [e.x, e.y],
+                    hx: end.hx,
+                    hy: end.hy,
+                };
+            }
+
+            function drawField() {
+                const r = fit(field, fieldCtx);
+                view = { w: r.width, h: r.height, s: r.width / VIEW_W };
+                const ctx = fieldCtx;
+                ctx.clearRect(0, 0, view.w, view.h);
+                ctx.fillStyle = css.field;
+                ctx.fillRect(0, 0, view.w, view.h);
+                // the grid: a line every 4 steps, a yard line every 8
+                const small0 = view.w < 520;
+                const x0 = Math.ceil(unX(0) / 4) * 4,
+                    y0 = Math.ceil(unY(0) / 4) * 4;
+                ctx.lineWidth = 1;
+                for (let x = x0; X(x) < view.w; x += 4) {
+                    ctx.strokeStyle = x % 8 === 0 ? css.yard : css.grid;
+                    ctx.beginPath();
+                    ctx.moveTo(Math.round(X(x)) + 0.5, 0);
+                    ctx.lineTo(Math.round(X(x)) + 0.5, view.h);
+                    ctx.stroke();
+                }
+                ctx.strokeStyle = css.grid;
+                for (let y = y0; Y(y) < view.h; y += 4) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, Math.round(Y(y)) + 0.5);
+                    ctx.lineTo(view.w, Math.round(Y(y)) + 0.5);
+                    ctx.stroke();
+                }
+                ctx.fillStyle = css.sub;
+                ctx.font = "11px system-ui, sans-serif";
+                ctx.textAlign = "left";
+                ctx.fillText(
+                    small0
+                        ? "grid: 4 steps"
+                        : "grid: 4 steps · darker lines: 5 yards · green: the shape right now",
+                    8,
+                    view.h - 8,
+                );
+
+                const p = S.t;
+                const small = view.w < 520;
+
+                // the two pages' shapes
+                const endLook = (which, O, label, color, dash) => {
+                    ctx.save();
+                    ctx.setLineDash(dash);
+                    ctx.lineWidth = S.edit === which ? 1.75 : 1.25;
+                    ctx.strokeStyle = color;
+                    ctx.globalAlpha = S.edit === which ? 0.95 : 0.6;
+                    strokeOutline(ctx, O);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    const h = handles(which);
+                    ctx.fillStyle = color;
+                    ctx.font = "600 12px system-ui, sans-serif";
+                    ctx.textAlign = "center";
+                    const dx = h.centre[0] - h.wide[0],
+                        dy = h.centre[1] - h.wide[1];
+                    const dl = Math.hypot(dx, dy) || 1;
+                    ctx.fillText(
+                        label,
+                        Math.max(
+                            26,
+                            Math.min(
+                                view.w - 26,
+                                X(h.centre[0] + dx) + (dx / dl) * 30,
+                            ),
+                        ),
+                        Math.max(
+                            14,
+                            Math.min(
+                                view.h - 22,
+                                Y(h.centre[1] + dy) + (dy / dl) * 22 + 4,
+                            ),
+                        ),
+                    );
+                    ctx.restore();
+                };
+                const endB = S.mode === "today" ? M.B.F : outlineAt(1).O;
+                endLook("a", M.A.F, "Page 1", css.p1, []);
+                endLook(
+                    "b",
+                    S.mode === "rigid" ? endB : M.B.F,
+                    "Page 2",
+                    css.p2,
+                    [6, 5],
+                );
+
+                // trails
+                if (S.trails !== "off") {
+                    const T = S.counts * 8;
+                    const upto = Math.round(p * T);
+                    M.paths.forEach((pts, q) => {
+                        if (S.trails === "leader" && q !== M.leader) return;
+                        const col = q === M.leader ? css.leader : css.accent;
+                        ctx.strokeStyle = col;
+                        ctx.globalAlpha = 0.22;
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        for (let i = 0; i <= T; i++) {
+                            const x = X(pts[2 * i]),
+                                y = Y(pts[2 * i + 1]);
+                            if (i) ctx.lineTo(x, y);
+                            else ctx.moveTo(x, y);
+                        }
+                        ctx.stroke();
+                        if (upto > 0) {
+                            ctx.globalAlpha = 0.9;
+                            ctx.lineWidth = q === M.leader ? 2 : 1.5;
+                            ctx.beginPath();
+                            for (let i = 0; i <= upto; i++) {
+                                const x = X(pts[2 * i]),
+                                    y = Y(pts[2 * i + 1]);
+                                if (i) ctx.lineTo(x, y);
+                                else ctx.moveTo(x, y);
+                            }
+                            ctx.stroke();
+                        }
+                    });
+                    ctx.globalAlpha = 1;
+                }
+
+                // where everyone starts and stops
+                const ring = (pt, color) => {
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 1.25;
+                    ctx.beginPath();
+                    ctx.arc(X(pt[0]), Y(pt[1]), small ? 3 : 4, 0, TAU);
+                    ctx.stroke();
+                };
+                for (let q = 0; q < S.n; q++) {
+                    ring(pos(q, 0), css.p1);
+                    ring(pos(q, 1), css.p2);
+                }
+
+                // the shape as it is now
+                if (p > 0 && p < 1 && S.mode !== "today") {
+                    ctx.strokeStyle = css.now;
+                    ctx.lineWidth = 2.5;
+                    strokeOutline(ctx, outlineAt(p).O);
+                    ctx.stroke();
+                }
+
+                // the marchers
+                const dotRadius = small ? 4.5 : 6;
+                ctx.font = `600 ${small ? 9 : 10}px system-ui, sans-serif`;
+                ctx.textAlign = "center";
+                for (let q = 0; q < S.n; q++) {
+                    const pt = pos(q, p);
+                    ctx.fillStyle = q === M.leader ? css.leader : css.dot;
+                    ctx.beginPath();
+                    ctx.arc(X(pt[0]), Y(pt[1]), dotRadius, 0, TAU);
+                    ctx.fill();
+                    if (S.n <= 20) {
+                        ctx.fillStyle = css.field;
+                        ctx.fillText(String(q + 1), X(pt[0]), Y(pt[1]) + 3.5);
+                    }
+                }
+
+                // handles of the shape being edited
+                const h = handles(S.edit);
+                const col = S.edit === "a" ? css.p1 : css.p2;
+                ctx.strokeStyle = col;
+                ctx.fillStyle = css.surface;
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(X(h.top[0]), Y(h.top[1]));
+                ctx.lineTo(X(h.turn[0]), Y(h.turn[1]));
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(X(h.turn[0]), Y(h.turn[1]), 7, 0, TAU);
+                ctx.fill();
+                ctx.stroke();
+                for (const k of ["wide", "deep", "corner"]) {
+                    const z = k === "corner" ? 6 : 5;
+                    ctx.beginPath();
+                    ctx.rect(X(h[k][0]) - z, Y(h[k][1]) - z, 2 * z, 2 * z);
+                    ctx.fill();
+                    ctx.stroke();
+                }
+                ctx.beginPath();
+                ctx.moveTo(X(h.centre[0]) - 5, Y(h.centre[1]));
+                ctx.lineTo(X(h.centre[0]) + 5, Y(h.centre[1]));
+                ctx.moveTo(X(h.centre[0]), Y(h.centre[1]) - 5);
+                ctx.lineTo(X(h.centre[0]), Y(h.centre[1]) + 5);
+                ctx.stroke();
+            }
+
+            const kindName = (e) => KINDS[e.kind].name;
+            function shapeLaneText() {
+                if (S.mode === "today")
+                    return "Page 1's outline, copied into the move. Page 2's shape isn't linked.";
+                const bits = [];
+                const sameKind = S.a.kind === S.b.kind || S.mode === "rigid";
+                bits.push(
+                    sameKind
+                        ? kindName(S.a)
+                        : `${kindName(S.a)} → ${kindName(S.b)}`,
+                );
+                const turn = Math.round(S.b.rot - S.a.rot);
+                if (turn)
+                    bits.push(
+                        S.mode === "straight"
+                            ? `ends turned ${Math.abs(turn)}°, blended straight`
+                            : `turns ${Math.abs(turn)}° ${turn > 0 ? "clockwise" : "counterclockwise"}`,
+                    );
+                const dist = Math.hypot(S.b.x - S.a.x, S.b.y - S.a.y);
+                if (dist > 0.5) bits.push(`travels ${dist.toFixed(0)} steps`);
+                const kx = S.b.sx / S.a.sx,
+                    ky = S.b.sy / S.a.sy;
+                if (Math.abs(kx - 1) > 0.02 || Math.abs(ky - 1) > 0.02)
+                    bits.push(
+                        Math.abs(kx - ky) < 0.02
+                            ? `${Math.round(kx * 100)}% size`
+                            : `${Math.round(kx * 100)}% wide, ${Math.round(ky * 100)}% deep`,
+                    );
+                if (bits.length === 1 && sameKind) bits.push("no change");
+                return bits.join(" · ");
+            }
+            function followLaneText() {
+                if (!S.places) return "Nobody walks around";
+                const share = Math.abs(M.delta);
+                const way = S.dir > 0 ? "clockwise" : "counterclockwise";
+                const around =
+                    share >= 1
+                        ? `${share.toFixed(2).replace(/\.?0+$/, "")} × around`
+                        : `${Math.round(share * 100)}% of the way around`;
+                return `${S.places} ${S.places === 1 ? "spot" : "spots"} ${way} · ${around}`;
+            }
+
+            let laneBox = { x0: 0, x1: 1 };
+            function drawLanes() {
+                const r = fit(lanes, lanesCtx);
+                const ctx = lanesCtx;
+                const w = r.width,
+                    h = r.height;
+                ctx.clearRect(0, 0, w, h);
+                const gutter = w < 520 ? 50 : 62;
+                const x0 = gutter,
+                    x1 = w - 10;
+                laneBox = { x0, x1 };
+                const tx = (c) => x0 + ((x1 - x0) * c) / S.counts;
+                const ruler = 18;
+                const laneH = (h - ruler - 6) / 2;
+                ctx.font = "11px system-ui, sans-serif";
+                ctx.textAlign = "center";
+                for (let c = 0; c <= S.counts; c++) {
+                    const major = c % 4 === 0;
+                    ctx.strokeStyle = major ? css.yard : css.grid;
+                    ctx.beginPath();
+                    ctx.moveTo(Math.round(tx(c)) + 0.5, major ? 10 : 14);
+                    ctx.lineTo(Math.round(tx(c)) + 0.5, h);
+                    ctx.stroke();
+                    if (major && c !== 0 && c !== S.counts) {
+                        ctx.fillStyle = css.sub;
+                        ctx.fillText(String(c), tx(c), 9);
+                    }
+                }
+                ctx.fillStyle = css.p1;
+                ctx.textAlign = "left";
+                ctx.font = "600 11px system-ui, sans-serif";
+                ctx.fillText("Page 1", x0, 9);
+                ctx.fillStyle = css.p2;
+                ctx.textAlign = "right";
+                ctx.fillText("Page 2", x1, 9);
+
+                const lane = (i, name, text, color, glyphs) => {
+                    const y = ruler + i * (laneH + 3);
+                    ctx.fillStyle = css.sub;
+                    ctx.textAlign = "left";
+                    ctx.font = "12px system-ui, sans-serif";
+                    ctx.fillText(name, 4, y + laneH / 2 + 4);
+                    ctx.fillStyle = css["accent-soft"];
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.roundRect(x0, y, x1 - x0, laneH, 6);
+                    ctx.fill();
+                    ctx.stroke();
+                    let left = x0 + 8,
+                        right = x1 - 8;
+                    if (glyphs) {
+                        const g = (O, cx, e) => {
+                            const k =
+                                (laneH - 8) /
+                                2 /
+                                Math.max(M.A.hx, M.A.hy, M.B.hx, M.B.hy, 1);
+                            ctx.strokeStyle = color;
+                            ctx.lineWidth = 1.25;
+                            strokeOutline(
+                                ctx,
+                                O,
+                                (x) => cx + (x - e.x) * k,
+                                (yy) => y + laneH / 2 + (yy - e.y) * k,
+                            );
+                            ctx.stroke();
+                        };
+                        const gw = laneH;
+                        g(M.A.F, x0 + gw / 2 + 4, S.a);
+                        g(
+                            S.mode === "today" ? M.A.F : outlineAt(1).O,
+                            x1 - gw / 2 - 4,
+                            S.mode === "today" ? S.a : S.b,
+                        );
+                        left += gw;
+                        right -= gw;
+                    }
+                    ctx.fillStyle = css.text;
+                    ctx.font = "12px system-ui, sans-serif";
+                    ctx.textAlign = "center";
+                    let t = text;
+                    while (
+                        t.length > 8 &&
+                        ctx.measureText(t).width > right - left
+                    )
+                        t = t.slice(0, -2);
+                    if (t !== text) t = t.trimEnd() + "…";
+                    ctx.fillText(t, (left + right) / 2, y + laneH / 2 + 4);
+                };
+                lane(
+                    0,
+                    "Shape",
+                    shapeLaneText(),
+                    S.mode === "today" ? css.yard : css.accent,
+                    true,
+                );
+                lane(1, "Follow", followLaneText(), css.leader, false);
+
+                const px = tx(S.t * S.counts);
+                ctx.strokeStyle = css.text;
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(px, 2);
+                ctx.lineTo(px, h);
+                ctx.stroke();
+                ctx.fillStyle = css.text;
+                ctx.beginPath();
+                ctx.moveTo(px - 5, 0);
+                ctx.lineTo(px + 5, 0);
+                ctx.lineTo(px, 7);
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            const $ = (id) => document.getElementById(id);
+            function drawReadouts() {
+                const c = S.t * S.counts;
+                $("countText").textContent =
+                    `Count ${c.toFixed(c % 1 ? 1 : 0)} of ${S.counts}`;
+                const d = M.big.d;
+                const to5 = d > 0.01 ? (8 / d).toFixed(1) : "–";
+                const el = $("stepRead");
+                el.className = d > 2 ? "warn" : "";
+                el.innerHTML =
+                    d > 0.01
+                        ? `Biggest step: <b>${to5} to 5</b> (${d.toFixed(2)} steps a count, marcher ${M.big.q + 1}, counts ${M.big.c}–${M.big.c + 1})${d > 2 ? " · bigger than 4 to 5" : ""}`
+                        : "Nobody moves";
+                let lo = Infinity,
+                    hi = 0;
+                for (let q = 0; q + 1 < S.n; q++) {
+                    const a = pos(q, S.t),
+                        b = pos(q + 1, S.t);
+                    const g = Math.hypot(a[0] - b[0], a[1] - b[1]);
+                    lo = Math.min(lo, g);
+                    hi = Math.max(hi, g);
+                }
+                $("gapRead").innerHTML =
+                    `Gaps now: <b>${lo.toFixed(1)}–${hi.toFixed(1)} steps</b>`;
+            }
+
+            let dirty = true;
+            function draw() {
+                if (!dirty) return;
+                dirty = false;
+                drawField();
+                drawLanes();
+                drawReadouts();
+                $("scrub").value = String(Math.round(S.t * 1000));
+            }
+            function changed() {
+                rebuild();
+                syncControls();
+                dirty = true;
+            }
+
+            /* ---------- controls ---------- */
+            function syncControls() {
+                const e = S[S.edit];
+                for (const b of $("editWhich").children)
+                    b.classList.toggle("on", b.dataset.end === S.edit);
+                for (const b of $("kinds").children)
+                    b.classList.toggle("on", b.dataset.kind === e.kind);
+                for (const b of $("dir").children)
+                    b.classList.toggle("on", Number(b.dataset.dir) === S.dir);
+                for (const b of $("trails").children)
+                    b.classList.toggle("on", b.dataset.trails === S.trails);
+                for (const r of document.querySelectorAll('input[name="mode"]'))
+                    r.checked = r.value === S.mode;
+                const set = (id, v, text) => {
+                    $(id).value = String(v);
+                    $(id + "Out").textContent = text;
+                };
+                const size = Math.sqrt(e.sx * e.sy);
+                set("rot", Math.round(e.rot), `${Math.round(e.rot)}°`);
+                set(
+                    "size",
+                    Math.round(size * 100),
+                    `${Math.round(size * 100)}%`,
+                );
+                set("sx", Math.round(e.sx * 100), `${Math.round(e.sx * 100)}%`);
+                set("sy", Math.round(e.sy * 100), `${Math.round(e.sy * 100)}%`);
+                set("places", S.places, String(S.places));
+                set("n", S.n, String(S.n));
+                set("fill", S.fill, `${S.fill}%`);
+                set("counts", S.counts, String(S.counts));
+                set("twist", S.twist, `${S.twist}%`);
+                $("even").checked = S.even;
+                const noPick = S.mode === "rigid" && S.edit === "b";
+                $("kinds").style.opacity = noPick ? "0.45" : "1";
+                $("kindsWhy").hidden = !noPick;
+                $("play").textContent = S.playing ? "Pause" : "Play";
+            }
+
+            for (const [name, make] of PRESETS) {
+                const b = document.createElement("button");
+                b.textContent = name;
+                b.onclick = () => {
+                    Object.assign(S, make());
+                    S.twist = 0;
+                    S.edit = "b";
+                    if (S.mode === "today" && name.startsWith("No change"))
+                        S.mode = "layers";
+                    changed();
+                };
+                $("presets").appendChild(b);
+            }
+            for (const k of Object.keys(KINDS)) {
+                const b = document.createElement("button");
+                b.textContent = KINDS[k].name;
+                b.dataset.kind = k;
+                b.onclick = () => {
+                    S[S.edit].kind = k;
+                    changed();
+                };
+                $("kinds").appendChild(b);
+            }
+            for (const b of $("editWhich").children)
+                b.onclick = () => {
+                    S.edit = b.dataset.end;
+                    changed();
+                };
+            for (const b of $("dir").children)
+                b.onclick = () => {
+                    S.dir = Number(b.dataset.dir);
+                    changed();
+                };
+            for (const b of $("trails").children)
+                b.onclick = () => {
+                    S.trails = b.dataset.trails;
+                    changed();
+                };
+            for (const r of document.querySelectorAll('input[name="mode"]'))
+                r.onchange = () => {
+                    S.mode = r.value;
+                    changed();
+                };
+            const onRange = (id, fn) =>
+                ($(id).oninput = () => (fn(Number($(id).value)), changed()));
+            onRange("rot", (v) => (S[S.edit].rot = v));
+            onRange("size", (v) => {
+                const e = S[S.edit];
+                const k = v / 100 / Math.sqrt(e.sx * e.sy);
+                e.sx *= k;
+                e.sy *= k;
+            });
+            onRange("sx", (v) => (S[S.edit].sx = v / 100));
+            onRange("sy", (v) => (S[S.edit].sy = v / 100));
+            onRange("places", (v) => (S.places = v));
+            onRange("n", (v) => (S.n = v));
+            onRange("fill", (v) => (S.fill = v));
+            onRange("counts", (v) => (S.counts = v));
+            onRange("twist", (v) => (S.twist = v));
+            $("even").onchange = () => {
+                S.even = $("even").checked;
+                changed();
+            };
+            $("copyEnd").onclick = () => {
+                S.b = { ...S.a };
+                S.twist = 0;
+                changed();
+            };
+            $("scrub").oninput = () => {
+                S.playing = false;
+                S.t = Number($("scrub").value) / 1000;
+                syncControls();
+                dirty = true;
+            };
+
+            /* ---------- playing ---------- */
+            const BPM = 120;
+            let last = 0,
+                rest = 0;
+            function tick(now) {
+                if (S.playing) {
+                    const dt = Math.min(0.1, (now - last) / 1000);
+                    if (rest > 0) {
+                        rest -= dt;
+                        if (rest <= 0) S.t = 0;
+                    } else {
+                        S.t += (dt * BPM) / 60 / S.counts;
+                        if (S.t >= 1) {
+                            S.t = 1;
+                            rest = 0.9; // stand on page 2 for a moment, then go again
+                        }
+                    }
+                    dirty = true;
+                }
+                last = now;
+                draw();
+                requestAnimationFrame(tick);
+            }
+            function togglePlay() {
+                S.playing = !S.playing;
+                if (S.playing && S.t >= 1) S.t = 0;
+                rest = 0;
+                syncControls();
+                dirty = true;
+            }
+            $("play").onclick = togglePlay;
+            window.addEventListener("keydown", (ev) => {
+                if (
+                    ev.target instanceof HTMLInputElement &&
+                    ev.target.type !== "range" &&
+                    ev.target.type !== "radio" &&
+                    ev.target.type !== "checkbox"
+                )
+                    return;
+                if (ev.code === "Space") {
+                    ev.preventDefault();
+                    togglePlay();
+                } else if (ev.key === "ArrowLeft" || ev.key === "ArrowRight") {
+                    if (ev.target instanceof HTMLInputElement) return;
+                    S.playing = false;
+                    const c =
+                        Math.round(S.t * S.counts) +
+                        (ev.key === "ArrowRight" ? 1 : -1);
+                    S.t = Math.max(0, Math.min(1, c / S.counts));
+                    syncControls();
+                    dirty = true;
+                }
+            });
+
+            /* ---------- dragging on the field ---------- */
+            function inside(O, x, y) {
+                let hit = false;
+                for (let i = 0, j = K - 1; i < K; j = i++) {
+                    const xi = O[2 * i],
+                        yi = O[2 * i + 1],
+                        xj = O[2 * j],
+                        yj = O[2 * j + 1];
+                    if (
+                        yi > y !== yj > y &&
+                        x < ((xj - xi) * (y - yi)) / (yj - yi) + xi
+                    )
+                        hit = !hit;
+                }
+                return hit;
+            }
+            const endOutline = (which) => (which === "a" ? M.A.F : M.B.F);
+            let drag = null;
+            field.addEventListener("pointerdown", (ev) => {
+                const r = field.getBoundingClientRect();
+                const px = ev.clientX - r.left,
+                    py = ev.clientY - r.top;
+                const x = unX(px),
+                    y = unY(py);
+                const reach = ev.pointerType === "touch" ? 24 : 13;
+                const h = handles(S.edit);
+                let what = null;
+                for (const k of ["turn", "corner", "wide", "deep"]) {
+                    if (Math.hypot(X(h[k][0]) - px, Y(h[k][1]) - py) <= reach) {
+                        what = k;
+                        break;
+                    }
+                }
+                if (!what) {
+                    const other = S.edit === "a" ? "b" : "a";
+                    if (inside(endOutline(S.edit), x, y)) what = "move";
+                    else if (inside(endOutline(other), x, y)) {
+                        S.edit = other;
+                        what = "move";
+                    }
+                }
+                if (!what) return;
+                const e = S[S.edit];
+                drag = {
+                    what,
+                    x,
+                    y,
+                    e0: { ...e },
+                    d0: Math.hypot(x - e.x, y - e.y) || 1,
+                };
+                field.setPointerCapture(ev.pointerId);
+                field.style.cursor = "grabbing";
+                changed();
+                ev.preventDefault();
+            });
+            field.addEventListener("pointermove", (ev) => {
+                const r = field.getBoundingClientRect();
+                const x = unX(ev.clientX - r.left),
+                    y = unY(ev.clientY - r.top);
+                if (!drag) {
+                    const h = handles(S.edit);
+                    const near = ["turn", "corner", "wide", "deep"].some(
+                        (k) =>
+                            Math.hypot(
+                                X(h[k][0]) - (ev.clientX - r.left),
+                                Y(h[k][1]) - (ev.clientY - r.top),
+                            ) <= 13,
+                    );
+                    field.style.cursor = near
+                        ? "pointer"
+                        : inside(endOutline("a"), x, y) ||
+                            inside(endOutline("b"), x, y)
+                          ? "grab"
+                          : "default";
+                    return;
+                }
+                const e = S[S.edit],
+                    e0 = drag.e0;
+                if (drag.what === "move") {
+                    e.x = Math.round((e0.x + x - drag.x) * 2) / 2;
+                    e.y = Math.round((e0.y + y - drag.y) * 2) / 2;
+                } else if (drag.what === "turn") {
+                    const want =
+                        (Math.atan2(y - e.y, x - e.x) * 180) / Math.PI + 90;
+                    let d = ((((want - e.rot) % 360) + 540) % 360) - 180; // the short way from where it is
+                    let next = e.rot + d;
+                    next = Math.max(-360, Math.min(360, next));
+                    e.rot = ev.shiftKey
+                        ? Math.round(next / 15) * 15
+                        : Math.round(next);
+                } else {
+                    const c = Math.cos(rad(-e.rot)),
+                        s = Math.sin(rad(-e.rot));
+                    const lx = c * (x - e.x) - s * (y - e.y),
+                        ly = s * (x - e.x) + c * (y - e.y);
+                    const d = dense(
+                        S.mode === "rigid" && S.edit === "b"
+                            ? S.a.kind
+                            : e.kind,
+                    );
+                    if (drag.what === "wide")
+                        e.sx = Math.max(
+                            0.15,
+                            Math.min(2.5, Math.abs(lx) / d.hx),
+                        );
+                    else if (drag.what === "deep")
+                        e.sy = Math.max(
+                            0.15,
+                            Math.min(2.5, Math.abs(ly) / d.hy),
+                        );
+                    else {
+                        const k = Math.max(
+                            0.2,
+                            Math.hypot(x - e.x, y - e.y) / drag.d0,
+                        );
+                        const cap = Math.min(k, 2.5 / Math.max(e0.sx, e0.sy));
+                        e.sx = e0.sx * cap;
+                        e.sy = e0.sy * cap;
+                    }
+                }
+                changed();
+            });
+            const endDrag = () => {
+                drag = null;
+                field.style.cursor = "default";
+            };
+            field.addEventListener("pointerup", endDrag);
+            field.addEventListener("pointercancel", endDrag);
+
+            /* ---------- scrubbing on the lanes ---------- */
+            let scrubbing = false;
+            const scrubTo = (ev) => {
+                const r = lanes.getBoundingClientRect();
+                const f =
+                    (ev.clientX - r.left - laneBox.x0) /
+                    (laneBox.x1 - laneBox.x0);
+                S.playing = false;
+                S.t = Math.max(0, Math.min(1, f));
+                syncControls();
+                dirty = true;
+            };
+            lanes.addEventListener("pointerdown", (ev) => {
+                scrubbing = true;
+                lanes.setPointerCapture(ev.pointerId);
+                scrubTo(ev);
+            });
+            lanes.addEventListener(
+                "pointermove",
+                (ev) => scrubbing && scrubTo(ev),
+            );
+            lanes.addEventListener("pointerup", () => (scrubbing = false));
+            lanes.addEventListener("pointercancel", () => (scrubbing = false));
+
+            /* ---------- start ---------- */
+            readCss();
+            window
+                .matchMedia("(prefers-color-scheme: dark)")
+                .addEventListener("change", () => {
+                    readCss();
+                    dirty = true;
+                });
+            new ResizeObserver(() => (dirty = true)).observe(field);
+            // a link can open on a set-up: #mode=rigid&t=0.5&preset=2
+            for (const [k, v] of new URLSearchParams(location.hash.slice(1))) {
+                if (k === "preset" && PRESETS[Number(v)])
+                    Object.assign(S, PRESETS[Number(v)][1]());
+                else if (
+                    k === "mode" &&
+                    ["layers", "rigid", "straight", "today"].includes(v)
+                )
+                    S.mode = v;
+                else if (k === "t")
+                    S.t = Math.max(0, Math.min(1, Number(v) || 0));
+                else if (k === "places")
+                    S.places = Math.max(0, Math.min(36, Number(v) || 0));
+                else if (k === "even") S.even = v === "1";
+                else if (k === "edit" && (v === "a" || v === "b")) S.edit = v;
+                else if (k === "endWidth")
+                    S.b.sx = Math.max(0.15, Math.min(2.5, Number(v) || 1));
+                else if (k === "endDepth")
+                    S.b.sy = Math.max(0.15, Math.min(2.5, Number(v) || 1));
+                else if (k === "endTurn")
+                    S.b.rot = Math.max(-360, Math.min(360, Number(v) || 0));
+            }
+            rebuild();
+            syncControls();
+            requestAnimationFrame(tick);
+            window.__proto = {
+                S,
+                pos,
+                changed,
+                get M() {
+                    return M;
+                },
+            };
+        </script>
+    </body>
+</html>
