@@ -15,8 +15,9 @@ import type { ShowCredits, VenueParams } from "../../types";
 
 /**
  * The venue's identity: everything in the hall that carries a name or a
- * logo is painted here, on canvas. The hall is Mark Diesel Stadium, dressed
- * for the GRAND NATIONAL CHAMPIONSHIPS; OpenMarch's marks stay few: the
+ * logo is painted here, on canvas. The hall is Mark Diesel Stadium and
+ * names no event, so any show can be on its field; OpenMarch's marks stay
+ * few: the
  * drape's logo panel, one back sideline board, the flags in the
  * roof, the end zones and the marcher on the midfield helmet. No
  * other brand, real or made up. The marks are OpenMarch's own, never
@@ -35,7 +36,7 @@ import type { ShowCredits, VenueParams } from "../../types";
  * type is DM Sans, the app's face, but for the red suite signs' leaning
  * serif (`stadiumSign.ts`).
  *
- * Everywhere else the hall names itself and the event: the drape's banner,
+ * Everywhere else the hall names itself: the drape's banner,
  * the LED ribbons,
  * the video boards' header and card, the field wall's pads, the other
  * sideline boards, the rafter banners, the ring of legends and the plaza's
@@ -69,11 +70,8 @@ export const OPENMARCH_SIGN = "OPENMARCH";
 /** The hall's name, as its signs set it. */
 export const DIESEL_NAME = "MARK DIESEL";
 export const DIESEL_STADIUM = "MARK DIESEL STADIUM";
-export const DIESEL_EVENT = "GRAND NATIONAL CHAMPIONSHIPS";
-/** The event's short name, for the smaller signs. */
-export const DIESEL_EVENT_SHORT = "GRAND NATIONALS";
-/** The round of the event the hall is dressed for. */
-export const DIESEL_ROUND = "PRELIMS";
+/** What the long boards greet the crowd with. */
+export const DIESEL_WELCOME = "WELCOME TO MARK DIESEL STADIUM";
 
 /**
  * The venue's colors and end-zone lettering for a show that has not chosen
@@ -313,7 +311,7 @@ export function paintLogoPanel(g: G, w: number, h: number): void {
 export const DIESEL_BANNER_ASPECT = 10;
 
 /**
- * The drape's banner: GRAND NATIONAL CHAMPIONSHIPS, white on black, between
+ * The drape's banner: the hall's name, white on black, between
  * two lavender rules.
  */
 export function paintChampionshipBanner(g: G, w: number, h: number): void {
@@ -323,7 +321,7 @@ export function paintChampionshipBanner(g: G, w: number, h: number): void {
     g.lineWidth = Math.max(2, h * 0.012);
     g.strokeRect(h * 0.05, h * 0.05, w - h * 0.1, h - h * 0.1);
     const gap = h * 0.55;
-    const textW = signText(g, DIESEL_EVENT, w / 2, h / 2, h * 0.34, {
+    const textW = signText(g, DIESEL_STADIUM, w / 2, h / 2, h * 0.34, {
         color: OM.white,
         align: "center",
         spacing: 0.06,
@@ -341,7 +339,7 @@ export function paintChampionshipBanner(g: G, w: number, h: number): void {
 
 /**
  * One tile of the padded field wall (16 wall heights long): dark vinyl pads
- * with their seams, and the event's name once, small, in lavender.
+ * with their seams, and the hall's name once, small, in lavender.
  */
 export function paintWallPad(g: G, w: number, h: number): void {
     const sheen = g.createLinearGradient(0, 0, 0, h);
@@ -361,7 +359,7 @@ export function paintWallPad(g: G, w: number, h: number): void {
     // The rolled top edge.
     g.fillStyle = "rgba(255,255,255,0.1)";
     g.fillRect(0, 0, w, h * 0.05);
-    signText(g, DIESEL_EVENT, w / 2, h * 0.53, h * 0.26, {
+    signText(g, DIESEL_STADIUM, w / 2, h * 0.53, h * 0.26, {
         color: OM.lavender,
         align: "center",
         spacing: 0.14,
@@ -371,7 +369,7 @@ export function paintWallPad(g: G, w: number, h: number): void {
 }
 
 /** What the ring of legends says, between small lavender diamonds. */
-const RING_LEGENDS = ["GRAND NATIONALS", "CHAMPIONSHIPS", "GRAND CHAMPION"];
+const RING_LEGENDS = [DIESEL_STADIUM, "RING OF CHAMPIONS"];
 
 /** A small diamond, `size` pixels across, centered on (cx, cy). */
 function diamond(g: G, cx: number, cy: number, size: number): void {
@@ -412,7 +410,7 @@ export function paintNameRing(g: G, w: number, h: number): void {
     });
 }
 
-/** What the LED ribbons show besides the event's name. */
+/** What the lower LED ribbon shows. */
 export interface DieselRibbonState {
     /** The show's title; blank puts the first of `bands` on instead. */
     title: string;
@@ -582,7 +580,7 @@ export function paintRibbonUpper(g: G, w: number, h: number): void {
     glow.addColorStop(1, OM.lavender);
     g.fillStyle = glow;
     g.fillRect(0, 0, w, h);
-    signText(g, DIESEL_EVENT_SHORT, w / 2, h / 2, h * 0.42, {
+    signText(g, DIESEL_STADIUM, w / 2, h / 2, h * 0.42, {
         color: OM.white,
         align: "center",
         spacing: 0.06,
@@ -613,8 +611,8 @@ export function paintBoardHeader(g: G, w: number, h: number): void {
 }
 
 /**
- * The card a video board shows when it has no live picture: the event and
- * its round, and the show now performing, bright on violet.
+ * The card a video board shows when it has no live picture: a welcome to
+ * the hall, and the show now performing, bright on violet.
  */
 export function paintBoardCard(
     g: G,
@@ -630,23 +628,18 @@ export function paintBoardCard(
     g.fillRect(0, 0, w, h);
     const left = h * 0.12;
     const room = w - 2 * left;
-    signText(g, DIESEL_STADIUM, left, h * 0.2, h * 0.04, {
-        color: OM.mist,
+    signText(g, "WELCOME TO", left, h * 0.24, h * 0.05, {
+        color: OM.lavender,
         spacing: 0.16,
         weight: 0,
         maxWidth: room,
     });
-    signText(g, "GRAND NATIONAL", left, h * 0.36, h * 0.1, {
+    signText(g, DIESEL_NAME, left, h * 0.4, h * 0.11, {
         color: OM.white,
         maxWidth: room,
     });
-    signText(g, "CHAMPIONSHIPS", left, h * 0.5, h * 0.1, {
+    signText(g, "STADIUM", left, h * 0.56, h * 0.11, {
         color: OM.white,
-        maxWidth: room,
-    });
-    signText(g, DIESEL_ROUND, left, h * 0.64, h * 0.05, {
-        color: OM.lavender,
-        spacing: 0.16,
         maxWidth: room,
     });
 
@@ -681,7 +674,7 @@ export type SponsorFace =
     | "otm"
     /** A line of text. */
     | "text"
-    /** The event's name, on the long middle boards. */
+    /** The welcome to the hall, on the long middle boards. */
     | "event";
 
 /** One board on the back sideline. */
@@ -713,20 +706,20 @@ const EVENT_BOARD: SponsorPanel = {
 
 /**
  * The boards along the back sideline, from the audience's left to right:
- * the hall and the event, with OpenMarch's logo on one side of the middle
+ * the hall's name and its welcome, with OpenMarch's logo on one side of the middle
  * and On The Move's on the other (the ends drop first where the row is too
  * long).
  */
 export const SPONSOR_PANELS: SponsorPanel[] = [
     board("text", OM.night, OM.mist, DIESEL_STADIUM),
-    board("text", OM.ink, OM.lavender, DIESEL_EVENT_SHORT),
+    board("text", OM.ink, OM.lavender, "WELCOME"),
     board("text", OM.night, OM.mist, DIESEL_STADIUM),
     board("logo", OM.ink, OM.white),
     EVENT_BOARD,
     EVENT_BOARD,
     board("otm", OM.ink, OM.white),
     board("text", OM.night, OM.mist, DIESEL_STADIUM),
-    board("text", OM.ink, OM.lavender, DIESEL_EVENT_SHORT),
+    board("text", OM.ink, OM.lavender, "WELCOME"),
     board("text", OM.night, OM.mist, DIESEL_STADIUM),
 ];
 
@@ -760,7 +753,7 @@ export function paintSponsorPanel(
         case "text":
             signText(
                 g,
-                panel.face === "event" ? DIESEL_EVENT : (panel.text ?? ""),
+                panel.face === "event" ? DIESEL_WELCOME : (panel.text ?? ""),
                 w / 2,
                 h / 2,
                 h * 0.3,
@@ -777,13 +770,13 @@ export interface RafterBanner {
 
 /** The banners on the trusses; they repeat in this order. */
 export const RAFTER_BANNERS: RafterBanner[] = [
-    { lines: ["GRAND", "NATIONAL", "CHAMPIONS"], year: "2009" },
-    { lines: ["GRAND", "NATIONAL", "CHAMPIONS"], year: "2013" },
-    { lines: ["DIVISION", "CHAMPIONS"], year: "2014" },
-    { lines: ["GRAND", "NATIONAL", "CHAMPIONS"], year: "2016" },
-    { lines: ["DIVISION", "CHAMPIONS"], year: "2019" },
-    { lines: ["GRAND", "NATIONAL", "FINALISTS"], year: "2022" },
-    { lines: ["GRAND", "NATIONAL", "CHAMPIONS"], year: "2024" },
+    { lines: ["CHAMPIONS"], year: "2009" },
+    { lines: ["CHAMPIONS"], year: "2013" },
+    { lines: ["FINALISTS"], year: "2014" },
+    { lines: ["CHAMPIONS"], year: "2016" },
+    { lines: ["FINALISTS"], year: "2019" },
+    { lines: ["CHAMPIONS"], year: "2022" },
+    { lines: ["CHAMPIONS"], year: "2024" },
 ];
 
 /** Width over height of a rafter banner. */
@@ -870,7 +863,7 @@ export const MONUMENT_ASPECT = 2.6;
 
 /**
  * The face of a monument sign on the plaza: the hall's name in white on the
- * app's night, over a violet foot with the event.
+ * app's night, over a violet foot with a welcome.
  */
 export function paintMonument(g: G, w: number, h: number): void {
     g.fillStyle = OM.night;
@@ -894,7 +887,7 @@ export function paintMonument(g: G, w: number, h: number): void {
         weight: 0,
         maxWidth: w * 0.86,
     });
-    signText(g, DIESEL_EVENT, w / 2, h - foot / 2, foot * 0.38, {
+    signText(g, "WELCOME", w / 2, h - foot / 2, foot * 0.38, {
         color: OM.white,
         align: "center",
         spacing: 0.06,

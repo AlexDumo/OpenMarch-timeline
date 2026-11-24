@@ -28,7 +28,7 @@ import { dieselLighting } from "./lighting";
  * - the lower ribbon on the club fascia, all the way round the bowl: the
  *   clock, the show now performing and the bands after it;
  * - the upper ribbon on the terrace fascia, round the four corners and the
- *   ends: GRAND NATIONALS.
+ *   ends: the hall's name.
  *
  * Each is its own mesh a few centimeters in front of the bowl's fascia,
  * facing the field, and crawls slowly to the left while the window draws.

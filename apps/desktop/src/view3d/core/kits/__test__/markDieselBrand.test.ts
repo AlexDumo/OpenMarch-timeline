@@ -248,17 +248,16 @@ describe("Venue brand painters", () => {
             expect(text, face).not.toMatch(
                 /lucas|colts|yamaha|bands of america|\bboa\b|openmarch\.com/i,
             );
-        expect(faces.banner).toBe("GRAND NATIONAL CHAMPIONSHIPS");
-        expect(faces.wall).toBe("GRAND NATIONAL CHAMPIONSHIPS");
-        expect(faces.nameRing).toBe(
-            "GRAND NATIONALS | CHAMPIONSHIPS | GRAND CHAMPION",
-        );
-        expect(faces.ribbonUpper).toBe("GRAND NATIONALS");
+        // No event is named anywhere: any show can be on the field.
+        for (const [face, text] of Object.entries(faces))
+            expect(text, face).not.toMatch(/grand|national|prelims|finals\b/i);
+        expect(faces.banner).toBe("MARK DIESEL STADIUM");
+        expect(faces.wall).toBe("MARK DIESEL STADIUM");
+        expect(faces.nameRing).toBe("MARK DIESEL STADIUM | RING OF CHAMPIONS");
+        expect(faces.ribbonUpper).toBe("MARK DIESEL STADIUM");
         expect(faces.sign).toContain("MARK DIESEL STADIUM");
         expect(faces.header).toBe("MARK DIESEL STADIUM");
-        expect(faces.monument).toBe(
-            "MARK DIESEL | STADIUM | GRAND NATIONAL CHAMPIONSHIPS",
-        );
+        expect(faces.monument).toBe("MARK DIESEL | STADIUM | WELCOME");
     });
 
     it("shows the clock and the order of appearance on the lower ribbon", () => {
