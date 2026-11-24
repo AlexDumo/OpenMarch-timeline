@@ -11,6 +11,7 @@ import {
     editItems,
     itemListState,
     observeWorn,
+    resetItemDraftsForTests,
     useItemDrafts,
     type ItemDraft,
 } from "../itemDrafts";
@@ -31,7 +32,7 @@ const draft = (latest: UniformPackValue): ItemDraft => ({
 });
 
 describe("item drafts", () => {
-    afterEach(() => useItemDrafts.setState({ draft: null }));
+    afterEach(() => resetItemDraftsForTests());
 
     it("reads a live draft's newest saved pack, not the one it was drawn over", () => {
         const key = draftKey(v(1), 3);
@@ -58,9 +59,9 @@ const item = (id: string, width: number): UniformPackItem => ({
 
 describe("an edit right after a save or an Undo (#1287 re-review)", () => {
     afterEach(() => {
+        resetItemDraftsForTests();
         vi.clearAllTimers();
         vi.useRealTimers();
-        useItemDrafts.setState({ draft: null, saving: false, failed: false });
     });
 
     // P: the version before, with a crest and a number. The draft deleted the number and was

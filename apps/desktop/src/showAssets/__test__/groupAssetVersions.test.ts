@@ -3,7 +3,12 @@
  * uniform's items doesn't list the uniform once per save.
  */
 import { describe, expect, it } from "vitest";
-import { groupAssetVersions, removableLines, type AssetUse } from "../assetUse";
+import {
+    groupAssetVersions,
+    removableCount,
+    removableLines,
+    type AssetUse,
+} from "../assetUse";
 import type { ShowAsset } from "@/db-functions/showAssets";
 
 const version = (
@@ -87,13 +92,15 @@ describe("removableLines", () => {
             version("m", "e", 0, "b5"),
         ];
         const unused = rows.filter((r) => r.uses === 0);
-        expect(removableLines(unused, rows)).toEqual([
+        const lines = removableLines(unused, rows);
+        expect(lines).toEqual([
             {
                 id: "u",
                 name: "fjm-page",
                 count: 3,
                 bytes: 3000,
                 olderOnly: true,
+                allOlder: true,
             },
             {
                 id: "m",
@@ -101,7 +108,25 @@ describe("removableLines", () => {
                 count: 1,
                 bytes: 1000,
                 olderOnly: false,
+                allOlder: false,
             },
         ]);
+        // the dialog counts what the lines hold: versions, since one line groups them
+        expect(removableCount(lines)).toEqual({ count: 4, unit: "versions" });
+    });
+
+    it("calls them other versions when one may be newer than the one kept (after an undo)", () => {
+        const rows = [version("u", "a", 1, "b1"), version("u", "b", 0, "b2")];
+        const [line] = removableLines([rows[1]], rows);
+        expect(line.olderOnly).toBe(true);
+        expect(line.allOlder).toBe(false);
+    });
+
+    it("counts assets when every line is one whole asset", () => {
+        const rows = [version("u", "a", 0, "b1"), version("m", "b", 0, "b2")];
+        expect(removableCount(removableLines(rows, rows))).toEqual({
+            count: 2,
+            unit: "assets",
+        });
     });
 });
