@@ -13,7 +13,8 @@
  * - **Edit path off**: only the stretch the form stands on changes. Where the changed leg reaches
  *   back past the tail, a corner is set on the trail at the tail's spot, so the route in stays; a
  *   move that would back the tail into it is held where it was.
- * - **Alt** detaches the one marcher instead (`detachTrailSpot`), **Ctrl/⌘** constrains as a
+ * - **Alt** takes the one marcher out of the trail instead (`detachTrailSpot`, L.18 TM-3: it
+ *   gets a plain move to where it's let go), **Ctrl/⌘** constrains as a
  *   point's drag does, **Shift** is fine (off the grid).
  *
  * The drag is the head drag's (AP-T16, `trailHead.ts`): the session is step 4b's drawing, the end
@@ -412,8 +413,8 @@ export const formLineUpReason = () =>
     );
 
 /**
- * One marcher of the form detached (Alt + drag): its end spot leaves the trail for `at`, one undo
- * step; it walks the trail to its projection, then straight there (R-13″'s off-trail rule)
+ * One marcher of the form moved off it (Alt + drag): it leaves the trail for a plain move to `at`
+ * (L.18, TM-3), one undo step; the trail goes on with the others
  */
 export async function detachFormMarcher(
     marcherId: number,

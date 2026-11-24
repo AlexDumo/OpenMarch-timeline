@@ -65,6 +65,9 @@ import {
     type PathTarget,
 } from "./pathTarget";
 import {
+    convertShownTrail,
+    convertTrailBlocker,
+    abortPointDrag,
     acknowledgeOpenPath,
     editMemberLine,
     pathSlotsOf,
@@ -488,6 +491,24 @@ export function usePathPenActions(): void {
                   )
                 : undefined,
         },
+    );
+
+    // Convert to shape (L.18, TM-4): offered on a shown trail dragged out of a line
+    const convertBlocker = usePathPenStore((s) =>
+        trailShown &&
+        s.session?.phase !== "drawing" &&
+        s.session?.dragging === null
+            ? convertTrailBlocker(s.session)
+            : null,
+    );
+    useActionHandler(
+        "convertTrailToShape",
+        () => void convertShownTrail(),
+        {
+            enabled: convertBlocker === null,
+            disabledReason: convertBlocker ?? undefined,
+        },
+        trailShown && trailAlong && phase !== "drawing",
     );
 
     // Shape controls (owner, 2026-11-17): the trail's end shape's own controls, tucked away
@@ -1030,6 +1051,8 @@ export function PathPenKeys(): null {
     useActionHandler(
         "cancelAlignmentUpdates",
         () => {
+            // A point being dragged: the drag is called off, nothing written (L.18, TM-2)
+            if (!drawing && abortPointDrag()) return;
             // Adjusting a lane: its picked handle goes first, then back to quiet (round 2)
             if (!drawing && pickedLane?.key != null)
                 selectLane({ marcherId: pickedLane.marcherId, key: null });

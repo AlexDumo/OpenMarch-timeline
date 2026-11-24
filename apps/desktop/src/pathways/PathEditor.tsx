@@ -66,6 +66,7 @@ import {
     TrailCornerCounts,
 } from "./TrailCornerCounts";
 import { useTrailEndShape, useTrailShapeControls } from "./trailShape";
+import { nextPin, placedKey, type BarPin } from "./barPin";
 import { trailOffReason, useFollowTheLeader } from "./followTheLeader";
 import { isFollowing } from "./FollowStatus";
 import { useIsTouchMode } from "@/stores/InputModeStore";
@@ -94,6 +95,7 @@ import {
 } from "./followAround";
 import { rippleArrivalCount } from "@/db-functions/timelineTrailRipplePlan";
 import {
+    convertTrailBlocker,
     detachAllIdsOf,
     detachAllLabel,
     detachAllNote,
@@ -529,6 +531,8 @@ function PathEditorBar({
                   ...(session.target.group && !session.target.trail
                       ? [...(drawn.rings ?? []), ...drawn.spots]
                       : []),
+                  // A trail's end spots, where its marchers stop: the bar keeps off them (#1102)
+                  ...(session.target.trail ? drawn.spots : []),
               ]
             : (drawn?.lanes?.flat() ?? []);
         return lines.length > 0 ? lines : pathOutline(shapeOf(session));
@@ -557,7 +561,9 @@ function PathEditorBar({
     // While drawing, the bar stays where it first appeared, beside the marchers (sim round 3: it
     // re-placed itself as the line grew, so a click meant for Finish landed on the field and
     // added a corner). It fades while a point is dragged, as the shape editor's bar does
-    const pinned = useRef<{ left: number; top: number } | null>(null);
+    // A placed point that runs the drawing under it moves it clear once (#1102, `barPin.ts`)
+    const pinned = useRef<BarPin | null>(null);
+    const key = placedKey(session);
     if (!drawing) pinned.current = null;
     // Pinned only once the drawing bar itself was measured: the closed bar's size came first
     // (review of #900)
@@ -567,7 +573,12 @@ function PathEditorBar({
         size.width > 0 &&
         Number.isFinite(size.fw)
     )
-        pinned.current = { left: place.left, top: place.top };
+        pinned.current = { left: place.left, top: place.top, key };
+    else if (pinned.current)
+        pinned.current = nextPin(pinned.current, key, place, size, [
+            ...outline.map((p) => fieldToElement(view, p.x, p.y)),
+            ...footprint.map((p) => fieldToElement(view, p.x, p.y)),
+        ]);
     const { left, top } = (drawing && pinned.current) || place;
     // It also steps back while the line is held or carried round an outline (owner, 2026-11-23):
     // the marchers and the note by the pointer show through it, and it can't take the drop's click
@@ -1032,10 +1043,16 @@ function PathMoreMenu({ session }: { session: PathSession }) {
                   "The path already fits where its marcher stands",
               );
     const more = tolgee.t("pathways.editor.more", "More path commands");
-    // A trail's end shape (owner, 2026-11-17): its controls, tucked away while the trail is shown.
-    // They edit a trail: gone with Follow-the-leader off (#1095), as the switch takes their
-    // command away
+    // A trail's end shape and Convert to shape edit a trail: gone with Follow-the-leader off
+    // (#1095), as the switch takes their commands away
     const followTheLeader = useFollowTheLeader();
+    // Convert to shape (L.18, TM-4): a trail dragged out of a line, its spots placed as a Line
+    const along =
+        followTheLeader &&
+        !!session.target.trail?.along &&
+        !session.target.trail.around;
+    const convertReason = along ? convertTrailBlocker(session) : null;
+    // A trail's end shape (owner, 2026-11-17): its controls, tucked away while the trail is shown
     const endShape = useTrailEndShape();
     const shapeControls = useTrailShapeControls();
     return (
@@ -1107,6 +1124,27 @@ function PathMoreMenu({ session }: { session: PathSession }) {
                                         "Re-fit path",
                                     )}
                         </MenuItemWithReason>
+                    )}
+                    {along && session.phase !== "drawing" && (
+                        <>
+                            <MenuItemWithReason
+                                testId="path-convert-shape"
+                                reason={convertReason}
+                                reasonTestId="path-convert-shape-reason"
+                                onSelect={() =>
+                                    runAction("convertTrailToShape")
+                                }
+                            >
+                                <ShapesIcon size={14} aria-hidden />
+                                {tolgee.t(
+                                    "actions.path.convertToShape",
+                                    "Convert to shape",
+                                )}
+                            </MenuItemWithReason>
+                            <DropdownMenu.Separator
+                                className={MENU_SEPARATOR_CLASS}
+                            />
+                        </>
                     )}
                     {trail && endShape && followTheLeader && (
                         <>

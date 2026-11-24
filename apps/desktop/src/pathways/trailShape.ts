@@ -1,4 +1,6 @@
+import type { Resolver } from "@openmarch/core";
 import { useBoxSelectionStore } from "@/shapes/placed/boxSelectionStore";
+import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { isFollowTheLeaderOn, useFollowTheLeader } from "./followTheLeader";
 import {
     pathKey,
@@ -115,4 +117,47 @@ export function useTrailEndShape(): boolean {
             )
         );
     });
+}
+
+/** Two beats closer than this are one */
+const SAME_BEAT = 1e-9;
+
+/**
+ * Whether a placed shape on `members`, placed at `endBeat`, is where a follow-the-leader line ends:
+ * they're exactly the line of one follow-the-leader move arriving at that beat (a trail into a
+ * form, or a trail converted to a shape). A click on one of them then picks that marcher, not the
+ * whole shape (#1101): the line is the trail's, which a click on its path selects. Only with
+ * Follow-the-leader on (#1095); off, a shape is clicked as any other.
+ */
+export function isTrailEndShape(
+    members: readonly number[],
+    endBeat: number,
+    resolver: Pick<
+        Resolver,
+        "spanInfos" | "ftlEntry"
+    > | null = useTimelineResolverStore.getState().resolver,
+): boolean {
+    if (!resolver || members.length < 2 || !isFollowTheLeaderOn()) return false;
+    let spans;
+    try {
+        spans = resolver.spanInfos(members[0]!);
+    } catch {
+        return false;
+    }
+    const arriving = spans.find(
+        (span) =>
+            span.transitionId !== null &&
+            span.assignmentEnd !== null &&
+            Math.abs(span.assignmentEnd - endBeat) < SAME_BEAT,
+    );
+    if (!arriving || arriving.transitionId === null) return false;
+    let line: readonly number[];
+    try {
+        line = resolver.ftlEntry(arriving.transitionId).members;
+    } catch {
+        // Not a follow-the-leader move
+        return false;
+    }
+    const set = new Set(members);
+    return line.length === set.size && line.every((id) => set.has(id));
 }

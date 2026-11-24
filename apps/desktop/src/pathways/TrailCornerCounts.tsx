@@ -299,9 +299,13 @@ usePathPenStore.subscribe((s) => {
  * warning color when a member turns between counts. A click or tap opens the corner's list: who
  * turns there, leader first, and on which count. While a trail is drawn the chips only show (a
  * click on the field places the next point), so the list opens once it's finished. A trail only
- * selected (closed) shows them once the path bar's summary pins them (owner, 2026-11-18); open
- * (Edit path) or drawn, always.
+ * selected (closed) shows them once the path bar's summary pins them (owner, 2026-11-18); drawn,
+ * always. Open (Edit path) on a trail dragged out of a line, only the corner being dragged shows
+ * its chip, unless the summary pins them all (L.18, TM-7: the path is edited, not read).
  */
+/** A corner this near a dragged point (field units) is that point's */
+const CORNER_AT = 0.5;
+
 export function TrailCornerCounts({ session }: { session: PathSession }) {
     const view = trailCornersOf(session);
     const field = useFieldViewStore();
@@ -312,10 +316,31 @@ export function TrailCornerCounts({ session }: { session: PathSession }) {
     if (!view || view.corners.length === 0) return null;
     if (quiet && !pinned) return null;
     const drawing = session.phase === "drawing";
+    // Edit path on a dragged-out trail: the chip of the corner under the dragged point only
+    const dragged =
+        session.phase === "open" &&
+        !pinned &&
+        session.target.trail?.along &&
+        !session.target.trail.around
+            ? session.dragging === null
+                ? null
+                : (session.points[session.dragging]?.at ?? null)
+            : undefined;
+    const corners =
+        dragged === undefined
+            ? view.corners
+            : dragged === null
+              ? []
+              : view.corners.filter(
+                    (c) =>
+                        Math.hypot(c.at[0] - dragged.x, c.at[1] - dragged.y) <
+                        CORNER_AT,
+                );
+    if (corners.length === 0) return null;
     return (
         <>
             {chipPlaces(
-                view.corners,
+                corners,
                 (x, y) => fieldToElement(field, x, y),
                 chipObstaclesOf(session, field),
             ).map(({ corner, left, top, sx, sy }) => (

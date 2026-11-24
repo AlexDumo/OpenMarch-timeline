@@ -420,6 +420,11 @@ export type FieldModeDrawing = {
         readonly ids: readonly number[];
         readonly spots: readonly FieldPoint[];
         readonly walk?: (p: number) => readonly FieldPoint[];
+        /**
+         * The drawing's `spots` are drawn too: the marchers stand where the playhead has them,
+         * not on their end spots (a trail's points dragged, pathways L.18)
+         */
+        readonly keepSpots?: boolean;
     };
     /**
      * Thin, faint lines (pathways step 15): each member's lane of a group path, from its start
@@ -1605,6 +1610,11 @@ export class FieldEditor {
         if (this.areaTool === tool) return;
         this.areaTool = tool;
         this.emit();
+    }
+
+    /** Whether the show is playing (`setPlaying`) */
+    isPlaying(): boolean {
+        return this.playing;
     }
 
     /** The show started or stopped playing: the pivot hides while it plays. */

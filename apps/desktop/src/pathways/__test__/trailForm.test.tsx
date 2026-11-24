@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "@testing-library/react";
+import { toast } from "sonner";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import type { FieldPointer } from "@/field/editor/fieldEditor";
 import { setShapeField } from "@/shapes/field/shapeField";
@@ -376,6 +377,41 @@ describe("a trail's form, reshaped by dragging its marchers", () => {
         // The tail and the leader still take their drags
         expect(formGrabFor(s, 1, S)).not.toBe("lineUp");
         expect(formGrabFor(s, 5, S)).not.toBe("lineUp");
+    });
+
+    it("#1100: a press on a line-up marcher says nothing until it's dragged; a click (or a right-click's or long press's press) selects it, nothing written", () => {
+        const error = vi.spyOn(toast, "error").mockImplementation(() => "");
+        try {
+            const target = storedTarget(3);
+            const ends = new Map(
+                target.trail!.members.map((m) => [m.marcherId, m.to]),
+            );
+            setShapeField({
+                fieldProperties: () => fieldProperties,
+                zoom: () => ZOOM,
+                marchers: () => [],
+                drawn: (ids) => new Map(ids.map((id) => [id, ends.get(id)!])),
+            });
+            show(true, target);
+            expect(formGrabFor(session(), 2, S)).toBe("lineUp");
+            const p = ends.get(2)!;
+            pathPenMode.press(at(p.x, p.y), onMarcher(2));
+            expect(error).not.toHaveBeenCalled();
+            pathPenMode.release(at(p.x, p.y), null);
+            expect(error).not.toHaveBeenCalled();
+            expect(picked.ids).toContain(2);
+            // Dragged: refused with the reason, once, and nothing written
+            pathPenMode.press(at(p.x, p.y), onMarcher(2));
+            pathPenMode.move(at(p.x, p.y + 3 * S));
+            pathPenMode.move(at(p.x, p.y + 4 * S));
+            vi.advanceTimersToNextFrame();
+            pathPenMode.release(at(p.x, p.y + 4 * S), null);
+            expect(error).toHaveBeenCalledTimes(1);
+            expect(String(error.mock.calls[0]![0])).toMatch(/line-up/);
+            expect(vi.mocked(transactionWithHistory)).not.toHaveBeenCalled();
+        } finally {
+            error.mockRestore();
+        }
     });
 
     it("splits an arc leg into two arcs of the same circle at a corner set on it", () => {

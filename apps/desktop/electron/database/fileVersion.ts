@@ -44,6 +44,13 @@
  *   that doesn't know it would walk the outline as an open trail into the spots, so a file is
  *   written as 17 with its first move round an outline. A file without one stays at the version
  *   it had, and the number is not lowered when the last one goes.
+ * - 18: order marks (pathways step 4g, #1099): a line's order set or cleared by hand is a shape
+ *   recipe of kind `order` or `orderClear` in no move (`timeline_id` NULL, `marcherOrder.ts`). A
+ *   build that doesn't know them (0.2.0-beta.5 and older) reads such a recipe as a placed shape at
+ *   the starting spots: its marchers get no Held hold, move cuts treat them as in a shape, and a
+ *   shape placed at the starting spots strips the mark. So a file is written as 18 with its first
+ *   order mark, or when it opens holding one (`markOrderModelIfOrdered`). A file without one stays
+ *   at the version it had, and the number is not lowered when the last mark goes.
  */
 import type { DatabaseSync } from "node:sqlite";
 import { recoverParkedFloorInTransaction } from "./parkedFloor";
@@ -72,6 +79,9 @@ export const ARC_MODEL_USER_VERSION = 14;
 /** Version of a file with a move round a closed outline (pathways step 10, spec Appendix L.11). */
 export const OUTLINE_MODEL_USER_VERSION = 17;
 
+/** Version of a file with an order mark: a line's order set or cleared by hand (step 4g, #1099). */
+export const ORDER_MODEL_USER_VERSION = 18;
+
 /** Oldest version this build opens. Older files must go through 0.0.10 first. */
 export const MIN_SUPPORTED_USER_VERSION = PAGE_MODEL_USER_VERSION;
 /**
@@ -81,7 +91,7 @@ export const MIN_SUPPORTED_USER_VERSION = PAGE_MODEL_USER_VERSION;
 export const UNKNOWN_USER_VERSIONS: readonly number[] = [15, 16];
 
 /** Newest version this build opens. Anything higher was written by a newer release. */
-export const MAX_SUPPORTED_USER_VERSION = OUTLINE_MODEL_USER_VERSION;
+export const MAX_SUPPORTED_USER_VERSION = ORDER_MODEL_USER_VERSION;
 
 /** Whether a newer build wrote `userVersion`: above the newest, or a number this build skips */
 export const isTooNewUserVersion = (userVersion: number): boolean =>
@@ -211,4 +221,26 @@ export function markLaneModelIfLaned(db: DatabaseSync): void {
     if (!db.prepare("SELECT 1 FROM timeline_lanes LIMIT 1").get()) return;
     if (readUserVersion(db) < LANE_MODEL_USER_VERSION)
         db.prepare(`PRAGMA user_version = ${LANE_MODEL_USER_VERSION}`).run();
+}
+
+/**
+ * Writes the order-mark version (18) when the file holds an order mark and an older version: one
+ * a build before #1099 wrote without raising it. Run after the migrations, on every open; a file
+ * without one, or already at 18, is left as it is.
+ */
+export function markOrderModelIfOrdered(db: DatabaseSync): void {
+    const hasTable = db
+        .prepare(
+            "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'timeline_shape_recipes'",
+        )
+        .get();
+    if (!hasTable) return;
+    const marked = db
+        .prepare(
+            "SELECT 1 FROM timeline_shape_recipes WHERE kind IN ('order', 'orderClear') LIMIT 1",
+        )
+        .get();
+    if (!marked) return;
+    if (readUserVersion(db) < ORDER_MODEL_USER_VERSION)
+        db.prepare(`PRAGMA user_version = ${ORDER_MODEL_USER_VERSION}`).run();
 }

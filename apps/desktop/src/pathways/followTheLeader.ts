@@ -30,6 +30,7 @@ export const FOLLOW_THE_LEADER_ACTIONS: ReadonlySet<ActionId> =
         "followSnakeRows",
         "followSnakeColumns",
         "trailShapeControls",
+        "convertTrailToShape",
         "toggleMarcherOrder",
         "setMarcherOrder",
         "reverseMarcherOrder",

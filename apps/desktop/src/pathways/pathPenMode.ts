@@ -33,6 +33,7 @@ import type { ToolEnv } from "@/shapes/tool/toolKind";
 import type { XY } from "@/shapes/types";
 import { drawnAsGroup, type PathTarget } from "./pathTarget";
 import { walkedRoute } from "./walkedRoute";
+import { liveTrailOf } from "./trailLive";
 import { shapeTuckedUnderTrail } from "./trailShape";
 import { snakeFrom } from "@/db-functions/timelineTrailSnake";
 import {
@@ -105,6 +106,7 @@ import {
 import {
     addPoint,
     cancelDrag,
+    pointDragAborts,
     commitAdjustKey,
     commitLaneAdjust,
     commitPoints,
@@ -343,6 +345,11 @@ class PathPenMode implements FieldMode {
         member?: number;
         /** That marcher detached with Alt: where its spot goes, once dragged */
         detach?: { at: XY | null };
+        /**
+         * That marcher is still in the line-up, so its drag is refused: said once it's dragged,
+         * never on the press, which may be a click, a long press or a right-click (#1100)
+         */
+        lineUp?: { told: boolean };
         /** Going round (owner, 2026-11-22): the press that grabbed the line to slide it round */
         round?: boolean;
         /**
@@ -355,8 +362,18 @@ class PathPenMode implements FieldMode {
     private detachShown: { id: number; at: XY } | null = null;
     private listeners = new Set<() => void>();
 
+    /** Point drags called off by Escape so far (`abortPointDrag`) */
+    private aborts = pointDragAborts();
+
     constructor() {
         usePathPenStore.subscribe(() => {
+            // Escape called off a point's drag (L.18, TM-2): its press drags no more
+            if (pointDragAborts() !== this.aborts) {
+                this.aborts = pointDragAborts();
+                const p = this.held;
+                if (p && p.key !== null && !p.head && p.member === undefined)
+                    this.endHeld();
+            }
             for (const l of this.listeners) l();
         });
         // The Straight | Curve switch and Alt change the drawing's cue for the next point
@@ -377,7 +394,12 @@ class PathPenMode implements FieldMode {
     }
 
     get ownsSelectionBox() {
-        return this.session?.phase === "drawing";
+        const s = this.session;
+        // Edit path on a trail (L.18, TM-7): the path is what's edited, so no selection frame or
+        // transform handles that would read as a second object (a drag inside it moves nothing)
+        return (
+            s?.phase === "drawing" || (s?.phase === "open" && !!s.target.trail)
+        );
     }
     get locksSelection() {
         return this.session?.phase === "drawing";
@@ -611,8 +633,6 @@ class PathPenMode implements FieldMode {
         // Alt, or the touch pill's Alt (the from-center toggle) for a finger
         const detach = holdsOtherKind(pointer) || isToggleOn("fromCenter");
         const grab = step && !detach ? formGrabFor(s, id, step) : null;
-        if (grab === "lineUp")
-            toast.error(formLineUpReason(), { id: "trail-form" });
         const started =
             !!step && !!grab && grab !== "lineUp" && startFormDrag(step, grab);
         const base = shapeOf(s);
@@ -638,6 +658,7 @@ class PathPenMode implements FieldMode {
             head: started,
             member: id,
             ...(detach ? { detach: { at: null } } : {}),
+            ...(grab === "lineUp" ? { lineUp: { told: false } } : {}),
         };
     }
 
@@ -821,8 +842,14 @@ class PathPenMode implements FieldMode {
                 this.headFrame.push({ at: pointer.field, roles });
             return;
         }
-        // A marcher whose drag is refused (still in the line-up): nothing to drag
-        if (p.member !== undefined) return;
+        // A marcher whose drag is refused (still in the line-up): nothing to drag, said once
+        if (p.member !== undefined) {
+            if (p.lineUp && !p.lineUp.told) {
+                p.lineUp.told = true;
+                toast.error(formLineUpReason(), { id: "trail-form" });
+            }
+            return;
+        }
         // The first leg dragged out of an end (step 4b): the pen's leg to the pointer
         if (s.phase === "drawing") {
             if (p.firstLeg) this.pen.pointAt(pointer.field, roles);
@@ -2099,6 +2126,8 @@ function buildDrawing(
         ...(laneTip ? { tip: laneTip } : {}),
         // AP-T16: the head of a trail dragged out of a line, to drag on or back (step 4d's arrows)
         ...headArrows(session, asObject),
+        // L.18 (TM-2): a point dragged, the form and the marchers follow the path live
+        ...(asObject ? {} : liveTrailOf(session)),
     };
 }
 

@@ -1295,7 +1295,10 @@ const ShapeBody = memo(function ShapeBody({
                 );
             })}
             {/* The real marchers stand on them instead (pathways step 4c) */}
-            {(drawing.marchersAt ? [] : drawing.spots).map((p, i) => {
+            {(drawing.marchersAt && !drawing.marchersAt.keepSpots
+                ? []
+                : drawing.spots
+            ).map((p, i) => {
                 // A marcher standing on its end spot already shows it (owner, 2026-11-17)
                 if (skipSpots.has(i)) return null;
                 return (
