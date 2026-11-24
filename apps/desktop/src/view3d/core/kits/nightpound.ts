@@ -13,7 +13,6 @@ import { buildLighting } from "./nightpound/lighting";
 import { buildRoof } from "./nightpound/roof";
 import { buildScoreboard } from "./nightpound/scoreboard";
 import {
-    AREA,
     SEAT_PITCH,
     type NightpoundCtx,
     type NightpoundPart,
@@ -107,12 +106,12 @@ export const buildNightpound: KitBuilder = ({ footprint, params, quality }) => {
             aisleEvery: 1e6,
             standing: 0.02,
             clearRadius: 3.4,
-            // From a seat, nobody hides the competition area or its lines.
+            // From a seat, nobody hides the show's floor or its lines.
             keepInView: {
-                minX: cx - AREA.halfX - 0.3,
-                maxX: cx + AREA.halfX + 0.3,
-                minZ: cz - AREA.halfZ - 0.3,
-                maxZ: cz + AREA.halfZ + 0.3,
+                minX: footprint.minX - 0.3,
+                maxX: footprint.maxX + 0.3,
+                minZ: footprint.minZ - 0.3,
+                maxZ: footprint.maxZ + 0.3,
             },
             clothes: CLOTHES,
             // The seat rows are in the scene's space; the bowl thinks in the
