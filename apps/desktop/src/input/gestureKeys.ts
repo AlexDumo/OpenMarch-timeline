@@ -1,5 +1,5 @@
 import { isMacPlatform } from "@/shortcuts/platform";
-import { MODIFIER_RELEASE_GRACE_MS } from "./modifierGrace";
+import { modifierReleaseGraceMs } from "./modifierGrace";
 import {
     HELD_ROLES,
     releaseUsedKeys,
@@ -19,7 +19,7 @@ import {
  * gesture only asks `roles()` and re-runs its last move when told to.
  *
  * A role turns off only once its key (or on-screen toggle) has been up for the release grace
- * (`MODIFIER_RELEASE_GRACE_MS`): people let go of Shift a moment before the mouse, and that drop
+ * (`MODIFIER_RELEASE_GRACE_MS` in `modifierGrace.ts`): people let go of Shift a moment before the mouse, and that drop
  * should keep Shift. Turning a role on is immediate; holding a role a little longer is the whole
  * cost, so letting go on purpose to cancel it still works, the preview just changes after the grace.
  */
@@ -49,7 +49,7 @@ export function startGestureKeys({
     track = true,
     map,
     isMac = isMacPlatform(),
-    releaseGraceMs = MODIFIER_RELEASE_GRACE_MS,
+    releaseGraceMs = modifierReleaseGraceMs(),
 }: {
     context: GestureContext;
     /** The keys held at the press (`heldKeysOf` the pointer-down) */
@@ -89,7 +89,10 @@ export function startGestureKeys({
         for (const role of graced.keys()) out[role] = true;
         return out;
     };
-    let last = actual();
+    /** The roles as the keys and toggles have them, before the grace */
+    let lastActual = actual();
+    /** The roles last reported, with the grace */
+    let last = lastActual;
     const roles = () => withGrace(actual());
     const clearGrace = () => {
         for (const timer of graced.values()) clearTimeout(timer);
@@ -108,7 +111,7 @@ export function startGestureKeys({
                 }
             } else if (
                 grace &&
-                last[role] &&
+                lastActual[role] &&
                 timer === undefined &&
                 releaseGraceMs > 0
             ) {
@@ -121,6 +124,7 @@ export function startGestureKeys({
                 );
             }
         }
+        lastActual = now;
         const next = withGrace(now);
         const changed = !sameRoles(next, last);
         last = next;

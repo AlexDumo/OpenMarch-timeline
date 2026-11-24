@@ -10,6 +10,21 @@
  */
 export const MODIFIER_RELEASE_GRACE_MS = 150;
 
+let graceMs = MODIFIER_RELEASE_GRACE_MS;
+
+/** The grace now: {@link MODIFIER_RELEASE_GRACE_MS} outside tests */
+export const modifierReleaseGraceMs = (): number => graceMs;
+
+/**
+ * For tests about something else than the grace (a key let go mid-drag redraws at once): 0 turns
+ * it off. Call with no argument to put it back.
+ */
+export function setModifierReleaseGraceForTests(
+    ms: number = MODIFIER_RELEASE_GRACE_MS,
+): void {
+    graceMs = ms;
+}
+
 export type ModifierName = "shift" | "alt" | "ctrl" | "meta";
 
 const KEY_NAMES: Readonly<Record<string, ModifierName>> = {
@@ -60,11 +75,11 @@ installModifierGrace();
 export function wasJustReleased(
     name: ModifierName,
     at: number = now(),
-    graceMs: number = MODIFIER_RELEASE_GRACE_MS,
+    grace: number = graceMs,
 ): boolean {
     const released = releasedAt.get(name);
     if (released === undefined) return false;
-    if (at - released < graceMs) return true;
+    if (at - released < grace) return true;
     releasedAt.delete(name);
     return false;
 }
