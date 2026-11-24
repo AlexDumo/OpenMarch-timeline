@@ -495,6 +495,51 @@ describeDbTests("view3dUniformPack", (it) => {
             ).toBeNull();
         });
 
+        it("resolves a removed version to what the venue names, even when a save reused an older row (#1287)", async ({
+            db,
+        }) => {
+            // O, then A (one burst), then a burst B whose content goes back to O's bytes
+            const originPack = packFile("Home uniform", 1);
+            const origin = await store(db, originPack);
+            const id = parseShowAssetRef(origin)!.id;
+            const a = await saveUniformItemsPack({
+                db,
+                pack: crestPack(4),
+                manifest: readUniformPack(crestPack(4)).manifest,
+                field,
+                versionOf: id,
+                expect: origin,
+            });
+            const b = await saveUniformItemsPack({
+                db,
+                pack: crestPack(5),
+                manifest: readUniformPack(crestPack(5)).manifest,
+                field,
+                versionOf: id,
+                expect: a.value,
+            });
+            const back = await saveUniformItemsPack({
+                db,
+                pack: originPack,
+                manifest: readUniformPack(originPack).manifest,
+                field,
+                versionOf: id,
+                expect: b.value,
+                amend: b.token ?? undefined,
+            });
+            // the save reused O's row, and removed B
+            expect(back.value).toBe(origin);
+            expect(
+                (await getShowAssets({ db }))
+                    .filter((x) => x.id === id)
+                    .map((x) => showAssetValue(x)),
+            ).toEqual([origin, a.value]);
+            // a window still naming B sees O, the look the venue has, not A
+            expect(
+                (await resolveStoredUniformPack({ db, value: b.value }))?.value,
+            ).toBe(origin);
+        });
+
         it("refuses a manifest that doesn't parse, changing nothing", async ({
             db,
         }) => {

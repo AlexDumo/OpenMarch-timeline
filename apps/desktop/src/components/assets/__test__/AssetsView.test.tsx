@@ -27,7 +27,11 @@ import { env, picked } from "@/showAssets/modelImport/__test__/fixtures";
 import { openItemEditor } from "@/components/items/openItemEditor";
 import { showAssetsView } from "../openAssets";
 import { sql } from "drizzle-orm";
-import { setUniformPack } from "@/db-functions/view3dUniformPack";
+import {
+    saveUniformItemsPack,
+    setUniformPack,
+} from "@/db-functions/view3dUniformPack";
+import { parseShowAssetRef } from "@/showAssets/ref";
 import {
     getStoredVenueSettings,
     updateVenueSettings,
@@ -461,6 +465,73 @@ describeDbTests("Assets view", (it) => {
         expect(
             screen.queryByTestId("assets-unreadable-uniform-note"),
         ).toBeNull();
+    });
+
+    it("counts the version the band wears in place of a removed one as in use (#1287)", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        const origin = await wearUniform(db, "fjm-page", 21);
+        const id = parseShowAssetRef(origin)!.id;
+        // an item edit: a second version, Y, which the band wears
+        const withCrest = writeUniformPack(
+            {
+                ...sampleManifest("fjm-page"),
+                items: [
+                    {
+                        id: "crest",
+                        file: "items/crest.png",
+                        panel: "front",
+                        at: [17, 25.32],
+                        width: 6,
+                    },
+                ],
+            },
+            {
+                "layers/base.png": fakePng(3360, 2816, 21),
+                "items/crest.png": fakePng(64, 64, 1),
+            },
+        );
+        const y = await saveUniformItemsPack({
+            db,
+            pack: withCrest,
+            manifest: readUniformPack(withCrest).manifest,
+            field: await fieldPropertiesOf(db),
+            versionOf: id,
+            expect: origin,
+        });
+        // the venue names a version of the same uniform that a burst removed: the band wears Y
+        const venue = (await getStoredVenueSettings({ db }))!;
+        await updateVenueSettings({
+            db,
+            settings: {
+                ...venue,
+                uniformArtwork: `library:${id}@${"d".repeat(64)}`,
+            },
+        });
+        // nothing in history keeps either version
+        await db.run(sql`DELETE FROM history_undo`);
+        await db.run(sql`DELETE FROM history_redo`);
+        await setUpFeature(<SidebarModal />, 1, []);
+        await act(async () => showAssetsView());
+        const view = await screen.findByTestId("assets-view");
+        await refresh();
+        // one row for the uniform, showing Y, in use; its older version is counted
+        await waitFor(() => {
+            const rows = within(view).getAllByTestId("asset-row");
+            expect(rows).toHaveLength(1);
+            expect(rows[0]).not.toHaveTextContent("Not used");
+            expect(
+                within(rows[0]).getByTestId("asset-other-versions"),
+            ).toHaveTextContent("1 older version");
+        });
+        expect(y.value).not.toBe(origin);
+        // Remove unused… offers only the older version, never the one worn
+        await act(async () => showAssetsView({ openRemove: true }));
+        const list = await screen.findByTestId("assets-remove-list");
+        expect(within(list).getAllByRole("listitem")).toHaveLength(1);
+        expect(screen.queryByTestId("assets-missing-uniform-note")).toBeNull();
     });
 
     it("lists the assets when the undo history can't be read, keeps every uniform, and says so", async ({
