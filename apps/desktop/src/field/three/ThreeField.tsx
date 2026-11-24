@@ -129,6 +129,7 @@ import {
 import { GlyphAtlas } from "./sdfText";
 import { selectionBoxPadding } from "./selectionRing";
 import { useSelectionCoverStore } from "@/field/editor/selectionCoverStore";
+import { itemHandlesShown } from "@/items/itemHandlesStore";
 import { drawnSelectionBox, selectionHandles } from "./selectionFrame";
 import { fieldObstacleSource } from "./fieldObstacles";
 import { createThreeFieldTestApi } from "./threeFieldTestApi";
@@ -549,8 +550,6 @@ function ThreeFieldView() {
                         dropMarchersOnTimeline(
                             positions,
                             latest.current.moveMarchers,
-                            // A locked item's drop moves it on every page
-                            (id) => items.isLocked(id),
                         ),
                     // #204: a click on a placed box's member selects the whole box
                     pressSelection: (hit, shift, reachInside) =>
@@ -564,9 +563,11 @@ function ThreeFieldView() {
                     doubleClickMarcher: enterBox,
                     // C2.1: items are hit anywhere inside their Outline
                     isItem: (id) => items.isItem(id),
-                    // The pit's locked equipment: no marquee or lasso takes it
+                    // Locked items (the pit's equipment): no click, drag or marquee takes them
                     isLocked: (id) => items.isLocked(id),
-                    itemAt: (point) => items.itemAt(point),
+                    itemAt: (point, accept) => items.itemAt(point, accept),
+                    // Shown once asked for, with an item's Resize and turn (props epic step 2)
+                    itemHandlesShown,
                     itemFrame: (id) => items.frameOf(id),
                     previewItem: (id, size) =>
                         items.setPreview(

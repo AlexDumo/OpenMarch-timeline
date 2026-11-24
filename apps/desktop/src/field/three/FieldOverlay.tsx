@@ -57,6 +57,7 @@ import { PivotHint } from "./PivotHint";
 import HeldRolesChip, { HeldRolesChipBelowTip } from "./HeldRolesChip";
 import { useFieldUnderlayStore } from "@/field/editor/fieldUnderlayStore";
 import { useSelectionCoverStore } from "@/field/editor/selectionCoverStore";
+import { useItemHandlesStore } from "@/items/itemHandlesStore";
 import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
 import ClearOfFinger from "./ClearOfFinger";
 
@@ -207,6 +208,7 @@ export default function FieldOverlay({
                     items.subscribe(listener),
                     subscribeEditor(listener),
                     useSelectionCoverStore.subscribe(listener),
+                    useItemHandlesStore.subscribe(listener),
                 ];
                 return () => off.forEach((unsubscribe) => unsubscribe());
             },

@@ -1,3 +1,4 @@
+import { itemHandlesShown } from "@/items/itemHandlesStore";
 import type { FieldEditor } from "@/field/editor/fieldEditor";
 import {
     boundsOf,
@@ -54,7 +55,7 @@ export function drawnSelectionBox(
     return box && { box, angle: 0, covers: editor.selectionCovers() };
 }
 
-/** The frame of the one item selected and drawn, or null for any other selection. */
+/** The frame of the one item selected and drawn with its handles shown, or null otherwise. */
 function selectedItemFrame(
     marchers: FieldMarchers,
     items: FieldItems,
@@ -66,7 +67,14 @@ function selectedItemFrame(
         if (only !== null) return null;
         only = ids[i];
     }
-    if (only === null || !items.isItem(only)) return null;
+    // A locked item has no handles, nor does one whose handles weren't asked for (step 2)
+    if (
+        only === null ||
+        !items.isItem(only) ||
+        items.isLocked(only) ||
+        !itemHandlesShown(only)
+    )
+        return null;
     const frame = items.frameOf(only);
     return frame && itemSelectionFrame(frame);
 }

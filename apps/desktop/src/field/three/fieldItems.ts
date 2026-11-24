@@ -144,7 +144,7 @@ export class FieldItems implements FieldItemSource {
         return this.ids.has(id);
     }
 
-    /** Whether item `id` is locked to one position for the whole show. */
+    /** Whether item `id` is locked: not selected or moved on the field until it's unlocked. */
     isLocked(id: number): boolean {
         return this.locked.has(id);
     }
@@ -223,10 +223,17 @@ export class FieldItems implements FieldItemSource {
     }
 
     /** The topmost item drawn whose Outline holds `point`, or null. */
-    itemAt(point: Pt): number | null {
+    itemAt(
+        point: Pt,
+        accept: (id: number) => boolean = () => true,
+    ): number | null {
         const outlines = this.outlines();
         for (let i = outlines.length - 1; i >= 0; i--)
-            if (insideOutline(outlines[i].points, point)) return outlines[i].id;
+            if (
+                accept(outlines[i].id) &&
+                insideOutline(outlines[i].points, point)
+            )
+                return outlines[i].id;
         return null;
     }
 

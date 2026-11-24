@@ -2,6 +2,7 @@ import { setModifierReleaseGraceForTests } from "@/input/modifierGrace";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
     FieldEditor,
+    LOCKED_ITEM_MENU,
     type DropResult,
     type FieldEditorPorts,
     type FieldPoint,
@@ -29,6 +30,8 @@ function setup({
     keepsProportions = false,
     /** A cube-sized Outline, 10 field units across (20 CSS px): its handles cover it */
     small = false,
+    /** Whether item 2's resize and turn handles were asked for (its Resize and turn) */
+    handles = true,
 } = {}) {
     const state = {
         selected: [...selected] as readonly number[],
@@ -58,11 +61,14 @@ function setup({
         }),
         isItem: (id) => id === 2,
         isLocked: (id) => locked && id === 2,
-        itemAt: (point: FieldPoint) =>
+        itemAt: (point: FieldPoint, accept = () => true) =>
             Math.abs(point.x - 300) <= frame.width / 2 &&
-            Math.abs(point.y - 100) <= frame.depth / 2
+            Math.abs(point.y - 100) <= frame.depth / 2 &&
+            accept(2)
                 ? 2
                 : null,
+        itemHandlesShown: () => handles,
+        openMenu: vi.fn(),
         itemFrame: (id) => (id === 2 ? frame : null),
         previewItem: (id, size) => {
             state.preview = size;
@@ -180,12 +186,46 @@ describe("FieldEditor with items", () => {
         expect(state.selected).toEqual([]);
     });
 
-    it("still selects a locked item clicked, and drags it", () => {
+    it("passes a click on a locked item, and a drag from it boxes the field", () => {
+        const clicked = setup({ locked: true, selected: [1] });
+        click(clicked.editor, 340, 115);
+        expect(clicked.state.selected).toEqual([]);
+        // A drag from inside it is a marquee, which takes the marchers and never the item
         const { editor, state } = setup({ locked: true });
         editor.pointerDown(at(340, 115));
-        editor.pointerMove(at(360, 115));
-        editor.pointerUp(at(360, 115));
+        editor.pointerMove(at(60, 60));
+        editor.pointerUp(at(60, 60));
+        expect(state.drops).toEqual([]);
+        expect(state.selected).toEqual([1, 3]);
+    });
+
+    it("opens a locked item's own menu at a right-click on it, with it selected alone", () => {
+        const { editor, state, ports } = setup({ locked: true, selected: [1] });
+        editor.pointerDown(at(340, 115, { button: 2 }));
+        editor.pointerUp(at(340, 115, { button: 2 }));
         expect(state.selected).toEqual([2]);
+        expect(ports.openMenu).toHaveBeenCalledWith(
+            expect.anything(),
+            2,
+            LOCKED_ITEM_MENU,
+        );
+    });
+
+    it("opens the field's own menu at a right-click on an unlocked item", () => {
+        const { editor, state, ports } = setup();
+        editor.pointerDown(at(340, 115, { button: 2 }));
+        editor.pointerUp(at(340, 115, { button: 2 }));
+        expect(state.selected).toEqual([2]);
+        expect(ports.openMenu).toHaveBeenCalledWith(expect.anything(), 2);
+    });
+
+    it("moves a selected item without handles from anywhere inside it, even near its edge", () => {
+        const { editor, state } = setup({ selected: [2], handles: false });
+        // On the right side's handle, were it drawn
+        editor.pointerDown(at(350, 100));
+        editor.pointerMove(at(370, 100));
+        editor.pointerUp(at(370, 100));
+        expect(state.saves).toEqual([]);
         expect(state.drops).toEqual([[{ id: 2, x: 320, y: 100 }]]);
     });
 

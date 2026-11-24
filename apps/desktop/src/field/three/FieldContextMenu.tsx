@@ -10,6 +10,7 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
     CheckIcon,
     ArrowCounterClockwiseIcon,
+    LockOpenIcon,
     ArrowsLeftRightIcon,
     ArrowsMergeIcon,
     ArrowsSplitIcon,
@@ -60,7 +61,10 @@ import {
  * editor selects an unselected marcher right-clicked before it opens.
  *
  * - **Edit <name>**, first, while one item (a prop, front ensemble equipment, a podium) is
- *   selected, as right-clicking one does: it opens the item's edit view.
+ *   selected, as right-clicking one does: it opens the item's edit view. Then **Resize and
+ *   turn**, which shows its handles, and **Lock <name>** (props epic step 2). A locked item isn't
+ *   selected by a click: its right-click opens a menu of its own, **Unlock <name>** and **Edit
+ *   <name>** (`LOCKED_ITEM_MENU`).
  * - **Copy**, **Paste**, **Paste exactly** (#961) and **Paste mirrored**: the selection's
  *   formation copied, and pasted onto the marchers selected as an open shape that Enter places.
  *   Unavailable with nobody selected, and the pastes with nothing copied.
@@ -152,8 +156,9 @@ const HOLD_STYLE_GROUP: readonly ActionId[] = [
 ];
 
 const GROUPS: readonly (readonly ActionId[])[] = [
-    // An item right-clicked: its edit view
-    ["editSelectedItem"],
+    // An item right-clicked: its edit view, its handles and its lock (props epic step 2). A
+    // locked one's right-click offers Unlock and Edit alone (`LOCKED_ITEM_MENU`)
+    ["editSelectedItem", "resizeSelectedItem", "lockSelectedItem"],
     // #961: a formation copied, and pasted onto the marchers selected
     [
         "copyFormation",
@@ -185,6 +190,12 @@ const GROUPS: readonly (readonly ActionId[])[] = [
 /** The actions the menu offers, in order. */
 export const FIELD_MENU_ACTIONS: readonly ActionId[] = GROUPS.flat();
 
+/** What the menu watches for changes: its own actions, and a locked item's (`LOCKED_ITEM_MENU`) */
+const SNAPSHOT_ACTIONS: readonly ActionId[] = [
+    ...FIELD_MENU_ACTIONS,
+    "unlockSelectedItem",
+];
+
 /** Holds, shown only in timeline mode (unavailable where they can't run) */
 const HOLDS: ReadonlySet<ActionId> = new Set(["timelineHoldFromPrevious"]);
 
@@ -208,6 +219,8 @@ const ORDER: ReadonlySet<ActionId> = new Set([
 /** Shown only while available, as Group is: Hold over the window in Expert with a window (#476) */
 const WHILE_AVAILABLE: ReadonlySet<ActionId> = new Set([
     "editSelectedItem",
+    "resizeSelectedItem",
+    "lockSelectedItem",
     "shapeGroup",
     "shapeUngroup",
     "shapeEnterBox",
@@ -240,6 +253,8 @@ const MODE_ICONS: Partial<Record<ActionId, Icon>> = {
     refitPath: ArrowsOutLineHorizontalIcon,
     reverseTrail: ArrowsLeftRightIcon,
     removePath: TrashIcon,
+    unlockSelectedItem: LockOpenIcon,
+    editSelectedItem: PencilSimpleIcon,
 };
 /** A second line under an entry's name, saying what a weighty one does (its i18n key) */
 const NOTES: Partial<Record<ActionId, string>> = {
@@ -255,7 +270,7 @@ const CHECK_SLOT_CLASS = "flex w-[14px] shrink-0 justify-center";
 
 /** Each action's enabled state, live label and reason, as one string, so a change re-renders. */
 const handlerSnapshot = () =>
-    FIELD_MENU_ACTIONS.map(
+    SNAPSHOT_ACTIONS.map(
         (id) =>
             `${isActionEnabled(id) ? 1 : 0}${isActionChecked(id) ? 1 : 0}${actionLabelNow(id) ?? ""}\t${actionDisabledReason(id) ?? ""}`,
     ).join("\n");
