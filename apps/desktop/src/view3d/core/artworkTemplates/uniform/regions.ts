@@ -166,7 +166,7 @@ export function spanAt(
     for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
         const [xa, ya] = polygon[j];
         const [xb, yb] = polygon[i];
-        if (ya <= y !== yb <= y) {
+        if (ya <= y ? yb > y : yb <= y) {
             const x = xa + ((y - ya) / (yb - ya)) * (xb - xa);
             left = Math.min(left, x);
             right = Math.max(right, x);
@@ -182,7 +182,7 @@ export function insidePolygon(polygon: readonly Point[], p: Point): boolean {
         const [xa, ya] = polygon[j];
         const [xb, yb] = polygon[i];
         if (
-            ya <= p[1] !== yb <= p[1] &&
+            (ya <= p[1] ? yb > p[1] : yb <= p[1]) &&
             p[0] < xa + ((p[1] - ya) / (yb - ya)) * (xb - xa)
         )
             inside = !inside;

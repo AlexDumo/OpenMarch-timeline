@@ -236,7 +236,7 @@ describe("a stripe at a seam tick, from uniform-regions.json only", () => {
             const [xa, ya] = polygon[j];
             const [xb, yb] = polygon[i];
             if (
-                ya <= y !== yb <= y &&
+                (ya <= y ? yb > y : yb <= y) &&
                 x < xa + ((y - ya) / (yb - ya)) * (xb - xa)
             )
                 hit = !hit;
