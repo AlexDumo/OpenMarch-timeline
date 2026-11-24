@@ -17,29 +17,32 @@
  * what a hold does is the compile's hold style, which is not a cue. A kneel
  * has no Feet animation yet, so the feet stand under it.
  *
- * Facing values, as headings in radians about +Y (0 faces the audience,
- * +pi/2 faces side 2; facing.ts):
+ * Facing (#993; ADR 0015's 2026-11-24 amendment), as headings in radians
+ * about +Y (0 faces the audience, +pi/2 faces side 2; facing.ts): the
+ * compile's angle in degrees, unwrapped, so 360 is a full spin and -270 ends
+ * where 90 does after turning the other way. A turn starts on its cue's
+ * count and runs for its counts at an even speed (`facingDegreesAt`), so the
+ * headings at the count boundaries step evenly and the planner turns
+ * linearly between them, never the short way. An instant turn lands on its
+ * click in fixed time ({@link SNAP_SECONDS} before it, at the tempo of the
+ * count before it): `turnSpan` says what part of that count, at its end, the
+ * turn takes, and the planner takes it the short way, so an instant spin
+ * doesn't whirl round.
  *
- * - front 0, back pi, side 1 -pi/2, side 2 +pi/2;
- * - angle: `degrees` the same way round, 0 the audience, 90 side 2,
- *   180 the backfield, 270 side 1;
- * - point: toward field point (`x`, `y`) from where the marcher stands.
- *   The stored settings are field coordinates, the dots' space (ADR 0004
- *   amendment of 2026-10-15); the window passes `pointToWorld` to convert
- *   them as positions are. Without it they're read as world meters, `x`
- *   toward side 2 and `y` toward the audience;
- * - direction of travel: where the step landing at that boundary went,
- *   keeping the last direction on a hold (the next one before any travel).
- *
- * A Facing transition eases from the heading before it to its value over
- * its counts, the short way round. A snap is keyed in fixed time
- * ({@link SNAP_SECONDS} before its click, at the tempo of the count before
- * it): `turnSpan` says what part of that count, at its end, the turn takes.
- * A momentary Facing cue turns back when it ends, over the count after it.
+ * Two library values aren't offered yet, and the compile can't give their
+ * angle, which needs the drill: toward a point faces field point (`x`, `y`)
+ * from where the marcher stands (the stored settings are field coordinates,
+ * the dots' space, ADR 0004 amendment of 2026-10-15; the window passes
+ * `pointToWorld`, else they're world meters, `x` toward side 2 and `y`
+ * toward the audience), and direction of travel faces where the step landing
+ * at that boundary went, keeping the last direction on a hold (the next one
+ * before any travel). A turn into either goes evenly, the short way, from
+ * the angle before it.
  *
  * Pure: no React, three.js or database.
  */
 import {
+    facingDegreesAt,
     holdStyleAt,
     type CompiledCues,
     type CueSegment,
@@ -129,16 +132,8 @@ function angleDelta(a: number, b: number): number {
     return d;
 }
 
-/** An angle in (-pi, pi]. */
-const wrap = (a: number) => {
-    const d = angleDelta(0, a);
-    return d === -Math.PI ? Math.PI : d;
-};
-
-const smooth = (u: number) => {
-    const x = Math.min(Math.max(u, 0), 1);
-    return x * x * (3 - 2 * x);
-};
+/** Values whose angle needs the drill, which the compile can't give. */
+const FROM_DRILL = new Set(["builtin:facing.point", "builtin:facing.travel"]);
 
 /**
  * Turns one marcher's compiled cues into per-count planner inputs.
@@ -172,37 +167,17 @@ export function marcherCueInputs(
     for (let b = 0; b <= K; b++)
         if (Number.isNaN(travel[b])) travel[b] = first ?? FRONT_HEADING;
 
-    /** A Facing value's heading at boundary b. */
-    const valueHeading = (seg: CueSegment | undefined, b: number): number => {
-        const s = seg?.settings ?? {};
-        switch (seg?.value) {
-            case "builtin:facing.back":
-                return Math.PI;
-            case "builtin:facing.side1":
-                return -Math.PI / 2;
-            case "builtin:facing.side2":
-                return Math.PI / 2;
-            case "builtin:facing.angle":
-                return wrap(Number(s.degrees ?? 0) * DEG);
-            case "builtin:facing.point": {
-                const [px, pz] = pointToWorld(
-                    Number(s.x ?? 0),
-                    Number(s.y ?? 0),
-                );
-                const dx = px - positions[b * 2];
-                const dz = pz - positions[b * 2 + 1];
-                return Math.hypot(dx, dz) > 1e-9
-                    ? Math.atan2(dx, dz)
-                    : FRONT_HEADING;
-            }
-            case "builtin:facing.travel":
-                return travel[b];
-            default:
-                return FRONT_HEADING;
-        }
+    /** A drill-made value's heading at boundary b: toward a point, or the travel. */
+    const drillHeading = (seg: CueSegment, b: number): number => {
+        if (seg.value === "builtin:facing.travel") return travel[b];
+        const s = seg.settings ?? {};
+        const [px, pz] = pointToWorld(Number(s.x ?? 0), Number(s.y ?? 0));
+        const dx = px - positions[b * 2];
+        const dz = pz - positions[b * 2 + 1];
+        return Math.hypot(dx, dz) > 1e-9 ? Math.atan2(dx, dz) : FRONT_HEADING;
     };
 
-    // a snap lands on its click in fixed time, at the end of the count before
+    // an instant turn lands on its click in fixed time, at the end of the count before
     const turnSpan = new Float64Array(K + 1).fill(1);
     const secondsPerCount = options.secondsPerCount ?? (() => 0.5);
     for (const seg of facing) {
@@ -218,20 +193,20 @@ export function marcherCueInputs(
     for (let b = 0; b <= K; b++) {
         const c = Math.max(b - CUE_LEAD, 0);
         const seg = segmentAt(facing, c);
-        if (seg?.kind !== "transition") {
-            heading[b] = valueHeading(seg, b);
+        if (!seg || !FROM_DRILL.has(seg.value ?? "")) {
+            // the compile's angle, unwrapped: a turn steps evenly from count to count
+            heading[b] = facingDegreesAt(facing, c) * DEG;
             continue;
         }
-        // ease from what the performer faced as the turn began
-        const before = segmentAt(facing, seg.from - 1e-9);
-        const startB = Math.min(
-            Math.max(Math.round(seg.from) + CUE_LEAD, 0),
-            K,
-        );
-        const h0 = before ? valueHeading(before, startB) : FRONT_HEADING;
-        const h1 = valueHeading(seg, b);
-        const u = smooth((c - seg.from) / (seg.to - seg.from));
-        heading[b] = h0 + angleDelta(h0, h1) * u;
+        const to = drillHeading(seg, b);
+        if (seg.kind !== "transition") {
+            heading[b] = to;
+            continue;
+        }
+        // turning into it: evenly, the short way, from the angle the turn starts at
+        const from = (seg.fromDegrees ?? 0) * DEG;
+        const u = (c - seg.from) / (seg.to - seg.from);
+        heading[b] = from + angleDelta(from, to) * u;
     }
     return { feet, heading, turnSpan };
 }
