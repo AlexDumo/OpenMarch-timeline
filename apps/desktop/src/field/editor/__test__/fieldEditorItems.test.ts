@@ -111,14 +111,28 @@ describe("FieldEditor with items", () => {
         expect(state.selected).toEqual([3]);
     });
 
-    it("selects every performer with Ctrl/Cmd+A, and no item", () => {
+    it("selects every marcher and prop with Ctrl/Cmd+A", () => {
         const { editor, state } = setup();
+        editor.selectAll();
+        expect(state.selected).toEqual([1, 2, 3]);
+    });
+
+    it("leaves a locked item out of Ctrl/Cmd+A", () => {
+        const { editor, state } = setup({ locked: true });
         editor.selectAll();
         expect(state.selected).toEqual([1, 3]);
     });
 
-    it("marquees the performers over an item, and not the item", () => {
+    it("marquees the marchers over an item and the item with them", () => {
         const { editor, state } = setup();
+        editor.pointerDown(at(50, 50));
+        editor.pointerMove(at(400, 150));
+        editor.pointerUp(at(400, 150));
+        expect(state.selected).toEqual([1, 2, 3]);
+    });
+
+    it("marquees the marchers over a locked item, and not the item", () => {
+        const { editor, state } = setup({ locked: true });
         editor.pointerDown(at(50, 50));
         editor.pointerMove(at(400, 150));
         editor.pointerUp(at(400, 150));

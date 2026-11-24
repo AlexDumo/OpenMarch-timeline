@@ -1269,15 +1269,18 @@ export class FieldEditor {
         this.setHover("default");
     }
 
-    /** Ctrl/Cmd+A: every performer drawn that can be selected; items (C2.2) are left out. */
+    /**
+     * Ctrl/Cmd+A: every marcher and prop drawn that can be selected; locked items (the pit) are
+     * left out (props epic, fork #1239).
+     */
     selectAll(): void {
         const { ids, hidden } = this.ports.marchers();
-        const isItem = this.ports.isItem ?? (() => false);
+        const isLocked = this.ports.isLocked ?? (() => false);
         this.write(
             ids.filter(
                 (id, i) =>
                     !hidden?.[i] &&
-                    !isItem(id) &&
+                    !isLocked(id) &&
                     this.ports.canSelect(id) &&
                     !this.ports.marcherHidden?.(id),
             ),
@@ -1753,7 +1756,8 @@ export class FieldEditor {
         for (let i = 0; i < drawn.length; i++) {
             const id = drawn[i];
             if (hidden?.[i] || this.ports.marcherHidden?.(id)) continue;
-            if (!this.ports.canSelect(id) || this.ports.isItem?.(id)) continue;
+            if (!this.ports.canSelect(id) || this.ports.isLocked?.(id))
+                continue;
             targets.push({
                 at: { x: positions[i * 2], y: positions[i * 2 + 1] },
                 anchor: { kind: "marcher", id },

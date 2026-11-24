@@ -19,7 +19,7 @@
             "snapToCustomFraction": "Snap to grid",
             "toggleSnap": "Toggle Snap",
             "toggleSnapKeywords": "snap magnet grid free",
-            "propsOnly": "Only props are selected: props aren't lined up or spaced"
+            "lockedOnly": "Only locked items are selected: locked items aren't lined up or spaced"
         },
         "batchEdit": {
             "clearPage": "Clear Page {page}",
@@ -891,8 +891,8 @@
         "marcher": {
             "drillNumber": "Drill Number",
             "errorLoadingCoords": "Error loading coordinates",
-            "itemsSelected": "{count, plural, one {# prop selected. Edit it in the Props panel.} other {# props selected. Edit them in the Props panel.}}",
-            "equipmentSelected": "{count, plural, =1 {# piece of equipment selected. Right-click it to edit it.} other {# pieces of equipment selected. Right-click one to edit it.}}",
+            "propsLook": "{count, plural, one {# prop selected. Change its size and look in the Props panel.} other {# props selected. Change their size and look in the Props panel.}}",
+            "lockedSelected": "{count, plural, one {# locked item selected. It stays where it is: right-click it to edit it.} other {# locked items selected. They stay where they are: right-click one to edit it.}}",
             "playing": "Playing. Pause to see and edit the selected marchers.",
             "maxStepSize": "Largest step size",
             "minStepSize": "Smallest step size",
