@@ -46,6 +46,8 @@ const float OM_FLAT_PI = 3.14159265;
 // (uFlatPx), so the jacket takes only the jacket's art and the pants only the pants', never a filtered blend of
 // both along the boundary.
 const float OM_FLAT_HEM_INSET = 0.05;
+// The most (in) a sample's filter footprint keeps the torso and the hips off the hem (omFlatArt).
+const float OM_FLAT_HEM_FOOTPRINT_MAX = 0.5;
 // The hem inset (in) at this atlas's resolution.
 float omFlatHemInset() {
   return max(OM_FLAT_HEM_INSET, uFlatPx);
@@ -180,6 +182,13 @@ vec4 omFlatArt() {
   if (fwidth(float(s) * 2.0 + (front ? 1.0 : 0.0)) > 0.0) {
     gx = vec2(length(dFdx(vRest)) / OM_FLAT_IN, 0.0);
     gy = vec2(0.0, length(dFdy(vRest)) / OM_FLAT_IN);
+  }
+  // off the hem by the filter's own footprint too: at a coarser mip level one atlas pixel isn't enough (capped,
+  // so a far marcher's jacket doesn't take art from inches higher up)
+  if (s == 0 || s == 1) {
+    float hem = uFlatY0[1];
+    float keep = max(omFlatHemInset(), min(OM_FLAT_HEM_FOOTPRINT_MAX, max(length(gx), length(gy))));
+    q.y = s == 0 ? min(q.y, hem - keep) : max(q.y, hem + keep);
   }
   if (valid < 0.5) return vec4(0.0);
   return textureGrad(uFlatArt, (org + q) / uFlatAtlas, gx / uFlatAtlas, gy / uFlatAtlas);
