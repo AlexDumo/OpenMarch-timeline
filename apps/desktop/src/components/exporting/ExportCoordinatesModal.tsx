@@ -1,4 +1,5 @@
 /* eslint-disable no-control-regex */
+import { reportMilestone, sizeBucket } from "@/analytics/usageEvents";
 import { useAudioOffsetSeconds } from "@/tempo/audioOffset";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MarcherCoordinateSheetPreview from "./MarcherCoordinateSheet";
@@ -10,6 +11,7 @@ import {
     tagAppearanceByPageIdMapQueryOptions,
 } from "@/hooks/queries";
 import { buildMarcherAppearancesByPageId } from "./utils/exportAppearances";
+import { makeDrillChartFiles } from "./utils/drillChartFiles";
 import {
     buildCoordinateSheets,
     coordinateSheetMarchers,
@@ -36,8 +38,6 @@ import * as Form from "@radix-ui/react-form";
 import { toast } from "sonner";
 import { ACTION_TOAST_DURATION_MS } from "@/components/ui/toastDurations";
 import { useTimingObjects } from "@/hooks";
-import individualDemoSVG from "@/assets/drill_chart_export_individual_demo.svg";
-import overviewDemoSVG from "@/assets/drill_chart_export_overview_demo.svg";
 import { Tabs, TabsList, TabContent, TabItem } from "@openmarch/ui";
 import MovesPastEndWarning from "./MovesPastEndWarning";
 import { useAppDialogStore, type ExportTab } from "@/stores/AppDialogStore";
@@ -76,6 +76,9 @@ import {
     OverlayTimeline,
 } from "./video/videoOverlay";
 import OverlayPreview from "./video/OverlayPreview";
+import ViewFromChoice, { EXPORT_TOGGLE_ITEM_CLASS } from "./ViewFromChoice";
+import DrillChartPreview from "./DrillChartPreview";
+import type { FieldViewFrom } from "@/field/fieldViewFrom";
 import type { VideoTheme } from "./video/videoTheme";
 import {
     clampFieldFraming,
@@ -302,6 +305,10 @@ function CoordinateSheetExport() {
 
             setProgress(100);
             setCurrentStep(t("exportCoordinates.exportComplete"));
+            reportMilestone("export finished", {
+                kind: "coordinate_sheets",
+                marchers: sizeBucket(processedMarchers.length),
+            });
 
             toast.success(
                 t("exportCoordinates.coordinateSheetsExported", {
@@ -330,6 +337,8 @@ function CoordinateSheetExport() {
             );
         } catch (error) {
             console.error("Export error:", error);
+            if (!isCancelled.current)
+                reportMilestone("export failed", { kind: "coordinate_sheets" });
             setCurrentStep(t("exportCoordinates.exportFailed"));
             toast.error(
                 t("exportCoordinates.exportFailedToast", {
@@ -650,9 +659,17 @@ function DrillChartExport() {
     // Export options
     const [individualCharts, setIndividualCharts] = useState(false);
     const [includeNotesAppendix, setIncludeNotesAppendix] = useState(true);
+    // The view each kind of chart is drawn from. A performer reads their own chart, so
+    // individual charts start in the performers' view; the full-field chart in the audience's (#1268)
+    const [viewFromByKind, setViewFromByKind] = useState<
+        Record<"individual" | "overview", FieldViewFrom>
+    >({ individual: "performer", overview: "audience" });
+    const chartKind = individualCharts ? "individual" : "overview";
+    const viewFrom = viewFromByKind[chartKind];
 
     /**
      * Exports the generated SVGs as PDF files for each marcher or a single overview PDF.
+     * Throws when no PDF was made, with the reason as the message.
      * @param svgPages - 2D array of SVG strings for each marcher.
      * @param readableCoords - 2D array of readable coordinates for each marcher.
      */
@@ -697,27 +714,23 @@ function DrillChartExport() {
                       }))
                 : [];
 
-            // Generate PDFs for each marcher or MAIN if individual charts are not selected
-            for (let marcher = 0; marcher < svgPages.length; marcher++) {
+            // One PDF per marcher, or one combined "MAIN" chart. Throws when the combined
+            // chart fails, at the first save error, or when no individual chart was made,
+            // so the export shows as failed
+            return await makeDrillChartFiles({
+                count: individualCharts ? svgPages.length : 1,
+                individualCharts,
                 // Index i is always marchers[i]. A marcher missing a position on some page
                 // has no pages here: skip its PDF rather than draw an incomplete one
-                if (individualCharts && svgPages[marcher].length === 0) {
-                    const drillNumber = marchers[marcher]?.drill_number ?? "";
+                skipReason: (marcher) => {
+                    if (svgPages[marcher].length > 0) return undefined;
                     console.warn(
-                        `Drill charts: no positions for ${drillNumber} on every page; skipped`,
+                        `Drill charts: no positions for ${marchers[marcher]?.drill_number ?? ""} on every page; skipped`,
                     );
-                    toast.error(
-                        t("exportCoordinates.svgExportFailed", {
-                            drillNumber,
-                            error: t(
-                                "exportCoordinates.marcherPositionsMissing",
-                            ),
-                        }),
-                    );
-                    continue;
-                }
-                const result =
-                    await window.electron.export.generateDocForMarcher({
+                    return t("exportCoordinates.marcherPositionsMissing");
+                },
+                makePdf: (marcher) =>
+                    window.electron.export.generateDocForMarcher({
                         svgPages: svgPages[marcher],
                         drillNumber: individualCharts
                             ? marchers[marcher].drill_number
@@ -731,35 +744,30 @@ function DrillChartExport() {
                         showName: exportName,
                         exportDir,
                         individualCharts,
-                    });
-
-                if (!individualCharts) break; // just one PDF for MAIN
-
-                setProgress(50 + (50 * marcher) / svgPages.length);
-                setCurrentStep(
-                    t("exportCoordinates.generatingPDF", {
-                        drillNumber: marchers[marcher]?.drill_number ?? "MAIN",
                     }),
-                );
-
-                // Individual PDF failed, log error and continue
-                if (!result.success) {
-                    console.error(
-                        "SVG export failed with error:",
-                        result.error,
-                    );
-                    toast.error(
-                        t("exportCoordinates.svgExportFailed", {
+                onAttempted: (marcher) => {
+                    setProgress(50 + (50 * marcher) / svgPages.length);
+                    setCurrentStep(
+                        t("exportCoordinates.generatingPDF", {
                             drillNumber:
                                 marchers[marcher]?.drill_number ?? "MAIN",
-                            error: result.error,
                         }),
                     );
-                }
-                if (isCancelled.current) {
-                    throw new Error(t("exportCoordinates.cancelledByUser"));
-                }
-            }
+                },
+                onFailed: (marcher, error) => {
+                    console.error("Drill chart PDF failed with error:", error);
+                    toast.error(
+                        t("exportCoordinates.svgExportFailed", {
+                            drillNumber: marchers[marcher]?.drill_number ?? "",
+                            error,
+                        }),
+                    );
+                },
+                isCancelled: () => isCancelled.current,
+                cancelledMessage: t("exportCoordinates.cancelledByUser"),
+                noneMadeMessage: t("exportCoordinates.noDrillChartsMade"),
+                unknownErrorMessage: t("exportCoordinates.unknownError"),
+            });
         },
         [
             includeNotesAppendix,
@@ -822,6 +830,7 @@ function DrillChartExport() {
                 gridLines: uiSettings.gridLines,
                 halfLines: uiSettings.halfLines,
                 individualCharts: individualCharts,
+                viewFrom,
             }));
         } catch (error) {
             toast.error(
@@ -833,6 +842,7 @@ function DrillChartExport() {
                 }),
             );
             setCurrentStep(t("exportCoordinates.exportFailed"));
+            reportMilestone("export failed", { kind: "drill_charts" });
             isCancelled.current = true;
             setIsLoading(false);
         }
@@ -865,12 +875,17 @@ function DrillChartExport() {
                 });
             }, 150);
 
-            await exportPromise;
-            clearInterval(finalProgressInterval);
+            // Throws when no PDF was made, so reaching here means at least one was
+            try {
+                await exportPromise;
+            } finally {
+                clearInterval(finalProgressInterval);
+            }
 
             setProgress(100);
             setCurrentStep(t("exportCoordinates.exportComplete"));
 
+            reportMilestone("export finished", { kind: "drill_charts" });
             toast.success(t("exportCoordinates.drillChartsExported"), {
                 duration: ACTION_TOAST_DURATION_MS,
                 action: {
@@ -880,6 +895,8 @@ function DrillChartExport() {
                 },
             });
         } catch (error) {
+            if (!isCancelled.current)
+                reportMilestone("export failed", { kind: "drill_charts" });
             toast.error(
                 t("exportCoordinates.pdfExportFailed", {
                     error:
@@ -909,6 +926,7 @@ function DrillChartExport() {
         uiSettings.gridLines,
         uiSettings.halfLines,
         individualCharts,
+        viewFrom,
         exportMarcherSVGs,
     ]);
 
@@ -979,6 +997,15 @@ function DrillChartExport() {
                         />
                     </Form.Field>
                 </div>
+                <ViewFromChoice
+                    value={viewFrom}
+                    onChange={(next) =>
+                        setViewFromByKind((current) => ({
+                            ...current,
+                            [chartKind]: next,
+                        }))
+                    }
+                />
             </Form.Root>
 
             {/* Preview Section */}
@@ -993,20 +1020,18 @@ function DrillChartExport() {
                 {canExport ? (
                     <div className="flex flex-col items-center gap-8">
                         <div className="rounded-6 max-h-[20rem] w-full max-w-[20rem] border border-gray-200 bg-white px-8 py-4 text-black">
-                            <img
-                                src={
-                                    individualCharts
-                                        ? individualDemoSVG
-                                        : overviewDemoSVG
+                            <DrillChartPreview
+                                fieldProperties={fieldProperties!}
+                                pages={pages}
+                                marchers={marchers!}
+                                sectionAppearances={sectionAppearances}
+                                marcherAppearancesByPageId={
+                                    marcherAppearancesByPageId
                                 }
-                                alt={t(
-                                    "exportCoordinates.drillChartPreviewAlt",
-                                )}
-                                className="block w-full"
-                                style={{
-                                    maxHeight: "20rem",
-                                    objectFit: "contain",
-                                }}
+                                gridLines={uiSettings.gridLines}
+                                halfLines={uiSettings.halfLines}
+                                individualCharts={individualCharts}
+                                viewFrom={viewFrom}
                             />
                         </div>
                     </div>
@@ -1018,7 +1043,7 @@ function DrillChartExport() {
                         <p className="text-body max-w-md text-center text-gray-600">
                             <T keyName="exportCoordinates.exportNotAvailableDescription" />
                         </p>
-                        <div className="text-center text-xs text-gray-500">
+                        <div className="text-sub text-center text-gray-500">
                             <div>
                                 {t("exportCoordinates.checkFieldProperties", {
                                     status: fieldProperties ? "ok" : "missing",
@@ -1167,6 +1192,8 @@ function VideoExport() {
     const [fieldFraming, setFieldFraming] = useState<FieldFraming>(
         DEFAULT_FIELD_FRAMING,
     );
+    // The video follows the whole show, so it starts in the audience's view (#1265)
+    const [viewFrom, setViewFrom] = useState<FieldViewFrom>("audience");
     const [fieldRenderContext, setFieldRenderContext] =
         useState<VideoRenderContext | null>(null);
     // Why the new field couldn't start off screen for the preview, if it couldn't
@@ -1248,6 +1275,7 @@ function VideoExport() {
                     // The preview sizes it to its own canvas on the first frame
                     width: 1,
                     height: 1,
+                    viewFrom,
                 });
                 if (cancelled) {
                     ctx.dispose();
@@ -1282,6 +1310,7 @@ function VideoExport() {
         appearanceSteps,
         fieldImage.loaded,
         fieldImage.image,
+        viewFrom,
     ]);
 
     const previewLoading =
@@ -1403,6 +1432,7 @@ function VideoExport() {
                 fps: frameRate,
                 videoTheme,
                 fieldFraming,
+                viewFrom,
                 overlay: overlayEnabled
                     ? { measures, options: overlayOptions, placement }
                     : undefined,
@@ -1417,6 +1447,10 @@ function VideoExport() {
 
             setProgress(100);
             setCurrentStep(t("exportCoordinates.exportComplete"));
+            reportMilestone("export finished", {
+                kind: "video",
+                audio: result.hasAudio,
+            });
             if (isWebBuild) {
                 // Saving needs a fresh tap (the share sheet won't open
                 // this long after the Export tap): see "Save video" below
@@ -1437,6 +1471,7 @@ function VideoExport() {
             });
         } catch (error) {
             console.error("Video export failed:", error);
+            reportMilestone("export failed", { kind: "video" });
             setCurrentStep(t("exportCoordinates.exportFailed"));
             toast.error(
                 t("exportCoordinates.videoExportFailed", {
@@ -1477,6 +1512,7 @@ function VideoExport() {
         overlayOptions,
         placement,
         fieldFraming,
+        viewFrom,
     ]);
 
     return (
@@ -1556,20 +1592,34 @@ function VideoExport() {
                     >
                         <ToggleGroup.Item
                             value="light"
-                            className="text-text bg-fg-2 text-body border-stroke data-[state=on]:border-accent touch:min-h-44 flex items-center gap-6 rounded-full border px-12 py-8 outline-hidden duration-150 ease-out focus-visible:-translate-y-4"
+                            className={EXPORT_TOGGLE_ITEM_CLASS}
                         >
                             <SunIcon size={20} />
                             <T keyName="settings.general.appearance.light" />
                         </ToggleGroup.Item>
                         <ToggleGroup.Item
                             value="dark"
-                            className="text-text bg-fg-2 text-body border-stroke data-[state=on]:border-accent touch:min-h-44 flex items-center gap-6 rounded-full border px-12 py-8 outline-hidden duration-150 ease-out focus-visible:-translate-y-4"
+                            className={EXPORT_TOGGLE_ITEM_CLASS}
                         >
                             <MoonIcon size={20} />
                             <T keyName="settings.general.appearance.dark" />
                         </ToggleGroup.Item>
                     </ToggleGroup.Root>
                 </Form.Field>
+                <ViewFromChoice
+                    value={viewFrom}
+                    onChange={(next) => {
+                        if (next === viewFrom) return;
+                        // The field turns about the frame's center: keep the same part in view
+                        setFieldFraming((framing) => ({
+                            ...framing,
+                            offsetX: -framing.offsetX,
+                            offsetY: -framing.offsetY,
+                        }));
+                        setViewFrom(next);
+                    }}
+                    className="col-span-2"
+                />
             </Form.Root>
 
             {/* Overlay options */}

@@ -33,6 +33,8 @@ export type ThreeFieldState = {
     marchers: FieldMarchers;
     /** Each marcher's drill number, by id. */
     labels(): ReadonlyMap<number, string>;
+    /** Each marcher's equipment icon at the beat shown, for those that have one */
+    equipmentIcons(): ReadonlyMap<number, string>;
     view(): FieldViewState;
     /** The element the field draws into, or null before it mounts. */
     element(): HTMLElement | null;
@@ -91,6 +93,7 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
             const rect = element.getBoundingClientRect();
             const view = field.view();
             const labels = field.labels();
+            const icons = field.equipmentIcons();
             const { ids, positions, stacks } = field.marchers;
             const theme = field.theme();
             return ids.map((id, i): FieldTestMarcher => {
@@ -101,6 +104,7 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
                 return {
                     id,
                     label: labels.get(id) ?? "",
+                    equipmentIcon: icons.get(id) ?? "",
                     x,
                     y,
                     screen,
@@ -233,12 +237,23 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
             label: r.label,
         })),
         gaps: (drawing.gaps ?? []).map(copy),
+        emptySpots: (drawing.emptySpots ?? []).map(copy),
         construction: constructionOf(drawing, copy),
         stage: drawing.stage ?? null,
         knob: drawing.knob ? screen(drawing.knob.at) : null,
         centerDot: drawing.centerDot ? screen(drawing.centerDot) : null,
         pivotMark: drawing.pivotMark ? screen(drawing.pivotMark) : null,
         pivotPreview: drawing.pivotPreview ? copy(drawing.pivotPreview) : null,
+        mirror: drawing.mirror
+            ? {
+                  at: copy(drawing.mirror.at),
+                  screen: screen(drawing.mirror.at),
+                  across: drawing.mirror.across,
+                  deep: drawing.mirror.deep,
+                  acrossLabel: drawing.mirror.acrossLabel ?? null,
+                  deepLabel: drawing.mirror.deepLabel ?? null,
+              }
+            : null,
         labels: (drawing.labels ?? []).map((l) => l.text),
         tip: drawing.tip?.text ?? null,
         gliding: drawing.gliding === true,
@@ -271,6 +286,16 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
                   to: copy(drawing.offsetStep.to),
                   across: drawing.offsetStep.across,
                   deep: drawing.offsetStep.deep,
+              }
+            : null,
+        rowsGap: drawing.rowsGap
+            ? {
+                  from: copy(drawing.rowsGap.from),
+                  corner: copy(drawing.rowsGap.corner),
+                  to: copy(drawing.rowsGap.to),
+                  outward: { ...drawing.rowsGap.outward },
+                  apart: drawing.rowsGap.apart,
+                  slant: drawing.rowsGap.slant,
               }
             : null,
     };

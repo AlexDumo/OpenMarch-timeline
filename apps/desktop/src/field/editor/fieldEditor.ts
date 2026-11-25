@@ -61,6 +61,8 @@ import {
     type PivotTarget,
 } from "./selectionPivot";
 import { RotateGesture, ScaleGesture } from "./transformGestures";
+import { linesUnder, type LinePull } from "./linePull";
+import { lineCoordinate } from "@/shapes/field/lineCoordinate";
 import { isPanButton } from "./view";
 
 /**
@@ -73,7 +75,17 @@ import { isPanButton } from "./view";
  * inspector's and the timeline's) through {@link FieldEditorPorts.selection}.
  */
 
+/**
+ * The menu a right-click on a locked item opens (props epic step 2): unlock it, or open its edit
+ * view. The item is selected alone first, so both act on it.
+ */
+export const LOCKED_ITEM_MENU: readonly string[] = [
+    "unlockSelectedItem",
+    "editSelectedItem",
+];
+
 /** A point in field units, as the timeline stores positions. */
+
 export type FieldPoint = { x: number; y: number };
 
 /**
@@ -192,19 +204,33 @@ export type FieldEditorPorts = {
      */
     isItem?(id: number): boolean;
     /**
-     * Whether item `id` is locked to one position for the whole show (the pit's equipment): a
-     * marquee and a lasso never take it, a click still selects it.
+     * Whether item `id` is locked (the pit's equipment, a prop locked in the Props panel): no
+     * click, drag, marquee, lasso or Select all takes it, so marchers around it can be selected
+     * and moved. A right-click on it offers to unlock it ({@link LOCKED_ITEM_MENU}).
      */
     isLocked?(id: number): boolean;
-    /** The item whose Outline holds `point`, topmost first, or null. */
-    itemAt?(point: FieldPoint): number | null;
+    /** The topmost item whose Outline holds `point` among those `accept` takes, or null. */
+    itemAt?(point: FieldPoint, accept?: (id: number) => boolean): number | null;
+    /**
+     * Whether item `id`'s resize and turn handles are shown: only once asked for (its right-click
+     * menu's Resize and turn), since a prop is usually drawn at its real size and a click on it
+     * is meant to move it (owner, 2026-11-24). Absent, they always are.
+     */
+    itemHandlesShown?(id: number): boolean;
+    /**
+     * A click at `at` on locked item `id`, which passes over it: shows that it's locked, so the
+     * click isn't dead (props epic step 2). Null: a click anywhere else, which puts that away
+     */
+    lockedItemClicked?(id: number | null, at: FieldPoint): void;
     /** Item `id`'s Outline as drawn, or null when it isn't drawn. */
     itemFrame?(id: number): ItemFrame | null;
     /** Draws item `id` at this size and turn while a handle drags it; null draws it as stored. */
     previewItem?(id: number, size: ItemSize | null): void;
     /**
-     * Saves item `id`'s new size and turn at the playhead. Resolves "saved"
-     * once the field can draw it, or "refused" when nothing was saved.
+     * Saves item `id`'s new size and turn at the playhead, and its new center
+     * when the resize moved it (`size.center`), as a drop of the item there, in
+     * the same edit. Resolves "saved" once the field can draw it, or "refused"
+     * when nothing was saved.
      */
     saveItem?(id: number, size: ItemSize): Promise<DropResult>;
     /** A point snapped as a marcher's coordinates are (the prop tool's corners). */
@@ -240,6 +266,12 @@ export type FieldEditorOptions = {
     moveTransform?: MoveTransform;
     /** The Snap toggle, read on every pointer event; off, a rotation turns freely. On when omitted. */
     snap?: () => boolean;
+    /**
+     * The field's lines a resized selection's side lands on (#585), read on every pointer event;
+     * while a move or a resize has the selection on one, a guide is drawn along it. None when
+     * omitted. A move's own landing is the {@link moveTransform}'s.
+     */
+    pull?: () => LinePull | null;
     /**
      * The touch pill's toggles (`onScreenToggles` in `TouchModifierStore`): its held roles count
      * as held keys for every drag, a toggle changed mid-drag re-runs it as a key does, and the
@@ -361,6 +393,8 @@ export type FieldModeDrawing = {
     barHandles?: readonly { at: FieldPoint; from: FieldPoint }[];
     /** The outline is open: drawn without joining its last point to its first (a line, #524) */
     openOutline?: boolean;
+    /** The shape's other rows (spec #1190), open lines drawn like its outline */
+    rows?: readonly (readonly FieldPoint[])[];
     /**
      * The outline is a drawn path (pathways): drawn solid and heavier than a shape's outline, so it
      * reads over a group's faint lanes; heaviest while drawn or open (`edited`), a little lighter
@@ -454,6 +488,11 @@ export type FieldModeDrawing = {
      */
     gaps?: readonly FieldPoint[];
     /**
+     * Spots nobody will take (loose dots pasted onto fewer marchers, #961), drawn as dashed rings
+     * at full strength: they're part of what's pasted, not a control
+     */
+    emptySpots?: readonly FieldPoint[];
+    /**
      * The shape's look at this stage (docs/timeline/research/shapes/08-shape-system-ux.md,
      * "Marcher styling"): while it's drawn, a dashed outline and solid spots; once open, a solid
      * outline with a faint fill. Dashed rings when absent.
@@ -477,6 +516,24 @@ export type FieldModeDrawing = {
     pivotPreview?: FieldPoint;
     /** While turning: what it turns around, and the pointer */
     pivot?: { at: FieldPoint; to: FieldPoint };
+    /**
+     * A mirrored paste's mirror point (Paste mirrored): a handle that drags, with a line through
+     * it side to side and front to back across the whole canvas. The lines the paste mirrors
+     * across are drawn solid and named; the others faint.
+     */
+    mirror?: {
+        at: FieldPoint;
+        /** Mirrored side to side: across the line through the point that runs like a yard line */
+        across: boolean;
+        /** Mirrored front to back: across the line through the point that runs like the sidelines */
+        deep: boolean;
+        /** The upright line's name as the coordinate sheet writes it ("On 50"), when it mirrors */
+        acrossLabel?: string;
+        /** The level line's name ("12 BE BH"), when it mirrors */
+        deepLabel?: string;
+        /** The point is being dragged */
+        dragging?: boolean;
+    };
     /** A note by the pointer: the angle, or where the shape is in drill terms */
     tip?: { at: FieldPoint; text: string };
     /** The spots are part way to where they're going: a glide is running (#387) */
@@ -542,6 +599,20 @@ export type FieldModeDrawing = {
         to: FieldPoint;
         across: string;
         deep: string;
+    };
+    /**
+     * While a Line's Rows apart or Slant number is pointed at, focused or dragged (#1190): the gap
+     * at an end of the block, from the drawn row's end spot straight across to the next row
+     * (`corner`), then along it by the slant (`to`), dashed, labeled ("4 steps apart · Slant 1";
+     * no slant leg when `slant` is null) on the `outward` side, a unit vector away from the block
+     */
+    rowsGap?: {
+        from: FieldPoint;
+        corner: FieldPoint;
+        to: FieldPoint;
+        outward: FieldPoint;
+        apart: string;
+        slant: string | null;
     };
 };
 
@@ -693,6 +764,8 @@ export class FieldEditor {
     private gestureButton = 0;
     private hover: FieldCursor = "default";
     private hoverHandle: HandleId | null = null;
+    private hoverMarcherId: number | null = null;
+    private readonly hoverMarcherListeners = new Set<() => void>();
     /** The selection box's cover when a rotation started: the box turns with it until the release */
     private rotateCovers: FieldRect | null = null;
     /**
@@ -712,8 +785,18 @@ export class FieldEditor {
      */
     private pending: ReadonlyMap<number, FieldPoint> | null = null;
     private drops = 0;
+    /**
+     * The last handle gesture started on each item: a save that settles after another one started
+     * on the same item leaves that one's size drawn.
+     */
+    private readonly itemTransforms = new Map<number, object>();
     /** Where the marchers being dragged are drawn, or null with no drag. */
     private live: readonly MarcherPosition[] | null = null;
+    /**
+     * While a move or a resize has the selection's edge or center on one of the field's lines
+     * (#585): a guide along each, drawn as a shape's are. Null otherwise.
+     */
+    private lineGuides: FieldModeDrawing | null = null;
     private typed: TypedRotation | null = null;
     private ownPivot: OwnPivot | null = null;
     /** Where the pivot is drawn while its crosshair is dragged */
@@ -889,6 +972,7 @@ export class FieldEditor {
         if (this.ignoredButton !== null) return;
         const press = this.press;
         if (!press) {
+            this.setHoverMarcher(this.marcherAt(pointer));
             const modeCursor =
                 this.mode?.cursorAt(pointer, {
                     onDot: () => this.marcherAt(pointer) !== null,
@@ -1030,7 +1114,11 @@ export class FieldEditor {
             if (this.lastClick) this.lastClick.taken = true;
             return;
         }
-        this.click(press, pointer.shift || press.add === true);
+        // Shift down at the press or the release: people let go of it a moment before the mouse
+        this.click(
+            press,
+            pointer.shift || press.start.shift || press.add === true,
+        );
         this.noteClickSelection();
         if (press.double && press.hit !== null)
             this.ports.doubleClickMarcher?.(press.hit);
@@ -1218,6 +1306,7 @@ export class FieldEditor {
     pointerLeave(): void {
         this.mode?.leave?.();
         this.setHoverHandle(null);
+        this.setHoverMarcher(null);
         this.setPivotHover(null);
         if (this.pickAt) {
             this.pickAt = null;
@@ -1226,15 +1315,18 @@ export class FieldEditor {
         this.setHover("default");
     }
 
-    /** Ctrl/Cmd+A: every performer drawn that can be selected; items (C2.2) are left out. */
+    /**
+     * Ctrl/Cmd+A: every marcher and prop drawn that can be selected; locked items (the pit) are
+     * left out (props epic, fork #1239).
+     */
     selectAll(): void {
         const { ids, hidden } = this.ports.marchers();
-        const isItem = this.ports.isItem ?? (() => false);
+        const isLocked = this.ports.isLocked ?? (() => false);
         this.write(
             ids.filter(
                 (id, i) =>
                     !hidden?.[i] &&
-                    !isItem(id) &&
+                    !isLocked(id) &&
                     this.ports.canSelect(id) &&
                     !this.ports.marcherHidden?.(id),
             ),
@@ -1375,7 +1467,7 @@ export class FieldEditor {
 
     /** What the mode draws over the field, or null with no mode or nothing drawn. */
     modeDrawing(): FieldModeDrawing | null {
-        return this.mode?.drawing() ?? null;
+        return this.mode?.drawing() ?? this.lineGuides;
     }
 
     /** Whether a mode (the open shape) keeps the field's menu shut (#315). */
@@ -1432,6 +1524,23 @@ export class FieldEditor {
     }
 
     /**
+     * The marcher the pointer rests on with no button down, or null: the field shows a drill
+     * number an equipment icon stands in for while it's pointed at (#992).
+     */
+    hoveredMarcher(): number | null {
+        return this.hoverMarcherId;
+    }
+
+    /**
+     * Calls `listener` when {@link hoveredMarcher} changes (apart from {@link subscribe}, which a
+     * marcher pointed at doesn't wake). Returns the unsubscribe.
+     */
+    subscribeHoveredMarcher(listener: () => void): () => void {
+        this.hoverMarcherListeners.add(listener);
+        return () => this.hoverMarcherListeners.delete(listener);
+    }
+
+    /**
      * The plain selection's pivot, which the field draws as a crosshair (see `selectionPivot.ts`).
      * While a rotation is dragged or typed, it's what that turns around. Null while the selection
      * can't be turned (fewer than two marchers drawn, a mode with its own handles, the prop tool,
@@ -1449,6 +1558,16 @@ export class FieldEditor {
         if (this.pivotDrag) return { at: this.pivotDrag, own: true, key: null };
         if (this.gesture) return this.restingPivot(own, false);
         return this.restingPivot(own, true);
+    }
+
+    /**
+     * Where the plain selection's pivot was set, when it was moved off its box's center (a cell
+     * picked, dragged onto a marcher or a spot): what Flip mirrors about too. Null on the center.
+     */
+    selectionPivotAnchor(): PivotAnchor | null {
+        if (this.selectionPivot() === null) return null;
+        const anchor = this.currentOwnPivot()?.anchor ?? null;
+        return anchor && !isCenter(anchor) ? anchor : null;
     }
 
     /** The pivot where it's set; `resting` with no gesture running, so hints and previews show */
@@ -1528,6 +1647,21 @@ export class FieldEditor {
      * Sets the pivot to point `key` of the selection's box (the inspector's pivot grid); the
      * center puts it back there.
      */
+    /**
+     * The selection's pivot pinned to field point `at` (a spot of its own), so it stays where it is
+     * whatever the marchers do: Flip pins a pivot set on a cell of the box before it mirrors about
+     * it, so flipping again, or undoing, goes about the same line
+     */
+    pinSelectionPivot(at: FieldPoint): void {
+        if (this.selectionPivot() === null) return;
+        const ids = this.ports.selection.get();
+        this.ownPivot = {
+            ids: [...ids],
+            anchor: { kind: "point", at: { x: at.x, y: at.y } },
+        };
+        this.emit();
+    }
+
     setSelectionPivot(key: BoxPointKey): void {
         // None while a shape owns the selection, or a lone marcher: nothing to set
         if (this.selectionPivot() === null) return;
@@ -1685,7 +1819,8 @@ export class FieldEditor {
         for (let i = 0; i < drawn.length; i++) {
             const id = drawn[i];
             if (hidden?.[i] || this.ports.marcherHidden?.(id)) continue;
-            if (!this.ports.canSelect(id) || this.ports.isItem?.(id)) continue;
+            if (!this.ports.canSelect(id) || this.ports.isLocked?.(id))
+                continue;
             targets.push({
                 at: { x: positions[i * 2], y: positions[i * 2 + 1] },
                 anchor: { kind: "marcher", id },
@@ -1894,6 +2029,9 @@ export class FieldEditor {
                   press.handle,
                   box,
                   keys,
+                  (point) => this.ports.snap?.(point) ?? point,
+                  this.options.snap,
+                  () => this.options.pull?.() ?? null,
               );
     }
 
@@ -1964,30 +2102,38 @@ export class FieldEditor {
     }
 
     /**
-     * The one item selected and drawn, with its Outline: its handles resize
-     * and turn it (C2.1) instead of scaling or rotating a selection. Null for
-     * any other selection.
+     * The one item selected and drawn, with its Outline, while its handles are
+     * shown (`itemHandlesShown`): they resize and turn it (C2.1) instead of
+     * scaling or rotating a selection. Null for any other selection, a locked
+     * item, or one whose handles weren't asked for.
      */
     private selectedItem(): { id: number; frame: ItemFrame } | null {
         const selection = this.ports.selection.get();
         if (selection.length !== 1) return null;
         const [id] = selection;
-        if (!this.ports.isItem?.(id)) return null;
+        if (!this.ports.isItem?.(id) || this.ports.isLocked?.(id)) return null;
+        if (!(this.ports.itemHandlesShown?.(id) ?? true)) return null;
         const frame = this.ports.itemFrame?.(id) ?? null;
         return frame && { id, frame };
     }
 
     /**
      * Resizing or turning the selected item from a handle. Drawn at the size
-     * given until its save settles, as a drop's marchers are.
+     * given, and at its new center when the resize moved it, until its save
+     * settles, as a drop's marchers are.
      */
     private startItemTransform(
         press: FieldPress,
         handle: HandleId,
         { id, frame }: { id: number; frame: ItemFrame },
     ): FieldGesture {
-        const preview = (size: ItemSize | null) =>
+        const transform = {};
+        this.itemTransforms.set(id, transform);
+        const preview = (size: ItemSize | null) => {
             this.ports.previewItem?.(id, size);
+            if (size?.center) this.showLive([{ id, ...size.center }]);
+            else if (this.live) this.endLive();
+        };
         const host = {
             show: (size: ItemSize) => preview(size),
             cancel: () => preview(null),
@@ -1995,16 +2141,36 @@ export class FieldEditor {
                 const unchanged =
                     size.width === frame.width &&
                     size.depth === frame.depth &&
-                    size.rotation === frame.rotation;
+                    size.rotation === frame.rotation &&
+                    !size.center;
                 if (unchanged || !this.ports.saveItem) {
                     preview(null);
                     return;
                 }
-                preview(size);
-                this.ports.saveItem(id, size).then(
-                    () => preview(null),
-                    () => preview(null),
-                );
+                this.ports.previewItem?.(id, size);
+                const center = size.center;
+                // A moved center is drawn as a drop's marchers are, till the save settles, and
+                // counts as a drop: only the last drop's answer clears what's pending
+                const drop = center ? ++this.drops : null;
+                if (center) {
+                    this.live = null;
+                    this.pending = withPositions(this.pending, [
+                        { id, ...center },
+                    ]);
+                    this.ports.showPositions(this.pending);
+                }
+                const settle = () => {
+                    if (this.itemTransforms.get(id) === transform) {
+                        this.itemTransforms.delete(id);
+                        this.ports.previewItem?.(id, null);
+                    }
+                    if (drop === null || drop !== this.drops) return;
+                    this.pending = null;
+                    this.ports.showPositions(
+                        this.live && withPositions(null, this.live),
+                    );
+                };
+                this.ports.saveItem(id, size).then(settle, settle);
             },
         };
         const keys = this.keysFor(press.start);
@@ -2177,9 +2343,13 @@ export class FieldEditor {
     private drawnPositions(ids: readonly number[]): MarcherPosition[] {
         const { ids: drawn, positions, hidden } = this.ports.marchers();
         const wanted = new Set(ids);
+        const isLocked = this.ports.isLocked ?? (() => false);
         const starts: MarcherPosition[] = [];
         for (let i = 0; i < drawn.length; i++) {
-            if (!wanted.has(drawn[i]) || hidden?.[i]) continue;
+            // A locked item selected with others (from its menu or the Props panel) isn't moved,
+            // turned or boxed with them: only an unlock lets it move (props epic step 2)
+            if (!wanted.has(drawn[i]) || hidden?.[i] || isLocked(drawn[i]))
+                continue;
             starts.push({
                 id: drawn[i],
                 x: positions[i * 2],
@@ -2242,12 +2412,51 @@ export class FieldEditor {
     private showLive(positions: readonly MarcherPosition[]) {
         this.live = positions;
         this.ports.showPositions(withPositions(this.pending, positions));
+        this.setLineGuides(positions);
     }
 
     /** The drag is over with nothing dropped: only drops still saving are drawn. */
     private endLive() {
         this.live = null;
         this.ports.showPositions(this.pending);
+        this.setLineGuides(null);
+    }
+
+    /**
+     * The guides for marchers drawn at `positions` while they're moved or resized: along each of
+     * the field's lines their edges or center lie on, named as the coordinate sheet writes a spot
+     * on it ("On 50"). None with the Snap toggle off, as a shape's (#425), or with `null`.
+     */
+    private setLineGuides(positions: readonly MarcherPosition[] | null) {
+        const pull =
+            positions &&
+            (this.gesture instanceof MoveGesture ||
+                this.gesture instanceof ScaleGesture) &&
+            (this.options.snap?.() ?? true)
+                ? this.options.pull?.()
+                : null;
+        const on = pull && positions ? linesUnder(positions, pull.lines) : null;
+        const guides = on
+            ? [
+                  ...on.x.map((at) => ({
+                      from: { x: at, y: 0 },
+                      to: { x: at, y: 1 },
+                      label: lineCoordinate("x", at) ?? undefined,
+                  })),
+                  ...on.y.map((at) => ({
+                      from: { x: 0, y: at },
+                      to: { x: 1, y: at },
+                      label: lineCoordinate("y", at) ?? undefined,
+                  })),
+              ]
+            : [];
+        const before = JSON.stringify(this.lineGuides?.guides ?? []);
+        if (JSON.stringify(guides) === before) return;
+        this.lineGuides =
+            guides.length > 0
+                ? { outline: null, spots: [], walks: [], handles: [], guides }
+                : null;
+        this.emit();
     }
 
     /**
@@ -2268,6 +2477,7 @@ export class FieldEditor {
             return;
         }
         this.live = null;
+        this.setLineGuides(null);
         const pending = withPositions(this.pending, positions);
         this.pending = pending;
         const drop = ++this.drops;
@@ -2309,12 +2519,53 @@ export class FieldEditor {
     private openMenu(pointer: FieldPointer) {
         this.ports.takePress?.();
         const hit = this.handleAt(pointer) ? null : this.marcherAt(pointer);
+        const locked = hit === null ? this.lockedItemAt(pointer) : null;
+        if (locked !== null) {
+            // Selected alone, so the menu's Unlock and Edit name it; nothing moves it while locked
+            this.write([locked]);
+            this.ports.openMenu?.(pointer, locked, LOCKED_ITEM_MENU);
+            return;
+        }
         if (hit !== null && !this.ports.selection.get().includes(hit))
             this.write([hit]);
         this.ports.openMenu?.(pointer, hit);
     }
 
+    /**
+     * Opens locked item `id`'s own menu (Unlock, Edit) at `screen`, with it selected alone, as a
+     * right-click on it does: from the tag a click on it shows (props epic step 2)
+     */
+    openLockedItemMenu(id: number, field: FieldPoint, screen: FieldPoint) {
+        this.write([id]);
+        this.ports.openMenu?.(
+            {
+                field,
+                screen,
+                button: 2,
+                kind: "mouse",
+                shift: false,
+                alt: false,
+                ctrl: false,
+                meta: false,
+            },
+            id,
+            LOCKED_ITEM_MENU,
+        );
+    }
+
+    /** The topmost locked item drawn under `pointer` that can be selected, or null */
+    private lockedItemAt({ field }: FieldPointer): number | null {
+        const isLocked = this.ports.isLocked;
+        if (!isLocked) return null;
+        const item = this.ports.itemAt?.(field, isLocked) ?? null;
+        return item !== null && this.ports.canSelect(item) ? item : null;
+    }
+
     private click(press: FieldPress, shift: boolean) {
+        this.ports.lockedItemClicked?.(
+            press.hit === null ? this.lockedItemAt(press.start) : null,
+            press.start.field,
+        );
         const chosen =
             press.hit === null
                 ? null
@@ -2349,9 +2600,9 @@ export class FieldEditor {
 
     /**
      * The marcher a press at `point` lands on: a performer's dot, else an
-     * item whose Outline holds it, so a performer on a platform is still
+     * unlocked item whose Outline holds it, so a performer on a platform is still
      * pressed. Every press, drag, menu and hover finds performers here, so
-     * hidden ones (#558) are passed over in this one place.
+     * hidden ones (#558) and locked items are passed over in this one place.
      */
     private marcherAt({ field: point, kind }: FieldPointer) {
         const isItem = this.ports.isItem ?? (() => false);
@@ -2363,7 +2614,8 @@ export class FieldEditor {
             (id) => !isItem(id) && !hidden(id) && this.ports.canSelect(id),
         );
         if (performer !== null) return performer;
-        const item = this.ports.itemAt?.(point) ?? null;
+        const isLocked = this.ports.isLocked ?? (() => false);
+        const item = this.ports.itemAt?.(point, (id) => !isLocked(id)) ?? null;
         return item !== null && this.ports.canSelect(item) ? item : null;
     }
 
@@ -2384,6 +2636,12 @@ export class FieldEditor {
         this.gesture = null;
         gesture.cancel();
         this.emit();
+    }
+
+    private setHoverMarcher(id: number | null) {
+        if (id === this.hoverMarcherId) return;
+        this.hoverMarcherId = id;
+        for (const listener of this.hoverMarcherListeners) listener();
     }
 
     private setHoverHandle(handle: HandleId | null) {

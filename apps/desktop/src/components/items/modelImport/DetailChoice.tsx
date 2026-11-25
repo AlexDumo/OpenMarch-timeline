@@ -57,8 +57,15 @@ export default function DetailChoice({
 
     const label = (l: DetailLevel) => t(`props.import.detail.levels.${l}`);
     const before = session.before;
-    const versions: CompareVersion[] =
-        row.applied === "original"
+    // What the 3D View draws once the camera is far from the prop (#1180)
+    const farCopy: CompareVersion = {
+        key: "far",
+        label: t("props.import.compare.farCopy"),
+        bytes: model.parts.distant,
+        testId: "model-compare-far",
+    };
+    const versions: CompareVersion[] = [
+        ...(row.applied === "original"
             ? [
                   {
                       key: "chosen",
@@ -87,17 +94,20 @@ export default function DetailChoice({
                       failed: before?.status === "failed",
                       testId: "model-compare-other",
                   },
-              ];
+              ]),
+        farCopy,
+    ];
 
     return (
         <section
             className="flex flex-col gap-8"
             data-testid="model-import-detail"
         >
-            <h5 className="text-text/70 text-sm font-medium">
+            <h5 className="text-text/70 text-body font-medium">
                 <T keyName="props.import.detail.title" />
             </h5>
             <SegmentedTextSwitch
+                className="self-start"
                 ariaLabel={t("props.import.detail.title")}
                 selected={level}
                 setSelected={(value) =>

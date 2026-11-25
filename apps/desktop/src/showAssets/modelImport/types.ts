@@ -89,13 +89,13 @@ export type Choice =
       }
     /**
      * How the model is stood up: always offered, since a file can lie on any side. Pre-selected
-     * upright, or stood up from Z-up when the model stands tallest along Z (`zUpSuspected`).
+     * upright, as glTF's Y-up has it. Imports saved before #1200 may also carry a
+     * `zUpSuspected` flag from the old guess; nothing reads it.
      */
     | {
           code: "tilt";
           preselected: Tilt;
           applied: Tilt;
-          zUpSuspected: boolean;
       }
     | { code: "turn"; preselected: Turn; applied: Turn }
     | {
@@ -134,6 +134,8 @@ export type Fix =
           morphTargets: number;
           scenes: number;
       }
+    /** A rigged model frozen in its pose with no animation playing, its rig removed (#1168) */
+    | { code: "rigFrozen" }
     /** The pivot moved to the bottom center of the footprint, by this much (m) */
     | { code: "pivotMoved"; offsetM: Vec3 };
 

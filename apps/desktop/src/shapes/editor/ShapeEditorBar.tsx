@@ -18,6 +18,7 @@ import {
 import { animated, to, useSpring } from "@react-spring/web";
 import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
 import { setShapeEditorRect } from "./shapeEditorRect";
+import { MirrorControls } from "./MirrorControls";
 import { clearPlacement, oneRowRoom } from "./editorPlacement";
 import {
     coverInset,
@@ -34,6 +35,7 @@ import { keepInView } from "./keepInView";
 import { glideTo, isGliding } from "@/field/three/fieldNavigation";
 import { activeFieldEditor } from "@/field/editor/activeFieldEditor";
 import {
+    engageRowsGap,
     engageStep,
     setShapeScrubbing,
     useShapePointerStore,
@@ -66,7 +68,15 @@ import {
     EyeIcon,
     EyeSlashIcon,
     SelectionSlashIcon,
+    RowsIcon,
+    CaretDownIcon,
+    CaretLeftIcon,
+    CaretRightIcon,
+    XIcon,
 } from "@phosphor-icons/react";
+import * as Popover from "@radix-ui/react-popover";
+import { Tip } from "@/components/ui/Tip";
+import { useEditorMenu, useMenuFocus } from "./menuFocus";
 import {
     fieldToElement,
     useFieldViewStore,
@@ -99,11 +109,13 @@ import {
     paramGlyph,
     toolId,
     type AnyToolKind,
+    type RowView,
     type ParamGlyph,
     type ToolEnv,
 } from "../tool/toolKind";
 import { useShapeHidden, useShapeToolStore } from "../tool/shapeToolStore";
 import { ShapeAwayChip } from "./ShapeAwayChip";
+import { PasteFitNotice } from "../clipboard/PasteFitNotice";
 import { GlyphText } from "./GlyphText";
 import { useShapePointerOver } from "../tool/shapeToolMode";
 import "./ShapeEditorSurface.css";
@@ -168,6 +180,9 @@ const EDITOR_SPRING = { tension: 210, friction: 26, clamp: true };
 const EDIT_WINDOW_MS = 1000;
 /** How long the editor stays put before the other layers hear where it settled (#927) */
 const NOTE_SETTLED_MS = 150;
+
+/** Room the floating editor leaves around a mirrored paste's pink point, in CSS px */
+const MIRROR_POINT_CLEAR_PX = 18;
 
 /**
  * The floating editor (08-shape-system-ux.md, "The floating editor"), the main place for editing
@@ -425,10 +440,13 @@ function ShapeEditorBar({
     const numbers = useMemo(() => numberActions(live, run, chips), [live]);
     const frame = kind.frameOf(params, spots);
 
+    // A mirrored paste's flip keys switch which ways it mirrors through its point (Paste mirrored)
     const flip = (axis: "across" | "deep") =>
-        updateWith(live, (now, env) =>
-            flipShape(kind, now, spots, axis, pivotOf(now), env),
-        );
+        live.mirror
+            ? live.mirror.toggle(axis)
+            : updateWith(live, (now, env) =>
+                  flipShape(kind, now, spots, axis, pivotOf(now), env),
+              );
     // The keys act on this shape while its editor shows (#429): mounted after the app's own
     // handlers, the flips sit on top of the marchers' flips and go back when it closes. A held
     // key doesn't repeat them (review)
@@ -438,15 +456,56 @@ function ShapeEditorBar({
     useActionHandler("flipVertical", () => flip("deep"), {
         ignoreRepeat: true,
     });
+    // A mirrored paste only mirrors (owner on Paste mirrored): its keys and palette entries for
+    // turning and resizing are off, saying why, and its Mirror choice is on
+    const mirrored = target.mirror !== undefined;
+    const mirrorOnly = () =>
+        mirrored
+            ? tolgee.t(
+                  "actions.shape.mirrorOnlyReason",
+                  "A mirrored paste only mirrors. Place it, then turn or resize it",
+              )
+            : undefined;
     useActionHandler("shapeQuarterTurn", () => turnQuarter(live), {
+        enabled: !mirrored,
+        disabledReason: mirrorOnly,
         ignoreRepeat: true,
     });
+    const mirrorWay = (axes: { across: boolean; deep: boolean }) => () =>
+        live.mirror?.set(axes);
+    const mirrorOpen = {
+        enabled: mirrored,
+        disabledReason: () =>
+            mirrored
+                ? undefined
+                : tolgee.t(
+                      "actions.shape.mirrorNotOpen",
+                      "Paste mirrored first",
+                  ),
+        ignoreRepeat: true,
+    };
+    useActionHandler(
+        "mirrorSideToSide",
+        mirrorWay({ across: true, deep: false }),
+        mirrorOpen,
+    );
+    useActionHandler(
+        "mirrorFrontToBack",
+        mirrorWay({ across: false, deep: true }),
+        mirrorOpen,
+    );
+    useActionHandler(
+        "mirrorBoth",
+        mirrorWay({ across: true, deep: true }),
+        mirrorOpen,
+    );
     // A double-click on the pivot, as the pivot menu's entry (tablet 1.5): back to the center
     useActionHandler(
         "shapeCenterPivot",
         () => pickPivotOf(live, DEFAULT_PIVOT),
         {
-            enabled: pivotOf(params) !== DEFAULT_PIVOT,
+            enabled: !mirrored && pivotOf(params) !== DEFAULT_PIVOT,
+            disabledReason: mirrorOnly,
             ignoreRepeat: true,
         },
     );
@@ -456,10 +515,12 @@ function ShapeEditorBar({
     const canExpand =
         env !== null && scaledOnce(target, params, 1, env) !== null;
     useActionHandler("shapeShrink", () => scaleOnce(live, -1, envFor), {
-        enabled: canShrink,
+        enabled: !mirrored && canShrink,
+        disabledReason: mirrorOnly,
     });
     useActionHandler("shapeExpand", () => scaleOnce(live, 1, envFor), {
-        enabled: canExpand,
+        enabled: !mirrored && canExpand,
+        disabledReason: mirrorOnly,
     });
     useActionHandler("shapeRecalculate", () => target.recalculate?.(), {
         enabled: target.recalculate !== null,
@@ -468,7 +529,8 @@ function ShapeEditorBar({
     // An outline evened out in its frame (owner on #459): none where it doesn't apply
     const evenState = evenStateOf(kind, params, spots);
     useActionHandler("shapeEvenOut", () => evenOut(live), {
-        enabled: evenState === "uneven",
+        enabled: !mirrored && evenState === "uneven",
+        disabledReason: mirrorOnly,
         ignoreRepeat: true,
     });
 
@@ -497,14 +559,17 @@ function ShapeEditorBar({
     return (
         <animated.div
             ref={place.ref}
-            className="shape-editor-surface text-sub text-text touch:z-30 pointer-events-none absolute z-10 flex flex-col items-center gap-4 whitespace-nowrap *:pointer-events-auto"
+            // Touch: one above the Inspector's edge tab (z-30). Where the field leaves the bar no
+            // spot clear of the tab, the bar covers the tab rather than the tab covering Place
+            className="shape-editor-surface text-sub text-text touch:z-[31] pointer-events-none absolute z-10 flex flex-col items-center gap-4 whitespace-nowrap *:pointer-events-auto"
             style={place.style}
             data-over={overShape}
             {...place.hold}
             data-testid={testId}
             data-shape-editor
             // #927: holds Place; it keeps off the zoom box, the Inspector's tab and the toolbar
-            // panel itself, and the pill keeps off it
+            // panel itself, and the pill keeps off it. With no clear spot it covers them, the
+            // toolbar panel aside
             data-field-layer="mover"
             data-placement={place.above ? "above" : "below"}
             data-held={place.held}
@@ -518,178 +583,206 @@ function ShapeEditorBar({
                 data-testid={`${testId}-bar`}
                 data-rows={twoRows ? 2 : 1}
             >
-                {/* What the shape is, and what's done to it: side by side, or one above the
-                    other when the field is too narrow for one row */}
-                <span
-                    ref={whatRow}
-                    className="flex shrink-0 items-center gap-6"
-                    data-editor-row
-                >
+                {/* A mirrored paste only mirrors (owner): which way, Recalculate, then Place */}
+                {target.mirror ? (
                     <span
-                        className="flex items-center gap-2"
-                        data-testid={`${testId}-text`}
+                        ref={whatRow}
+                        className="flex shrink-0 items-center gap-6"
+                        data-editor-row
                     >
-                        {layout.values.map((x) => (
-                            <Fragment key={x.param.key}>
-                                <NumberChip
-                                    param={x.param}
-                                    display={x.display}
-                                    note={x.note}
-                                    before={x.before}
-                                    after={x.after}
-                                    canLess={x.less !== null}
-                                    canMore={x.more !== null}
-                                    glyph={null}
-                                    actions={numbers}
-                                />
-                                {layout.ratioLock &&
-                                    x.param.ratioLockAfter === true && (
-                                        <RatioLockButton sizes />
-                                    )}
-                            </Fragment>
-                        ))}
-                        {target.empty > 0 && (
-                            <span className="text-text/60">
-                                ·{" "}
-                                {tolgee.t(
-                                    "shapes.edit.empty",
-                                    "{count} empty",
-                                    {
-                                        count: target.empty,
-                                    },
-                                )}
-                            </span>
+                        <MirrorControls axes={target.mirror} />
+                        {kind.asIs !== true && (
+                            <MirrorRecalculate
+                                live={live}
+                                canRecalculate={target.recalculate !== null}
+                            />
                         )}
                     </span>
-                    <span className="contents" {...intervalsCarry}>
-                        {layout.groups && layout.groups.length > 1 && (
-                            <>
-                                <Divider />
-                                <GroupMenu
-                                    target={live}
-                                    groups={layout.groups}
-                                    envFor={envFor}
-                                    onScrubbing={setShapeScrubbing}
-                                />
-                                {layout.lock !== null && (
-                                    <IntervalLockButton
-                                        live={live}
-                                        locked={layout.lock}
+                ) : (
+                    <span
+                        ref={whatRow}
+                        className="flex shrink-0 items-center gap-6"
+                        data-editor-row
+                    >
+                        <span
+                            className="flex items-center gap-2"
+                            data-testid={`${testId}-text`}
+                        >
+                            {layout.values.map((x) => (
+                                <Fragment key={x.param.key}>
+                                    <NumberChip
+                                        param={x.param}
+                                        display={x.display}
+                                        note={x.note}
+                                        before={x.before}
+                                        after={x.after}
+                                        canLess={x.less !== null}
+                                        canMore={x.more !== null}
+                                        glyph={null}
+                                        actions={numbers}
                                     />
-                                )}
-                            </>
-                        )}
-                        {layout.groups?.length === 1 && (
-                            <>
-                                <Divider />
-                                <GroupChips
-                                    target={live}
-                                    groups={layout.groups}
-                                    envFor={envFor}
-                                    onScrubbing={setShapeScrubbing}
-                                />
-                                <span className="text-text/60">
-                                    {tolgee.t("shapes.edit.steps", "steps")}
-                                </span>
-                                {layout.lock !== null && (
-                                    <IntervalLockButton
-                                        live={live}
-                                        locked={layout.lock}
-                                    />
-                                )}
-                            </>
-                        )}
-                        {layout.intervals.length > 0 && (
-                            <>
-                                <Divider />
-                                <span className="flex items-center gap-2">
-                                    {layout.intervals.map((x) => (
-                                        <NumberChip
-                                            key={x.param.key}
-                                            param={x.param}
-                                            display={x.display}
-                                            note={null}
-                                            canLess={false}
-                                            canMore={false}
-                                            glyph={paramGlyph(
-                                                x.param,
-                                                params,
-                                                spots,
-                                            )}
-                                            glyphAfter={
-                                                x.param.glyphAfter === true
-                                            }
-                                            derived={x.derived}
-                                            actions={numbers}
-                                        />
-                                    ))}
-                                    <span className="text-text/60">
-                                        {tolgee.t("shapes.edit.steps", "steps")}
-                                    </span>
                                     {layout.ratioLock &&
-                                        layout.intervals.length > 1 && (
-                                            <RatioLockButton />
+                                        x.param.ratioLockAfter === true && (
+                                            <RatioLockButton sizes />
                                         )}
+                                </Fragment>
+                            ))}
+                            {target.empty > 0 && (
+                                <span className="text-text/60">
+                                    ·{" "}
+                                    {tolgee.t(
+                                        "shapes.edit.empty",
+                                        "{count} empty",
+                                        {
+                                            count: target.empty,
+                                        },
+                                    )}
+                                </span>
+                            )}
+                        </span>
+                        <span className="contents" {...intervalsCarry}>
+                            {layout.groups && layout.groups.length > 1 && (
+                                <>
+                                    <Divider />
+                                    <GroupMenu
+                                        target={live}
+                                        groups={layout.groups}
+                                        envFor={envFor}
+                                        onScrubbing={setShapeScrubbing}
+                                    />
                                     {layout.lock !== null && (
                                         <IntervalLockButton
                                             live={live}
                                             locked={layout.lock}
                                         />
                                     )}
-                                </span>
-                            </>
+                                </>
+                            )}
+                            {layout.groups?.length === 1 && (
+                                <>
+                                    <Divider />
+                                    <GroupChips
+                                        target={live}
+                                        groups={layout.groups}
+                                        envFor={envFor}
+                                        onScrubbing={setShapeScrubbing}
+                                    />
+                                    <span className="text-text/60">
+                                        {tolgee.t("shapes.edit.steps", "steps")}
+                                    </span>
+                                    {layout.lock !== null && (
+                                        <IntervalLockButton
+                                            live={live}
+                                            locked={layout.lock}
+                                        />
+                                    )}
+                                </>
+                            )}
+                            {layout.intervals.length > 0 && (
+                                <>
+                                    <Divider />
+                                    <span className="flex items-center gap-2">
+                                        {layout.intervals.map((x) => (
+                                            <NumberChip
+                                                key={x.param.key}
+                                                param={x.param}
+                                                display={x.display}
+                                                note={null}
+                                                canLess={false}
+                                                canMore={false}
+                                                glyph={paramGlyph(
+                                                    x.param,
+                                                    params,
+                                                    spots,
+                                                )}
+                                                glyphAfter={
+                                                    x.param.glyphAfter === true
+                                                }
+                                                derived={x.derived}
+                                                actions={numbers}
+                                            />
+                                        ))}
+                                        <span className="text-text/60">
+                                            {tolgee.t(
+                                                "shapes.edit.steps",
+                                                "steps",
+                                            )}
+                                        </span>
+                                        {layout.ratioLock &&
+                                            layout.intervals.length > 1 && (
+                                                <RatioLockButton />
+                                            )}
+                                        {layout.lock !== null && (
+                                            <IntervalLockButton
+                                                live={live}
+                                                locked={layout.lock}
+                                            />
+                                        )}
+                                    </span>
+                                </>
+                            )}
+                        </span>
+                        {target.drawnOn && (
+                            <span className="text-text/50">
+                                {tolgee.t(
+                                    "shapes.edit.drawnOn",
+                                    "from {page}",
+                                    {
+                                        page: target.drawnOn,
+                                    },
+                                )}
+                            </span>
                         )}
                     </span>
-                    {target.drawnOn && (
-                        <span className="text-text/50">
-                            {tolgee.t("shapes.edit.drawnOn", "from {page}", {
-                                page: target.drawnOn,
-                            })}
-                        </span>
-                    )}
-                </span>
+                )}
                 {!twoRows && <Divider />}
                 <span
                     ref={doRow}
                     className="flex shrink-0 items-center gap-6"
                     data-editor-row
                 >
-                    <TurnControls
-                        live={live}
-                        degrees={rotationDegrees(
-                            shapeTurn(kind, params, spots),
-                        )}
-                        rotation={frame.rotation}
-                        pivot={pivotOf(params)}
-                        canRecalculate={target.recalculate !== null}
-                        inOrder={
-                            target.order !== undefined &&
-                            target.order.current !== "nearest"
-                        }
-                        empty={target.empty}
-                        canCloseUp={target.closeUp !== undefined}
-                        evenState={evenState}
-                        canShrink={canShrink}
-                        canExpand={canExpand}
-                        asIs={kind.asIs === true}
-                    />
+                    {!target.mirror && (
+                        <TurnControls
+                            live={live}
+                            degrees={rotationDegrees(
+                                shapeTurn(kind, params, spots),
+                            )}
+                            rotation={frame.rotation}
+                            pivot={pivotOf(params)}
+                            canRecalculate={target.recalculate !== null}
+                            inOrder={
+                                target.order !== undefined &&
+                                target.order.current !== "nearest"
+                            }
+                            empty={target.empty}
+                            canCloseUp={target.closeUp !== undefined}
+                            evenState={evenState}
+                            canShrink={canShrink}
+                            canExpand={canExpand}
+                            asIs={kind.asIs === true}
+                        />
+                    )}
                     {/* What doesn't change the shape itself, at the end (owner): its pathways */}
-                    <Divider />
+                    {!target.mirror && <Divider />}
                     <EndControls
                         live={live}
                         canPlace={target.place !== undefined}
                     />
                 </span>
             </div>
-            <FillPill
-                live={live}
-                kind={kind}
-                shown={fillShown(kind, params, spots)}
-                canPlace={target.place !== undefined}
-                order={target.order?.current}
-                keepOffered={target.order?.keepOffered}
-                testId={testId}
-            />
+            {!target.mirror && (
+                <FillPill
+                    live={live}
+                    kind={kind}
+                    shown={fillShown(kind, params, spots)}
+                    canPlace={target.place !== undefined}
+                    order={target.order?.current}
+                    keepOffered={target.order?.keepOffered}
+                    testId={testId}
+                />
+            )}
+            {/* An open paste that doesn't fit says so here, beside Place (#961) */}
+            {testId === "shape-tool-readout" && <PasteFitNotice />}
         </animated.div>
     );
 }
@@ -719,6 +812,9 @@ function useLiveTarget(target: ShapeEditTarget): ShapeEditTarget {
             get place() {
                 return latest.current.place;
             },
+            get placeLoose() {
+                return latest.current.placeLoose;
+            },
             get drawnOn() {
                 return latest.current.drawnOn;
             },
@@ -730,6 +826,9 @@ function useLiveTarget(target: ShapeEditTarget): ShapeEditTarget {
             },
             get order() {
                 return latest.current.order;
+            },
+            get mirror() {
+                return latest.current.mirror;
             },
             begin: () => latest.current.begin(),
             preview: (params) => latest.current.preview(params),
@@ -912,49 +1011,55 @@ const NumberChip = memo(function NumberChip({
 }) {
     const plain = useMemo(() => actions.scrub(param), [actions, param]);
     const showsStep = param.showsStep === true;
+    // A number setting the kind's step, or the gap between its rows: the field draws it while it's
+    // pointed at, focused (typing too) or dragged (owner on #596; Rows, #1190)
+    const engageMark = showsStep
+        ? engageStep
+        : param.showsRowsGap === true
+          ? engageRowsGap
+          : null;
+    const shows = engageMark !== null;
     const key = param.key;
-    // A number setting the kind's step: the field draws it while it's pointed at, focused (typing
-    // too) or dragged (owner on #596)
     const scrub = useMemo(
         () =>
-            showsStep
+            engageMark
                 ? {
                       ...plain,
                       onScrubStart: () => {
-                          engageStep(`${key}:drag`, true);
+                          engageMark(`${key}:drag`, true);
                           plain.onScrubStart();
                       },
                       onScrubEnd: (keep: boolean) => {
-                          engageStep(`${key}:drag`, false);
+                          engageMark(`${key}:drag`, false);
                           plain.onScrubEnd(keep);
                       },
                   }
                 : plain,
-        [plain, showsStep, key],
+        [plain, engageMark, key],
     );
     useEffect(
         () => () => {
             for (const how of ["hover", "focus", "typing", "drag"])
-                engageStep(`${key}:${how}`, false);
+                engageMark?.(`${key}:${how}`, false);
         },
-        [key],
+        [engageMark, key],
     );
     // Focused is the number itself (Tab reaches it) or typing into it: the button gives way to
     // the input and back without a blur, so a change of one clears the other
-    const engage = showsStep
+    const engage = engageMark
         ? {
-              onPointerEnter: () => engageStep(`${key}:hover`, true),
-              onPointerLeave: () => engageStep(`${key}:hover`, false),
-              onFocus: () => engageStep(`${key}:focus`, true),
-              onBlur: () => engageStep(`${key}:focus`, false),
+              onPointerEnter: () => engageMark(`${key}:hover`, true),
+              onPointerLeave: () => engageMark(`${key}:hover`, false),
+              onFocus: () => engageMark(`${key}:focus`, true),
+              onBlur: () => engageMark(`${key}:focus`, false),
           }
         : {};
     const onTyping = useCallback(
         (typing: boolean) => {
-            engageStep(`${key}:focus`, false);
-            engageStep(`${key}:typing`, typing);
+            engageMark?.(`${key}:focus`, false);
+            engageMark?.(`${key}:typing`, typing);
         },
-        [key],
+        [engageMark, key],
     );
     return (
         <span
@@ -984,7 +1089,7 @@ const NumberChip = memo(function NumberChip({
                 testId={`shape-editor-${param.key}`}
                 {...scrub}
                 onType={(text) => actions.type(param, text)}
-                onTyping={showsStep ? onTyping : undefined}
+                onTyping={shows ? onTyping : undefined}
                 onSnap={
                     derived && param.snap
                         ? () => actions.snap(param)
@@ -1087,6 +1192,39 @@ const RatioLockButton = memo(function RatioLockButton({
             {/* One chain either way, lit in the accent when locked: a broken
                 link didn't read as anything (owner) */}
             <LinkSimpleIcon size={14} />
+        </IconButton>
+    );
+});
+
+/** Recalculate on a mirrored paste's editor, as on any shape's (Paste mirrored) */
+const MirrorRecalculate = memo(function MirrorRecalculate({
+    live: target,
+    canRecalculate,
+}: {
+    live: ShapeEditTarget;
+    canRecalculate: boolean;
+}) {
+    const look = useActionLook(canRecalculate);
+    return (
+        <IconButton
+            label={
+                canRecalculate
+                    ? tolgee.t(
+                          "shapes.edit.recalculate.title",
+                          "Recalculate who goes where, by least travel",
+                      )
+                    : tolgee.t(
+                          "shapes.edit.recalculate.already",
+                          "Who goes where is already least travel",
+                      )
+            }
+            disabled={!canRecalculate}
+            action="shapeRecalculate"
+            className="relative"
+            onClick={() => target.recalculate?.()}
+            testId="shape-editor-recalculate"
+        >
+            <RecalculateFace look={look} />
         </IconButton>
     );
 });
@@ -1288,6 +1426,21 @@ const TurnControls = memo(function TurnControls({
 });
 
 /**
+ * Place's second tooltip line, kept on one line: Shift-click or Shift+Enter places the marchers,
+ * keeping no shape
+ */
+function PlaceLooseHint() {
+    return (
+        <span className="text-text-subtitle text-sub block whitespace-nowrap">
+            <T
+                keyName="shapes.edit.placeLoose"
+                params={{ keys: () => <Shortcut action="applyShapeLoose" /> }}
+            />
+        </span>
+    );
+}
+
+/**
  * The eye, Guides (#634), Snap and Pathways, then Place for a new shape or Ungroup for a placed one
  */
 const EndControls = memo(function EndControls({
@@ -1326,8 +1479,20 @@ const EndControls = memo(function EndControls({
                         </ActionButton>
                     )}
                     <EditorButton
-                        onClick={() => target.place?.()}
+                        // Shift-click is Shift+Enter: the marchers placed, no shape kept
+                        onClick={(e) =>
+                            e.shiftKey
+                                ? target.placeLoose?.()
+                                : target.place?.()
+                        }
                         testId="shape-editor-place"
+                        tip={{
+                            label: tolgee.t("shapes.edit.place", "Place"),
+                            action: "applyShape",
+                            hint: <PlaceLooseHint />,
+                            hintText: tolgee.t("actions.shape.applyLoose"),
+                            oneLine: true,
+                        }}
                     >
                         {tolgee.t("shapes.edit.place", "Place")}
                     </EditorButton>
@@ -1376,6 +1541,9 @@ const fillShown = (kind: AnyToolKind, params: unknown, spots: number) => {
         ]),
         flipX,
         flipY,
+        // The Rows menu lists every row, and shows its spacing (spec #1190)
+        kind.rows ? kind.rows.view(params, spots) : null,
+        kind.rows ? (params as { rows?: unknown }).rows : null,
     ]);
 };
 
@@ -1408,6 +1576,8 @@ const FillPill = memo(function FillPill({
         >
             {/* The kind's own menus (a Line's spacing, #523) */}
             <ChoiceMenus target={target} envFor={env} />
+            {/* The marchers split into rows alongside the shape (spec #1190) */}
+            <RowsMenu target={target} />
             {/* Who goes where on a Line (#528) */}
             <OrderMenu target={target} />
             <ModeMenu target={target} envFor={env} />
@@ -1439,6 +1609,615 @@ const FillPill = memo(function FillPill({
         </div>
     );
 });
+
+/**
+ * The Rows menu (spec #1190): the marchers of a Line, Curve or Arc split into rows alongside it,
+ * one shape with it. Its button says how many rows; it lists them in field order, each with its
+ * spots (a press leaves one empty), its marchers (typed, dragged or stepped, one at a time from or
+ * to another row, so nobody is ever left out) and, once there's more than one row, arrows that
+ * move it half a spot along the line, a full row as well as a short one. Each change is one undo step (one save for a placed shape). None for a kind without.
+ */
+function RowsMenu({ target }: { target: ShapeEditTarget }) {
+    const [open, setOpen] = useEditorMenu();
+    const focus = useMenuFocus((el) =>
+        el.querySelector<HTMLElement>("[data-testid^='shape-rows-']"),
+    );
+    const run = useRef<SizeRun | null>(null);
+    const chips = useRef<{ layout: ChipLayout; anchor: XY }>({
+        layout: {
+            values: [],
+            intervals: [],
+            groups: null,
+            ratioLock: false,
+            lock: null,
+        },
+        anchor: { x: 0, y: 0 },
+    });
+    const rows = target.kind.rows;
+    const said = useRef<string | null>(null);
+    const actions = useMemo(() => {
+        const base = numberActions(target, run, chips);
+        const step = (param: Param, by: -1 | 1) => {
+            const env = envFor();
+            const next =
+                env && param.stepper?.by(target.params, target.spots, by, env);
+            if (next) target.apply(next);
+        };
+        return {
+            ...base,
+            less: (param: Param) => step(param, -1),
+            more: (param: Param) => step(param, 1),
+        };
+    }, [target]);
+    if (!rows) return null;
+    const { params, spots } = target;
+    const view = rows.view(params, spots);
+    if (!view) return null;
+    const env = envFor();
+    const stepPx = env?.stepPx ?? 1;
+    const many = view.rows.length > 1;
+    const label = tolgee.t("shapes.rows.label", "Rows");
+    const summary = many
+        ? tolgee.t("shapes.rows.summary", "Rows · {count}", {
+              count: view.rows.length,
+          })
+        : label;
+    // The button keeps what it said while its menu is open, so the menu doesn't slide out from
+    // under the pointer as its rows change the button's width (sim study of #1190)
+    if (!open) said.current = summary;
+    const across = view.words === "across";
+    const apply = (next: unknown) => {
+        if (next) target.apply(next);
+    };
+    const can = (param: Param, by: -1 | 1) =>
+        env !== null &&
+        (param.stepper?.by(params, spots, by, env) ?? null) !== null;
+    const canAdd = env !== null && rows.add(params, spots, "far", env) !== null;
+    const addTip = canAdd
+        ? null
+        : tolgee.t(
+              "shapes.rows.addNone",
+              "No room for another row: every row needs a marcher",
+          );
+    const longest = Math.max(...view.rows.map((r) => r.spots.length));
+    const dot = Math.max(4, Math.min(8, Math.floor(132 / longest) - 3));
+    const removable = many || view.empty > 0;
+    return (
+        <Popover.Root open={open} onOpenChange={setOpen}>
+            <Tip
+                label={tolgee.t(
+                    "shapes.rows.tip",
+                    "Split these marchers into rows alongside the line",
+                )}
+            >
+                <Popover.Trigger asChild>
+                    <button
+                        type="button"
+                        aria-label={summary}
+                        {...focus.trigger}
+                        data-testid="shape-rows"
+                        className="rounded-4 hover:bg-text/10 flex min-h-24 items-center gap-4 px-4 py-2"
+                    >
+                        <RowsIcon size={14} />
+                        <span>{said.current ?? summary}</span>
+                        <CaretDownIcon size={10} />
+                    </button>
+                </Popover.Trigger>
+            </Tip>
+            <Popover.Portal>
+                <Popover.Content
+                    side="bottom"
+                    align="start"
+                    sideOffset={6}
+                    {...focus.content}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal z-50 flex w-[360px] flex-col gap-2 border p-8"
+                    data-testid="shape-rows-content"
+                >
+                    <div className="flex min-h-24 items-center justify-between gap-8 px-4">
+                        <span
+                            className={many ? "" : "text-text/60"}
+                            data-testid="shape-rows-heading"
+                        >
+                            {many
+                                ? view.empty > 0
+                                    ? tolgee.t(
+                                          "shapes.rows.headingEmpty",
+                                          "{count} marchers in {rows} rows · {empty, plural, one {# empty spot} other {# empty spots}}",
+                                          {
+                                              count: spots,
+                                              rows: view.rows.length,
+                                              empty: view.empty,
+                                          },
+                                      )
+                                    : tolgee.t(
+                                          "shapes.rows.heading",
+                                          "{count} marchers in {rows} rows",
+                                          {
+                                              count: spots,
+                                              rows: view.rows.length,
+                                          },
+                                      )
+                                : tolgee.t(
+                                      "shapes.rows.splits",
+                                      "Splits your {count} marchers. Adds none.",
+                                      { count: spots },
+                                  )}
+                        </span>
+                    </div>
+                    {view.picks.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-4 px-4">
+                            <span className="text-text/60">
+                                {tolgee.t("shapes.rows.picks", "Quick picks")}
+                            </span>
+                            {view.picks.map((pick) => (
+                                <Tip
+                                    key={pick.perRow}
+                                    label={
+                                        pick.last === pick.perRow
+                                            ? tolgee.t(
+                                                  "shapes.rows.pickTip",
+                                                  "{perRow} in a row, {rows} rows",
+                                                  pick,
+                                              )
+                                            : tolgee.t(
+                                                  "shapes.rows.pickTipLast",
+                                                  "{perRow} in a row, {rows} rows, the last row {last}",
+                                                  pick,
+                                              )
+                                    }
+                                >
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            env &&
+                                            apply(
+                                                rows.pick(
+                                                    target.params,
+                                                    target.spots,
+                                                    pick.perRow,
+                                                    env,
+                                                ),
+                                            )
+                                        }
+                                        data-testid={`shape-rows-pick-${pick.perRow}`}
+                                        aria-pressed={pick.on}
+                                        className={clsx(
+                                            "border-stroke bg-fg-2 rounded-full border px-8 py-1 tabular-nums",
+                                            pick.on
+                                                ? "border-accent text-accent"
+                                                : "hover:text-accent",
+                                        )}
+                                    >
+                                        {`${pick.perRow} × ${pick.rows}`}
+                                    </button>
+                                </Tip>
+                            ))}
+                        </div>
+                    )}
+                    <div className="bg-stroke my-4 h-px" />
+                    <div className="flex min-h-24 items-center justify-between gap-8 pl-4">
+                        <span className="text-text/60">{label}</span>
+                        <span className="flex items-center gap-2">
+                            {(["far", "near"] as const).map((side) => (
+                                <Tip
+                                    key={side}
+                                    label={
+                                        addTip ??
+                                        (side === "far"
+                                            ? across
+                                                ? tolgee.t(
+                                                      "shapes.rows.addBehindTip",
+                                                      "A row behind, the marchers shared out again",
+                                                  )
+                                                : tolgee.t(
+                                                      "shapes.rows.addLeftTip",
+                                                      "A row to the left, the marchers shared out again",
+                                                  )
+                                            : across
+                                              ? tolgee.t(
+                                                    "shapes.rows.addFrontTip",
+                                                    "A row in front, the marchers shared out again",
+                                                )
+                                              : tolgee.t(
+                                                    "shapes.rows.addRightTip",
+                                                    "A row to the right, the marchers shared out again",
+                                                ))
+                                    }
+                                >
+                                    <button
+                                        type="button"
+                                        aria-disabled={!canAdd || undefined}
+                                        onClick={() =>
+                                            canAdd &&
+                                            env &&
+                                            apply(
+                                                rows.add(
+                                                    target.params,
+                                                    target.spots,
+                                                    side,
+                                                    env,
+                                                ),
+                                            )
+                                        }
+                                        data-testid={`shape-rows-add-${side}`}
+                                        className={clsx(
+                                            "rounded-4 flex min-h-24 items-center gap-4 px-4 py-2",
+                                            canAdd
+                                                ? "hover:text-accent"
+                                                : "opacity-40",
+                                        )}
+                                    >
+                                        <PlusIcon size={12} />
+                                        {side === "far"
+                                            ? across
+                                                ? tolgee.t(
+                                                      "shapes.rows.addBehind",
+                                                      "Behind",
+                                                  )
+                                                : tolgee.t(
+                                                      "shapes.rows.addLeft",
+                                                      "Left",
+                                                  )
+                                            : across
+                                              ? tolgee.t(
+                                                    "shapes.rows.addFront",
+                                                    "In front",
+                                                )
+                                              : tolgee.t(
+                                                    "shapes.rows.addRight",
+                                                    "Right",
+                                                )}
+                                    </button>
+                                </Tip>
+                            ))}
+                        </span>
+                    </div>
+                    {/* One grid for every row and its headings, so the columns line up */}
+                    <div className="grid grid-cols-[52px_minmax(0,1fr)_auto_72px_24px] gap-x-4">
+                        <div
+                            className="text-text/60 col-span-full grid grid-cols-subgrid items-end pl-4 text-center"
+                            data-testid="shape-rows-columns"
+                        >
+                            <span />
+                            <span />
+                            <span className="truncate">
+                                {tolgee.t(
+                                    "shapes.rows.colMarchers",
+                                    "Marchers",
+                                )}
+                            </span>
+                            <span className="truncate">
+                                {many &&
+                                    tolgee.t("shapes.rows.colOffset", "Offset")}
+                            </span>
+                            <span />
+                        </div>
+                        {view.rows.map((row, i) => {
+                            const param = rows.count(row.index);
+                            const name = rowName(row, across);
+                            // Any row moves along once there are others to move against: a full one
+                            // staggers as a short one does (owner on #1190)
+                            const moves = view.rows.length > 1;
+                            return (
+                                <div
+                                    key={row.index}
+                                    className="rounded-4 hover:bg-text/5 col-span-full grid min-h-24 grid-cols-subgrid items-center pl-4"
+                                    data-testid={`shape-rows-row-${i}`}
+                                >
+                                    <span
+                                        className={clsx(
+                                            "truncate",
+                                            row.side === null && "text-accent",
+                                        )}
+                                    >
+                                        {name}
+                                    </span>
+                                    <span
+                                        className="flex items-center justify-center overflow-hidden"
+                                        style={{
+                                            transform: `translateX(${(row.shift * (dot + 2)) / 2}px)`,
+                                        }}
+                                    >
+                                        {row.spots.map((filled, j) => (
+                                            <button
+                                                key={j}
+                                                type="button"
+                                                aria-label={
+                                                    filled
+                                                        ? tolgee.t(
+                                                              "shapes.rows.leaveEmpty",
+                                                              "Leave this spot empty",
+                                                          )
+                                                        : tolgee.t(
+                                                              "shapes.rows.fillSpot",
+                                                              "Empty spot: press to take it out",
+                                                          )
+                                                }
+                                                title={
+                                                    filled
+                                                        ? tolgee.t(
+                                                              "shapes.rows.leaveEmpty",
+                                                              "Leave this spot empty",
+                                                          )
+                                                        : tolgee.t(
+                                                              "shapes.rows.fillSpot",
+                                                              "Empty spot: press to take it out",
+                                                          )
+                                                }
+                                                onClick={() =>
+                                                    env &&
+                                                    apply(
+                                                        rows.toggleSpot(
+                                                            target.params,
+                                                            target.spots,
+                                                            row.index,
+                                                            j,
+                                                            env,
+                                                        ),
+                                                    )
+                                                }
+                                                data-testid={`shape-rows-dot-${i}-${j}`}
+                                                className={clsx(
+                                                    "group flex h-24 items-center justify-center px-1",
+                                                    row.side === null
+                                                        ? "text-accent"
+                                                        : "text-text",
+                                                )}
+                                            >
+                                                <span
+                                                    className={clsx(
+                                                        "block rounded-full group-hover:scale-125",
+                                                        filled
+                                                            ? "bg-current"
+                                                            : "border border-current opacity-60",
+                                                    )}
+                                                    style={{
+                                                        width: dot,
+                                                        height: dot,
+                                                    }}
+                                                />
+                                            </button>
+                                        ))}
+                                    </span>
+                                    <NumberChip
+                                        param={param}
+                                        display={param.display(
+                                            params,
+                                            spots,
+                                            stepPx,
+                                        )}
+                                        note={null}
+                                        canLess={can(param, -1)}
+                                        canMore={can(param, 1)}
+                                        glyph={null}
+                                        actions={actions}
+                                    />
+                                    <span className="flex items-center justify-center">
+                                        {moves &&
+                                            ([-1, 1] as const).map((by) => (
+                                                <Fragment key={by}>
+                                                    {by > 0 && (
+                                                        <span
+                                                            className={clsx(
+                                                                "min-w-20 text-center tabular-nums",
+                                                                row.shift ===
+                                                                    0 &&
+                                                                    "text-text/60",
+                                                            )}
+                                                            data-testid={`shape-rows-offset-${i}`}
+                                                        >
+                                                            {offsetText(
+                                                                row.shift,
+                                                            )}
+                                                        </span>
+                                                    )}
+                                                    <IconButton
+                                                        label={sitsTip(
+                                                            row.shift,
+                                                            by,
+                                                            across,
+                                                        )}
+                                                        onClick={() =>
+                                                            apply(
+                                                                rows.shift(
+                                                                    target.params,
+                                                                    target.spots,
+                                                                    row.index,
+                                                                    by,
+                                                                ),
+                                                            )
+                                                        }
+                                                        testId={`shape-rows-sits-${by < 0 ? "less" : "more"}-${i}`}
+                                                    >
+                                                        {by < 0 ? (
+                                                            <CaretLeftIcon
+                                                                size={10}
+                                                            />
+                                                        ) : (
+                                                            <CaretRightIcon
+                                                                size={10}
+                                                            />
+                                                        )}
+                                                    </IconButton>
+                                                </Fragment>
+                                            ))}
+                                    </span>
+                                    {row.side === null ? (
+                                        <span />
+                                    ) : (
+                                        <IconButton
+                                            label={tolgee.t(
+                                                "shapes.rows.remove",
+                                                "Remove {name}: its marchers go to the shortest rows",
+                                                { name },
+                                            )}
+                                            onClick={() =>
+                                                apply(
+                                                    rows.remove(
+                                                        target.params,
+                                                        target.spots,
+                                                        row.index,
+                                                    ),
+                                                )
+                                            }
+                                            testId={`shape-rows-remove-${i}`}
+                                        >
+                                            <XIcon size={10} />
+                                        </IconButton>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                    <span className="text-text/60 px-4">
+                        {tolgee.t(
+                            "shapes.rows.dotHint",
+                            "Press a dot to leave that spot empty",
+                        )}
+                    </span>
+                    {many && (
+                        <>
+                            <div className="bg-stroke my-4 h-px" />
+                            <span className="text-text/60 px-4">
+                                {tolgee.t("shapes.rows.spacing", "Spacing")}
+                            </span>
+                            {[rows.apart, rows.slant].map((param) => (
+                                <div
+                                    key={param.key}
+                                    className="flex min-h-24 items-center justify-between gap-8 pl-4"
+                                >
+                                    <span>
+                                        {param === rows.apart
+                                            ? tolgee.t(
+                                                  "shapes.rows.rowApart",
+                                                  "Rows apart",
+                                              )
+                                            : tolgee.t(
+                                                  "shapes.rows.rowSlant",
+                                                  "Slant",
+                                              )}
+                                    </span>
+                                    <NumberChip
+                                        param={param}
+                                        display={param.display(
+                                            params,
+                                            spots,
+                                            stepPx,
+                                        )}
+                                        note={null}
+                                        after={tolgee.t(
+                                            "shapes.edit.steps",
+                                            "steps",
+                                        )}
+                                        canLess={false}
+                                        canMore={false}
+                                        glyph={null}
+                                        actions={actions}
+                                    />
+                                </div>
+                            ))}
+                        </>
+                    )}
+                    <div className="bg-stroke my-4 h-px" />
+                    <Tip
+                        label={
+                            removable
+                                ? tolgee.t(
+                                      "shapes.rows.clearTip",
+                                      "Back to the one line you drew",
+                                  )
+                                : tolgee.t(
+                                      "shapes.rows.clearNone",
+                                      "No rows yet",
+                                  )
+                        }
+                    >
+                        <button
+                            type="button"
+                            aria-disabled={!removable || undefined}
+                            onClick={() => {
+                                if (!removable) return;
+                                apply(rows.clear(target.params));
+                                setOpen(false);
+                            }}
+                            data-testid="shape-rows-clear"
+                            className={clsx(
+                                "rounded-4 min-h-24 px-4 py-2 text-left",
+                                removable ? "hover:text-accent" : "opacity-40",
+                            )}
+                        >
+                            {tolgee.t("shapes.rows.clear", "Remove rows")}
+                        </button>
+                    </Tip>
+                </Popover.Content>
+            </Popover.Portal>
+        </Popover.Root>
+    );
+}
+
+/** A row's name in the Rows menu: the drawn line, or so many behind, in front, left or right */
+function rowName(row: RowView, across: boolean): string {
+    if (row.side === null) return tolgee.t("shapes.rows.drawn", "Drawn");
+    const count = { count: row.away };
+    if (row.side === "far")
+        return across
+            ? tolgee.t("shapes.rows.behindN", "Behind {count}", count)
+            : tolgee.t("shapes.rows.leftN", "Left {count}", count);
+    return across
+        ? tolgee.t("shapes.rows.frontN", "Front {count}", count)
+        : tolgee.t("shapes.rows.rightN", "Right {count}", count);
+}
+
+/** Where a row sits along the line, in spots: 0, or ±½, ±1, ±1½… (a shift counts half spots) */
+function offsetText(shift: number): string {
+    if (shift === 0) return "0";
+    const whole = Math.floor(Math.abs(shift) / 2);
+    const half = Math.abs(shift) % 2 === 1 ? "½" : "";
+    return `${shift < 0 ? "−" : "+"}${whole || !half ? whole : ""}${half}`;
+}
+
+/** What a row's arrow does, and where the row sits now */
+function sitsTip(shift: number, by: -1 | 1, across: boolean): string {
+    const way =
+        by > 0
+            ? across
+                ? tolgee.t("shapes.rows.sitsRight", "Half a spot to the right")
+                : tolgee.t(
+                      "shapes.rows.sitsBack",
+                      "Half a spot toward the back",
+                  )
+            : across
+              ? tolgee.t("shapes.rows.sitsLeft", "Half a spot to the left")
+              : tolgee.t(
+                    "shapes.rows.sitsForward",
+                    "Half a spot toward the front",
+                );
+    if (shift === 0)
+        return tolgee.t(
+            "shapes.rows.sitsCentered",
+            "{way}. It sits centered now",
+            {
+                way,
+            },
+        );
+    return tolgee.t(
+        "shapes.rows.sitsNow",
+        "{way}. It sits {half, plural, one {# half spot} other {# half spots}} {side} now",
+        {
+            way,
+            half: Math.abs(shift),
+            side:
+                shift > 0
+                    ? across
+                        ? tolgee.t("shapes.rows.sideRight", "right")
+                        : tolgee.t("shapes.rows.sideBack", "back")
+                    : across
+                      ? tolgee.t("shapes.rows.sideLeft", "left")
+                      : tolgee.t("shapes.rows.sideForward", "forward"),
+        },
+    );
+}
 
 /** The field less the covers over its top (the touch toolbar's panel), in the field's px */
 function visibleField(
@@ -1540,6 +2319,22 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
             hitRadius: HANDLE_REACH_PX / (view.zoom || 1),
             stemUnit: HANDLE_REACH_PX / (view.zoom || 1),
         });
+        // A mirrored paste's pink point (Paste mirrored) is kept clear too: it's what's dragged
+        const tool = useShapeToolStore.getState().tool;
+        const point =
+            tool?.mirror && tool.params === params
+                ? fieldToElement(view, tool.mirror.point.x, tool.mirror.point.y)
+                : null;
+        const clearOfPoint = point
+            ? [
+                  {
+                      left: point.x - MIRROR_POINT_CLEAR_PX,
+                      top: point.y - MIRROR_POINT_CLEAR_PX,
+                      width: 2 * MIRROR_POINT_CLEAR_PX,
+                      height: 2 * MIRROR_POINT_CLEAR_PX,
+                  },
+              ]
+            : [];
         return clearPlacement(
             {
                 outline: outline.map((p) => fieldToElement(view, p.x, p.y)),
@@ -1559,7 +2354,7 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
                 fieldWidth: room.fieldWidth,
                 fieldHeight: room.fieldHeight,
             },
-            obstacles.current.all,
+            [...obstacles.current.all, ...clearOfPoint],
             obstacles.current.covers,
             // #936, touch layout: never off the field or under the toolbar panel, so Place and
             // Discard can always be tapped

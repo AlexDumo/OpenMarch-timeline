@@ -100,6 +100,9 @@ import { useIsBasicMode } from "@/stores/EditorModeStore";
 import { useBasicLocksStore } from "@/timeline/basicLocks";
 import { useBasicPoints } from "./useBasicPoints";
 import type Page from "@/global/classes/Page";
+import { useEquipmentLaneBand } from "./cues/EquipmentLane";
+import { MovesHiddenStrip, MovesLaneHeader } from "./cues/MovesLaneHeader";
+import { useLaneShown } from "@/timeline/timelineLanes";
 
 const NO_WAVEFORM = { peaksByBeat: [] };
 const NO_CLIPS: TimelineInput[] = [];
@@ -133,6 +136,7 @@ function useBasicTimelineExtras(pages: readonly Page[]) {
                 page:
                     names.get(`${point.box.start}:${point.box.end}`)?.name ??
                     "",
+                removeReason: point.removeReason,
             })),
             onRemoveBasicPoint: (beat: number) => {
                 const point = points.find((p) => p.beat === beat);
@@ -153,16 +157,29 @@ const LOOP_BUTTONS = (
     </>
 );
 const SPEED_BUTTON = <TimelineSpeedButton />;
+const MOVES_HEADER = <MovesLaneHeader />;
+const MOVES_HIDDEN_STRIP = <MovesHiddenStrip />;
 /**
- * Tempo mode: the Tempo button leads the transport's view controls. In tempo mode
- * it's the only one: Play loops the selected measures, so no Loop button
+ * Tempo mode: the Edit music button ends the transport's row, after a divider, so it isn't read as
+ * one of the view controls (Fit, Compact) before it (owner, 2026-11-24). In tempo mode it's left
+ * out: the mode's header has Done, the one button out, and Play loops the selected measures, so no
+ * Loop button
  */
-const TEMPO_VIEW_CONTROLS = <TempoModeButton />;
-const BASIC_VIEW_CONTROLS = <TempoModeButton />;
+const TEMPO_VIEW_CONTROLS = null;
+const EDIT_MUSIC = (
+    <>
+        <span
+            aria-hidden="true"
+            className="bg-stroke mx-4 h-16 w-px shrink-0"
+        />
+        <TempoModeButton />
+    </>
+);
+const BASIC_VIEW_CONTROLS = EDIT_MUSIC;
 const EXPERT_VIEW_CONTROLS = (
     <>
-        <TempoModeButton />
         <TimelineCompactButton />
+        {EDIT_MUSIC}
     </>
 );
 
@@ -212,6 +229,11 @@ export default function TimelineModePanel() {
     // Expert parts (clips, the loop, isolation, moves): docs/timeline/research/basic-mode
     // Tempo mode: the timeline shows the tempo lanes in place of the clips, in Basic too
     const tempoMode = useTempoModeStore((s) => s.on);
+    // The cue lanes under the drill rows (ADR 0015 D-7), hidden until shown
+    const equipmentLane = useEquipmentLaneBand();
+    // Moves is a lane too (fork #992): hidden, the move tracks fold into a "Moves hidden" strip
+    // that shows them again; the drill doesn't change
+    const movesShown = useLaneShown("moves");
     const basic = useIsBasicMode() && !tempoMode;
     const basicExtras = useBasicTimelineExtras(pages);
     const compact = useUiSettingsStore((s) => s.uiSettings.timelineCompact);
@@ -588,8 +610,15 @@ export default function TimelineModePanel() {
                     beats={beats}
                     pages={pages}
                     measures={measures}
-                    timelines={basic || tempoMode ? NO_CLIPS : offPage}
+                    timelines={
+                        basic || tempoMode || !movesShown ? NO_CLIPS : offPage
+                    }
+                    movesHeader={MOVES_HEADER}
+                    movesHiddenStrip={
+                        movesShown ? undefined : MOVES_HIDDEN_STRIP
+                    }
                     band={tempoMode ? TEMPO_BAND : undefined}
+                    lanes={tempoMode ? undefined : equipmentLane}
                     pageMoves={pageMoves}
                     transportAccessories={
                         basic || tempoMode ? SPEED_BUTTON : LOOP_BUTTONS

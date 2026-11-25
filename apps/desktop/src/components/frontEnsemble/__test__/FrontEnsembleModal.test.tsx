@@ -9,11 +9,7 @@ import {
 import { afterEach, beforeAll, expect, vi } from "vitest";
 import { useEffect } from "react";
 import { describeDbTests, schema, type DbConnection } from "@/test/base";
-import {
-    harnessQueryClient,
-    selectTimeline,
-    setUpFeature,
-} from "@/test/featureHarness";
+import { harnessQueryClient, setUpFeature } from "@/test/featureHarness";
 import tolgee from "@/global/singletons/Tolgee";
 import { stopTimelineResolver } from "@/timeline/timelineStore";
 import { createItems, getItemGeometry, getItems } from "@/db-functions/items";
@@ -161,24 +157,35 @@ describeDbTests("Front ensemble panel", (it) => {
         const row = await screen.findByTestId("front-ensemble-summary");
         expect(within(row).getByText("No pit yet")).toBeTruthy();
         fireEvent.click(within(row).getByRole("button", { name: "Set up" }));
-        // The list of what the show has, with Add and the presets in its header
-        await screen.findByText(
-            "No front ensemble yet. Add equipment and podiums, or start from a preset.",
-        );
+        // An empty view offers both ways to start in its body: a preset (Medium picked) or
+        // equipment one piece at a time. Its header has neither Add nor the presets button
+        await screen.findByRole("heading", { name: "Start from a preset" });
         expect(
-            screen.getByRole("button", { name: "Start from a preset" }),
+            screen.getByRole("heading", { name: "Or build it yourself" }),
         ).toBeTruthy();
+        expect(screen.queryByRole("button", { name: "Add" })).toBeNull();
+        const presets = screen.getByRole("region", { name: "Presets" });
+        expect(
+            within(presets)
+                .getByRole("radio", { name: "Medium" })
+                .getAttribute("aria-checked"),
+        ).toBe("true");
+        expect(
+            within(presets).queryByRole("radio", { name: "None" }),
+        ).toBeNull();
+        expect(
+            within(presets).getByRole("button", { name: "Use this preset" }),
+        ).toBeTruthy();
+        expect(screen.queryByTestId("pit-presets-button")).toBeNull();
         // Add is its own view (the pictures), with a way back to the list
         const unregisterAdd = registerActionHandler(
             "addFrontEnsembleEquipment",
             { run: openFrontEnsembleAdd, isEnabled: () => true },
         );
-        fireEvent.click(screen.getByRole("button", { name: "Add" }));
+        fireEvent.click(screen.getByRole("button", { name: "Add equipment" }));
         await screen.findByRole("region", { name: "Add equipment" });
         fireEvent.click(screen.getByRole("button", { name: "Back" }));
-        await screen.findByText(
-            "No front ensemble yet. Add equipment and podiums, or start from a preset.",
-        );
+        await screen.findByRole("heading", { name: "Start from a preset" });
         unregisterAdd();
         // The Marchers button stays lit: the view is part of that panel
         expect(useSidebarModalStore.getState().contentId).toBe("marchers");
@@ -214,11 +221,13 @@ describeDbTests("Front ensemble panel", (it) => {
             name: "Add equipment",
         });
         // Every model is a picture, named by family and variant; the default is marked, and
-        // each tells its footprint
+        // each tells its footprint, in the show's units (feet and inches: the test show is imperial)
         const rosewood43 = within(ensemble).getByRole("button", {
             name: "Marimba · 4.3 octaves · Rosewood Default",
         });
-        expect(rosewood43).toHaveAccessibleDescription("2.13 × 0.9 m");
+        expect(rosewood43).toHaveAccessibleDescription(
+            `6' 11 7/8" × 2' 11 3/8"`,
+        );
         expect(rosewood43.querySelector("img")).not.toBeNull();
         // The search box narrows the pictures
         fireEvent.change(
@@ -425,7 +434,7 @@ describeDbTests("Front ensemble panel", (it) => {
         expect((await getItems({ db }))[0].locked).toBe(true);
     });
 
-    it("locks an item with moves where it is at the playhead, not at its home", async ({
+    it("locks an item from its switch, keeping its moves", async ({
         db,
         marchersAndPages,
     }) => {
@@ -455,19 +464,19 @@ describeDbTests("Front ensemble panel", (it) => {
         });
         const resolverOf = async () =>
             createResolver((await readTimelineTables(db)).snapshot);
-        const at9 = (await resolverOf()).positionAt(prop.marcher_id, 9);
-        expect(at9).not.toEqual([100, 100]);
+        const before = await resolverOf();
 
         await setUpFeature(<PropEditContents itemId={prop.id} />, PAGE, []);
-        // The playhead on beat 9
-        await selectTimeline({ start: 1, end: 9 });
         fireEvent.click(await screen.findByRole("switch", { name: "Locked" }));
         await waitFor(async () =>
             expect((await getItems({ db }))[0].locked).toBe(true),
         );
+        // A lock changes nothing but the lock (props epic step 2)
         const resolver = await resolverOf();
         for (const beat of [0, 1, 9, 17, 30])
-            expect(resolver.positionAt(prop.marcher_id, beat)).toEqual(at9);
+            expect(resolver.positionAt(prop.marcher_id, beat)).toEqual(
+                before.positionAt(prop.marcher_id, beat),
+            );
     });
 
     it("places a podium with the turn the tool gave it", async ({
@@ -676,7 +685,7 @@ describeDbTests("Front ensemble panel", (it) => {
         expect(await screen.findByText(/No props yet/)).toBeInTheDocument();
     });
 
-    it("tells the inspector's reader selected equipment is edited with a right-click", async ({
+    it("tells the inspector's reader a locked item stays put and where a prop's look is edited", async ({
         db,
         marchersAndPages,
     }) => {
@@ -691,12 +700,12 @@ describeDbTests("Front ensemble panel", (it) => {
             prop.marcher_id,
         ]);
         expect(
-            await screen.findByTestId("inspector-equipment-selected"),
+            await screen.findByTestId("inspector-locked-selected"),
         ).toHaveTextContent(
-            "1 piece of equipment selected. Right-click it to edit it.",
+            "1 locked item selected. It isn't moved here: right-click it and choose Unlock to move it.",
         );
         expect(
             screen.getByTestId("inspector-items-selected"),
-        ).toHaveTextContent("1 prop selected. Edit it in the Props panel.");
+        ).toHaveTextContent("Prop size and look: Props panel");
     });
 });

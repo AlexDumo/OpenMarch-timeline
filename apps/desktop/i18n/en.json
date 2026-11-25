@@ -19,7 +19,7 @@
             "snapToCustomFraction": "Snap to grid",
             "toggleSnap": "Toggle Snap",
             "toggleSnapKeywords": "snap magnet grid free",
-            "propsOnly": "Only props are selected: props aren't lined up or spaced"
+            "lockedOnly": "Only locked items are selected: locked items aren't lined up or spaced"
         },
         "batchEdit": {
             "clearPage": "Clear Page {page}",
@@ -50,8 +50,21 @@
             "holdOverWindow": "{holdOverWindow}"
         },
         "edit": {
+            "clearClipboard": "Clear the clipboard",
+            "clearClipboardKeywords": "clear empty clipboard copied formation forget remove",
+            "copy": "Copy",
+            "copyKeywords": "copy formation picture shape positions dots form set clipboard",
             "noRedoAvailable": "No action to redo",
             "noUndoAvailable": "No action to undo",
+            "paste": "Paste",
+            "pasteAsPositions": "Paste a copied shape as its positions",
+            "pasteAsPositionsKeywords": "paste positions coordinates exact spots dots shape clipboard",
+            "pasteAsShape": "Paste a copied shape as the shape",
+            "pasteInPlace": "Paste exactly",
+            "pasteInPlaceKeywords": "paste exactly in place same spot original position coordinates where copied formation restore",
+            "pasteKeywords": "paste formation picture shape positions dots form set clipboard onto selected",
+            "pasteMirrored": "Paste mirrored",
+            "pasteMirroredKeywords": "paste mirror mirrored reflect reflection flip symmetric symmetry opposite other side across point line 50 front back formation clipboard",
             "redo": "Redo",
             "redoFailed": "The redo couldn't be applied, so nothing changed.",
             "undo": "Undo",
@@ -116,6 +129,7 @@
             "newDialogue": "New file…",
             "openExport": "Export…",
             "saveDialogue": "Save a copy…",
+            "saveNow": "Save now",
             "removeUnusedAssets": "Remove unused assets…",
             "removeUnusedAssetsKeywords": "remove delete clean unused assets models imported size smaller"
         },
@@ -173,8 +187,15 @@
             "circle": "Shape: Circle",
             "ring": "Favorites ring: hold to pick a shape, tap to keep it open",
             "apply": "Place marchers on the shape",
+            "applyLoose": "Place marchers without keeping the shape",
             "removeLastPoint": "Shape: Remove the last point while drawing",
             "quarterTurn": "Shape: Turn 90° clockwise",
+            "mirrorSideToSide": "Mirrored paste: Mirror side to side",
+            "mirrorFrontToBack": "Mirrored paste: Mirror front to back",
+            "mirrorBoth": "Mirrored paste: Mirror both ways",
+            "mirrorKeywords": "mirror mirrored paste reflect flip side front back both point line",
+            "mirrorOnlyReason": "A mirrored paste only mirrors. Place it, then turn or resize it",
+            "mirrorNotOpen": "Paste mirrored first",
             "recalculate": "Shape: Recalculate who goes where",
             "evenOut": "Shape: Even out the outline",
             "hideMarchers": "Shape: Hide the marchers (hold to peek, tap to keep hidden)",
@@ -249,16 +270,74 @@
             "addFrontEnsembleEquipment": "Add front ensemble equipment or podium",
             "addFrontEnsembleEquipmentKeywords": "pit podium drum major marimba vibraphone percussion speaker mixer tower stepladder instrument",
             "openAssets": "Open the show's assets",
-            "openAssetsKeywords": "assets imported models files credits license size storage library"
+            "openAssetsKeywords": "assets imported models files credits license size storage library",
+            "toggleFieldVenue": "Show or hide venue on field",
+            "toggleFieldVenueKeywords": "stadium turf 3d background underlay logo end zone",
+            "showFieldVenue": "Show venue on field",
+            "hideFieldVenue": "Hide venue on field",
+            "toggleView3dCameraOnField": "Show or hide 3D View camera on field",
+            "showView3dCameraOnField": "Show 3D View camera on field",
+            "hideView3dCameraOnField": "Hide 3D View camera on field"
         },
         "items": {
             "edit": "Edit selected prop or equipment",
             "editNamed": "Edit {name}",
             "editKeywords": "edit settings properties prop equipment podium instrument name size lock",
+            "unlock": "Unlock selected prop or equipment",
+            "unlockNamed": "Unlock {name}",
+            "lock": "Lock selected prop or equipment",
+            "lockNamed": "Lock {name}",
+            "lockKeywords": "lock unlock prop equipment pit protect keep select move",
+            "resize": "Resize and turn",
+            "resizeKeywords": "resize turn rotate size scale handles prop equipment",
             "importModel": "Import a 3D model…",
             "importModelKeywords": "import 3d model glb gltf prop upload file object",
             "placeImportedModel": "Place an imported model",
             "placeImportedModelKeywords": "place imported model prop 3d custom glb"
+        },
+        "cues": {
+            "equipmentNone": "Equipment: Nothing",
+            "equipmentKeywords": "equipment cue hold holds carry prop guard rifle flag sabre horn drum instrument",
+            "selectHoldingNone": "Select empty hands",
+            "selectHoldingKeywords": "select who holds holding equipment rifles flags sabres playhead",
+            "addSelected": "Add selected to this cue",
+            "removeSelected": "Remove selected from this cue",
+            "makeLasting": "Make cue lasting",
+            "makeMomentary": "Make cue momentary",
+            "params": {
+                "length": "Counts",
+                "degrees": "Degrees"
+            },
+            "delete": "Delete cue",
+            "cueKeywords": "cue equipment performers add remove momentary lasting delete",
+            "toggleEquipmentLane": "Show or hide the Equipment lane",
+            "equipmentIconsOff": "Equipment icons: Off",
+            "equipmentIconsChanged": "Equipment icons: Changed only",
+            "equipmentIconsEveryone": "Equipment icons: Everyone",
+            "equipmentIconsBeside": "Equipment icons: Next to the number",
+            "equipmentIconsOnDot": "Equipment icons: In place of the dot",
+            "equipmentIconsOnNumber": "Equipment icons: In place of the number",
+            "equipmentIconsKeywords": "show equipment icons instrument field labels holds",
+            "laneKeywords": "equipment lane cues timeline row show hide",
+            "selectHoldingFamily": {
+                "guard": "Select all guard equipment",
+                "brass": "Select all brass",
+                "woodwinds": "Select all woodwinds",
+                "drums": "Select all drums"
+            },
+            "setEquipment": "Equipment: {item}",
+            "selectHolding": "Select {item}",
+            "equipmentUsual": "Equipment: Their own instrument",
+            "moveToPlayhead": "Move cue to playhead",
+            "endAtPlayhead": "End cue at playhead",
+            "toggleMovesLane": "Show or hide the Moves lane",
+            "setFacing": "Facing: {item}",
+            "facingTurnLeft": "Facing: Turn left 45°",
+            "facingTurnRight": "Facing: Turn right 45°",
+            "facingAngle": "Facing: Angle…",
+            "facingKeywords": "facing face turn direction angle degrees spin front back side",
+            "editTurn": "Edit turn…",
+            "toggleFacingLane": "Show or hide the Facing lane"
         },
         "path": {
             "pen": "Path pen",
@@ -378,7 +457,7 @@
         "title": "Command palette",
         "unavailable": "Not available right now",
         "offInPreview": "Not in Preview — exit Preview to edit",
-        "offInEditMusic": "Not while editing music — select Edit music to go back",
+        "offInEditMusic": "Not while editing music — select Done to go back",
         "shape": "Shape",
         "next": "Next",
         "done": "Done",
@@ -480,7 +559,15 @@
         "empty": "No ensembles found. Create one above!",
         "loading": "Loading ensembles...",
         "viewDetails": "View ensemble details",
-        "loadError": "Error loading ensembles: {error}"
+        "loadError": "Error loading ensembles: {error}",
+        "expiry": {
+            "expiredBadge": "Expired {date}",
+            "expiredExplanation": "These ensembles have expired. You can still open and attach their productions, but new productions and revisions can't be pushed to the mobile app. Contact sales@openmarch.com to extend one.",
+            "expiresIn": "{days, plural, =0 {Expires today ({date}).} one {Expires in # day ({date}).} other {Expires in # days ({date}).}} Contact sales@openmarch.com to extend it.",
+            "hideExpired": "Hide expired ensembles",
+            "noActive": "No active ensembles.",
+            "showExpired": "View expired ensembles ({count})"
+        }
     },
     "exportCoordinates": {
         "abbreviateCoordinateDescriptions": "Abbreviate coordinate descriptions",
@@ -534,6 +621,7 @@
         "noMarcher": "No marcher provided",
         "noMarcherPages": "No marcher pages provided",
         "noPages": "No pages provided",
+        "noDrillChartsMade": "No marcher's drill chart could be made",
         "showInFolder": "Show in folder",
         "openExportDirectoryError": "Could not open export directory: {error}",
         "organizeBySection": "Organize by Section",
@@ -621,7 +709,13 @@
         "checkFieldProperties": "Field Properties: {status, select, ok {✓} other {✗}}",
         "checkMarcher": "Marcher: {status, select, ok {✓} other {✗}}",
         "checkPage": "Page: {status, select, ok {✓} other {✗}}",
-        "organizeBySectionHint": "Create PDF files for each individual marcher, organized in folders by section. If this is not checked, one large PDF file will be created with every coordinate sheet in score order."
+        "organizeBySectionHint": "Create PDF files for each individual marcher, organized in folders by section. If this is not checked, one large PDF file will be created with every coordinate sheet in score order.",
+        "viewFrom": "View from",
+        "viewFromAudience": "Audience",
+        "viewFromPerformers": "Performers",
+        "viewFromTooltip": "Performers turns the field around, as marchers see it facing the front: the front sideline is at the top and side 1 is on the right. Yard numbers turn with the field; the labels around it stay upright.",
+        "drillChartPreviewLoading": "Drawing the preview…",
+        "drillChartPreviewUnavailable": "The preview couldn't be drawn."
     },
     "field": {
         "benchmark": {
@@ -669,7 +763,27 @@
         "areaCount": {
             "add": "{count, plural, one {+# marcher} other {+# marchers}}",
             "select": "{count, plural, one {# marcher} other {# marchers}}",
-            "subtract": "{count, plural, one {−# marcher} other {−# marchers}}"
+            "subtract": "{count, plural, one {−# marcher} other {−# marchers}}",
+            "addProps": "{props, plural, one {+# prop} other {+# props}}",
+            "addBoth": "{marchers, plural, one {+# marcher} other {+# marchers}} and {props, plural, one {# prop} other {# props}}",
+            "selectProps": "{props, plural, one {# prop} other {# props}}",
+            "selectBoth": "{marchers, plural, one {# marcher} other {# marchers}} and {props, plural, one {# prop} other {# props}}",
+            "subtractProps": "{props, plural, one {−# prop} other {−# props}}",
+            "subtractBoth": "{marchers, plural, one {−# marcher} other {−# marchers}} and {props, plural, one {# prop} other {# props}}"
+        },
+        "menu": {
+            "equipment": "Equipment",
+            "selectByEquipment": "Select by equipment",
+            "facing": "Facing"
+        },
+        "view3dCamera": {
+            "name": "3D View camera",
+            "move": "Move the 3D View camera",
+            "aim": "Aim the 3D View camera"
+        },
+        "lockedItem": {
+            "tag": "Locked",
+            "open": "Locked: click to unlock or edit it"
         }
     },
     "fieldDisplay": {
@@ -778,6 +892,37 @@
         "measurements": {
             "feet": "{value} ft",
             "meters": "{value} m"
+        },
+        "indoorFloor": {
+            "image": "Floor image",
+            "addImage": "Add floor image",
+            "imageHint": "The art printed on your floor, shown under the grid. If it has the shape of one of the floor sizes below, that size is picked for you.",
+            "unreadable": "That file isn't an image OpenMarch can read. Try a PNG or JPEG.",
+            "replaceImage": "Replace",
+            "removeImage": "Remove",
+            "matches": "Matches the {size} floor.",
+            "shapedLike": "Shaped like a {size} floor.",
+            "useSize": "Use {size}",
+            "noMatch": "This image's shape doesn't match a floor size below, so it's fitted inside the floor.",
+            "size": "Floor size",
+            "sizeFeet": "{depth} × {width} ft",
+            "fullSize": "WGI full size",
+            "stepSize": "Step size",
+            "step24": "24 inches",
+            "step30": "30 inches (6 to 5)",
+            "linesEvery": "Lines every {feet} ft ({steps} steps)",
+            "otherFields": "Other fields",
+            "backToFloors": "Indoor floor sizes",
+            "custom": "Custom",
+            "anySize": "Type a size",
+            "anyStep": "Type a step size",
+            "depth": "Front to back",
+            "width": "Side to side",
+            "feet": "ft",
+            "feetRange": "Use {min} to {max} feet.",
+            "stepLength": "Each step",
+            "inchesRange": "Use {min} to {max} inches.",
+            "matchesCustom": "The floor has this image's shape."
         }
     },
     "fileAccessDialogError": {
@@ -795,6 +940,7 @@
             "cancel": "Cancel",
             "description": "There's a leftover file, “{name}”, next to this show, from a save that didn't finish. OpenMarch can't use it where it is, but it can finish recovering the show from a copy. The leftover file is moved to OpenMarch's backups, not deleted.",
             "recover": "Recover and open",
+            "syncFolder": "This show is in a folder synced by {service}. Sync apps sometimes hold on to this file while OpenMarch saves, which leaves it behind.",
             "title": "A leftover file is stopping this show from opening"
         },
         "notFound": {
@@ -850,8 +996,8 @@
         "marcher": {
             "drillNumber": "Drill Number",
             "errorLoadingCoords": "Error loading coordinates",
-            "itemsSelected": "{count, plural, one {# prop selected. Edit it in the Props panel.} other {# props selected. Edit them in the Props panel.}}",
-            "equipmentSelected": "{count, plural, =1 {# piece of equipment selected. Right-click it to edit it.} other {# pieces of equipment selected. Right-click one to edit it.}}",
+            "propsLook": "Prop size and look: Props panel",
+            "lockedSelected": "{count, plural, one {# locked item selected. It isn't moved here: right-click it and choose Unlock to move it.} other {# locked items selected. They aren't moved here: right-click one and choose Unlock to move it.}}",
             "playing": "Playing. Pause to see and edit the selected marchers.",
             "maxStepSize": "Largest step size",
             "minStepSize": "Smallest step size",
@@ -884,6 +1030,8 @@
             },
             "title": "{count} Marchers",
             "titleSingle": "Marcher {drillNumber}",
+            "titleProp": "Prop {name}",
+            "titleWithProps": "{marchers, plural, one {# marcher} other {# marchers}} and {props, plural, one {# prop} other {# props}}",
             "addToTagCaption": "Add to tag",
             "alignHorizontallyCaption": "Horizontal",
             "alignVerticallyCaption": "Vertical",
@@ -1032,8 +1180,9 @@
                     "typeLabel": "Activity"
                 },
                 "field": {
-                    "description": "Pick a field template for your show.",
-                    "title": "Field setup"
+                    "indoorDescription": "Set up your floor: its art, its size and the grid's step size.",
+                    "activityTitle": "Activity and field",
+                    "activityDescription": "Choose your activity, then the field you perform on."
                 },
                 "performers": {
                     "description": "Add marchers now or skip and add them later in the editor.",
@@ -1349,6 +1498,11 @@
             "description": "OpenMarch couldn't reach its online service or confirm your sign-in. Check your internet connection and try again.",
             "retry": "Try again",
             "title": "Can't reach OpenMarch"
+        },
+        "expired": {
+            "addAudioDisabled": "Can't add audio: this ensemble expired on {date}.",
+            "banner": "This ensemble expired on {date}. New revisions can't be pushed to the mobile app. Contact sales@openmarch.com to extend it.",
+            "pushDisabled": "Can't push: this ensemble expired on {date}."
         }
     },
     "music": {
@@ -1491,6 +1645,8 @@
             "preset": "Couldn't apply the preset"
         },
         "height": "Height",
+        "lengthUnreadable": "Couldn't read “{text}” as a length. Type it like 4 ft 6 in, 4.5 ft or 1.4 m.",
+        "lengthTooSmall": "Too small: at least {min}.",
         "hide": "Hide on the field",
         "name": "Name",
         "offField": "Off field at the playhead. Move the playhead to a count where the prop is on the field to change its outline.",
@@ -1525,16 +1681,13 @@
         "title": "Props",
         "transition": "Transition",
         "width": "Width",
-        "units": {
-            "meters": "m"
-        },
         "locked": "Locked",
         "lockLabel": "Locked",
-        "lockHint": "One position for the whole show",
+        "lockHint": "Clicks and drags on the field pass over it",
         "imported": {
             "title": "Imported",
             "import": "Import…",
-            "empty": "Import a .glb or .gltf model, or drop one on the window, to place it like any prop.",
+            "empty": "Import a .glb, .gltf or .zip model, or drop one on the window, to place it like any prop.",
             "place": "Place {name}",
             "manage": "Manage assets"
         },
@@ -1562,6 +1715,7 @@
                 "description": "Drag to look around, then switch versions to see what simplifying changed.",
                 "which": "Version to show",
                 "lightCopy": "Light copy",
+                "farCopy": "Far-away copy",
                 "hint": "Drag to turn, scroll to zoom",
                 "stands": "From the stands",
                 "closeUp": "Close up",
@@ -1569,7 +1723,8 @@
             },
             "size": {
                 "title": "Size",
-                "value": "{width} × {depth} m, {height} m tall",
+                "dimensionsOf": "{width} × {depth}, {height} tall",
+                "inFile": "In the file: {width} × {depth} {unit}, {height} {unit} tall",
                 "question": "Is that its real size? If not, pick the unit the file was made in.",
                 "suggested": "It looked like it was made in {unit}, so it was converted. Check the size."
             },
@@ -1582,15 +1737,10 @@
             },
             "groups": {
                 "cantImport": "Can't import",
-                "needsChoice": "Needs your choice",
                 "fixed": "Fixed for you",
                 "notes": "Notes"
             },
             "tryAgain": "Try again",
-            "rotate": {
-                "title": "Stand it up (Z-up file)",
-                "detail": "Some programs export with Z as up, so the model lies on its back."
-            },
             "name": "Name",
             "saveFailed": "Couldn't add the model to the show.",
             "cancel": "Cancel",
@@ -1608,7 +1758,7 @@
             "cantImport": {
                 "noModelFile": {
                     "title": "No model in the files",
-                    "detail": "Pick a .glb file, or a .gltf with the files it names."
+                    "detail": "Pick a .glb file, a .zip from a model site, or a .gltf with the files it names."
                 },
                 "severalModelFiles": {
                     "title": "More than one model",
@@ -1652,7 +1802,7 @@
                     "detail": "{triangles} triangles; the most it can import is {limit}."
                 },
                 "rigged": {
-                    "title": "Rigged models aren't supported",
+                    "title": "This model's rig can't be read",
                     "detail": "Import a still version of it."
                 },
                 "noGeometry": {
@@ -1681,13 +1831,14 @@
                     "morphTargets": "{count, plural, one {# shape key} other {# shape keys}}",
                     "scenes": "{count, plural, one {# other scene} other {# other scenes}}"
                 },
+                "rigFrozen": "Removed its rig: it stands still, as posed without animation",
                 "pivotMoved": "Set it on the ground at its center"
             },
             "notes": {
                 "validatorWarnings": "{count, plural, one {The file has # warning} other {The file has # warnings}}",
                 "sizeOutOfRange": {
                     "title": "Unusual size for a prop",
-                    "detail": "Its longest side is {largest} m; props are usually {min} to {max} m."
+                    "detailOf": "Its longest side is {largest}; props are usually {min} to {max}."
                 },
                 "overTriangleCap": "Still detailed: {triangles} triangles (the aim is {cap})"
             }
@@ -1700,10 +1851,14 @@
             "title": "Add equipment",
             "button": "Add"
         },
-        "empty": "No front ensemble yet. Add equipment and podiums, or start from a preset.",
         "list": {
             "equipment": "Equipment",
             "podiums": "Podiums"
+        },
+        "custom": {
+            "title": "Or build it yourself",
+            "description": "Pick instruments, speakers and podiums one at a time.",
+            "button": "Add equipment"
         },
         "placeInstructions": "Click the field to place the {name}. It is on the field from the playhead's count.",
         "equipment": {
@@ -1719,7 +1874,7 @@
             "editTitle": "Edit Podium"
         },
         "default": "Default",
-        "footprint": "{width} × {depth} m",
+        "footprintSize": "{width} × {depth}",
         "groups": {
             "audio": "Audio",
             "keyboards": "Keyboards",
@@ -1733,14 +1888,11 @@
             "medium": "Medium",
             "large": "Large",
             "summary": {
-                "small": "2 marimbas, 2 vibes, a rack, a synth and 2 speakers",
-                "medium": "4 marimbas, 3 vibes, xylophone, glockenspiel, rack, drum set, synth and 4 speakers",
-                "large": "6 marimbas, 4 vibes, xylophone, glockenspiel, 2 racks, drum set, 2 synths and 6 speakers",
                 "none": "No pit. You can set one up later in the Marchers panel."
             },
-            "always": "Each also adds a podium on the 50 and a mixer behind the pit.",
             "addPerformers": "Also add performers",
             "apply": "Apply",
+            "use": "Use this preset",
             "replaces": "Replaces the equipment the last preset added. Its players move to the new spots; those left without an instrument are removed, unless they have moves later in the show. Undo brings everything back. Equipment you added yourself stays.",
             "none": "None",
             "start": "Start from a preset",
@@ -1798,6 +1950,8 @@
             "tuba": "Tuba"
         },
         "other": "Other",
+        "prop": "Prop",
+        "equipment": "Equipment",
         "pit": {
             "auxPercussion": "Aux Percussion",
             "drumSet": "Drum Set",
@@ -1867,6 +2021,15 @@
         "general.editorMode.note": "Switching keeps your show as it is. Anything made in Expert that Basic can't edit stays, plays and is shown as locked in Basic.",
         "general.language": "Language",
         "general.openView3dWithShow": "Open 3D View when a show opens",
+        "general.editorDisplay": "Open the editor on",
+        "general.view3dDisplay": "Open the 3D View on",
+        "general.windows": "Windows",
+        "general.windowDisplay.last": "Where you left it",
+        "general.windowDisplay.display": "Display {number} · {size}",
+        "general.windowDisplay.namedDisplay": "{name} · {size}",
+        "general.windowDisplay.main": "{display} (main)",
+        "general.windowDisplay.disconnected": "A display that isn't connected",
+        "general.windowDisplay.disconnected.description": "Until that display is connected again, the window opens where you left it.",
         "general.performanceMode": "Performance mode",
         "general.performanceMode.description": "Draw the field more simply so it stays smooth on slower computers. The field switches to this by itself when graphics run in software.",
         "general.showFullDatabasePath": "Show full file path",
@@ -1886,6 +2049,12 @@
         "privacy.analytics.disabled": "You are not sharing analytics. If you experience issues or bugs, we will not be aware of them. If you have an issue, please <a>submit feedback</a> so that we can address it.",
         "privacy.analytics.enabled": "You're sharing usage analytics. Thank you for helping us improve OpenMarch for everyone.",
         "privacy.analytics.toggle": "Enable analytics",
+        "privacy.discord": "Discord status",
+        "privacy.discord.about": "While Discord is open on this computer, your Discord status says you're designing a show in OpenMarch, and for how long. Your friends and the people in your servers can see it.",
+        "privacy.discord.showName": "Show the show's name",
+        "privacy.discord.showName.description": "Adds the name of the open show to your Discord status. Off unless you turn it on.",
+        "privacy.discord.showName.needsStatus": "Turn on the Discord status above first.",
+        "privacy.discord.toggle": "Show OpenMarch in my Discord status",
         "privacy.description": "Choose what OpenMarch shares to help improve the app.",
         "repairDotsFile": "Repair DOTS file",
         "repairDotsFile.cancel": "Cancel",
@@ -1974,7 +2143,15 @@
         "shortcuts.conflictWith": "<keys></keys> is already used by {actions}.",
         "shortcuts.recordingHint": "Press keys… (<keys></keys> to cancel)",
         "shortcuts.category.field": "Field",
+        "general.workingCopySaves": "Save shows through a working copy",
+        "general.workingCopySaves.description": "Edits go to a private copy, and your show file is updated a few seconds after you stop editing, all at once. Safe in folders that OneDrive, iCloud Drive or Dropbox sync. Turn it off to write every change straight to the show file, as earlier versions did. Applies to the next show you open.",
         "shortcuts.category.path": "Paths"
+    },
+    "discord": {
+        "presence.designing": "Designing a show",
+        "presence.getOpenMarch": "Get OpenMarch",
+        "presence.launchPage": "Choosing a show",
+        "presence.newShow": "Starting a new show"
     },
     "shapes": {
         "box": {
@@ -2047,6 +2224,15 @@
             "empty": "{count} empty",
             "flipAcross": "Flip side to side",
             "flipDeep": "Flip front to back",
+            "mirror": {
+                "label": "Mirror",
+                "across": "Side to side",
+                "acrossTip": "Mirror across the upright line through the mirror point: side 1 and side 2 swap",
+                "deep": "Front to back",
+                "deepTip": "Mirror across the level line through the mirror point: front and back swap",
+                "both": "Both",
+                "bothTip": "Mirror across both lines: half a turn around the mirror point"
+            },
             "expand": "Expand, keeping the proportions",
             "shrink": "Shrink, keeping the proportions",
             "shrinkFloor": "Shrink: no spacing can go under half a step",
@@ -2086,6 +2272,7 @@
                 "tip": "Turn and flip around the {pivot}"
             },
             "place": "Place",
+            "placeLoose": "Shift-click or <keys></keys>: place without keeping the shape",
             "quarterTurn": "Turn 90° clockwise",
             "guides": {
                 "label": "Guides",
@@ -2159,6 +2346,15 @@
             "groupNeedsTwo": "Select 2 or more marchers to group them",
             "ungroupError": "Couldn't ungroup the shape",
             "ungroupIsolated": "Ungroup this shape outside isolation: it comes from an earlier page",
+            "droppedAtFlag": {
+                "many": "{count, plural, one {# marcher isn't part of the shape at this flag anymore} other {# marchers aren't part of the shape at this flag anymore}}",
+                "one": "{name} isn't part of the shape at this flag anymore"
+            },
+            "leftOut": {
+                "hint": "A shape holds only marchers whose last mid-page position on this page is at the same count. Remove the positions that differ, then place the shape again.",
+                "many": "{count, plural, one {# marcher is on its spot, but isn't part of the shape} other {# marchers are on their spots, but aren't part of the shape}}",
+                "one": "{name} is on its spot, but isn't part of the shape"
+            },
             "leftShape": {
                 "many": "{count, plural, one {# left the {shape, select, block {box} circle {circle} other {shape}}} other {# left the {shape, select, block {box} circle {circle} other {shape}}}}",
                 "one": "{name} left the {shape, select, block {box} circle {circle} other {shape}}"
@@ -2484,6 +2680,97 @@
             "addGroup": "Add group",
             "list": "All groups as a list: count * steps, + between groups",
             "countAt": "{count} at {interval}"
+        },
+        "clipboard": {
+            "announceCleared": "Clipboard cleared",
+            "announceCopied": "{count, plural, one {Copied {name}, # marcher} other {Copied {name}, # marchers}}",
+            "announcePreview": "Paste preview. Enter places it, Escape discards it.",
+            "announceMirrorPreview": "Mirrored paste preview. Move the mirror point with the arrow keys, by clicking the field or by dragging it. Enter places it, Escape discards it.",
+            "anyNumber": "Pastes onto any number of marchers, keeping its size",
+            "asShape": "Shape",
+            "chipCopied": "Copied",
+            "chipEmptySpots": "{count, plural, one {# spot stays empty} other {# spots stay empty}}",
+            "chipExact": "{count, plural, one {Fits the # selected} other {Fits the # selected}}",
+            "chipLabel": "Clipboard: {name}, {count}. {status}. Show details",
+            "chipLaidOut": "{count, plural, one {Laid out for # marcher} other {Laid out for # marchers}}",
+            "chipLeftOut": "{count, plural, one {# marcher has no spot} other {# marchers have no spot}}",
+            "chipShapeOpen": "Place or discard the open shape",
+            "fitEmptySpots": "{count, plural, one {With {selected} selected, # spot stays empty} other {With {selected} selected, # spots stay empty}}",
+            "fitExact": "{count, plural, one {Fits the # marcher selected} other {Fits the # marchers selected}}",
+            "fitLaidOut": "{count, plural, one {Laid out for the # marcher selected} other {Laid out for the # marchers selected}}",
+            "fitLeftOut": "{count, plural, one {# selected marcher has no spot and stays put} other {# selected marchers have no spot and stay put}}",
+            "fixed": "{count, plural, one {Fills # spot: select # marcher to fill it} other {Fills # spots: select # marchers to fill them all}}",
+            "fold": "Hide clipboard details",
+            "left": "{count, plural, one {# marcher has no spot and stays put} other {# marchers have no spot and stay put}}",
+            "marchers": "{count, plural, one {# marcher} other {# marchers}}",
+            "pasteAs": "Paste as",
+            "pasteExactlyHint": "Puts the copy on the exact spot it was copied from, and the selected marchers take its spots by shortest walk.",
+            "pasteMirroredHint": "Puts the copy's mirror image across a point you drag, such as the 50, a yard line or a marcher. Choose side to side, front to back or both in its editor.",
+            "pictureLabel": "Picture of the copied formation",
+            "positions": "Positions",
+            "reasonEmpty": "Nothing is copied",
+            "reasonNotAShape": "Copy a whole shape first",
+            "reasonNothingCopied": "Copy marchers first",
+            "reasonOpenShape": "Place or discard the open shape first",
+            "reasonSelectToCopy": "Select marchers to copy them",
+            "reasonSelectToPaste": "Select the marchers to paste onto",
+            "restedTip": "Clipboard: {name}, {count} · Show details",
+            "shapeAsPositions": "{name} positions",
+            "title": "Clipboard"
+        },
+        "rows": {
+            "addBehind": "Behind",
+            "addBehindTip": "A row behind, the marchers shared out again",
+            "addFront": "In front",
+            "addFrontTip": "A row in front, the marchers shared out again",
+            "addLeft": "Left",
+            "addLeftTip": "A row to the left, the marchers shared out again",
+            "addNone": "No room for another row: every row needs a marcher",
+            "addRight": "Right",
+            "addRightTip": "A row to the right, the marchers shared out again",
+            "apart": "Rows apart, in steps",
+            "apartMark": "{count, plural, one {{steps} step apart} other {{steps} steps apart}}",
+            "behindN": "Behind {count}",
+            "clear": "Remove rows",
+            "clearNone": "No rows yet",
+            "clearTip": "Back to the one line you drew",
+            "colMarchers": "Marchers",
+            "colOffset": "Offset",
+            "count": "Marchers in this row",
+            "countLess": "One fewer here: to the shortest other row",
+            "countMore": "One more here: from the longest other row",
+            "dotHint": "Press a dot to leave that spot empty",
+            "drawn": "Drawn",
+            "fillSpot": "Empty spot: press to take it out",
+            "frontN": "Front {count}",
+            "heading": "{count} marchers in {rows} rows",
+            "headingEmpty": "{count} marchers in {rows} rows · {empty, plural, one {# empty spot} other {# empty spots}}",
+            "label": "Rows",
+            "leaveEmpty": "Leave this spot empty",
+            "leftN": "Left {count}",
+            "pickTip": "{perRow} in a row, {rows} rows",
+            "pickTipLast": "{perRow} in a row, {rows} rows, the last row {last}",
+            "picks": "Quick picks",
+            "remove": "Remove {name}: its marchers go to the shortest rows",
+            "rightN": "Right {count}",
+            "rowApart": "Rows apart",
+            "rowSlant": "Slant",
+            "sideBack": "back",
+            "sideForward": "forward",
+            "sideLeft": "left",
+            "sideRight": "right",
+            "sitsBack": "Half a spot toward the back",
+            "sitsCentered": "{way}. It sits centered now",
+            "sitsForward": "Half a spot toward the front",
+            "sitsLeft": "Half a spot to the left",
+            "sitsNow": "{way}. It sits {half, plural, one {# half spot} other {# half spots}} {side} now",
+            "sitsRight": "Half a spot to the right",
+            "slant": "How much further along each row starts than the one in front, in steps",
+            "slantMark": "Slant {steps}",
+            "spacing": "Spacing",
+            "splits": "Splits your {count} marchers. Adds none.",
+            "summary": "Rows · {count}",
+            "tip": "Split these marchers into rows alongside the line"
         }
     },
     "tags": {
@@ -2757,6 +3044,7 @@
             "point": {
                 "label": "Position at count {count} of page {page}",
                 "remove": "Remove this count's position",
+                "removeHeld": "{count, plural, =1 {This marcher is {heldLower} from this count, so its position here stays. Remove the hold first.} other {These marchers are {heldLower} from this count, so their positions here stay. Remove the holds first.}}",
                 "tooltip": "Position at count {count} of page {page}. Right-click to remove it."
             },
             "locked": "{count, plural, =1 {One marcher uses Expert moves on this page. Switch to Expert to edit it.} other {# marchers use Expert moves on this page. Switch to Expert to edit them.}}",
@@ -3163,6 +3451,11 @@
         },
         "clearPage": {
             "error": "Couldn't clear the page"
+        },
+        "lanes": {
+            "moves": "Moves",
+            "movesHidden": "Moves hidden",
+            "showMoves": "Show Moves"
         }
     },
     "titlebar": {
@@ -3188,13 +3481,12 @@
             "lockYCaption": "Lock Y",
             "snapCaption": "Snap to grid",
             "lockMarchersAriaLabel": "Cursor movement and marcher snap",
-            "placeAllMarchers": "Place all marchers",
-            "placeSelectedMarchers": "Place selected marchers",
+            "allMarchers": "All marchers",
+            "selectedMarchers": "Selected marchers",
             "clearThisPage": "{clearThisPage}",
             "snapToggleCaption": "Snap",
-            "toNextPageSpots": "...to next page's spots",
-            "setMarcherPositionsAriaLabel": "Set marcher positions",
-            "toPreviousPagePositions": "...to previous page positions"
+            "moveToNextPageSpots": "Move to next page's spots",
+            "setMarcherPositionsAriaLabel": "Set marcher positions"
         },
         "collisions": {
             "collisionsToolbar": "Collisions",
@@ -3237,6 +3529,15 @@
             "labelsNames": "Drill numbers",
             "labelsNumbers": "Numbers only",
             "labelsOff": "Off",
+            "equipment": "Equipment icons",
+            "equipmentChanged": "Changed only",
+            "equipmentEveryone": "Everyone",
+            "equipmentOff": "Off",
+            "equipmentPlace": "Where",
+            "equipmentBeside": "Next to the number",
+            "equipmentOnDot": "In place of the dot",
+            "equipmentOnNumber": "In place of the number",
+            "equipmentPlaceOffReason": "Equipment icons are off. Choose Changed only or Everyone to show them.",
             "nextPaths": "Next paths",
             "shapes": "Shapes",
             "shapesAlways": "Always",
@@ -3245,7 +3546,21 @@
             "order": "Order",
             "orderSelected": "While selected",
             "orderAlways": "Always",
-            "orderOff": "Off"
+            "orderOff": "Off",
+            "venue": "Venue",
+            "venueOff": "Off",
+            "venueFaint": "Faint",
+            "venueSoft": "Soft",
+            "venueMarkings": "Markings only",
+            "venueFull": "Full color",
+            "venueAround": "Around the field",
+            "venueAroundField": "None",
+            "venueAroundEdge": "Turf edge",
+            "venueAroundStands": "Stands",
+            "venueCamera": "3D View camera",
+            "venueCameraHint": "Shows where the 3D View is looking while it's open.",
+            "venueBlank": "This show's 3D View venue is Field only, so there's nothing to show. Choose another venue in the 3D View's settings.",
+            "venueEdgeStadiumOnly": "Only stadiums have a turf edge."
         },
         "alignmentTabShort": "Align",
         "pathsTab": "Paths"
@@ -3308,15 +3623,18 @@
         "camera": {
             "blimp": "Blimp",
             "corner": "Corner",
+            "directors": "Directors' area",
             "endZone": "End zone",
             "floor": "On the floor",
             "frontRow": "Front row",
             "geJudge": "GE judge",
+            "judges": "Judges' level",
             "judgesTable": "Judges' table",
             "lowerBowl": "Lower bowl",
             "podium": "Podium",
             "pressBox": "Press box",
             "sideline": "Sideline",
+            "soundBoard": "Sound board",
             "topDown": "Top down",
             "tunnel": "Tunnel",
             "upperDeck": "Upper deck"
@@ -3328,6 +3646,8 @@
             "college": "College bowl",
             "gym": "Indoor gym",
             "hs": "High school",
+            "markDiesel": "Mark Diesel Stadium",
+            "nightpound": "Taydon, OH",
             "pro": "Pro dome"
         },
         "lighting": {
@@ -3392,6 +3712,13 @@
             "homeColor": "Home",
             "awayColor": "Visitors",
             "endZones": "End zones",
+            "fieldLines": "Field lines",
+            "fieldLinesOption": {
+                "show": "Show's field",
+                "stadium": "Stadium's field"
+            },
+            "fieldLinesShowNote": "The lines of your show's field, as set up in Edit field.",
+            "fieldLinesStadiumNote": "The lines really painted in this stadium: its own yard numbers and hashes. Your show's field doesn't change, and marchers stay where you wrote them.",
             "endZoneText": "End-zone lettering",
             "endZoneTextPlaceholder": "No lettering",
             "endZoneColor": "Color",
@@ -3464,6 +3791,14 @@
             "goTo": "Go to {name}",
             "setView": "Set to current view",
             "setViewTooltip": "Move this camera to where the view is now",
+            "more": "More for {name}",
+            "dragToReorder": "Drag to reorder {name}",
+            "hideSettings": "Hide camera settings",
+            "alreadyFirst": "Already the first camera",
+            "alreadyLast": "Already the last camera",
+            "duplicate": "Duplicate",
+            "copyName": "{name} copy",
+            "copyNameN": "{name} copy {n}",
             "moveUp": "Move up",
             "moveDown": "Move down",
             "remove": "Remove",
@@ -3476,7 +3811,21 @@
             "removed": "Removed “{name}”",
             "undo": "Undo",
             "replace": "Replace",
-            "saveFailed": "Couldn't save the 3D View cameras"
+            "saveFailed": "Couldn't save the 3D View cameras",
+            "settings": "Camera settings",
+            "settingsTooltip": "Exact position, aim, lens and follow",
+            "followsBehind": "Follows a performer",
+            "followsEyes": "Looks out of a performer's eyes",
+            "export": "Export…",
+            "exportTooltip": "Save these cameras to a file",
+            "exportEmpty": "No cameras to export",
+            "import": "Import…",
+            "importTooltip": "Replace these cameras with a file's",
+            "importConfirm": "Replace your cameras with the {count, plural, one {# camera} other {# cameras}} in this file? You can undo it right after.",
+            "imported": "Imported {count, plural, one {# camera} other {# cameras}}",
+            "importNotCameras": "That file isn't an OpenMarch cameras file.",
+            "importInvalid": "That cameras file has a mistake in it, so nothing was imported.",
+            "importUnreadable": "Couldn't read that file."
         },
         "venue": {
             "updateFailed": "Couldn't change the 3D View venue"
@@ -3512,6 +3861,69 @@
             "unreadable": "That PNG couldn't be read.",
             "templateFailed": "The template couldn't be made.",
             "saveFailed": "Couldn't save the flag silk artwork"
+        },
+        "cameraSettings": {
+            "does": "Camera",
+            "follows": "Follows",
+            "around": "Angle",
+            "aroundTooltip": "Where the camera is around them: 0° behind, 90° their right, 180° in front, −90° their left",
+            "followTiltTooltip": "How far above them the camera looks down from. Below 0 looks up at them",
+            "distance": "Distance",
+            "distanceTooltip": "How far the camera is from them",
+            "lookTurn": "Turn",
+            "lookTurnTooltip": "Turns their look to the right. Below 0 turns it left",
+            "lookTiltTooltip": "Looks up. Below 0 looks down, e.g. at a drum",
+            "nobody": "Nobody",
+            "followView": "View",
+            "behind": "Outside",
+            "eyes": "Eyes",
+            "performer": "Performer",
+            "position": "Position",
+            "camera": "Camera",
+            "lookAt": "Looks at",
+            "across": "Across",
+            "acrossTooltip": "Toward side 2 from the center of the field (negative is toward side 1)",
+            "height": "Height",
+            "heightTooltip": "Above the field",
+            "front": "Front",
+            "frontTooltip": "Toward the audience from the front sideline (negative is onto the field)",
+            "units": "In {unit} from the center of the front sideline",
+            "ft": "feet",
+            "m": "meters",
+            "pan": "Pan",
+            "panTooltip": "Turned toward side 2 (negative toward side 1); 0 looks from the audience toward the back of the field. Drag to change.",
+            "tilt": "Tilt",
+            "tiltTooltip": "Aimed up (negative is down). Drag to change.",
+            "roll": "Roll",
+            "rollTooltip": "Turned clockwise around where it looks, tilting the picture. Drag to change.",
+            "lens": "Lens",
+            "focalLength": "Focal length",
+            "focalLengthTooltip": "As on a full-frame camera. Higher zooms in. Drag to change.",
+            "fieldOfView": "Field of view",
+            "fieldOfViewTooltip": "How much the camera takes in, top to bottom. Smaller zooms in. Drag to change.",
+            "mm": "mm",
+            "focus": "Focus",
+            "focusOff": "Off",
+            "focusLookAt": "Look-at",
+            "focusPerformer": "Performer",
+            "focusDistance": "Distance",
+            "focusDistanceField": "Focus distance",
+            "focusDistanceTooltip": "How far from the camera things are sharp. Drag to change.",
+            "fStop": "f-stop",
+            "fStopTooltip": "Lower blurs more of what's nearer and farther, as on a real lens. Drag to change.",
+            "sharpRange": "Looks sharp from {near} to {far} {unit}",
+            "sharpBeyond": "Looks sharp from {near} {unit} to the far distance"
+        },
+        "venueKind": {
+            "fitted": "Sized to your field",
+            "real": "Real venues",
+            "realHint": "Modeled on real buildings, at their real size.",
+            "field": "{venue}: a fixed {width} × {depth} ft field.",
+            "floor": "{venue}: a fixed {width} × {depth} ft floor."
+        },
+        "venueFit": {
+            "fallback": "This show's field is bigger than the {width} × {depth} ft floor at {venue}, so the 3D View shows the {fallback} instead.",
+            "tooBig": "{venue} has a fixed {width} × {depth} ft floor, and this show's field is {fieldWidth} × {fieldDepth} ft."
         }
     },
     "web": {
@@ -3937,7 +4349,8 @@
             "noDocument": {
                 "title": "Cannot Save or Export",
                 "message": "There is currently no active document to save or export."
-            }
+            },
+            "saveNow": "Save Now"
         },
         "view": {
             "title": "View",
@@ -3948,7 +4361,9 @@
             "resetZoom": "Actual Size",
             "zoomIn": "Zoom In",
             "zoomOut": "Zoom Out",
-            "toggleFullScreen": "Toggle Full Screen"
+            "toggleFullScreen": "Toggle Full Screen",
+            "movesLane": "Show or Hide Moves Lane",
+            "equipmentLane": "Show or Hide Equipment Lane"
         },
         "playback": {
             "title": "Playback",
@@ -3999,6 +4414,29 @@
         },
         "openFailed": {
             "title": "Error Loading Database"
+        },
+        "recoverOnOpen": {
+            "message": "OpenMarch closed before your last changes to “{name}” were saved.",
+            "detail": "Last edited {time}. Recover them to keep working where you left off, or discard them to open the show as it was last saved. Discarded changes can't be brought back.",
+            "recover": "Recover Changes",
+            "discard": "Discard Changes",
+            "cancel": "Cancel"
+        },
+        "saveAs": {
+            "button": "Save"
+        },
+        "unpublished": {
+            "message": "Your latest changes to “{name}” aren't in its file yet.",
+            "conflictDetail": "“{name}” was changed by another program or computer, so OpenMarch didn't write over it.",
+            "readOnlyDetail": "“{name}” is read-only, so OpenMarch can't write your changes to it.",
+            "busyDetail": "“{name}” couldn't be updated: another program may be using it, or its folder can't be written to.",
+            "busySyncDetail": "“{name}” couldn't be updated: {service} may be using it.",
+            "keptDetail": "If you close anyway, OpenMarch keeps your changes and offers to recover them the next time you open the show.",
+            "keepMine": "Keep My Version",
+            "saveAs": "Save As…",
+            "retry": "Try Again",
+            "closeAnyway": "Close Anyway",
+            "cancel": "Cancel"
         }
     },
     "cues": {
@@ -4006,6 +4444,149 @@
             "create": "Couldn't add the cue",
             "delete": "Couldn't delete the cue",
             "update": "Couldn't change the cue"
+        },
+        "label": {
+            "performers": "{count, plural, one {# performer} other {# performers}}"
+        },
+        "carry": {
+            "movedTo": "{count, plural, one {# cue moved} other {# cues moved}} to {where}",
+            "moved": "{count, plural, one {# cue moved} other {# cues moved}} to the counts after the ones you deleted",
+            "dropped": "{count, plural, one {# cue was deleted with those counts} other {# cues were deleted with those counts}}"
+        },
+        "value": {
+            "winds": "Horn",
+            "battery": "Drum",
+            "none": "Nothing",
+            "usual": "Their own instrument"
+        },
+        "lane": {
+            "equipment": "Equipment",
+            "foldedCount": "{groups, plural, one {# group} other {# groups}} · {count}",
+            "empty": "No equipment cues yet. Select performers, then right-click › Equipment.",
+            "selectRow": "Select these performers",
+            "selectPerformers": "Select its performers",
+            "markLabel": "{name}: {value}, {where}",
+            "menuHeading": "{value} · {name}",
+            "forCounts": "{count, plural, one {For # count} other {For # counts}}",
+            "dragStart": "Drag to change where it starts",
+            "dragEnd": "Drag to change where it ends",
+            "hide": "Hide this lane",
+            "lanes": "Lanes",
+            "hiddenCount": "· {count} hidden",
+            "find": "Find a lane…",
+            "inThisShow": "In this show",
+            "addLane": "Add a lane",
+            "cueCount": "{count, plural, one {# cue} other {# cues}}",
+            "noMatch": "No lanes match",
+            "hideNamed": "Hide {lane}",
+            "collapseRows": "Collapse rows",
+            "expandRows": "Expand rows",
+            "facing": "Facing",
+            "facingEmpty": "No facing cues yet. Select performers, then right-click › Facing.",
+            "turnMark": "{name}: {value}, {where}",
+            "dragTurnStart": "Drag to set where the turn starts",
+            "turnLabel": "{icon} {amount} · {count, plural, one {# count} other {# counts}}",
+            "turnLabelShort": "{icon} {amount}",
+            "dragCue": "Drag to move this facing change",
+            "dragToTurn": "Drag to turn over counts"
+        },
+        "item": {
+            "flag": "Flag",
+            "swingFlag": "Swing flag",
+            "doubleSwingFlag": "Double swing flags",
+            "rifle": "Rifle",
+            "sabre": "Sabre",
+            "trumpet": "Trumpet",
+            "mellophone": "Mellophone",
+            "baritone": "Baritone",
+            "euphonium": "Euphonium",
+            "trombone": "Trombone",
+            "bassTrombone": "Bass trombone",
+            "tuba": "Tuba",
+            "sousaphone": "Sousaphone",
+            "piccolo": "Piccolo",
+            "flute": "Flute",
+            "clarinet": "Clarinet",
+            "bassClarinet": "Bass clarinet",
+            "sopranoSax": "Soprano sax",
+            "altoSax": "Alto sax",
+            "tenorSax": "Tenor sax",
+            "bariSax": "Bari sax",
+            "snare": "Snare",
+            "tenors": "Tenors",
+            "bassDrum": "Bass drum",
+            "cymbals": "Cymbals"
+        },
+        "plural": {
+            "flag": "Flags",
+            "swingFlag": "Swing flags",
+            "doubleSwingFlag": "Double swing flags",
+            "rifle": "Rifles",
+            "sabre": "Sabres",
+            "trumpet": "Trumpets",
+            "mellophone": "Mellophones",
+            "baritone": "Baritones",
+            "euphonium": "Euphoniums",
+            "trombone": "Trombones",
+            "bassTrombone": "Bass trombones",
+            "tuba": "Tubas",
+            "sousaphone": "Sousaphones",
+            "piccolo": "Piccolos",
+            "flute": "Flutes",
+            "clarinet": "Clarinets",
+            "bassClarinet": "Bass clarinets",
+            "sopranoSax": "Soprano saxes",
+            "altoSax": "Alto saxes",
+            "tenorSax": "Tenor saxes",
+            "bariSax": "Bari saxes",
+            "snare": "Snares",
+            "tenors": "Tenors",
+            "bassDrum": "Bass drums",
+            "cymbals": "Cymbals"
+        },
+        "family": {
+            "guard": "Guard equipment",
+            "brass": "Brass",
+            "woodwinds": "Woodwinds",
+            "drums": "Drums"
+        },
+        "laneFamily": {
+            "equipment": "Equipment",
+            "facing": "Facing"
+        },
+        "reason": {
+            "paused": "Pause to change equipment",
+            "pausedSelect": "Pause to select by equipment",
+            "noCount": "Move the playhead onto a count",
+            "noCue": "Pick a cue in the Equipment lane first",
+            "allIn": "The selected performers are already in this cue",
+            "noneIn": "None of the selected performers is in this cue",
+            "atPlayhead": "The cue is already on the playhead's count",
+            "endBeforeStart": "Move the playhead after the cue's start first.",
+            "endsAtPlayhead": "The cue already ends at the playhead.",
+            "endPastNext": "The playhead is past these performers' next change. End the cue before it.",
+            "movesBasic": "Moves have bars in Expert only",
+            "notFacing": "Pick a turn in the Facing lane first",
+            "facingLasting": "Facing cues last until the next one",
+            "pausedFacing": "Pause to change facing"
+        },
+        "facing": {
+            "front": "Front",
+            "back": "Back",
+            "side1": "Side 1",
+            "side2": "Side 2",
+            "turnLeft": "Turn left 45°",
+            "turnRight": "Turn right 45°",
+            "angle": "Angle…"
+        },
+        "turn": {
+            "title": "{name} · turn into {where}",
+            "from": "From ({where})",
+            "to": "To ({where})",
+            "counts": "Counts",
+            "dial": "Where they end up",
+            "dialHint": "Drag the dot to where they end up. Keep going past a full circle to add a spin.",
+            "instant": "Instant"
         }
     },
     "coordinates": {
@@ -4231,9 +4812,7 @@
         },
         "button": {
             "hint": "The music file, and lining the counts up with it: tempo, time signatures, rehearsal marks",
-            "hintOn": "Line the counts up with the music. <escape></escape> or <toggle></toggle> leaves.",
             "label": "Edit music",
-            "labelOn": "Editing music",
             "text": "Edit music"
         },
         "errors": {
@@ -4241,53 +4820,6 @@
             "moveOneCountLong": "That move is only one count long",
             "wouldHideSet": "That would leave a keyframe ending on the same count as the move under it, hiding that move's set. Remove fewer counts, or end the keyframe a count earlier.",
             "wouldRemovePage": "That would remove a page. Remove fewer counts, or delete the page first."
-        },
-        "help": {
-            "doubleClickLane": {
-                "title": "Add a tempo change",
-                "text": "Double-click the tempo lane where it should change. Double-click a change's dot to remove it."
-            },
-            "dragChangeDot": {
-                "title": "Move a tempo change",
-                "text": "Drag its dot up or down to change the tempo, or sideways to move where it changes."
-            },
-            "dragEndDot": {
-                "title": "Set where a rit. ends",
-                "text": "Drag the square dot at the end of a stretch, so the next tempo can jump back (a tempo)."
-            },
-            "dragLine": {
-                "title": "Set a tempo",
-                "text": "Drag the tempo line up or down. To type a tempo, right-click and choose Set tempo…"
-            },
-            "dragMeasures": {
-                "title": "Select counts",
-                "text": "Drag along the measures or the music, then edit them all at once."
-            },
-            "dragRoundHandle": {
-                "title": "Change tempo gradually",
-                "text": "Drag the round handle in the middle of a stretch. Double-click it to jump again."
-            },
-            "keys": {
-                "escape": "Clear the selection, or cancel a drag; with nothing to clear, stop editing music",
-                "play": "Play from the playhead, or stop where it is",
-                "tap": "Tap tempo: tap on each beat to see how fast it is",
-                "toggle": "Start or stop editing music",
-                "metronome": "Metronome on or off"
-            },
-            "label": "How editing music works",
-            "rightClick": {
-                "title": "Holds and counts",
-                "text": "Right-click a count to make it a hold, change tempo gradually, or add and remove counts."
-            },
-            "rightClickMeasure": {
-                "title": "Measures and rehearsal marks",
-                "text": "Right-click a measure to renumber it, set its time signature or add a mark. Drag a mark to move it."
-            },
-            "title": "Line the counts up with the music",
-            "musicFile": {
-                "title": "Change the music",
-                "text": "Click the file's name in the header to switch, import or delete audio, or set the music offset."
-            }
         },
         "importScore": {
             "choose": "Choose a file…",
@@ -4922,6 +5454,47 @@
         "report": {
             "title": "Something not working?",
             "body": "Tell us what happened. You can record your screen and send a copy of your show."
+        }
+    },
+    "workingCopy": {
+        "status": {
+            "saved": "Saved",
+            "pending": "Edited",
+            "saving": "Saving…",
+            "problem": "Not in your folder yet"
+        },
+        "detail": {
+            "saved": "Your latest changes are in “{name}”.",
+            "pending": "Your changes are kept safe in OpenMarch and written to “{name}” a few seconds after you stop editing, when you switch to another app, and when you close the show.",
+            "deferred": "“{name}” couldn't be updated yet: another program may be using it, or its folder can't be written to. Your changes are kept safe in OpenMarch, which keeps trying on its own.",
+            "deferredSync": "“{name}” couldn't be updated yet: {service} may be using it. Your changes are kept safe in OpenMarch, which keeps trying on its own.",
+            "readOnly": "“{name}” is read-only, so OpenMarch can't write your changes to it. Save them as a new file to keep them.",
+            "conflict": "“{name}” was changed by another program or computer. Choose which version to keep."
+        },
+        "detailsLabel": "Save status",
+        "saveNow": "Save Now",
+        "saveAs": "Save As…",
+        "nothingToSave": "Everything is already saved",
+        "conflict": {
+            "title": "This show changed on disk",
+            "description": "“{name}” was changed by another program or computer since OpenMarch last saved it, so your latest changes haven't been written to it. Which version do you want to keep?",
+            "keepMine": "Keep my version",
+            "keepTheirs": "Use the version on disk",
+            "saveCopy": "Save mine as a new file…"
+        },
+        "missing": {
+            "title": "This show was moved or deleted",
+            "description": "“{name}” isn't where OpenMarch opened it from, so your latest changes haven't been saved to it.",
+            "saveHere": "Save it where it was"
+        },
+        "recovery": {
+            "title": "Recover unsaved changes",
+            "description": "OpenMarch closed before these changes reached their show files.",
+            "lastEdited": "Last edited {time}",
+            "missing": "the show file is missing",
+            "recover": "Recover",
+            "discard": "Discard",
+            "error": "Couldn't recover the changes: {error}"
         }
     },
     "assets": {

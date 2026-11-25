@@ -1,4 +1,5 @@
 import {
+    EQUIPMENT_USUAL,
     GUARD_CARRIES,
     cueSettings,
     cueValueLookup,
@@ -7,6 +8,7 @@ import {
     type CueValueLookup,
 } from "./library";
 import { holdStyles, isItem } from "./holdStyle";
+import { facingDegreesAt, facingTargetDegrees } from "./facing";
 import {
     CUE_TYPES,
     isCueType,
@@ -170,6 +172,24 @@ function lastingTimeline(
     }
     out.push(current);
     return out;
+}
+
+/**
+ * Adds each performer's angle to their Facing segments (fork #993), which come from the same
+ * lasting timeline as every type's (`lastingTimeline`): front, 0°, until their first cue; a cue's
+ * turn leads into its count (`transitionSegment`) at an even speed, from the angle they held
+ * before to where the value takes them from there (`facingTargetDegrees`).
+ */
+function withFacingDegrees(segments: readonly CueSegment[]): CueSegment[] {
+    let current = 0;
+    return segments.map((seg) => {
+        if (seg.kind === "transition") {
+            const from = current;
+            current = facingTargetDegrees(seg.value, seg.settings, from);
+            return { ...seg, fromDegrees: from, degrees: current };
+        }
+        return { ...seg, fromDegrees: current, degrees: current };
+    });
 }
 
 /** Flags or notes merged across marchers: one per kind and set of cues. */
@@ -481,6 +501,18 @@ export function cueValueAt(
         if (seg.kind !== "transition" || seg.to <= count) landed = seg.value;
     }
     return landed;
+}
+
+/**
+ * A performer's Facing in degrees at count clock `count` (fork #993): unwrapped, 0 front, 90 side
+ * 2; a turn in progress is part way, at an even speed.
+ */
+export function facingAt(
+    compiled: CompiledCues,
+    marcherId: number,
+    count: number,
+): number {
+    return facingDegreesAt(compiled.segments(marcherId, "facing"), count);
 }
 
 /**
@@ -805,6 +837,29 @@ function resolve(
 }
 
 /**
+ * "Their own instrument" (`EQUIPMENT_USUAL`) is the performer's section
+ * default: the segments show that default's value, so every reader (who
+ * holds what, the 2D tags, the 3D View) sees the real item. The cue stays
+ * the segment's cue.
+ */
+function resolveUsual(
+    segments: CueSegment[],
+    defaults: PerformerDefaults,
+    lookup: CueValueLookup,
+): void {
+    const usual = defaults.equipment.value;
+    const value = usual !== null ? lookup(usual) : undefined;
+    segments.forEach((seg, i) => {
+        if (seg.value !== EQUIPMENT_USUAL) return;
+        segments[i] = {
+            ...seg,
+            value: usual,
+            label: value?.label ?? seg.label,
+        };
+    });
+}
+
+/**
  * One performer's type from their cues: the lasting timeline with the
  * momentary cues laid over it. A cue's fit is checked on its count, against
  * what Equipment gives the performer there.
@@ -832,6 +887,21 @@ function resolveType(
         marcher.id,
         flags,
     );
+    // Facing is lasting only, and turns each performer from their own angle (fork #993)
+    if (type === "facing")
+        return {
+            placed,
+            segments: withFacingDegrees(
+                lastingTimeline(
+                    lookup,
+                    marcher.id,
+                    lasting,
+                    counts,
+                    flags,
+                    spans,
+                ),
+            ),
+        };
     const resolved = overlay(
         lastingTimeline(lookup, marcher.id, lasting, counts, flags, spans),
         momentarySpans(momentary, marcher.id, counts, flags, (count) =>
@@ -840,6 +910,7 @@ function resolveType(
                 : Infinity,
         ),
     );
+    if (type === "equipment") resolveUsual(resolved, defaults, lookup);
     return {
         placed,
         segments: input.travels

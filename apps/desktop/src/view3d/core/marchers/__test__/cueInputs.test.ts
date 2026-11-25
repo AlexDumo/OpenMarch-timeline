@@ -164,53 +164,114 @@ describe("the hold style", () => {
     });
 });
 
-describe("Facing cues", () => {
+describe("Facing cues (#993)", () => {
     // The marchers run a count ahead of the show (STEP_AHEAD): the body at
     // plan boundary b is what the show draws at count b - 1.
-    it("turn to the back over the transition, landing on the cue's click", () => {
-        // "back on 6", 2 counts: turning from the click of 5 to the click of 6
-        const out = inputs(drill(holds(10)), [on(1, 6, "builtin:facing.back")]);
-        const h = [...out.heading];
-        expect(h.slice(0, 7)).toEqual(Array(7).fill(0)); // show clicks -1..5
-        expect(Math.abs(h[7])).toBeCloseTo(Math.PI, 9); // show click 6
-        expect(Math.abs(h[10])).toBeCloseTo(Math.PI, 9);
-    });
-
-    it("snap in fixed time: 0.2 s before the click, not over the count", () => {
-        // "back on 6" as a snap, at 120 bpm: 0.2 s is 0.4 of a count
-        const out = inputs(drill(holds(10)), [
-            on(1, 6, "builtin:facing.back", { transition: 1 }),
-        ]);
-        expect(out.turnSpan[7]).toBeCloseTo(0.4, 9); // into show click 6
-        expect(out.turnSpan[6]).toBe(1);
-        const plan = {
+    const planOf = (out: ReturnType<typeof inputs>) =>
+        ({
             events: [],
-            counts: 11,
+            counts: out.heading.length,
             headings: out.heading,
             turnSpan: out.turnSpan,
-        } as MarcherPlan;
+        }) as MarcherPlan;
+    const degrees = (h: ArrayLike<number>) =>
+        Array.from(h, (r) => Math.round((r / DEG) * 1e6) / 1e6);
+
+    it("leads the turn into the cue's count and turns at an even speed", () => {
+        // "back on 10, turning over the 4 counts before": a transition of 5, counted
+        // inclusively, from the click of 6 to the click of 10
+        const out = inputs(drill(holds(12)), [
+            on(1, 10, "builtin:facing.back", { transition: 5 }),
+        ]);
+        // boundary b is show count b - 1
+        expect(degrees(out.heading)).toEqual([
+            0, 0, 0, 0, 0, 0, 0, 0, 45, 90, 135, 180, 180,
+        ]);
+        expect(out.turnSpan.every((s) => s === 1)).toBe(true);
+        // between the clicks too: a quarter of the way through count 7 is 56.25°
+        expect(headingAt(planOf(out), 8.25) / DEG).toBeCloseTo(56.25, 9);
+    });
+
+    it("spins a 360° turn all the way round, over 4 counts or in one", () => {
+        const four = inputs(drill(holds(8)), [
+            on(1, 6, "builtin:facing.angle", {
+                settings: { degrees: 360 },
+                transition: 5,
+            }),
+        ]);
+        expect(degrees(four.heading)).toEqual([
+            0, 0, 0, 0, 90, 180, 270, 360, 360,
+        ]);
+        const one = inputs(drill(holds(4)), [
+            on(1, 2, "builtin:facing.angle", {
+                settings: { degrees: 360 },
+                transition: 2,
+            }),
+        ]);
+        // halfway through the count it faces the back, not the front
+        expect(headingAt(planOf(one), 2.5) / DEG).toBeCloseTo(180, 9);
+    });
+
+    it("goes the long way to −270°, though it ends where 90° does", () => {
+        const out = inputs(drill(holds(6)), [
+            on(1, 4, "builtin:facing.angle", {
+                settings: { degrees: -270 },
+                transition: 4,
+            }),
+        ]);
+        expect(degrees(out.heading)).toEqual([0, 0, 0, -90, -180, -270, -270]);
+        expect(headingAt(planOf(out), 3.5) / DEG).toBeCloseTo(-135, 9);
+    });
+
+    it("turns each performer from their own angle", () => {
+        const K = 8;
+        const compiled = compileCues({
+            beats: Array.from({ length: K }, (_, i) => ({
+                id: 100 + i,
+                duration: 0.5,
+            })),
+            marchers: [
+                { id: 1, section: "Trumpet", carries: "winds" },
+                { id: 2, section: "Trumpet", carries: "winds" },
+            ],
+            cues: [
+                { ...on(1, 0, "builtin:facing.side2"), marcherIds: [1] },
+                {
+                    ...on(2, 6, "builtin:facing.back", { transition: 3 }),
+                    marcherIds: [1, 2],
+                },
+            ],
+        });
+        const at = (id: number) =>
+            degrees(marcherCueInputs(compiled, id, drill(holds(K))).heading);
+        // halfway through the turn (show count 5, boundary 6)
+        expect(at(1)[6]).toBe(135);
+        expect(at(2)[6]).toBe(90);
+        expect(at(1)[7]).toBe(180);
+        expect(at(2)[7]).toBe(180);
+    });
+
+    it("snaps an instant turn in fixed time, the short way round", () => {
+        // "back on 6", instant, at 120 bpm: 0.2 s is 0.4 of a count
+        const out = inputs(drill(holds(10)), [on(1, 6, "builtin:facing.back")]);
+        expect(out.turnSpan[7]).toBeCloseTo(0.4, 9); // into show click 6
+        expect(out.turnSpan[6]).toBe(1);
+        const plan = planOf(out);
         // plan boundary 7 is show click 6: still front at show count 5.5
         expect(headingAt(plan, 6.5)).toBeCloseTo(0, 9);
         expect(headingAt(plan, 6.6)).toBeCloseTo(0, 9);
         // halfway through the 0.4 counts, halfway round
         expect(Math.abs(headingAt(plan, 6.8))).toBeCloseTo(Math.PI / 2, 9);
         expect(Math.abs(headingAt(plan, 7))).toBeCloseTo(Math.PI, 9);
-    });
-
-    it("ease through a longer transition, halfway at its middle", () => {
-        // side 2 on 6 over 5 counts: from the click of 2 to the click of 6
-        const out = inputs(drill(holds(10)), [
-            on(1, 6, "builtin:facing.side2", { transition: 5 }),
+        // an instant spin doesn't whirl round in 0.2 s: it ends where it began
+        const spin = inputs(drill(holds(10)), [
+            on(1, 6, "builtin:facing.angle", { settings: { degrees: 360 } }),
         ]);
-        expect(out.heading[3]).toBeCloseTo(0, 9); // show click 2
-        expect(out.heading[5]).toBeCloseTo(45 * DEG, 9); // show click 4
-        expect(out.heading[7]).toBeCloseTo(90 * DEG, 9); // show click 6
-        // and in between the clicks it only moves forward
-        for (let b = 3; b < 7; b++)
-            expect(out.heading[b + 1]).toBeGreaterThan(out.heading[b]);
+        for (const c of [6.6, 6.7, 6.8, 6.9, 7])
+            expect(Math.cos(headingAt(planOf(spin), c))).toBeCloseTo(1, 9);
     });
 
-    it("face side 1, side 2, and an angle", () => {
+    it("face side 1, side 2, and an angle, unwrapped", () => {
         const at = (value: string, settings?: Record<string, unknown>) =>
             inputs(drill(holds(4)), [on(1, 0, value, { settings })]).heading[2];
         expect(at("builtin:facing.side1")).toBeCloseTo(-90 * DEG, 9);
@@ -221,7 +282,7 @@ describe("Facing cues", () => {
             9,
         );
         expect(at("builtin:facing.angle", { degrees: 270 })).toBeCloseTo(
-            -90 * DEG,
+            270 * DEG,
             9,
         );
     });
@@ -234,16 +295,11 @@ describe("Facing cues", () => {
         expect(out.heading[2]).toBeCloseTo(90 * DEG, 9);
     });
 
-    it("turn back when a momentary cue ends", () => {
-        // back for counts 4 and 5, as a snap
+    it("ignores a momentary Facing cue: facing is lasting only", () => {
         const out = inputs(drill(holds(10)), [
-            on(1, 4, "builtin:facing.back", { length: 2, transition: 1 }),
+            on(1, 4, "builtin:facing.back", { length: 2 }),
         ]);
-        const h = [...out.heading];
-        expect(h[4]).toBeCloseTo(0, 9); // show click 3
-        expect(Math.abs(h[5])).toBeCloseTo(Math.PI, 9); // show click 4
-        expect(Math.abs(h[6])).toBeCloseTo(Math.PI, 9);
-        expect(h[7]).toBeCloseTo(0, 9); // show click 6: the front again
+        expect([...out.heading]).toEqual(Array(11).fill(0));
     });
 
     it("face the direction of travel, and keep it on a hold", () => {

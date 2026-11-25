@@ -34,7 +34,7 @@ export default function StartStep({
     };
 
     return (
-        <div className="mx-auto flex w-full max-w-lg flex-col gap-12">
+        <div className="mx-auto flex w-full max-w-2xl flex-col gap-12">
             <div
                 role="button"
                 tabIndex={isImporting ? -1 : 0}
@@ -52,11 +52,11 @@ export default function StartStep({
             >
                 <span className="flex items-center gap-8">
                     <FileIcon size={28} />
-                    <span className="text-lg font-bold">
+                    <span className="text-h5 font-bold">
                         <T keyName="launchpage.newShow.steps.start.blank" />
                     </span>
                 </span>
-                <span className="text-text/70 text-sm font-normal">
+                <span className="text-text/70 text-body font-normal">
                     <T keyName="launchpage.newShow.steps.start.blankDescription" />
                 </span>
             </div>
@@ -77,11 +77,11 @@ export default function StartStep({
             >
                 <span className="flex items-center gap-8">
                     <DownloadSimpleIcon size={28} />
-                    <span className="text-lg font-bold">
+                    <span className="text-h5 font-bold">
                         <T keyName="launchpage.newShow.steps.start.importPrevious" />
                     </span>
                 </span>
-                <span className="text-text/70 text-sm font-normal">
+                <span className="text-text/70 text-body font-normal">
                     {sourceName
                         ? t("launchpage.newShow.steps.start.importSummary", {
                               fileName: sourceName,

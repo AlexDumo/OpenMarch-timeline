@@ -49,6 +49,8 @@ export interface ActionDefinition {
     labelSuffixKey?: string;
     /** The label names a page state or a hold command, filled from `holdTerms` */
     labelHoldTerms?: true;
+    /** i18n key of the `{item}` the label names, e.g. "cues.item.trumpet" in "Equipment: {item}" */
+    labelItemKey?: string;
     toggleOnKey?: string;
     toggleOffKey?: string;
     category: ActionCategory;
@@ -169,6 +171,129 @@ function buildNudgeActions(): Record<NudgeActionId, ActionDefinition> {
     return result;
 }
 
+/**
+ * The Equipment catalog's items (core's `equipmentCatalog`, fork #992), by key: `trumpet` is
+ * `builtin:equipment.trumpet`. The definitions test checks they match the catalog.
+ */
+export const EQUIPMENT_ITEM_KEYS = [
+    "flag",
+    "swingFlag",
+    "doubleSwingFlag",
+    "rifle",
+    "sabre",
+    "trumpet",
+    "mellophone",
+    "baritone",
+    "euphonium",
+    "trombone",
+    "bassTrombone",
+    "tuba",
+    "sousaphone",
+    "piccolo",
+    "flute",
+    "clarinet",
+    "bassClarinet",
+    "sopranoSax",
+    "altoSax",
+    "tenorSax",
+    "bariSax",
+    "snare",
+    "tenors",
+    "bassDrum",
+    "cymbals",
+] as const;
+export type EquipmentItemKey = (typeof EQUIPMENT_ITEM_KEYS)[number];
+export const EQUIPMENT_FAMILY_KEYS = [
+    "guard",
+    "brass",
+    "woodwinds",
+    "drums",
+] as const;
+type EquipmentFamilyKey = (typeof EQUIPMENT_FAMILY_KEYS)[number];
+
+const capitalize = <S extends string>(s: S) =>
+    (s.charAt(0).toUpperCase() + s.slice(1)) as Capitalize<S>;
+
+type EquipmentActionId =
+    | `equipment${Capitalize<EquipmentItemKey>}`
+    | "equipmentUsual"
+    | "equipmentNone"
+    | `selectHolding${Capitalize<EquipmentItemKey>}`
+    | `selectHoldingFamily${Capitalize<EquipmentFamilyKey>}`
+    | "selectHoldingNone";
+
+/** The Equipment action that sets `key` (an item, `usual` or `none`). */
+export const equipmentActionOf = (
+    key: EquipmentItemKey | "usual" | "none",
+): ActionId => `equipment${capitalize(key)}`;
+/** The action that selects who holds `key` (an item or `none`) at the playhead. */
+export const selectHoldingActionOf = (
+    key: EquipmentItemKey | "none",
+): ActionId => `selectHolding${capitalize(key)}`;
+/** The action that selects who holds anything of `family` at the playhead. */
+export const selectFamilyActionOf = (family: EquipmentFamilyKey): ActionId =>
+    `selectHoldingFamily${capitalize(family)}`;
+
+/**
+ * Equipment cues (ADR 0015 D-3, D-6; fork #992): what the selected performers hold from the
+ * paused playhead on, as one lasting cue that stores them (D-4), one action per catalog item, plus
+ * their own instrument (the section default) and nothing. And selecting whoever holds an item, or
+ * anything of a family, at the playhead, whatever their section (D-4, #377's `#rifles`). The field
+ * menu's Equipment submenu runs these. Unbound
+ */
+function buildEquipmentActions(): Record<EquipmentActionId, ActionDefinition> {
+    const set = (args: ActionArgs, extra: Partial<ActionDefinition>) =>
+        ({
+            labelKey: "actions.cues.setEquipment",
+            keywordsKey: "actions.cues.equipmentKeywords",
+            category: "batchEdit",
+            scope: "canvas",
+            defaultBindings: [],
+            args,
+            ...extra,
+        }) satisfies ActionDefinition;
+    const select = (args: ActionArgs, extra: Partial<ActionDefinition>) =>
+        ({
+            labelKey: "actions.cues.selectHolding",
+            keywordsKey: "actions.cues.selectHoldingKeywords",
+            category: "select",
+            scope: "canvas",
+            defaultBindings: [],
+            args,
+            ...extra,
+        }) satisfies ActionDefinition;
+    const result = {
+        equipmentUsual: set(
+            { equipment: "usual" },
+            { labelKey: "actions.cues.equipmentUsual" },
+        ),
+        equipmentNone: set(
+            { equipment: "none" },
+            { labelKey: "actions.cues.equipmentNone" },
+        ),
+        selectHoldingNone: select(
+            { holds: "none" },
+            { labelKey: "actions.cues.selectHoldingNone" },
+        ),
+    } as Record<EquipmentActionId, ActionDefinition>;
+    for (const key of EQUIPMENT_ITEM_KEYS) {
+        result[`equipment${capitalize(key)}`] = set(
+            { equipment: key },
+            { labelItemKey: `cues.item.${key}` },
+        );
+        result[`selectHolding${capitalize(key)}`] = select(
+            { holds: key },
+            { labelItemKey: `cues.plural.${key}` },
+        );
+    }
+    for (const family of EQUIPMENT_FAMILY_KEYS)
+        result[`selectHoldingFamily${capitalize(family)}`] = select(
+            { family },
+            { labelKey: `actions.cues.selectHoldingFamily.${family}` },
+        );
+    return result;
+}
+
 type FieldLineNudgeActionId =
     `fieldEditNudge${keyof typeof NUDGE_KEYS}${"" | "Fine"}`;
 
@@ -213,6 +338,14 @@ const STATIC_ACTIONS = {
         scope: "global",
         // Electron binds this in the native menu; the web build has none.
         defaultBindings: isWebBuild ? ["$mod+S"] : [],
+    },
+    // Working-copy saves (ADR 0018): write the show file now instead of a few seconds later.
+    // No default key yet: Cmd/Ctrl+S swaps marchers on desktop.
+    saveNow: {
+        labelKey: "actions.file.saveNow",
+        category: "file",
+        scope: "global",
+        defaultBindings: [],
     },
     launchNewFileDialogue: {
         labelKey: "actions.file.newDialogue",
@@ -509,6 +642,217 @@ const STATIC_ACTIONS = {
         defaultBindings: [],
         args: { style: "highMarkTime" },
     },
+    // The picked cue (the Equipment lane), else the one Equipment cue on the playhead's count:
+    // change who it applies to (owner on #991), make it lasting or momentary, delete it. Unbound
+    cueAddSelected: {
+        labelKey: "actions.cues.addSelected",
+        keywordsKey: "actions.cues.cueKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    cueRemoveSelected: {
+        labelKey: "actions.cues.removeSelected",
+        keywordsKey: "actions.cues.cueKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    cueMakeLasting: {
+        labelKey: "actions.cues.makeLasting",
+        keywordsKey: "actions.cues.cueKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    cueMakeMomentary: {
+        labelKey: "actions.cues.makeMomentary",
+        keywordsKey: "actions.cues.cueKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: [],
+        params: [
+            {
+                key: "length",
+                labelKey: "actions.cues.params.length",
+                unit: "count",
+                default: 8,
+                range: { min: 1 },
+            },
+        ],
+    },
+    // The touch and keyboard way to move a cue: to the playhead's count (a drag in the lane is
+    // the mouse way)
+    cueMoveToPlayhead: {
+        labelKey: "actions.cues.moveToPlayhead",
+        keywordsKey: "actions.cues.cueKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    cueDelete: {
+        labelKey: "actions.cues.delete",
+        keywordsKey: "actions.cues.cueKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    // Shows or hides one of the timeline's lanes (`timeline/timelineLanes.ts`), as its entry in
+    // the Lanes menu, the View menu and its eye button do. Unbound
+    toggleMovesLane: {
+        labelKey: "actions.cues.toggleMovesLane",
+        keywordsKey: "actions.cues.laneKeywords",
+        category: "timeline",
+        scope: "global",
+        defaultBindings: [],
+    },
+    // Who shows an equipment icon after their drill number on the field (fork #992): the field
+    // display bar's Equipment icons choice. Unbound
+    equipmentIconsOff: {
+        labelKey: "actions.cues.equipmentIconsOff",
+        keywordsKey: "actions.cues.equipmentIconsKeywords",
+        category: "field",
+        scope: "canvas",
+        defaultBindings: [],
+        args: { shown: "off" },
+    },
+    equipmentIconsChanged: {
+        labelKey: "actions.cues.equipmentIconsChanged",
+        keywordsKey: "actions.cues.equipmentIconsKeywords",
+        category: "field",
+        scope: "canvas",
+        defaultBindings: [],
+        args: { shown: "changed" },
+    },
+    equipmentIconsEveryone: {
+        labelKey: "actions.cues.equipmentIconsEveryone",
+        keywordsKey: "actions.cues.equipmentIconsKeywords",
+        category: "field",
+        scope: "canvas",
+        defaultBindings: [],
+        args: { shown: "everyone" },
+    },
+    // Where those icons go: the popup's Where choice. Unbound
+    equipmentIconsBeside: {
+        labelKey: "actions.cues.equipmentIconsBeside",
+        keywordsKey: "actions.cues.equipmentIconsKeywords",
+        category: "field",
+        scope: "canvas",
+        defaultBindings: [],
+        args: { place: "beside" },
+    },
+    equipmentIconsOnDot: {
+        labelKey: "actions.cues.equipmentIconsOnDot",
+        keywordsKey: "actions.cues.equipmentIconsKeywords",
+        category: "field",
+        scope: "canvas",
+        defaultBindings: [],
+        args: { place: "dot" },
+    },
+    equipmentIconsOnNumber: {
+        labelKey: "actions.cues.equipmentIconsOnNumber",
+        keywordsKey: "actions.cues.equipmentIconsKeywords",
+        category: "field",
+        scope: "canvas",
+        defaultBindings: [],
+        args: { place: "label" },
+    },
+    // The keyboard and touch way to set where a cue ends (dragging its bar's end is the mouse's)
+    cueEndAtPlayhead: {
+        labelKey: "actions.cues.endAtPlayhead",
+        keywordsKey: "actions.cues.cueKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    toggleEquipmentLane: {
+        labelKey: "actions.cues.toggleEquipmentLane",
+        keywordsKey: "actions.cues.laneKeywords",
+        category: "timeline",
+        scope: "global",
+        defaultBindings: [],
+    },
+    toggleFacingLane: {
+        labelKey: "actions.cues.toggleFacingLane",
+        keywordsKey: "actions.cues.laneKeywords",
+        category: "timeline",
+        scope: "global",
+        defaultBindings: [],
+    },
+    // Facing cues (fork #993): where the selected performers face from the paused playhead, one
+    // lasting cue that turns each from their own angle (`cues/facing.ts`). The field menu's Facing
+    // submenu runs these; the sides' labels follow the field's side names (the handlers)
+    facingFront: {
+        labelKey: "actions.cues.setFacing",
+        labelItemKey: "cues.facing.front",
+        keywordsKey: "actions.cues.facingKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: ["Alt+0"],
+    },
+    facingBack: {
+        labelKey: "actions.cues.setFacing",
+        labelItemKey: "cues.facing.back",
+        keywordsKey: "actions.cues.facingKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: ["Alt+B"],
+    },
+    facingSide1: {
+        labelKey: "actions.cues.setFacing",
+        labelItemKey: "cues.facing.side1",
+        keywordsKey: "actions.cues.facingKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: ["Alt+1"],
+    },
+    facingSide2: {
+        labelKey: "actions.cues.setFacing",
+        labelItemKey: "cues.facing.side2",
+        keywordsKey: "actions.cues.facingKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: ["Alt+2"],
+    },
+    facingTurnLeft: {
+        labelKey: "actions.cues.facingTurnLeft",
+        keywordsKey: "actions.cues.facingKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: ["Alt+BracketLeft"],
+    },
+    facingTurnRight: {
+        labelKey: "actions.cues.facingTurnRight",
+        keywordsKey: "actions.cues.facingKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: ["Alt+BracketRight"],
+    },
+    // Angle…: asks the degrees (unwrapped: 360 is a spin, −270 turns the long way to side 2)
+    facingAngle: {
+        labelKey: "actions.cues.facingAngle",
+        keywordsKey: "actions.cues.facingKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: [],
+        params: [
+            {
+                key: "degrees",
+                labelKey: "actions.cues.params.degrees",
+                unit: "degrees",
+                default: 90,
+            },
+        ],
+    },
+    // The picked Facing cue's turn: its angle and counts, in the turn popover (the lane's
+    // double-click)
+    cueEditTurn: {
+        labelKey: "actions.cues.editTurn",
+        keywordsKey: "actions.cues.cueKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: [],
+    },
     setAllMarchersToNextPage: {
         labelKey: "actions.batchEdit.moveAllToNextSpots",
         category: "batchEdit",
@@ -623,6 +967,25 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: ["M"],
     },
+    // The show's 3D venue under the 2D grid (#1207), back in the look last picked. Unbound: a
+    // view picked now and then, from the display bar's Venue button or the palette
+    toggleFieldVenue: {
+        labelKey: "actions.ui.toggleFieldVenue",
+        keywordsKey: "actions.ui.toggleFieldVenueKeywords",
+        toggleOnKey: "actions.ui.showFieldVenue",
+        toggleOffKey: "actions.ui.hideFieldVenue",
+        category: "ui",
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    toggleView3dCameraOnField: {
+        labelKey: "actions.ui.toggleView3dCameraOnField",
+        toggleOnKey: "actions.ui.showView3dCameraOnField",
+        toggleOffKey: "actions.ui.hideView3dCameraOnField",
+        category: "ui",
+        scope: "canvas",
+        defaultBindings: [],
+    },
     // #315: the field's right-click menu, from the keyboard, at the selection. Enabled only with
     // a selection
     openFieldMenu: {
@@ -693,6 +1056,31 @@ const STATIC_ACTIONS = {
     editSelectedItem: {
         labelKey: "actions.items.edit",
         keywordsKey: "actions.items.editKeywords",
+        category: "edit",
+        scope: "global",
+        defaultBindings: [],
+    },
+    // The one selected item's lock (props epic step 2): a locked item can't be clicked, boxed or
+    // moved on the field; a right-click on it offers Unlock, and an unlocked one's offers Lock
+    unlockSelectedItem: {
+        labelKey: "actions.items.unlock",
+        keywordsKey: "actions.items.lockKeywords",
+        category: "edit",
+        scope: "global",
+        defaultBindings: [],
+    },
+    lockSelectedItem: {
+        labelKey: "actions.items.lock",
+        keywordsKey: "actions.items.lockKeywords",
+        category: "edit",
+        scope: "global",
+        defaultBindings: [],
+    },
+    // Shows the one selected prop's resize and turn handles on the field (props epic step 2):
+    // hidden otherwise, so a click on a prop moves it as it would a marcher
+    resizeSelectedItem: {
+        labelKey: "actions.items.resize",
+        keywordsKey: "actions.items.resizeKeywords",
         category: "edit",
         scope: "global",
         defaultBindings: [],
@@ -844,6 +1232,14 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: ["Enter"],
     },
+    // Place without keeping the shape: the marchers go to their spots as a plain move does, and
+    // no shape is saved, as Place then Ungroup would leave them. Shift-click on Place does the same
+    applyShapeLoose: {
+        labelKey: "actions.shape.applyLoose",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: ["Shift+Enter"],
+    },
     // While drawing a line point by point, the last point taken back (owner, option A on #522).
     // Handled only then (shapes/tool/ShapeToolKeys), so the keys do nothing else meanwhile
     shapeRemoveLastPoint: {
@@ -881,9 +1277,35 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: [],
     },
+    // A mirrored paste's Mirror choice (Paste mirrored): which ways it mirrors through its point.
+    // No keys: the flip keys switch each way
+    mirrorSideToSide: {
+        labelKey: "actions.shape.mirrorSideToSide",
+        keywordsKey: "actions.shape.mirrorKeywords",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    mirrorFrontToBack: {
+        labelKey: "actions.shape.mirrorFrontToBack",
+        keywordsKey: "actions.shape.mirrorKeywords",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    mirrorBoth: {
+        labelKey: "actions.shape.mirrorBoth",
+        keywordsKey: "actions.shape.mirrorKeywords",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
     // The floating editor's turn and Recalculate (#429), for the open or selected shape only. While
     // one is shown, Alt+F and Alt+Shift+F (flipHorizontal/flipVertical) flip the shape instead of
-    // the marchers (shapes/editor/ShapeEditorBar)
+    // the marchers, or switch a mirrored paste's Mirror ways (shapes/editor/ShapeEditorBar)
     shapeQuarterTurn: {
         labelKey: "actions.shape.quarterTurn",
         keywordsKey: "actions.shape.keywords",
@@ -1205,6 +1627,67 @@ const STATIC_ACTIONS = {
         category: "shape",
         scope: "canvas",
         defaultBindings: [],
+        ignoreRepeat: true,
+    },
+
+    // Copy and paste a formation (#961, owner 2026-11-15): Copy keeps where the selected marchers
+    // stand (one whole placed shape as a shape); Paste shows it on the marchers selected then, as
+    // an open shape centered on them that Enter places, and Paste exactly starts it where it was
+    // copied. Nothing is created, so there's no Cut or Duplicate. The app's own clipboard, not the
+    // system's; in a text field these keys stay the text's (shapes/clipboard)
+    copyFormation: {
+        labelKey: "actions.edit.copy",
+        keywordsKey: "actions.edit.copyKeywords",
+        category: "edit",
+        scope: "canvas",
+        defaultBindings: ["$mod+C", "Control+C"],
+        ignoreRepeat: true,
+    },
+    pasteFormation: {
+        labelKey: "actions.edit.paste",
+        keywordsKey: "actions.edit.pasteKeywords",
+        category: "edit",
+        scope: "canvas",
+        defaultBindings: ["$mod+V", "Control+V"],
+        ignoreRepeat: true,
+    },
+    // A copied shape pasted as its exact positions rather than rebuilt for any count: the
+    // Clipboard card's Shape | Positions switch (owner 2026-11-15). No key
+    pasteAsPositions: {
+        labelKey: "actions.edit.pasteAsPositions",
+        keywordsKey: "actions.edit.pasteAsPositionsKeywords",
+        category: "edit",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    // Empty the formation clipboard: the Clipboard card's Clear. No key
+    clearClipboard: {
+        labelKey: "actions.edit.clearClipboard",
+        keywordsKey: "actions.edit.clearClipboardKeywords",
+        category: "edit",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+    pasteFormationInPlace: {
+        labelKey: "actions.edit.pasteInPlace",
+        keywordsKey: "actions.edit.pasteInPlaceKeywords",
+        category: "edit",
+        scope: "canvas",
+        defaultBindings: ["$mod+Shift+V", "Control+Shift+V"],
+        ignoreRepeat: true,
+    },
+    // Paste mirrored: the copy where it was copied, mirrored side to side through a point the
+    // user places (the last one used, the 50 the first time). While it's open, its editor's Mirror
+    // choice (the mirror* actions below) and the flip keys pick which ways it mirrors, and the
+    // arrow keys move the point (shapes/tool/mirror.ts)
+    pasteMirrored: {
+        labelKey: "actions.edit.pasteMirrored",
+        keywordsKey: "actions.edit.pasteMirroredKeywords",
+        category: "edit",
+        scope: "canvas",
+        defaultBindings: ["$mod+Alt+V", "Control+Alt+V"],
         ignoreRepeat: true,
     },
 
@@ -1568,6 +2051,7 @@ export const ACTIONS = {
     ...STATIC_ACTIONS,
     ...buildNudgeActions(),
     ...buildFieldLineNudgeActions(),
+    ...buildEquipmentActions(),
 } as const satisfies Record<string, ActionDefinition>;
 
 export type ActionId = keyof typeof ACTIONS;
@@ -1593,4 +2077,43 @@ export const EXPORT_ACTION_IDS = [
 
 export function getActionDefinition(id: ActionId): ActionDefinition {
     return ACTIONS[id];
+}
+
+/** Categories of actions that don't change the show (for usage analytics: what an undo right after can blame). */
+const NON_EDIT_CATEGORIES: ReadonlySet<ActionCategory> = new Set([
+    "file",
+    "navigation",
+    "playback",
+    "ui",
+    "cursor",
+    "select",
+]);
+
+/** Actions in edit categories that still don't change the show: views, modes and copying. */
+const NON_EDIT_ACTIONS: ReadonlySet<string> = new Set([
+    "timelineZoomIn",
+    "timelineZoomOut",
+    "timelineFit",
+    "toggleSnap",
+    "toggleEditorMode",
+    "toggleTempoMode",
+    "copyFormation",
+    "followPreview",
+    "toggleMarcherOrder",
+]);
+
+/**
+ * Whether the action changes the show, judged by its category, less views, modes, copying and
+ * selecting. Unknown ids are not edits.
+ */
+export function isEditAction(id: string): boolean {
+    const action = (
+        ACTIONS as Partial<Record<string, { category: ActionCategory }>>
+    )[id];
+    return (
+        action !== undefined &&
+        !NON_EDIT_CATEGORIES.has(action.category) &&
+        !NON_EDIT_ACTIONS.has(id) &&
+        !id.startsWith("fieldEditSelectAll")
+    );
 }

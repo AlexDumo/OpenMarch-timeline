@@ -20,6 +20,11 @@ export type FieldTestMarcher = {
     id: number;
     /** The marcher's label text, as drawn on the field (its drill number). */
     label: string;
+    /**
+     * The equipment icon drawn after the label at the beat shown ("Rifle"), for whom the
+     * Equipment icons setting shows one (#992); "" for none.
+     */
+    equipmentIcon: string;
     /** Where the dot is drawn, in field units. */
     x: number;
     y: number;
@@ -243,7 +248,7 @@ export type FieldTestItem = {
     y: number;
     /** Its center in the viewport */
     screen: ScreenPoint;
-    /** Locked to one position for the whole show: drawn with a lock */
+    /** Locked: a click, drag or marquee on the field passes over it */
     locked?: boolean;
     /** A pit instrument's playing spot as drawn, in field units, or null for none */
     playingSpot?: { x: number; y: number } | null;
@@ -278,6 +283,8 @@ export type FieldTestShapeOverlay = {
     }[];
     /** Spots it leaves empty on purpose (an odd-count outline's gap), field units. */
     gaps: { x: number; y: number }[];
+    /** Spots a paste leaves empty (#961) */
+    emptySpots: { x: number; y: number }[];
     /** Circles it's drawn on (an Arc's whole circle, #634), field units. */
     construction: {
         center: { x: number; y: number };
@@ -306,6 +313,18 @@ export type FieldTestShapeOverlay = {
     pivotMark: ScreenPoint | null;
     /** The pivot a cell of the editor's pivot menu points at (#437), in field units; null without one */
     pivotPreview: { x: number; y: number } | null;
+    /**
+     * A mirrored paste's mirror point (Paste mirrored): where it is in field units and in the
+     * viewport, which ways it mirrors, and the names shown for its lines; null without one
+     */
+    mirror: {
+        at: { x: number; y: number };
+        screen: ScreenPoint;
+        across: boolean;
+        deep: boolean;
+        acrossLabel: string | null;
+        deepLabel: string | null;
+    } | null;
     /** Who will stand on each spot, as labeled. */
     labels: string[];
     /** The readout by the pointer during a gesture ("7½ × 2 steps · ↔ 2½ ↕ 2 apart"), or null. */
@@ -356,6 +375,19 @@ export type FieldTestShapeOverlay = {
         to: { x: number; y: number };
         across: string;
         deep: string;
+    } | null;
+    /**
+     * While a Line's Rows apart or Slant number is engaged: the gap from the drawn row to the
+     * next, field units, across to `corner` then along to `to`, with its labels ("4 steps apart",
+     * "Slant 1" or null). Null otherwise.
+     */
+    rowsGap: {
+        from: { x: number; y: number };
+        corner: { x: number; y: number };
+        to: { x: number; y: number };
+        outward: { x: number; y: number };
+        apart: string;
+        slant: string | null;
     } | null;
 };
 

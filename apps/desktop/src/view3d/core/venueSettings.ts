@@ -5,8 +5,14 @@
  * must not import React, React Three Fiber, drei, Electron or the database.
  */
 import * as z from "zod";
-import type { FieldProperties } from "@openmarch/core";
-import type { LightingPreset, VenueKitId, VenueParams } from "./types";
+import { fieldFootprint, type FieldProperties } from "@openmarch/core";
+import { ft } from "./environment/units";
+import type {
+    FieldFootprint,
+    LightingPreset,
+    VenueKitId,
+    VenueParams,
+} from "./types";
 import {
     GUARD_UNIFORM_PRESET_IDS,
     UNIFORM_PRESET_IDS,
@@ -35,6 +41,8 @@ export const VENUE_KIT_IDS = [
     "bighs",
     "college",
     "pro",
+    "markDiesel",
+    "nightpound",
     "gym",
     "arena",
     "blank",
@@ -102,9 +110,36 @@ export const venueSettingsSchema = z.object({
      * (fork #973) without a version bump.
      */
     silkArtwork: z.number().int().positive().optional(),
+    /**
+     * Whose lines a venue with a field of its own (`KITS_WITH_OWN_FIELD`)
+     * paints: the show's field ("show") or the stadium's real ones
+     * ("stadium"); absent means the show's. Added 2026-11-23 without a
+     * version bump, like `brassFinish`: older builds ignore it.
+     */
+    fieldLines: z.enum(["show", "stadium"]).optional(),
 });
 
 export type VenueSettings = z.infer<typeof venueSettingsSchema>;
+
+export type FieldLines = NonNullable<VenueSettings["fieldLines"]>;
+
+/**
+ * Venues with a football field of their own, painted from the stadium's
+ * turf drawings (`KIT_OWN_FIELD`): they never shrink to the show's field,
+ * lay a floor on their turf as a tarp, and can paint their own lines in
+ * place of the show's (`fieldLines`).
+ */
+export const KITS_WITH_OWN_FIELD: readonly VenueKitId[] = ["markDiesel"];
+
+/** The lines a venue paints: the stadium's only where it has its own. */
+export function fieldLinesFor(
+    kit: VenueKitId,
+    fieldLines: FieldLines | undefined,
+): FieldLines {
+    return KITS_WITH_OWN_FIELD.includes(kit) && fieldLines === "stadium"
+        ? "stadium"
+        : "show";
+}
 
 // Compile-time checks that the schema matches the shared contracts in types.ts.
 type Equals<A, B> =
@@ -127,6 +162,43 @@ export const DEFAULT_VENUE_PARAMS: Readonly<VenueParams> = Object.freeze({
 });
 
 /**
+ * Params a kit starts with instead of `DEFAULT_VENUE_PARAMS`: a venue with
+ * a name of its own paints that name, in its own colors, until the show
+ * chooses otherwise. (Mark Diesel's match `DIESEL_VENUE_PARAMS` in the kit.)
+ */
+export const KIT_VENUE_PARAMS: Readonly<
+    Partial<Record<VenueKitId, Readonly<VenueParams>>>
+> = {
+    markDiesel: Object.freeze({
+        homeColor: "#6442ff",
+        awayColor: "#c23b3b",
+        endZoneText: "OPENMARCH",
+        endZoneColor: "#6442ff",
+    }),
+};
+
+/** The params a kit starts with. */
+export function defaultParamsForKit(kit: VenueKitId): VenueParams {
+    return { ...(KIT_VENUE_PARAMS[kit] ?? DEFAULT_VENUE_PARAMS) };
+}
+
+/**
+ * The params after switching kits: a show that never changed the old kit's
+ * starting params gets the new kit's; one that chose its own keeps them.
+ */
+export function paramsForKitSwitch(
+    from: VenueKitId,
+    to: VenueKitId,
+    params: VenueParams,
+): VenueParams {
+    const start = defaultParamsForKit(from);
+    const untouched = (Object.keys(start) as (keyof VenueParams)[]).every(
+        (key) => params[key] === start[key],
+    );
+    return untouched ? defaultParamsForKit(to) : params;
+}
+
+/**
  * The lighting presets each kit supports and its default (design.md §6).
  * Kit builders should report the same lists in `KitResult.lightingPresets`.
  */
@@ -146,6 +218,11 @@ export const KIT_LIGHTING: Readonly<
         presets: ["day", "night", "roofClosed"],
         defaultLighting: "roofClosed",
     },
+    markDiesel: {
+        presets: ["roofClosed", "day", "night"],
+        defaultLighting: "roofClosed",
+    },
+    nightpound: { presets: ["show", "house"], defaultLighting: "show" },
     gym: { presets: ["house", "show"], defaultLighting: "house" },
     arena: { presets: ["house", "show"], defaultLighting: "show" },
     blank: { presets: ["day", "dusk", "night"], defaultLighting: "day" },
@@ -169,8 +246,85 @@ export function defaultVenueForKit(kit: VenueKitId): VenueSettings {
         kit,
         lighting: KIT_LIGHTING[kit].defaultLighting,
         crowd: true,
-        params: { ...DEFAULT_VENUE_PARAMS },
+        params: defaultParamsForKit(kit),
     };
+}
+
+/**
+ * Venues built round a floor of fixed size, in meters: `width` along the
+ * front sideline, `depth` front to back. Only a field that fits inside it
+ * can be shown there.
+ *
+ * Nightpound's is the WGI World Championships competition area at UD Arena
+ * in Dayton, 106 ft by 78 ft, which is also the largest area WGI rules
+ * allow anywhere (research in docs/3d/nightpound.md).
+ */
+export const KIT_FIXED_FLOOR: Readonly<
+    Partial<
+        Record<VenueKitId, { readonly width: number; readonly depth: number }>
+    >
+> = {
+    nightpound: { width: ft(106), depth: ft(78) },
+};
+
+/**
+ * Venues modeled on a real building at its real size, with the field or
+ * floor they're built round. The venue picker lists them apart from the
+ * venues that are sized to the show's field, and shows their size.
+ */
+export const REAL_VENUES: Readonly<
+    Partial<
+        Record<
+            VenueKitId,
+            {
+                readonly surface: "field" | "floor";
+                readonly width: number;
+                readonly depth: number;
+            }
+        >
+    >
+> = {
+    // Built round a football field with end zones (`fixedFieldFootprint`).
+    markDiesel: { surface: "field", width: ft(360), depth: ft(160) },
+    nightpound: { surface: "floor", width: ft(106), depth: ft(78) },
+};
+
+/** Whether a venue is a real building (`REAL_VENUES`) or sized to the show's field. */
+export type VenueKind = "fitted" | "real";
+
+export function venueKind(kit: VenueKitId): VenueKind {
+    return REAL_VENUES[kit] ? "real" : "fitted";
+}
+
+/** The venue a show sees when its field doesn't fit its own venue's floor. */
+export const KIT_FIXED_FLOOR_FALLBACK: VenueKitId = "arena";
+
+/** Leeway for rounding in field sizes: a centimeter. */
+const FIT_TOLERANCE = 0.01;
+
+/** Whether a field fits the kit's floor. Kits without a fixed floor fit any field. */
+export function kitFitsField(
+    kit: VenueKitId,
+    footprint: FieldFootprint,
+): boolean {
+    const floor = KIT_FIXED_FLOOR[kit];
+    if (!floor) return true;
+    return (
+        footprint.maxX - footprint.minX <= floor.width + FIT_TOLERANCE &&
+        footprint.maxZ - footprint.minZ <= floor.depth + FIT_TOLERANCE
+    );
+}
+
+/**
+ * The kit the 3D View builds for a show: its chosen kit, or the indoor
+ * arena when the field is too big for a fixed-floor venue (the field changed
+ * after the venue was chosen).
+ */
+export function kitForField(
+    kit: VenueKitId,
+    footprint: FieldFootprint,
+): VenueKitId {
+    return kitFitsField(kit, footprint) ? kit : KIT_FIXED_FLOOR_FALLBACK;
 }
 
 /** The parts of FieldProperties the default venue depends on. */
@@ -246,4 +400,18 @@ export function parseVenueSettingsJson(
         ...result.data,
         lighting: lightingForKit(result.data.kit, result.data.lighting),
     };
+}
+
+/**
+ * The kit a show's venue shows as, in the 3D View and on the 2D field
+ * (`kitForField`): the saved kit, or the fallback when the show's field has
+ * outgrown its fixed floor. Before the field loads, the saved kit.
+ */
+export function shownKit(
+    kit: VenueKitId,
+    fieldProperties: FieldProperties | undefined,
+): VenueKitId {
+    return fieldProperties
+        ? kitForField(kit, fieldFootprint(fieldProperties))
+        : kit;
 }

@@ -1,4 +1,8 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+    MODIFIER_RELEASE_GRACE_MS,
+    setModifierReleaseGraceForTests,
+} from "@/input/modifierGrace";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
     CLICK_SLOP,
     DOUBLE_CLICK_MS,
@@ -14,6 +18,10 @@ import type { MarcherPosition, MoveTransform } from "../moveGesture";
 import { ruledMove, type MoveRules } from "../moveRules";
 import { watchKeyListeners } from "@/shapes/__test__/keyListeners";
 import { useShapeEditorStore } from "@/shapes/frame/shapeEditorStore";
+
+// Keys let go mid-drag here redraw at once; the release grace has its own tests
+beforeEach(() => setModifierReleaseGraceForTests(0));
+afterEach(() => setModifierReleaseGraceForTests());
 
 /**
  * Marchers 1 to 4 in a row 100 field units apart, at zoom 2 (2 CSS px per
@@ -34,6 +42,8 @@ function setup({
     positions = [100, 100, 200, 100, 300, 100, 400, 100],
     selectionCovers = undefined as FieldEditorPorts["selectionCovers"],
     onScreen = undefined as FieldOnScreen | undefined,
+    snap = undefined as FieldEditorPorts["snap"],
+    snapOn = undefined as (() => boolean) | undefined,
 } = {}) {
     const clock = { now: 1000 };
     const state = {
@@ -70,6 +80,7 @@ function setup({
         marcherHidden,
         selectionBoxPadding: () => 10,
         selectionCovers,
+        snap,
         openMenu: vi.fn(),
         showPositions: vi.fn((positions) => {
             state.shown = positions;
@@ -86,6 +97,7 @@ function setup({
         moveTransform,
         now: () => clock.now,
         onScreen,
+        snap: snapOn,
     });
     return { editor, state, ports, clock };
 }
@@ -134,6 +146,13 @@ describe("FieldEditor click selection", () => {
         expect(state.selected).toEqual([1, 3]);
         click(editor, 100, 100, { shift: true });
         expect(state.selected).toEqual([3]);
+    });
+
+    it("adds a marcher when Shift comes up just before the mouse", () => {
+        const { editor, state } = setup({ selected: [1] });
+        editor.pointerDown(at(300, 100, { shift: true }));
+        editor.pointerUp(at(300, 100));
+        expect(state.selected).toEqual([1, 3]);
     });
 
     it("clears the selection on a click on empty field", () => {
@@ -924,6 +943,21 @@ describe("FieldEditor hover", () => {
         editor.pointerMove(at(EMPTY.x, EMPTY.y));
         expect(listener).toHaveBeenCalledTimes(1);
     });
+    it("reports the marcher under the pointer, and tells only its own subscribers (#992)", () => {
+        const { editor } = setup();
+        const hovered = vi.fn();
+        editor.subscribeHoveredMarcher(hovered);
+        editor.pointerMove(at(100, 100));
+        expect(editor.hoveredMarcher()).not.toBeNull();
+        editor.pointerMove(at(101, 100));
+        expect(hovered).toHaveBeenCalledTimes(1);
+        editor.pointerMove(at(EMPTY.x, EMPTY.y));
+        expect(editor.hoveredMarcher()).toBeNull();
+        editor.pointerMove(at(100, 100));
+        editor.pointerLeave();
+        expect(editor.hoveredMarcher()).toBeNull();
+        expect(hovered).toHaveBeenCalledTimes(4);
+    });
 });
 
 describe("FieldEditor select all", () => {
@@ -1366,6 +1400,54 @@ describe("FieldEditor modifier roles (version A)", () => {
         // The release where the pointer was drops what's drawn
         editor.pointerUp(at(137, 121));
         expect(state.drops[0].positions).toEqual([{ id: 1, x: 137, y: 121 }]);
+    });
+
+    describe("a key let go just before the drop (release grace)", () => {
+        beforeEach(() => {
+            setModifierReleaseGraceForTests();
+            vi.useFakeTimers();
+        });
+        afterEach(() => vi.useRealTimers());
+
+        const constrained = () => {
+            const { editor, state } = setup({
+                moveTransform: rulesOn({ rounding: undefined }),
+            });
+            running = editor;
+            editor.pointerDown(at(100, 100));
+            editor.pointerMove(at(137, 121));
+            key("keydown", { key: "Control", ctrlKey: true });
+            expect(shown(state)).toEqual({ 1: { x: 137, y: 100 } });
+            key("keyup", { key: "Control" });
+            return { editor, state };
+        };
+
+        it("drops what's drawn, still constrained, when the mouse comes up right after the key", () => {
+            const { editor, state } = constrained();
+            expect(shown(state)).toEqual({ 1: { x: 137, y: 100 } });
+            editor.pointerUp(at(137, 121));
+            expect(state.drops[0].positions).toEqual([
+                { id: 1, x: 137, y: 100 },
+            ]);
+        });
+
+        it("keeps the key for a release that moved too", () => {
+            const { editor, state } = constrained();
+            editor.pointerUp(at(150, 125));
+            expect(state.drops[0].positions).toEqual([
+                { id: 1, x: 150, y: 100 },
+            ]);
+        });
+
+        it("lets the key go once the grace runs out, so letting go on purpose still frees the axis", () => {
+            const { editor, state } = constrained();
+            vi.advanceTimersByTime(MODIFIER_RELEASE_GRACE_MS);
+            expect(shown(state)).toEqual({ 1: { x: 137, y: 121 } });
+            editor.pointerUp(at(137, 121));
+            expect(state.drops[0].positions).toEqual([
+                { id: 1, x: 137, y: 121 },
+            ]);
+        });
     });
 
     it("re-anchors on the snapped spot when fine turns on from a keydown, with no pointer move", () => {
@@ -2142,6 +2224,34 @@ describe("FieldEditor scale and rotate handles (#198)", () => {
             { id: 3, x: 400, y: 100 },
             { id: 4, x: 550, y: 100 },
         ]);
+    });
+
+    describe("snapping the dragged side to the grid (#585)", () => {
+        const tens = (p: FieldPoint) => ({
+            x: Math.round(p.x / 10) * 10,
+            y: Math.round(p.y / 10) * 10,
+        });
+        const dragEastTo = (x: number, snapOn?: () => boolean) => {
+            const { editor, state } = setup({
+                selected: ALL,
+                snap: tens,
+                snapOn,
+            });
+            editor.pointerDown(at(HANDLE.e.x, HANDLE.e.y));
+            editor.pointerMove(at(485, 130));
+            editor.pointerMove(at(x, 160));
+            editor.pointerUp(at(x, 160));
+            return state.drops[0].positions.map((p) => p.x);
+        };
+
+        it("lands the dragged side on the grid, the marchers inside in proportion", () => {
+            // The side would reach 547: it lands on 550
+            expect(dragEastTo(557)).toEqual([100, 250, 400, 550]);
+        });
+
+        it("scales freely with the Snap toggle off", () => {
+            expect(dragEastTo(557, () => false)).toEqual([100, 249, 398, 547]);
+        });
     });
 
     describe("a formation with height", () => {

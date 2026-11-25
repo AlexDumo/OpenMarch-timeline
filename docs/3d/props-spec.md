@@ -155,7 +155,10 @@ phases [26.24].
   applied before the turn). A small X/Y/Z drawing in the picture's corner,
   drawn from the picture's own viewpoint, lights the button's axis and shows
   which way it swings while the button is pointed at, focused or just tapped.
-  The Z-up guess pre-selects the tilt and keeps its "Stand it up" check.
+  Since #1200 (owner, 2026-11-23) nothing is guessed: glTF is Y-up by its
+  spec, and a car facing glTF's +Z front is longest along Z, so the Z-up
+  guess stood correct cars on their nose. A model comes in as the file has
+  it, and the "Stand it up" check and the Needs your choice group are gone.
 - **Kind** (Prop, Equipment, Garment, Floor prop, Base floor): a picker sets
   it; a plain Library import asks for it as a required choice, pre-selected
   only from the Starter kit stamp, never from a guess. Size range, caps and
@@ -380,9 +383,10 @@ aliases, never shown as labels [owner, 2026-10-12, Q39–Q41, Q44].
   38 m and back inside 30 m, as the built-in equipment does.
 - A missing `OM_grip_R` pre-selects a grip a quarter of the way along the
   longest side; grips live in the sidecar, never re-centering the model. A
-  model is guessed Z-up when Z is its largest side and over 1.25× Y (floors
-  get the rotation offered but unchecked). A Garment with any unrigged mesh
-  is rejected [Q37].
+  model was guessed Z-up when Z was its largest side and over 1.25× Y; since
+  #1200 (owner, 2026-11-23) there is no guess, and Rotate X, Y and Z cover a
+  file that lies on a side. A Garment with any unrigged mesh is rejected
+  [Q37].
 
 ## 4. Items and Placement
 
@@ -418,6 +422,24 @@ aliases, never shown as labels [owner, 2026-10-12, Q39–Q41, Q44].
   coordinate sheets, mobile export, drill numbers, Visuals mode's Who list.
   Props may fill formation slots; band and section cue targets never reach
   items [24].
+- **A prop is a marcher with a size and a rotation** (owner, 2026-11-23,
+  fork #1239). Every marcher tool takes unlocked props and equipment in the
+  selection: shapes, the shape clipboard, paths and the Path pen, the order
+  lane, align and distribute, tags, select-all and the marquee. Locked items
+  stay out of all of them. The type filters above stay only where the loop
+  means people: exports, drill order, cues and uniforms.
+- **One lock, a deliberate unlock** (owner, 2026-11-23 and 2026-11-24, fork
+  #1241). A locked item can't be clicked, dragged, boxed, lassoed or picked by
+  Select all, and canvas edits leave it out (`withoutLockedMovesInTransaction`).
+  Its right-click selects it alone and offers Unlock and Edit. It carries no
+  padlock on the field (owner, 2026-11-24): a click on it shows a "Locked" tag
+  beside the pointer for a few seconds, and the tag opens the same menu, so a
+  click is never dead and a rage click unlocks nothing. Locking and
+  unlocking write only the flag: the old "one position for the whole show"
+  meaning (a drag set the home and cleared moves) is gone. Equipment starts
+  locked; drawn props start unlocked. A selected prop shows no resize or turn
+  handles until its right-click menu's Resize and turn, since props are
+  usually drawn at their real size; they go when the selection changes.
 - **Hidden** is a per-user view preference (`UiSettingsStore.hiddenPropIds`),
   never show data [05].
 
@@ -518,8 +540,12 @@ deletes the change. It joins undo history and repair like the cue tables.
   wins, eases in over the transition, beat delete cascades; in history and
   repair.
 - A footprint is **width** and **depth**; vertical size is **height**.
-- Independent of moves: a resize never needs a move, and dragging a move
-  doesn't carry its resizes.
+- Independent of moves: an Outline change is stored apart from the moves,
+  and dragging a move doesn't carry its resizes. On the field, a handle resizes as the selection
+  box scales marchers: the opposite side stays put, so the item's center moves
+  and is saved as a drop of it, in the same undo step as the Outline change.
+  With from center (Alt) the center stays and nothing moves; constrain ($mod)
+  keeps the proportions (owner, 2026-11-22).
 - Edited on Visuals mode's Items tab. A drag of an Outline in the 2D editor
   writes a geometry change at the playhead's count, the same data [26.7].
 - **Floor props** get a **rolls out** flag: as the Outline grows over a

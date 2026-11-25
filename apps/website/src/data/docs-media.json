@@ -1,9 +1,21 @@
 {
+    "3d-camera-row-menu": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 816,
+        "height": 816
+    },
+    "3d-camera-settings": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 1600,
+        "height": 1000
+    },
     "3d-cameras-panel": {
         "chapter": "3d-view",
         "kind": "still",
-        "width": 752,
-        "height": 836
+        "width": 816,
+        "height": 908
     },
     "3d-controls": {
         "chapter": "3d-view",
@@ -21,7 +33,7 @@
         "chapter": "3d-view",
         "kind": "still",
         "width": 996,
-        "height": 1412
+        "height": 1356
     },
     "3d-front-ensemble-field": {
         "chapter": "3d-view",
@@ -32,8 +44,8 @@
     "3d-front-ensemble-presets": {
         "chapter": "3d-view",
         "kind": "still",
-        "width": 1176,
-        "height": 576
+        "width": 972,
+        "height": 1116
     },
     "3d-front-ensemble-summary": {
         "chapter": "3d-view",
@@ -91,7 +103,7 @@
         "chapter": "3d-view",
         "kind": "still",
         "width": 996,
-        "height": 1240
+        "height": 1260
     },
     "3d-props-handles": {
         "chapter": "3d-view",
@@ -110,7 +122,7 @@
         "chapter": "3d-view",
         "kind": "still",
         "width": 996,
-        "height": 1412
+        "height": 1356
     },
     "3d-props-imported": {
         "chapter": "3d-view",
@@ -122,7 +134,7 @@
         "chapter": "3d-view",
         "kind": "still",
         "width": 996,
-        "height": 1064
+        "height": 1072
     },
     "3d-props-polygon": {
         "chapter": "3d-view",
@@ -135,7 +147,7 @@
         "chapter": "3d-view",
         "kind": "still",
         "width": 752,
-        "height": 1088
+        "height": 928
     },
     "3d-silk-artwork": {
         "chapter": "3d-view",
@@ -160,6 +172,18 @@
         "kind": "still",
         "width": 1280,
         "height": 640
+    },
+    "3d-venue-mark-diesel": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 1280,
+        "height": 800
+    },
+    "3d-venue-nightpound": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 1280,
+        "height": 464
     },
     "3d-window": {
         "chapter": "3d-view",
@@ -233,7 +257,7 @@
         "chapter": "files",
         "kind": "still",
         "width": 1552,
-        "height": 876
+        "height": 1000
     },
     "files-export-sheets": {
         "chapter": "files",
@@ -270,7 +294,7 @@
         "chapter": "files",
         "kind": "still",
         "width": 1552,
-        "height": 584
+        "height": 708
     },
     "marchers-add-form": {
         "chapter": "marchers",
@@ -296,6 +320,87 @@
         "kind": "still",
         "width": 768,
         "height": 748
+    },
+    "marchers-equipment-drag": {
+        "chapter": "marchers",
+        "kind": "clip",
+        "width": 1280,
+        "height": 364,
+        "seconds": 4.5
+    },
+    "marchers-equipment-edge": {
+        "chapter": "marchers",
+        "kind": "clip",
+        "width": 1280,
+        "height": 364,
+        "seconds": 6.6
+    },
+    "marchers-equipment-icons": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 1472,
+        "height": 592
+    },
+    "marchers-equipment-icons-everyone": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 1472,
+        "height": 592
+    },
+    "marchers-equipment-icons-on-dot": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 1472,
+        "height": 592
+    },
+    "marchers-equipment-icons-on-number": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 1472,
+        "height": 592
+    },
+    "marchers-equipment-icons-setting": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 480,
+        "height": 712
+    },
+    "marchers-equipment-lane": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 1600,
+        "height": 660
+    },
+    "marchers-equipment-menu": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 1468,
+        "height": 1404
+    },
+    "marchers-facing-lane": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 1600,
+        "height": 456
+    },
+    "marchers-facing-menu": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 1104,
+        "height": 1404
+    },
+    "marchers-facing-popover": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 1600,
+        "height": 396
+    },
+    "marchers-facing-stretch": {
+        "chapter": "marchers",
+        "kind": "clip",
+        "width": 1280,
+        "height": 364,
+        "seconds": 5
     },
     "marchers-inspector": {
         "chapter": "marchers",
@@ -353,8 +458,8 @@
     "marchers-select-tool": {
         "chapter": "marchers",
         "kind": "still",
-        "width": 920,
-        "height": 368
+        "width": 808,
+        "height": 480
     },
     "marchers-space": {
         "chapter": "marchers",
@@ -485,6 +590,12 @@
         "width": 1280,
         "height": 188
     },
+    "shapes-clipboard-card": {
+        "chapter": "shapes",
+        "kind": "still",
+        "width": 664,
+        "height": 344
+    },
     "shapes-curve-bend": {
         "chapter": "shapes",
         "kind": "clip",
@@ -565,6 +676,19 @@
         "kind": "still",
         "width": 1424,
         "height": 892
+    },
+    "shapes-paste": {
+        "chapter": "shapes",
+        "kind": "clip",
+        "width": 1280,
+        "height": 680,
+        "seconds": 6.5
+    },
+    "shapes-paste-mirrored": {
+        "chapter": "shapes",
+        "kind": "still",
+        "width": 1600,
+        "height": 1278
     },
     "shapes-pathways": {
         "chapter": "shapes",
@@ -649,11 +773,17 @@
         "width": 1600,
         "height": 1000
     },
+    "start-new-show-floor": {
+        "chapter": "start",
+        "kind": "still",
+        "width": 1600,
+        "height": 1250
+    },
     "start-new-show-performers": {
         "chapter": "start",
         "kind": "still",
-        "width": 1280,
-        "height": 1152
+        "width": 1600,
+        "height": 1250
     },
     "start-report-drawer-form": {
         "chapter": "start",
@@ -750,6 +880,12 @@
         "width": 1296,
         "height": 1272
     },
+    "timeline-lanes-menu": {
+        "chapter": "timeline",
+        "kind": "still",
+        "width": 1600,
+        "height": 264
+    },
     "timeline-later-pages": {
         "chapter": "timeline",
         "kind": "clip",
@@ -783,6 +919,12 @@
         "kind": "still",
         "width": 776,
         "height": 556
+    },
+    "timeline-moves-hidden": {
+        "chapter": "timeline",
+        "kind": "still",
+        "width": 1600,
+        "height": 252
     },
     "timeline-next-paths": {
         "chapter": "timeline",
@@ -825,7 +967,7 @@
         "chapter": "timeline",
         "kind": "still",
         "width": 1600,
-        "height": 330
+        "height": 386
     },
     "timeline-paths": {
         "chapter": "timeline",
@@ -871,6 +1013,24 @@
         "width": 1280,
         "height": 296,
         "seconds": 6.9
+    },
+    "venue-camera-on-field": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 1600,
+        "height": 886
+    },
+    "venue-on-field": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 1600,
+        "height": 886
+    },
+    "venue-on-field-stands": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 1600,
+        "height": 886
     },
     "window-command-palette": {
         "chapter": "workspace",

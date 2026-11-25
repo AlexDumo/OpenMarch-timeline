@@ -438,6 +438,86 @@
                             ]
                         }
                     ]
+                },
+                {
+                    "label": "Copy",
+                    "other": [
+                        {
+                            "keys": [
+                                "Ctrl",
+                                "C"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌘",
+                                "C"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Paste",
+                    "other": [
+                        {
+                            "keys": [
+                                "Ctrl",
+                                "V"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌘",
+                                "V"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Paste exactly",
+                    "other": [
+                        {
+                            "keys": [
+                                "Ctrl",
+                                "Shift",
+                                "V"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⇧",
+                                "⌘",
+                                "V"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Paste mirrored",
+                    "other": [
+                        {
+                            "keys": [
+                                "Ctrl",
+                                "Alt",
+                                "V"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "⌘",
+                                "V"
+                            ]
+                        }
+                    ]
                 }
             ]
         },
@@ -871,6 +951,25 @@
                     ]
                 },
                 {
+                    "label": "Place marchers without keeping the shape",
+                    "other": [
+                        {
+                            "keys": [
+                                "Shift",
+                                "Enter"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⇧",
+                                "↩"
+                            ]
+                        }
+                    ]
+                },
+                {
                     "label": "Shape: Remove the last point while drawing",
                     "other": [
                         {
@@ -1121,6 +1220,120 @@
                             "keys": [
                                 "⌘",
                                 "H"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Facing: Front",
+                    "other": [
+                        {
+                            "keys": [
+                                "Alt",
+                                "0"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "0"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Facing: Back",
+                    "other": [
+                        {
+                            "keys": [
+                                "Alt",
+                                "B"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "B"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Facing: Side 1",
+                    "other": [
+                        {
+                            "keys": [
+                                "Alt",
+                                "1"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "1"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Facing: Side 2",
+                    "other": [
+                        {
+                            "keys": [
+                                "Alt",
+                                "2"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "2"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Facing: Turn left 45°",
+                    "other": [
+                        {
+                            "keys": [
+                                "Alt",
+                                "["
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "["
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Facing: Turn right 45°",
+                    "other": [
+                        {
+                            "keys": [
+                                "Alt",
+                                "]"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "]"
                             ]
                         }
                     ]
@@ -2099,6 +2312,86 @@
                             ]
                         }
                     ]
+                },
+                {
+                    "label": "Copy",
+                    "other": [
+                        {
+                            "keys": [
+                                "Ctrl",
+                                "C"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌘",
+                                "C"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Paste",
+                    "other": [
+                        {
+                            "keys": [
+                                "Ctrl",
+                                "V"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌘",
+                                "V"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Paste exactly",
+                    "other": [
+                        {
+                            "keys": [
+                                "Ctrl",
+                                "Shift",
+                                "V"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⇧",
+                                "⌘",
+                                "V"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Paste mirrored",
+                    "other": [
+                        {
+                            "keys": [
+                                "Ctrl",
+                                "Alt",
+                                "V"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "⌘",
+                                "V"
+                            ]
+                        }
+                    ]
                 }
             ]
         },
@@ -2532,6 +2825,25 @@
                     ]
                 },
                 {
+                    "label": "Place marchers without keeping the shape",
+                    "other": [
+                        {
+                            "keys": [
+                                "Shift",
+                                "Enter"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⇧",
+                                "↩"
+                            ]
+                        }
+                    ]
+                },
+                {
                     "label": "Shape: Remove the last point while drawing",
                     "other": [
                         {
@@ -2782,6 +3094,120 @@
                             "keys": [
                                 "⌘",
                                 "H"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Facing: Front",
+                    "other": [
+                        {
+                            "keys": [
+                                "Alt",
+                                "0"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "0"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Facing: Back",
+                    "other": [
+                        {
+                            "keys": [
+                                "Alt",
+                                "B"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "B"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Facing: Side 1",
+                    "other": [
+                        {
+                            "keys": [
+                                "Alt",
+                                "1"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "1"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Facing: Side 2",
+                    "other": [
+                        {
+                            "keys": [
+                                "Alt",
+                                "2"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "2"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Facing: Turn left 45°",
+                    "other": [
+                        {
+                            "keys": [
+                                "Alt",
+                                "["
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "["
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Facing: Turn right 45°",
+                    "other": [
+                        {
+                            "keys": [
+                                "Alt",
+                                "]"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⌥",
+                                "]"
                             ]
                         }
                     ]

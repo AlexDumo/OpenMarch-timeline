@@ -380,13 +380,28 @@ describe("planning from compiled cues", () => {
         expect(other![12]).toBeCloseTo(0);
     });
 
-    it("turns back when a momentary Facing cue ends", () => {
+    it("ignores a momentary Facing cue: facing is lasting only (#993)", () => {
         const [first] = headingsOf([
             facing("builtin:facing.back", { length: 4 }),
         ]);
-        expect(Math.abs(first![10])).toBeCloseTo(Math.PI);
-        // counts 8-11 face the back; from count 12 (boundary 13) the front again
+        expect(first![10]).toBeCloseTo(0);
         expect(first![14]).toBeCloseTo(0);
+    });
+
+    it("leads a Facing turn into its count and spins the long way round (#993)", () => {
+        // a 360° spin on count 12, over the 4 counts before (a transition of 5, counted
+        // inclusively): from count 8, boundary 9, to count 12
+        const [first] = headingsOf([
+            facing("builtin:facing.angle", {
+                settings: { degrees: 360 },
+                transition: 5,
+                beatId: 62,
+            }),
+        ]);
+        expect(first![9]).toBeCloseTo(0);
+        expect(first![10]).toBeCloseTo(Math.PI / 2);
+        expect(first![11]).toBeCloseTo(Math.PI);
+        expect(first![13]).toBeCloseTo(2 * Math.PI);
     });
 
     it("ignores a cue of a type this build doesn't know", () => {

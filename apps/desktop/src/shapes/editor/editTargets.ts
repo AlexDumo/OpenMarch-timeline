@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { useQueryClient } from "@tanstack/react-query";
 import type { OrderChoice } from "../assign";
-import type { Pivot } from "../frame/frame";
+import type { FlipAxis, Pivot } from "../frame/frame";
 import { carryPivot } from "../frame/pivot";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import {
@@ -34,7 +34,10 @@ import {
     pickPivot,
     recalculate,
     release,
+    setMirrorAxes,
+    toggleMirror,
 } from "../tool/toolMachine";
+import type { MirrorAxes } from "../tool/mirror";
 import {
     updateTool,
     useShapeHidden,
@@ -58,6 +61,8 @@ export interface ShapeEditTarget {
     readonly empty: number;
     /** Place, for a new shape; absent for a placed one */
     readonly place?: () => void;
+    /** Place keeping no shape (Shift+Enter, Shift-click on Place); absent for a placed one */
+    readonly placeLoose?: () => void;
     /** "Page 3", when a placed shape was drawn on an earlier page than the one shown */
     readonly drawnOn: string | null;
     /** A number's drag starts, moves and ends: one change when it's kept */
@@ -98,6 +103,18 @@ export interface ShapeEditTarget {
         readonly keepOffered: boolean;
         pick(choice: OrderChoice): void;
     };
+    /**
+     * A mirrored paste (Paste mirrored): which ways it mirrors through its point, set by the
+     * editor's Mirror choice, and switching one, which the Flip keys do instead of flipping.
+     * Absent for any other shape.
+     */
+    readonly mirror?: {
+        readonly across: boolean;
+        readonly deep: boolean;
+        toggle(axis: FlipAxis): void;
+        /** The Mirror choice: side to side, front to back or both */
+        set(axes: MirrorAxes): void;
+    };
 }
 
 const withField = (run: (ctx: ReturnType<typeof shapeContextFor>) => void) => {
@@ -126,6 +143,7 @@ export function useToolEditTarget(): ShapeEditTarget | null {
             spots: tool.spots,
             empty: 0,
             place: () => void place(),
+            placeLoose: () => void place(true),
             drawnOn: null,
             begin: () => updateTool(beginEdit),
             preview: (params) => updateTool((t) => previewEdit(t, params)),
@@ -149,6 +167,16 @@ export function useToolEditTarget(): ShapeEditTarget | null {
                 ? () =>
                       withField((ctx) => updateTool((t) => recalculate(t, ctx)))
                 : null,
+            ...(tool.mirror && {
+                mirror: {
+                    across: tool.mirror.across,
+                    deep: tool.mirror.deep,
+                    toggle: (axis: FlipAxis) =>
+                        updateTool((t) => toggleMirror(t, axis)),
+                    set: (axes: MirrorAxes) =>
+                        updateTool((t) => setMirrorAxes(t, axes)),
+                },
+            }),
             ...(tool.kind.ordered && {
                 order: {
                     current: tool.order,

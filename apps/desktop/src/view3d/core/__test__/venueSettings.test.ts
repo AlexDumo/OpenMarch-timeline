@@ -4,16 +4,25 @@ import {
     GUARD_UNIFORM_PRESET_IDS,
     UNIFORM_PRESET_IDS,
 } from "../marchers/uniformPresets";
+import { DIESEL_VENUE_PARAMS } from "../kits/markDiesel/brand";
 import FootballTemplates from "@/global/classes/fieldTemplates/Football";
 import GridFieldTemplates from "@/global/classes/fieldTemplates/GridFields";
+import { fieldFootprint } from "@openmarch/core";
 import {
     DEFAULT_VENUE_PARAMS,
     KIT_LIGHTING,
+    KIT_VENUE_PARAMS,
     VENUE_KIT_IDS,
+    defaultParamsForKit,
     defaultVenueForField,
     defaultVenueForKit,
     fieldFamily,
+    kitFitsField,
+    kitForField,
+    shownKit,
+    venueKind,
     lightingForKit,
+    paramsForKitSwitch,
     parseVenueSettings,
     parseVenueSettingsJson,
     venueSettingsSchema,
@@ -113,6 +122,7 @@ describe("lighting", () => {
 
     it("keeps lighting the kit supports", () => {
         expect(lightingForKit("pro", "roofClosed")).toBe("roofClosed");
+        expect(lightingForKit("markDiesel", "night")).toBe("night");
         expect(lightingForKit("gym", "show")).toBe("show");
         expect(lightingForKit("arena", "house")).toBe("house");
     });
@@ -121,6 +131,7 @@ describe("lighting", () => {
         expect(lightingForKit("gym", "night")).toBe("house");
         expect(lightingForKit("hs", "roofClosed")).toBe("day");
         expect(lightingForKit("pro", "dusk")).toBe("roofClosed");
+        expect(lightingForKit("markDiesel", "show")).toBe("roofClosed");
         // The arena opens with the house dark and the floor lit.
         expect(lightingForKit("arena", "night")).toBe("show");
     });
@@ -210,5 +221,89 @@ describe("defaultVenueForField", () => {
         a.params.homeColor = "#000000";
         expect(defaultVenueForField(field).params.homeColor).toBe("#6442ff");
         expect(DEFAULT_VENUE_PARAMS.homeColor).toBe("#6442ff");
+    });
+});
+
+describe("a kit's starting params", () => {
+    it("gives Mark Diesel OpenMarch's name and colors, as the kit paints them", () => {
+        const params = defaultVenueForKit("markDiesel").params;
+        expect(params).toEqual({ ...DIESEL_VENUE_PARAMS });
+        expect(params.endZoneText).toBe("OPENMARCH");
+        expect(defaultParamsForKit("hs")).toEqual({ ...DEFAULT_VENUE_PARAMS });
+        // A fresh object each time.
+        expect(defaultParamsForKit("markDiesel")).not.toBe(
+            KIT_VENUE_PARAMS.markDiesel,
+        );
+    });
+
+    it("swaps untouched params on a kit switch and keeps the show's own", () => {
+        const start = defaultParamsForKit("hs");
+        const diesel = defaultParamsForKit("markDiesel");
+        expect(paramsForKitSwitch("hs", "markDiesel", start)).toEqual(diesel);
+        expect(paramsForKitSwitch("markDiesel", "pro", diesel)).toEqual(start);
+        expect(paramsForKitSwitch("hs", "pro", start)).toEqual(start);
+        const own = { ...start, endZoneText: "TIGERS" };
+        expect(paramsForKitSwitch("hs", "markDiesel", own)).toBe(own);
+        const ownInDiesel = { ...diesel, homeColor: "#112233" };
+        expect(paramsForKitSwitch("markDiesel", "hs", ownInDiesel)).toBe(
+            ownInDiesel,
+        );
+    });
+});
+
+describe("Nightpound's fixed floor", () => {
+    const fits = (field: Parameters<typeof fieldFootprint>[0]) =>
+        kitFitsField("nightpound", fieldFootprint(field));
+
+    it("takes every indoor and SoundSport floor", () => {
+        for (const field of Object.values(GridFieldTemplates))
+            expect(fits(field), field.name).toBe(true);
+    });
+
+    it("refuses football fields", () => {
+        for (const field of Object.values(FootballTemplates))
+            expect(fits(field), field.name).toBe(false);
+    });
+
+    it("takes WGI's largest area exactly, and nothing an inch over", () => {
+        const ft = 0.3048;
+        const area = (w: number, d: number) => ({
+            minX: -(w * ft) / 2,
+            maxX: (w * ft) / 2,
+            minZ: -d * ft,
+            maxZ: 0,
+        });
+        expect(kitFitsField("nightpound", area(106, 78))).toBe(true);
+        expect(kitFitsField("nightpound", area(106 + 1 / 12, 78))).toBe(false);
+        expect(kitFitsField("nightpound", area(106, 78 + 1 / 12))).toBe(false);
+        // Turned the other way, the area doesn't fit.
+        expect(kitFitsField("nightpound", area(78, 106))).toBe(false);
+    });
+
+    it("shows the indoor arena for a field that outgrew it, and leaves other kits alone", () => {
+        const football = fieldFootprint(
+            FootballTemplates.HIGH_SCHOOL_FOOTBALL_FIELD_NO_END_ZONES,
+        );
+        expect(kitForField("nightpound", football)).toBe("arena");
+        expect(kitForField("hs", football)).toBe("hs");
+        const indoor = fieldFootprint(GridFieldTemplates.INDOOR_50x90_8to5);
+        expect(kitForField("nightpound", indoor)).toBe("nightpound");
+    });
+
+    it("shows the same kit on the 2D field, and the saved one before the field loads", () => {
+        const football =
+            FootballTemplates.HIGH_SCHOOL_FOOTBALL_FIELD_NO_END_ZONES;
+        expect(shownKit("nightpound", football)).toBe("arena");
+        expect(
+            shownKit("nightpound", GridFieldTemplates.INDOOR_50x90_8to5),
+        ).toBe("nightpound");
+        expect(shownKit("nightpound", undefined)).toBe("nightpound");
+    });
+});
+
+describe("venue kinds", () => {
+    it("lists the real buildings apart from the venues sized to the field", () => {
+        const real = VENUE_KIT_IDS.filter((kit) => venueKind(kit) === "real");
+        expect(real).toEqual(["markDiesel", "nightpound"]);
     });
 });

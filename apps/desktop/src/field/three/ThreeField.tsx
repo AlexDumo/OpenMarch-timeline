@@ -129,14 +129,32 @@ import {
 import { GlyphAtlas } from "./sdfText";
 import { selectionBoxPadding } from "./selectionRing";
 import { useSelectionCoverStore } from "@/field/editor/selectionCoverStore";
+import { itemHandlesShown } from "@/items/itemHandlesStore";
+import { hideLockedItemTag, showLockedItemTag } from "@/items/lockedItemTag";
+import LockedItemTag from "./LockedItemTag";
 import { drawnSelectionBox, selectionHandles } from "./selectionFrame";
 import { fieldObstacleSource } from "./fieldObstacles";
 import { createThreeFieldTestApi } from "./threeFieldTestApi";
 import FieldLayer from "./layers/FieldLayer";
 import BackgroundImageLayer from "./layers/BackgroundImageLayer";
+import VenueUnderlayLayer from "./venueUnderlay/VenueUnderlayLayer";
+import CameraMarkerLayer from "./venueUnderlay/CameraMarkerLayer";
+import CameraHandle from "./venueUnderlay/CameraHandle";
+import {
+    styleBaseColor,
+    venueAround,
+    venueLook,
+    washedColor,
+    withLightLines,
+} from "./venueUnderlay/fieldVenue";
+import { useFieldVenueAction } from "./venueUnderlay/useFieldVenueAction";
+import { useVenueSettings } from "@/hooks/queries/useVenueSettings";
+import { KIT_FIELD_STYLE, kitFieldStyle } from "@/view3d/core/kits/fieldStyle";
+import { shownKit } from "@/view3d/core/venueSettings";
 import MarchersLayer from "./layers/MarchersLayer";
 import ItemsLayer from "./layers/ItemsLayer";
 import LabelsLayer, { type LabelStyle } from "./layers/LabelsLayer";
+import { useEquipmentIcons } from "@/cues/useEquipmentIcons";
 import OverlayLayer from "./layers/OverlayLayer";
 import StartFlagLayers from "./StartFlagLayers";
 import { ModeMarchers } from "./ModeMarchers";
@@ -156,6 +174,7 @@ import { FieldUnavailable, useFieldQualityNotice } from "./FieldQualityNotice";
 import { CanvasErrorBoundary, ContextLossGuard } from "./fieldRecovery";
 import FieldBenchmark from "@/field/benchmark/FieldBenchmark";
 import PropDrawingNotice from "@/components/items/PropDrawingNotice";
+import { ClipboardChip } from "@/shapes/clipboard/ClipboardChip";
 import { threeFieldView } from "@/field/benchmark/fieldScenarios";
 import { r3fFrames } from "./benchmarkFrames";
 import { makeFloorSampler } from "@/pathways/floorSampler";
@@ -250,15 +269,41 @@ function ThreeFieldView() {
         [fieldProperties, fieldImage],
     );
     const { theme: appTheme } = useTheme();
-    // How bright the floor is under the order lanes (step 4i): background and field image, read once
+    // The venue on the field (#1207): off unless the View setting picks a look
+    const { fieldVenue, fieldVenueAround } = useUiSettingsStore(
+        useShallow((s) => ({
+            fieldVenue: s.uiSettings.fieldVenue,
+            fieldVenueAround: s.uiSettings.fieldVenueAround,
+        })),
+    );
+    const { data: venue } = useVenueSettings();
+    const venueKit = shownKit(venue?.kit ?? "hs", fieldProperties);
+    const venueStyle = fieldProperties
+        ? kitFieldStyle(venueKit, fieldProperties)
+        : KIT_FIELD_STYLE[venueKit];
+    const venue3d = venueLook(fieldVenue, venueStyle);
+    useFieldVenueAction(venueStyle);
+    // Full color draws the grid in light ink over the dark turf
+    const lineFieldProperties = useMemo(
+        () =>
+            fieldProperties && venue3d?.keepMarkings
+                ? withLightLines(fieldProperties)
+                : fieldProperties,
+        [fieldProperties, venue3d?.keepMarkings],
+    );
+    // How bright the floor is under the order lanes (step 4i): background (washed with the
+    // venue's color when it shows) and field image, read once
+    const background = fieldProperties?.theme.background;
+    const floorBackground = useMemo(() => {
+        const bg = background ?? { r: 255, g: 255, b: 255 };
+        return venue3d
+            ? washedColor(bg, styleBaseColor(venueStyle, bg), venue3d)
+            : bg;
+    }, [background, venue3d, venueStyle]);
     const orderFloor = useMemo(
         () =>
             makeFloorSampler({
-                background: fieldProperties?.theme.background ?? {
-                    r: 255,
-                    g: 255,
-                    b: 255,
-                },
+                background: floorBackground,
                 image: fieldImage,
                 placement: fieldImagePlan,
                 width: fieldProperties?.width ?? 0,
@@ -270,7 +315,13 @@ function ThreeFieldView() {
             }),
         // `appTheme` is what the dark class follows
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [fieldProperties, fieldImage, fieldImagePlan, appTheme],
+        [
+            fieldProperties,
+            floorBackground,
+            fieldImage,
+            fieldImagePlan,
+            appTheme,
+        ],
     );
     const appearanceSteps = useMarcherAppearanceSteps(true);
     const { mutateAsync: moveMarchers } = useMutation(
@@ -302,6 +353,11 @@ function ThreeFieldView() {
         })),
     );
     const numbersOnly = labelForm === "numbers";
+    // What a performer holds, by their drill number, when it isn't their section's usual (#992)
+    const equipmentIcons = useEquipmentIcons();
+    const equipmentIconPlace = useUiSettingsStore(
+        (s) => s.uiSettings.equipmentIconPlace ?? "beside",
+    );
     const items = useMemo(() => new FieldItems(marchers), [marchers]);
     const itemLabels = useFieldItems(items, beats);
     const { strips, loaded: itemsLoaded } = useFieldStrips(fieldProperties);
@@ -435,6 +491,7 @@ function ThreeFieldView() {
         fieldImage: fieldImagePlan,
         theme: fieldProperties?.theme,
         fieldProperties,
+        equipmentIcons,
     });
     latest.current = {
         saveItem,
@@ -447,6 +504,7 @@ function ThreeFieldView() {
         setSelectedMarchers,
         moveMarchers,
         fieldProperties,
+        equipmentIcons,
     };
     // #315: where a right-click opens the field's menu (`useFieldMenu`, below
     // the editor), and the press that closes it, which does nothing more
@@ -503,8 +561,6 @@ function ThreeFieldView() {
                         dropMarchersOnTimeline(
                             positions,
                             latest.current.moveMarchers,
-                            // A locked item's drop moves it on every page
-                            (id) => items.isLocked(id),
                         ),
                     // #204: a click on a placed box's member selects the whole box
                     pressSelection: (hit, shift, reachInside) =>
@@ -518,9 +574,15 @@ function ThreeFieldView() {
                     doubleClickMarcher: enterBox,
                     // C2.1: items are hit anywhere inside their Outline
                     isItem: (id) => items.isItem(id),
-                    // The pit's locked equipment: no marquee or lasso takes it
+                    // Locked items (the pit's equipment): no click, drag or marquee takes them
                     isLocked: (id) => items.isLocked(id),
-                    itemAt: (point) => items.itemAt(point),
+                    itemAt: (point, accept) => items.itemAt(point, accept),
+                    // Shown once asked for, with an item's Resize and turn (props epic step 2)
+                    itemHandlesShown,
+                    lockedItemClicked: (id, at) =>
+                        id === null
+                            ? hideLockedItemTag()
+                            : showLockedItemTag(id, at),
                     itemFrame: (id) => items.frameOf(id),
                     previewItem: (id, size) =>
                         items.setPreview(
@@ -545,12 +607,31 @@ function ThreeFieldView() {
                     onScreen: onScreenToggles,
                     // #197: snapping, the Snap toggle and Lock X/Y, read as they are on each
                     // move; off, the Snap toggle frees a rotate handle too
+                    // #585: and lands a dragged or resized selection on the field's lines
                     ...settingsMoveOptions(
                         () => latest.current.fieldProperties ?? null,
+                        () => {
+                            const properties = latest.current.fieldProperties;
+                            return properties
+                                ? {
+                                      properties,
+                                      zoom: useFieldViewStore.getState().zoom,
+                                  }
+                                : null;
+                        },
                     ),
                 },
             ),
         [marchers, items, dimming],
+    );
+    // The marcher under the pointer: an equipment icon in place of the number gives way to it
+    const hoveredMarcher = useMemo(
+        () => ({
+            get: () => editor.hoveredMarcher(),
+            subscribe: (changed: () => void) =>
+                editor.subscribeHoveredMarcher(changed),
+        }),
+        [editor],
     );
     useEffect(() => {
         setActiveFieldEditor(editor);
@@ -603,6 +684,9 @@ function ThreeFieldView() {
             createThreeFieldTestApi({
                 marchers,
                 labels: () => latest.current.labels,
+                equipmentIcons: () =>
+                    latest.current.equipmentIcons?.at(marchers.drawnBeat)
+                        .icons ?? new Map(),
                 view: () => useFieldViewStore.getState(),
                 element: () => element.current,
                 pageId: () => latest.current.pageId,
@@ -691,6 +775,8 @@ function ThreeFieldView() {
                     <TimelineIsolationBar />
                     <TimelineFromStartBadge />
                     <PropDrawingNotice />
+                    {/* What's copied, in the bottom-left corner across from the zoom box (#961) */}
+                    <ClipboardChip />
                 </>
             )}
             <FieldBenchmark
@@ -760,8 +846,17 @@ function ThreeFieldView() {
                             clock={countGrid}
                             appearanceSteps={appearanceSteps}
                         />
-                        <FieldLayer
+                        <VenueUnderlayLayer
                             fieldProperties={fieldProperties}
+                            look={venue3d}
+                            around={venueAround(fieldVenueAround, venueStyle)}
+                        />
+                        <CameraMarkerLayer fieldProperties={fieldProperties} />
+                        <FieldLayer
+                            // `??` narrows: fieldProperties is set here
+                            fieldProperties={
+                                lineFieldProperties ?? fieldProperties
+                            }
                             strips={strips}
                             numberAtlas={atlases.number}
                             labelAtlas={atlases.checkpoint}
@@ -798,6 +893,8 @@ function ThreeFieldView() {
                             dimming={dimming}
                             look={look}
                             theme={fieldProperties.theme}
+                            icons={equipmentIcons}
+                            iconPlace={equipmentIconPlace}
                         />
                         <LabelsLayer
                             marchers={marchers}
@@ -808,6 +905,9 @@ function ThreeFieldView() {
                             atlas={atlases.label}
                             style={labelStyle}
                             holdAutoSize={isPlaying}
+                            icons={equipmentIcons}
+                            iconPlace={equipmentIconPlace}
+                            hovered={hoveredMarcher}
                         />
                         <OverlayLayer
                             plan={timeline.collisions}
@@ -830,6 +930,9 @@ function ThreeFieldView() {
                         editor={editor}
                         theme={fieldProperties.theme}
                     />
+                )}
+                {fieldProperties && (
+                    <CameraHandle fieldProperties={fieldProperties} />
                 )}
                 {/* A line's order, and Set order's sweep (pathways step 4g): only with
                     Follow-the-leader on (#1095) */}
@@ -863,6 +966,12 @@ function ThreeFieldView() {
                 <DockedCommandBar />
                 {/* A Line's point and segment menus (#569) */}
                 <HandleMenu />
+                <LockedItemTag
+                    onOpen={(id, field, screen) => {
+                        hideLockedItemTag();
+                        editor.openLockedItemMenu(id, field, screen);
+                    }}
+                />
                 <FieldContextMenu
                     at={menu.at}
                     actions={menu.actions}

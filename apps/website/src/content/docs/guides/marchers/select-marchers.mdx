@@ -75,7 +75,7 @@ The tool you pick stays picked on this device until you change it. To draw one l
 
 ## Select everyone
 
-Press <Kbd action="selectAllMarchers" />, or right-click empty field and choose <Ui k="actions.select.selectAll" />. Props aren't included.
+Press <Kbd action="selectAllMarchers" />, or right-click empty field and choose <Ui k="actions.select.selectAll" />. Props are included, but not [locked](/guides/3d-view/props/#lock-a-prop) ones such as the pit's equipment.
 
 ## Select a whole section, tag, family or drill prefix
 
@@ -93,6 +93,10 @@ The toolbar's <Ui k="inspector.shape.selectTab" /> tab selects marchers by what 
 The group replaces the selection. <Kbd keys="Shift" gesture="click" /> a group to add it instead, for example the trumpets and the mellophones together.
 
 <Ui k="toolbar.select.selectBy.family" /> groups sections into Woodwind, Brass, Battery, Guard, Other and Pit. <Ui k="toolbar.select.selectBy.tag" /> lists the tags you've made; see [Change how marchers look](/guides/marchers/appearance/#make-a-tag). With many groups, a search box appears.
+
+## Select by what they hold
+
+To select everyone holding a rifle at the playhead, whatever their section, right-click a marcher, open <Ui k="field.menu.selectByEquipment" />, then <Ui k="cues.family.guard" />, and choose Select <Ui k="cues.plural.rifle" />. Every item works the same way, and each family's submenu can select all of it, such as <Ui k="actions.cues.selectHoldingFamily.brass" />. See [Change what performers hold](/guides/marchers/equipment/#see-who-holds-what).
 
 ## Select one marcher in a placed shape
 

@@ -23,7 +23,7 @@ export default function NewShowProgressIndicator({
                             ? "bg-accent"
                             : completedSteps.has(index)
                               ? "bg-accent/50"
-                              : "bg-fg-2",
+                              : "bg-stroke",
                     )}
                 />
             ))}

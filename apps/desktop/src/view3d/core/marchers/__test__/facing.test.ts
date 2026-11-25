@@ -1,12 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { pixelsToWorld } from "@openmarch/core";
 import FieldPropertiesTemplates from "../../../../global/classes/FieldProperties.templates";
-import {
-    FRONT_HEADING,
-    SLIDE_BAND,
-    marcherHeading,
-    travelDirection,
-} from "../facing";
+import { FRONT_HEADING, SLIDE_BAND, travelDirection } from "../facing";
 import { writeMatrix } from "../../../render/instanced-marchers.js";
 
 const fp = FieldPropertiesTemplates.HIGH_SCHOOL_FOOTBALL_FIELD_WITH_END_ZONES;
@@ -24,12 +19,11 @@ function canvasTravel(dxPx: number, dyPx: number) {
 describe("marcher facing", () => {
     it("faces the front sideline at heading 0", () => {
         expect(FRONT_HEADING).toBe(0);
-        expect(marcherHeading()).toBe(0);
     });
 
     it("draws the body's +Z (its front) toward the audience, +X (its left) toward side 2", () => {
         const m = new Float32Array(16);
-        writeMatrix(m, 0, 3, -20, marcherHeading(), 1);
+        writeMatrix(m, 0, 3, -20, FRONT_HEADING, 1);
         // columns: local +X -> (m[0], m[2]), local +Z -> (m[8], m[10])
         const col = (k: number) => [m[k], m[k + 1], m[k + 2]].map((v) => v + 0); // -0 to 0
         expect(col(8)).toEqual([0, 0, 1]);

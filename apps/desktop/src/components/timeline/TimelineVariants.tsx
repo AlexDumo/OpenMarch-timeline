@@ -10,6 +10,7 @@ import {
     useRef,
     useState,
     type MouseEvent,
+    type RefObject,
 } from "react";
 import { TimelineLoopBar } from "./TimelineLoopBar";
 import { useClipDrops } from "./clipDrops";
@@ -83,6 +84,7 @@ import type {
     TimelineTrackId,
 } from "./TimelineViewModel";
 import {
+    basicPointUnderPlayhead,
     TimelineBasicBodies,
     TimelineBasicExpertMarks,
     TimelineBasicPoints,
@@ -771,6 +773,27 @@ const TimelineSurface = memo(function TimelineSurface({
     const expanded = density !== "collapsed";
     const viewportRef = useRef<HTMLDivElement>(null);
     const playheadRef = useRef<HTMLButtonElement>(null);
+    // UI-19 Basic: the paused playhead covers the tick on its count (it's drawn above the ticks),
+    // so its menu offers that tick's Remove too, and the playhead keeps its drag
+    const onRemoveBasicPoint = props.onRemoveBasicPoint;
+    const playheadTick =
+        props.isPlaying || !onRemoveBasicPoint
+            ? undefined
+            : basicPointUnderPlayhead(
+                  props.basicPoints,
+                  positionBeat,
+                  pixelsPerBeat,
+              );
+    const playheadPoint = useMemo(
+        () =>
+            playheadTick && onRemoveBasicPoint
+                ? {
+                      onRemove: () => onRemoveBasicPoint(playheadTick.beat),
+                      reason: playheadTick.removeReason ?? null,
+                  }
+                : undefined,
+        [playheadTick, onRemoveBasicPoint],
+    );
     const rows = useMemo(
         () => (basic ? [] : packTimelineTracks(model.tracks)),
         [basic, model.tracks],
@@ -845,7 +868,10 @@ const TimelineSurface = memo(function TimelineSurface({
     const stretch = useContext(TimelinePaneStretchContext);
     // Lanes in place of the clip rows (tempo mode's lanes)
     const band = basic ? undefined : props.band;
-    const contentHeight = band ? trackTop + band.height : timelineHeight;
+    // Lanes under the clip rows (the cue lanes), in Basic too
+    const lanes = props.lanes;
+    const lanesTop = band ? trackTop + band.height : timelineHeight;
+    const contentHeight = lanesTop + (lanes?.height ?? 0);
     const surfaceHeight = stretch
         ? Math.max(contentHeight, viewportHeight)
         : contentHeight;
@@ -919,12 +945,26 @@ const TimelineSurface = memo(function TimelineSurface({
     );
     // A band being edited (tempo mode) is the only thing in focus: no page editing beside it
     const bandFocus = !!band?.focus;
+    // The cue lanes take presses below their top (as a focused band does): the playhead and the
+    // start flag are grabbed above them, so a cue's edge under either line is still the cue's
+    const lanesTakePresses = lanes?.takesPresses === true;
+    const lanesScroll = useScrollTop(viewportRef, lanesTakePresses);
+    const linesGrabHeight = bandFocus
+        ? trackTop
+        : lanesTakePresses
+          ? Math.max(0, lanesTop - lanesScroll)
+          : undefined;
     const appendAtPlayhead =
         props.isPlaying || bandFocus ? undefined : props.appendAtPlayhead;
     // The owner seeks on a selection (UI-9: to a range's end, or home's beat 0)
     const onSelectionChange = useLatestCallback(props.onSelectionChange);
     // UI-12: clicks and scrubs land on a nearby downbeat or page line; Basic's on any count
     // (UI-19: a mid-page edit happens at a count)
+    // A dragged edge's weaker lines, apart from the page lines (`snapEdgeBeat`)
+    const measureDownbeats = useMemo(
+        () => model.measures.map((measure) => measure.atBeat),
+        [model.measures],
+    );
     const seekSnapBeats = useMemo(
         () =>
             basic
@@ -1288,7 +1328,50 @@ const TimelineSurface = memo(function TimelineSurface({
                             pixelsPerBeat,
                             beatCount: model.beatCount,
                             snapBeats: seekSnapBeats,
+                            pageBeats: basic ? seekSnapBeats : snapBeats,
+                            downbeats: measureDownbeats,
                             leadingInset: initialPageWidth,
+                        })}
+                        {!basic &&
+                            !band &&
+                            rows.length > 0 &&
+                            props.movesHeader && (
+                                // The Moves lane's heading, at the visible left edge over the first
+                                // row of move tracks
+                                <div
+                                    className="pointer-events-none absolute left-0 z-[4] h-0"
+                                    style={{ top: trackTop, width }}
+                                >
+                                    <div className="pointer-events-auto sticky left-0 w-fit">
+                                        {props.movesHeader}
+                                    </div>
+                                </div>
+                            )}
+                        {!basic && !band && props.movesHiddenStrip && (
+                            // Moves is hidden: it folds into a strip where its tracks were
+                            <div
+                                className="absolute left-0 z-[4]"
+                                style={{
+                                    top: trackTop,
+                                    width,
+                                    height: rowPitch,
+                                }}
+                            >
+                                {props.movesHiddenStrip}
+                            </div>
+                        )}
+                        {lanes?.render({
+                            top: lanesTop,
+                            width,
+                            pixelsPerBeat,
+                            beatCount: model.beatCount,
+                            snapBeats: seekSnapBeats,
+                            pageBeats: basic ? seekSnapBeats : snapBeats,
+                            downbeats: measureDownbeats,
+                            leadingInset: initialPageWidth,
+                            // A click on a cue's bar selects its counts, as a clip's click does
+                            // (Basic has no clips and selects no ranges)
+                            onSelectRange: basic ? undefined : commitSelection,
                         })}
                     </div>
                     {/* The clips dropping out of a page box (`useClipDrops`), over the pinned
@@ -1465,7 +1548,7 @@ const TimelineSurface = memo(function TimelineSurface({
                             }
                             pixelsPerBeat={pixelsPerBeat}
                             height={pinnedHeight}
-                            grabHeight={bandFocus ? trackTop : undefined}
+                            grabHeight={linesGrabHeight}
                             beatCount={model.beatCount}
                             anchorRef={playheadRef}
                             onSeek={props.onSeek}
@@ -1478,6 +1561,7 @@ const TimelineSurface = memo(function TimelineSurface({
                             }
                             onAddSubsetPage={props.onAddSubsetPage}
                             addPageNames={props.addPageNames}
+                            basicPoint={playheadPoint}
                         />
                         {appendAtPlayhead && (
                             <TimelineAppendAtPlayhead
@@ -1531,7 +1615,7 @@ const TimelineSurface = memo(function TimelineSurface({
                                 pixelsPerBeat={pixelsPerBeat}
                                 height={pinnedHeight}
                                 // Tempo mode: the band's count handles win over the flag
-                                grabHeight={bandFocus ? trackTop : undefined}
+                                grabHeight={linesGrabHeight}
                                 snapBeats={snapBeats}
                                 onCommit={commitSelection}
                                 onLineDrag={props.onSeek}
@@ -1576,3 +1660,20 @@ export const CollapsedTimeline = memo(function CollapsedTimeline(
 ) {
     return <TimelineSurface {...props} density="collapsed" />;
 });
+
+/** The element's vertical scroll, kept while `watch` (the cue lanes show); 0 otherwise. */
+function useScrollTop(
+    ref: RefObject<HTMLElement | null>,
+    watch: boolean,
+): number {
+    const [top, setTop] = useState(0);
+    useEffect(() => {
+        const element = ref.current;
+        if (!watch || !element) return;
+        const read = () => setTop(element.scrollTop);
+        read();
+        element.addEventListener("scroll", read, { passive: true });
+        return () => element.removeEventListener("scroll", read);
+    }, [ref, watch]);
+    return watch ? top : 0;
+}

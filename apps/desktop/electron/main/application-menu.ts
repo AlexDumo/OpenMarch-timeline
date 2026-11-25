@@ -7,6 +7,7 @@ import {
     CHECK_FOR_UPDATES_MENU_ACTION,
     HELP_MENU_ACTIONS,
     PLAYBACK_MENU_ACTIONS,
+    VIEW_MENU_ACTIONS,
     type MenuAction,
 } from "../../src/global/menuActions";
 import { SITE_URL, siteUrl } from "../../src/global/siteUrl";
@@ -65,10 +66,14 @@ const linkItem = (label: string, url: string): MenuItemConstructorOptions => ({
  * Basic the Playback menu leaves out the items whose actions Basic turns off. Role items get their
  * labels here too: Electron's own role labels are English only.
  */
-export function buildApplicationMenu({ basic = false } = {}): Menu {
+export function buildApplicationMenu({
+    basic = false,
+    saveNow = false,
+}: { basic?: boolean; saveNow?: boolean } = {}): Menu {
     return Menu.buildFromTemplate(
         applicationMenuTemplate({
             basic,
+            saveNow,
             isMacOS: process.platform === "darwin",
         }),
     );
@@ -81,9 +86,12 @@ export function buildApplicationMenu({ basic = false } = {}): Menu {
 // eslint-disable-next-line max-lines-per-function -- the menu template, one item per entry
 export function applicationMenuTemplate({
     basic,
+    saveNow = false,
     isMacOS,
 }: {
     basic: boolean;
+    /** Show File ▸ Save Now (working-copy saves are on). */
+    saveNow?: boolean;
     isMacOS: boolean;
 }): MenuItemConstructorOptions[] {
     const appName = app.name;
@@ -126,6 +134,19 @@ export function applicationMenuTemplate({
                         void mainProcess.requestNewShowFromMenu();
                     },
                 },
+                // Working-copy saves publish a few seconds after editing stops; this publishes
+                // now (ADR 0018). Without them every edit is already in the file.
+                ...(saveNow
+                    ? ([
+                          {
+                              // No accelerator: Cmd/Ctrl+S swaps marchers.
+                              label: t("menu.file.saveNow"),
+                              click() {
+                                  void mainProcess.publishNow();
+                              },
+                          },
+                      ] satisfies MenuItemConstructorOptions[])
+                    : []),
                 {
                     label: t("menu.file.saveAsCopy"),
                     click(_item, focusedWindow) {
@@ -198,6 +219,11 @@ export function applicationMenuTemplate({
                         openView3dWindow();
                     },
                 },
+                { type: "separator" },
+                // The timeline's lanes (fork #992), as the Lanes menu shows and hides them
+                ...VIEW_MENU_ACTIONS.filter(
+                    (item) => !(basic && item.expertOnly),
+                ).map(rendererActionItem(isMacOS)),
                 { type: "separator" },
                 { role: "reload", label: t("menu.view.reload") },
                 { role: "forceReload", label: t("menu.view.forceReload") },

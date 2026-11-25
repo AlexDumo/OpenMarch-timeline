@@ -23,6 +23,7 @@ import {
     actionDisabledReason,
     isActionEnabled,
     onRefusedPress,
+    reportRefusedAction,
     runAction,
     subscribeToActionHandlers,
 } from "./registry";
@@ -65,10 +66,16 @@ export type ActionButtonProps =
         /** Selects the toggle on/off label for toggle actions */
         toggleState?: "on" | "off";
         /**
-         * A short word or two shown with the icon in touch mode, where the tooltip
-         * can't be seen. Give it to icon-only buttons.
+         * A short word or two shown under the icon in touch mode, for buttons in a panel that
+         * opens like a menu (the timeline's "…" panel), where the words are the entries. Buttons
+         * always on screen go without: a long press names them (#1292).
          */
         caption?: string;
+        /**
+         * A second, quieter line in the tooltip, under the name and shortcut: what the action does
+         * when its name alone doesn't say enough. A long press shows it too.
+         */
+        hint?: string;
         /** Called after the action runs, e.g. to close the menu the button sits in */
         onRun?: () => void;
     };
@@ -87,6 +94,7 @@ export default function ActionButton({
     tooltip,
     toggleState,
     caption,
+    hint,
     onRun,
     children,
     className,
@@ -247,13 +255,14 @@ export default function ActionButton({
                     // Pressing it shows why instead, as the menus' entries do: a press closes
                     // the tooltip, and a finger has no hover
                     event.preventDefault();
+                    reportRefusedAction(action, "button", reason);
                     openHint();
                     return;
                 }
                 // A caller's onClick can take the click over with preventDefault
                 onClick?.(event);
                 if (event.defaultPrevented) return;
-                runAction(action, args);
+                runAction(action, args, "button");
                 onRun?.();
             }}
             className={twMerge(
@@ -276,7 +285,8 @@ export default function ActionButton({
             {/* The touch layout shows the long-press bubble instead */}
             <Tip
                 label={hintLabel || undefined}
-                hint={reason}
+                // Greyed out, why it is; otherwise what it does, when given
+                hint={reason ?? hint}
                 action={showShortcut ? action : undefined}
                 disabled={isTouch}
             >
@@ -298,9 +308,9 @@ export default function ActionButton({
                         <span>{hintLabel}</span>
                         {showShortcut && <Shortcut action={action} />}
                     </span>
-                    {reason && (
-                        <span className="text-sub text-text-subtitle">
-                            {reason}
+                    {(reason ?? hint) && (
+                        <span className="text-sub text-text-subtitle block max-w-280">
+                            {reason ?? hint}
                         </span>
                     )}
                 </span>

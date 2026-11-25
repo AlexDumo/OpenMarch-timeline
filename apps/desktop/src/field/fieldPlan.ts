@@ -8,6 +8,11 @@ import {
     yardNumberPath,
     yardNumberSides,
 } from "./fieldNumbers";
+import {
+    turnPathData,
+    type FieldSize,
+    type FieldViewFrom,
+} from "./fieldViewFrom";
 
 /**
  * The 2D field's layout, in field units. Everything sits exactly on its
@@ -61,6 +66,8 @@ export type FieldPlanImage = {
     width: number;
     height: number;
     opacity: number;
+    /** Drawn turned half a turn about its center (the performers' view) */
+    turned?: boolean;
 };
 
 export type FieldPlan2d = {
@@ -96,6 +103,8 @@ export type FieldPlanOptions = {
      * didn't decode. Drawn only if the field properties show it.
      */
     image?: { width: number; height: number } | null;
+    /** The side the field is seen from; the audience's by default (`fieldViewFrom.ts`). */
+    viewFrom?: FieldViewFrom;
 };
 
 const GRID_STROKE = FieldProperties.GRID_STROKE_WIDTH;
@@ -171,10 +180,14 @@ const backFrom = (from: number, interval: number) => {
 /**
  * The field's lines a shape's edge can be pulled onto (#425), in field units: x for lines side to
  * side, y for front to back. The checkpoints used as references, visible or not (a front
- * sideline is invisible but still a line), and the half lines where the field has them. Not the
- * step grid.
+ * sideline is invisible but still a line), and the half lines where the field has them unless
+ * `halfLines` is false (a selection of marchers lands on checkpoints only, #585). Not the step
+ * grid.
  */
-export function fieldReferenceLines(fp: FieldProperties): {
+export function fieldReferenceLines(
+    fp: FieldProperties,
+    { halfLines = true }: { halfLines?: boolean } = {},
+): {
     x: number[];
     y: number[];
 } {
@@ -185,7 +198,7 @@ export function fieldReferenceLines(fp: FieldProperties): {
         .filter((c) => c.useAsReference)
         .map((c) => checkpointY(fp, c));
     // The half lines where the 2D plan draws them
-    if (fp.halfLineXInterval)
+    if (halfLines && fp.halfLineXInterval)
         x.push(
             ...linesFrom(
                 fp.centerFrontPoint.xPixels,
@@ -193,7 +206,7 @@ export function fieldReferenceLines(fp: FieldProperties): {
                 fp.width,
             ),
         );
-    if (fp.halfLineYInterval) {
+    if (halfLines && fp.halfLineYInterval) {
         const interval = fp.pixelsPerStep * fp.halfLineYInterval;
         y.push(...backFrom(gridStartY(fp) - interval, interval));
     }
@@ -234,6 +247,7 @@ export const fieldImagePlacement = (
 export function planFieldImage(
     fieldProperties: FieldProperties,
     image: FieldPlanOptions["image"],
+    viewFrom: FieldViewFrom = "audience",
 ): FieldPlanImage | null {
     if (!fieldProperties.showFieldImage || !image) return null;
     const { width, height } = fieldProperties;
@@ -241,14 +255,73 @@ export function planFieldImage(
         image.width > 0 && image.height > 0
             ? fieldImagePlacement(fieldProperties, image)
             : { x: 0, y: 0, width, height };
-    return { ...at, opacity: fieldProperties.backgroundImageOpacity };
+    const placed = { ...at, opacity: fieldProperties.backgroundImageOpacity };
+    return viewFrom === "performer"
+        ? turnImage(placed, fieldProperties)
+        : placed;
+}
+
+const turnImage = (image: FieldPlanImage, size: FieldSize): FieldPlanImage => ({
+    ...image,
+    x: size.width - image.x - image.width,
+    y: size.height - image.y - image.height,
+    turned: !image.turned,
+});
+
+const SWAPPED_ANCHOR: Record<FieldPlanText["anchor"], FieldPlanText["anchor"]> =
+    { start: "end", middle: "middle", end: "start" };
+
+/**
+ * A text seen from the other side. Painted yard numbers turn with the field, as they would on
+ * the grass; the labels around the field move with their point but stay upright.
+ */
+function turnText(t: FieldPlanText, size: FieldSize): FieldPlanText {
+    const centerY = size.height - textCenterY(t);
+    const painted = t.role === "yardNumber";
+    return {
+        ...t,
+        x: size.width - t.x,
+        y: centerY + BASELINE_BELOW_CENTER * t.fontSize,
+        anchor: painted ? t.anchor : SWAPPED_ANCHOR[t.anchor],
+        flipped: painted ? !t.flipped : t.flipped,
+    };
+}
+
+/**
+ * The plan seen from the performers' side: everything turned half a turn about the field's
+ * center, the labels around it kept upright (`turnText`).
+ */
+export function turnFieldPlan(plan: FieldPlan2d): FieldPlan2d {
+    const size = { width: plan.width, height: plan.height };
+    const { border } = plan;
+    return {
+        ...plan,
+        image: plan.image && turnImage(plan.image, size),
+        lines: plan.lines.map((l) => ({
+            ...l,
+            x1: size.width - l.x1,
+            y1: size.height - l.y1,
+            x2: size.width - l.x2,
+            y2: size.height - l.y2,
+        })),
+        texts: plan.texts.map((t) => turnText(t, size)),
+        shapes: plan.shapes.map((s) => ({
+            ...s,
+            path: turnPathData(s.path, size),
+        })),
+        border: {
+            ...border,
+            x: size.width - border.x - border.width,
+            y: size.height - border.y - border.height,
+        },
+    };
 }
 
 /** Plans the 2D field of `fieldProperties`, painted with its theme. */
 // eslint-disable-next-line max-lines-per-function
 export function planField2d(
     fieldProperties: FieldProperties,
-    { gridLines, halfLines, image }: FieldPlanOptions,
+    { gridLines, halfLines, image, viewFrom = "audience" }: FieldPlanOptions,
 ): FieldPlan2d {
     const fp = fieldProperties;
     const { width, height, pixelsPerStep, centerFrontPoint, theme } = fp;
@@ -343,7 +416,7 @@ export function planField2d(
     const inset = (borderWidth - GRID_STROKE) / 2;
     const numbers = yardNumbers(fp);
 
-    return {
+    const plan: FieldPlan2d = {
         width,
         height,
         background: theme.background,
@@ -360,9 +433,57 @@ export function planField2d(
             color: theme.primaryStroke,
         },
     };
+    return viewFrom === "performer" ? turnFieldPlan(plan) : plan;
 }
 
-/** The checkpoint labels outside the field */
+/**
+ * A label's width, a little wide: the labels draw in the platform's fallback font, so this is
+ * 0.6 em a character (wider than its digits and capitals) and 0.3 em a space.
+ */
+export function labelWidthEstimate(text: string, fontSize: number): number {
+    const spaces = text.split(" ").length - 1;
+    return fontSize * (0.6 * (text.length - spaces) + 0.3 * spaces);
+}
+
+/** Room left between two labels side by side, in font sizes */
+const LABEL_GAP = 0.25;
+/**
+ * How tall a label is when thinning front-to-back labels, in font sizes: its letters, not its
+ * text box, so labels a little closer than a line of text still both show (a college field's
+ * grid and real back hashes, 1.33 steps apart)
+ */
+const LABEL_INK_HEIGHT = 0.7;
+
+/**
+ * The labels along one edge that don't overlap, as an axis thins its tick labels: the label
+ * nearest `first` is kept, then each label further out is kept when it clears every label kept
+ * so far. On a wide floor at short steps, some lines past the grid's 0 line go unlabeled
+ * ("S1 24" is wider than 4 steps at 12 inches); the lines themselves still draw.
+ */
+function thinLabels<T>(
+    labels: readonly T[],
+    position: (label: T) => number,
+    size: (label: T) => number,
+    first: number,
+    gap: number,
+): T[] {
+    const kept: { at: number; half: number }[] = [];
+    const out: T[] = [];
+    const byNearness = [...labels].sort(
+        (a, b) => Math.abs(position(a) - first) - Math.abs(position(b) - first),
+    );
+    for (const label of byNearness) {
+        const at = position(label);
+        const half = size(label) / 2;
+        if (kept.some((k) => Math.abs(k.at - at) < k.half + half + gap))
+            continue;
+        kept.push({ at, half });
+        out.push(label);
+    }
+    return labels.filter((label) => out.includes(label));
+}
+
+/** The checkpoint labels outside the field, thinned so none overlap (`thinLabels`) */
 function checkpointLabels(fp: FieldProperties): FieldPlanText[] {
     const { centerFrontPoint, width, theme } = fp;
     const label = (
@@ -384,8 +505,15 @@ function checkpointLabels(fp: FieldProperties): FieldPlanText[] {
     });
     const out: FieldPlanText[] = [];
     const labelBaselineBelowTop = BASELINE_FROM_TOP * LABEL_FONT_SIZE;
-    for (const xCheckpoint of fp.xCheckpoints) {
-        if (!xCheckpoint.visible) continue;
+    // Side to side: kept from the center out, by each label's width
+    const xLabels = thinLabels(
+        fp.xCheckpoints.filter((c) => c.visible),
+        (c) => checkpointX(fp, c),
+        (c) => labelWidthEstimate(c.terseName, LABEL_FONT_SIZE),
+        centerFrontPoint.xPixels,
+        LABEL_GAP * LABEL_FONT_SIZE,
+    );
+    for (const xCheckpoint of xLabels) {
         const x = checkpointX(fp, xCheckpoint);
         if (fp.bottomLabelsVisible)
             out.push(
@@ -407,8 +535,15 @@ function checkpointLabels(fp: FieldProperties): FieldPlanText[] {
             );
     }
     const sidePadding = 10;
-    for (const yCheckpoint of fp.yCheckpoints) {
-        if (!yCheckpoint.visible) continue;
+    // Front to back: kept from the front, by the height of each label's letters
+    const yLabels = thinLabels(
+        fp.yCheckpoints.filter((c) => c.visible),
+        (c) => checkpointY(fp, c),
+        () => LABEL_INK_HEIGHT * LABEL_FONT_SIZE,
+        centerFrontPoint.yPixels,
+        0,
+    );
+    for (const yCheckpoint of yLabels) {
         const baseline =
             checkpointY(fp, yCheckpoint) +
             BASELINE_BELOW_CENTER * LABEL_FONT_SIZE;

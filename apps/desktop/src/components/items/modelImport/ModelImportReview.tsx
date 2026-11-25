@@ -5,14 +5,12 @@ import {
     InfoIcon,
     ProhibitIcon,
     SpinnerGapIcon,
-    WarningIcon,
     WrenchIcon,
 } from "@phosphor-icons/react";
 import { T, useTranslate } from "@tolgee/react";
 import clsx from "clsx";
 import {
     Button,
-    Checkbox,
     Input,
     SegmentedTextSwitch,
     Select,
@@ -23,11 +21,7 @@ import {
 import ItemPanelHeader from "@/components/items/ItemPanelHeader";
 import AxisPreview, { AXIS_COLORS, type Axis } from "./AxisPreview";
 import DetailChoice from "./DetailChoice";
-import {
-    sameTilt,
-    tipped,
-    UPRIGHT,
-} from "@/showAssets/modelImport/orientation";
+import { tipped, UPRIGHT } from "@/showAssets/modelImport/orientation";
 import { useModelImportSession } from "@/showAssets/modelImport/review/modelImportSession";
 import {
     canRetry,
@@ -42,8 +36,8 @@ import type {
     Turn,
     UnitFix,
 } from "@/showAssets/modelImport/types";
-
-const meters = (value: number) => String(Number(value.toFixed(2)));
+import { useShowLengths } from "@/hooks/useMeasurementSystem";
+import { UNIT_FIXES } from "@/showAssets/modelImport/rules";
 
 /** The licenses offered (SPDX), most permissive first; empty means Unknown (props-spec §10) */
 export const LICENSE_OPTIONS = [
@@ -108,6 +102,7 @@ export default function ModelImportReview({
     onDone: (modelValue: string | null) => void;
 }) {
     const { t } = useTranslate();
+    const lengths = useShowLengths();
     const session = useModelImportSession();
     const { result, running, choices } = session;
     const report = result?.report;
@@ -137,8 +132,6 @@ export default function ModelImportReview({
     useEffect(() => {
         if (running) setPointed(null);
     }, [running]);
-    // Stood up from Z-up on its own: said in Needs your choice, with a way back
-    const zUp = tilt?.zUpSuspected ? tilt : undefined;
     const detail = choiceOf(needs, "detail");
     const picture = useBytesUrl(model?.parts.thumbnail, "image/png");
 
@@ -247,6 +240,7 @@ export default function ModelImportReview({
                     <SizeConfirm
                         size={model.sidecar.sizeM}
                         unit={choices.unitFix ?? unitFix?.applied ?? "none"}
+                        sizeUnit={unitFix?.applied ?? "none"}
                         suggested={unitFix?.preselected}
                         disabled={running}
                         onUnit={(unit) => session.choose({ unitFix: unit })}
@@ -285,30 +279,6 @@ export default function ModelImportReview({
                     />
                 )}
 
-                {model && zUp && (
-                    <ReportGroup
-                        tone="accent"
-                        icon={<WarningIcon size={16} />}
-                        title={t("props.import.groups.needsChoice")}
-                        testId="model-import-choices"
-                    >
-                        {zUp && (
-                            <ChoiceCheck
-                                id="model-import-rotate"
-                                checked={sameTilt(appliedTilt, zUp.preselected)}
-                                disabled={running}
-                                onChange={(on) =>
-                                    session.choose({
-                                        tilt: on ? zUp.preselected : UPRIGHT,
-                                    })
-                                }
-                                title={t("props.import.rotate.title")}
-                                detail={t("props.import.rotate.detail")}
-                            />
-                        )}
-                    </ReportGroup>
-                )}
-
                 {report && report.fixedForYou.length > 0 && (
                     <ReportGroup
                         tone="green"
@@ -332,7 +302,11 @@ export default function ModelImportReview({
                         testId="model-import-notes"
                     >
                         {report.notes.map((note, i) => (
-                            <Line key={i} {...noteText(note, t)} muted />
+                            <Line
+                                key={i}
+                                {...noteText(note, t, lengths.format)}
+                                muted
+                            />
                         ))}
                     </ReportGroup>
                 )}
@@ -398,23 +372,33 @@ export default function ModelImportReview({
 }
 
 /**
- * The size to confirm: width × depth × height in meters, and the file's unit, one click each.
+ * The size to confirm: width × depth × height in the show's units, and the file's unit, one
+ * click each.
  * The import suggests a unit when the size is clearly off; it is never applied silently.
  */
 function SizeConfirm({
     size,
     unit,
+    sizeUnit,
     suggested,
     disabled,
     onUnit,
 }: {
     size: { width: number; height: number; depth: number };
     unit: UnitFix;
+    /** The unit `size` was read in: `unit` once a change of it has run */
+    sizeUnit: UnitFix;
     suggested: UnitFix | undefined;
     disabled: boolean;
     onUnit: (unit: UnitFix) => void;
 }) {
     const { t } = useTranslate();
+    // The size shows in the show's units; the file's own numbers show under it when the file
+    // was made in another unit (a model made in meters, in an imperial show)
+    const lengths = useShowLengths();
+    const shownUnit: UnitFix = lengths.system === "metric" ? "none" : "ft";
+    const fileFactor = UNIT_FIXES.find((f) => f.unit === sizeUnit)?.factor ?? 1;
+    const fileNumber = (meters: number) => lengths.number(meters / fileFactor);
     return (
         <section
             className="flex flex-col gap-8"
@@ -425,12 +409,25 @@ function SizeConfirm({
                     className="text-body font-medium tabular-nums"
                     data-testid="model-import-size"
                 >
-                    {t("props.import.size.value", {
-                        width: meters(size.width),
-                        depth: meters(size.depth),
-                        height: meters(size.height),
+                    {t("props.import.size.dimensionsOf", {
+                        width: lengths.format(size.width),
+                        depth: lengths.format(size.depth),
+                        height: lengths.format(size.height),
                     })}
                 </span>
+                {sizeUnit !== shownUnit && (
+                    <span
+                        className="text-sub text-text-subtitle tabular-nums"
+                        data-testid="model-import-size-in-file"
+                    >
+                        {t("props.import.size.inFile", {
+                            width: fileNumber(size.width),
+                            depth: fileNumber(size.depth),
+                            height: fileNumber(size.height),
+                            unit: t(`props.import.units.${sizeUnit}`),
+                        })}
+                    </span>
+                )}
                 <span className="text-sub text-text-subtitle">
                     {suggested && suggested !== "none"
                         ? t("props.import.size.suggested", {
@@ -649,37 +646,6 @@ function Line({ title, detail, muted }: ReportLine & { muted?: boolean }) {
                     {detail}
                 </span>
             )}
-        </div>
-    );
-}
-
-function ChoiceCheck({
-    id,
-    checked,
-    disabled,
-    onChange,
-    title,
-    detail,
-}: {
-    id: string;
-    checked: boolean;
-    disabled: boolean;
-    onChange: (checked: boolean) => void;
-    title: string;
-    detail?: string;
-}) {
-    return (
-        <div className="flex items-start gap-8">
-            <Checkbox
-                id={id}
-                data-testid={id}
-                checked={checked}
-                disabled={disabled}
-                onCheckedChange={(value) => onChange(value === true)}
-            />
-            <label htmlFor={id} className="min-w-0 cursor-pointer">
-                <Line title={title} detail={detail} />
-            </label>
         </div>
     );
 }

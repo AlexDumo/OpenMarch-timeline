@@ -694,7 +694,7 @@ test("change: while a box is open everyone else fades, and nobody once it closes
     await expect.poll(dimmedIds).toEqual([]);
 });
 
-test("change: the field display bar holds paths, labels and shapes; the rest is in Settings › Field", async ({
+test("change: the field display bar holds paths, labels, equipment icons, shapes and the venue; the rest is in Settings › Field", async ({
     show,
 }) => {
     const { page } = show;
@@ -704,11 +704,15 @@ test("change: the field display bar holds paths, labels and shapes; the rest is 
     for (const id of [
         "start-flag-positions",
         "field-display-labels",
+        // What each performer holds, as an icon by the drill number (fork #992)
+        "field-display-equipment",
         "field-display-shapes",
+        // The show's 3D venue under the grid (#1207), off by default
+        "field-display-venue",
     ])
         await expect(bar.getByTestId(id)).toBeVisible();
     // Nothing else crept in
-    await expect(bar.getByRole("button")).toHaveCount(3);
+    await expect(bar.getByRole("button")).toHaveCount(5);
     await expect(page.getByTestId("open-view3d")).toBeVisible();
 
     const settings = await openSettings(page, "Field");
@@ -1490,6 +1494,49 @@ test("Enter places the marchers on the spots as one undo step, and Escape cancel
 
     await page.keyboard.press("ControlOrMeta+z");
     await expect.poll(() => savedPositions(show, 0)).toEqual(asPositions(HOME));
+});
+
+test("change: Shift+Enter, or Shift-click on Place, puts the marchers on the spots as one undo step and keeps no shape", async ({
+    show,
+}) => {
+    const { page } = show;
+    const recipes = async () =>
+        (
+            await show.query<{ kind: string }>(
+                "SELECT kind FROM timeline_shape_recipes",
+            )
+        ).length;
+    const onSpots = (spots: readonly { x: number; y: number }[]) => async () =>
+        (await savedPositions(show, 0)).every((p) =>
+            spots.some((s) => Math.hypot(s.x - p.x, s.y - p.y) < CLOSE),
+        );
+
+    const steps = await undoSteps(show);
+    await drawBox(show);
+    let spots = (await shapeOverlay(page))!.spots;
+    await page.keyboard.press("Shift+Enter");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await expect.poll(onSpots(spots)).toBe(true);
+    await waitForIdle(page);
+    expect(await recipes()).toBe(0);
+    expect(await placedBoxes(page)).toEqual([]);
+    expect(await undoSteps(show)).toBe(steps + 1);
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(() => savedPositions(show, 0)).toEqual(asPositions(HOME));
+
+    // Place's tooltip names both, and a Shift-click is Shift+Enter
+    await drawBox(show);
+    spots = (await shapeOverlay(page))!.spots;
+    const place = page.getByTestId("shape-editor-place");
+    await place.hover();
+    await expect(page.getByRole("tooltip")).toContainText(
+        "place without keeping the shape",
+    );
+    await place.click({ modifiers: ["Shift"] });
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await expect.poll(onSpots(spots)).toBe(true);
+    await waitForIdle(page);
+    expect(await recipes()).toBe(0);
 });
 
 /** Draws and places a box on every marcher, then clears the selection. */
@@ -4514,6 +4561,16 @@ test("change: the pivot of a box placed on a page and again on the next one chan
     await expect(pivotButton).toHaveAttribute("data-pivot", "nw");
 });
 
+/**
+ * The field menu's first entry after Copy, Paste and Paste exactly (#961), which always lead it:
+ * where the shape entries (Group, Ungroup) start
+ */
+const firstShapeItem = (menu: Locator) =>
+    menu
+        .getByRole("menuitem")
+        .filter({ hasNotText: /^(Copy|Paste)/ })
+        .first();
+
 test.describe("a box carried onto a page with no positions of its own (#485)", () => {
     test.use({
         seedSql: seedShowSql({
@@ -4840,7 +4897,7 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         await page.mouse.click(member.x, member.y, { button: "right" });
         const menu = page.getByTestId("field-menu");
         await expect(menu).toBeVisible();
-        await expect(menu.getByRole("menuitem").first()).toHaveText(/Ungroup/);
+        await expect(firstShapeItem(menu)).toHaveText(/Ungroup/);
         await page.keyboard.press("Escape");
         await expect(menu).toBeHidden();
 
@@ -4891,10 +4948,8 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         const steps = await undoSteps(show);
         await page.mouse.click(member.x, member.y, { button: "right" });
         await expect(menu).toBeVisible();
-        await expect(menu.getByRole("menuitem").first()).toHaveText(
-            /Group selection/,
-        );
-        await menu.getByRole("menuitem").first().click();
+        await expect(firstShapeItem(menu)).toHaveText(/Group selection/);
+        await firstShapeItem(menu).click();
         await expect.poll(kinds).toEqual(["group"]);
         await waitForIdle(page);
         // Nobody moves; Page 1 takes the change, as one undo step
@@ -4910,7 +4965,7 @@ test.describe("a box carried onto a page with no positions of its own (#485)", (
         ).toHaveCount(0);
         await page.mouse.click(member.x, member.y, { button: "right" });
         await expect(menu).toBeVisible();
-        await expect(menu.getByRole("menuitem").first()).toHaveText(/Ungroup/);
+        await expect(firstShapeItem(menu)).toHaveText(/Ungroup/);
         await page.keyboard.press("Escape");
         await expect(menu).toBeHidden();
 

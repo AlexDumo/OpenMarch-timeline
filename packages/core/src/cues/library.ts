@@ -4,6 +4,7 @@
  */
 import type {
     CueEquipment,
+    EquipmentFamily,
     CueSettingField,
     CueType,
     CueValue,
@@ -78,7 +79,10 @@ const toss = (
         defaultLength: length,
     });
 
-/** A Facing value: a turn over 2 counts unless its cue says. */
+/**
+ * A Facing value: lasting only, and instant (a snap) unless its cue gives a transition (fork
+ * #993). Its turn leads into the cue's count, as every transition does (`transitionSegment`).
+ */
 const facing = (
     id: string,
     name: string,
@@ -86,27 +90,99 @@ const facing = (
     extra: Partial<CueValue> = {},
 ): CueValue =>
     lasting(`facing.${id}`, "facing", name, label, ALL_CARRIES, {
-        defaultTransition: 2,
+        locked: true,
+        defaultTransition: 1,
         ...extra,
     });
 
-/** An Equipment value: what a performer holds, cut on its count. */
+/** The Equipment catalog's families, in the order menus list them. */
+export const EQUIPMENT_FAMILIES: readonly EquipmentFamily[] = [
+    "guard",
+    "brass",
+    "woodwinds",
+    "drums",
+];
+
+/** An Equipment value that isn't a catalog item: Nothing, and the fallbacks below. */
 const equipment = (
-    holds: PerformerCarry,
+    key: string,
+    holds: PerformerCarry | undefined,
     name: string,
     label: string,
 ): CueValue =>
-    lasting(`equipment.${holds}`, "equipment", name, label, ALL_CARRIES, {
-        holds,
+    lasting(`equipment.${key}`, "equipment", name, label, ALL_CARRIES, {
+        ...(holds ? { holds } : {}),
     });
 
+/** A catalog item: a real piece of equipment any performer can hold, in its family. */
+const item = (
+    key: string,
+    family: EquipmentFamily,
+    holds: PerformerCarry,
+    name: string,
+): CueValue =>
+    lasting(`equipment.${key}`, "equipment", name, name, ALL_CARRIES, {
+        holds,
+        family,
+    });
+
+/**
+ * The Equipment catalog (ADR 0015 D-6; fork #992): every item a performer can
+ * be given, by family. Each lines up with a 3D View model.
+ */
+const EQUIPMENT_CATALOG_VALUES: readonly CueValue[] = [
+    item("flag", "guard", "flag", "Flag"),
+    item("swingFlag", "guard", "flag", "Swing flag"),
+    item("doubleSwingFlag", "guard", "flag", "Double swing flags"),
+    item("rifle", "guard", "rifle", "Rifle"),
+    item("sabre", "guard", "sabre", "Sabre"),
+    item("trumpet", "brass", "winds", "Trumpet"),
+    item("mellophone", "brass", "winds", "Mellophone"),
+    item("baritone", "brass", "winds", "Baritone"),
+    item("euphonium", "brass", "winds", "Euphonium"),
+    item("trombone", "brass", "winds", "Trombone"),
+    item("bassTrombone", "brass", "winds", "Bass trombone"),
+    item("tuba", "brass", "winds", "Tuba"),
+    item("sousaphone", "brass", "winds", "Sousaphone"),
+    item("piccolo", "woodwinds", "winds", "Piccolo"),
+    item("flute", "woodwinds", "winds", "Flute"),
+    item("clarinet", "woodwinds", "winds", "Clarinet"),
+    item("bassClarinet", "woodwinds", "winds", "Bass clarinet"),
+    item("sopranoSax", "woodwinds", "winds", "Soprano sax"),
+    item("altoSax", "woodwinds", "winds", "Alto sax"),
+    item("tenorSax", "woodwinds", "winds", "Tenor sax"),
+    item("bariSax", "woodwinds", "winds", "Bari sax"),
+    item("snare", "drums", "battery", "Snare"),
+    item("tenors", "drums", "battery", "Tenors"),
+    item("bassDrum", "drums", "battery", "Bass drum"),
+    item("cymbals", "drums", "battery", "Cymbals"),
+];
+
+/**
+ * "Their own instrument": the performer's section default, whatever it is.
+ * Compile resolves it to that default, so it never shows as itself.
+ */
+export const EQUIPMENT_USUAL = "builtin:equipment.usual";
+/** Holding nothing. */
+export const EQUIPMENT_NONE = "builtin:equipment.none";
+
+/** The catalog's items, in family order; `family` narrows it to one family. */
+export function equipmentCatalog(
+    family?: EquipmentFamily,
+): readonly CueValue[] {
+    return family
+        ? EQUIPMENT_CATALOG_VALUES.filter((v) => v.family === family)
+        : EQUIPMENT_CATALOG_VALUES;
+}
+
 export const CUE_LIBRARY: readonly CueValue[] = [
-    equipment("none", "Nothing", "None"),
-    equipment("winds", "Horn", "Horn"),
-    equipment("battery", "Drum", "Drum"),
-    equipment("flag", "Flag", "Flag"),
-    equipment("rifle", "Rifle", "Rifle"),
-    equipment("sabre", "Sabre", "Sabre"),
+    ...EQUIPMENT_CATALOG_VALUES,
+    equipment("none", "none", "Nothing", "None"),
+    equipment("usual", undefined, "Their own instrument", "Own"),
+    // What a performer of a section without catalog equipment holds by
+    // default (`defaultCueValue`); not in the catalog, so never set by hand
+    equipment("winds", "winds", "Horn", "Horn"),
+    equipment("battery", "battery", "Drum", "Drum"),
     position("horn.up", "Horns up", "HU", ["winds"], {
         settings: [choice("angle", ["box", "plus10"])],
     }),
@@ -133,6 +209,8 @@ export const CUE_LIBRARY: readonly CueValue[] = [
     facing("back", "Back", "Back"),
     facing("side1", "Side 1", "S1"),
     facing("side2", "Side 2", "S2"),
+    facing("turnLeft", "Turn left 45°", "L45"),
+    facing("turnRight", "Turn right 45°", "R45"),
     facing("travel", "Direction of travel", "Travel"),
     facing("angle", "Angle", "Angle", { settings: [number("degrees")] }),
     facing("point", "Toward a point", "Point", {

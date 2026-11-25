@@ -18,8 +18,7 @@
             "snapOn": "吸附已关闭：点击重新开启",
             "snapToCustomFraction": "吸附到网格",
             "toggleSnap": "开关吸附",
-            "toggleSnapKeywords": "吸附 磁铁 网格 自由 对齐 snap magnet grid free",
-            "propsOnly": "仅选择了道具：道具不参与对齐或分布"
+            "toggleSnapKeywords": "吸附 磁铁 网格 自由 对齐 snap magnet grid free"
         },
         "batchEdit": {
             "clearPage": "清除第{page}页",
@@ -790,8 +789,6 @@
         "marcher": {
             "drillNumber": "队形编号",
             "errorLoadingCoords": "加载坐标时出错",
-            "itemsSelected": "{count, plural, other {已选择#个道具。请在“道具”面板中编辑。}}",
-            "equipmentSelected": "{count, plural, =1 {已选择#件器材。右键点击可编辑。} other {已选择#件器材。右键点击其中一件可编辑。}}",
             "playing": "正在播放。暂停后可查看和编辑所选队员。",
             "maxStepSize": "最大步幅",
             "minStepSize": "最小步幅",
@@ -970,10 +967,6 @@
                     "description": "选择团体类型。",
                     "title": "团体类型",
                     "typeLabel": "团体类型"
-                },
-                "field": {
-                    "description": "为表演选择场地模板。",
-                    "title": "场地设置"
                 },
                 "performers": {
                     "description": "现在添加队员，或跳过并稍后在编辑器中添加。",
@@ -1510,12 +1503,8 @@
             "medium": "中",
             "large": "大",
             "summary": {
-                "small": "2台马林巴、2台颤音琴、1个打击乐架、1台合成器和2个音箱",
-                "medium": "4台马林巴、3台颤音琴、木琴、钟琴、打击乐架、架子鼓、合成器和4个音箱",
-                "large": "6台马林巴、4台颤音琴、木琴、钟琴、2个打击乐架、架子鼓、2台合成器和6个音箱",
                 "none": "没有定点打击乐。之后可以在“队员”面板中设置。"
             },
-            "always": "每种规模还会在50码线上添加一个指挥台，并在定点打击乐后方添加一台调音台。",
             "addPerformers": "同时添加队员",
             "apply": "应用",
             "replaces": "将替换上一个预设添加的器材。其演奏队员会移到新位置；没有乐器可用的队员将被移除，除非他们在表演后面还有动作。撤销可恢复全部内容。你自己添加的器材会保留。",
@@ -3928,9 +3917,7 @@
         },
         "button": {
             "hint": "音乐文件，以及让拍与音乐对齐：速度、拍号、排练记号",
-            "hintOn": "让拍与音乐对齐。按<escape></escape>或<toggle></toggle>退出。",
             "label": "编辑音乐",
-            "labelOn": "正在编辑音乐",
             "text": "编辑音乐"
         },
         "errors": {
@@ -3938,53 +3925,6 @@
             "moveOneCountLong": "该动作只有一拍",
             "wouldHideSet": "这会使关键帧与其下方的动作在同一拍结束，从而隐藏该动作的定位。请少移除几拍，或让关键帧提前一拍结束。",
             "wouldRemovePage": "这会移除一页。请少移除几拍，或先删除该页。"
-        },
-        "help": {
-            "doubleClickLane": {
-                "title": "添加速度变化点",
-                "text": "在速度轨道上需要变化的位置双击。双击变化点的圆点可将其移除。"
-            },
-            "dragChangeDot": {
-                "title": "移动速度变化点",
-                "text": "上下拖动其圆点可更改速度，左右拖动可移动变化的位置。"
-            },
-            "dragEndDot": {
-                "title": "设置渐慢（rit.）的结束位置",
-                "text": "拖动一段末尾的方形点，使下一个速度可以跳回原速（a tempo）。"
-            },
-            "dragLine": {
-                "title": "设置速度",
-                "text": "上下拖动速度线。要输入速度，请右键点击并选择“设置速度…”"
-            },
-            "dragMeasures": {
-                "title": "选择拍",
-                "text": "沿小节或音乐轨道拖动，然后一次性编辑它们。"
-            },
-            "dragRoundHandle": {
-                "title": "让速度渐变",
-                "text": "拖动一段中间的圆形手柄。双击它可恢复为突变。"
-            },
-            "keys": {
-                "escape": "取消选择，或取消拖动；没有可取消的内容时，停止编辑音乐",
-                "play": "从播放头播放，或在当前位置停止",
-                "tap": "测速：在每个节拍上敲击，查看速度有多快",
-                "toggle": "开始或停止编辑音乐",
-                "metronome": "开关节拍器"
-            },
-            "label": "编辑音乐的使用方法",
-            "rightClick": {
-                "title": "延长和拍",
-                "text": "右键点击某一拍，可将其设为延长、让速度渐变，或添加和移除拍。"
-            },
-            "rightClickMeasure": {
-                "title": "小节和排练记号",
-                "text": "右键点击小节，可重新编号、设置拍号或添加记号。拖动记号可移动它。"
-            },
-            "title": "让拍与音乐对齐",
-            "musicFile": {
-                "title": "更换音乐",
-                "text": "点击顶栏中的文件名，可切换、导入或删除音频，或设置音乐偏移。"
-            }
         },
         "importScore": {
             "choose": "选择文件…",

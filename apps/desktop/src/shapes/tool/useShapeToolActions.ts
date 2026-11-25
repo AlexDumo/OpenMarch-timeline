@@ -1,14 +1,17 @@
 import tolgee from "@/global/singletons/Tolgee";
 import { useCallback } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
-import type { CanvasEditPlan } from "@/timeline/timelineCoordinateWrites";
+import {
+    planCanvasEdit,
+    type CanvasEditPlan,
+} from "@/timeline/timelineCoordinateWrites";
 import {
     useActionHandler,
     useActionHandlerGroup,
 } from "@/shortcuts/useActionHandler";
 import { useEditorReadiness } from "@/shortcuts/handlers/useEditorReadiness";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
-import { placementOf, writePlacement } from "./shapePlacement";
+import { placementOf, placesNothing, writePlacement } from "./shapePlacement";
 import { kindPickGate, pickShapeKind } from "./pickKind";
 import { SHAPE_TOOLS } from "./shapeTools";
 import type { ToolState } from "./toolMachine";
@@ -27,18 +30,27 @@ import {
  * The host's place function (spec #344): every open shape is placed through here, by Place
  * (Enter) and nothing else (#416). Its marchers go to their spots and its
  * recipe is saved as one edit (`writePlacement`, the same write a placed shape's edits use).
- * `plan` is the edit window to write to, the current one unless given. Resolves false when
+ * `plan` is the edit window to write to, the current one unless given. A placement that would
+ * change nothing (`placesNothing`) writes nothing and costs no undo step. Resolves false when
  * nothing was placed.
  */
 export async function placeShape(
     tool: ToolState,
     queryClient: QueryClient,
     plan: CanvasEditPlan | null = null,
+    /**
+     * Keep no shape (Shift+Enter, Shift-click on Place): the members go to their spots as a plain
+     * move does and no recipe is saved, as Place then Ungroup would leave them
+     */
+    loose: boolean = false,
 ): Promise<boolean> {
     const field = currentShapeField();
     if (!field) return false;
-    const placement = placementOf(tool, shapeContextFor(field));
-    if (!placement) return false;
+    const found = placementOf(tool, shapeContextFor(field));
+    if (!found) return false;
+    const placement = loose ? { ...found, plain: true } : found;
+    const edit = plan ?? planCanvasEdit();
+    if (edit.ok && placesNothing(placement, edit.beat)) return true;
     return writePlacement(
         placement,
         queryClient,
@@ -47,14 +59,21 @@ export async function placeShape(
     );
 }
 
-/** Place (Enter): places the open shape at the edit window now, then closes the tool */
-export function useApplyShape(): () => Promise<void> {
+/**
+ * Place (Enter): places the open shape at the edit window now, then closes the tool. `loose`
+ * (Shift+Enter) places the marchers and keeps no shape
+ */
+export function useApplyShape(): (loose?: boolean) => Promise<void> {
     const queryClient = useQueryClient();
-    return useCallback(async () => {
-        const { tool } = useShapeToolStore.getState();
-        if (!tool || isShapeHidden()) return;
-        if (await placeShape(tool, queryClient)) closeShapeTool();
-    }, [queryClient]);
+    return useCallback(
+        async (loose = false) => {
+            const { tool } = useShapeToolStore.getState();
+            if (!tool || isShapeHidden()) return;
+            if (await placeShape(tool, queryClient, null, loose))
+                closeShapeTool();
+        },
+        [queryClient],
+    );
 }
 
 /**
@@ -62,25 +81,25 @@ export function useApplyShape(): () => Promise<void> {
  * selection (#603)
  */
 export function useShapeToolActions(): void {
-    const { ready, selectedPerformers } = useEditorReadiness();
+    const { ready, selectedEditable } = useEditorReadiness();
     const placeable = useShapeToolStore(
         (s) => s.tool !== null && s.tool.params !== null && !s.tool.gesture,
     );
     const apply = useApplyShape();
     const hidden = useShapeHidden();
     const shown = useShapeShown();
-    useShapePaletteSource(ready, selectedPerformers, apply);
+    useShapePaletteSource(ready, selectedEditable, apply);
 
     // A kind's key arms it, or turns the open shape into it
     useActionHandlerGroup(
         SHAPE_TOOLS.map((entry) => entry.action),
         (id) => {
             const entry = SHAPE_TOOLS.find((e) => e.action === id);
-            if (entry) pickShapeKind(entry.kind, selectedPerformers);
+            if (entry) pickShapeKind(entry.kind, selectedEditable);
         },
-        { enabled: ready && kindPickGate(shown, selectedPerformers).ok },
+        { enabled: ready && kindPickGate(shown, selectedEditable).ok },
     );
-    // Group the selected performers as they stand (#603); not one placed shape selected whole,
+    // Group the selected marchers and props as they stand (#603); not one placed shape selected whole,
     // which is a shape already (Ungroup is offered there instead)
     const shapeSelected = useBoxSelectionStore((s) => s.selected !== null);
     const queryClient = useQueryClient();
@@ -88,7 +107,7 @@ export function useShapeToolActions(): void {
         "shapeGroup",
         () =>
             void groupMarchers(
-                selectedPerformers.map((m) => m.id),
+                selectedEditable.map((m) => m.id),
                 queryClient,
             ),
         {
@@ -96,7 +115,7 @@ export function useShapeToolActions(): void {
                 ready &&
                 !shown &&
                 !shapeSelected &&
-                selectedPerformers.length >= GROUP_MIN,
+                selectedEditable.length >= GROUP_MIN,
             ignoreRepeat: true,
             // Too few to group says so; a shape open or selected offers its own commands
             disabledReason:
@@ -111,6 +130,13 @@ export function useShapeToolActions(): void {
             void apply();
         },
         // A shape waiting out of sight isn't placed by a key: Enter acts on what is shown (#416)
+        { enabled: placeable && !hidden },
+    );
+    useActionHandler(
+        "applyShapeLoose",
+        () => {
+            void apply(true);
+        },
         { enabled: placeable && !hidden },
     );
 }

@@ -9,6 +9,7 @@ import { useNudgeActionHandlers } from "./handlers/useNudgeActionHandlers";
 import { useTimelineActionEffects } from "./handlers/useTimelineActionEffects";
 import { useUiActionHandlers } from "./handlers/useUiActionHandlers";
 import { useShapeToolActions } from "@/shapes/tool/useShapeToolActions";
+import { useClipboardActions } from "@/shapes/clipboard/useClipboardActions";
 import { DiscardedShapeKeys, ShapeToolKeys } from "@/shapes/tool/ShapeToolKeys";
 import {
     useShapeHidden,
@@ -18,6 +19,7 @@ import { PlacedBoxKeys } from "@/shapes/placed/PlacedBoxKeys";
 import { useBoxSelectionStore } from "@/shapes/placed/boxSelectionStore";
 import { useUnsetActionHandlers } from "./handlers/useUnsetActionHandlers";
 import { useHoldActionHandlers } from "./handlers/useHoldActionHandlers";
+import { useCueActionHandlers } from "./handlers/useCueActionHandlers";
 import { PathPenKeys, usePathPenActions } from "@/pathways/usePathPen";
 import { usePathPenStore } from "@/pathways/pathPenStore";
 import {
@@ -51,8 +53,10 @@ export function EditorActionHandlers() {
     useUiActionHandlers();
     useCursorActionHandlers();
     useShapeToolActions();
+    useClipboardActions();
     useUnsetActionHandlers();
     useHoldActionHandlers();
+    useCueActionHandlers();
     useFieldEditActionHandlers();
     useItemActionHandlers();
     useFieldEditModeEntry();

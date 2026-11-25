@@ -43,6 +43,12 @@ export type PerformerCarry =
     | "sabre"
     | "none";
 
+/**
+ * The families the Equipment catalog is grouped in (`EQUIPMENT_FAMILIES`).
+ * Imported equipment (custom assets) will be a family of its own later.
+ */
+export type EquipmentFamily = "guard" | "brass" | "woodwinds" | "drums";
+
 /** A stored cue, as the compile step reads it. */
 export interface CueInput {
     id: number;
@@ -234,6 +240,8 @@ export interface CueValue {
     settings?: readonly CueSettingField[];
     /** Equipment values: what holding it counts as. */
     holds?: PerformerCarry;
+    /** Equipment catalog items: the family menus group it in (`EQUIPMENT_FAMILIES`). */
+    family?: EquipmentFamily;
 }
 
 export type SegmentKind = "default" | "lasting" | "transition" | "momentary";
@@ -255,6 +263,13 @@ export interface CueSegment {
      * show here: a kneel while the dot travels.
      */
     hiddenCueId?: number;
+    /**
+     * Facing (#993): the angle in degrees, unwrapped (0 front, 90 side 2),
+     * that this performer holds over the segment, or turns to by its end.
+     */
+    degrees?: number;
+    /** Facing: the angle a turn (a `transition` segment) starts from. */
+    fromDegrees?: number;
 }
 
 export type CueFlagKind =

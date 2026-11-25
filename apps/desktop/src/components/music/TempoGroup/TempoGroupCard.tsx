@@ -16,7 +16,6 @@ import {
 import { AlertDialog } from "@openmarch/ui";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { T, useTranslate } from "@tolgee/react";
-import { TouchCaption } from "@/components/ui/InfoTip";
 import { useCascadeDeleteMeasures } from "@/global/classes/Measure";
 import { getEffectiveBindings } from "@/shortcuts/keymap";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
@@ -108,7 +107,7 @@ function StaticTempoGroupCard({
                         <div>
                             <h3 className="text-h3">
                                 {tempoGroup.tempo}{" "}
-                                <span className="text-text-subtitle text-sm">
+                                <span className="text-text-subtitle text-body">
                                     {isMixedMeter ? "♩ " : ""}
                                     {t("music.bpmUnit")}
                                 </span>
@@ -116,7 +115,7 @@ function StaticTempoGroupCard({
                         </div>
                     )}
                     {tempoGroup.measureRangeString && (
-                        <p className="text-text-subtitle text-sm">
+                        <p className="text-text-subtitle text-body">
                             {tempoGroup.numOfRepeats > 1
                                 ? t(
                                       "music.tempoGroupCard.measureRangeRepeats",
@@ -132,7 +131,7 @@ function StaticTempoGroupCard({
                 <div className="flex flex-col items-end justify-between gap-4">
                     <h4 className="text-h4 flex items-center gap-8">
                         <div
-                            className="bg-fg-1 rounded-6 border-stroke h-fit border px-6 text-sm"
+                            className="bg-fg-1 rounded-6 border-stroke text-body h-fit border px-6"
                             hidden={!isMixedMeter}
                         >
                             {Array.from({
@@ -225,9 +224,6 @@ function StaticTempoGroupCard({
                                     className="hover:text-accent text-text touch:min-h-44 flex items-center gap-4 duration-150 ease-out"
                                 >
                                     <PlusIcon size={24} />
-                                    <TouchCaption>
-                                        <T keyName="music.addAfterCaption" />
-                                    </TouchCaption>
                                 </button>
                             </Tooltip.Trigger>
                             <Tooltip.Portal>

@@ -1,22 +1,26 @@
 /**
  * Which way a 3D View marcher faces, and which way its legs travel.
  *
- * The upper body always faces the front sideline (the audience). That is
- * the only facing the app has today: the timeline model has no facing, so
- * every marcher faces front until a facing tool defines one. The legs turn
- * toward the travel direction (om-pose's `pickDirection`), so a marcher
- * crossing the field slides and one moving upfield marches backward.
+ * The upper body faces the performer's Facing (#993): front, the audience,
+ * until their first Facing cue, then the cues' angles, turning as the
+ * compile says (`cueInputs.ts`). The legs follow the path whatever the
+ * facing: they turn toward the travel direction (om-pose's `pickDirection`),
+ * so a performer traveling across their facing slides and one traveling
+ * behind them marches backward.
  *
- * Slides face the 50. Within SLIDE_BAND of sideways, `pickDirection`'s
- * ahead-or-behind split gives way to the 50 yard line: a slide toward it is a
- * forward gait, a slide away from it a backward gait, so the legs point at the
- * 50 either way (the planner says which, per run of slide counts). Past the
- * band the feet flip as usual: a 100 degree slide is a backward march, legs
- * turned 80 degrees.
+ * Slides face the 50, with any facing. Within SLIDE_BAND of sideways,
+ * `pickDirection`'s ahead-or-behind split gives way to the 50 yard line: a
+ * slide toward it is a forward gait, a slide away from it a backward gait, so
+ * the legs point at the 50 either way (the planner says which, per run of
+ * slide counts). A slide with no sideline-to-sideline travel (facing a side,
+ * traveling up or down the field) gets no answer from the 50 and keeps the
+ * split. Past the band the feet flip as usual: a 100 degree slide is a
+ * backward march, legs turned 80 degrees.
  *
  * Axes are ADR 0010 D-2: +X toward side 2 (audience right), +Z toward the
  * audience. The renderer's heading is radians about +Y with 0 facing +Z
- * (`writeMatrix`), so facing front is heading 0, and the performer's left is +X.
+ * (`writeMatrix`), so facing front is heading 0, and the performer's left is +X:
+ * a positive Facing angle turns them to their left.
  */
 import { pickDirection, type Direction } from "../../render/step-blend.js";
 
@@ -39,11 +43,6 @@ export function isSlide(dir: Direction): boolean {
 
 /** Heading of a marcher facing the front sideline: radians about +Y, 0 = +Z. */
 export const FRONT_HEADING = 0;
-
-/** The heading every marcher's upper body faces. */
-export function marcherHeading(): number {
-    return FRONT_HEADING;
-}
 
 /**
  * The move family and leg turn for travel (dx, dz) in world meters, for a

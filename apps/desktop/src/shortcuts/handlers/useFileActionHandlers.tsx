@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { reportMilestone } from "@/analytics/usageEvents";
 import { T, useTranslate } from "@tolgee/react";
 import { AlertDialogAction, AlertDialogCancel, Button } from "@openmarch/ui";
 import { CircleNotchIcon } from "@phosphor-icons/react";
@@ -11,6 +12,7 @@ import { isWebBuild } from "@/utilities/webBuild";
 import { canSendReports, openReport } from "@/feedback/openReport";
 import { useActionHandler } from "../useActionHandler";
 import { MY_REPORTS_URL } from "@/feedback/reportsApi";
+import { workingCopyIsActive } from "@/hooks/useWorkingCopyStatus";
 
 // eslint-disable-next-line max-lines-per-function
 export function useFileActionHandlers() {
@@ -40,6 +42,14 @@ export function useFileActionHandlers() {
     useActionHandler("viewMyReports", () => {
         window.open(MY_REPORTS_URL, "_blank", "noopener,noreferrer");
     });
+
+    // Only while the open show is edited through a working copy; otherwise every change is
+    // already in the file.
+    useActionHandler(
+        "saveNow",
+        () => void window.electron.workingCopy?.saveNow(),
+        { enabled: () => workingCopyIsActive() },
+    );
 
     useActionHandler("launchLoadFileDialogue", () => {
         void window.electron.databaseLoad();
@@ -142,6 +152,10 @@ export function useFileActionHandlers() {
                     await window.electron.launchInsertAudioFileDialogue();
                 if (response?.cancelled) return;
                 if (response?.success) {
+                    reportMilestone("music imported", {
+                        kind: "audio",
+                        source: "editor",
+                    });
                     AudioFile.getSelectedAudioFile().then((audioFile) => {
                         const selectedAudioFileWithoutAudio = {
                             ...audioFile,

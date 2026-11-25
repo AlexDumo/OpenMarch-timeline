@@ -18,8 +18,7 @@
             "snapOn": "Lekap dimatikan: hidupkan semula",
             "snapToCustomFraction": "Lekap ke grid",
             "toggleSnap": "Togol lekap",
-            "toggleSnapKeywords": "snap magnet grid free lekap bebas",
-            "propsOnly": "Hanya prop dipilih: prop tidak dijajarkan atau dijarakkan"
+            "toggleSnapKeywords": "snap magnet grid free lekap bebas"
         },
         "batchEdit": {
             "clearPage": "Kosongkan halaman {page}",
@@ -798,8 +797,6 @@
         "marcher": {
             "drillNumber": "Nombor drill",
             "errorLoadingCoords": "Ralat memuatkan koordinat",
-            "itemsSelected": "{count, plural, other {# prop dipilih. Editnya dalam panel Prop.}}",
-            "equipmentSelected": "{count, plural, =1 {# peralatan dipilih. Klik kanan padanya untuk mengeditnya.} other {# peralatan dipilih. Klik kanan pada salah satu untuk mengeditnya.}}",
             "playing": "Sedang dimainkan. Jeda untuk melihat dan mengedit pemain yang dipilih.",
             "maxStepSize": "Saiz langkah terbesar",
             "minStepSize": "Saiz langkah terkecil",
@@ -978,10 +975,6 @@
                     "description": "Pilih aktiviti anda.",
                     "title": "Aktiviti",
                     "typeLabel": "Aktiviti"
-                },
-                "field": {
-                    "description": "Pilih templat padang untuk persembahan anda.",
-                    "title": "Persediaan padang"
                 },
                 "performers": {
                     "description": "Tambah pemain sekarang atau langkau dan tambah kemudian dalam editor.",
@@ -1530,15 +1523,10 @@
             },
             "groups": {
                 "cantImport": "Tidak dapat diimport",
-                "needsChoice": "Perlu pilihan anda",
                 "fixed": "Dibaiki secara automatik",
                 "notes": "Catatan"
             },
             "tryAgain": "Cuba lagi",
-            "rotate": {
-                "title": "Tegakkan (fail Z-up)",
-                "detail": "Sesetengah program mengeksport dengan Z sebagai arah atas, jadi model terbaring telentang."
-            },
             "name": "Nama",
             "saveFailed": "Tidak dapat menambah model pada persembahan.",
             "cancel": "Batal",
@@ -1681,12 +1669,8 @@
             "medium": "Sederhana",
             "large": "Besar",
             "summary": {
-                "small": "2 marimba, 2 vibrafon, satu rak, satu sintesizer dan 2 pembesar suara",
-                "medium": "4 marimba, 3 vibrafon, zilofon, glockenspiel, rak, set dram, sintesizer dan 4 pembesar suara",
-                "large": "6 marimba, 4 vibrafon, zilofon, glockenspiel, 2 rak, set dram, 2 sintesizer dan 6 pembesar suara",
                 "none": "Tiada pit. Anda boleh menyediakannya kemudian dalam panel Pemain."
             },
-            "always": "Setiap satu juga menambah podium di garisan 50 dan pengadun di belakang pit.",
             "addPerformers": "Tambah juga pemain",
             "apply": "Guna",
             "replaces": "Menggantikan peralatan yang ditambah oleh pratetap terakhir. Pemainnya beralih ke kedudukan baharu; yang tiada alat muzik akan dialih keluar, kecuali mereka mempunyai gerakan kemudian dalam persembahan. Buat asal mengembalikan semuanya. Peralatan yang anda tambah sendiri kekal.",
@@ -4099,9 +4083,7 @@
         },
         "button": {
             "hint": "Fail muzik, dan menjajarkan kiraan dengannya: tempo, tanda masa, tanda latihan",
-            "hintOn": "Jajarkan kiraan dengan muzik. <escape></escape> atau <toggle></toggle> untuk keluar.",
             "label": "Edit muzik",
-            "labelOn": "Mengedit muzik",
             "text": "Edit muzik"
         },
         "errors": {
@@ -4109,53 +4091,6 @@
             "moveOneCountLong": "Gerakan itu hanya sepanjang satu kiraan",
             "wouldHideSet": "Ini akan menyebabkan kerangka kunci berakhir pada kiraan yang sama dengan gerakan di bawahnya, lalu menyembunyikan set gerakan itu. Buang lebih sedikit kiraan, atau tamatkan kerangka kunci satu kiraan lebih awal.",
             "wouldRemovePage": "Ini akan membuang satu halaman. Buang lebih sedikit kiraan, atau padam halaman itu dahulu."
-        },
-        "help": {
-            "doubleClickLane": {
-                "title": "Tambah perubahan tempo",
-                "text": "Klik dua kali pada lorong tempo di tempat ia patut berubah. Klik dua kali titik perubahan untuk membuangnya."
-            },
-            "dragChangeDot": {
-                "title": "Alih perubahan tempo",
-                "text": "Seret titiknya ke atas atau ke bawah untuk menukar tempo, atau ke sisi untuk mengalih tempat ia berubah."
-            },
-            "dragEndDot": {
-                "title": "Tetapkan tempat rit. berakhir",
-                "text": "Seret titik segi empat di hujung sesuatu bahagian, supaya tempo seterusnya boleh kembali melompat (a tempo)."
-            },
-            "dragLine": {
-                "title": "Tetapkan tempo",
-                "text": "Seret garisan tempo ke atas atau ke bawah. Untuk menaip tempo, klik kanan dan pilih Tetapkan tempo…"
-            },
-            "dragMeasures": {
-                "title": "Pilih kiraan",
-                "text": "Seret di sepanjang bar atau muzik, kemudian edit kesemuanya sekali gus."
-            },
-            "dragRoundHandle": {
-                "title": "Ubah tempo secara beransur",
-                "text": "Seret pemegang bulat di tengah sesuatu bahagian. Klik dua kali padanya untuk kembali melompat."
-            },
-            "keys": {
-                "escape": "Kosongkan pilihan, atau batalkan seretan; jika tiada apa untuk dikosongkan, berhenti mengedit muzik",
-                "play": "Main dari kepala main, atau berhenti di tempatnya",
-                "tap": "Ketuk tempo: ketuk pada setiap rentak untuk melihat kelajuannya",
-                "toggle": "Mula atau berhenti mengedit muzik",
-                "metronome": "Hidupkan atau matikan metronom"
-            },
-            "label": "Cara mengedit muzik",
-            "rightClick": {
-                "title": "Fermata dan kiraan",
-                "text": "Klik kanan kiraan untuk menjadikannya fermata, mengubah tempo secara beransur, atau menambah dan membuang kiraan."
-            },
-            "rightClickMeasure": {
-                "title": "Bar dan tanda latihan",
-                "text": "Klik kanan bar untuk menomborkannya semula, menetapkan tanda masanya atau menambah tanda. Seret tanda untuk mengalihkannya."
-            },
-            "title": "Jajarkan kiraan dengan muzik",
-            "musicFile": {
-                "title": "Tukar muzik",
-                "text": "Klik nama fail di pengepala untuk menukar, mengimport atau memadam audio, atau menetapkan ofset muzik."
-            }
         },
         "importScore": {
             "choose": "Pilih fail…",

@@ -1,4 +1,5 @@
 import { db } from "@/global/database/db";
+import { forgetNewShow, rememberNewShow } from "@/analytics/usageEvents";
 import { schema } from "@/global/database/db";
 import { asc } from "drizzle-orm";
 import {
@@ -330,11 +331,12 @@ async function applyPreviousDotsCoordinates(
     });
 }
 
-async function applyPreviousDotsFieldImage(
+/** The field image picked in the Field step, or the one a previous show's file brought */
+async function applyFieldImage(
     form: NewShowFormState,
     queryClient: QueryClient,
 ): Promise<void> {
-    const fieldImage = form.previousDotsImport?.fieldImage;
+    const fieldImage = form.fieldImage ?? form.previousDotsImport?.fieldImage;
     if (fieldImage == null || fieldImage.length === 0) return;
 
     await updateFieldPropertiesImage(fieldImage);
@@ -772,7 +774,7 @@ export async function completeNewShow(
     await applyProjectSettings(form);
     await applyMusicSettings(form.audio, form.tempo);
     await updateFieldProperties(form.fieldTemplate);
-    await applyPreviousDotsFieldImage(form, queryClient);
+    await applyFieldImage(form, queryClient);
     if (form.tempo?.method === "tempo_only") {
         await createTempoOnlyBeatsMeasuresAndPages(form, queryClient);
     } else {
@@ -784,14 +786,28 @@ export async function completeNewShow(
     await applyPreviousDotsMarcherTags(form, queryClient);
     await applyFrontEnsemble(form, queryClient);
 
-    const finalizeResult = await window.electron.finalizeNewShowDraft(
-        targetPath,
-        form.projectName,
-    );
+    // Sent by the reloaded window once the show has opened (saving it reloads this one)
+    rememberNewShow({
+        tempo: form.tempo?.method ?? "skip",
+        audio: form.audio?.method ?? "skip",
+        marchers: form.performers?.marchers.length ?? 0,
+        fromPreviousShow: form.previousDotsImport !== undefined,
+    });
+    let finalizeResult: number;
+    try {
+        finalizeResult = await window.electron.finalizeNewShowDraft(
+            targetPath,
+            form.projectName,
+        );
+    } catch (error) {
+        forgetNewShow();
+        throw error;
+    }
     // OPEN_STOPPED_STATUS: the show was saved, but a main-process dialog already explained why
     // it didn't open (convert on open), and the window is reloading.
     if (finalizeResult === OPEN_STOPPED_STATUS) return;
     if (finalizeResult !== 200) {
+        forgetNewShow();
         throw new NewShowError(
             tolgee.t(
                 "launchpage.newShow.errors.saveFailed",

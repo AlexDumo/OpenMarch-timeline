@@ -229,9 +229,13 @@ async function importChair(
 }
 
 /** Sets a number field in the Edit Prop panel. */
+/**
+ * Types into a prop's Width, Depth or Height box. A number is meters; text is typed as it is
+ * (`20'`). The boxes show the show's units, and a bare number would be feet or inches there.
+ */
 async function setPropField(page, label, value) {
     const input = page.getByLabel(label, { exact: true }).first();
-    await input.fill(String(value));
+    await input.fill(typeof value === "number" ? `${value} m` : value);
     await input.press("Enter");
     await page.waitForTimeout(600);
 }
@@ -327,9 +331,8 @@ async function sidebarPanelBox(page) {
 
 /** The front ensemble view, opened from its row at the top of the Marchers panel. */
 async function frontEnsembleView(page) {
-    const presets = page.getByTestId("pit-presets-button");
     for (let i = 0; i < 4; i++) {
-        if (await presets.isVisible().catch(() => false)) return;
+        if (await frontEnsembleViewOpen(page)) return;
         const row = page.getByTestId("front-ensemble-summary");
         if (await row.isVisible().catch(() => false))
             await row.getByRole("button").click();
@@ -338,13 +341,35 @@ async function frontEnsembleView(page) {
     }
 }
 
-/** Applies a front ensemble preset from the front ensemble view's header, with its players. */
+/** Whether the front ensemble view is showing: its presets in the body (no pit) or header */
+async function frontEnsembleViewOpen(page) {
+    for (const id of ["pit-preset-start", "pit-presets-button"])
+        if (
+            await page
+                .getByTestId(id)
+                .isVisible()
+                .catch(() => false)
+        )
+            return true;
+    return false;
+}
+
+/**
+ * Applies a front ensemble preset, with its players: from the view's body while the show has no
+ * pit, otherwise from the header's popover.
+ */
 async function applyPitPreset(page, size) {
     await frontEnsembleView(page);
-    await page.getByTestId("pit-presets-button").click();
-    const popover = page.getByRole("dialog", { name: "Presets" });
-    await popover.getByTestId(`pit-preset-${size}`).click();
-    await popover.getByRole("button", { name: "Apply" }).click();
+    const start = page.getByTestId("pit-preset-start");
+    if (await start.isVisible().catch(() => false)) {
+        await start.getByTestId(`pit-preset-card-${size}`).click();
+        await start.getByRole("button", { name: "Use this preset" }).click();
+    } else {
+        await page.getByTestId("pit-presets-button").click();
+        const popover = page.getByRole("dialog", { name: "Presets" });
+        await popover.getByTestId(`pit-preset-${size}`).click();
+        await popover.getByRole("button", { name: "Apply" }).click();
+    }
     await page.waitForTimeout(2500);
 }
 
@@ -352,10 +377,7 @@ async function applyPitPreset(page, size) {
 async function closeMarchersPanel(page) {
     for (let i = 0; i < 3; i++) {
         const open =
-            (await page
-                .getByTestId("pit-presets-button")
-                .isVisible()
-                .catch(() => false)) ||
+            (await frontEnsembleViewOpen(page)) ||
             (await page
                 .getByTestId("front-ensemble-summary")
                 .isVisible()
@@ -549,6 +571,65 @@ const shots = [
         },
     },
     {
+        id: "3d-camera-row-menu",
+        kind: "still",
+        async setup(ctx) {
+            await seekInPage(ctx.page, 3, 0.5);
+            const { view } = await open3d(ctx);
+            await view.getByTestId("view3d-camera-menu").click();
+            await ctx.wait(400);
+            await view.getByTestId("view3d-camera-edit").click();
+            const panel = view.getByTestId("view3d-cameras-panel");
+            await panel.waitFor();
+            await view.getByTestId("view3d-camera-more").nth(1).click();
+            const menu = view.getByTestId("view3d-camera-menu-items");
+            await menu.waitFor();
+            await ctx.wait(600);
+            return {
+                box: ctx.union(
+                    await ctx.around(panel, 16),
+                    await ctx.around(menu, 16),
+                ),
+                target: view,
+            };
+        },
+    },
+    {
+        id: "3d-camera-settings",
+        kind: "still",
+        async setup(ctx) {
+            await seekInPage(ctx.page, 3, 0.5);
+            const { view } = await open3d(ctx);
+            await view.getByTestId("view3d-camera-menu").click();
+            await ctx.wait(400);
+            await view.getByTestId("view3d-camera-edit").click();
+            await view.getByTestId("view3d-cameras-panel").waitFor();
+            // Front row, with a long lens focused where it looks, wide open
+            await view
+                .getByTestId("view3d-camera-settings-toggle")
+                .nth(1)
+                .click();
+            await view.getByTestId("view3d-camera-settings").waitFor();
+            const set = async (key, value) => {
+                const field = view.getByTestId(`view3d-camera-setting-${key}`);
+                await field.click();
+                await field.fill(String(value));
+                await field.press("Enter");
+                await ctx.wait(600);
+            };
+            await set("focal", 85);
+            await view
+                .getByTestId("view3d-camera-focus-mode")
+                .getByText("Look-at", { exact: true })
+                .click();
+            await ctx.wait(600);
+            await set("fstop", 1.4);
+            await view.mouse.move(ctx.window.width - 4, ctx.window.height / 2);
+            await ctx.wait(1500);
+            return { box: ctx.whole, target: view };
+        },
+    },
+    {
         id: "3d-settings",
         kind: "still",
         async setup(ctx) {
@@ -617,6 +698,97 @@ const shots = [
                 // The band, the stands and the whole scoreboard, without the judges' table in
                 // front or the dark guard members at the front left
                 box: { x: 360, y: 40, width: 1120, height: 560 },
+                target: view,
+            };
+        },
+    },
+    {
+        id: "3d-venue-mark-diesel",
+        kind: "still",
+        // Narrower than the usual 1600 pixels, like the arena: the crowd is busy
+        width: 1280,
+        covers: [
+            "apps/desktop/src/view3d/core/kits/markDiesel.ts",
+            "apps/desktop/src/view3d/core/kits/markDiesel",
+        ],
+        // Mark Diesel Stadium with its roof closed, from its first camera
+        async setup(ctx) {
+            await seekInPage(ctx.page, 3, 0.5);
+            const { view, baked } = await open3d(ctx);
+            await view.getByTestId("view3d-settings-button").click();
+            await view.getByTestId("view3d-settings").waitFor();
+            await view
+                .getByTestId("view3d-venue-picker")
+                .locator('[data-value="markDiesel"]')
+                .click();
+            await baked(2);
+            await ctx.wait(1500);
+            // The sample show's Day carries over, and Day opens the roof
+            await view
+                .getByTestId("view3d-lighting-picker")
+                .locator('[data-value="roofClosed"]')
+                .click();
+            await ctx.wait(1500);
+            await view.getByTestId("view3d-settings-button").click();
+            await tidy(view);
+            await view.keyboard.press("Digit1");
+            await view.mouse.move(ctx.window.width - 4, ctx.window.height / 2);
+            await ctx.wait(3000);
+            return { box: ctx.whole, target: view };
+        },
+    },
+    {
+        id: "3d-venue-nightpound",
+        kind: "still",
+        // Narrower than the usual 1600 pixels, like the arena: the crowd is busy
+        width: 1280,
+        covers: [
+            "apps/desktop/src/view3d/core/kits/nightpound.ts",
+            "apps/desktop/src/view3d/core/kits/nightpound",
+        ],
+        // Taydon, OH under Show lights from its Floor camera. Its floor is fixed, so the
+        // sample show's football field is switched to an indoor floor first; the band's spots
+        // stay where they were, off that floor, so the floor is empty
+        async setup(ctx) {
+            const { page } = ctx;
+            await ctx.wait(3000);
+            await tidy(page);
+            await page.locator("#sidebar-launcher-field").click();
+            await page.getByTestId("field-edit-panel").waitFor();
+            await ctx.wait(800);
+            await page.getByTestId("field-template-select").click();
+            await page
+                .getByRole("option", { name: "Indoor 50x90 - 6 to 5 Steps" })
+                .click();
+            await page.getByTestId("field-template-apply").click();
+            await ctx.wait(1500);
+            await page.keyboard.press("Escape");
+            await seekInPage(page, 3, 0.5);
+            const { view, baked } = await open3d(ctx);
+            await view.getByTestId("view3d-settings-button").click();
+            await view.getByTestId("view3d-settings").waitFor();
+            await view
+                .getByTestId("view3d-venue-picker")
+                .locator('[data-value="nightpound"]')
+                .click();
+            await baked(2);
+            await ctx.wait(1500);
+            await view
+                .getByTestId("view3d-lighting-picker")
+                .locator('[data-value="show"]')
+                .click()
+                .catch(() => {});
+            await ctx.wait(1500);
+            await view.getByTestId("view3d-settings-button").click();
+            await tidy(view);
+            // The Floor camera (fifth): no crowd in front of it, unlike the seats
+            await view.keyboard.press("Digit5");
+            await view.mouse.move(ctx.window.width - 4, ctx.window.height / 2);
+            await ctx.wait(3000);
+            // The flags, the stands and the drape, with a strip of the floor, under the camera bar
+            const { width, height } = ctx.window;
+            return {
+                box: { x: 0, y: 96, width, height: Math.round(height * 0.58) },
                 target: view,
             };
         },
@@ -777,7 +949,8 @@ const shots = [
         id: "3d-props-import-compare",
         kind: "still",
         // The import review's Compare in 3D for the chair: the Original (39,936 triangles), with
-        // Light beside it in the switch, turned a little so the cushions' detail shows
+        // Light and the far-away copy beside it in the switch, turned a little so the cushions'
+        // detail shows
         async setup(ctx) {
             const { page } = ctx;
             await importChair(page);
@@ -973,7 +1146,7 @@ const shots = [
     {
         id: "3d-props-edit",
         kind: "still",
-        // The Edit Prop panel for a riser 1.2 m tall
+        // The Edit Prop panel for a riser 20 × 6 ft, 4 ft tall
         async setup(ctx) {
             const { page } = ctx;
             const { index } = await drawRiser(page, {
@@ -989,8 +1162,9 @@ const shots = [
                 .click();
             await ctx.wait(800);
             // Round sizes, so the picture matches its alt text
-            await setPropField(page, "Width", 6);
-            await setPropField(page, "Depth", 2);
+            await setPropField(page, "Width", "20'");
+            await setPropField(page, "Depth", "6'");
+            await setPropField(page, "Height", "4'");
             // No focus ring left on the last field
             await page.evaluate(() => document.activeElement?.blur());
             await page.mouse.move(1596, 996);
@@ -1012,7 +1186,7 @@ const shots = [
     {
         id: "3d-props-handles",
         kind: "clip",
-        // A selected prop: turn it with the round handle, then resize it from a corner
+        // A prop with its handles shown: turn it with the round handle, then resize it from a corner
         async setup(ctx) {
             const { page } = ctx;
             const { item } = await drawRiser(page, { color: AMBER });
@@ -1022,7 +1196,11 @@ const shots = [
             const before = (await items(page)).find((i) => i.id === item.id);
             await zoomFieldAt(page, before.screen, 3);
             const now = (await items(page)).find((i) => i.id === item.id);
-            await page.mouse.click(now.screen.x, now.screen.y);
+            // Its handles show once asked for: right-click, Resize and turn (props epic step 2)
+            await page.mouse.click(now.screen.x, now.screen.y, {
+                button: "right",
+            });
+            await page.getByTestId("field-menu-resizeSelectedItem").click();
             await ctx.wait(600);
             const handles = await page.evaluate(() =>
                 window.fieldTest.handles(),
@@ -1152,9 +1330,19 @@ const shots = [
         async setup(ctx) {
             const { page } = ctx;
             await frontEnsembleView(page);
+            // The header's Add once there's a pit; an empty view's Add equipment otherwise
             await page
                 .getByRole("button", { name: "Add", exact: true })
+                .or(
+                    page.getByRole("button", {
+                        name: "Add equipment",
+                        exact: true,
+                    }),
+                )
+                .first()
                 .click();
+            // Off the pictures, so none is hovered
+            await page.mouse.move(1596, 996);
             // Let the pictures load
             await ctx.wait(1500);
             return { box: await sidebarPanelBox(page) };
@@ -1231,26 +1419,29 @@ const shots = [
     {
         id: "3d-front-ensemble-presets",
         kind: "still",
-        // The front ensemble view of a show with no pit, the preset chooser open on Medium
+        // The front ensemble view of a show with no pit: the presets (Medium chosen) and Build it
+        // yourself in its body
         async setup(ctx) {
             const { page } = ctx;
             await tidy(page);
             await frontEnsembleView(page);
-            await page.getByTestId("pit-presets-button").click();
-            const popover = page.getByRole("dialog", { name: "Presets" });
-            await popover.waitFor();
-            await popover.getByTestId("pit-preset-medium").click();
+            const presets = page.getByTestId("pit-preset-start");
+            await presets.waitFor();
+            await presets.getByTestId("pit-preset-card-medium").click();
             await page.mouse.move(1596, 996);
             await ctx.wait(800);
-            // The panel's header and the chooser hanging from it; the empty panel below stays out
+            // The panel's header and both ways to start under it; the empty panel below stays out
             const panel = await sidebarPanelBox(page);
-            const pop = await ctx.around(popover, 16);
+            const body = await ctx.around(
+                page.getByRole("region", { name: "Or build it yourself" }),
+                16,
+            );
             return {
                 box: {
                     x: panel.x,
                     y: panel.y,
                     width: panel.width - 12,
-                    height: pop.y + pop.height - panel.y,
+                    height: body.y + body.height - panel.y,
                 },
             };
         },
@@ -1279,6 +1470,132 @@ const shots = [
                     height: r.y + r.height - panel.y,
                 },
             };
+        },
+    },
+    {
+        id: "venue-on-field",
+        kind: "still",
+        // The editor's field with the venue on it (Faint), and the Venue button's menu open
+        // beside the display bar (fork #1207)
+        covers: [
+            "apps/desktop/src/components/canvas/display/VenueButton.tsx",
+            "apps/desktop/src/field/three/venueUnderlay",
+        ],
+        async setup(ctx) {
+            const { page } = ctx;
+            await tidy(page);
+            const button = page.getByTestId("field-display-venue");
+            await button.click();
+            await page.getByTestId("field-display-venue-faint").click();
+            await page.getByTestId("field-display-venue-around-edge").click();
+            await page.mouse.move(4, ctx.window.height / 2);
+            await ctx.wait(1500);
+            const menu = page
+                .locator("[data-radix-popper-content-wrapper]")
+                .first();
+            return {
+                box: ctx.union(
+                    await ctx.around(
+                        page.getByTestId("fieldCanvas").first(),
+                        0,
+                    ),
+                    await ctx.around(menu, 12),
+                ),
+            };
+        },
+    },
+    {
+        id: "venue-on-field-stands",
+        kind: "still",
+        // Zoomed out with Soft and Stands: the stadium around the field, from above
+        async setup(ctx) {
+            const { page } = ctx;
+            await tidy(page);
+            await page.getByTestId("field-display-venue").click();
+            await page.getByTestId("field-display-venue-soft").click();
+            await page.getByTestId("field-display-venue-around-stands").click();
+            await page.keyboard.press("Escape");
+            // No tooltip on the button the menu closed back to
+            await ctx.wait(400);
+            await page.evaluate(() =>
+                /** @type {HTMLElement | null} */ (
+                    document.activeElement
+                )?.blur(),
+            );
+            const canvas = page.getByTestId("fieldCanvas").first();
+            const c = await canvas.boundingBox();
+            // Out about three times (ctrl-wheel, as a trackpad pinch)
+            await page.evaluate(
+                ([x, y]) => {
+                    const target = document.elementFromPoint(x, y);
+                    for (let i = 0; i < 6; i++)
+                        target.dispatchEvent(
+                            new WheelEvent("wheel", {
+                                deltaY: 100,
+                                ctrlKey: true,
+                                clientX: x,
+                                clientY: y,
+                                bubbles: true,
+                                cancelable: true,
+                            }),
+                        );
+                },
+                [c.x + c.width / 2, c.y + c.height / 2],
+            );
+            await page.mouse.move(4, ctx.window.height / 2);
+            await page.keyboard.press("Escape");
+            await ctx.wait(2000);
+            return { box: await ctx.around(canvas, 0) };
+        },
+    },
+    {
+        id: "venue-camera-on-field",
+        kind: "still",
+        // The 3D View's camera on the 2D field (#1227): the camera chip, its wedge and the ring it
+        // looks at, zoomed out, with the 3D View open on its default camera
+        covers: [
+            "apps/desktop/src/field/three/venueUnderlay/CameraHandle.tsx",
+            "apps/desktop/src/field/three/venueUnderlay/CameraMarkerLayer.tsx",
+        ],
+        async setup(ctx) {
+            const { page } = ctx;
+            await tidy(page);
+            await page.getByTestId("field-display-venue").click();
+            await page.getByTestId("field-display-venue-faint").click();
+            await page.getByTestId("field-display-venue-around-edge").click();
+            await page.getByTestId("field-display-venue-camera").click();
+            await page.keyboard.press("Escape");
+            await open3d(ctx);
+            await page.bringToFront();
+            await page.evaluate(() =>
+                /** @type {HTMLElement | null} */ (
+                    document.activeElement
+                )?.blur(),
+            );
+            const canvas = page.getByTestId("fieldCanvas").first();
+            const c = await canvas.boundingBox();
+            // Out (ctrl-wheel, as a trackpad pinch), so the camera in front of the field shows
+            await page.evaluate(
+                ([x, y]) => {
+                    const target = document.elementFromPoint(x, y);
+                    for (let i = 0; i < 5; i++)
+                        target.dispatchEvent(
+                            new WheelEvent("wheel", {
+                                deltaY: 100,
+                                ctrlKey: true,
+                                clientX: x,
+                                clientY: y,
+                                bubbles: true,
+                                cancelable: true,
+                            }),
+                        );
+                },
+                [c.x + c.width / 2, c.y + c.height / 2],
+            );
+            await page.getByTestId("fieldView3dCameraMove").waitFor();
+            await page.mouse.move(4, ctx.window.height / 2);
+            await ctx.wait(1500);
+            return { box: await ctx.around(canvas, 0) };
         },
     },
 ];

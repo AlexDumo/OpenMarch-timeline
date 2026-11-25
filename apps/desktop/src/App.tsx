@@ -1,4 +1,5 @@
 import { threeZoomControls } from "@/field/three/fieldNavigation";
+import { reportWindowLoaded } from "@/analytics/usageEvents";
 import Toolbar, { PreviewToolbar } from "@/components/toolbar/Toolbar";
 import Inspector from "@/components/inspector/Inspector";
 import SidebarModal from "@/components/sidebar/SidebarModal";
@@ -27,6 +28,7 @@ import clsx from "clsx";
 import { useTempoModeStore } from "@/tempo/tempoModeStore";
 import { SelectedAudioFileProvider } from "@/context/SelectedAudioFileContext";
 import { TooltipProvider } from "@radix-ui/react-tooltip";
+import WorkingCopyConflictDialog from "@/components/workingCopy/WorkingCopyConflictDialog";
 import TitleBar from "@/components/titlebar/TitleBar";
 import { useUiSettingsStore } from "./stores/UiSettingsStore";
 import { useSnapOnWhenFileOpens } from "./hooks/useSnapOnWhenFileOpens";
@@ -166,6 +168,9 @@ function App() {
         // Check if database is ready
         void window.electron.databaseIsReady().then((result: boolean) => {
             setDatabaseIsReady(result);
+            // Only here, as the window loads: opening, creating or closing a show reloads it,
+            // and the page being left must not report the show it hands over
+            reportWindowLoaded(result);
         });
     }, []);
 
@@ -321,6 +326,7 @@ function App() {
                                             <SvgPreviewHandler />
                                             <PreviewModeHost />
                                             <TitleBar showControls />
+                                            <WorkingCopyConflictDialog />
                                             <>
                                                 <div
                                                     id="app"

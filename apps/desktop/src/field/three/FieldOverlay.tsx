@@ -57,6 +57,7 @@ import { PivotHint } from "./PivotHint";
 import HeldRolesChip, { HeldRolesChipBelowTip } from "./HeldRolesChip";
 import { useFieldUnderlayStore } from "@/field/editor/fieldUnderlayStore";
 import { useSelectionCoverStore } from "@/field/editor/selectionCoverStore";
+import { useItemHandlesStore } from "@/items/itemHandlesStore";
 import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
 import ClearOfFinger from "./ClearOfFinger";
 
@@ -89,6 +90,8 @@ const SUBTRACT_LASSO_DASH = "2 4";
  */
 const SHAPE_OUTLINE_WIDTH = 1;
 const SHAPE_OUTLINE_DASH = "6 4";
+/** A spot a paste leaves empty (#961): dashes in field units round a marcher-sized ring */
+const EMPTY_SPOT_DASH = "2 1.5";
 /** How far an angle line runs from its circle's center, in field units: past any field */
 const GUIDE_REACH = 100_000;
 const SPOT_RADIUS = 4;
@@ -146,6 +149,14 @@ const GUIDE_EDGE_WIDTH = 2.5 * SHAPE_OUTLINE_WIDTH;
 /** A corner or center on a guide with no side along it (#446): a ring in CSS px, as the pivot's */
 const GUIDE_MARK_RADIUS = 6;
 const GUIDE_MARK_WIDTH = GUIDE_EDGE_WIDTH;
+/**
+ * A mirrored paste's mirror point (Paste mirrored): pink, apart from the pivot's yellow and the
+ * guides' orange. The lines it mirrors across are dashed at full strength; the others faint.
+ */
+const MIRROR_COLOR = "#db2777";
+const MIRROR_TEXT = "white";
+const MIRROR_POINT_RADIUS = 7;
+const MIRROR_LINE_WIDTH = 1.5;
 /** A guide's name tag at the canvas edge, in CSS px */
 const GUIDE_LABEL_PX = 12;
 const GUIDE_LABEL_HEIGHT = 20;
@@ -197,6 +208,7 @@ export default function FieldOverlay({
                     items.subscribe(listener),
                     subscribeEditor(listener),
                     useSelectionCoverStore.subscribe(listener),
+                    useItemHandlesStore.subscribe(listener),
                 ];
                 return () => off.forEach((unsubscribe) => unsubscribe());
             },
@@ -298,7 +310,12 @@ export default function FieldOverlay({
                     />
                 )}
                 {area && (
-                    <AreaPreviewMarks area={area} theme={theme} touch={touch} />
+                    <AreaPreviewMarks
+                        area={area}
+                        theme={theme}
+                        touch={touch}
+                        isItem={(id) => items.isItem(id)}
+                    />
                 )}
                 {modeDrawing && (
                     <ModeDrawing
@@ -797,6 +814,140 @@ function GuideLabels({
 /** What a guide's name at the top keeps below: the task's cards, the toolbar panel and the pill */
 const TOP_LAYERS: readonly FieldLayerKind[] = ["task", "cover", "pill"];
 
+type MirrorShown = NonNullable<FieldModeDrawing["mirror"]>;
+
+/**
+ * A mirrored paste's mirror point (Paste mirrored): a line through it each way across the whole
+ * canvas, at any zoom, and the point itself, which drags. The lines the paste mirrors across are
+ * dashed and strong; the other is faint, so which way it mirrors reads before anything is pressed.
+ */
+function MirrorMark({
+    mirror,
+    at,
+    view,
+}: {
+    mirror: MirrorShown;
+    at: (p: { x: number; y: number }) => { x: number; y: number };
+    view: { width: number; height: number };
+}) {
+    const p = at(mirror.at);
+    const line = (on: boolean, a: XYPoint, b: XYPoint, testId: string) => (
+        <g data-testid={testId} data-on={on ? "true" : "false"}>
+            {on && (
+                <line
+                    x1={a.x}
+                    y1={a.y}
+                    x2={b.x}
+                    y2={b.y}
+                    stroke={GUIDE_CASING}
+                    strokeWidth={GUIDE_CASING_WIDTH}
+                />
+            )}
+            <line
+                x1={a.x}
+                y1={a.y}
+                x2={b.x}
+                y2={b.y}
+                stroke={MIRROR_COLOR}
+                strokeWidth={on ? MIRROR_LINE_WIDTH : 1}
+                strokeDasharray={on ? "8 5" : "2 5"}
+                opacity={on ? 1 : 0.6}
+            />
+        </g>
+    );
+    const r = mirror.dragging ? MIRROR_POINT_RADIUS + 1 : MIRROR_POINT_RADIUS;
+    return (
+        <g data-testid="fieldShapeMirror" pointerEvents="none">
+            {line(
+                mirror.across,
+                { x: p.x, y: 0 },
+                { x: p.x, y: view.height },
+                "fieldShapeMirrorAcross",
+            )}
+            {line(
+                mirror.deep,
+                { x: 0, y: p.y },
+                { x: view.width, y: p.y },
+                "fieldShapeMirrorDeep",
+            )}
+            <circle
+                cx={p.x}
+                cy={p.y}
+                r={r + 1.5}
+                fill="none"
+                stroke="black"
+                strokeOpacity={0.45}
+                strokeWidth={2}
+            />
+            <circle
+                cx={p.x}
+                cy={p.y}
+                r={r}
+                fill={MIRROR_COLOR}
+                stroke="white"
+                strokeWidth={2}
+                data-testid="fieldShapeMirrorPoint"
+            />
+            <circle cx={p.x} cy={p.y} r={2} fill="white" />
+        </g>
+    );
+}
+
+/** The mirror's lines named at the canvas edge, as a guide's are, in the mirror's pink */
+function MirrorLabels({
+    mirror,
+    at,
+    view,
+}: {
+    mirror: MirrorShown;
+    at: (p: { x: number; y: number }) => { x: number; y: number };
+    view: { width: number; height: number };
+}) {
+    const ref = useRef<SVGGElement>(null);
+    const touchLayout = useIsTouchMode();
+    const field = useCallback(
+        () => ref.current?.ownerSVGElement?.parentElement ?? null,
+        [],
+    );
+    const overTop = useFieldLayerRects(
+        field,
+        TOP_LAYERS,
+        touchLayout && !!mirror.acrossLabel,
+    );
+    const p = at(mirror.at);
+    return (
+        <g ref={ref}>
+            {mirror.acrossLabel && (
+                <GuideLabel
+                    text={mirror.acrossLabel}
+                    at={{ x: p.x, y: 0 }}
+                    upright
+                    width={view.width}
+                    height={view.height}
+                    overTop={overTop}
+                    ink={MIRROR_COLOR}
+                    inkText={MIRROR_TEXT}
+                    testId="fieldShapeMirrorLabel"
+                />
+            )}
+            {mirror.deepLabel && (
+                <GuideLabel
+                    text={mirror.deepLabel}
+                    at={{ x: 0, y: p.y }}
+                    upright={false}
+                    width={view.width}
+                    height={view.height}
+                    ink={MIRROR_COLOR}
+                    inkText={MIRROR_TEXT}
+                    testId="fieldShapeMirrorLabel"
+                />
+            )}
+        </g>
+    );
+}
+
+type XYPoint = { x: number; y: number };
+
 /**
  * A guide's name at the canvas edge (#427): at the top for a line side to side, at the left for
  * one front to back, kept inside the canvas. At the top it goes below any of `overTop` it would be
@@ -809,6 +960,9 @@ function GuideLabel({
     width,
     height,
     overTop = [],
+    ink = GUIDE_INK,
+    inkText = GUIDE_INK_TEXT,
+    testId = "fieldShapeGuideLabel",
 }: {
     text: string;
     at: { x: number; y: number };
@@ -816,6 +970,10 @@ function GuideLabel({
     width: number;
     height: number;
     overTop?: readonly Rect[];
+    /** The tag's fill and text: the guides' orange unless given (a mirror's pink) */
+    ink?: string;
+    inkText?: string;
+    testId?: string;
 }) {
     // About the width of the text in DM Sans at this size, with room either side
     const w = text.length * GUIDE_LABEL_PX * 0.55 + 16;
@@ -831,22 +989,15 @@ function GuideLabel({
           )
         : clamp(at.y - h / 2, height - h);
     return (
-        <g data-testid="fieldShapeGuideLabel">
-            <rect
-                x={x}
-                y={y}
-                width={w}
-                height={h}
-                rx={h / 2}
-                fill={GUIDE_INK}
-            />
+        <g data-testid={testId}>
+            <rect x={x} y={y} width={w} height={h} rx={h / 2} fill={ink} />
             <text
                 x={x + w / 2}
                 y={y + h / 2}
                 fontSize={GUIDE_LABEL_PX}
                 fontWeight={600}
                 className="font-sans"
-                fill={GUIDE_INK_TEXT}
+                fill={inkText}
                 textAnchor="middle"
                 dominantBaseline="central"
             >
@@ -1145,6 +1296,21 @@ const ShapeBody = memo(function ShapeBody({
                         vectorEffect="non-scaling-stroke"
                     />
                 ))}
+            {/* The shape's other rows (spec #1190): each drawn as its own line is */}
+            {drawing.rows?.map((row, i) => (
+                <polyline
+                    key={`row-${i}`}
+                    points={row.map((p) => `${p.x},${p.y}`).join(" ")}
+                    fill="none"
+                    stroke={shape}
+                    strokeWidth={SHAPE_OUTLINE_WIDTH}
+                    strokeDasharray={open ? undefined : SHAPE_OUTLINE_DASH}
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    vectorEffect="non-scaling-stroke"
+                    data-testid="fieldShapeRow"
+                />
+            ))}
             {/* Over the muted group line: the one heavy line while a lane is worked on */}
             {drawing.lanePicked !== undefined &&
                 drawing.lanes?.[drawing.lanePicked] && (
@@ -1168,6 +1334,24 @@ const ShapeBody = memo(function ShapeBody({
                 looks={looks}
                 scale={scale}
             />
+            {/* Spots a paste leaves empty (#961): a dashed ring the size of a marcher, so the whole
+                copy reads, at full strength however calm the shape is */}
+            {drawing.emptySpots?.map((p, i) => (
+                <MarkerSvg
+                    key={`empty-${i}`}
+                    // An X is drawn in its fill, so an empty one is a ring
+                    shape={spotShape === "cross" ? "circle" : spotShape}
+                    x={p.x}
+                    y={p.y}
+                    r={DOT_RADIUS * scale}
+                    fill="none"
+                    stroke={shape}
+                    strokeWidth={SHAPE_OUTLINE_WIDTH}
+                    strokeDasharray={EMPTY_SPOT_DASH}
+                    vectorEffect="non-scaling-stroke"
+                    data-testid="fieldShapeEmptySpot"
+                />
+            ))}
             {drawing.memberRings?.map((ring, i) => (
                 // In the marcher's shape, as its selection ring is
                 <MarkerSvg
@@ -1438,6 +1622,85 @@ function OffsetStep({
     );
 }
 
+/**
+ * The gap from a Line's drawn row to the next (#1190), while Rows apart or Slant is engaged, at an
+ * end of the block: a dashed leg across in the pivot's yellow on a dark edge, ticked at both rows,
+ * then one along the next row by the slant, and the numbers in one pill outside the block, so it
+ * never covers a spot
+ */
+function RowsGapMark({
+    gap,
+    at,
+}: {
+    gap: NonNullable<FieldModeDrawing["rowsGap"]>;
+    at: (point: { x: number; y: number }) => { x: number; y: number };
+}) {
+    const a = at(gap.from);
+    const c = at(gap.corner);
+    const b = at(gap.to);
+    // Away from the block on screen
+    const o = at({
+        x: gap.from.x + gap.outward.x,
+        y: gap.from.y + gap.outward.y,
+    });
+    const ol = Math.hypot(o.x - a.x, o.y - a.y);
+    const u =
+        ol > 1e-6
+            ? { x: (o.x - a.x) / ol, y: (o.y - a.y) / ol }
+            : { x: 1, y: 0 };
+    const tick = (p: { x: number; y: number }) =>
+        `M ${p.x - u.x * 2} ${p.y - u.y * 2} L ${p.x + u.x * 6} ${p.y + u.y * 6}`;
+    const d = [
+        gap.slant
+            ? `M ${a.x} ${a.y} L ${c.x} ${c.y} L ${b.x} ${b.y}`
+            : `M ${a.x} ${a.y} L ${c.x} ${c.y}`,
+        tick(a),
+        tick(c),
+    ].join(" ");
+    const text = gap.slant ? `${gap.apart} · ${gap.slant}` : gap.apart;
+    const h = GROUP_LABEL_HEIGHT;
+    const w = groupLabelWidth(text);
+    // Clear of the leg, its ticks and the end spot's handle
+    const r = (Math.abs(u.x) * w) / 2 + (Math.abs(u.y) * h) / 2 + 12;
+    const x = (a.x + c.x) / 2 + u.x * r;
+    const y = (a.y + c.y) / 2 + u.y * r;
+    return (
+        <g data-testid="fieldShapeRowsGap" pointerEvents="none">
+            <path d={d} fill="none" stroke="black" strokeWidth={3.5} />
+            <path
+                d={d}
+                fill="none"
+                stroke={PIVOT_COLOR}
+                strokeWidth={1.5}
+                strokeDasharray="5 3"
+            />
+            <rect
+                x={x - w / 2}
+                y={y - h / 2}
+                width={w}
+                height={h}
+                rx={h / 2}
+                fill={PIVOT_COLOR}
+                stroke="black"
+                strokeWidth={1}
+            />
+            <text
+                x={x}
+                y={y}
+                fontSize={GROUP_LABEL_PX}
+                fontWeight={600}
+                className="font-sans"
+                fill="black"
+                textAnchor="middle"
+                dominantBaseline="central"
+                data-testid="fieldShapeRowsGapLabel"
+            >
+                {text}
+            </text>
+        </g>
+    );
+}
+
 /** The shape a mode's spots take: its marchers' when they share one (`spotShapeOf`). */
 function useSpotShape(
     drawing: FieldModeDrawing,
@@ -1627,6 +1890,7 @@ function ModeDrawing({
                     abovePx={drawing.labels?.length ? SPOT_LABEL_PX + 1 : 0}
                 />
             )}
+            {drawing.rowsGap && <RowsGapMark gap={drawing.rowsGap} at={at} />}
             {drawing.labels?.map(({ at: point, text }, i) => {
                 const p = at(point);
                 return (
@@ -1824,9 +2088,15 @@ function ModeDrawing({
                         </g>
                     );
                 })()}
+            {drawing.mirror && (
+                <MirrorMark mirror={drawing.mirror} at={at} view={view} />
+            )}
             {/* The guides' names last, over every line, edge and spot, so nothing crosses
                 their text (owner on #427) */}
             <GuideLabels guides={drawing.guides} at={at} view={view} />
+            {drawing.mirror && (
+                <MirrorLabels mirror={drawing.mirror} at={at} view={view} />
+            )}
         </g>
     );
 }
@@ -1926,10 +2196,13 @@ function AreaPreviewMarks({
     area,
     theme,
     touch,
+    isItem,
 }: {
     area: AreaShape;
     theme: FieldTheme;
     touch: boolean;
+    /** Whether a marcher row is a prop or equipment, counted apart (props epic) */
+    isItem: (id: number) => boolean;
 }) {
     const { t } = useTranslate();
     const view = useFieldViewStore();
@@ -1951,13 +2224,21 @@ function AreaPreviewMarks({
             `M${p.x - half} ${p.y - half}h${half * 2}v${half * 2}h${-half * 2}z`,
         );
     }
-    const count = preview.ids.length;
-    const text =
+    const props = preview.ids.filter(isItem).length;
+    const count = preview.ids.length - props;
+    const choice =
         preview.choice === "add"
-            ? t("field.areaCount.add", { count })
+            ? "add"
             : preview.choice === "subtract"
-              ? t("field.areaCount.subtract", { count })
-              : t("field.areaCount.select", { count });
+              ? "subtract"
+              : "select";
+    // Marchers and props counted apart, as the inspector does ("8 marchers and 1 prop")
+    const text =
+        props === 0
+            ? t(`field.areaCount.${choice}`, { count })
+            : count === 0
+              ? t(`field.areaCount.${choice}Props`, { props })
+              : t(`field.areaCount.${choice}Both`, { marchers: count, props });
     return (
         <g data-testid="fieldAreaPreview" opacity={opacity}>
             <path

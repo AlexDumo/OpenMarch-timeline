@@ -8,10 +8,12 @@ import {
 import { ReadableCoords } from "@/global/classes/ReadableCoords";
 import { InspectorCollapsible } from "@/components/inspector/InspectorCollapsible";
 import ActionButton from "@/shortcuts/ActionButton";
+import MarcherPositionsMenu from "@/components/toolbar/MarcherPositionsMenu";
 import { Button, getButtonClassName, Input } from "@openmarch/ui";
 import StepSizeWarningBadge from "./StepSizeWarningBadge";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
-import { performersOnly } from "@/global/classes/Marcher";
+import { useUnlockedOnly } from "@/items/lockedItems";
+import { isPerformer } from "@/global/classes/Marcher";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { clsx } from "clsx";
@@ -23,6 +25,10 @@ import { pageEndBeat } from "@/timeline/timelineCanvas";
 import { useTimelineStepSizes } from "@/timeline/useTimelineStepSizes";
 import { useTimingObjects } from "@/hooks";
 import { allItemsQueryOptions } from "@/hooks/queries/useItems";
+import { openItemEditor } from "@/components/items/openItemEditor";
+import type { ItemWithMarcher } from "@/components/items/ItemRows";
+import { PropListContents } from "@/components/items/PropsModal";
+import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 import {
     FlipHorizontalIcon,
     FlipVerticalIcon,
@@ -30,9 +36,7 @@ import {
     AlignCenterVerticalSimpleIcon,
     DotsThreeOutlineIcon,
     DotsThreeOutlineVerticalIcon,
-    CaretDownIcon,
 } from "@phosphor-icons/react";
-import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import { TagButtons } from "./marcher/TagEditor";
 import TimelineHoldLine, { TimelineHeldCount } from "./TimelineHoldLine";
 import TimelineHoldStyle from "./TimelineHoldStyle";
@@ -258,7 +262,6 @@ export function ArrangeButtons({ rotate }: { rotate: ReactNode }) {
             <div className="flex gap-8">
                 <ActionButton
                     action="alignVertically"
-                    caption={t("inspector.marcher.alignVerticallyCaption")}
                     className={clsx(
                         getButtonClassName({
                             variant: "secondary",
@@ -271,7 +274,6 @@ export function ArrangeButtons({ rotate }: { rotate: ReactNode }) {
                 </ActionButton>
                 <ActionButton
                     action="alignHorizontally"
-                    caption={t("inspector.marcher.alignHorizontallyCaption")}
                     className={clsx(
                         getButtonClassName({
                             variant: "secondary",
@@ -285,7 +287,6 @@ export function ArrangeButtons({ rotate }: { rotate: ReactNode }) {
 
                 <ActionButton
                     action="flipHorizontal"
-                    caption={t("inspector.marcher.flipHorizontalCaption")}
                     className={clsx(
                         getButtonClassName({
                             variant: "secondary",
@@ -298,7 +299,6 @@ export function ArrangeButtons({ rotate }: { rotate: ReactNode }) {
                 </ActionButton>
                 <ActionButton
                     action="flipVertical"
-                    caption={t("inspector.marcher.flipVerticalCaption")}
                     className={clsx(
                         getButtonClassName({
                             variant: "secondary",
@@ -318,7 +318,7 @@ export function ArrangeButtons({ rotate }: { rotate: ReactNode }) {
                 <h5 className="text-h5">
                     <T keyName="inspector.marcher.distributeHeading" />
                 </h5>
-                <div className="flex flex-1 items-center justify-center gap-4">
+                <div className="text-sub flex flex-1 items-center justify-center gap-4">
                     <Button
                         aria-label={t(
                             "actions.alignment.distributeHorizontally",
@@ -353,10 +353,10 @@ export function ArrangeButtons({ rotate }: { rotate: ReactNode }) {
                             setHorizontalStepInterval(e.target.value)
                         }
                         compact
-                        className="rounded-4 w-8 flex-1 border text-center text-xs"
+                        className="rounded-4 w-8 flex-1 border text-center"
                     />
                 </div>
-                <div className="flex flex-1 items-center justify-center gap-4">
+                <div className="text-sub flex flex-1 items-center justify-center gap-4">
                     <Button
                         aria-label={t("actions.alignment.distributeVertically")}
                         disabled={distributionDisabled}
@@ -387,7 +387,7 @@ export function ArrangeButtons({ rotate }: { rotate: ReactNode }) {
                         onChange={(e) =>
                             setVerticalStepInterval(e.target.value)
                         }
-                        className="rounded-4 w-8 flex-1 border text-center text-xs"
+                        className="rounded-4 w-8 flex-1 border text-center"
                     />
                 </div>
             </div>
@@ -395,51 +395,22 @@ export function ArrangeButtons({ rotate }: { rotate: ReactNode }) {
     );
 }
 
-/** Puts the selected marchers where they stand on the page before or after */
+/** The "Selected marchers ▾" menu: the same actions as the Alignment toolbar's "All marchers ▾" */
 function PlaceMenu() {
-    const [placeMenuOpen, setPlaceMenuOpen] = useState(false);
-    const closePlaceMenu = () => setPlaceMenuOpen(false);
     return (
-        <>
-            {/* Set Marcher Positions Dropdowns */}
-            <div className="flex flex-col gap-8">
-                <Dropdown.Root
-                    open={placeMenuOpen}
-                    onOpenChange={setPlaceMenuOpen}
-                >
-                    <Dropdown.Trigger
-                        className={clsx(
-                            getButtonClassName({
-                                variant: "secondary",
-                                size: "compact",
-                            }),
-                            "flex items-center justify-center gap-6",
-                        )}
-                    >
-                        <T keyName="toolbar.alignment.placeSelectedMarchers" />{" "}
-                        <CaretDownIcon size={14} />
-                    </Dropdown.Trigger>
-                    <Dropdown.Portal>
-                        <Dropdown.Content className="bg-modal rounded-6 shadow-modal backdrop-blur-32 border-stroke flex flex-col items-start gap-0 border p-8">
-                            <ActionButton
-                                action="setSelectedMarchersToPreviousPage"
-                                onRun={closePlaceMenu}
-                                className="text-text px-6 py-4"
-                            >
-                                <T keyName="toolbar.alignment.toPreviousPagePositions" />
-                            </ActionButton>
-                            <ActionButton
-                                action="setSelectedMarchersToNextPage"
-                                onRun={closePlaceMenu}
-                                className="text-text px-6 py-4"
-                            >
-                                <T keyName="toolbar.alignment.toNextPageSpots" />
-                            </ActionButton>
-                        </Dropdown.Content>
-                    </Dropdown.Portal>
-                </Dropdown.Root>
-            </div>
-        </>
+        <div className="flex flex-col gap-8">
+            <MarcherPositionsMenu
+                scope="selected"
+                caretSize={14}
+                triggerClassName={clsx(
+                    getButtonClassName({
+                        variant: "secondary",
+                        size: "compact",
+                    }),
+                    "flex items-center justify-center gap-6",
+                )}
+            />
+        </div>
     );
 }
 
@@ -476,23 +447,35 @@ function MarcherEditor() {
     const { t } = useTranslate();
     const { selectedMarchers: selection, setSelectedMarchers } =
         useSelectedMarchers()!;
-    // Performers: items are edited in their panels, not as marchers: props in the Props panel,
-    // equipment, edited from its right-click menu
-    const selectedMarchers = useMemo(
-        () => performersOnly(selection),
-        [selection],
-    );
+    // Marchers and props alike (props epic, fork #1239); a locked item keeps its place and is
+    // edited from its right-click menu
+    const selectedMarchers = useUnlockedOnly(selection);
     const { data: items } = useQuery(allItemsQueryOptions());
-    const selectedEquipmentCount = useMemo(() => {
-        const equipment = new Set(
-            items
-                ?.filter((item) => item.kind === "equipment")
-                .map((item) => item.marcher_id),
-        );
-        return selection.filter((m) => equipment.has(m.id)).length;
-    }, [items, selection]);
-    const selectedPropCount =
-        selection.length - selectedMarchers.length - selectedEquipmentCount;
+    // The notes over the section: where a prop's size and look are edited, and why a locked
+    // item isn't in the section
+    const { selectedPropCount, selectedLockedCount, firstProp } =
+        useMemo(() => {
+            const kinds = new Map(
+                (items ?? []).map((item) => [item.marcher_id, item]),
+            );
+            let props = 0;
+            let locked = 0;
+            let first: ItemWithMarcher | null = null;
+            for (const m of selection) {
+                const item = kinds.get(m.id);
+                if (!item) continue;
+                if (item.locked) locked++;
+                else if (item.kind === "prop") {
+                    props++;
+                    first ??= item;
+                }
+            }
+            return {
+                selectedPropCount: props,
+                selectedLockedCount: locked,
+                firstProp: first,
+            };
+        }, [items, selection]);
     const { selectedPage } = useSelectedPage()!;
     /**
      * Playback (UI-19 review): the section keeps its place and shows a note instead of the
@@ -571,24 +554,33 @@ function MarcherEditor() {
     return (
         <>
             {selectedPropCount > 0 && (
-                <p
-                    className="text-sub text-text/60 px-6"
+                // Opens the one prop's settings, or the Props panel for several
+                <button
+                    type="button"
+                    className="text-sub text-text/60 hover:text-text px-6 text-left underline-offset-2 hover:underline"
                     data-testid="inspector-items-selected"
+                    onClick={() => {
+                        if (selectedPropCount === 1 && firstProp)
+                            openItemEditor(firstProp);
+                        else {
+                            const { setContent, setOpen } =
+                                useSidebarModalStore.getState();
+                            setContent(<PropListContents />, "props");
+                            setOpen(true);
+                        }
+                    }}
                 >
-                    <T
-                        keyName="inspector.marcher.itemsSelected"
-                        params={{ count: selectedPropCount }}
-                    />
-                </p>
+                    <T keyName="inspector.marcher.propsLook" />
+                </button>
             )}
-            {selectedEquipmentCount > 0 && (
+            {selectedLockedCount > 0 && (
                 <p
                     className="text-sub text-text/60 px-6"
-                    data-testid="inspector-equipment-selected"
+                    data-testid="inspector-locked-selected"
                 >
                     <T
-                        keyName="inspector.marcher.equipmentSelected"
-                        params={{ count: selectedEquipmentCount }}
+                        keyName="inspector.marcher.lockedSelected"
+                        params={{ count: selectedLockedCount }}
                     />
                 </p>
             )}
@@ -599,8 +591,17 @@ function MarcherEditor() {
                         <InspectorCollapsible
                             defaultOpen
                             translatableTitle={{
-                                keyName: "inspector.marcher.title",
-                                parameters: { count: selectedMarchers.length },
+                                keyName:
+                                    selectedPropCount > 0
+                                        ? "inspector.marcher.titleWithProps"
+                                        : "inspector.marcher.title",
+                                parameters: {
+                                    count: selectedMarchers.length,
+                                    marchers:
+                                        selectedMarchers.length -
+                                        selectedPropCount,
+                                    props: selectedPropCount,
+                                },
                             }}
                             className="mt-12 flex flex-col gap-16"
                         >
@@ -736,9 +737,14 @@ function MarcherEditor() {
                         <InspectorCollapsible
                             defaultOpen
                             translatableTitle={{
-                                keyName: "inspector.marcher.titleSingle",
+                                keyName: isPerformer(selectedMarchers[0])
+                                    ? "inspector.marcher.titleSingle"
+                                    : "inspector.marcher.titleProp",
                                 parameters: {
                                     drillNumber:
+                                        selectedMarchers[0].drill_number,
+                                    name:
+                                        selectedMarchers[0].name?.trim() ||
                                         selectedMarchers[0].drill_number,
                                 },
                             }}

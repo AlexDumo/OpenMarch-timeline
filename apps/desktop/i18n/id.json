@@ -18,8 +18,7 @@
             "snapOn": "Snap nonaktif: aktifkan kembali",
             "snapToCustomFraction": "Snap ke kisi",
             "toggleSnap": "Aktifkan/nonaktifkan snap",
-            "toggleSnapKeywords": "snap jepret magnet kisi grid bebas free",
-            "propsOnly": "Hanya properti yang dipilih: properti tidak diratakan atau diberi jarak"
+            "toggleSnapKeywords": "snap jepret magnet kisi grid bebas free"
         },
         "batchEdit": {
             "clearPage": "Kosongkan Halaman {page}",
@@ -798,8 +797,6 @@
         "marcher": {
             "drillNumber": "Nomor drill",
             "errorLoadingCoords": "Gagal memuat koordinat",
-            "itemsSelected": "{count, plural, other {# properti dipilih. Edit di panel Properti.}}",
-            "equipmentSelected": "{count, plural, =1 {# peralatan dipilih. Klik kanan untuk mengeditnya.} other {# peralatan dipilih. Klik kanan salah satunya untuk mengeditnya.}}",
             "playing": "Sedang diputar. Jeda untuk melihat dan mengedit pemain yang dipilih.",
             "maxStepSize": "Ukuran langkah terbesar",
             "minStepSize": "Ukuran langkah terkecil",
@@ -978,10 +975,6 @@
                     "description": "Pilih jenis aktivitas.",
                     "title": "Aktivitas",
                     "typeLabel": "Aktivitas"
-                },
-                "field": {
-                    "description": "Pilih template lapangan untuk pertunjukan.",
-                    "title": "Penyiapan lapangan"
                 },
                 "performers": {
                     "description": "Tambahkan pemain sekarang atau lewati dan tambahkan nanti di editor.",
@@ -1530,15 +1523,10 @@
             },
             "groups": {
                 "cantImport": "Tidak dapat diimpor",
-                "needsChoice": "Perlu dipilih",
                 "fixed": "Diperbaiki otomatis",
                 "notes": "Catatan"
             },
             "tryAgain": "Coba lagi",
-            "rotate": {
-                "title": "Berdirikan (file Z-up)",
-                "detail": "Beberapa program mengekspor dengan sumbu Z ke atas, sehingga model terbaring telentang."
-            },
             "name": "Nama",
             "saveFailed": "Gagal menambahkan model ke pertunjukan.",
             "cancel": "Batal",
@@ -1681,12 +1669,8 @@
             "medium": "Sedang",
             "large": "Besar",
             "summary": {
-                "small": "2 marimba, 2 vibrafon, satu rak, satu synth, dan 2 speaker",
-                "medium": "4 marimba, 3 vibrafon, xilofon, glockenspiel, rak, drum set, synth, dan 4 speaker",
-                "large": "6 marimba, 4 vibrafon, xilofon, glockenspiel, 2 rak, drum set, 2 synth, dan 6 speaker",
                 "none": "Tanpa pit. Anda dapat menyiapkannya nanti di panel Pemain."
             },
-            "always": "Setiap preset juga menambahkan podium di garis 50 dan mixer di belakang pit.",
             "addPerformers": "Tambahkan juga pemain",
             "apply": "Terapkan",
             "replaces": "Menggantikan peralatan yang ditambahkan preset terakhir. Pemainnya pindah ke posisi baru; pemain yang tidak lagi memiliki instrumen dihapus, kecuali mereka memiliki gerakan di bagian pertunjukan selanjutnya. Urungkan akan mengembalikan semuanya. Peralatan yang Anda tambahkan sendiri tetap ada.",
@@ -4099,9 +4083,7 @@
         },
         "button": {
             "hint": "File musik, dan menyelaraskan hitungan dengannya: tempo, tanda birama, tanda latihan",
-            "hintOn": "Selaraskan hitungan dengan musik. <escape></escape> atau <toggle></toggle> untuk keluar.",
             "label": "Edit musik",
-            "labelOn": "Mengedit musik",
             "text": "Edit musik"
         },
         "errors": {
@@ -4109,53 +4091,6 @@
             "moveOneCountLong": "Gerakan itu hanya sepanjang satu hitungan",
             "wouldHideSet": "Tindakan ini akan membuat keyframe berakhir pada hitungan yang sama dengan gerakan di bawahnya, sehingga set gerakan itu tersembunyi. Hapus lebih sedikit hitungan, atau akhiri keyframe satu hitungan lebih awal.",
             "wouldRemovePage": "Tindakan ini akan menghapus halaman. Hapus lebih sedikit hitungan, atau hapus halamannya terlebih dahulu."
-        },
-        "help": {
-            "doubleClickLane": {
-                "title": "Tambahkan perubahan tempo",
-                "text": "Klik dua kali jalur tempo di tempat tempo harus berubah. Klik dua kali titik perubahan untuk menghapusnya."
-            },
-            "dragChangeDot": {
-                "title": "Pindahkan perubahan tempo",
-                "text": "Seret titiknya ke atas atau ke bawah untuk mengubah tempo, atau ke samping untuk memindahkan tempat perubahannya."
-            },
-            "dragEndDot": {
-                "title": "Atur akhir rit.",
-                "text": "Seret titik persegi di akhir sebuah bagian, agar tempo berikutnya dapat melompat kembali (a tempo)."
-            },
-            "dragLine": {
-                "title": "Atur tempo",
-                "text": "Seret garis tempo ke atas atau ke bawah. Untuk mengetik tempo, klik kanan lalu pilih Atur tempo…"
-            },
-            "dragMeasures": {
-                "title": "Pilih hitungan",
-                "text": "Seret di sepanjang birama atau musik, lalu edit semuanya sekaligus."
-            },
-            "dragRoundHandle": {
-                "title": "Ubah tempo secara bertahap",
-                "text": "Seret pegangan bulat di tengah sebuah bagian. Klik dua kali untuk kembali melompat."
-            },
-            "keys": {
-                "escape": "Hapus pilihan, atau batalkan seretan; jika tidak ada yang dihapus, berhenti mengedit musik",
-                "play": "Putar dari playhead, atau hentikan di posisinya",
-                "tap": "Tap tempo: ketuk di setiap ketukan untuk melihat kecepatannya",
-                "toggle": "Mulai atau berhenti mengedit musik",
-                "metronome": "Metronom aktif atau nonaktif"
-            },
-            "label": "Cara kerja edit musik",
-            "rightClick": {
-                "title": "Fermata dan hitungan",
-                "text": "Klik kanan hitungan untuk menjadikannya fermata, mengubah tempo secara bertahap, atau menambah dan menghapus hitungan."
-            },
-            "rightClickMeasure": {
-                "title": "Birama dan tanda latihan",
-                "text": "Klik kanan birama untuk memberinya nomor ulang, mengatur tanda biramanya, atau menambahkan tanda latihan. Seret tanda untuk memindahkannya."
-            },
-            "title": "Selaraskan hitungan dengan musik",
-            "musicFile": {
-                "title": "Ganti musik",
-                "text": "Klik nama file di header untuk mengganti, mengimpor, atau menghapus audio, atau mengatur offset musik."
-            }
         },
         "importScore": {
             "choose": "Pilih file…",

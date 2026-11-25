@@ -2,8 +2,7 @@ import tolgee from "@/global/singletons/Tolgee";
 import clsx from "clsx";
 import { T } from "@tolgee/react";
 import Shortcut from "@/components/ui/Shortcut";
-import { useMemo } from "react";
-import { performersOnly } from "@/global/classes/Marcher";
+import { useUnlockedOnly } from "@/items/lockedItems";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import ActionButton from "@/shortcuts/ActionButton";
 import { getEffectiveBindings } from "@/shortcuts/keymap";
@@ -34,10 +33,8 @@ const PREVIEW_SIZE = 26;
  */
 export default function ShapesTab() {
     const selected = useSelectedMarchers()?.selectedMarchers;
-    const performers = useMemo(
-        () => performersOnly(selected ?? []),
-        [selected],
-    );
+    // Marchers and props alike; a locked item takes no spot
+    const performers = useUnlockedOnly(selected);
     // A shape waiting away from its moment isn't picked: a kind starts over (#416)
     const shown = useShapeShown();
     const openKind = useShapeToolStore((s) => s.tool?.kind ?? null);
@@ -88,7 +85,6 @@ export default function ShapesTab() {
                                     }}
                                     aria-pressed={on}
                                     aria-label={kind.shape.label}
-                                    caption={kind.shape.label}
                                     data-testid={`shapes-tab-${toolId(kind)}`}
                                     className={clsx(
                                         "touch:flex-col touch:gap-2 flex items-center",
@@ -112,10 +108,6 @@ export default function ShapesTab() {
                     <ActionButton
                         action="openShapeRing"
                         args={{ latched: true, atField: true }}
-                        caption={tolgee.t(
-                            "shapes.tool.tab.ringCaption",
-                            "Ring",
-                        )}
                         data-testid="shapes-tab-ring"
                         className="touch:min-h-44 flex flex-col items-center justify-center gap-2"
                     >

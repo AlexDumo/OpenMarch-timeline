@@ -67,6 +67,11 @@ export interface ToolEnv {
     readonly pivot?: Pivot;
     /** Where marchers stand, for a dragged pivot to snap to (#350); none when absent */
     readonly pivotSnaps?: () => readonly XY[];
+    /**
+     * Where every marcher stands, and nothing else: what a mirror point snaps to (Paste
+     * mirrored). Not the open shape's spots, which move with the point. None when absent.
+     */
+    readonly marcherSnaps?: () => readonly XY[];
     /** The box's ratio lock: changing one spacing changes the other in proportion */
     readonly ratioLocked?: boolean;
     /** An Arc's lock: changing its width changes its depth in proportion, and back (#634) */
@@ -197,6 +202,11 @@ export interface ToolParam<P> {
      * {@link ToolKind.step} and lights its pivot (a Line's offset, owner on #596)
      */
     readonly showsStep?: boolean;
+    /**
+     * While the number is pointed at, focused or dragged, the field draws the gap from one of the
+     * kind's rows to the next ({@link ToolRows.gap}) with its numbers (Rows apart and Slant, #1190)
+     */
+    readonly showsRowsGap?: boolean;
     /** Hidden while this is false (a spacing with only one spot that way) */
     shown?(params: P, n: number): boolean;
     /** The number as shown: "6 × 2", "2" */
@@ -491,6 +501,87 @@ export interface ToolClickPoints<P> {
     close?(points: readonly XY[], n: number, env: ToolEnv): P | undefined;
 }
 
+/** One row in the Rows menu (spec #1190), as it lists them */
+export interface RowView {
+    /** Which row it is, for the menu's edits */
+    readonly index: number;
+    /** 0 for the drawn line; 1, 2… away from it on its side */
+    readonly away: number;
+    /** Behind (or to the left) of the drawn line, in front (or to the right), or the drawn line */
+    readonly side: "far" | "near" | null;
+    /** Marchers in it */
+    readonly count: number;
+    /** Its spots as the menu shows them, left to right: true where a marcher stands */
+    readonly spots: readonly boolean[];
+    /** Where it sits from centered, in half spots: + to the right, or toward the back */
+    readonly shift: number;
+    /** Shorter than the longest row */
+    readonly short: boolean;
+}
+
+/** What the Rows menu shows (spec #1190) */
+export interface RowsView {
+    /** Rows across the field are behind and in front; up and down it, left and right */
+    readonly words: "across" | "upDown";
+    /** Every row, the far side (behind or left) first */
+    readonly rows: readonly RowView[];
+    /** Spots left empty in all */
+    readonly empty: number;
+    /** Box sizes one press lays out: so many in a row, so many rows, the last row's own */
+    readonly picks: readonly {
+        readonly perRow: number;
+        readonly rows: number;
+        readonly last: number;
+        readonly on: boolean;
+    }[];
+}
+
+/**
+ * A kind's rows (spec #1190): its marchers split into rows alongside the drawn shape, set in the
+ * editor's Rows menu. Everything takes the whole spot count, as the host gives it; every edit keeps
+ * every marcher in a row.
+ */
+export interface ToolRows<P> {
+    /** What the menu shows; null when the shape can't have rows (a closed line) */
+    view(params: P, n: number): RowsView | null;
+    /** A row added on `side`, the marchers shared out again; null when there's no room */
+    add(params: P, n: number, side: "far" | "near", env: ToolEnv): P | null;
+    /** Row `index` taken off, its marchers going to the shortest rows */
+    remove(params: P, n: number, index: number): P;
+    /** The marchers in row `index`, typed, dragged or stepped: one at a time from or to another row */
+    count(index: number): ToolParam<P>;
+    /** Spot `spot` of row `index` (as the menu shows it) left empty, or filled again */
+    toggleSpot(
+        params: P,
+        n: number,
+        index: number,
+        spot: number,
+        env: ToolEnv,
+    ): P | null;
+    /** Row `index` moved half a spot right (or back), left (or forward), or centered again (0) */
+    shift(params: P, n: number, index: number, by: -1 | 0 | 1): P;
+    /** The box size `perRow` in a row laid out, the rows in front kept in front */
+    pick(params: P, n: number, perRow: number, env: ToolEnv): P;
+    /** Back to the one drawn line */
+    clear(params: P): P;
+    /** How far apart the rows are */
+    readonly apart: ToolParam<P>;
+    /** How much further along each row starts than the one in front */
+    readonly slant: ToolParam<P>;
+    /**
+     * The gap its Rows apart and Slant numbers set, as the field draws it while they're engaged:
+     * from an end spot of the drawn row straight across to the next row (`corner`), then along it
+     * by the slant (`to`, `corner` itself with none), in field units; `outward` a unit vector away
+     * from the block there. Null with only the drawn row. `stepPx` places the spots as the shape
+     * does (a measured line's centered run sits on the grid).
+     */
+    gap(
+        params: P,
+        n: number,
+        stepPx?: number,
+    ): { from: XY; corner: XY; to: XY; outward: XY } | null;
+}
+
 /**
  * How one kind of shape is drawn and edited with the pointer. The tool's state machine
  * (`toolMachine.ts`) owns the gestures and calls these; a kind never sees a pointer event.
@@ -671,6 +762,12 @@ export interface ToolKind<P> {
      */
     fromFrame(frame: ShapeFrame, n: number, env: ToolEnv): P;
     /**
+     * The shape laid out for `n` marchers in the space it takes with `from` (a paste onto another
+     * number of marchers, #961; owner 2026-11-22): its settings, center, turn and flip kept, its
+     * spacing whatever that takes. Absent: its own params are laid out for the count.
+     */
+    atCount?(params: P, from: number, n: number, env: ToolEnv): P;
+    /**
      * The shape its picture shows (`shapePreview`), when filling a square with {@link fromFrame}
      * wouldn't read as the kind: the Line's zigzag and the Curve's wave (owner, 2026-10-31)
      */
@@ -694,6 +791,29 @@ export interface ToolKind<P> {
      * offers no Recalculate, and it isn't saved to the library, which keeps no spots
      */
     readonly asIs?: boolean;
+    /**
+     * Placing it saves no recipe: its marchers go to its spots and stay plain marchers (loose dots
+     * pasted from the clipboard, #961). It isn't read back from recipes or offered by a picker.
+     */
+    readonly loose?: boolean;
+    /**
+     * Spots nobody takes (loose dots pasted onto fewer marchers, #961): drawn as empty rings
+     * while it's open. `stepPx` places them as the shape does.
+     */
+    emptySpots?(params: P, n: number, stepPx?: number): readonly XY[];
+    /** The params as placing saves them, when the open shape holds more than a recipe keeps */
+    forPlacing?(params: P): P;
+    /** Its Rows menu (spec #1190); absent for a kind without */
+    readonly rows?: ToolRows<P>;
+    /**
+     * The outlines of its rows besides the drawn one, drawn like its own outline (spec #1190).
+     * None when absent. `stepPx` places them as the shape does.
+     */
+    rowOutlines?(
+        params: P,
+        n: number,
+        stepPx?: number,
+    ): readonly (readonly XY[])[];
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

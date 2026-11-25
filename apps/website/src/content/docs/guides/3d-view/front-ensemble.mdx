@@ -22,7 +22,7 @@ import Ui from "@/components/docs/Ui.astro";
 import InShort from "@/components/docs/InShort.astro";
 import { Steps } from "@astrojs/starlight/components";
 
-<InShort>In the <Ui k="sidebar.marchers" /> panel, select <Ui k="frontEnsemble.summary.setUp" /> next to <Ui k="frontEnsemble.summary.title" plain />, then <Ui k="frontEnsemble.presets.start" />, choose a size and select <Ui k="frontEnsemble.presets.apply" />.</InShort>
+<InShort>In the <Ui k="sidebar.marchers" /> panel, select <Ui k="frontEnsemble.summary.setUp" /> next to <Ui k="frontEnsemble.summary.title" plain />, choose a size and select <Ui k="frontEnsemble.presets.use" />.</InShort>
 
 The front ensemble, or pit, is the equipment that stands in front of the field all show: marimbas, vibraphones, synths, racks, a drum set, speakers, and the drum major's podium. You set it up once and it stays put on every page. On the field each piece is drawn from above; in the 3D View it's the real instrument, with its player standing at it.
 
@@ -50,17 +50,15 @@ The front ensemble view lists the show's equipment and its podiums. The command 
 
 <Steps>
 
-1. In the front ensemble view, select <Ui k="frontEnsemble.presets.start" />.
+1. While the show has no pit, the front ensemble view offers two ways to start. Under <Ui k="frontEnsemble.presets.start" plain /> are <Ui k="frontEnsemble.presets.small" plain />, <Ui k="frontEnsemble.presets.medium" plain /> and <Ui k="frontEnsemble.presets.large" plain />, each pictured from above with what it holds. Choose one.
 
-2. Choose <Ui k="frontEnsemble.presets.small" plain />, <Ui k="frontEnsemble.presets.medium" plain /> or <Ui k="frontEnsemble.presets.large" plain />. The line under the sizes says what each one holds.
-
-3. Leave <Ui k="frontEnsemble.presets.addPerformers" plain /> on to get a player for each instrument and a drum major on the podium, then select <Ui k="frontEnsemble.presets.apply" />.
+2. Leave <Ui k="frontEnsemble.presets.addPerformers" plain /> on to get a player for each instrument and a drum major on the podium, then select <Ui k="frontEnsemble.presets.use" />.
 
 </Steps>
 
 <Media
   id="3d-front-ensemble-presets"
-  alt="The front ensemble view of a show with no pit yet, with Start from a preset open: Small, Medium and Large, Medium chosen and the line under them saying what it holds, Also add performers on, and Apply."
+  alt="The front ensemble view of a show with no pit yet: Small, Medium and Large as cards, each with a picture of the pit from above and what it holds, Medium chosen, Also add performers on and Use this preset; under them, Or build it yourself with an Add equipment button."
   maxWidth={480}
 />
 
@@ -71,15 +69,15 @@ The pit is laid out in two rows in front of the front sideline, centered on the 
   alt="A Medium pit on the field below the front sideline, drawn from above on a light gray area: a rack, xylophone, drum set, glockenspiel and synth in the back row, vibraphones and marimbas in the front row, each with its player's dot on the field side of it, speakers at the ends, the drum major on the podium in front, and the mixer behind the pit."
 />
 
-Once the show has a pit, the button reads <Ui k="frontEnsemble.presets.reset" />. Applying another size replaces the equipment the last preset placed; equipment you added yourself stays. The last preset's players move onto the new instruments of their section, and those whose instrument the new size doesn't have are removed, unless they have moves later in the show. Undo brings everything back.
+Once the show has a pit, the presets move behind <Ui k="frontEnsemble.presets.reset" /> in the view's header: choose a size there and select <Ui k="frontEnsemble.presets.apply" />. Applying another size replaces the equipment the last preset placed; equipment you added yourself stays. The last preset's players move onto the new instruments of their section, and those whose instrument the new size doesn't have are removed, unless they have moves later in the show. Undo brings everything back.
 
 ## Add one piece
 
 <Steps>
 
-1. In the front ensemble view, select <Ui k="frontEnsemble.add.button" />.
+1. In the front ensemble view, select <Ui k="frontEnsemble.add.button" /> in its header, or <Ui k="frontEnsemble.custom.button" /> under <Ui k="frontEnsemble.custom.title" plain /> while the show has no pit.
 
-2. Find the piece: the pictures are grouped under <Ui k="frontEnsemble.groups.keyboards" plain />, <Ui k="frontEnsemble.groups.percussion" plain />, <Ui k="frontEnsemble.groups.audio" plain /> and <Ui k="frontEnsemble.groups.podiums" plain />, or type in <Ui k="frontEnsemble.search" plain /> ("marimba black", "tower"). Each shows its size and footprint in meters; a dot marks the usual choice.
+2. Find the piece: the pictures are grouped under <Ui k="frontEnsemble.groups.keyboards" plain />, <Ui k="frontEnsemble.groups.percussion" plain />, <Ui k="frontEnsemble.groups.audio" plain /> and <Ui k="frontEnsemble.groups.podiums" plain />, or type in <Ui k="frontEnsemble.search" plain /> ("marimba black", "tower"). Each shows its size and footprint, in feet and inches (or meters when the field is metric); a dot marks the usual choice.
 
 3. Select the picture. The panel closes, and the piece follows the pointer.
 
@@ -97,9 +95,11 @@ A piece you add this way has no player. To give it one, add a marcher and put th
 
 ## Change, move or remove a piece
 
-Equipment is <Ui k="props.locked" plain />: it has one position for the whole show. Dragging it on any page moves it on every page, and a selection box around marchers doesn't pick it up.
+Equipment starts <Ui k="props.locked" plain />: a click, a selection box or <Ui k="actions.select.selectAll" plain /> passes over it, so you can select the players and marchers in front of it without picking it up, and nothing moves it. Clicking it shows a <Ui k="field.lockedItem.tag" plain /> tag for a few seconds instead.
 
-To change a piece, right-click it on the field and choose <Ui k="actions.items.editNamed" values={{ name: "Marimba 1" }} />, or select <Ui k="frontEnsemble.equipment.edit" plain /> on its row in the front ensemble view. There you can rename it, choose another size or finish of the same instrument, or turn <Ui k="props.locked" plain /> off to move it during the show the way you move a prop ([Add props to the field](/guides/3d-view/props/)).
+To move a piece, right-click it on the field (or click its <Ui k="field.lockedItem.tag" plain /> tag) and choose <Ui k="actions.items.unlockNamed" values={{ name: "Marimba 1" }} />. From then on it moves the way a prop does ([Add props to the field](/guides/3d-view/props/#move-a-prop-during-the-show)), and its right-click menu's <Ui k="actions.items.lockNamed" values={{ name: "Marimba 1" }} /> locks it again. Locking keeps where it goes during the show.
+
+To change a piece, right-click it on the field and choose <Ui k="actions.items.editNamed" values={{ name: "Marimba 1" }} />, or select <Ui k="frontEnsemble.equipment.edit" plain /> on its row in the front ensemble view. There you can rename it, choose another size or finish of the same instrument, or turn <Ui k="props.locked" plain /> on or off.
 
 To remove a piece, select <Ui k="frontEnsemble.equipment.delete" plain /> on its row. Undo brings it back.
 

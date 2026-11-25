@@ -159,7 +159,7 @@ export default function ProjectStep({ project, onChange }: ProjectStepProps) {
     };
 
     return (
-        <div className="mx-auto flex w-full max-w-lg flex-col gap-16">
+        <div className="mx-auto flex w-full max-w-2xl flex-col gap-16">
             <WizardFormField label={t("launchpage.newShow.showName")} required>
                 <Input
                     value={projectName}
@@ -174,7 +174,7 @@ export default function ProjectStep({ project, onChange }: ProjectStepProps) {
                 {/* A web show lives in the browser until downloaded: no location. */}
                 {!isWebBuild && (
                     <div className="flex items-center gap-8">
-                        <div className="text-text-subtitle bg-fg-2 rounded-6 border-stroke min-h-30 grow border px-8 py-4 text-sm">
+                        <div className="text-text-subtitle bg-fg-2 rounded-6 border-stroke text-body min-h-30 grow border px-8 py-4">
                             {fileLocation ?? ""}
                         </div>
                         <Button

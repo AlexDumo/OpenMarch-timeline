@@ -33,7 +33,9 @@ import {
 } from "../registry";
 
 import { isBasicMode } from "@/stores/EditorModeStore";
-import { paramsCommand } from "./commandBar";
+import tolgee from "@/global/singletons/Tolgee";
+import { dockCommand, paramsCommand } from "./commandBar";
+
 import type { PaletteContext, PaletteItem } from "./sources";
 
 const CATEGORY_ICONS: Record<ActionCategory, Icon> = {
@@ -132,10 +134,13 @@ export function getActionPaletteItems(
                                       ...param,
                                       label: t(labelKey),
                                   })),
-                                  (values) => runAction(id, values),
+                                  (values) => runAction(id, values, "palette"),
                               ),
                           }
-                        : { run: () => runAction(id, def.paletteArgs) }),
+                        : {
+                              run: () =>
+                                  runAction(id, def.paletteArgs, "palette"),
+                          }),
                 };
             })
             // A command that can't run and can't say why isn't listed: a dimmed row with no reason
@@ -144,4 +149,27 @@ export function getActionPaletteItems(
                 (item) => !item.disabled || item.disabledReason !== undefined,
             )
     );
+}
+
+/**
+ * Asks an action's typed params in the docked command bar, then runs it with the answers, as
+ * choosing it in the palette does. For a menu entry or key of an action that asks (Angle…).
+ * False when the action has no params or can't begin.
+ */
+export function askActionParams(id: ActionId): boolean {
+    const def = getActionDefinition(id);
+    if (!def.params) return false;
+    const t = (key: string) => tolgee.t(key);
+    const label = actionLabelNow(id) ?? getActionLabel(id, t);
+    const run = paramsCommand(
+        [label],
+        def.params.map(({ labelKey, ...param }) => ({
+            ...param,
+            label: t(labelKey),
+        })),
+        (values) => runAction(id, values, "palette"),
+    ).begin();
+    if (!run) return false;
+    dockCommand(run, [], []);
+    return true;
 }

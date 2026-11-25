@@ -18,8 +18,7 @@
             "snapOn": "Ajuste desativado: ativar novamente",
             "snapToCustomFraction": "Ajustar à grade",
             "toggleSnap": "Ativar/desativar ajuste",
-            "toggleSnapKeywords": "ajustar ajuste ímã grade livre snap magnet grid free",
-            "propsOnly": "Só há adereços selecionados: adereços não são alinhados nem espaçados"
+            "toggleSnapKeywords": "ajustar ajuste ímã grade livre snap magnet grid free"
         },
         "batchEdit": {
             "clearPage": "Limpar página {page}",
@@ -798,8 +797,6 @@
         "marcher": {
             "drillNumber": "Número na coreografia",
             "errorLoadingCoords": "Erro ao carregar as coordenadas",
-            "itemsSelected": "{count, plural, one {# adereço selecionado. Edite-o no painel Adereços.} other {# adereços selecionados. Edite-os no painel Adereços.}}",
-            "equipmentSelected": "{count, plural, =1 {# equipamento selecionado. Clique nele com o botão direito para editá-lo.} other {# equipamentos selecionados. Clique em um com o botão direito para editá-lo.}}",
             "playing": "Reproduzindo. Pause para ver e editar os integrantes selecionados.",
             "maxStepSize": "Maior tamanho de passo",
             "minStepSize": "Menor tamanho de passo",
@@ -978,10 +975,6 @@
                     "description": "Escolha sua modalidade.",
                     "title": "Modalidade",
                     "typeLabel": "Modalidade"
-                },
-                "field": {
-                    "description": "Escolha um modelo de campo para o seu show.",
-                    "title": "Configuração do campo"
                 },
                 "performers": {
                     "description": "Adicione os integrantes agora ou pule e adicione-os mais tarde no editor.",
@@ -1530,15 +1523,10 @@
             },
             "groups": {
                 "cantImport": "Não é possível importar",
-                "needsChoice": "Precisa da sua escolha",
                 "fixed": "Corrigido automaticamente",
                 "notes": "Observações"
             },
             "tryAgain": "Tentar novamente",
-            "rotate": {
-                "title": "Colocar em pé (arquivo Z-up)",
-                "detail": "Alguns programas exportam com Z para cima, então o modelo fica deitado de costas."
-            },
             "name": "Nome",
             "saveFailed": "Não foi possível adicionar o modelo ao show.",
             "cancel": "Cancelar",
@@ -1681,12 +1669,8 @@
             "medium": "Médio",
             "large": "Grande",
             "summary": {
-                "small": "2 marimbas, 2 vibrafones, um rack, um sintetizador e 2 caixas de som",
-                "medium": "4 marimbas, 3 vibrafones, xilofone, glockenspiel, rack, bateria, sintetizador e 4 caixas de som",
-                "large": "6 marimbas, 4 vibrafones, xilofone, glockenspiel, 2 racks, bateria, 2 sintetizadores e 6 caixas de som",
                 "none": "Sem pit. Você pode montar um depois no painel Integrantes."
             },
-            "always": "Cada um também adiciona um pódio na linha de 50 e uma mesa de som atrás do pit.",
             "addPerformers": "Adicionar também os integrantes",
             "apply": "Aplicar",
             "replaces": "Substitui os equipamentos adicionados pela última predefinição. Os músicos vão para as novas posições; os que ficarem sem instrumento são removidos, a menos que tenham movimentos mais adiante no show. Desfazer restaura tudo. Os equipamentos que você adicionou continuam.",
@@ -4099,9 +4083,7 @@
         },
         "button": {
             "hint": "O arquivo de música e o alinhamento dos tempos com ela: andamento, fórmulas de compasso, marcas de ensaio",
-            "hintOn": "Alinhe os tempos com a música. <escape></escape> ou <toggle></toggle> sai.",
             "label": "Editar música",
-            "labelOn": "Editando a música",
             "text": "Editar música"
         },
         "errors": {
@@ -4109,53 +4091,6 @@
             "moveOneCountLong": "Esse movimento tem só um tempo",
             "wouldHideSet": "Isso deixaria um quadro-chave terminando no mesmo tempo que o movimento abaixo dele, escondendo a formação desse movimento. Remova menos tempos ou termine o quadro-chave um tempo antes.",
             "wouldRemovePage": "Isso removeria uma página. Remova menos tempos ou exclua a página antes."
-        },
-        "help": {
-            "doubleClickLane": {
-                "title": "Adicionar uma mudança de andamento",
-                "text": "Clique duas vezes na faixa de andamento onde ele deve mudar. Clique duas vezes no ponto de uma mudança para removê-la."
-            },
-            "dragChangeDot": {
-                "title": "Mover uma mudança de andamento",
-                "text": "Arraste o ponto para cima ou para baixo para mudar o andamento, ou para os lados para mudar onde ele muda."
-            },
-            "dragEndDot": {
-                "title": "Definir onde um rit. termina",
-                "text": "Arraste o ponto quadrado no fim de um trecho para que o andamento seguinte possa voltar de repente (a tempo)."
-            },
-            "dragLine": {
-                "title": "Definir um andamento",
-                "text": "Arraste a linha de andamento para cima ou para baixo. Para digitar um andamento, clique com o botão direito e escolha Definir andamento…"
-            },
-            "dragMeasures": {
-                "title": "Selecionar tempos",
-                "text": "Arraste ao longo dos compassos ou da música e edite todos de uma vez."
-            },
-            "dragRoundHandle": {
-                "title": "Mudar o andamento gradualmente",
-                "text": "Arraste a alça redonda no meio de um trecho. Clique duas vezes nela para voltar a um salto."
-            },
-            "keys": {
-                "escape": "Limpar a seleção ou cancelar um arrasto; sem nada para limpar, parar de editar a música",
-                "play": "Reproduzir do indicador de reprodução ou parar onde está",
-                "tap": "Andamento por toque: toque em cada batida para ver a velocidade",
-                "toggle": "Começar ou parar de editar a música",
-                "metronome": "Ativar ou desativar o metrônomo"
-            },
-            "label": "Como funciona a edição da música",
-            "rightClick": {
-                "title": "Fermatas e tempos",
-                "text": "Clique com o botão direito em um tempo para transformá-lo em fermata, mudar o andamento gradualmente ou adicionar e remover tempos."
-            },
-            "rightClickMeasure": {
-                "title": "Compassos e marcas de ensaio",
-                "text": "Clique com o botão direito em um compasso para renumerá-lo, definir a fórmula de compasso ou adicionar uma marca. Arraste uma marca para movê-la."
-            },
-            "title": "Alinhe os tempos com a música",
-            "musicFile": {
-                "title": "Trocar a música",
-                "text": "Clique no nome do arquivo no cabeçalho para trocar, importar ou excluir áudio, ou definir o deslocamento da música."
-            }
         },
         "importScore": {
             "choose": "Escolher um arquivo…",

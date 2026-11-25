@@ -344,7 +344,14 @@ describe("FieldContextMenu", () => {
                 );
         }
         expect(groups).toEqual([
-            ["editSelectedItem"],
+            ["editSelectedItem", "resizeSelectedItem", "lockSelectedItem"],
+            // Copy and paste (#961), and Paste mirrored
+            [
+                "copyFormation",
+                "pasteFormation",
+                "pasteFormationInPlace",
+                "pasteMirrored",
+            ],
             ["editPath", "editLine"],
             ["detachPath", "detachAllPath", "removePath"],
             [
@@ -357,6 +364,16 @@ describe("FieldContextMenu", () => {
                 "timelineHoldStyleStand",
                 "timelineHoldStyleMarkTime",
                 "timelineHoldStyleHighMarkTime",
+            ],
+            // #992: what the selection holds, and selecting by it, as submenus; the picked cue's
+            // performers while they can change
+            [
+                "equipment",
+                "select-holding",
+                // Facing (#993)
+                "facing",
+                "cueAddSelected",
+                "cueRemoveSelected",
             ],
             ["splitSelectedIntoNewMove", "timelineSplitMoveAtPlayhead"],
             // Two selected: a line's order
@@ -372,6 +389,11 @@ describe("FieldContextMenu", () => {
             ["selectAllMarchers"],
             ["fieldEditMode"],
         ]);
+        expect(item("copyFormation")).toHaveTextContent("Copy");
+        expect(item("pasteFormation")).toHaveTextContent("Paste");
+        expect(item("pasteFormationInPlace")).toHaveTextContent(
+            "Paste exactly",
+        );
         expect(item("timelineHoldFromPrevious")).toHaveTextContent(
             "Hold from last keyframe",
         );
