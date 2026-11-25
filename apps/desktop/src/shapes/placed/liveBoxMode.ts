@@ -49,11 +49,14 @@ import {
 import { outlineGapAt } from "../distribute/outlineGap";
 import { closeHandleMenu, openHandleMenu } from "../field/handleMenu";
 import {
+    scissorsAt,
     splitCheck,
     splitSection,
     splitShape,
     SPLIT_VALUE,
+    type Scissors,
 } from "./splitShape";
+import { showSplit } from "./splitPreview";
 import { groupDrawing } from "../field/groupDrawing";
 import { stepDrawing } from "../field/stepDrawing";
 import { rowsGapDrawing } from "../field/rowsGapDrawing";
@@ -239,6 +242,10 @@ export class LiveBoxMode implements FieldMode {
     private readDuringGesture: PlacedBox | null = null;
     /** What made the last press: a held key's rerun goes on with its reach (tablet 1.4) */
     private pressKind: PointerKind = "mouse";
+    /** The scissors shown over a gap of the line (#1336), while the pointer is there */
+    private scissors: Scissors | null = null;
+    /** A press on the scissors: it splits there when let go */
+    private scissorsPress: Scissors | null = null;
 
     constructor(
         box: PlacedBox,
@@ -298,10 +305,43 @@ export class LiveBoxMode implements FieldMode {
     }
 
     claims(pointer: FieldPointer, press: FieldModePress): boolean {
+        if (this.onScissors(pointer)) return true;
         return (
             !this.yieldsToEditor(pointer, press) &&
             this.pressed(pointer) !== null
         );
+    }
+
+    /** Whether `pointer` is on the scissors shown, within a handle's reach of them */
+    private onScissors(pointer: FieldPointer): boolean {
+        const field = currentShapeField();
+        if (!this.scissors || !field) return false;
+        const reach = toolEnvFor(field, undefined, {
+            kind: pointer.kind,
+        }).hitRadius;
+        const { at } = this.scissors;
+        return (
+            Math.hypot(pointer.field.x - at.x, pointer.field.y - at.y) <= reach
+        );
+    }
+
+    /** The scissors for where the pointer is: those shown while it's on them, else the gap's */
+    private scissorsFor(pointer: FieldPointer): Scissors | null {
+        const field = currentShapeField();
+        if (!field || this.live.gesture) return null;
+        // Kept on the way from the line up to them, so they can be reached
+        if (this.scissors && this.towardScissors(pointer, this.scissors))
+            return this.scissors;
+        return scissorsAt(
+            { ...this.live.box, params: this.live.params },
+            pointer.field,
+            toolEnvFor(field, undefined, { kind: pointer.kind }),
+        );
+    }
+
+    private showScissors(scissors: Scissors | null): void {
+        this.scissors = scissors;
+        showSplit(scissors?.check.gap ?? null, scissors?.at ?? null);
     }
 
     /**
@@ -338,6 +378,11 @@ export class LiveBoxMode implements FieldMode {
         const field = currentShapeField();
         this.endHeld();
         if (!field) return;
+        // On the scissors, the press is theirs: let go there, it splits (#1336)
+        if (this.onScissors(pointer)) {
+            this.scissorsPress = this.scissors;
+            return;
+        }
         const { held, reachInside } = pressShapeKeys(
             pointer,
             {
@@ -373,7 +418,7 @@ export class LiveBoxMode implements FieldMode {
 
     move(pointer: FieldPointer): void {
         const field = currentShapeField();
-        if (!field) return;
+        if (!field || this.scissorsPress) return;
         this.live = moveLive(
             this.live,
             pointer.field,
@@ -401,6 +446,20 @@ export class LiveBoxMode implements FieldMode {
 
     release(pointer: FieldPointer, click: LiveClick | null): void {
         this.endHeld();
+        const scissors = this.scissorsPress;
+        if (scissors) {
+            this.scissorsPress = null;
+            this.showScissors(null);
+            // Let go off them (dragged away), it does nothing
+            if (click && this.scissorsNear(pointer, scissors))
+                void splitShape(
+                    scissors.check.box,
+                    scissors.check.k,
+                    this.queryClient,
+                );
+            this.emit();
+            return;
+        }
         const before = this.live;
         const out = releaseLive(
             before,
@@ -510,7 +569,47 @@ export class LiveBoxMode implements FieldMode {
         return this.under?.fieldMenuAt?.(pointer) ?? null;
     }
 
+    /** Whether `pointer` is between the gap and `scissors`, a reach and a half either side */
+    private towardScissors(pointer: FieldPointer, scissors: Scissors): boolean {
+        const field = currentShapeField();
+        if (!field) return false;
+        const reach = toolEnvFor(field, undefined, {
+            kind: pointer.kind,
+        }).hitRadius;
+        const { from, to } = scissors.check.gap;
+        const a = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+        const b = scissors.at;
+        const d = { x: b.x - a.x, y: b.y - a.y };
+        const l2 = d.x * d.x + d.y * d.y || 1;
+        const p = pointer.field;
+        const t = Math.max(
+            0,
+            Math.min(1, ((p.x - a.x) * d.x + (p.y - a.y) * d.y) / l2),
+        );
+        return (
+            Math.hypot(p.x - (a.x + d.x * t), p.y - (a.y + d.y * t)) <=
+            1.5 * reach
+        );
+    }
+
+    /** Whether `pointer` is within a handle's reach of `scissors` */
+    private scissorsNear(pointer: FieldPointer, scissors: Scissors): boolean {
+        const field = currentShapeField();
+        if (!field) return false;
+        const reach = toolEnvFor(field, undefined, {
+            kind: pointer.kind,
+        }).hitRadius;
+        return (
+            Math.hypot(
+                pointer.field.x - scissors.at.x,
+                pointer.field.y - scissors.at.y,
+            ) <= reach
+        );
+    }
+
     cancel(): void {
+        this.scissorsPress = null;
+        this.showScissors(null);
         this.endHeld();
         this.live = openLive(this.live.box, this.live.selected);
         this.catchUp();
@@ -524,6 +623,7 @@ export class LiveBoxMode implements FieldMode {
 
     leave(): void {
         setShapePointerOver(false);
+        if (!this.scissorsPress) this.showScissors(null);
     }
 
     cursorAt(pointer: FieldPointer, hover?: FieldModeHover) {
@@ -538,7 +638,17 @@ export class LiveBoxMode implements FieldMode {
             toolEnvFor(field, undefined, { kind: pointer.kind }),
             this.live.selected,
         );
-        // The editor asks for the cursor as the pointer moves, so this is where hovering is seen
+        // The editor asks for the cursor as the pointer moves, so this is where hovering is seen.
+        // Over a gap of a line (not on a handle), scissors to split there (#1336)
+        const scissors =
+            target === null || target.type !== "handle"
+                ? this.scissorsFor(pointer)
+                : null;
+        if (!this.scissorsPress) this.showScissors(scissors);
+        if (scissors && this.onScissors(pointer)) {
+            setShapePointerOver(true);
+            return "pointer";
+        }
         setShapePointerOver(target !== null);
         return target
             ? shapeCursor(

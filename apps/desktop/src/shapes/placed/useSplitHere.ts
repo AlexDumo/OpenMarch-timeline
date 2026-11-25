@@ -16,7 +16,7 @@ import {
     type SplitCheck,
 } from "./splitShape";
 import type { PlacedBox } from "./placedBox";
-import { useSplitPreviewStore } from "./splitPreview";
+import { showSplit } from "./splitPreview";
 
 /** Whether field point `at` is on placed shape `box`: inside its frame, a step round it */
 function onShape(box: PlacedBox, at: XY, step: number): boolean {
@@ -69,10 +69,7 @@ export function useSplitHere(): void {
             ignoreRepeat: true,
             disabledReason: check && !check.ok ? check.reason : undefined,
             // Pointed at in the menu, the cut is marked where it falls
-            preview: (on) =>
-                useSplitPreviewStore.setState({
-                    gap: on && check?.ok ? check.gap : null,
-                }),
+            preview: (on) => showSplit(on && check?.ok ? check.gap : null),
         },
     );
 }

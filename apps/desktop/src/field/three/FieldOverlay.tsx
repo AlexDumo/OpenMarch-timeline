@@ -824,41 +824,77 @@ type MirrorShown = NonNullable<FieldModeDrawing["mirror"]>;
  * dashed and strong; the other is faint, so which way it mirrors reads before anything is pressed.
  */
 /**
- * Where Split here would cut a placed line while its menu entry is pointed at (#1336): a dashed
- * stroke across the gap, at its middle, square to it
+ * Where a split would cut a placed line (#1336): a dashed stroke across the gap, at its middle,
+ * square to it, while Split here is pointed at in a menu; over a gap of the selected line, up to
+ * the scissors a click splits on
  */
 function SplitMark() {
     const gap = useSplitPreviewStore((s) => s.gap);
+    const scissors = useSplitPreviewStore((s) => s.scissors);
     const view = useFieldViewStore();
     if (!gap) return null;
     const a = fieldToElement(view, gap.from.x, gap.from.y);
     const b = fieldToElement(view, gap.to.x, gap.to.y);
     const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
     const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-    // Across the gap, half a gap long each way but never under a finger's width
+    // Across the gap, half a gap long each way but never under a finger's width; with scissors,
+    // from just past the line up to them
     const half = Math.max(14, len / 2);
-    const n = { x: (-(b.y - a.y) / len) * half, y: ((b.x - a.x) / len) * half };
-    const p1 = { x: mid.x + n.x, y: mid.y + n.y };
-    const p2 = { x: mid.x - n.x, y: mid.y - n.y };
+    const n = { x: -(b.y - a.y) / len, y: (b.x - a.x) / len };
+    const tip = scissors ? fieldToElement(view, scissors.x, scissors.y) : null;
+    const p1 = tip ?? { x: mid.x + n.x * half, y: mid.y + n.y * half };
+    const away = tip
+        ? (() => {
+              const d = Math.hypot(tip.x - mid.x, tip.y - mid.y) || 1;
+              return {
+                  x: mid.x - ((tip.x - mid.x) / d) * 14,
+                  y: mid.y - ((tip.y - mid.y) / d) * 14,
+              };
+          })()
+        : { x: mid.x - n.x * half, y: mid.y - n.y * half };
     return (
         <g data-testid="fieldSplitMark" pointerEvents="none">
             <line
                 x1={p1.x}
                 y1={p1.y}
-                x2={p2.x}
-                y2={p2.y}
+                x2={away.x}
+                y2={away.y}
                 stroke={GUIDE_CASING}
                 strokeWidth={GUIDE_CASING_WIDTH}
             />
             <line
                 x1={p1.x}
                 y1={p1.y}
-                x2={p2.x}
-                y2={p2.y}
+                x2={away.x}
+                y2={away.y}
                 stroke={MIRROR_COLOR}
                 strokeWidth={MIRROR_LINE_WIDTH}
                 strokeDasharray="6 4"
             />
+            {tip && <SplitScissors at={tip} />}
+        </g>
+    );
+}
+
+/** The scissors a click splits a placed line on (#1336): a round button with scissors in it */
+function SplitScissors({ at }: { at: { x: number; y: number } }) {
+    return (
+        <g
+            transform={`translate(${at.x},${at.y})`}
+            data-testid="fieldSplitScissors"
+        >
+            <circle r={11} fill="white" stroke={MIRROR_COLOR} strokeWidth={2} />
+            <g
+                stroke={MIRROR_COLOR}
+                strokeWidth={1.6}
+                fill="none"
+                strokeLinecap="round"
+            >
+                <circle cx={-3.2} cy={3.4} r={2.2} />
+                <circle cx={3.2} cy={3.4} r={2.2} />
+                <line x1={-1.8} y1={1.6} x2={3.5} y2={-5} />
+                <line x1={1.8} y1={1.6} x2={-3.5} y2={-5} />
+            </g>
         </g>
     );
 }

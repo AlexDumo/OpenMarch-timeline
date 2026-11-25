@@ -16,11 +16,16 @@ import {
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
 import { arcTool } from "../arc/arcTool";
-import { isClosed, lineSpots, type LineParams } from "../line/lineGeometry";
+import {
+    isClosed,
+    lineSpots,
+    onLine,
+    type LineParams,
+} from "../line/lineGeometry";
 import { splitCount, splitLine } from "../line/lineSplit";
 import { lineTool } from "../line/lineTool";
 import { writePlacement, type ShapePlacement } from "../tool/shapePlacement";
-import type { ToolMenuSection } from "../tool/toolKind";
+import type { ToolEnv, ToolMenuSection } from "../tool/toolKind";
 import type { XY } from "../types";
 import { carriedOnto, storedBox } from "./commitBox";
 import { UNGROUPED_KIND, type PlacedBox } from "./placedBox";
@@ -90,6 +95,47 @@ export function splitCheck(
         .slice()
         .sort((a, b) => (a.s ?? 0) - (b.s ?? 0));
     return { ok: true, box, k, gap: { from: spots[k - 1]!, to: spots[k]! } };
+}
+
+/** A split the pointer is over on the selected line: where, and the scissors a click splits on */
+export interface Scissors {
+    readonly check: Extract<SplitCheck, { ok: true }>;
+    /** Just off the line, square to the gap from its middle, so it covers no dot or handle */
+    readonly at: XY;
+}
+
+/**
+ * The scissors for field point `at` on placed line `box` (#1336, owner's mockup): over the line in
+ * a gap between two marchers, not on a dot, with room for them (a gap of three reaches or more).
+ * They sit two reaches off the line, on the side toward the back of the field (up the screen).
+ * Null anywhere else, and on a shape that isn't a line or can't be split.
+ */
+export function scissorsAt(
+    box: PlacedBox,
+    at: XY,
+    env: Pick<ToolEnv, "stepPx" | "hitRadius">,
+): Scissors | null {
+    if (!isLineKind(box)) return null;
+    if (!onLine(box.params, box.spots, at, env)) return null;
+    const reach = env.hitRadius;
+    if (
+        box.recipe.members.some(
+            (m) => Math.hypot(m.x - at.x, m.y - at.y) <= reach,
+        )
+    )
+        return null;
+    const check = splitCheck(box, at);
+    if (!check?.ok) return null;
+    const { from, to } = check.gap;
+    const length = Math.hypot(to.x - from.x, to.y - from.y);
+    if (length < 3 * reach) return null;
+    let n = { x: -(to.y - from.y) / length, y: (to.x - from.x) / length };
+    if (n.y > 0 || (n.y === 0 && n.x > 0)) n = { x: -n.x, y: -n.y };
+    const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+    return {
+        check,
+        at: { x: mid.x + n.x * 2 * reach, y: mid.y + n.y * 2 * reach },
+    };
 }
 
 /** Why a placed shape that isn't a line can't be split, until step 2 of #1335 */

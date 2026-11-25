@@ -23,7 +23,7 @@ import { lineSpots, type LineParams } from "../../line/lineGeometry";
 import { writePlacement } from "../../tool/shapePlacement";
 import type { XY } from "../../types";
 import { boxesAt, type PlacedBox, type PlacedRecipe } from "../placedBox";
-import { splitCheck, splitPlacement } from "../splitShape";
+import { scissorsAt, splitCheck, splitPlacement } from "../splitShape";
 
 /**
  * Split here (#1336): where a right-click splits a placed line, what the split saves, and that
@@ -133,6 +133,25 @@ describe("splitCheck", () => {
         const [withRows] = placed(rows);
         if (withRows)
             expect(splitCheck(withRows, { x: 30, y: 0 })?.ok).toBe(false);
+    });
+});
+
+describe("scissorsAt", () => {
+    const [line] = placed(LINE);
+    const env = { stepPx: 12, hitRadius: 3 };
+    unitIt("shows over a gap, two reaches off the line toward the back", () => {
+        // Spots 25 apart: the gap from 25 to 50
+        const s = scissorsAt(line!, { x: 33, y: 0.5 }, env);
+        expect(s?.check.k).toBe(2);
+        expect(s?.at.x).toBeCloseTo(37.5);
+        expect(s?.at.y).toBeCloseTo(-6);
+    });
+    unitIt("not on a marcher, off the line, or on a gap too short", () => {
+        expect(scissorsAt(line!, { x: 25, y: 1 }, env)).toBeNull();
+        expect(scissorsAt(line!, { x: 33, y: 40 }, env)).toBeNull();
+        expect(
+            scissorsAt(line!, { x: 33, y: 0 }, { stepPx: 12, hitRadius: 9 }),
+        ).toBeNull();
     });
 });
 
