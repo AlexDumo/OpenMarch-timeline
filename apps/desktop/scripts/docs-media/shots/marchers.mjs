@@ -1106,8 +1106,9 @@ const shots = [
     {
         id: "marchers-facing-lane",
         kind: "still",
-        // G6–G10 turned to side 2 at the end of Page 1 over 4 counts, the playhead halfway through:
-        // the Facing lane's row with the striped turn (0° → 90°) and the solid hold after it
+        // G6–G10 facing side 2 by the end of Page 1, turning over the 4 counts before it: the Facing
+        // lane's row with the striped turn (0° → 90°) leading into the
+        // solid Side 2 bar
         async setup({ page, wait }) {
             await toPage1(page, wait);
             await setFacing(page, SABRES, "facingSide2", wait);
@@ -1129,8 +1130,9 @@ const shots = [
     {
         id: "marchers-facing-stretch",
         kind: "clip",
-        // G6–G10 turned to side 2, instantly, at the end of Page 1; the grip where the turn ends is
-        // dragged two counts later, and the bar becomes a striped 2-count turn
+        // G6–G10 turned to side 2, instantly, at the end of Page 1; the start of the Side 2 bar is
+        // dragged two counts left, and a striped 2-count turn grows in front of it, ending on the
+        // same count
         async setup({ page, wait }) {
             await toPage1(page, wait);
             await setFacing(page, SABRES, "facingSide2", wait);
@@ -1143,7 +1145,7 @@ const shots = [
             const two = 2 * (await countWidth(page));
             await overlay.enable();
             const grip = await page
-                .getByTestId("facing-lane-turn-end")
+                .getByTestId("facing-lane-result-start")
                 .first()
                 .boundingBox();
             const grab = {
@@ -1152,12 +1154,12 @@ const shots = [
             };
             await film.moveTo(
                 page,
-                { x: grab.x + 60, y: grab.y - 120 },
+                { x: grab.x - 60, y: grab.y - 120 },
                 grab,
                 0.6,
             );
             await film.hold(0.5);
-            await film.drag(page, grab, { x: grab.x + two, y: grab.y }, 1.2);
+            await film.drag(page, grab, { x: grab.x - two, y: grab.y }, 1.2);
             await film.hold(1.5);
         },
     },
