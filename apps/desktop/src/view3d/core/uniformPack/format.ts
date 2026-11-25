@@ -1,24 +1,27 @@
 // cspell:words fflate omasset IHDR zippable Zippable eocd
 /**
- * The uniform pack, format version 1, a **preview** (docs/3d/uniform-artwork.md, "The uniform
- * pack"; ADR 0010 amendment 2026-11-24, fork #1257). It can still change, and freezes only after a
- * real artist has finished a uniform with it (fork #1259).
+ * The uniform pack, format versions 1 and 2, a **preview** (docs/3d/uniform-artwork.md, "The
+ * uniform pack"; ADR 0010 amendments of 2026-11-24, forks #1257 and #1258). It can still change,
+ * and freezes only after a real artist has finished a uniform with it (fork #1259).
  *
  * One pack is one self-contained file, and the same bytes are the show asset of kind `uniform`
  * (one part, `pack`): a pack leaves a show and comes back unchanged. It is a zip holding
  *
  * - `manifest.json`: the asset format, its version, the kind (`uniform`), the name, the page in
- *   real inches, the palette and part options, the layers and the credits; `items` (fork #1258)
- *   and `modes` and `variants` (step 5) are reserved, and this build reads none of them;
- * - `layers/<id>.png`: each layer, a transparent PNG covering the whole flats page.
+ *   real inches, the palette and part options, the layers, the placed items (version 2) and the
+ *   credits; `modes`, `variants` and `attachments` are reserved for later steps;
+ * - `layers/<id>.png`: each layer, a transparent PNG covering the whole flats page;
+ * - `items/<id>.png`: each placed item's image (version 2), a transparent PNG of the art alone.
  *
  * No path outside the zip is ever named. It is the first kind of the portable asset file of epic
  * fork #1262, so the outer fields (`format`, `formatVersion`, `kind`, `name`, `credits`) are
  * meant for every kind; the rest is the uniform's.
  *
- * Version 1 is strict: unknown top-level keys are refused, and so are non-empty `items`, `modes`,
- * `variants` and `attachments`, which are reserved. A later field that changes what is drawn
- * bumps `formatVersion`, so an older build refuses that pack instead of drawing it wrong.
+ * Both versions are strict: unknown keys are refused, and so are non-empty `modes`, `variants` and
+ * `attachments`, which are reserved (and `items`, in version 1). A field that changes what is
+ * drawn bumps `formatVersion`, so an older build refuses that pack instead of drawing it wrong.
+ * Version 2 adds only `items`, so a pack is written as version 1 while it has none: a build that
+ * reads only version 1 still reads it, and draws it right.
  *
  * Reading never trusts the zip's sizes: only the manifest and the layers it names are inflated,
  * each one streamed and stopped as soon as it passes its declared size, and an entry whose
@@ -36,8 +39,11 @@ import type { PresetLook } from "@/view3d/core/marchers/uniformPresets";
 export const UNIFORM_ASSET_KIND = "uniform";
 /** What the file is, whatever its kind */
 export const ASSET_FILE_FORMAT = "openmarch-asset";
-/** The pack's format version. A preview until fork #1259; see the module comment. */
-export const UNIFORM_PACK_VERSION = 1;
+/**
+ * The newest pack format version this build reads and writes. A preview until fork #1259; see the
+ * module comment. Version 2 (fork #1258) adds placed items.
+ */
+export const UNIFORM_PACK_VERSION = 2;
 /** The file's extension and type, for every kind of asset file (epic fork #1262) */
 export const ASSET_FILE_EXTENSION = ".omasset";
 export const ASSET_FILE_MIME = "application/vnd.openmarch.asset+zip";
@@ -60,9 +66,17 @@ export const UNIFORM_PACK_MAX_UNZIPPED_BYTES = 256 * 1024 * 1024;
 export const UNIFORM_MANIFEST_MAX_BYTES = 1024 * 1024;
 export const UNIFORM_PACK_MAX_ENTRIES = 64;
 export const UNIFORM_PACK_MAX_LAYERS = 16;
+/** Placed items in one pack */
+export const UNIFORM_PACK_MAX_ITEMS = 32;
 /** A layer image with more pixels than this isn't decoded (4× the page) */
 export const UNIFORM_LAYER_MAX_PIXELS =
     4 * FLATS_PAGE_PX.width * FLATS_PAGE_PX.height;
+/** An item image with more pixels than this isn't decoded (2048 × 2048) */
+export const UNIFORM_ITEM_MAX_PIXELS = 2048 * 2048;
+/** Nor one longer than this on either side */
+export const UNIFORM_ITEM_MAX_SIDE = 4096;
+/** An imported item image is stored at most this many pixels on its long side */
+export const UNIFORM_ITEM_STORED_PX = 1024;
 
 const MANIFEST = "manifest.json";
 
@@ -97,13 +111,114 @@ const creditsSchema = z.strictObject({
     source: z.string().max(500).optional(),
 });
 
-/** A reserved list: version 1 writes it empty or leaves it out, and refuses anything in it */
+/** A reserved list: written empty or left out, and anything in it is refused */
 const reserved = z.array(z.unknown()).max(0).optional();
+
+/** The flats panels an item goes on */
+export const FLATS_PANELS = ["front", "back", "cape"] as const;
+
+/** The template's regions, by id (`regions.json`); a tile item names the ones it covers */
+export const FLATS_REGION_IDS = [
+    "front-torso",
+    "front-sleeve-L",
+    "front-sleeve-R",
+    "front-hips",
+    "front-leg-L",
+    "front-leg-R",
+    "back-torso",
+    "back-sleeve-L",
+    "back-sleeve-R",
+    "back-hips",
+    "back-leg-L",
+    "back-leg-R",
+    "cape",
+] as const;
+export type FlatsRegionId = (typeof FLATS_REGION_IDS)[number];
+
+/** The panel a region is on */
+export const panelOfRegion = (id: FlatsRegionId) =>
+    id === "cape" ? "cape" : id.startsWith("front-") ? "front" : "back";
+
+/**
+ * How an item follows the 7 body types (docs/3d/uniform-artwork.md, "Grading across the 7 body
+ * types"):
+ *
+ * - `proportional` (the default): scales with the girth factor k and keeps its aspect (logos,
+ *   numbers, crests);
+ * - `fixed`: exactly its real size on every body (patches, buttons);
+ * - `stretch`: widens with girth, like the fabric under it;
+ * - `tile`: the image repeated over `regions` at its real size on every body (all-over prints);
+ *   `width` and `height` are one tile's size;
+ * - `line`: piping or braid: stretches along its length like the fabric and keeps its line width.
+ *   The image's width is the line's length, so a vertical line is an item rotated 90°.
+ */
+export const ITEM_GRADES = [
+    "proportional",
+    "fixed",
+    "stretch",
+    "tile",
+    "line",
+] as const;
+export type ItemGrade = (typeof ITEM_GRADES)[number];
+
+/** The smallest tile, inches: smaller ones would draw too many copies */
+export const ITEM_MIN_TILE_IN = 1;
+
+const itemSchema = z
+    .strictObject({
+        id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,31}$/),
+        /** What the list calls it, such as the picked file's name */
+        name: z.string().max(120).optional(),
+        /** Its image in the pack; items may share one */
+        file: z.string().regex(/^items\/[a-z0-9][a-z0-9-]{0,31}\.png$/),
+        panel: z.enum(FLATS_PANELS),
+        /** Its centre, panel inches, on the median body */
+        at: z.tuple([
+            z.number().min(-50).max(150),
+            z.number().min(-50).max(150),
+        ]),
+        /** Its size on the median body, inches: either is enough, the image's aspect gives the other */
+        width: z.number().positive().max(120).optional(),
+        height: z.number().positive().max(120).optional(),
+        /** Degrees, clockwise as seen on the panel */
+        rotate: z.number().min(-360).max(360).optional(),
+        opacity: z.number().min(0).max(1).optional(),
+        grade: z.enum(ITEM_GRADES).optional(),
+        /** A tile item's regions, on its panel; only for `tile`, which needs at least one */
+        regions: z.array(z.enum(FLATS_REGION_IDS)).min(1).max(13).optional(),
+    })
+    .superRefine((item, ctx) => {
+        if (item.width === undefined && item.height === undefined)
+            ctx.addIssue({ code: "custom", message: "an item needs a size" });
+        const tile = item.grade === "tile";
+        if (tile && !item.regions)
+            ctx.addIssue({ code: "custom", message: "a tile needs regions" });
+        if (!tile && item.regions)
+            ctx.addIssue({
+                code: "custom",
+                message: "only a tile has regions",
+            });
+        if (item.regions?.some((r) => panelOfRegion(r) !== item.panel))
+            ctx.addIssue({
+                code: "custom",
+                message: "a tile's regions are on its panel",
+            });
+        if (
+            tile &&
+            [item.width, item.height].some(
+                (v) => v !== undefined && v < ITEM_MIN_TILE_IN,
+            )
+        )
+            ctx.addIssue({ code: "custom", message: "the tile is too small" });
+    });
+
+export type UniformPackItem = z.infer<typeof itemSchema>;
 
 export const uniformPackManifestSchema = z
     .strictObject({
         format: z.literal(ASSET_FILE_FORMAT),
-        formatVersion: z.literal(UNIFORM_PACK_VERSION),
+        /** 1, or 2 when it has items */
+        formatVersion: z.union([z.literal(1), z.literal(2)]),
         /** True while the format can still change (fork #1259) */
         preview: z.boolean().optional(),
         kind: z.literal(UNIFORM_ASSET_KIND),
@@ -135,8 +250,11 @@ export const uniformPackManifestSchema = z
         }),
         /** Bottom first, ids unique. Every layer this build draws, in this order. */
         layers: z.array(layerSchema).min(1).max(UNIFORM_PACK_MAX_LAYERS),
-        /** Reserved for placed logos and numbers (fork #1258) */
-        items: reserved,
+        /**
+         * Placed logos, numbers, crests and prints (version 2, fork #1258), drawn over the layers
+         * in order, bottom first. Version 1 reserves it: empty or left out.
+         */
+        items: z.array(itemSchema).max(UNIFORM_PACK_MAX_ITEMS).optional(),
         /** Reserved for modes and variants (step 5 of fork #1257) */
         modes: reserved,
         variants: reserved,
@@ -151,16 +269,37 @@ export const uniformPackManifestSchema = z
             ctx.addIssue({ code: "custom", message: "layer ids repeat" });
         if (new Set(files).size !== files.length)
             ctx.addIssue({ code: "custom", message: "layer files repeat" });
+        const items = manifest.items ?? [];
+        if (manifest.formatVersion === 1 && items.length > 0)
+            ctx.addIssue({
+                code: "custom",
+                message: "version 1 has no items",
+            });
+        const itemIds = items.map((item) => item.id);
+        if (new Set(itemIds).size !== itemIds.length)
+            ctx.addIssue({ code: "custom", message: "item ids repeat" });
     });
 
 export type UniformPackManifest = z.infer<typeof uniformPackManifestSchema>;
 export type UniformPackCredits = UniformPackManifest["credits"];
 
-/** A read pack: its manifest and each layer's PNG bytes, in the manifest's order */
+/** A read pack: its manifest, each layer's PNG bytes in the manifest's order, and each item file's */
 export interface UniformPack {
     manifest: UniformPackManifest;
     layers: { id: string; png: Uint8Array }[];
+    /** Each file the items name, once */
+    itemFiles: { file: string; png: Uint8Array }[];
 }
+
+/** The lowest format version that holds `manifest`: 2 with items, otherwise 1 */
+export const requiredPackVersion = (
+    manifest: Pick<UniformPackManifest, "items">,
+): 1 | 2 => ((manifest.items?.length ?? 0) > 0 ? 2 : 1);
+
+/** The files a manifest's items name, each once, in first use order */
+export const itemFilesOf = (manifest: Pick<UniformPackManifest, "items">) => [
+    ...new Set((manifest.items ?? []).map((item) => item.file)),
+];
 
 /** Why a file isn't a pack this build can read; `reason` is for logs, not people */
 export class UniformPackError extends Error {
@@ -239,14 +378,19 @@ export function lookOfManifest(manifest: UniformPackManifest): PresetLook {
 const FIXED_MTIME = new Date(Date.UTC(1980, 0, 1, 12));
 
 /**
- * The pack file for `manifest` and its layers' PNGs, keyed by `layers[].file`. Throws when the
- * manifest doesn't parse or names a layer it isn't given.
+ * The pack file for `manifest` and its layers' and items' PNGs, keyed by their `file`. It is
+ * written as the lowest version that holds it ({@link requiredPackVersion}), whatever
+ * `formatVersion` says. Throws when the manifest doesn't parse or names a file it isn't given.
  */
 export function writeUniformPack(
     manifest: UniformPackManifest,
     files: Readonly<Record<string, Uint8Array>>,
 ): Uint8Array {
-    const checked = uniformPackManifestSchema.parse(manifest);
+    const checked = uniformPackManifestSchema.parse({
+        ...manifest,
+        formatVersion: requiredPackVersion(manifest),
+        items: manifest.items ?? [],
+    });
     const zippable: Zippable = {
         // a readable manifest first, so a person opening the zip finds it
         [MANIFEST]: [
@@ -260,6 +404,12 @@ export function writeUniformPack(
             throw new Error(`uniform pack: layer ${layer.file} isn't a PNG`);
         // PNGs are compressed already
         zippable[layer.file] = [png, { level: 0, mtime: FIXED_MTIME }];
+    }
+    for (const file of itemFilesOf(checked)) {
+        const png = files[file];
+        if (!png || !pngHeaderSize(png))
+            throw new Error(`uniform pack: item ${file} isn't a PNG`);
+        zippable[file] = [png, { level: 0, mtime: FIXED_MTIME }];
     }
     return zipSync(zippable);
 }
@@ -450,26 +600,57 @@ export function readUniformPack(bytes: Uint8Array): UniformPack {
     }
     const manifest = parseManifest(json);
     let total = manifestEntry.originalSize;
-    const layers = manifest.layers.map((layer) => {
-        const entry = entries.get(layer.file);
-        if (!entry) throw damaged(`layer ${layer.file} is missing`);
+    const png = (file: string, what: string, maxPixels: number) => {
+        const entry = entries.get(file);
+        if (!entry) throw damaged(`${what} ${file} is missing`);
         total += entry.originalSize;
         if (total > UNIFORM_PACK_MAX_UNZIPPED_BYTES)
             throw new UniformPackError(
                 "tooLarge",
                 `over ${UNIFORM_PACK_MAX_UNZIPPED_BYTES} bytes inflated`,
             );
-        const png = inflateEntry(bytes, entry);
-        const size = pngHeaderSize(png);
-        if (!size) throw damaged(`layer ${layer.file} isn't a PNG`);
-        if (size.width * size.height > UNIFORM_LAYER_MAX_PIXELS)
+        const data = inflateEntry(bytes, entry);
+        const size = pngHeaderSize(data);
+        if (!size) throw damaged(`${what} ${file} isn't a PNG`);
+        if (
+            size.width * size.height > maxPixels ||
+            (what === "item" &&
+                Math.max(size.width, size.height) > UNIFORM_ITEM_MAX_SIDE)
+        )
             throw new UniformPackError(
                 "tooLarge",
-                `layer ${layer.file} is ${size.width} × ${size.height} px`,
+                `${what} ${file} is ${size.width} × ${size.height} px`,
             );
-        return { id: layer.id, png };
+        return data;
+    };
+    const layers = manifest.layers.map((layer) => ({
+        id: layer.id,
+        png: png(layer.file, "layer", UNIFORM_LAYER_MAX_PIXELS),
+    }));
+    const itemFiles = itemFilesOf(manifest).map((file) => ({
+        file,
+        png: png(file, "item", UNIFORM_ITEM_MAX_PIXELS),
+    }));
+    return { manifest, layers, itemFiles };
+}
+
+/**
+ * The pack file for `pack` with `items` in place of its own: its layers kept, the item files it
+ * has that `items` still name kept, and `files` (item PNGs by file) added or put in their place.
+ * Throws when an item names a file neither has, or the manifest doesn't parse.
+ */
+export function packWithItems(
+    pack: UniformPack,
+    items: UniformPackItem[],
+    files: Readonly<Record<string, Uint8Array>>,
+): Uint8Array {
+    const all: Record<string, Uint8Array> = {};
+    pack.manifest.layers.forEach((layer, i) => {
+        all[layer.file] = pack.layers[i].png;
     });
-    return { manifest, layers };
+    for (const { file, png } of pack.itemFiles) all[file] = png;
+    for (const [file, png] of Object.entries(files)) all[file] = png;
+    return writeUniformPack({ ...pack.manifest, items }, all);
 }
 
 /** A file name for a pack called `name`: its own characters where a file system allows them */
@@ -492,7 +673,7 @@ export function uniformNameFromFile(fileName: string): string {
     return (name || "Uniform").slice(0, 120);
 }
 
-/** A version 1 manifest with one page layer, `layers/base.png` */
+/** A manifest with one page layer, `layers/base.png`, and no items (so version 1) */
 export function singleLayerManifest({
     name,
     look,
@@ -504,7 +685,7 @@ export function singleLayerManifest({
 }): UniformPackManifest {
     return {
         format: ASSET_FILE_FORMAT,
-        formatVersion: UNIFORM_PACK_VERSION,
+        formatVersion: 1,
         preview: true,
         kind: UNIFORM_ASSET_KIND,
         name,

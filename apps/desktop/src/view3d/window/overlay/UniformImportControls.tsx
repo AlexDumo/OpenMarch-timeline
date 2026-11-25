@@ -14,6 +14,8 @@ import { Button } from "@openmarch/ui";
 import { touchSafeAccept } from "@/utilities/fileAccept";
 import {
     uniformPackQueryOptions,
+    keepSameUniform,
+    uniformEntryOf,
     uniformPacksQueryOptions,
 } from "@/hooks/queries/useUniformPack";
 import {
@@ -62,15 +64,18 @@ export function UniformImportControls() {
 
     const worn = flatsArtworkOf(settings?.uniformArtwork);
     const wornPack = worn && isUniformPackValue(worn) ? worn : null;
-    const { data: pack, isSuccess: packRead } = useQuery(
-        uniformPackQueryOptions(wornPack),
-    );
+    const { data: pack, isSuccess: packRead } = useQuery({
+        ...uniformPackQueryOptions(wornPack),
+        // an item edit's save moves the band to a new version: keep Save uniform file meanwhile
+        placeholderData: keepSameUniform(wornPack),
+    });
     const { data: packs } = useQuery(uniformPacksQueryOptions());
     // the venue names a uniform the show doesn't have (an undo after Remove unused…) or whose
     // file doesn't read: the band wears its preset
     const wornProblem = wornPackProblem(
         wornPack,
-        packs?.some((p) => p.value === wornPack),
+        // any version of it: editing items adds versions and replaces them (fork #1258)
+        packs ? uniformEntryOf(packs, wornPack) !== undefined : undefined,
         packRead ? pack : undefined,
     );
 

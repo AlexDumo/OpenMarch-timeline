@@ -34,6 +34,10 @@ import {
     uniformsInHistoryQueryOptions,
 } from "@/hooks/queries/useShowAssets";
 import {
+    removableCount,
+    removableLines,
+    groupAssetVersions,
+    type AssetGroup,
     LARGE_SHOW_ASSET_BYTES,
     keptForHistory,
     showAssetUse,
@@ -49,7 +53,7 @@ import {
     type WornPackProblem,
 } from "@/view3d/core/uniformPack/wornPack";
 import { uniformPackQueryOptions } from "@/hooks/queries/useUniformPack";
-import { showAssetRefValue } from "@/showAssets/ref";
+import { parseShowAssetRef, showAssetRefValue } from "@/showAssets/ref";
 
 /**
  * The show's own assets (fork #1001, owner 2026-11-17): every imported model with its picture,
@@ -109,6 +113,9 @@ function useAssetUse() {
                 ...cues.map((cue) => cue.value),
                 armed,
                 worn,
+                // a version the band wears in place of a removed one the venue names (see
+                // `resolveStoredUniformPack`) is in use too, so Remove unused… never offers it
+                wornPack && wornPack.value !== worn ? wornPack.value : null,
             ],
             // a failed read keeps every uniform, even if an older read succeeded
             keptForHistory(uniforms, historyFailed ? undefined : inHistory),
@@ -121,12 +128,25 @@ function useAssetUse() {
         ).length;
         // The band's uniform when the show doesn't have it (an undo after Remove unused…), or
         // has it but its file doesn't read
+        // any version of it: a version an item edit just replaced still counts (fork #1258)
+        const wornId = parseShowAssetRef(worn)?.id;
         const uniformProblem = wornPackProblem(
             worn,
-            known.has(worn ?? ""),
+            known.has(worn ?? "") ||
+                use.assets.some(
+                    (row) =>
+                        row.asset.id === wornId &&
+                        row.asset.kind === UNIFORM_ASSET_KIND,
+                ),
             wornPack,
         );
-        return { ...use, missingProps, uniformProblem, historyFailed };
+        return {
+            ...use,
+            groups: groupAssetVersions(use.assets, sizes),
+            missingProps,
+            uniformProblem,
+            historyFailed,
+        };
     }, [
         assets,
         sizes,
@@ -181,6 +201,7 @@ export function AssetsContents({
                 {use && (
                     <AssetNotes
                         unused={use.unused}
+                        all={use.assets}
                         unusedBytes={use.unusedBytes}
                         totalBytes={use.totalBytes}
                         missingProps={use.missingProps}
@@ -195,8 +216,12 @@ export function AssetsContents({
                     </p>
                 )}
                 <ul className="flex flex-col gap-8">
-                    {use?.assets.map((row) => (
-                        <AssetRow key={row.value} row={row} />
+                    {use?.groups.map((group) => (
+                        <AssetRow
+                            key={group.row.asset.id}
+                            row={group.row}
+                            group={group}
+                        />
                     ))}
                 </ul>
             </div>
@@ -206,6 +231,7 @@ export function AssetsContents({
                     onOpenChange={setRemoving}
                     checking={!checked}
                     unused={use.unused}
+                    all={use.assets}
                     unusedBytes={use.unusedBytes}
                 />
             )}
@@ -216,6 +242,7 @@ export function AssetsContents({
 /** The quiet notes at the top: unused assets, props whose model is gone, a large show */
 function AssetNotes({
     unused,
+    all,
     unusedBytes,
     totalBytes,
     missingProps,
@@ -224,6 +251,8 @@ function AssetNotes({
     onRemove,
 }: {
     unused: readonly AssetUse[];
+    /** Every asset version, to count unused ones as the Remove unused… list groups them */
+    all: readonly AssetUse[];
     unusedBytes: number;
     totalBytes: number;
     missingProps: number;
@@ -231,6 +260,7 @@ function AssetNotes({
     historyFailed: boolean;
     onRemove: () => void;
 }) {
+    const tally = removableCount(removableLines(unused, all));
     const sizeText = useSizeText();
     const notes: React.ReactNode[] = [];
     if (unused.length > 0)
@@ -242,9 +272,13 @@ function AssetNotes({
             >
                 <span>
                     <T
-                        keyName="assets.notes.unused"
+                        keyName={
+                            tally.unit === "versions"
+                                ? "assets.notes.unusedVersions"
+                                : "assets.notes.unused"
+                        }
                         params={{
-                            count: unused.length,
+                            count: tally.count,
                             size: sizeText(unusedBytes),
                         }}
                     />
@@ -316,7 +350,7 @@ const licenseOf = (credits: JsonObject): string | null => {
 };
 
 /** One asset: its picture, name, kind, size and use, and its credits to read or edit */
-function AssetRow({ row }: { row: AssetUse }) {
+function AssetRow({ row, group }: { row: AssetUse; group: AssetGroup }) {
     const { t } = useTranslate();
     const sizeText = useSizeText();
     const [open, setOpen] = useState(false);
@@ -354,6 +388,22 @@ function AssetRow({ row }: { row: AssetUse }) {
                                 : t("assets.unused"),
                         ].join(" · ")}
                     </span>
+                    {group.others.length > 0 && (
+                        <span
+                            className="text-sub text-text-subtitle"
+                            data-testid="asset-other-versions"
+                        >
+                            {t(
+                                group.allOlder
+                                    ? "assets.olderVersions"
+                                    : "assets.otherVersions",
+                                {
+                                    count: group.others.length,
+                                    size: sizeText(group.othersBytes),
+                                },
+                            )}
+                        </span>
+                    )}
                     <span className="text-sub text-text-subtitle flex items-center gap-4">
                         {license ? (
                             license === "LicenseRef-Proprietary" ? (
@@ -496,6 +546,7 @@ function RemoveUnusedDialog({
     onOpenChange,
     checking,
     unused: given,
+    all,
     unusedBytes,
 }: {
     open: boolean;
@@ -503,9 +554,15 @@ function RemoveUnusedDialog({
     /** Still reading what undo or redo names: lists nothing and offers nothing yet */
     checking: boolean;
     unused: readonly AssetUse[];
+    /** Every asset version, to tell older versions of a kept asset from whole assets */
+    all: readonly AssetUse[];
     unusedBytes: number;
 }) {
+    const { t } = useTranslate();
     const unused = checking ? [] : given;
+    // one line per asset, and a count that matches the lines
+    const lines = removableLines(unused, all);
+    const tally = removableCount(lines);
     const queryClient = useQueryClient();
     const sizeText = useSizeText();
     const { mutate, isPending } = useMutation(
@@ -519,8 +576,12 @@ function RemoveUnusedDialog({
                         <T keyName="assets.removeUnused.button" />
                     ) : (
                         <T
-                            keyName="assets.removeUnused.title"
-                            params={{ count: unused.length }}
+                            keyName={
+                                tally.unit === "versions"
+                                    ? "assets.removeUnused.titleVersions"
+                                    : "assets.removeUnused.title"
+                            }
+                            params={{ count: tally.count }}
                         />
                     )}
                 </AlertDialogTitle>
@@ -541,16 +602,31 @@ function RemoveUnusedDialog({
                         className="text-body flex max-h-[16rem] flex-col gap-4 overflow-y-auto"
                         data-testid="assets-remove-list"
                     >
-                        {unused.map((row) => (
+                        {lines.map((line) => (
                             <li
-                                key={row.value}
+                                key={line.id}
                                 className="flex justify-between gap-12"
                             >
                                 <span className="truncate">
-                                    {row.asset.name}
+                                    {line.olderOnly
+                                        ? t(
+                                              line.allOlder
+                                                  ? "assets.removeUnused.olderVersions"
+                                                  : "assets.removeUnused.otherVersions",
+                                              {
+                                                  count: line.count,
+                                                  name: line.name,
+                                              },
+                                          )
+                                        : line.count > 1
+                                          ? t("assets.removeUnused.versions", {
+                                                count: line.count,
+                                                name: line.name,
+                                            })
+                                          : line.name}
                                 </span>
                                 <span className="text-text-subtitle shrink-0">
-                                    {sizeText(row.bytes)}
+                                    {sizeText(line.bytes)}
                                 </span>
                             </li>
                         ))}
@@ -579,8 +655,12 @@ function RemoveUnusedDialog({
                                 }
                             >
                                 <T
-                                    keyName="assets.removeUnused.confirm"
-                                    params={{ count: unused.length }}
+                                    keyName={
+                                        tally.unit === "versions"
+                                            ? "assets.removeUnused.confirmVersions"
+                                            : "assets.removeUnused.confirm"
+                                    }
+                                    params={{ count: tally.count }}
                                 />
                             </Button>
                         </AlertDialogAction>

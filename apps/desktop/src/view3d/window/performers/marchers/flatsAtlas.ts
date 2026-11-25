@@ -25,6 +25,10 @@ import {
     flatsAtlasLayout,
     gradeAt,
     itemDraw,
+    itemSize,
+    itemStrips,
+    tileLayout,
+    type FlatsItem,
     type FlatsLayout,
     type FlatsPanel,
     type FlatsRegions,
@@ -32,7 +36,14 @@ import {
     type UniformArtworkId,
     isUniformPackValue,
 } from "@/view3d/core/marchers/uniformArtwork";
-import { FLATS_PAGE_IN } from "@/view3d/core/uniformPack/format";
+import {
+    FLATS_PAGE_IN,
+    type UniformPackItem,
+} from "@/view3d/core/uniformPack/format";
+import {
+    draftOrigin,
+    drawnDraft,
+} from "@/view3d/window/uniformPack/itemDrafts";
 import { readStoredUniformPackBytes } from "@/hooks/queries/useUniformPack";
 import { runUniformPackJob } from "@/view3d/uniformPack/runUniformPackJob";
 import type { BodyType } from "@/view3d/core/marchers/looks";
@@ -212,27 +223,35 @@ function bleed(
     });
 }
 
+/** A show's pack decoded for drawing: its flattened layers, its items and their images */
+interface PackDrawing {
+    page: ImageBitmap;
+    items: UniformPackItem[];
+    images: Map<string, ImageBitmap>;
+}
+
 interface PackPage {
-    promise: Promise<ImageBitmap>;
+    promise: Promise<PackDrawing>;
     users: number;
 }
 const packPages = new Map<string, PackPage>();
 
 /**
  * A show's pack's layers flattened onto one bitmap of the whole page at
- * `dpi`, read and decoded in the uniform pack worker (never in the window:
- * the show may come from anyone). The window holds one bitmap per pack, not
- * one per layer. Shared while atlases are composed from it, then closed.
+ * `dpi`, and its item images decoded, read in the uniform pack worker (never
+ * in the window: the show may come from anyone). The window holds one bitmap
+ * per pack, not one per layer, plus one per item image. Shared while atlases
+ * are composed from it, then closed.
  */
 async function withPackPage<T>(
     key: string,
     dpi: number,
-    use: (page: ImageBitmap) => Promise<T>,
+    use: (drawing: PackDrawing) => Promise<T>,
 ): Promise<T> {
     const cacheKey = `${key}|${dpi}`;
     let entry = packPages.get(cacheKey);
     if (!entry) {
-        const promise = (async () => {
+        const promise = (async (): Promise<PackDrawing> => {
             const stored = await readStoredUniformPackBytes(key);
             if (!stored)
                 throw new Error(`3D View: the show has no uniform ${key}`);
@@ -243,9 +262,15 @@ async function withPackPage<T>(
                 width: Math.round(FLATS_PAGE_IN.width * dpi),
                 height: Math.round(FLATS_PAGE_IN.height * dpi),
             });
-            if (result.type !== "bitmap")
+            if (result.type !== "flattened")
                 throw new Error("3D View: the uniform didn't draw");
-            return result.bitmap;
+            return {
+                page: result.bitmap,
+                items: result.items,
+                images: new Map(
+                    result.itemBitmaps.map((i) => [i.file, i.bitmap]),
+                ),
+            };
         })();
         entry = { promise, users: 0 };
         packPages.set(cacheKey, entry);
@@ -264,7 +289,12 @@ async function withPackPage<T>(
         setTimeout(() => {
             if (held.users > 0 || packPages.get(cacheKey) !== held) return;
             packPages.delete(cacheKey);
-            held.promise.then((b) => b.close()).catch(() => undefined);
+            held.promise
+                .then((d) => {
+                    d.page.close();
+                    for (const b of d.images.values()) b.close();
+                })
+                .catch(() => undefined);
         }, 3000);
     }
 }
@@ -275,17 +305,26 @@ async function composeAtlas(
     body: BodyType,
     dpi: number,
 ): Promise<FlatsAtlas> {
-    if (isUniformPackValue(id))
-        return await withPackPage(id, dpi, async (page) => {
-            const { regions } = await loadFlatsGeometry();
-            const rect = flatsAtlasLayout(regions, false);
+    if (isUniformPackValue(id)) {
+        // an item draft (`itemDrafts.ts`) draws over the pack it started from
+        const draft = drawnDraft(id);
+        const draw = async (drawing: PackDrawing): Promise<FlatsAtlas> => {
+            const { layout, regions } = await loadFlatsGeometry();
+            const items = draft ? draft.items : drawing.items;
+            const imageOf = (file: string) =>
+                draft?.images[file]?.bitmap ?? drawing.images.get(file);
+            const rect = flatsAtlasLayout(
+                regions,
+                items.some((item) => item.panel === "cape"),
+            );
             return await composeFrom(rect, dpi, (ctx) => {
                 // the page covers everything: copy each panel's part of it
-                for (const panel of ["front", "back"] as const) {
+                for (const panel of ["front", "back", "cape"] as const) {
                     const o = rect[panel];
+                    if (!o) continue;
                     const P = regions.panels[panel];
                     ctx.drawImage(
-                        page,
+                        drawing.page,
                         P.x * dpi,
                         P.y * dpi,
                         P.w * dpi,
@@ -296,9 +335,34 @@ async function composeAtlas(
                         P.h * dpi,
                     );
                 }
+                for (const item of items) {
+                    const image = imageOf(item.file);
+                    if (!image) continue;
+                    drawItem(ctx, {
+                        item,
+                        panel: item.panel,
+                        image,
+                        aspect: image.width / image.height,
+                        layout,
+                        regions,
+                        rect,
+                        body,
+                        dpi,
+                    });
+                }
                 return Promise.resolve();
             });
-        });
+        };
+        const from = draftOrigin(id);
+        try {
+            return await withPackPage(from, dpi, draw);
+        } catch (error) {
+            // a burst's save removed that version while this composed: read the newest
+            const now = draftOrigin(id);
+            if (!draft || now === from) throw error;
+            return await withPackPage(now, dpi, draw);
+        }
+    }
     return await composeBuiltIn(id, body, dpi);
 }
 
@@ -345,32 +409,175 @@ async function drawBuiltIn(
     }
     // placed items, graded for this body
     for (const panel of panels) {
-        const o = rect[panel];
         const items = art.items?.[panel];
-        if (!o || !items) continue;
-        const P = regions.panels[panel];
+        if (!rect[panel] || !items) continue;
         for (const item of items) {
             const img = await loadImage(file(item.file));
-            const { k } = gradeAt(layout, regions, body, panel, ...item.at);
-            const d = itemDraw(item, aspectOf(img), k);
-            ctx.save();
-            ctx.beginPath();
-            ctx.rect(o[0] * dpi, o[1] * dpi, P.w * dpi, P.h * dpi);
-            ctx.clip();
-            ctx.translate((o[0] + item.at[0]) * dpi, (o[1] + item.at[1]) * dpi);
-            ctx.scale(d.sx, d.sy);
-            ctx.rotate(((item.rotate ?? 0) * Math.PI) / 180);
-            ctx.globalAlpha = item.opacity ?? 1;
-            ctx.drawImage(
-                img,
-                (-d.w / 2) * dpi,
-                (-d.h / 2) * dpi,
-                d.w * dpi,
-                d.h * dpi,
-            );
-            ctx.restore();
+            drawItem(ctx, {
+                item,
+                panel,
+                image: img,
+                aspect: aspectOf(img),
+                layout,
+                regions,
+                rect,
+                body,
+                dpi,
+            });
         }
     }
+}
+
+/**
+ * Draws one placed item onto an atlas, graded for `body` at the region under
+ * its centre (docs/3d/uniform-artwork.md, "Grading across the 7 body types"):
+ * see `itemDraw` and `tileLayout`. Clipped to its panel, or to its regions
+ * for a tile.
+ */
+function drawItem(
+    ctx: CanvasRenderingContext2D,
+    {
+        item,
+        panel,
+        image,
+        aspect,
+        layout,
+        regions,
+        rect,
+        body,
+        dpi,
+    }: {
+        item: FlatsItem | UniformPackItem;
+        panel: FlatsPanel;
+        image: CanvasImageSource;
+        aspect: number;
+        layout: FlatsLayout;
+        regions: FlatsRegions;
+        rect: ReturnType<typeof flatsAtlasLayout>;
+        body: BodyType;
+        dpi: number;
+    },
+): void {
+    const o = rect[panel];
+    if (!o) return;
+    const P = regions.panels[panel];
+    const size = itemSize(item, aspect);
+    if (!size) return;
+    ctx.save();
+    ctx.globalAlpha = item.opacity ?? 1;
+    if (item.grade === "tile") {
+        for (const tiles of tileLayout(
+            layout,
+            regions,
+            body,
+            panel,
+            item,
+            size.w,
+            size.h,
+        )) {
+            ctx.save();
+            ctx.beginPath();
+            tiles.polygon.forEach(([px, py], i) => {
+                const X = (o[0] + px) * dpi;
+                const Y = (o[1] + py) * dpi;
+                if (i) ctx.lineTo(X, Y);
+                else ctx.moveTo(X, Y);
+            });
+            ctx.closePath();
+            ctx.clip();
+            for (const [x, y] of tiles.origins)
+                ctx.drawImage(
+                    image,
+                    (o[0] + x) * dpi,
+                    (o[1] + y) * dpi,
+                    tiles.w * dpi,
+                    tiles.h * dpi,
+                );
+            ctx.restore();
+        }
+        ctx.restore();
+        return;
+    }
+    const [cx, cy] = item.at;
+    const { k } = gradeAt(layout, regions, body, panel, cx, cy);
+    const d = itemDraw(item, aspect, k);
+    ctx.beginPath();
+    ctx.rect(o[0] * dpi, o[1] * dpi, P.w * dpi, P.h * dpi);
+    ctx.clip();
+    const grade = item.grade ?? "proportional";
+    const angle = ((item.rotate ?? 0) * Math.PI) / 180;
+    if (grade === "proportional" || grade === "fixed") {
+        // drawn upright (rotated, and k times taller when proportional) on a
+        // canvas of its own, then copied in strips, each as wide as its row
+        // needs (`itemStrips`)
+        const bw =
+            Math.abs(d.w * Math.cos(angle)) + Math.abs(d.h * Math.sin(angle));
+        const bh =
+            (Math.abs(d.w * Math.sin(angle)) +
+                Math.abs(d.h * Math.cos(angle))) *
+            d.sy;
+        const W = Math.max(1, Math.ceil(bw * dpi));
+        const H = Math.max(1, Math.ceil(bh * dpi));
+        const off = document.createElement("canvas");
+        off.width = W;
+        off.height = H;
+        const itemCtx = off.getContext("2d")!;
+        itemCtx.translate(W / 2, H / 2);
+        itemCtx.scale(1, d.sy);
+        itemCtx.rotate(angle);
+        itemCtx.drawImage(
+            image,
+            (-d.w / 2) * dpi,
+            (-d.h / 2) * dpi,
+            d.w * dpi,
+            d.h * dpi,
+        );
+        const stripPx = Math.max(1, Math.round(dpi / 8));
+        const half = H / 2 / dpi;
+        const strips = itemStrips(
+            layout,
+            regions,
+            body,
+            panel,
+            item.at,
+            half,
+            grade === "proportional" ? k : 1,
+            stripPx / dpi,
+        );
+        const X = (o[0] + cx) * dpi;
+        const Y = (o[1] + cy) * dpi;
+        for (const s of strips) {
+            const sy = Math.round((s.top + half) * dpi);
+            const sh = Math.min(H - sy, Math.round(s.height * dpi));
+            if (sh <= 0) continue;
+            ctx.drawImage(
+                off,
+                0,
+                sy,
+                W,
+                sh,
+                X - (W * s.sx) / 2,
+                Y - H / 2 + sy,
+                W * s.sx,
+                sh,
+            );
+        }
+        off.width = 0;
+        ctx.restore();
+        return;
+    }
+    ctx.translate((o[0] + cx) * dpi, (o[1] + cy) * dpi);
+    ctx.scale(d.sx, d.sy);
+    ctx.rotate(angle);
+    if (d.ly !== undefined) ctx.scale(1, d.ly);
+    ctx.drawImage(
+        image,
+        (-d.w / 2) * dpi,
+        (-d.h / 2) * dpi,
+        d.w * dpi,
+        d.h * dpi,
+    );
+    ctx.restore();
 }
 
 /**

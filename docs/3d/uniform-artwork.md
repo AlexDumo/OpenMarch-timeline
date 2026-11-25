@@ -198,6 +198,31 @@ body's table is rescaled row by row so its side seams land on the median outline
 A logo painted straight into the fabric grades like fabric: on the full body it ends up about 1.24×
 wider than tall. The preview warns about this (see [Preview](#preview-and-warnings)).
 
+How the atlas draws each grade (step 4, fork #1258):
+
+- **Proportional and fixed** items are drawn in strips 1/8 in tall, each `target / k(row)` as wide,
+  where `target` is the k under the item's centre (proportional) or 1 (fixed). One scale per item
+  isn't enough: on `neutral-full` k runs from 1.02 to 1.40 over the 7 in of a chest crest, which
+  would leave it egg-shaped and about 1.3% wider than tall. With strips every row is within 1% on
+  all 7 bodies.
+- **Stretch** items are drawn as they are.
+- **Tile** items repeat in each listed region, each tile `1/k` as wide with k at the region's
+  middle (as the study's prototype did). So a tile is its real size at the region's middle row
+  only: elsewhere in the region its row's k differs, and the tiles drift up to about 25% from their
+  real width (measured over the back torso, a sleeve and a leg on all 7 bodies). The columns are
+  centred on the region's centre line, and the rows line up with one centred on the item's `at`
+  height, so a print continues from one region to the next.
+- **Line** items (piping, braid) are drawn with their own height scaled by
+  `√(k² cos² θ + sin² θ) / k`, so the line keeps its width at any angle θ while its length
+  follows the fabric. The image's width is the line's length; a vertical line is rotated 90°.
+
+An item whose image's shape makes a side over 120 in (or a tile with a side under 1 in) isn't
+drawn, and the item list says so; a tile region that would need over 4000 copies is left plain.
+
+Items are composed into the same atlas as the layers, so the atlas memory doesn't change. While
+composing, the window also holds each item image decoded (at most 1024 px on its long side, so
+at most 4 MB each).
+
 The council split 2–1 on proportional against √k for items; see [Open questions](#open-questions).
 
 ## The uniform pack
@@ -213,20 +238,28 @@ The internal form is one **uniform pack**, stored as a show asset (ADR 0010, ame
 - **modes:** named lists of layers, plus palette and option overrides
 - **attachments:** built-in hanging pieces with their own art (see below)
 
-### The pack file (format version 1, a preview)
+### The pack file (format versions 1 and 2, a preview)
 
-Built in step 3 (fork #1257); ADR 0010's amendment of 2026-11-24 has the full contract.
+Built in step 3 (fork #1257), with items added in step 4 (fork #1258); ADR 0010's amendment of
+2026-11-24 has the full contract.
 
-- **One file:** a zip with the extension `.omasset`. It holds `manifest.json` and one transparent
-  page-size PNG per layer under `layers/`, and names nothing outside itself.
+- **One file:** a zip with the extension `.omasset`. It holds `manifest.json`, one transparent
+  page-size PNG per layer under `layers/` and one PNG per item image under `items/`, and names
+  nothing outside itself.
 - **The manifest:**
   - the asset format and version, the kind `uniform`, the name and the page size in inches
   - the palette, the pattern style and the part options
   - the layers, bottom first
   - credits (license, author, source)
-  - `items`, `modes`, `variants` and `attachments`, reserved for later steps. Version 1 refuses
-    anything in them and any key it doesn't know; a later field that changes what is drawn bumps
-    the format version.
+  - `items` (version 2): each with an `id`, a `name`, its `file`, a `panel` (front, back or cape),
+    its centre `at` in panel inches, a `width` or `height`, `rotate`, `opacity` and a `grade`
+    (proportional, fixed, stretch, tile or line). A tile also lists its `regions`, on its panel;
+    its width and height are one tile's size, at least 1 in.
+  - `modes`, `variants` and `attachments`, reserved for later steps. Both versions refuse anything
+    in them and any key they don't know; a later field that changes what is drawn bumps the format
+    version.
+- **Versions.** Version 2 adds only `items`, so a pack is written as version 1 while it has no
+  items: a step 3 build still reads it. A version 1 reader refuses a version 2 pack as newer.
 - **The same bytes in a show.** A show stores the file as its asset of kind `uniform`, unchanged,
   and Save uniform file writes it back out. This is the first kind of the portable asset file in
   fork #1262.
@@ -260,6 +293,48 @@ Every way in produces the same pack. Nothing downstream knows which way a pack c
   switched by a cue. Guard, percussion and a full drum-major costume are variants. A pack shares
   layers between its variants and modes, so a sash is drawn once.
 
+## Placing items
+
+Built in step 4 (fork #1258). In the 3D View settings, under the band uniform, a **Logos and
+numbers** section shows while the band wears a uniform imported into the show.
+
+- **Add logo or number…** picks a PNG or SVG. It's read the way layers are: a PNG is decoded in the
+  uniform pack worker; an SVG is drawn in the window as an image, then its pixels go to the worker.
+  The worker trims it to its painted pixels and stores it at most 1024 px on its long side. A new
+  item goes on the chest centre, 6 in on its longer side.
+- Each item is a row:
+  - **Place:** Chest center, Back number, Left sleeve or Right sleeve (the upper arm on the front
+    panel, a fifth of the way down the sleeve). It says Custom once the item is moved by number.
+  - **Side:** Front or Back. No look draws a cape yet, so Cape shows only for an item a file
+    already put there.
+  - **Across** and **Down:** the centre in panel inches.
+  - **Size by** width or height, and **Size** in inches. Switching Size by keeps the item's
+    size: the number becomes its other side's length.
+  - **Rotation** in degrees.
+  - **On other builds:** the grade.
+  - **Repeat over** (a repeating print only): one toggle per region on its side. The last one
+    on stays on and says why: a print needs a part to cover.
+  - **Remove.**
+- **Live view.** The 3D View draws each change at once from an item draft in the window
+  (`itemDrafts.ts`), and the draft is saved a moment later (at once for adding and removing) as a
+  new version of the same uniform asset.
+- **Undo.** Edits less than 4 s apart are one burst and one undo step: Undo goes back to where
+  the burst started, and the show keeps two versions, the start and the end. If the venue moves
+  elsewhere before a change is saved (Undo, another uniform picked), the editor stores nothing and
+  the unsaved change is dropped, so Undo wins.
+- While a change composes, the marchers keep their previous art instead of showing the palette.
+  - A burst's save removes the version it replaces, and the 3D View hears of the asset change and
+    the venue change separately. A version the window's venue still names reads as its uniform's
+    newest version, never as missing, and the item list and Save uniform file keep the last pack
+    while the band moves to the next version.
+- **Size notes.** A row says when its item isn't drawn (a side over 120 in, or a repeating
+  print's copy under 1 in) or is too thin to see (under 1/32 in), and which Size values work, by
+  which side, or that no size works for that image. Switching Size by keeps the size exactly and
+  isn't offered when the other side's length is outside the Size field's 0.25 (1 for a print)
+  to 120 in.
+- **Assets view.** A uniform is one row, showing the version in use, with "N older versions"
+  and their size beside it; Remove unused… still takes out the versions nothing names.
+
 ## Hanging pieces and other shapes
 
 Paint cannot show anything that hangs or stands off the body. In the study that covered:
@@ -281,9 +356,20 @@ These are attachments, not artwork:
 
 ## Preview and warnings
 
-- The import shows the pack on all 7 body types: front, back, side and mid-stride.
+- The import shows the pack on all 7 body types: front, back, side and mid-stride. Not built yet:
+  the 3D View has no way to line the 7 body types up side by side.
 - Each of these gives a quiet note:
-  - a logo-like shape painted into the fabric (suggests making it an item)
+  - a logo-like shape painted into the fabric (suggests making it an item). Built in step 4: in
+    each garment region, one sample per half inch; the region's commonest color (4 bits a
+    channel) is the fabric; a 4-connected group of samples unlike it, 2.5 to 16 in on each side, no
+    more than 2.5× longer than wide, filling at least a fifth of its box and touching neither the
+    region's edge nor its top or bottom, is called a logo. Stripes, bands and sashes cross a
+    region, so they don't count. It runs only on a layer that paints at least half the garment
+    area, since anything on a mostly clear overlay layer would stand alone.
+    - **Known limit:** it assumes each region has one flat fabric color. On a two-toned or shaded
+      jacket (a dark yoke over a shaded body, as in the hands-on test's `fjm-page.png`) the second
+      tone counts as "not fabric", touches the region's edges, and a logo painted on it merges into
+      it, so no note shows. Finding it would need real segmentation.
   - a template layer left visible in the export
   - a wrong image size
   - an item outside every region

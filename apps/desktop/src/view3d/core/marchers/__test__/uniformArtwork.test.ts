@@ -19,6 +19,14 @@ import {
     gradeAt,
     insidePolygon,
     itemDraw,
+    itemPresets,
+    itemSize,
+    itemSizeAdvice,
+    itemSizeRange,
+    sizeBySwitch,
+    itemStrips,
+    MAX_TILES_PER_REGION,
+    tileLayout,
     uniformArtworkOf,
     flatsArtworkOf,
     SAMPLE_FLATS,
@@ -446,5 +454,294 @@ describe("a look with flats", () => {
         expect("artwork" in plain.options).toBe(false);
         expect(bodyKey(plain)).not.toContain("artwork");
         expect(bodyKey(band)).toContain("sample");
+    });
+});
+
+/**
+ * Placed items on all 7 body types (fork #1258): the table widens every atlas row by its own
+ * grade factor k, so an item's width on the body is each row's chord times that row's k, and its
+ * height is real.
+ */
+describe("placed items on the 7 body types", () => {
+    it("keeps a round item round within 1% at every preset on every body, row by row", () => {
+        const presets = itemPresets(regions);
+        expect(presets.map((p) => p.id)).toEqual([
+            "chest",
+            "backNumber",
+            "sleeveLeft",
+            "sleeveRight",
+        ]);
+        // the atlas draws strips of 2 px at 16 px/in
+        const strip = 2 / 16;
+        for (const preset of presets) {
+            // a crest on the chest or back, a patch on a sleeve
+            const size = preset.id.startsWith("sleeve") ? 3 : 6;
+            for (const body of BODY_TYPES) {
+                const [cx, cy] = preset.at;
+                const { region, k } = gradeAt(
+                    layout,
+                    regions,
+                    body,
+                    preset.panel,
+                    cx,
+                    cy,
+                );
+                expect(region, `${preset.id} is on the uniform`).not.toBeNull();
+                const crest = { file: "crest.png", at: preset.at, width: size };
+                const d = itemDraw(crest, 1, k);
+                const half = (d.h * d.sy) / 2;
+                const strips = itemStrips(
+                    layout,
+                    regions,
+                    body,
+                    preset.panel,
+                    preset.at,
+                    half,
+                    k,
+                    strip,
+                );
+                // on the body: as tall as k × its size, every row k × its chord
+                const tall = 2 * half;
+                let worst = 0;
+                let wide = 0;
+                for (const s of strips) {
+                    const mid = s.top + s.height / 2;
+                    const f = mid / half;
+                    const chord = d.w * Math.sqrt(Math.max(0, 1 - f * f));
+                    const row = gradeAt(
+                        layout,
+                        regions,
+                        body,
+                        preset.panel,
+                        cx,
+                        cy + mid,
+                    );
+                    const onBody = chord * s.sx * (row.region ? row.k : k);
+                    wide = Math.max(wide, onBody);
+                    if (chord > 0.5)
+                        worst = Math.max(
+                            worst,
+                            Math.abs(onBody / (chord * k) - 1),
+                        );
+                }
+                const label = `${preset.id} on ${body}: ${wide.toFixed(3)} × ${tall.toFixed(3)} in`;
+                expect(worst, label).toBeLessThan(0.01);
+                expect(wide / tall, label).toBeGreaterThan(0.99);
+                expect(wide / tall, label).toBeLessThan(1.01);
+                expect(tall).toBeCloseTo(size * k, 6);
+                if (body === "neutral-average")
+                    expect(tall).toBeCloseTo(size, 6);
+            }
+        }
+    });
+
+    it("keeps a fixed item at its real size, and a stretched one widens with the fabric", () => {
+        for (const body of BODY_TYPES) {
+            const item = {
+                file: "p.png",
+                at: [17, CHEST_CENTRE_Y] as const,
+                width: 3,
+            };
+            const { k } = gradeAt(
+                layout,
+                regions,
+                body,
+                "front",
+                17,
+                CHEST_CENTRE_Y,
+            );
+            const fixed = itemDraw({ ...item, grade: "fixed" }, 1, k);
+            expect(fixed.w * fixed.sx * k).toBeCloseTo(3, 6);
+            expect(fixed.h * fixed.sy).toBeCloseTo(3, 6);
+            const stretch = itemDraw({ ...item, grade: "stretch" }, 1, k);
+            expect(stretch.w * stretch.sx * k).toBeCloseTo(3 * k, 6);
+        }
+    });
+
+    it("keeps a line's width at any angle while its length follows the fabric", () => {
+        for (const body of BODY_TYPES)
+            for (const rotate of [0, 30, 45, 90, 135]) {
+                const { k } = gradeAt(layout, regions, body, "back", 17, 30);
+                const d = itemDraw(
+                    {
+                        file: "braid.png",
+                        at: [17, 30],
+                        width: 10,
+                        height: 0.5,
+                        rotate,
+                        grade: "line",
+                    },
+                    20,
+                    k,
+                );
+                // the line's direction and its width's direction on the atlas, then on the body
+                const a = (rotate * Math.PI) / 180;
+                const along = [Math.cos(a), Math.sin(a)];
+                const across = [-Math.sin(a) * d.ly!, Math.cos(a) * d.ly!];
+                const onBody = (v: number[]) => [v[0] * k, v[1]];
+                const l = onBody(along);
+                const w = onBody(across);
+                // the width on the body: the part of `across` perpendicular to the line
+                const len = Math.hypot(l[0], l[1]);
+                const width = (Math.abs(l[0] * w[1] - l[1] * w[0]) / len) * d.h;
+                expect(width, `${body} at ${rotate}°`).toBeCloseTo(0.5, 6);
+            }
+    });
+
+    it("tiles a print at its real size at each region's middle row, on every body", () => {
+        const item = {
+            at: [17, 30] as const,
+            regions: ["back-torso", "back-sleeve-L", "back-leg-R"],
+        };
+        let drift = 0;
+        for (const body of BODY_TYPES) {
+            const tiles = tileLayout(layout, regions, body, "back", item, 4, 2);
+            expect(tiles.map((t) => t.region)).toEqual(item.regions);
+            for (const t of tiles) {
+                // each tile is drawn 1/k as wide, with k at the region's middle row, so on the
+                // body a tile is 4 × 2 in at that row
+                expect(t.w * t.k).toBeCloseTo(4, 6);
+                expect(t.h).toBe(2);
+                if (body === "neutral-full") expect(t.k).toBeGreaterThan(1.05);
+                // elsewhere in the region the row's own k differs, so the tiles drift from their
+                // real width there: measured, not hidden
+                const ys = t.polygon.map((q) => q[1]);
+                const xs = t.polygon.map((q) => q[0]);
+                const mx = (Math.min(...xs) + Math.max(...xs)) / 2;
+                for (
+                    let y = Math.min(...ys) + 0.5;
+                    y < Math.max(...ys);
+                    y += 0.5
+                ) {
+                    const row = gradeAt(layout, regions, body, "back", mx, y);
+                    if (row.region === t.region)
+                        drift = Math.max(
+                            drift,
+                            Math.abs((t.w * row.k) / 4 - 1),
+                        );
+                }
+                // the tiles cover the region
+                const ox = t.origins.map((o) => o[0]);
+                const oy = t.origins.map((o) => o[1]);
+                expect(Math.min(...ox)).toBeLessThanOrEqual(Math.min(...xs));
+                expect(Math.max(...ox) + t.w).toBeGreaterThanOrEqual(
+                    Math.max(...xs),
+                );
+                expect(Math.min(...oy)).toBeLessThanOrEqual(Math.min(...ys));
+                expect(Math.max(...oy) + t.h).toBeGreaterThanOrEqual(
+                    Math.max(...ys),
+                );
+                // the rows line up with one centred on the item's height
+                for (const y of oy) {
+                    const off = (((y + 1 - 30) % 2) + 2) % 2;
+                    expect(Math.min(off, 2 - off)).toBeLessThan(1e-9);
+                }
+            }
+        }
+        // Away from the middle row a tile is not its real width: k there differs. Measured at
+        // 25.5% at worst over these regions and bodies (decision 3 of fork #1287: k at the
+        // region's middle, as the study's prototype did). This pins it so a change shows.
+        expect(drift).toBeGreaterThan(0.2);
+        expect(drift).toBeLessThan(0.27);
+    });
+
+    it("leaves out an item whose image's shape makes a side too long, or a tile too small", () => {
+        // a 1 × 2048 px pinstripe 120 in wide would be 245,760 in tall
+        expect(itemSize({ width: 120 }, 1 / 2048)).toBeNull();
+        // a 1024 × 1 line sized by its height
+        expect(itemSize({ height: 0.5 }, 1024)).toBeNull();
+        expect(itemSize({ width: 10, height: 121 }, 1)).toBeNull();
+        // a 2048 × 1 tile 1 in wide is 1/2048 in tall
+        expect(itemSize({ width: 1, grade: "tile" }, 2048)).toBeNull();
+        expect(itemSize({ width: 4, grade: "tile" }, 4)).toEqual({
+            w: 4,
+            h: 1,
+        });
+        expect(itemSize({ width: 6 }, 1)).toEqual({ w: 6, h: 6 });
+        expect(itemSize({ width: 12 }, 24)).toEqual({ w: 12, h: 0.5 });
+        expect(itemSize({ width: 6 }, Number.NaN)).toBeNull();
+        // a region that would need too many copies is left plain
+        for (const body of BODY_TYPES) {
+            const tiles = tileLayout(
+                layout,
+                regions,
+                body,
+                "back",
+                { at: [17, 30], regions: ["back-torso"] },
+                0.1,
+                0.1,
+            );
+            expect(tiles).toEqual([]);
+            const ok = tileLayout(
+                layout,
+                regions,
+                body,
+                "back",
+                { at: [17, 30], regions: ["back-torso"] },
+                1,
+                1,
+            );
+            expect(ok).toHaveLength(1);
+            expect(ok[0].origins.length).toBeLessThanOrEqual(
+                MAX_TILES_PER_REGION,
+            );
+        }
+    });
+
+    it("keeps a pinstripe's size through Size by and says what size works (#1287 hands-on)", () => {
+        // a 1024 × 1 px pinstripe, 6 in wide
+        const aspect = 1024;
+        const stripe = { width: 6 };
+        // its height would be 0.006 in: under the Size field's 0.25 in, so the switch is refused
+        const toHeight = sizeBySwitch(stripe, aspect, "height");
+        expect(toHeight.ok).toBe(false);
+        expect(toHeight.value).toBeCloseTo(6 / 1024, 9);
+        // a 4 × 2 logo goes there and back exactly, no rounding drift
+        const logo = { width: 6 };
+        const h = sizeBySwitch(logo, 2, "height");
+        expect(h).toEqual({ ok: true, value: 3 });
+        expect(sizeBySwitch({ height: h.value }, 2, "width")).toEqual({
+            ok: true,
+            value: 6,
+        });
+        const odd = sizeBySwitch({ width: 6 }, 3, "height");
+        expect(sizeBySwitch({ height: odd.value }, 3, "width").value).toBe(6);
+
+        // drawn, but 0.006 in thick: too thin to see, and it says which sizes show it
+        for (const grade of ["proportional", "line"] as const) {
+            const advice = itemSizeAdvice({ ...stripe, grade }, aspect);
+            expect(advice.state).toBe("tooThin");
+            if (advice.state === "ok") continue;
+            expect(advice.thickness).toBeCloseTo(6 / 1024, 9);
+            expect(advice.fix).toEqual({ kind: "range", lo: 32, hi: 120 });
+        }
+        expect(itemSizeAdvice({ width: 40 }, aspect)).toEqual({ state: "ok" });
+        // as a repeating print no size works: 1 in tall would be 1024 in wide
+        const tile = itemSizeAdvice({ ...stripe, grade: "tile" }, aspect);
+        expect(tile.state).toBe("notDrawn");
+        if (tile.state !== "ok")
+            expect(tile.fix).toEqual({ kind: "none", ratio: 1024 });
+        expect(itemSizeRange(aspect, "width", "tile")).toBeNull();
+        expect(itemSizeRange(aspect, "height", "tile")).toBeNull();
+        // a 100 × 1 stripe can repeat: 1 to 1.2 in tall makes copies 100 to 120 in wide
+        const wide = itemSizeAdvice({ height: 0.5, grade: "tile" }, 100);
+        expect(wide.state).toBe("notDrawn");
+        if (wide.state !== "ok") {
+            expect(wide.fix.kind).toBe("range");
+            if (wide.fix.kind === "range") {
+                expect(wide.fix.lo).toBe(1);
+                expect(wide.fix.hi).toBeCloseTo(1.2, 9);
+            }
+        }
+        // sized by its width at 1 in, it says to size it by its height instead
+        const byWidth = itemSizeAdvice({ width: 1, grade: "tile" }, 100);
+        if (byWidth.state !== "ok") {
+            expect(byWidth.fix.kind).toBe("range");
+            if (byWidth.fix.kind === "range") expect(byWidth.fix.lo).toBe(100);
+        }
+        // a 1 × 2048 pinstripe 120 in wide isn't drawn; sized by height it works up to 120 in
+        const tall = itemSizeAdvice({ width: 120 }, 1 / 2048);
+        expect(tall.state).toBe("notDrawn");
+        if (tall.state !== "ok") expect(tall.fix.kind).toBe("otherSide");
     });
 });
