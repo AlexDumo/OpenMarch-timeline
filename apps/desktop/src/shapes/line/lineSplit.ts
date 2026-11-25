@@ -223,16 +223,34 @@ function spotsAlong(p: LineParams, n: number): Slot[] {
 
 /**
  * How many of the line's `n` spots a split at `at` (a field point on or by it) leaves in the
- * first piece: the spots before it along the line, one it's on among them. Null when every spot
- * is on one side, so there'd be nothing to split off.
+ * first piece: the spots before it along the line. A click on a marcher's spot, within `reach`
+ * of it (never more than a third of the way to its neighbors), keeps that marcher in the first
+ * piece, the cut falling just after it. Null when every spot is on one side, so there'd be
+ * nothing to split off.
  */
-export function splitCount(p: LineParams, n: number, at: XY): number | null {
+export function splitCount(
+    p: LineParams,
+    n: number,
+    at: XY,
+    reach = 0,
+): number | null {
     if (isClosed(p) || n < 2) return null;
     const path = makePath(lineSegments(p));
+    const spots = spotsAlong(p, n);
+    const near = (i: number) => {
+        const spot = spots[i]!;
+        const gaps = [spots[i - 1], spots[i + 1]].flatMap((q) =>
+            q ? [Math.hypot(q.x - spot.x, q.y - spot.y)] : [],
+        );
+        const within = Math.min(reach, ...gaps.map((g) => g / 3));
+        return Math.hypot(at.x - spot.x, at.y - spot.y) <= within;
+    };
+    const on = spots.findIndex((_, i) => near(i));
     const s = path.project(at);
-    const k = spotsAlong(p, n).filter(
-        (spot) => spot.s! <= s + SAME_SPOT,
-    ).length;
+    const k =
+        on >= 0
+            ? on + 1
+            : spots.filter((spot) => spot.s! <= s + SAME_SPOT).length;
     return k >= 1 && k <= n - 1 ? k : null;
 }
 

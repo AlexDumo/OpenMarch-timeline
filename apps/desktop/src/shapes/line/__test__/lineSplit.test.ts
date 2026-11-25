@@ -154,6 +154,13 @@ describe("splitCount", () => {
         expect(splitCount(p, 11, { x: 35, y: 2 })).toBe(4);
         expect(splitCount(p, 11, { x: 30, y: 0 })).toBe(4);
     });
+    it("keeps a marcher clicked on in the first piece, even a hair before its spot", () => {
+        // Spots 10 apart: the 4th (index 3) at x 30
+        expect(splitCount(p, 11, { x: 29, y: 1 }, 2)).toBe(4);
+        expect(splitCount(p, 11, { x: 29, y: 1 })).toBe(3);
+        // Never more than a third of the way to a neighbor
+        expect(splitCount(p, 11, { x: 26, y: 0 }, 8)).toBe(3);
+    });
     it("has nothing to split past the last spot or on a closed line", () => {
         expect(splitCount(p, 11, { x: 120, y: 0 })).toBeNull();
         expect(

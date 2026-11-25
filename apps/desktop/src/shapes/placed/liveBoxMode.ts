@@ -438,18 +438,20 @@ export class LiveBoxMode implements FieldMode {
         const field = currentShapeField();
         if (!field || this.live.gesture) return false;
         const { kind, spots } = this.live.box;
+        const env = toolEnvFor(field, undefined, { kind: pointer.kind });
         const target = shapeTargetAt(
             kind,
             this.live.params,
             spots,
             pointer.field,
-            toolEnvFor(field, undefined, { kind: pointer.kind }),
+            env,
             this.live.selected,
         );
-        // A placed line splits where it's right-clicked (#1336): the host's entry, after the kind's
+        // A placed line splits where it's right-clicked (#1336): the host's entry, after the kind's;
+        // on a marcher, just after it
         const at = pointer.field;
         const splitAt = (params: unknown) =>
-            splitCheck({ ...this.live.box, params }, at);
+            splitCheck({ ...this.live.box, params }, at, env.hitRadius);
         return openHandleMenu(
             kind,
             this.live.params,

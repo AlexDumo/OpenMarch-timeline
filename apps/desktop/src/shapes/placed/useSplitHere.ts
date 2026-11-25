@@ -39,7 +39,8 @@ function checkAt(box: PlacedBox, at: XY): SplitCheck | null {
             ? { ok: false, reason: notALineReason() }
             : null;
     if (!onLine(box.params, box.spots, at, env)) return null;
-    return splitCheck(box, at);
+    // A right-click on a marcher splits just after it (sims, #1336)
+    return splitCheck(box, at, env.hitRadius);
 }
 
 /**

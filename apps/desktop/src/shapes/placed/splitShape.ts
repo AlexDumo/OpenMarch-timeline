@@ -55,7 +55,12 @@ export type SplitCheck =
  * rows, with marchers on both sides of the point. Null for a shape that isn't a line, which isn't
  * offered the entry at all.
  */
-export function splitCheck(box: PlacedBox, at: XY): SplitCheck | null {
+export function splitCheck(
+    box: PlacedBox,
+    at: XY,
+    /** How near a marcher's spot a click is on it (`splitCount`) */
+    reach = 0,
+): SplitCheck | null {
     if (!isLineKind(box)) return null;
     const refused = (reason: string): SplitCheck => ({ ok: false, reason });
     const p = box.params;
@@ -73,7 +78,7 @@ export function splitCheck(box: PlacedBox, at: XY): SplitCheck | null {
                 "A line with rows can't be split yet",
             ),
         );
-    const k = splitCount(p, box.spots, at);
+    const k = splitCount(p, box.spots, at, reach);
     if (k === null)
         return refused(
             tolgee.t(
