@@ -794,7 +794,7 @@ export function createWalkedPaths(
     const trails = new Map<number, FtlTrail>();
     const schedules = new Map<number, GroupSchedule>();
     const adjusts = new Map<LaneRow, ResolvedAdjust>();
-    const exactWalkers = new Map<ExactPath, ExactWalker>();
+    const exactWalkers = new WeakMap<ExactPath, ExactWalker>(); // a replaced path's walker goes with it
     const exactWalkerOf = (path: ExactPath): ExactWalker => {
         let w = exactWalkers.get(path);
         if (!w) exactWalkers.set(path, (w = exactWalker(path)));

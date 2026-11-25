@@ -39,7 +39,10 @@
  * - 15 to 18 are taken by pathways steps on branches not merged here: 5 (pins), 26 (sub-group
  *   Adjust), 10 (outlines) and 4g (order marks, #1099). Lab builds wrote them, so they are never
  *   reused. This build doesn't know them and refuses such a file as written by a newer build
- *   (`UNKNOWN_USER_VERSIONS`); each step takes its number out of that list when it merges.
+ *   (`UNKNOWN_USER_VERSIONS`). A step that merges after 19 writes a new number above the newest,
+ *   because a file's version only goes up: a file with pins and an exact path would otherwise be 19
+ *   and open, pins unplayed, in this build. It may still open its lab number by taking it out of
+ *   that list.
  * - 19: exact paths (ADR 0018 step 3, spec Appendix M): a route holds one marcher's walk as fixed
  *   shapes plus timing keys (`timeline_routes.exact_path`, migration 0029), walked through its own
  *   lane. A build that doesn't know it would walk that marcher on the route's plain `geometry`, a
@@ -78,7 +81,8 @@ export const EXACT_PATH_USER_VERSION = 19;
 export const MIN_SUPPORTED_USER_VERSION = PAGE_MODEL_USER_VERSION;
 /**
  * Versions below the newest that this build doesn't know (pathways steps 5, 26, 10 and 4g, not
- * merged here): refused as too new, never played wrong. A step takes its number out when it merges.
+ * merged here): refused as too new, never played wrong. A step that merges writes a number above
+ * the newest, and may take its lab number out of this list to open its lab files.
  */
 export const UNKNOWN_USER_VERSIONS: readonly number[] = [15, 16, 17, 18];
 /** Newest version this build opens. Anything higher was written by a newer release. */
@@ -193,7 +197,10 @@ export function applyFileVersionDecision(
 
 /** Message for a file from a newer release. The renderer shows a translated one. */
 export function fileTooNewMessage(userVersion: number): string {
-    return `This file was saved by a newer version of OpenMarch (file format ${userVersion}; this version supports up to ${MAX_SUPPORTED_USER_VERSION}). Update OpenMarch to open it.`;
+    const known = UNKNOWN_USER_VERSIONS.includes(userVersion)
+        ? ", which this version doesn't know"
+        : `; this version supports up to ${MAX_SUPPORTED_USER_VERSION}`;
+    return `This file was saved by a newer version of OpenMarch (file format ${userVersion}${known}). Update OpenMarch to open it.`;
 }
 
 /**

@@ -4,6 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import {
     applyFileVersionDecision,
     decideFileVersion,
+    fileTooNewMessage,
     isSupportedUserVersion,
     MAX_SUPPORTED_USER_VERSION,
     MIN_SUPPORTED_USER_VERSION,
@@ -16,6 +17,15 @@ describe("file-format version", () => {
         expect(MIN_SUPPORTED_USER_VERSION).toBe(7);
         expect(MAX_SUPPORTED_USER_VERSION).toBe(19);
         expect(NEW_FILE_USER_VERSION).toBe(8);
+    });
+
+    it("says a skipped number (15 to 18) is unknown rather than below the newest", () => {
+        expect(fileTooNewMessage(16)).toContain(
+            "file format 16, which this version doesn't know",
+        );
+        expect(fileTooNewMessage(20)).toContain(
+            "file format 20; this version supports up to 19",
+        );
     });
 
     describe("decideFileVersion", () => {

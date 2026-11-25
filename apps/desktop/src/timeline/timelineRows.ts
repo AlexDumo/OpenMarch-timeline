@@ -15,7 +15,7 @@ import type {
     TransitionRow,
     XY,
 } from "@openmarch/core";
-import { asc } from "drizzle-orm";
+import { asc, sql } from "drizzle-orm";
 // The schema itself, not the renderer's `@/global/database/db`: the main process loads this module
 // (through `sourceTimelinePositions`, for the previous-show import).
 import * as schema from "@om-electron/database/migrations/schema";
@@ -284,8 +284,18 @@ export interface TimelineTables {
     destinations: SlotDestinationIndex;
 }
 
+/** How `readTimelineTables` reads a file that may predate a column (another `.dots` file, never migrated). */
+export interface TimelineTableReadOptions {
+    /** Whether `timeline_routes` has `exact_path` (migration 0029); without it every route is drawn */
+    exactPaths?: boolean;
+}
+
 /** The seven reads of a cold build, in the order a snapshot assembles them. */
-function timelineTableQueries(db: DbConnection | DbTransaction) {
+function timelineTableQueries(
+    db: DbConnection | DbTransaction,
+    { exactPaths = true }: TimelineTableReadOptions = {},
+) {
+    const R = schema.timeline_routes;
     return [
         db
             .select({
@@ -302,7 +312,15 @@ function timelineTableQueries(db: DbConnection | DbTransaction) {
             .from(schema.timeline_assignments)
             .orderBy(asc(schema.timeline_assignments.id)),
         db.select().from(schema.timeline_slot_destinations),
-        db.select().from(schema.timeline_routes),
+        db
+            .select({
+                id: R.id,
+                geometry: R.geometry,
+                exact_path: exactPaths
+                    ? R.exact_path
+                    : sql<string | null>`NULL`,
+            })
+            .from(R),
         db.select().from(schema.timeline_lanes),
     ] as const;
 }
@@ -350,6 +368,7 @@ function assembleTimelineTables([
  */
 export async function readTimelineTables(
     db: DbConnection | DbTransaction,
+    options?: TimelineTableReadOptions,
 ): Promise<TimelineTables> {
     const [
         marchers,
@@ -359,7 +378,7 @@ export async function readTimelineTables(
         slotDestinations,
         routes,
         lanes,
-    ] = timelineTableQueries(db);
+    ] = timelineTableQueries(db, options);
     return assembleTimelineTables([
         await marchers,
         await shapes,

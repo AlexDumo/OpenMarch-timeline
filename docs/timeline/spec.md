@@ -4047,7 +4047,9 @@ its marcher's own lane (I-LN4: no offset, no Adjust), never as a trail. The rout
 holds only the path's ends and no points, so a reader that doesn't know exact paths sees a plain own
 path. A file is written as version 19 with its first exact path, so builds before it refuse the
 file as written by a newer version; a file without one keeps its version and opens in them as
-before. 15 to 18 are taken by unmerged pathways steps, and this build refuses them.
+before. 15 to 18 are taken by unmerged pathways steps, and this build refuses them. A step that
+merges after this one writes a number above 19, since a file's version only goes up; it may still
+open its own lab number.
 
 | ID | Rule |
 | --- | --- |
