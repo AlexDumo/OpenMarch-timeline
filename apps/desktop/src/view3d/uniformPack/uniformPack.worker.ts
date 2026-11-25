@@ -28,10 +28,11 @@ import {
     type PageRegions,
 } from "@/view3d/core/uniformPack/pageChecks";
 import { sha256Hex } from "@/showAssets/hash";
-import type {
-    UniformPackRefusal,
-    UniformPackRequest,
-    UniformPackResponse,
+import {
+    decodedImageKey,
+    type UniformPackRefusal,
+    type UniformPackRequest,
+    type UniformPackResponse,
 } from "./protocol";
 
 const reply = (message: UniformPackResponse, transfer: Transferable[] = []) =>
@@ -212,7 +213,8 @@ async function handle(request: UniformPackRequest) {
             let decoded: string[] | undefined;
             if (request.decode) {
                 // as "flatten" decodes them: a damaged image refuses the pack now. Images that
-                // decoded before (by content) are skipped: an edit's new version shares most
+                // decoded before (by content, as the same kind: a layer's limit isn't an item's)
+                // are skipped: an edit's new version shares most
                 const before = new Set(request.decoded ?? []);
                 decoded = [];
                 const images = [
@@ -220,8 +222,11 @@ async function handle(request: UniformPackRequest) {
                     ...pack.itemFiles.map(({ png }) => ({ png, item: true })),
                 ];
                 for (const { png, item } of images) {
-                    const hash = await sha256Hex(png);
-                    if (!before.has(hash))
+                    const key = decodedImageKey(
+                        item ? "item" : "layer",
+                        await sha256Hex(png),
+                    );
+                    if (!before.has(key))
                         (
                             await decodePng(
                                 png,
@@ -232,7 +237,7 @@ async function handle(request: UniformPackRequest) {
                                     : UNIFORM_LAYER_MAX_PIXELS,
                             )
                         ).bitmap.close();
-                    decoded.push(hash);
+                    decoded.push(key);
                 }
             }
             let notes: ReturnType<typeof pageNotes> = [];

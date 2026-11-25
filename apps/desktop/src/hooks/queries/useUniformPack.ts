@@ -136,8 +136,8 @@ export async function readPackManifest(
 
 /**
  * A pack file's manifest and its item images' sizes, read in a fresh worker. With `decoded`
- * (the sha256 of images known to decode), every other image in it is decoded too, so damaged
- * image data is refused here; the answer lists every image's hash.
+ * (the verdicts of images known to decode, `decodedImageKey`), every other image in it is
+ * decoded too, so damaged image data is refused here; the answer lists every image's verdict.
  */
 async function readPackInWorker(bytes: Uint8Array, decoded?: string[]) {
     // a copy: the worker takes it, and callers' bytes may be shared
@@ -153,18 +153,19 @@ async function readPackInWorker(bytes: Uint8Array, decoded?: string[]) {
 
 /**
  * What this window knows decodes, so a read doesn't decode the same images again: each pack
- * version whose every image decoded (a version's bytes never change), and each image by its
- * sha256 (an item edit's new version shares most of the last one's). Only images that decoded
- * are kept, never a failure.
+ * version whose every image decoded (a version's bytes never change), and each image by its kind
+ * and sha256 (`decodedImageKey`: an item edit's new version shares most of the last one's, and an
+ * image cleared as a layer is still checked as an item). Only images that decoded are kept,
+ * never a failure.
  */
 const decodedVersions = new Set<string>();
 const decodedImages = new Set<string>();
 const DECODED_IMAGES_KEPT = 512;
-const noteDecoded = (value: string, hashes: readonly string[]) => {
+const noteDecoded = (value: string, keys: readonly string[]) => {
     decodedVersions.add(value);
-    for (const hash of hashes) {
-        decodedImages.delete(hash);
-        decodedImages.add(hash);
+    for (const key of keys) {
+        decodedImages.delete(key);
+        decodedImages.add(key);
     }
     while (decodedImages.size > DECODED_IMAGES_KEPT)
         decodedImages.delete(decodedImages.values().next().value!);

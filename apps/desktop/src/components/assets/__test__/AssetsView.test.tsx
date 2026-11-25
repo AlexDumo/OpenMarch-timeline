@@ -82,7 +82,7 @@ const UNDECODABLE = 0xdd;
 vi.mock("@/view3d/uniformPack/runUniformPackJob", async () => {
     const { readUniformPack, UniformPackError } =
         await import("@/view3d/core/uniformPack/format");
-    const { UniformPackJobError } =
+    const { UniformPackJobError, decodedImageKey } =
         await import("@/view3d/uniformPack/protocol");
     const { sha256Hex } = await import("@/showAssets/hash");
     return {
@@ -115,8 +115,12 @@ vi.mock("@/view3d/uniformPack/runUniformPackJob", async () => {
             if (request.decode) {
                 const before = new Set(request.decoded ?? []);
                 decoded = [];
-                for (const { png } of [...pack.layers, ...pack.itemFiles]) {
-                    const hash = await sha256Hex(png);
+                const images = [
+                    ...pack.layers.map(({ png }) => ({ png, kind: "layer" })),
+                    ...pack.itemFiles.map(({ png }) => ({ png, kind: "item" })),
+                ] as const;
+                for (const { png, kind } of images) {
+                    const hash = decodedImageKey(kind, await sha256Hex(png));
                     if (!before.has(hash)) {
                         worker.decodes++;
                         if (worker.refusalsLeft > 0) {
