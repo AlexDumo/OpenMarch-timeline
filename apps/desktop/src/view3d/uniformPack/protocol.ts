@@ -1,0 +1,161 @@
+/**
+ * Messages to and from the uniform pack worker (`uniformPack.worker.ts`, fork #1257). Every
+ * untrusted image and pack file a uniform touches is read there, off the main thread: a picked
+ * PNG, a pack file being imported, the pack the editor is asked to store, and a show's pack when
+ * the 3D View draws it. One job per worker; `runUniformPackJob` starts a fresh one and ends it.
+ */
+import type {
+    UniformPackContents,
+    UniformPackItem,
+    UniformPackManifest,
+} from "@/view3d/core/uniformPack/format";
+import type {
+    PageNote,
+    PageRegions,
+} from "@/view3d/core/uniformPack/pageChecks";
+
+/** How long one worker job may take */
+export const UNIFORM_PACK_JOB_TIMEOUT_MS = 60_000;
+
+export type UniformPackRequest =
+    /** A picked PNG page: checked, scaled to the template's size if it isn't, re-encoded */
+    | { type: "png"; bytes: Uint8Array; regions: PageRegions }
+    /** A page already drawn at the template's size (an SVG): checked and encoded */
+    | {
+          type: "pixels";
+          width: number;
+          height: number;
+          pixels: Uint8ClampedArray;
+          regions: PageRegions;
+      }
+    /**
+     * A pack file: read and checked. With `regions`, its first layer is decoded too, for the
+     * notes a picked page gets. With `decode`, every layer and item image is decoded and let go
+     * of, so a pack whose headers read but whose image data doesn't is refused here rather than
+     * when the 3D View draws it; images whose verdict is in `decoded` (they decoded before, as
+     * the same kind: see {@link decodedImageKey}) are skipped.
+     */
+    | {
+          type: "pack";
+          bytes: Uint8Array;
+          regions?: PageRegions;
+          decode?: boolean;
+          decoded?: string[];
+      }
+    /**
+     * A pack file's layers drawn in order onto one bitmap of the whole page, at this size, plus
+     * each item file decoded (fork #1258), for the window to place and grade per body type.
+     * It draws what the pack's mode `mode` draws (step 5 of fork #1257; the default mode when it
+     * names none), and answers with that mode's items. With `layers` (a draft's), it draws those
+     * layer files instead, bottom first, and answers with every item: a file the pack doesn't
+     * have is drawn from `extra` (a draft's new overlay, checked like any layer), and one in
+     * neither is refused.
+     */
+    | {
+          type: "flatten";
+          bytes: Uint8Array;
+          width: number;
+          height: number;
+          mode?: string | null;
+          layers?: string[];
+          extra?: Record<string, Uint8Array>;
+      }
+    /** A picked PNG for a placed item: decoded, trimmed to its art, capped in size, re-encoded */
+    | { type: "item"; bytes: Uint8Array }
+    /** An item already drawn (an SVG): trimmed, capped and encoded like a PNG's */
+    | {
+          type: "itemPixels";
+          width: number;
+          height: number;
+          pixels: Uint8ClampedArray;
+      }
+    /**
+     * A pack file rewritten with `contents` (its layers, items and modes): its files kept where
+     * still named, and `files` (new item PNGs from an `item` job, new layer PNGs from a `png` or
+     * `pixels` job) added
+     */
+    | {
+          type: "withContents";
+          bytes: Uint8Array;
+          contents: UniformPackContents;
+          files: Record<string, Uint8Array>;
+      };
+
+/** Why the worker refused a job */
+export type UniformPackRefusal =
+    | "notPng"
+    | "tooLarge"
+    | "unreadable"
+    | "notPack"
+    | "newer"
+    | "damaged"
+    /** The worker itself failed (out of memory, say): nothing is known about the file */
+    | "failed";
+
+export type UniformPackResponse =
+    | {
+          type: "page";
+          /** The page at the template's size, as the pack stores it */
+          png: Uint8Array;
+          notes: PageNote[];
+          /** The picked image's size when it wasn't the template's, so it was scaled */
+          scaledFrom: { width: number; height: number } | null;
+      }
+    | {
+          type: "pack";
+          manifest: UniformPackManifest;
+          notes: PageNote[];
+          /** Each item image's size, from its PNG header, by file (fork #1258) */
+          itemSizes: Record<string, { width: number; height: number }>;
+          /** With `decode`: the verdict of every image in the pack, all of which decode
+           * ({@link decodedImageKey}) */
+          decoded?: string[];
+      }
+    | {
+          type: "flattened";
+          bitmap: ImageBitmap;
+          items: UniformPackItem[];
+          itemBitmaps: { file: string; bitmap: ImageBitmap }[];
+      }
+    | {
+          type: "itemImage";
+          /** The stored image: trimmed to its art, at most `UNIFORM_ITEM_STORED_PX` a side */
+          png: Uint8Array;
+          bitmap: ImageBitmap;
+          width: number;
+          height: number;
+      }
+    | { type: "packFile"; bytes: Uint8Array }
+    | { type: "refused"; code: UniformPackRefusal; message: string };
+
+/** A job the worker refused, or that failed or ran out of time */
+export class UniformPackJobError extends Error {
+    constructor(
+        /**
+         * Why: the worker's refusal (the file itself), or `timedOut` or `failed` (the worker ran
+         * out of time or died, which says nothing about the file: trying again may work)
+         */
+        readonly code: UniformPackRefusal | "timedOut" | "failed",
+        message: string,
+    ) {
+        super(message);
+        this.name = "UniformPackJobError";
+    }
+}
+
+/**
+ * Whether `error` says nothing about the file: the worker ran out of time or died, so the same
+ * job may well work next time. Anything else (a refusal) is the file's own.
+ */
+/**
+ * What a "pack" job's `decoded` list holds for one image: its kind and its sha256. A layer and an
+ * item are checked against different size limits, so an image that decoded as a layer has still
+ * to be checked, and decoded, as an item (and the other way round).
+ */
+export const decodedImageKey = (kind: "layer" | "item", sha256: string) =>
+    `${kind}:${sha256}`;
+
+export const isPassingPackFailure = (error: unknown): boolean =>
+    !(error instanceof UniformPackJobError) ||
+    error.code === "timedOut" ||
+    error.code === "failed";

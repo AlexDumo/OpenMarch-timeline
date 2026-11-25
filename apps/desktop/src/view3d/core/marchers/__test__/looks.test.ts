@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import {
+    BODY_BUILD_WEIGHTS,
+    BODY_FRAMES,
     BODY_TYPES,
+    DEFAULT_BODY_TYPES,
     bassOptions,
     fillToNumber,
     HEIGHT_CLASSES,
@@ -41,7 +44,7 @@ describe("performer bodies", () => {
         expect(defaultPerformerBody(42)).toEqual(defaultPerformerBody(42));
     });
 
-    it("spreads 2,000 marchers over every body type and skin tone", () => {
+    it("spreads 2,000 marchers over every default body type and skin tone", () => {
         const types = new Map<string, number>();
         const tones = new Map<number, number>();
         for (let id = 1; id <= 2000; id++) {
@@ -50,11 +53,26 @@ describe("performer bodies", () => {
             tones.set(b.skinTone, (tones.get(b.skinTone) ?? 0) + 1);
             expect(b.heightClass).toBe(1); // the low tier: one height
         }
-        expect(types.size).toBe(BODY_TYPES.length);
+        expect([...types.keys()].sort()).toEqual(
+            [...DEFAULT_BODY_TYPES].sort(),
+        );
+        expect(DEFAULT_BODY_TYPES).not.toContain("neutral-average");
         expect(tones.size).toBe(SKIN_TONES.length);
-        // roughly even: every type within 30% of 2000 / 7
-        for (const n of types.values())
-            expect(Math.abs(n - 2000 / 7)).toBeLessThan((0.3 * 2000) / 7);
+        // each frame about half; each build near its weight
+        for (const frame of BODY_FRAMES) {
+            const n = DEFAULT_BODY_TYPES.filter((t) =>
+                t.startsWith(`${frame}-`),
+            ).reduce((sum, t) => sum + (types.get(t) ?? 0), 0);
+            expect(Math.abs(n - 1000)).toBeLessThan(100);
+        }
+        for (const [build, weight] of BODY_BUILD_WEIGHTS) {
+            const n = BODY_FRAMES.reduce(
+                (sum, frame) => sum + (types.get(`${frame}-${build}`) ?? 0),
+                0,
+            );
+            const want = (2000 * weight) / 100;
+            expect(Math.abs(n - want)).toBeLessThan(0.2 * want);
+        }
     });
 
     it("varies heights a quarter short, half middle, a quarter tall at high quality", () => {
@@ -100,11 +118,19 @@ describe("performer bodies", () => {
         expect(classTag(1.1)).toBe("h110");
     });
 
-    it("has a bundled body for every body type and a pack for every class", () => {
-        for (const t of BODY_TYPES)
-            expect(fs.existsSync(path.join(assets, "bodies", `${t}.glb`))).toBe(
-                true,
-            );
+    it("bundles exactly the body types and a pack for every class", () => {
+        expect(fs.readdirSync(path.join(assets, "bodies")).sort()).toEqual(
+            BODY_TYPES.map((t) => `${t}.glb`).sort(),
+        );
+        // the pack script keeps its own copy of the list
+        const pack = fs.readFileSync(
+            path.join(
+                __dirname,
+                "../../../../../scripts/view3d-assets/pack-om-pose.mjs",
+            ),
+            "utf8",
+        );
+        for (const t of BODY_TYPES) expect(pack).toContain(`"${t}",`);
         for (const h of HEIGHT_CLASSES)
             expect(
                 fs.existsSync(

@@ -408,11 +408,24 @@ const license = fs.existsSync(licensePath)
 fs.rmSync(dest, { recursive: true, force: true });
 if (license) write("LICENSE", license);
 for (const { rel, packed } of packs) write(rel, packed);
-for (const f of fs
-    .readdirSync(path.join(src, "assets/body-v4u"))
-    .filter((f) => f.endsWith(".glb"))
-    .sort())
-    write(`bodies/${f}`, fs.readFileSync(path.join(src, "assets/body-v4u", f)));
+// Only the body types the app draws (BODY_TYPES in src/view3d/core/marchers/looks.ts; looks.test.ts checks
+// the two match): om-pose keeps older bodies the app no longer uses.
+const BODY_TYPES = [
+    "neutral-average",
+    "feminine-slim",
+    "feminine-average",
+    "feminine-athletic",
+    "feminine-full",
+    "masculine-slim",
+    "masculine-average",
+    "masculine-athletic",
+    "masculine-full",
+];
+for (const t of [...BODY_TYPES].sort())
+    write(
+        `bodies/${t}.glb`,
+        fs.readFileSync(path.join(src, "assets/body-v4u", `${t}.glb`)),
+    );
 write("manifest.json", Buffer.from(JSON.stringify(manifest)));
 write("crab/manifest.json", fs.readFileSync(crabManifestPath));
 fs.writeFileSync(
@@ -422,7 +435,7 @@ fs.writeFileSync(
             source: "https://github.com/OpenMarch/om-pose",
             commit,
             from: {
-                bodies: "assets/body-v4u/*.glb",
+                bodies: "assets/body-v4u/<BODY_TYPES>.glb",
                 clips: "out/body/animations/*.glb, packed one GLB per height class (still pose once, 16-bit rotations)",
                 manifest:
                     "out/body/manifest.json and out/body/turns/manifest.json, joined",

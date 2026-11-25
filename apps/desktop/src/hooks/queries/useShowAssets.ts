@@ -11,7 +11,9 @@ import {
     readShowAssetBlob,
     removeShowAssetsInTransaction,
     setShowAssetCreditsInTransaction,
+    valuesNamedInHistory,
 } from "@/db-functions/showAssets";
+import { UNIFORM_ASSET_KIND } from "@/view3d/core/uniformPack/format";
 import type { JsonObject } from "@/showAssets/hash";
 import type { ShowAssetRef } from "@/showAssets/ref";
 import { showAssetRefValue } from "@/showAssets/ref";
@@ -22,6 +24,7 @@ import { useItemDrawingStore } from "@/stores/ItemDrawingStore";
 import tolgee from "@/global/singletons/Tolgee";
 import { createShowBlobCache } from "@/showAssets/blobCache";
 import { DEFAULT_STALE_TIME } from "./constants";
+import { venueSettingsKeys } from "./useVenueSettings";
 
 /**
  * The key base matches the table name, as for the other tables. Assets aren't in the undo
@@ -56,6 +59,29 @@ export const showAssetBlobCache = createShowBlobCache({
     read: async (hash) => await readShowAssetBlob({ db, hash }),
 });
 
+/**
+ * Keys for which of the show's imported uniforms an undo or redo step names (fork #1257). They
+ * sit under the venue's key, not the assets': only venue changes move a uniform's reference in
+ * or out of history, and undo, redo and every venue write refresh `view3d_venue` (undo and redo
+ * by table name), so this refreshes with them.
+ */
+export const uniformsInHistoryKeys = {
+    all: () => [...venueSettingsKeys.all(), "uniformsInHistory"] as const,
+};
+
+/**
+ * The show's imported uniforms an undo or redo step names: never offered by Remove unused…,
+ * which is outside undo. An edit elsewhere can clear the redo steps without touching the venue,
+ * so Remove unused… reads it again when it opens; the removal checks again inside its
+ * transaction.
+ */
+export const uniformsInHistoryQueryOptions = (values: readonly string[]) =>
+    queryOptions({
+        queryKey: [...uniformsInHistoryKeys.all(), ...values],
+        queryFn: async () => await valuesNamedInHistory({ db, values }),
+        staleTime: 0,
+    });
+
 /** Every blob's size in bytes, by hash (fork #1001). Under the same key, so any change refreshes it. */
 export const showAssetSizesQueryOptions = () =>
     queryOptions({
@@ -76,18 +102,30 @@ export const removeUnusedShowAssetsMutationOptions = (qc: QueryClient) =>
                     ...(await getShowAssetReferences({ db: tx })),
                     ...armedModelValues(),
                 ]);
+                const assets = await getShowAssets({ db: tx });
                 const removable = new Set(
-                    (await getShowAssets({ db: tx }))
+                    assets
                         .filter((asset) =>
                             REMOVABLE_ASSET_KINDS.has(asset.kind),
                         )
                         .map(showAssetRefValue),
                 );
+                // an imported uniform an undo or redo would dress the band in again stays
+                const kept = await valuesNamedInHistory({
+                    db: tx,
+                    values: assets
+                        .filter((asset) => asset.kind === UNIFORM_ASSET_KIND)
+                        .map(showAssetRefValue),
+                });
                 return await removeShowAssetsInTransaction({
                     tx,
                     refs: refs.filter((ref) => {
                         const value = showAssetRefValue(ref);
-                        return removable.has(value) && !named.has(value);
+                        return (
+                            removable.has(value) &&
+                            !named.has(value) &&
+                            !kept.has(value)
+                        );
                     }),
                 });
             }),
