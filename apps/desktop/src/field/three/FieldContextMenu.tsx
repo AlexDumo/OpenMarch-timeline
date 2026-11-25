@@ -19,6 +19,7 @@ import {
     BezierCurveIcon,
     PencilSimpleIcon,
     TrashIcon,
+    UserMinusIcon,
     type Icon,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
@@ -83,6 +84,9 @@ import {
  *   Unavailable with nobody selected, and the pastes with nothing copied.
  * - **Group** or **Ungroup**, each shown only while it's available: Group with two or
  *   more marchers selected that aren't one placed shape (#603), Ungroup with one selected whole.
+ *   **Remove from shape** while a selected marcher's spot in a placed shape is open (ADR 0006
+ *   §9.1); a right-click or long press on the open spot's ring opens a menu of it alone
+ *   (`OPEN_SPOT_MENU`), with that marcher selected.
  *   With one selected whole and the menu opened on one of its marchers, **Select only this
  *   marcher** goes inside it there, as a double-click on that marcher does (tablet 1.5).
  * - The **Path** group (pathways, interaction system rule 4), in the path bar's order: **Edit
@@ -179,7 +183,7 @@ const GROUPS: readonly (readonly ActionId[])[] = [
         "pasteFormationInPlace",
         "pasteMirrored",
     ],
-    ["shapeGroup", "shapeUngroup", "shapeEnterBox"],
+    ["shapeGroup", "shapeUngroup", "shapeEnterBox", "shapeRemoveFromShape"],
     PATH,
     PATH_END,
     STATE_GROUP,
@@ -300,6 +304,7 @@ const WHILE_AVAILABLE: ReadonlySet<ActionId> = new Set([
     "shapeGroup",
     "shapeUngroup",
     "shapeEnterBox",
+    "shapeRemoveFromShape",
     "timelineHoldOverWindow",
 ]);
 
@@ -334,6 +339,7 @@ const MODE_ICONS: Partial<Record<ActionId, Icon>> = {
     removePath: TrashIcon,
     unlockSelectedItem: LockOpenIcon,
     editSelectedItem: PencilSimpleIcon,
+    shapeRemoveFromShape: UserMinusIcon,
 };
 /** A second line under an entry's name, saying what a weighty one does (its i18n key) */
 const NOTES: Partial<Record<ActionId, string>> = {

@@ -133,4 +133,11 @@ export const groupTool: ToolKind<GroupParams> = {
     fromFrame: (frame, n) => groupInFrame(frame, n),
     emptySpots: (p) => groupEmptySpots(p),
     forPlacing: (p) => groupForPlacing(p),
+    // Its frame fitted to the spots kept, which stay where they are
+    withoutSpots: (p, slots) =>
+        groupForPlacing({
+            ...p,
+            points: p.points.filter((_, i) => !slots.includes(i)),
+            empty: [],
+        }),
 };

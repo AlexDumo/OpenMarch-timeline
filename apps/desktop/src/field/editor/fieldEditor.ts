@@ -84,6 +84,12 @@ export const LOCKED_ITEM_MENU: readonly string[] = [
     "editSelectedItem",
 ];
 
+/**
+ * The menu a right-click or long press on a placed shape's open spot opens (ADR 0006 §9.1): the
+ * spot's marcher, selected alone first, taken out of the shape.
+ */
+export const OPEN_SPOT_MENU: readonly string[] = ["shapeRemoveFromShape"];
+
 /** A point in field units, as the timeline stores positions. */
 
 export type FieldPoint = { x: number; y: number };
@@ -250,6 +256,12 @@ export type FieldEditorPorts = {
         hit: number | null,
         actions?: readonly string[],
     ): void;
+    /**
+     * The marcher whose open spot in a placed shape (a ring the field draws where a member isn't
+     * standing, ADR 0006 §9.1) is within `radius` field units of `point`, or null. A right-click
+     * or long press there opens {@link OPEN_SPOT_MENU} for that marcher.
+     */
+    openSpotAt?(point: FieldPoint, radius: number): number | null;
 };
 
 export type DropResult = "saved" | "refused";
@@ -1039,8 +1051,9 @@ export class FieldEditor {
             // is held. A mode's own menu first; then the field's, unless the
             // open shape is being edited (a Mac's Ctrl-click has none)
             if (!this.menuFree()) return;
-            if (this.modeMenu(pointer)) return;
-            if (!macCtrl && !this.blocksFieldMenu()) this.openMenu(pointer);
+            if (this.modeMenu(pointer) || macCtrl) return;
+            if (!this.openSpotMenu(pointer) && !this.blocksFieldMenu())
+                this.openMenu(pointer);
             return;
         }
         const modePress = this.modePress;
@@ -1156,6 +1169,7 @@ export class FieldEditor {
             this.lastClick = null;
         }
         if (this.modeMenu(pointer)) return true;
+        if (this.openSpotMenu(pointer)) return true;
         if (this.blocksFieldMenu()) return false;
         this.openMenu(pointer);
         return true;
@@ -2507,6 +2521,24 @@ export class FieldEditor {
             );
         };
         this.ports.drop(positions).then(settle, () => settle());
+    }
+
+    /**
+     * A placed shape's open spot under `pointer` (not over a marcher's dot): its menu opens with
+     * the spot's marcher selected alone, so Remove from shape acts on it. Says whether one opened.
+     */
+    private openSpotMenu(pointer: FieldPointer): boolean {
+        if (!this.ports.openSpotAt || this.marcherAt(pointer) !== null)
+            return false;
+        const id = this.ports.openSpotAt(
+            pointer.field,
+            hitRadius(this.ports.zoom(), pointer.kind),
+        );
+        if (id === null) return false;
+        this.ports.takePress?.();
+        this.write([id]);
+        this.ports.openMenu?.(pointer, id, OPEN_SPOT_MENU);
+        return true;
     }
 
     /**

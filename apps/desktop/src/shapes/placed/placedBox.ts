@@ -28,10 +28,12 @@ import { recipeCount } from "./recipeCount";
  * The box came first, so the names say box; a placed shape of any kind the shape tool draws works
  * the same way (#397), through its tool kind, which the recipe's kind and version name.
  *
- * A shape is shown at the count it was placed at, and at every later moment while each
- * of its members still stands on its spot (the form is held). Its members are exactly the marchers
- * on its spots: one that moves away leaves the shape, leaving a hole, and moving every member the
- * same way moves the shape. Everything here is pure.
+ * A shape is shown from the count it was placed at (its mark), and at every later moment while at
+ * least one of its members stands on its spot (ADR 0006 revision of 2026-11-22, §9.1). Its members
+ * are the marchers listed on its spots, whether or not they stand there: a member off its spot is
+ * an open spot, which the field draws as a ring with its status (`openSpotStatus`). Dragging a
+ * member off its spot at the count takes it out, leaving a hole, and moving every member the same
+ * way moves the shape. Everything here is pure.
  */
 
 export type PlacedRecipe = Omit<StoredShapeRecipe, "members"> & {
@@ -51,6 +53,25 @@ export interface PlacedBox<P = unknown> {
     readonly spots: number;
     /** The beat the shape was placed at: its count (`recipeCount`) */
     readonly endBeat: number;
+    /**
+     * Its spots with no member on them at the beat it was read at (§9.1): members listed but
+     * standing elsewhere, and spots whose marcher a later shape has taken since (`taken`, shown
+     * "empty"). Taken ones are no longer in `recipe.members`, which lists who is in the shape there.
+     */
+    readonly open: readonly OpenSpot[];
+}
+
+/** A spot of a placed shape with no member on it: an open ring on the field */
+export interface OpenSpot extends ShapeRecipeMember {
+    /** Its marcher is in a later shape now (or ungrouped since): the spot is empty */
+    readonly taken: boolean;
+}
+
+/** The members of `box` standing on their spots where it was read: all but its open spots */
+export function membersHere(box: PlacedBox): ShapeRecipeMember[] {
+    if (box.open.length === 0) return [...box.recipe.members];
+    const away = new Set(box.open.map((o) => o.marcherId));
+    return box.recipe.members.filter((m) => !away.has(m.marcherId));
 }
 
 /** Whether `placed` is a box, for what only a box has (its file count, Re-split) */
@@ -125,9 +146,11 @@ export function placedOf(
 }
 
 /**
- * The placed shapes to show at `beat`: placed at or before it, with every member on its spot. A
- * marcher is in one shape at a time, the latest placed; one ungrouped since (`UNGROUPED_KIND`) is
- * in none.
+ * The placed shapes to show at `beat` (ADR 0006 revision of 2026-11-22, §9.1): each placed at or
+ * before it, with at least one member on its spot. A marcher is in one shape at a time, the latest
+ * placed that lists it, whether or not it stands there; one ungrouped since (`UNGROUPED_KIND`) is
+ * in none. Every listed spot is kept: members on theirs, the rest as open spots (`PlacedBox.open`),
+ * those a later shape took marked `taken` and left out of the members.
  *
  * @param positionOf where a marcher stands at `beat`
  * @param kinds the kinds recipes are read back as: every kind the shape tool draws
@@ -143,7 +166,7 @@ export function boxesAt({
     positionOf: (marcherId: number) => XY | undefined;
     kinds?: readonly AnyToolKind[];
 }): PlacedBox[] {
-    const candidates: (PlacedBox | Ungrouped)[] = [];
+    const candidates: (Candidate | Ungrouped)[] = [];
     for (const recipe of recipes) {
         const endBeat = recipeCount(recipe);
         if (endBeat > beat + 1e-9) continue;
@@ -154,28 +177,46 @@ export function boxesAt({
             continue;
         }
         const box = placedOf(recipe, kinds);
-        if (!box) continue;
-        const held = recipe.members.every((m) => {
-            const p = positionOf(m.marcherId);
-            return p !== undefined && same(p, m);
-        });
-        if (held) candidates.push({ recipe, ...box, endBeat });
+        if (box) candidates.push({ recipe, ...box, endBeat });
     }
     candidates.sort((a, b) => b.endBeat - a.endBeat);
     const claimed = new Set<number>();
     const out: PlacedBox[] = [];
     for (const box of candidates) {
-        // A mark keeps whoever a later shape hasn't taken; a shape needs all its members
+        // The latest shape or mark listing a marcher has it, standing on its spot or not
         if ("ungrouped" in box) {
             for (const m of box.recipe.members) claimed.add(m.marcherId);
             continue;
         }
-        if (box.recipe.members.some((m) => claimed.has(m.marcherId))) continue;
-        for (const m of box.recipe.members) claimed.add(m.marcherId);
-        out.push(box);
+        const members: ShapeRecipeMember[] = [];
+        const open: OpenSpot[] = [];
+        let here = 0;
+        for (const m of box.recipe.members) {
+            if (claimed.has(m.marcherId)) {
+                open.push({ ...m, taken: true });
+                continue;
+            }
+            members.push(m);
+            const p = positionOf(m.marcherId);
+            if (p !== undefined && same(p, m)) here++;
+            else open.push({ ...m, taken: false });
+        }
+        for (const m of members) claimed.add(m.marcherId);
+        if (here === 0) continue;
+        out.push({
+            ...box,
+            recipe:
+                members.length === box.recipe.members.length
+                    ? box.recipe
+                    : { ...box.recipe, members },
+            open,
+        });
     }
     return out;
 }
+
+/** A shape `boxesAt` weighs, before its open spots are known */
+type Candidate = Omit<PlacedBox, "open">;
 
 /** An ungrouped mark among the shapes `boxesAt` weighs: it claims its members and shows nothing */
 interface Ungrouped {
@@ -201,7 +242,10 @@ export function membershipAfter(
         return to !== undefined && !same(to, m);
     });
     if (off.length === 0) return { type: "none" };
-    if (off.length === box.recipe.members.length) {
+    // Every member on its spot moved, the same way: the shape moves, its open spots with it
+    const here = membersHere(box);
+    const offIds = new Set(off.map((m) => m.marcherId));
+    if (here.length > 0 && here.every((m) => offIds.has(m.marcherId))) {
         const first = off[0]!;
         const to = moved.get(first.marcherId)!;
         const delta = { x: to.x - first.x, y: to.y - first.y };

@@ -12,7 +12,7 @@ import tolgee from "@/global/singletons/Tolgee";
 import type { ActionId } from "@/shortcuts/definitions";
 import { registerActionHandler } from "@/shortcuts/registry";
 import { setFollowTheLeader } from "@/pathways/followTheLeader";
-import type { FieldEditor } from "@/field/editor/fieldEditor";
+import { OPEN_SPOT_MENU, type FieldEditor } from "@/field/editor/fieldEditor";
 import FieldContextMenu, {
     FIELD_MENU_ACTIONS,
     useFieldMenu,
@@ -317,10 +317,48 @@ describe("FieldContextMenu", () => {
         expect(screen.queryByTestId("field-menu-editSelectedItem")).toBeNull();
     });
 
+    it("offers Remove from shape with the shape entries only while it can run (ADR 0006 §9.1)", () => {
+        handle("shapeUngroup", { enabled: false, reason: null });
+        const run = handle("shapeRemoveFromShape", {
+            enabled: false,
+            reason: "No open spot",
+        });
+        open();
+        // Greyed out isn't shown: most marchers have no open spot
+        expect(item("shapeRemoveFromShape")).toBeNull();
+        cleanup();
+        handlers.splice(0).forEach((off) => off());
+        const runs = handle("shapeRemoveFromShape");
+        open();
+        const entry = item("shapeRemoveFromShape")!;
+        expect(entry).toHaveTextContent("Remove from shape");
+        fireEvent.click(entry);
+        expect(runs).toHaveBeenCalledTimes(1);
+        expect(run).not.toHaveBeenCalled();
+    });
+
+    it("on an open spot, offers Remove from shape alone, by the same name", () => {
+        for (const id of FIELD_MENU_ACTIONS) handle(id);
+        open({
+            actions: OPEN_SPOT_MENU as readonly ActionId[],
+            marcher: 4,
+        });
+        const content = screen.getByTestId("field-menu");
+        expect(
+            Array.from(content.children).map((el) =>
+                el.getAttribute("data-testid"),
+            ),
+        ).toEqual(["field-menu-shapeRemoveFromShape"]);
+        expect(item("shapeRemoveFromShape")).toHaveTextContent(
+            "Remove from shape",
+        );
+    });
+
     it("lists the actions in groups, with the page state commands together", () => {
         for (const id of FIELD_MENU_ACTIONS) handle(id);
         handle("shapeGroup", { enabled: false, reason: null });
         handle("shapeUngroup", { enabled: false, reason: null });
+        handle("shapeRemoveFromShape", { enabled: false });
         // The Path group shows only what applies: here Edit path, Edit <name>'s line, then after a
         // line Detach, Detach all and Remove path
         for (const id of [

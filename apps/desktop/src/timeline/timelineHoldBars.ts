@@ -12,7 +12,7 @@ import { windowWinsOverHold } from "./heldRules";
  *   it) draws light and dashed.
  * - A **shape carried on** draws solid too: the shape carried onto later pages is the shape's
  *   hold, and it stays until changed (owner, 2026-11-01, on #477). Where it's carried is the
- *   field's rule (`carriedStretches`, `boxesAt`): only while every member stands on its spot.
+ *   field's rule (`carriedStretches`, `boxesAt`): only while the member stands on its spot.
  * - A **departure** tick marks where the next move takes over.
  *
  * Bars light up where an edit would carry: during a field drag, the stretch the drag moves

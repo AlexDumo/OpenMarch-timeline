@@ -315,12 +315,14 @@ describe("groups read back across pages", () => {
         );
     });
 
-    it("shows on later pages while the form is held, and not once a member moves", () => {
+    it("shows on later pages while the form is held, and with an open spot once a member moves (ADR 0006 §9.1)", () => {
         const r = group(8);
         expect(find([r], 16)).toHaveLength(1);
         const moved = new Map(standingAt);
         moved.set(4, { x: 170, y: 133 });
-        expect(find([r], 16, moved)).toEqual([]);
+        expect(
+            find([r], 16, moved).map((b) => b.open.map((o) => o.marcherId)),
+        ).toEqual([[4]]);
         // Moving one takes it out, leaving a hole; moving all the same way moves the group
         const [shown] = find([r], 8);
         expect(membershipAfter(shown!, new Map([[4, { x: 1, y: 1 }]]))).toEqual(

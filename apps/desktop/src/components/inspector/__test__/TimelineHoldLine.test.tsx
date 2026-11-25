@@ -62,6 +62,7 @@ vi.mock("@/shapes/placed/placedBoxStore", async (importOriginal) => ({
         mocks.carried.map(({ members, endBeat }) => ({
             recipe: { members: members.map((marcherId) => ({ marcherId })) },
             endBeat,
+            open: [],
         })),
 }));
 // Set as shown writes through the real API (tested on a database elsewhere); here, who asks

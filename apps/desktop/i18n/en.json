@@ -213,7 +213,9 @@
             "centerPivot": "Shape: Move the pivot back to the center",
             "centerPivotKeywords": "pivot center centre reset turn flip around",
             "arc": "Shape: Arc",
-            "discard": "Shape: Discard"
+            "discard": "Shape: Discard",
+            "removeFromShape": "Remove from shape",
+            "removeFromShapeKeywords": "remove take out drop open spot empty ring member shape"
         },
         "swap": {
             "selectTwo": "Select 2 marchers to swap them",
@@ -2359,7 +2361,21 @@
                 "many": "{count, plural, one {# left the {shape, select, block {box} circle {circle} other {shape}}} other {# left the {shape, select, block {box} circle {circle} other {shape}}}}",
                 "one": "{name} left the {shape, select, block {box} circle {circle} other {shape}}"
             },
-            "selectWholeShape": "Select {shape, select, block {box} circle {circle} other {shape}}"
+            "selectWholeShape": "Select {shape, select, block {box} circle {circle} other {shape}}",
+            "removeFromShape": {
+                "error": "Couldn't remove the marcher from the shape",
+                "needsOpenSpot": "Select a marcher whose spot in a shape is open",
+                "oneShape": "Select open spots in one shape at a time"
+            },
+            "open": {
+                "onTheWay": "{name} · on the way",
+                "late": "{name} · late, arrives {where}",
+                "takenOver": "{name} · taken over at {where}",
+                "left": "{name} · left at {where}",
+                "empty": "{name} · empty, in another shape",
+                "away": "{name} · not on its spot",
+                "count": "count {count}"
+            }
         },
         "command": {
             "fill": "Fill: {modes}",

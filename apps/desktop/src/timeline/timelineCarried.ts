@@ -1,6 +1,7 @@
 import {
     boxesAt,
     isUngrouped,
+    membersHere,
     PLACED_KINDS,
     type PlacedBox,
     type PlacedRecipe,
@@ -15,24 +16,25 @@ import type { CarrySpan } from "./timelineCarryForward";
  * Where a placed shape carries its members (owner, 2026-11-01 on #477: a shape carried onto later
  * pages is the shape's hold, so its members are decided there). One rule for the field's look
  * (`notDefinedAt`, #478) and the timeline's hold bars (#477): a member is carried on a count while
- * `boxesAt` shows its shape there, so only while every member of the shape stands on its spot, the
- * latest shape or ungrouped mark claiming a marcher wins, and kinds this app can't read are skipped.
+ * `boxesAt` shows its shape there and the member stands on its spot (a member off it, an open spot,
+ * isn't carried), the latest shape or ungrouped mark claiming a marcher wins, and kinds this app
+ * can't read are skipped.
  */
 
-/** The members of `boxes` (`boxesAt` at some count): carried there. */
+/** The members of `boxes` (`boxesAt` at some count) on their spots: carried there. */
 export function carriedMembers(boxes: readonly PlacedBox[]): Set<number> {
     return new Set(carriedSince(boxes).keys());
 }
 
 /**
- * The members of `boxes` (`boxesAt` at some count), each with the beat its shape was placed or
+ * The members of `boxes` (`boxesAt` at some count) on their spots, each with the beat its shape was placed or
  * last laid out at (`PlacedBox.endBeat`): where the carry comes from, which the inspector's hold
  * line names as the page the hold is held since.
  */
 export function carriedSince(boxes: readonly PlacedBox[]): Map<number, number> {
     const since = new Map<number, number>();
     for (const box of boxes)
-        for (const member of box.recipe.members)
+        for (const member of membersHere(box))
             since.set(member.marcherId, box.endBeat);
     return since;
 }

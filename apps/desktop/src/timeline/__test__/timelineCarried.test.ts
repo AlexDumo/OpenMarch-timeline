@@ -176,22 +176,19 @@ describe("a shape carried on: the timeline's bars and the field agree", () => {
         ).toEqual([[8, SHOW_END, "held", true]]);
     });
 
-    it("once one member is dragged off alone, the rest draw Not defined on both", () => {
+    it("once one member walks off alone, the rest still draw Held on both: its spot is only open (ADR 0006 §9.1)", () => {
         const holds = expectAgreement("off", [1, 2, 3]);
         expect(
             holds.bars.map((b) => [b.start, b.end, b.kind, b.shape]),
-        ).toEqual([[8, SHOW_END, "notDefined", false]]);
+        ).toEqual([[8, SHOW_END, "held", true]]);
     });
 
-    it("a member that walks off and back carries the box again from the count it's back", () => {
+    it("a member that walks off and back leaves the rest carried the whole way", () => {
         const holds = expectAgreement("offAndBack", [1, 2, 3, 4]);
         expect(
             holds.bars
                 .filter((b) => b.marcherIds.includes(1))
                 .map((b) => [b.start, b.end, b.kind]),
-        ).toEqual([
-            [8, 15, "notDefined"],
-            [15, SHOW_END, "held"],
-        ]);
+        ).toEqual([[8, SHOW_END, "held"]]);
     });
 });

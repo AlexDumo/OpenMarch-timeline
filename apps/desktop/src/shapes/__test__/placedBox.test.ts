@@ -5,6 +5,7 @@ import { boxTool } from "../box/boxTool";
 import { drawBox, filesOf, ranksOf, type BoxSize } from "../box/boxGeometry";
 import {
     boxesAt,
+    membersHere,
     membershipAfter,
     UNGROUPED_KIND,
     movedBox,
@@ -75,17 +76,72 @@ describe("which placed box holds at a moment", () => {
         expect(find(4)).toHaveLength(0);
     });
 
-    it("hides the box once any member stands elsewhere", () => {
+    it("keeps the box with a member standing elsewhere: its spot is open, and it's still a member (ADR 0006 §9.1)", () => {
         const r = recipe(4, { x: 40, y: 40 }, 10);
         const positions = at(r);
         positions.set(2, { x: 99, y: 99 });
-        expect(
+        const [box, ...rest] = boxesAt({
+            recipes: [r],
+            beat: 12,
+            positionOf: (id) => positions.get(id),
+        });
+        expect(rest).toHaveLength(0);
+        expect(box!.recipe.members.map((m) => m.marcherId)).toEqual([
+            1, 2, 3, 4,
+        ]);
+        expect(box!.open).toEqual([{ ...r.members[1]!, taken: false }]);
+        expect(membersHere(box!).map((m) => m.marcherId)).toEqual([1, 3, 4]);
+    });
+
+    it("draws every spot open but one, and nothing once no member stands on its spot", () => {
+        const r = recipe(4, { x: 40, y: 40 }, 10);
+        const positions = at(r);
+        const find = () =>
             boxesAt({
                 recipes: [r],
                 beat: 12,
                 positionOf: (id) => positions.get(id),
-            }),
-        ).toHaveLength(0);
+            });
+        for (const id of [1, 2, 3]) positions.set(id, { x: 99, y: 99 });
+        expect(find()[0]!.open.map((o) => o.marcherId)).toEqual([1, 2, 3]);
+        positions.set(4, { x: 99, y: 99 });
+        expect(find()).toEqual([]);
+        // A marcher the resolver doesn't know isn't on its spot either
+        expect(
+            boxesAt({ recipes: [r], beat: 12, positionOf: () => undefined }),
+        ).toEqual([]);
+    });
+
+    it("shows a spot whose marcher a later shape took as empty, and leaves it out of the members", () => {
+        const early = recipe(4, { x: 40, y: 40 }, 10, 1);
+        // A later shape takes marcher 1 only, somewhere else
+        const late: PlacedRecipe = {
+            ...recipe(4, { x: 40, y: 40 }, 20, 2),
+            members: [{ marcherId: 1, slot: 0, x: 200, y: 200 }],
+            params: { ...early.params, spots: 1 },
+        };
+        const positions = at(early);
+        positions.set(1, { x: 200, y: 200 });
+        const found = boxesAt({
+            recipes: [early, late],
+            beat: 20,
+            positionOf: (id) => positions.get(id),
+        });
+        const earlyBox = found.find((b) => b.recipe.id === 1)!;
+        expect(earlyBox.recipe.members.map((m) => m.marcherId)).toEqual([
+            2, 3, 4,
+        ]);
+        expect(earlyBox.open).toEqual([{ ...early.members[0]!, taken: true }]);
+        expect(earlyBox.spots).toBe(4);
+        // The later one claims it even while it's off its spot there: still empty in the earlier
+        positions.set(1, { x: 0, y: 900 });
+        const again = boxesAt({
+            recipes: [early, late],
+            beat: 20,
+            positionOf: (id) => positions.get(id),
+        });
+        expect(again.map((b) => b.recipe.id)).toEqual([1]);
+        expect(again[0]!.open[0]!.taken).toBe(true);
     });
 
     it("takes the latest box when an earlier one still matches", () => {
@@ -113,14 +169,14 @@ describe("which placed box holds at a moment", () => {
         expect(box!.recipe.members).toHaveLength(3);
     });
 
-    it("skips recipes that aren't boxes or whose move is gone", () => {
-        const r = recipe(4, { x: 40, y: 40 }, 99);
+    it("skips recipes of a kind it can't read", () => {
         const line = { ...recipe(4, { x: 40, y: 40 }, 10), kind: "line" };
+        const positions = at(line);
         expect(
             boxesAt({
-                recipes: [r, line],
+                recipes: [line],
                 beat: 20,
-                positionOf: () => ({ x: 0, y: 0 }),
+                positionOf: (id) => positions.get(id),
             }),
         ).toEqual([]);
     });
@@ -211,7 +267,14 @@ describe("what moving marchers does to a box", () => {
     const box = (): PlacedBox => {
         const r = recipe(4, { x: 40, y: 40 }, 10);
         const p = r.params as PlacedBox["params"];
-        return { recipe: r, kind: boxTool, params: p, spots: 4, endBeat: 8 };
+        return {
+            recipe: r,
+            kind: boxTool,
+            params: p,
+            spots: 4,
+            endBeat: 8,
+            open: [],
+        };
     };
 
     it("nothing when no member moves off its spot", () => {
@@ -240,6 +303,27 @@ describe("what moving marchers does to a box", () => {
         expect(out.members[0]).toMatchObject({
             x: b.recipe.members[0]!.x + 5,
             y: b.recipe.members[0]!.y - 10,
+        });
+    });
+
+    it("moves the box, its open spots with it, when every member on its spot moves the same way", () => {
+        const b = box();
+        const away: PlacedBox = {
+            ...b,
+            open: [{ ...b.recipe.members[3]!, taken: false }],
+        };
+        const moved = new Map(
+            away.recipe.members
+                .slice(0, 3)
+                .map((m) => [m.marcherId, { x: m.x + 5, y: m.y }]),
+        );
+        expect(membershipAfter(away, moved)).toEqual({
+            type: "move",
+            delta: { x: 5, y: 0 },
+        });
+        const out = movedBox(away, { x: 5, y: 0 });
+        expect(out.members[3]).toMatchObject({
+            x: b.recipe.members[3]!.x + 5,
         });
     });
 
