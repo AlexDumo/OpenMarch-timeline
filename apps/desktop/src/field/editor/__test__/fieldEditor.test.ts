@@ -3091,6 +3091,46 @@ describe("FieldEditor modes (#204)", () => {
         ]);
     });
 
+    it("keeps a double-click going when the first click on a marcher turns a mode on (#1236)", () => {
+        // A click on a placed shape's member selects the shape, whose mode then comes on: the
+        // second click is the mode's, and still the double-click's
+        const { editor, state, clock } = setup();
+        click(editor, 100, 100);
+        expect(state.selected).toEqual([1]);
+        const { mode, calls } = fakeMode();
+        editor.setMode(mode);
+        clock.now += DOUBLE_CLICK_MS - 1;
+        click(editor, 101, 100);
+        expect(calls.filter((c) => c.startsWith("release"))).toEqual([
+            "release 101,100 double after the editor's click",
+        ]);
+    });
+
+    it("tells the app a double-click on a marcher whose first click was a mode's that then went off (#1236)", () => {
+        // A click on a selected shape's member goes inside it, so its mode goes off: the second
+        // click, the editor's, is a double-click on that marcher
+        const doubleClickMarcher = vi.fn();
+        const { editor, clock } = setup({ doubleClickMarcher });
+        const { mode, calls } = fakeMode();
+        editor.setMode(mode);
+        click(editor, 100, 100);
+        expect(calls.filter((c) => c.startsWith("release"))).toEqual([
+            "release 100,100 click",
+        ]);
+        editor.setMode(null);
+        clock.now += 100;
+        click(editor, 101, 100);
+        expect(doubleClickMarcher).toHaveBeenCalledWith(1);
+        // A mode's click off any marcher, then one on a marcher, is no double-click
+        clock.now += 1000;
+        editor.setMode(mode);
+        click(editor, EMPTY.x, EMPTY.y);
+        editor.setMode(null);
+        clock.now += 100;
+        click(editor, EMPTY.x, EMPTY.y);
+        expect(doubleClickMarcher).toHaveBeenCalledTimes(1);
+    });
+
     it("tells the mode a drag, not a click, when the press went past the slop and came back", () => {
         const { editor } = setup();
         const { mode, calls } = fakeMode();

@@ -321,7 +321,7 @@ export type FieldPress = {
 
 /**
  * The last click, for telling a double-click: on a marcher (`hit`), on empty
- * field (null), or one a mode took (`mode`).
+ * field (null), or one a mode took (`mode`, with the marcher under it, if any).
  */
 type LastClick = {
     time: number;
@@ -1008,13 +1008,15 @@ export class FieldEditor {
             this.modePress = null;
             const click =
                 !modePress.dragged && !isPastSlop(modePress.start, pointer);
-            // A double-click's second click starts no third
+            // A double-click's second click starts no third. The marcher under it is kept: the
+            // click may turn the mode off (a selected shape's member goes inside it), and a
+            // second click on that marcher is still the double-click's (#1236)
             this.lastClick =
                 click && !modePress.click.double
                     ? {
                           time: this.now(),
                           screen: modePress.start.screen,
-                          hit: null,
+                          hit: this.marcherAt(modePress.start),
                           mode: true,
                       }
                     : null;
@@ -1344,8 +1346,11 @@ export class FieldEditor {
             this.cancelGesture();
             this.press = null;
             // A click a mode took can change the mode (a path clicked under a selected box goes
-            // from the box's mode to the path's); the next click can still be its double-click
-            if (!this.lastClick?.taken) this.lastClick = null;
+            // from the box's mode to the path's), and so can a click on a marcher (it selects a
+            // placed shape, whose mode comes on): the next click can still be its double-click,
+            // the mode's with `ownFirst` false (#1236)
+            const last = this.lastClick;
+            if (last && !last.taken && last.hit === null) this.lastClick = null;
             this.unsubscribeMode = mode.subscribe(() => this.emit());
         }
         this.emit();
@@ -2145,7 +2150,9 @@ export class FieldEditor {
         const last = this.lastClick;
         return (
             last !== null &&
-            !last.mode &&
+            // A mode's click only on the same marcher: off one, it was on the mode's own
+            // handles or lines
+            (!last.mode || hit !== null) &&
             last.hit === hit &&
             this.isSoonAfter(last, pointer)
         );
