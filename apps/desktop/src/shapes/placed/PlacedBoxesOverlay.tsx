@@ -6,6 +6,11 @@ import { fieldToElement, useFieldViewStore } from "@/field/three/fieldView";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { frameCorners } from "../frame/frame";
+import {
+    applySimilarity,
+    fitSimilarity,
+    type Similarity,
+} from "../frame/similarity";
 import { shapeOutline } from "../frame/gestures";
 import { useShapeToolStore } from "../tool/shapeToolStore";
 import type { XY } from "../types";
@@ -22,6 +27,7 @@ import {
 import { closedOf } from "../distribute/modes";
 import { liveLinks, type ShapeLink } from "./shapeLinks";
 import { useLinkDragStore } from "./linkDragStore";
+import { useLivePositionsStore } from "./livePositionsStore";
 
 /** One placed shape as the field outlines it, in field units */
 export interface PlacedBoxDrawing {
@@ -150,6 +156,43 @@ const JOINT_PX = 11;
 /** The snap ring while a dragged end will attach, in CSS px */
 const SNAP_PX = 11;
 
+/** How far a live marcher may be from where one turn, scale or move takes its shape, in field units */
+const LIVE_FIT = 0.1;
+
+/**
+ * Where the field draws a shape while its marchers (`members`) are drawn elsewhere (#1236): the
+ * turn, even scale, mirror or move taking them all to where they're drawn (`live`), for its
+ * outline and joints to follow. Undefined when they aren't all drawn elsewhere (the shape stays
+ * where it is); null when they are but not taken evenly, so the shape won't keep them and its
+ * outline is hidden until they land.
+ */
+export function liveSimilarity(
+    members: readonly {
+        readonly marcherId: number;
+        readonly x: number;
+        readonly y: number;
+    }[],
+    live: ReadonlyMap<number, XY> | null,
+): Similarity | null | undefined {
+    if (!live) return undefined;
+    const pairs = members.flatMap((m) => {
+        const to = live.get(m.marcherId);
+        return to ? [{ from: { x: m.x, y: m.y }, to }] : [];
+    });
+    if (pairs.length === 0 || pairs.length < members.length) return undefined;
+    if (pairs.length === 1) {
+        // One marcher fixes only a move
+        const { from, to } = pairs[0]!;
+        return {
+            a: 1,
+            b: 0,
+            t: { x: to.x - from.x, y: to.y - from.y },
+            mirror: false,
+        };
+    }
+    return fitSimilarity(pairs, LIVE_FIT);
+}
+
 /**
  * The joints marked on the field (#1235): only those of a shape selected or being edited
  * (`picked`), so with nothing selected linked shapes look like any others (owner on #1249)
@@ -219,14 +262,19 @@ export function PlacedBoxesOverlay({
     }, [version]);
     useEffect(() => followPlacedBoxChanges(), []);
 
-    const { drawings, joints } = useMemo(() => {
+    const live = useLivePositionsStore((s) => s.positions);
+
+    const { drawings, joints, links, boxes } = useMemo(() => {
         if (mode === "off" || isPlaying || toolOpen)
-            return { drawings: [], joints: [] };
+            return { drawings: [], joints: [], links: [], boxes: [] };
         const ids = new Set((selected ?? []).map((m) => m.id));
         const boxes = placedBoxesAt(beat, recipes);
         const picked = (box: PlacedBox) =>
             box.recipe.id === editing ||
             box.recipe.members.some((m) => ids.has(m.marcherId));
+        const shownLinks = liveLinks(boxes, beat).filter(
+            (l) => picked(l.attacher) || picked(l.owner),
+        );
         return {
             drawings: boxes
                 .filter(
@@ -235,7 +283,9 @@ export function PlacedBoxesOverlay({
                         (mode === "always" || picked(box)),
                 )
                 .map((box) => placedBoxDrawing(box, stepPx)),
-            joints: jointsShown(liveLinks(boxes, beat), picked),
+            joints: jointsShown(shownLinks, () => true),
+            links: shownLinks,
+            boxes,
         };
         // placedBoxesAt reads the resolver and the move end beats, which these stand for
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -260,15 +310,43 @@ export function PlacedBoxesOverlay({
         };
     }, [drawings, joints]);
 
+    // Shapes whose marchers are drawn elsewhere (dragged, turned, scaled, a typed rotation or a
+    // drop saving) are drawn with them: each through what takes its members there, hidden when
+    // nothing does (#1236)
+    const sims = useMemo(() => {
+        const out = new Map<number, Similarity | null>();
+        if (!live) return out;
+        for (const box of boxes) {
+            const sim = liveSimilarity(box.recipe.members, live);
+            if (sim !== undefined) out.set(box.recipe.id, sim);
+        }
+        return out;
+    }, [boxes, live]);
+    const shownDrawings = drawings.flatMap((d) => {
+        const sim = sims.get(d.id);
+        if (sim === null) return [];
+        return sim
+            ? [{ ...d, corners: d.corners.map((c) => applySimilarity(sim, c)) }]
+            : [d];
+    });
+    const shownJoints = links.flatMap((l) => {
+        const a = sims.get(l.attacher.recipe.id);
+        const o = sims.get(l.owner.recipe.id);
+        // A joint goes with a shape being moved; one whose shape won't hold isn't marked
+        if (a === null || o === null) return [];
+        const sim = a ?? o;
+        return [sim ? applySimilarity(sim, l.at) : l.at];
+    });
     const dragging = linkDrag.ring !== null || linkDrag.followers.length > 0;
-    if (drawings.length === 0 && joints.length === 0 && !dragging) return null;
+    if (shownDrawings.length === 0 && shownJoints.length === 0 && !dragging)
+        return null;
     const color = rgbaToString(theme.shape);
     return (
         <svg
             className="pointer-events-none absolute inset-0 h-full w-full"
             data-testid="placedBoxes"
         >
-            {drawings.map(({ id, corners, open, label }) => {
+            {shownDrawings.map(({ id, corners, open, label }) => {
                 const points = corners.map((c) =>
                     fieldToElement(view, c.x, c.y),
                 );
@@ -298,7 +376,7 @@ export function PlacedBoxesOverlay({
                     </g>
                 );
             })}
-            {joints.map((at) => (
+            {shownJoints.map((at) => (
                 <JointMark
                     key={`${at.x},${at.y}`}
                     at={fieldToElement(view, at.x, at.y)}

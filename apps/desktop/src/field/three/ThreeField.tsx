@@ -77,6 +77,7 @@ import {
 import { doubleClickMember } from "@/shapes/placed/selectLinkedShapes";
 import { dropOnShapes } from "@/shapes/placed/commitBox";
 import { useBoxSelectionStore } from "@/shapes/placed/boxSelectionStore";
+import { setLivePositions } from "@/shapes/placed/livePositionsStore";
 import {
     drawnPlacedBoxes,
     drawnShapeJoints,
@@ -501,8 +502,11 @@ function ThreeFieldView() {
                     // Step 4j: the box stands clear of the order lane drawn on the selection
                     selectionCovers: () =>
                         useSelectionCoverStore.getState().covers,
-                    showPositions: (positions) =>
-                        marchers.setOverrides(positions),
+                    showPositions: (positions) => {
+                        marchers.setOverrides(positions);
+                        // Placed shapes' outlines go with them (#1236)
+                        setLivePositions(positions);
+                    },
                     // #196: drops go through the drop-to-timeline path; one that turned or
                     // scaled placed shapes selected whole takes them with it (#1236)
                     drop: (positions) =>
@@ -576,7 +580,10 @@ function ThreeFieldView() {
     );
     useEffect(() => {
         setActiveFieldEditor(editor);
-        return () => setActiveFieldEditor(null);
+        return () => {
+            setActiveFieldEditor(null);
+            setLivePositions(null);
+        };
     }, [editor]);
     // Preview edits nothing: the editor hears no presses there at all (`EditorInput`), only
     // navigation
