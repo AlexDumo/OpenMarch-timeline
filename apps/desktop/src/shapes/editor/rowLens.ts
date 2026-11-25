@@ -22,8 +22,8 @@ export const PITCH = 8;
 const ROOMY_PITCH = 10;
 /** Room at each end of a strip for the end dots' hover ring, px */
 export const STRIP_PAD = 7;
-/** The lens: spots each side of its center at full size, then spots over which it fades */
-export const LENS_FLAT = 4;
+/** The widest lens: spots each side of its center at full size, then spots over which it fades */
+const LENS_FLAT = 4;
 const LENS_FADE = 3;
 /** The narrowest the squeezed part gets, px per spot */
 const MIN_SQUEEZE = 0.02;
@@ -53,10 +53,31 @@ export function needsLens(rows: readonly LensRow[], width: number): boolean {
     return (hi - lo) * PITCH > width - 2 * STRIP_PAD;
 }
 
-/** ∫ of the lens's weight (1 across its flat part, fading to 0 over LENS_FADE) from −∞ to `t` */
-function lensArea(t: number): number {
-    const H = LENS_FLAT;
-    const K = LENS_FADE;
+/** A lens's size, in spots: full size each side of its center, then fading over `fade` */
+export interface LensSize {
+    readonly flat: number;
+    readonly fade: number;
+}
+
+/**
+ * The lens for these rows across `width`: as wide as leaves the rest of the strip about a pixel
+ * a spot (half the strip, for rows longer than that), so pointing past it moves it a spot or so at
+ * a time and the mouse can reach every spot, never squeezing the rest to a hair (sim study of the
+ * Rows lens: a full-width lens left 1 px for 40 spots).
+ */
+export function lensSize(rows: readonly LensRow[], width: number): LensSize {
+    const { lo, hi } = span(rows);
+    const R = hi - lo;
+    const W = Math.max(1, width - 2 * STRIP_PAD);
+    const rest = Math.min(1, (0.5 * W) / R);
+    const room = Math.max(0, (W - rest * R) / (PITCH - rest));
+    const fade = Math.min(LENS_FADE, Math.max(1, room / 4));
+    const flat = Math.max(1, Math.min(LENS_FLAT, (room - fade) / 2));
+    return { flat, fade };
+}
+
+/** ∫ of the lens's weight (1 across its flat part, fading to 0 over its fade) from −∞ to `t` */
+function lensArea(t: number, { flat: H, fade: K }: LensSize): number {
     if (t <= -(H + K)) return 0;
     if (t <= -H) {
         const u = t + H + K;
@@ -97,7 +118,8 @@ export function warp(
         const s = W / R;
         return (u) => STRIP_PAD + (u - lo) * s;
     }
-    const G = lensArea(hi - focus) - lensArea(lo - focus);
+    const size = lensSize(rows, width);
+    const G = lensArea(hi - focus, size) - lensArea(lo - focus, size);
     // The rest squeezes as far as it must so the lens stays full size
     let s = (W - a * PITCH * G) / (R - a * G);
     let b = PITCH;
@@ -105,9 +127,11 @@ export function warp(
         s = MIN_SQUEEZE;
         b = (W - s * (R - a * G)) / (a * G);
     }
-    const base = lensArea(lo - focus);
+    const base = lensArea(lo - focus, size);
     return (u) =>
-        STRIP_PAD + s * (u - lo) + a * (b - s) * (lensArea(u - focus) - base);
+        STRIP_PAD +
+        s * (u - lo) +
+        a * (b - s) * (lensArea(u - focus, size) - base);
 }
 
 /** The position whose `place(position)` lands on `px`, by halving (`place` rises with it) */
@@ -160,14 +184,11 @@ export function followPointer(
         else b = mid;
     }
     const at = (a + b) / 2;
-    if (at > focus + LENS_FLAT)
-        return solve(rows, px, (f) =>
-            warp(rows, width, f, strength)(f + LENS_FLAT),
-        );
-    if (at < focus - LENS_FLAT)
-        return solve(rows, px, (f) =>
-            warp(rows, width, f, strength)(f - LENS_FLAT),
-        );
+    const { flat } = lensSize(rows, width);
+    if (at > focus + flat)
+        return solve(rows, px, (f) => warp(rows, width, f, strength)(f + flat));
+    if (at < focus - flat)
+        return solve(rows, px, (f) => warp(rows, width, f, strength)(f - flat));
     return focus;
 }
 

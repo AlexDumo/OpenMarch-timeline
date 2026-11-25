@@ -96,7 +96,7 @@ test("change: 50 × 2 rows keep both ends in the menu, magnify where pointed, an
     await expect(readout).toContainText("Behind 1, spot 50 of 50");
     await expect(readout).toContainText("49 to the left, 0 to the right");
     await expect(page.getByTestId("shape-rows-spot-count")).toHaveText(
-        "← 49 · 0 →",
+        "49 left · 0 right",
     );
     await shot(page, "2-right-end");
     await page.mouse.down();
@@ -117,6 +117,11 @@ test("change: 50 × 2 rows keep both ends in the menu, magnify where pointed, an
     await pointAt(page, back, box.width / 2 + 16);
     await expect.poll(spotAt).toBe(middle + 2);
     await shot(page, "3-middle");
+    // The wheel moves the row a spot under the still pointer
+    await page.mouse.wheel(0, 100);
+    await expect.poll(spotAt).toBe(middle + 3);
+    await page.mouse.wheel(0, -100);
+    await expect.poll(spotAt).toBe(middle + 2);
     await page.mouse.down();
     await page.mouse.up();
     await expect(page.getByTestId("shape-rows-heading")).toContainText(
@@ -133,6 +138,9 @@ test("change: 50 × 2 rows keep both ends in the menu, magnify where pointed, an
     await expect(page.getByTestId("shape-rows-heading")).toContainText(
         "3 empty spots",
     );
+    // Other keys pass by the strip and leave its spot alone
+    await page.keyboard.press("Shift");
+    await expect(readout).toContainText("Drawn, spot 1 of");
     // Up keeps the column
     await page.keyboard.press("ArrowUp");
     await expect(readout).toContainText("Behind 1, spot 1 of");

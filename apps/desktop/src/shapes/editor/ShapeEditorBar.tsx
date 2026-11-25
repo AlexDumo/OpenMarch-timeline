@@ -1720,7 +1720,7 @@ function RowsMenu({ target }: { target: ShapeEditTarget }) {
                     sideOffset={6}
                     {...focus.content}
                     onPointerDown={(e) => e.stopPropagation()}
-                    className="rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal z-50 flex w-[360px] flex-col gap-2 border p-8"
+                    className="rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal z-50 flex w-420 flex-col gap-2 border p-8"
                     data-testid="shape-rows-content"
                 >
                     <div className="flex min-h-24 items-center justify-between gap-8 px-4">
@@ -1890,7 +1890,7 @@ function RowsMenu({ target }: { target: ShapeEditTarget }) {
                         >
                             <span />
                             <span className="relative self-stretch">
-                                <RowSpotsCount lens={lens} />
+                                <RowSpotsCount lens={lens} across={across} />
                             </span>
                             <span className="truncate">
                                 {tolgee.t(

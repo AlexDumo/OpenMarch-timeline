@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     focusUnder,
     followPointer,
-    LENS_FLAT,
+    lensSize,
     needsLens,
     PITCH,
     sameColumn,
@@ -81,14 +81,15 @@ describe("rowLens", () => {
             const focus = settled(rows, WIDTH / 2);
             const X = warp(rows, WIDTH, focus, 1);
             const met = new Set<number>();
-            for (let dx = -LENS_FLAT * PITCH; dx <= LENS_FLAT * PITCH; dx++) {
+            const { flat } = lensSize(rows, WIDTH);
+            for (let dx = -flat * PITCH; dx <= flat * PITCH; dx++) {
                 const px = WIDTH / 2 + dx;
                 expect(followPointer(rows, WIDTH, focus, 1, px)).toBe(focus);
                 met.add(spotUnder(rows, rows[0]!, WIDTH, focus, 1, px));
             }
             // Every spot the lens covers, one after another
             const list = [...met].sort((a, b) => a - b);
-            expect(list.length).toBeGreaterThanOrEqual(2 * LENS_FLAT);
+            expect(list.length).toBeGreaterThanOrEqual(2 * flat);
             list.forEach((spot, i) => i && expect(spot - list[i - 1]!).toBe(1));
             expect(X(focus)).toBeCloseTo(WIDTH / 2, 1);
         },
@@ -106,6 +107,31 @@ describe("rowLens", () => {
         }
         expect(last).toBe(249);
     });
+
+    it.each([
+        [90, 51],
+        [90, 100],
+        [150, 100],
+        [150, 250],
+    ])(
+        "in a %i px strip, a sweep along %i spots never skips more than the lens holds",
+        (width, n) => {
+            const rows = rowsOf(n);
+            const { flat } = lensSize(rows, width);
+            let focus = focusUnder(rows, width, STRIP_PAD, 1);
+            let last = 0;
+            let most = 0;
+            for (let px = STRIP_PAD; px <= width - STRIP_PAD; px++) {
+                focus = followPointer(rows, width, focus, 1, px);
+                const spot = spotUnder(rows, rows[0]!, width, focus, 1, px);
+                most = Math.max(most, spot - last);
+                last = spot;
+            }
+            expect(last).toBe(n - 1);
+            // A skipped spot is still in the lens, a step back inside it
+            expect(most).toBeLessThanOrEqual(2 * flat);
+        },
+    );
 
     it("finds the same column in a shorter or shifted row", () => {
         const long = { length: 34, shift: 0 };

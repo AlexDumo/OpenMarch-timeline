@@ -10,9 +10,10 @@ import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
 import {
     dotSize,
     followPointer,
-    LENS_FLAT,
+    lensSize,
     needsLens,
     sameColumn,
+    span,
     spotAt,
     spotUnder,
     warp,
@@ -48,6 +49,8 @@ export interface RowLens {
     blur(): void;
     /** A key on strip `at`: "press" for Space or Enter, true when the lens used it */
     key(at: number, key: string, shift: boolean): "press" | boolean;
+    /** The wheel over strip `at`: the row moves one spot under the pointer, `by` the way */
+    wheel(at: number, by: -1 | 1): void;
     hovered(): LensSpot | null;
     view(): {
         readonly rows: readonly LensRow[];
@@ -60,6 +63,18 @@ export interface RowLens {
     };
 }
 
+/** The keys a strip answers; any other key (Ctrl+Z, Tab…) passes by and leaves the lens be */
+const KEYS = new Set([
+    "ArrowLeft",
+    "ArrowRight",
+    "ArrowUp",
+    "ArrowDown",
+    "Home",
+    "End",
+    " ",
+    "Enter",
+]);
+
 export function createRowLens(): RowLens {
     let rows: readonly LensRow[] = [];
     let width = 0;
@@ -67,6 +82,7 @@ export function createRowLens(): RowLens {
     let row: number | null = null;
     let px = 0;
     let keySpot = 0;
+    let keyRow: number | null = null;
     let pinned = false;
     let press: { x: number; wasPinned: boolean; moved: boolean } | null = null;
     let open = 0;
@@ -95,6 +111,11 @@ export function createRowLens(): RowLens {
             else if (input !== null)
                 focus = followPointer(rows, width, focus, open, px);
         }
+        // The keyboard and the wheel carry on from the spot pointed at
+        if (input !== "key" && input !== null && row !== null && rows[row]) {
+            keySpot = spotUnder(rows, rows[row]!, width, focus, open, px);
+            keyRow = row;
+        }
         notify();
         if (open !== goal) kick();
     };
@@ -115,6 +136,22 @@ export function createRowLens(): RowLens {
         pinned = false;
         target = 0;
         kick();
+    };
+    /** The keyboard takes the lens on strip `at`, from the spot last pointed at or in its column */
+    const takeKeys = (at: number) => {
+        const r = rows[at]!;
+        const from = keyRow === null ? null : rows[keyRow];
+        keySpot =
+            keyRow === at
+                ? keySpot
+                : from
+                  ? sameColumn(from, Math.min(keySpot, from.length - 1), r)
+                  : Math.floor(r.length / 2);
+        keySpot = Math.max(0, Math.min(r.length - 1, keySpot));
+        keyRow = at;
+        input = "key";
+        row = at;
+        target = 1;
     };
     // A tap outside the strips lets go of a lens a touch left open
     const outside = (e: PointerEvent) => {
@@ -194,12 +231,7 @@ export function createRowLens(): RowLens {
             stopLeaving();
             const r = rows[at];
             if (!r) return;
-            if (input !== "key" || row === null)
-                keySpot = Math.floor(r.length / 2);
-            input = "key";
-            row = at;
-            keySpot = Math.min(keySpot, r.length - 1);
-            target = 1;
+            takeKeys(at);
             kick();
         },
         blur() {
@@ -216,14 +248,9 @@ export function createRowLens(): RowLens {
         },
         key(at, key, shift) {
             const r = rows[at];
-            if (!r) return false;
+            if (!r || !KEYS.has(key)) return false;
             stopLeaving();
-            if (input !== "key" || row !== at) {
-                input = "key";
-                row = at;
-                keySpot = Math.min(keySpot, r.length - 1);
-                target = 1;
-            }
+            if (input !== "key" || row !== at) takeKeys(at);
             const by = shift ? 5 : 1;
             if (key === "ArrowLeft") keySpot = Math.max(0, keySpot - by);
             else if (key === "ArrowRight")
@@ -236,11 +263,29 @@ export function createRowLens(): RowLens {
                 if (!to) return false;
                 keySpot = sameColumn(r, keySpot, to);
                 row = next;
+                keyRow = next;
                 strips.get(next)?.focus();
             } else if (key === " " || key === "Enter") return "press";
             else return false;
             kick();
             return true;
+        },
+        wheel(at, by) {
+            const r = rows[at];
+            if (!r) return;
+            if (input === "key") {
+                keySpot = Math.max(0, Math.min(r.length - 1, keySpot + by));
+            } else {
+                // The lens moves a spot, so the spot under the still pointer is the next one
+                const { lo, hi } = span(rows);
+                if (lens() && open > 0.5)
+                    focus = Math.max(lo, Math.min(hi, focus + by));
+                else {
+                    takeKeys(at);
+                    keySpot = Math.max(0, Math.min(r.length - 1, keySpot + by));
+                }
+            }
+            kick();
         },
         hovered() {
             if (row === null || input === null) return null;
@@ -303,7 +348,23 @@ export function RowSpots({
                 ? new ResizeObserver(size)
                 : null;
         watch?.observe(el);
+        // The wheel steps a spot a notch; a trackpad's small deltas add up to one
+        let sum = 0;
+        const wheel = (e: WheelEvent) => {
+            e.preventDefault();
+            const delta =
+                (Math.abs(e.deltaX) > Math.abs(e.deltaY)
+                    ? e.deltaX
+                    : e.deltaY) * (e.deltaMode === 1 ? 33 : 1);
+            if (Math.sign(delta) !== Math.sign(sum)) sum = 0;
+            sum += delta;
+            if (Math.abs(sum) < 80) return;
+            lens.wheel(at, sum > 0 ? 1 : -1);
+            sum = 0;
+        };
+        el.addEventListener("wheel", wheel, { passive: false });
         return () => {
+            el.removeEventListener("wheel", wheel);
             watch?.disconnect();
             lens.setStrip(at, null);
         };
@@ -348,8 +409,8 @@ export function RowSpots({
     const band =
         v.lens && v.open > 0.02
             ? {
-                  from: v.X(v.focus - LENS_FLAT - 0.5),
-                  to: v.X(v.focus + LENS_FLAT + 0.5),
+                  from: v.X(v.focus - lensSize(v.rows, v.width).flat - 0.5),
+                  to: v.X(v.focus + lensSize(v.rows, v.width).flat + 0.5),
               }
             : null;
     return (
@@ -426,7 +487,13 @@ export function RowSpots({
 }
 
 /** How many spots are each side of the one pointed at, over its column above the rows */
-export function RowSpotsCount({ lens }: { lens: RowLens }) {
+export function RowSpotsCount({
+    lens,
+    across,
+}: {
+    lens: RowLens;
+    across: boolean;
+}) {
     useLens(lens);
     const label = useRef<HTMLSpanElement | null>(null);
     const hot = lens.hovered();
@@ -448,10 +515,20 @@ export function RowSpotsCount({ lens }: { lens: RowLens }) {
             style={{ left: x }}
             data-testid="shape-rows-spot-count"
         >
-            {tolgee.t("shapes.rows.spotCount", "← {left} · {right} →", {
-                left: hot.spot,
-                right: row.length - 1 - hot.spot,
-            })}
+            {across
+                ? tolgee.t(
+                      "shapes.rows.spotCount",
+                      "{left} left · {right} right",
+                      {
+                          left: hot.spot,
+                          right: row.length - 1 - hot.spot,
+                      },
+                  )
+                : tolgee.t(
+                      "shapes.rows.spotCountUpDown",
+                      "{left} front · {right} back",
+                      { left: hot.spot, right: row.length - 1 - hot.spot },
+                  )}
         </span>
     );
 }
@@ -499,7 +576,7 @@ export function RowSpotsReadout({
             ? tolgee.t("shapes.rows.leaveEmpty", "Leave this spot empty")
             : tolgee.t(
                   "shapes.rows.fillSpot",
-                  "Empty spot: press to take it out",
+                  "Empty spot: press to put a marcher back here",
               );
         text = `${where}. ${does}`;
     } else
