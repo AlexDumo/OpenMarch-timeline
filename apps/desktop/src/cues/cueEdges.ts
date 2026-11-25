@@ -114,7 +114,12 @@ export function cueEdgeDrag({
 }
 
 /** Why End cue at playhead can't end a cue on a count, as the action's reason picks it. */
-export type EndRefusal = "beforeStart" | "pastNext" | "endsThere";
+export type EndRefusal =
+    | "beforeStart"
+    | "pastNext"
+    | "endsThere"
+    /** A Facing cue: it lasts until the next one; its turn leads into it (#993) */
+    | "lastingOnly";
 
 /**
  * Ending `cue` on `count` (End cue at playhead), by the end edge's rule: its new length, or why
@@ -152,4 +157,47 @@ export function endAtCount({
     if (result.end !== count) return { refused: "pastNext" };
     if (result.length === cue.length) return { refused: "endsThere" };
     return { length: result.length };
+}
+
+/** A Facing cue's turn after dragging its start: its transition (null: instant) and where it starts. */
+export interface TurnStartResult {
+    readonly transition: number | null;
+    readonly start: number;
+}
+
+/**
+ * The counts a Facing turn takes, from its stored transition (fork #993): a transition of L
+ * counts is counted inclusively, landing on the cue's count, so the turn runs over L − 1 counts
+ * before it (none, or 1, is instant).
+ */
+export const turnCounts = (transition: number | null): number =>
+    Math.max(0, (transition ?? 1) - 1);
+
+/** The transition a turn of `counts` counts before its cue stores (0: instant, null) */
+export const transitionForTurn = (counts: number): number | null =>
+    counts > 0 ? counts + 1 : null;
+
+/**
+ * Dragging the start of a Facing cue's turn `delta` counts (fork #993): the cue is its result on
+ * count `count`, and its turn leads into it. Dragged left the turn grows backwards; back to the
+ * cue's count it's instant. It never starts before `floor`, the cue before it for its performers
+ * (or the show's first count), as the compile cuts it there.
+ */
+export function turnStartDrag({
+    count,
+    transition,
+    floor,
+    delta,
+}: {
+    count: number;
+    transition: number | null;
+    floor: number;
+    delta: number;
+}): TurnStartResult {
+    const from = count - turnCounts(transition);
+    const start = Math.min(
+        Math.max(from + delta, Math.min(floor, count)),
+        count,
+    );
+    return { transition: transitionForTurn(count - start), start };
 }

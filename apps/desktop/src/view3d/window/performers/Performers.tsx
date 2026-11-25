@@ -81,7 +81,7 @@ import { workspaceSettingsQueryOptions } from "@/hooks/queries/useWorkspaceSetti
 import { performerDefaults } from "@/view3d/core/performerDefaults";
 import { useHoldStyles } from "./useHoldStyles";
 import { isPercussionSection } from "@/view3d/core/marchers/crab";
-import { marcherHeading } from "@/view3d/core/marchers/facing";
+import { FRONT_HEADING } from "@/view3d/core/marchers/facing";
 import {
     buildCountClock,
     countAt,
@@ -609,7 +609,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         [marcherBodies, showPlans, clock],
     );
     const headings = useMemo(
-        () => new Float32Array(count).fill(marcherHeading()),
+        () => new Float32Array(count).fill(FRONT_HEADING),
         [count],
     );
     const countRef = useRef(0);

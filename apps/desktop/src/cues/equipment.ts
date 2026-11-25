@@ -122,7 +122,7 @@ export const equipmentSetIsEmpty = (plan: EquipmentSet): boolean =>
     plan.newCues.length === 0;
 
 /** A plan that changes nothing yet. */
-const emptyPlan = (): EquipmentSet => ({
+export const emptyPlan = (): EquipmentSet => ({
     modifiedCues: [],
     deletedCueIds: [],
     newCues: [],
@@ -135,20 +135,26 @@ const emptyPlan = (): EquipmentSet => ({
  * value they join, the newest when there are two (the compile's winner), or null when there's none.
  * `except` (a cue being moved) is left out of the beat's cues.
  */
-function landOn({
+export function landOn({
     cues,
+    type = "equipment",
     beatId,
     length,
     value,
+    matches = (c) => c.value === value,
     marcherIds,
     except,
     relabelFor,
     plan,
 }: {
     cues: readonly DatabaseCue[];
+    /** The cue type: a performer is in at most one cue of a type and kind on a beat */
+    type?: string;
     beatId: number;
     length: number | null;
     value: string;
+    /** Whether a cue there sets the same thing, so they join it; the same value by default */
+    matches?: (cue: DatabaseCue) => boolean;
     marcherIds: readonly number[];
     except?: number;
     relabelFor: (marcherIds: readonly number[]) => string | null;
@@ -157,12 +163,12 @@ function landOn({
     const sameKind = cues.filter(
         (c) =>
             c.id !== except &&
-            c.type === "equipment" &&
+            c.type === type &&
             c.beatId === beatId &&
             c.length === length,
     );
     const target = sameKind
-        .filter((c) => c.value === value)
+        .filter(matches)
         .reduce<DatabaseCue | null>(
             (newest, c) => (newest === null || c.id > newest.id ? c : newest),
             null,
@@ -243,11 +249,21 @@ export function planEquipmentSet({
     return plan;
 }
 
-/** What moving a cue changes: the beat it's on, and how long it lasts (null: lasting). */
+/**
+ * What moving a cue changes: the beat it's on, how long it lasts (null: lasting), and how many
+ * counts its change takes (a Facing turn's; null: instant).
+ */
 export interface CueChange {
     readonly beatId?: number;
     readonly length?: number | null;
+    readonly transition?: number | null;
 }
+
+/** Two cues that set the same thing: the same value, settings and turn */
+export const sameSetting = (a: DatabaseCue, b: DatabaseCue): boolean =>
+    a.value === b.value &&
+    a.transition === b.transition &&
+    JSON.stringify(a.settings) === JSON.stringify(b.settings);
 
 /**
  * Moving cue `cueId` to another count, or changing how long it lasts (fork #992): its performers
@@ -273,21 +289,36 @@ export function planCueChange({
     if (!cue) return plan;
     const beatId = change.beatId ?? cue.beatId;
     const length = change.length === undefined ? cue.length : change.length;
-    if (beatId === cue.beatId && length === cue.length) return plan;
+    const transition =
+        change.transition === undefined ? cue.transition : change.transition;
+    if (
+        beatId === cue.beatId &&
+        length === cue.length &&
+        transition === cue.transition
+    )
+        return plan;
     const fields: ModifiedCueArgs = {
         id: cue.id,
         ...(beatId !== cue.beatId && { beatId }),
         ...(length !== cue.length && { length }),
+        ...(transition !== cue.transition && { transition }),
     };
-    if (cue.type !== "equipment") {
+    if (cue.type !== "equipment" && cue.type !== "facing") {
         plan.modifiedCues.push(fields);
         return plan;
     }
+    // A Facing cue joins one that sets the same angle and turn (#993)
+    const moved = { ...cue, transition };
     const target = landOn({
         cues,
+        type: cue.type,
         beatId,
         length,
         value: cue.value,
+        matches:
+            cue.type === "facing"
+                ? (c) => sameSetting(c, moved)
+                : (c) => c.value === cue.value,
         marcherIds: cue.marcherIds,
         except: cue.id,
         relabelFor,
@@ -328,6 +359,9 @@ export function withEquipmentSet(
                 ...c,
                 ...(change.beatId !== undefined && { beatId: change.beatId }),
                 ...(change.length !== undefined && { length: change.length }),
+                ...(change.transition !== undefined && {
+                    transition: change.transition,
+                }),
                 ...(change.marcherIds !== undefined && {
                     marcherIds: [...change.marcherIds],
                 }),

@@ -3,7 +3,9 @@
 <!-- cspell:words shako -->
 
 - Status: accepted by the owner on 2026-11-15, decision by decision, in a
-  design pass (the record is under "Decisions with the owner").
+  design pass (the record is under "Decisions with the owner"). Amended on
+  2026-11-25 for Facing: a cue is its result, and its transition leads into
+  it (see the amendment at the end).
 - Date: 2026-11-15
 - Supersedes in part: [ADR 0004](0004-performer-cues.md) D-1 to D-3 and its
   channels, including those of its 2026-10-11 amendment, and the Feet default
@@ -105,7 +107,9 @@ file on fork main holds cues.
   momentary only.
 - **Transition length:** a cue may say how many counts its change takes
   ("horns down over 2", "turn to the back over 4"). Each value has a default,
-  such as a snap for horns and 2 counts for a facing change.
+  such as a snap for horns and 2 counts for a facing change. Amended
+  2026-11-25: a Facing change is a snap unless given a transition (see the
+  amendment).
 - Before a performer's first cue of a type, the parameter has its
   **default**: a show setting or the section's, never stored as a cue.
 
@@ -316,3 +320,58 @@ Worked through one at a time on 2026-11-15.
 - End to end: set a rifle for the selection at a count; the 2D field and the
   3D View show it from that count; "Select Rifles" picks those performers
   there and not before.
+
+## Amendment 2026-11-25: a cue is its result, and its transition leads into it
+
+Settled with the owner on 2026-11-25 while building Facing cues (fork #993),
+after trying a turn that started on its cue's count. It confirms D-2's
+transition rule, makes it the rule the cue lanes edit by, and fills in D-3's
+Facing row.
+
+### Decision
+
+- **A cue is its result:** "facing 180° by count 3". Its count is where the
+  value is in place.
+- **The transition is a separate piece in front of the result.** It leads
+  into the cue's count over the cue's transition, counted inclusively as D-2
+  says: a transition of L counts starts on the click of count − L + 1, so it
+  changes over the L − 1 counts before the cue, and 1 (or none, for a value
+  whose default is a snap) is instant. It never starts before the
+  performer's previous cue of the type: it starts there instead, and the
+  compile flags the cut (`transition_cut`). This is the rule Equipment,
+  Position and every other type already compile by (`transitionSegment`), so
+  Facing, Position (#1297) and later types share it.
+- **For Facing, the transition turns at an even speed** per count (linear), in
+  unwrapped degrees. A renderer doesn't ease it.
+- **Editing follows the model.** In a cue lane, the result's bar starts on
+  the cue's count. Dragging its start, or the transition's, to the left
+  grows the transition backwards into the hold before it and leaves the
+  result on its count; dragging it back to the count makes it instant.
+  Moving the bar moves the cue and its transition together. To face back on
+  count 3, turning over the 2 counts before, the cue sits on count 3 with
+  its transition starting on count 1.
+- **Facing** (D-3's row, as built):
+  - A facing is an angle in plain degrees: 0 front, 90 side 2, 180 back, 270
+    (or −90) side 1. Angles aren't wrapped: 360 is a full spin, and −270
+    ends where 90 does after turning the other way. A positive angle turns
+    toward the performer's own left as they face front (side 2 is the
+    audience's right).
+  - Each performer turns from their own angle. Front, Back, Side 1 and Side 2
+    go to the nearest equivalent angle from it (half a turn either way goes
+    left), Turn left 45° and Turn right 45° from it, and an angle exactly.
+  - Facing cues are lasting only, and a snap unless given a transition (the
+    2-count default above no longer holds for Facing).
+  - Before a performer's first Facing cue they face front (0°).
+  - Direction of travel and toward a point stay in the library, not yet
+    offered.
+- **The feet follow the path for any facing.** A facing that differs from
+  the travel is a slide, backmarch or crab step whichever way the body
+  faces, and the 3D View works out which.
+
+### Consequences
+
+- The compiled Facing segments carry each performer's angle (`degrees`, and
+  a turn's `fromDegrees`), and `facingAt` answers the angle at any time.
+- A transition's length as people see it (the counts before the cue) is one
+  less than the stored `transition`, which counts the cue's own count too.
+- Equipment stays an instant swap on its count.

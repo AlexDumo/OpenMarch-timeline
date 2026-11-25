@@ -772,6 +772,87 @@ const STATIC_ACTIONS = {
         scope: "global",
         defaultBindings: [],
     },
+    toggleFacingLane: {
+        labelKey: "actions.cues.toggleFacingLane",
+        keywordsKey: "actions.cues.laneKeywords",
+        category: "timeline",
+        scope: "global",
+        defaultBindings: [],
+    },
+    // Facing cues (fork #993): where the selected performers face from the paused playhead, one
+    // lasting cue that turns each from their own angle (`cues/facing.ts`). The field menu's Facing
+    // submenu runs these; the sides' labels follow the field's side names (the handlers)
+    facingFront: {
+        labelKey: "actions.cues.setFacing",
+        labelItemKey: "cues.facing.front",
+        keywordsKey: "actions.cues.facingKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: ["Alt+0"],
+    },
+    facingBack: {
+        labelKey: "actions.cues.setFacing",
+        labelItemKey: "cues.facing.back",
+        keywordsKey: "actions.cues.facingKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: ["Alt+B"],
+    },
+    facingSide1: {
+        labelKey: "actions.cues.setFacing",
+        labelItemKey: "cues.facing.side1",
+        keywordsKey: "actions.cues.facingKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: ["Alt+1"],
+    },
+    facingSide2: {
+        labelKey: "actions.cues.setFacing",
+        labelItemKey: "cues.facing.side2",
+        keywordsKey: "actions.cues.facingKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: ["Alt+2"],
+    },
+    facingTurnLeft: {
+        labelKey: "actions.cues.facingTurnLeft",
+        keywordsKey: "actions.cues.facingKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: ["Alt+BracketLeft"],
+    },
+    facingTurnRight: {
+        labelKey: "actions.cues.facingTurnRight",
+        keywordsKey: "actions.cues.facingKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: ["Alt+BracketRight"],
+    },
+    // Angle…: asks the degrees (unwrapped: 360 is a spin, −270 turns the long way to side 2)
+    facingAngle: {
+        labelKey: "actions.cues.facingAngle",
+        keywordsKey: "actions.cues.facingKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: [],
+        params: [
+            {
+                key: "degrees",
+                labelKey: "actions.cues.params.degrees",
+                unit: "degrees",
+                default: 90,
+            },
+        ],
+    },
+    // The picked Facing cue's turn: its angle and counts, in the turn popover (the lane's
+    // double-click)
+    cueEditTurn: {
+        labelKey: "actions.cues.editTurn",
+        keywordsKey: "actions.cues.cueKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: [],
+    },
     setAllMarchersToNextPage: {
         labelKey: "actions.batchEdit.moveAllToNextSpots",
         category: "batchEdit",

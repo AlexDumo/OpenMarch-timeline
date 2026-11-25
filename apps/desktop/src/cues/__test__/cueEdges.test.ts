@@ -1,7 +1,14 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import type { DatabaseCue } from "@/db-functions/cues";
-import { cueEdgeDrag, cueNeighbours, endAtCount } from "../cueEdges";
+import {
+    cueEdgeDrag,
+    cueNeighbours,
+    endAtCount,
+    transitionForTurn,
+    turnCounts,
+    turnStartDrag,
+} from "../cueEdges";
 import { compileShowCues } from "../showCues";
 import { equipmentLane } from "../equipmentLane";
 
@@ -285,5 +292,34 @@ describe("cue edges among the performers' other cues (#992 review)", () => {
             [6, 60, 2],
             [60, 96, 3],
         ]);
+    });
+});
+
+describe("where a Facing turn starts (#993)", () => {
+    it("counts a turn's transition inclusively: L counts lead into the cue over L − 1", () => {
+        expect(turnCounts(null)).toBe(0);
+        expect(turnCounts(1)).toBe(0);
+        expect(turnCounts(3)).toBe(2);
+        expect(transitionForTurn(0)).toBeNull();
+        expect(transitionForTurn(2)).toBe(3);
+    });
+
+    it("grows the turn backwards from the result, keeping the result on its count", () => {
+        // A cue on count 10, the cue before it on count 4
+        const at = (delta: number, transition: number | null = null) =>
+            turnStartDrag({ count: 10, transition, floor: 4, delta });
+        // From an instant cue: two counts left is a 2-count turn, stored as 3
+        expect(at(-2)).toEqual({ transition: 3, start: 8 });
+        // From a 2-count turn's start: one more count
+        expect(at(-1, 3)).toEqual({ transition: 4, start: 7 });
+        // Back to the cue's count, or past it: instant
+        expect(at(2, 3)).toEqual({ transition: null, start: 10 });
+        expect(at(5)).toEqual({ transition: null, start: 10 });
+    });
+
+    it("never starts the turn before the cue before it", () => {
+        expect(
+            turnStartDrag({ count: 10, transition: null, floor: 4, delta: -9 }),
+        ).toEqual({ transition: 7, start: 4 });
     });
 });
