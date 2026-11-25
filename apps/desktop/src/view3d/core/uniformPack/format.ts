@@ -1,6 +1,6 @@
 // cspell:words fflate omasset IHDR zippable Zippable eocd
 /**
- * The uniform pack, format versions 1 and 2, a **preview** (docs/3d/uniform-artwork.md, "The
+ * The uniform pack, format versions 1 to 3, a **preview** (docs/3d/uniform-artwork.md, "The
  * uniform pack"; ADR 0010 amendments of 2026-11-24, forks #1257 and #1258). It can still change,
  * and freezes only after a real artist has finished a uniform with it (fork #1259).
  *
@@ -8,8 +8,8 @@
  * (one part, `pack`): a pack leaves a show and comes back unchanged. It is a zip holding
  *
  * - `manifest.json`: the asset format, its version, the kind (`uniform`), the name, the page in
- *   real inches, the palette and part options, the layers, the placed items (version 2) and the
- *   credits; `modes`, `variants` and `attachments` are reserved for later steps;
+ *   real inches, the palette and part options, the layers, the placed items (version 2), the
+ *   modes (version 3) and the credits; `variants` and `attachments` are reserved for later steps;
  * - `layers/<id>.png`: each layer, a transparent PNG covering the whole flats page;
  * - `items/<id>.png`: each placed item's image (version 2), a transparent PNG of the art alone.
  *
@@ -17,11 +17,12 @@
  * fork #1262, so the outer fields (`format`, `formatVersion`, `kind`, `name`, `credits`) are
  * meant for every kind; the rest is the uniform's.
  *
- * Both versions are strict: unknown keys are refused, and so are non-empty `modes`, `variants` and
- * `attachments`, which are reserved (and `items`, in version 1). A field that changes what is
- * drawn bumps `formatVersion`, so an older build refuses that pack instead of drawing it wrong.
- * Version 2 adds only `items`, so a pack is written as version 1 while it has none: a build that
- * reads only version 1 still reads it, and draws it right.
+ * Every version is strict: unknown keys are refused, and so are non-empty `variants` and
+ * `attachments`, which are reserved (and `items` in version 1, `modes` in versions 1 and 2). A
+ * field that changes what is drawn bumps `formatVersion`, so an older build refuses that pack
+ * instead of drawing it wrong. Version 2 adds only `items` and version 3 only `modes`, so a pack is
+ * written as the lowest version that holds it: a build that reads only version 1 still reads a
+ * pack with neither, and draws it right.
  *
  * Reading never trusts the zip's sizes: only the manifest and the layers it names are inflated,
  * each one streamed and stopped as soon as it passes its declared size, and an entry whose
@@ -41,9 +42,9 @@ export const UNIFORM_ASSET_KIND = "uniform";
 export const ASSET_FILE_FORMAT = "openmarch-asset";
 /**
  * The newest pack format version this build reads and writes. A preview until fork #1259; see the
- * module comment. Version 2 (fork #1258) adds placed items.
+ * module comment. Version 2 (fork #1258) adds placed items, version 3 (fork #1257, step 5) modes.
  */
-export const UNIFORM_PACK_VERSION = 2;
+export const UNIFORM_PACK_VERSION = 3;
 /** The file's extension and type, for every kind of asset file (epic fork #1262) */
 export const ASSET_FILE_EXTENSION = ".omasset";
 export const ASSET_FILE_MIME = "application/vnd.openmarch.asset+zip";
@@ -68,6 +69,8 @@ export const UNIFORM_PACK_MAX_ENTRIES = 64;
 export const UNIFORM_PACK_MAX_LAYERS = 16;
 /** Placed items in one pack */
 export const UNIFORM_PACK_MAX_ITEMS = 32;
+/** Modes in one pack */
+export const UNIFORM_PACK_MAX_MODES = 8;
 /** A layer image with more pixels than this isn't decoded (4× the page) */
 export const UNIFORM_LAYER_MAX_PIXELS =
     4 * FLATS_PAGE_PX.width * FLATS_PAGE_PX.height;
@@ -96,8 +99,20 @@ const paletteSchema = z.strictObject({
     visor: hex,
 });
 
+/** A layer's, item's or mode's id: what the manifest's lists name each other by */
+const idSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,31}$/);
+
+/** Part options: the parts the palette draws, or leaves off */
+const optionsSchema = z.strictObject({
+    stripe: z.boolean(),
+    collar: z.boolean(),
+    cuffs: z.boolean(),
+    gloves: z.boolean(),
+    hat: z.boolean(),
+});
+
 const layerSchema = z.strictObject({
-    id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,31}$/),
+    id: idSchema,
     name: z.string().max(120),
     /** Its image in the pack */
     file: z.string().regex(/^layers\/[a-z0-9][a-z0-9-]{0,31}\.png$/),
@@ -166,7 +181,7 @@ export const ITEM_MIN_TILE_IN = 1;
 
 const itemSchema = z
     .strictObject({
-        id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,31}$/),
+        id: idSchema,
         /** What the list calls it, such as the picked file's name */
         name: z.string().max(120).optional(),
         /** Its image in the pack; items may share one */
@@ -214,11 +229,33 @@ const itemSchema = z
 
 export type UniformPackItem = z.infer<typeof itemSchema>;
 
+/**
+ * A mode (version 3): one way the uniform is worn, such as plain, sash out, or sash out and
+ * unzipped (docs/3d/uniform-artwork.md, "Modes and variants"). It names the layers it draws, bottom
+ * first (the base, then overlays that hold only what changes), the items that show in it, and the
+ * palette roles and part options it changes. The first mode is the default.
+ */
+const modeSchema = z.strictObject({
+    id: idSchema,
+    name: z.string().min(1).max(120),
+    /** Layer ids, bottom first; at least one, none twice */
+    layers: z.array(idSchema).min(1).max(UNIFORM_PACK_MAX_LAYERS),
+    /** The item ids that show in this mode, none twice; drawn in the pack's item order */
+    items: z.array(idSchema).max(UNIFORM_PACK_MAX_ITEMS),
+    /** Palette roles this mode changes */
+    palette: paletteSchema.partial().optional(),
+    /** Part options this mode changes */
+    options: optionsSchema.partial().optional(),
+});
+
+export type UniformPackMode = z.infer<typeof modeSchema>;
+export type UniformPackLayer = z.infer<typeof layerSchema>;
+
 export const uniformPackManifestSchema = z
     .strictObject({
         format: z.literal(ASSET_FILE_FORMAT),
-        /** 1, or 2 when it has items */
-        formatVersion: z.union([z.literal(1), z.literal(2)]),
+        /** 1, 2 when it has items, 3 when it has modes */
+        formatVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
         /** True while the format can still change (fork #1259) */
         preview: z.boolean().optional(),
         kind: z.literal(UNIFORM_ASSET_KIND),
@@ -241,22 +278,23 @@ export const uniformPackManifestSchema = z
         ]),
         palette: paletteSchema,
         /** Part options */
-        options: z.strictObject({
-            stripe: z.boolean(),
-            collar: z.boolean(),
-            cuffs: z.boolean(),
-            gloves: z.boolean(),
-            hat: z.boolean(),
-        }),
-        /** Bottom first, ids unique. Every layer this build draws, in this order. */
+        options: optionsSchema,
+        /**
+         * Bottom first, ids unique. With no modes, every layer is drawn, in this order; with
+         * modes, each mode draws the ones it names.
+         */
         layers: z.array(layerSchema).min(1).max(UNIFORM_PACK_MAX_LAYERS),
         /**
          * Placed logos, numbers, crests and prints (version 2, fork #1258), drawn over the layers
          * in order, bottom first. Version 1 reserves it: empty or left out.
          */
         items: z.array(itemSchema).max(UNIFORM_PACK_MAX_ITEMS).optional(),
-        /** Reserved for modes and variants (step 5 of fork #1257) */
-        modes: reserved,
+        /**
+         * The ways the uniform is worn (version 3, step 5 of fork #1257); the first is the
+         * default. Versions 1 and 2 reserve it: empty or left out.
+         */
+        modes: z.array(modeSchema).max(UNIFORM_PACK_MAX_MODES).optional(),
+        /** Reserved for variants: guard, percussion, drum major (fork #1257) */
         variants: reserved,
         /** Reserved for hanging pieces (fork #1261) */
         attachments: reserved,
@@ -278,6 +316,39 @@ export const uniformPackManifestSchema = z
         const itemIds = items.map((item) => item.id);
         if (new Set(itemIds).size !== itemIds.length)
             ctx.addIssue({ code: "custom", message: "item ids repeat" });
+        const modes = manifest.modes ?? [];
+        if (manifest.formatVersion < 3 && modes.length > 0)
+            ctx.addIssue({
+                code: "custom",
+                message: `version ${manifest.formatVersion} has no modes`,
+            });
+        const modeIds = modes.map((mode) => mode.id);
+        if (new Set(modeIds).size !== modeIds.length)
+            ctx.addIssue({ code: "custom", message: "mode ids repeat" });
+        const layerIds = new Set(ids);
+        const itemIdSet = new Set(itemIds);
+        for (const mode of modes) {
+            if (new Set(mode.layers).size !== mode.layers.length)
+                ctx.addIssue({
+                    code: "custom",
+                    message: `mode ${mode.id} names a layer twice`,
+                });
+            if (mode.layers.some((id) => !layerIds.has(id)))
+                ctx.addIssue({
+                    code: "custom",
+                    message: `mode ${mode.id} names a layer the pack doesn't have`,
+                });
+            if (new Set(mode.items).size !== mode.items.length)
+                ctx.addIssue({
+                    code: "custom",
+                    message: `mode ${mode.id} names an item twice`,
+                });
+            if (mode.items.some((id) => !itemIdSet.has(id)))
+                ctx.addIssue({
+                    code: "custom",
+                    message: `mode ${mode.id} names an item the pack doesn't have`,
+                });
+        }
     });
 
 export type UniformPackManifest = z.infer<typeof uniformPackManifestSchema>;
@@ -291,10 +362,15 @@ export interface UniformPack {
     itemFiles: { file: string; png: Uint8Array }[];
 }
 
-/** The lowest format version that holds `manifest`: 2 with items, otherwise 1 */
+/** The lowest format version that holds `manifest`: 3 with modes, else 2 with items, else 1 */
 export const requiredPackVersion = (
-    manifest: Pick<UniformPackManifest, "items">,
-): 1 | 2 => ((manifest.items?.length ?? 0) > 0 ? 2 : 1);
+    manifest: Pick<UniformPackManifest, "items" | "modes">,
+): 1 | 2 | 3 =>
+    (manifest.modes?.length ?? 0) > 0
+        ? 3
+        : (manifest.items?.length ?? 0) > 0
+          ? 2
+          : 1;
 
 /** The files a manifest's items name, each once, in first use order */
 export const itemFilesOf = (manifest: Pick<UniformPackManifest, "items">) => [
@@ -353,9 +429,47 @@ export function manifestLookOf(
     };
 }
 
-/** The look a pack's manifest describes: the colors under and around its art */
-export function lookOfManifest(manifest: UniformPackManifest): PresetLook {
-    const p = manifest.palette;
+/**
+ * The mode `modeId` names, or the default (the first) when it names none the pack has; null for a
+ * pack without modes
+ */
+export function modeOf(
+    manifest: Pick<UniformPackManifest, "modes">,
+    modeId?: string | null,
+): UniformPackMode | null {
+    const modes = manifest.modes ?? [];
+    return modes.find((m) => m.id === modeId) ?? modes[0] ?? null;
+}
+
+/**
+ * What a pack draws in mode `modeId` ({@link modeOf}): its layers, bottom first, and its items, in
+ * the pack's order. A pack without modes draws every layer and every item.
+ */
+export function drawnInMode(
+    manifest: Pick<UniformPackManifest, "modes" | "layers" | "items">,
+    modeId?: string | null,
+): { layers: UniformPackLayer[]; items: UniformPackItem[] } {
+    const items = manifest.items ?? [];
+    const mode = modeOf(manifest, modeId);
+    if (!mode) return { layers: [...manifest.layers], items: [...items] };
+    const byId = new Map(manifest.layers.map((layer) => [layer.id, layer]));
+    const shown = new Set(mode.items);
+    return {
+        layers: mode.layers.flatMap((id) => byId.get(id) ?? []),
+        items: items.filter((item) => shown.has(item.id)),
+    };
+}
+
+/**
+ * The look a pack's manifest describes: the colors under and around its art, with mode `modeId`'s
+ * palette and option changes ({@link modeOf}) when it has modes
+ */
+export function lookOfManifest(
+    manifest: UniformPackManifest,
+    modeId?: string | null,
+): PresetLook {
+    const mode = modeOf(manifest, modeId);
+    const p = { ...manifest.palette, ...mode?.palette };
     return {
         style: manifest.style,
         colors: {
@@ -370,12 +484,18 @@ export function lookOfManifest(manifest: UniformPackManifest): PresetLook {
             plume: fromHex(p.plume),
             visor: fromHex(p.visor),
         },
-        options: { ...manifest.options },
+        options: { ...manifest.options, ...mode?.options },
     };
 }
 
-/** The same pack always makes the same bytes: every entry gets this date */
-const FIXED_MTIME = new Date(Date.UTC(1980, 0, 1, 12));
+/**
+ * The same pack always makes the same bytes: every entry gets this date. A zip stores DOS local
+ * time, which fflate reads from the Date's **local** fields, so the date is built from local fields
+ * too: 1980-01-01 12:00 in every timezone. (`Date.UTC(…)` wrote 07:00 in New York and 12:00 on a
+ * UTC CI runner, so the same pack made different bytes, and different Versions, by timezone.) Made
+ * at each write, not once: the system's timezone can change while the app runs.
+ */
+const fixedMtime = () => new Date(1980, 0, 1, 12);
 
 /**
  * The pack file for `manifest` and its layers' and items' PNGs, keyed by their `file`. It is
@@ -386,16 +506,18 @@ export function writeUniformPack(
     manifest: UniformPackManifest,
     files: Readonly<Record<string, Uint8Array>>,
 ): Uint8Array {
+    const mtime = fixedMtime();
     const checked = uniformPackManifestSchema.parse({
         ...manifest,
         formatVersion: requiredPackVersion(manifest),
         items: manifest.items ?? [],
+        modes: manifest.modes ?? [],
     });
     const zippable: Zippable = {
         // a readable manifest first, so a person opening the zip finds it
         [MANIFEST]: [
             strToU8(`${JSON.stringify(checked, null, 2)}\n`),
-            { level: 6, mtime: FIXED_MTIME },
+            { level: 6, mtime },
         ],
     };
     for (const layer of checked.layers) {
@@ -403,13 +525,13 @@ export function writeUniformPack(
         if (!png || !pngHeaderSize(png))
             throw new Error(`uniform pack: layer ${layer.file} isn't a PNG`);
         // PNGs are compressed already
-        zippable[layer.file] = [png, { level: 0, mtime: FIXED_MTIME }];
+        zippable[layer.file] = [png, { level: 0, mtime }];
     }
     for (const file of itemFilesOf(checked)) {
         const png = files[file];
         if (!png || !pngHeaderSize(png))
             throw new Error(`uniform pack: item ${file} isn't a PNG`);
-        zippable[file] = [png, { level: 0, mtime: FIXED_MTIME }];
+        zippable[file] = [png, { level: 0, mtime }];
     }
     return zipSync(zippable);
 }
@@ -635,14 +757,59 @@ export function readUniformPack(bytes: Uint8Array): UniformPack {
 }
 
 /**
- * The pack file for `pack` with `items` in place of its own: its layers kept, the item files it
- * has that `items` still name kept, and `files` (item PNGs by file) added or put in their place.
- * Throws when an item names a file neither has, or the manifest doesn't parse.
+ * What the uniform pack worker's `flatten` draws (step 5 of fork #1257): the layer PNGs, bottom
+ * first, and the items the window then places. By default, mode `mode`'s layers and items (the
+ * default mode when it names none the pack has). With `layers` (a draft's), those layer files
+ * instead, each from the pack or else from `extra` (a draft's new overlay), and every item of the
+ * pack. Throws {@link UniformPackError} `damaged` for a layer file in neither.
  */
-export function packWithItems(
+export function flattenPlan(
     pack: UniformPack,
-    items: UniformPackItem[],
-    files: Readonly<Record<string, Uint8Array>>,
+    {
+        mode,
+        layers,
+        extra = {},
+    }: {
+        mode?: string | null;
+        layers?: readonly string[];
+        extra?: Readonly<Record<string, Uint8Array>>;
+    },
+): { images: { file: string; png: Uint8Array }[]; items: UniformPackItem[] } {
+    const own = new Map(
+        pack.manifest.layers.map((layer, i) => [
+            layer.file,
+            pack.layers[i].png,
+        ]),
+    );
+    const inMode = drawnInMode(pack.manifest, mode);
+    const files = layers ?? inMode.layers.map((layer) => layer.file);
+    const images = files.map((file) => {
+        const png = own.get(file) ?? extra[file];
+        if (!png) throw damaged(`no layer ${file}`);
+        return { file, png };
+    });
+    return {
+        images,
+        items: layers ? (pack.manifest.items ?? []) : inMode.items,
+    };
+}
+
+/** What an edit of a pack changes: any of its layers, items and modes, and its colors and parts */
+export type UniformPackContents = Pick<
+    UniformPackManifest,
+    "layers" | "items" | "modes" | "palette" | "options"
+>;
+
+/**
+ * The pack file for `pack` with `contents` in place of its own: the layer and item files it has
+ * that the new lists still name kept, and `files` (layer and item PNGs by file) added or put in
+ * their place. A list left out of `contents` is kept as it was. Throws when a layer or item names
+ * a file neither has, or the manifest doesn't parse.
+ */
+export function packWithContents(
+    pack: UniformPack,
+    contents: Partial<UniformPackContents>,
+    files: Readonly<Record<string, Uint8Array>> = {},
 ): Uint8Array {
     const all: Record<string, Uint8Array> = {};
     pack.manifest.layers.forEach((layer, i) => {
@@ -650,8 +817,15 @@ export function packWithItems(
     });
     for (const { file, png } of pack.itemFiles) all[file] = png;
     for (const [file, png] of Object.entries(files)) all[file] = png;
-    return writeUniformPack({ ...pack.manifest, items }, all);
+    return writeUniformPack({ ...pack.manifest, ...contents }, all);
 }
+
+/** {@link packWithContents} with only new `items` */
+export const packWithItems = (
+    pack: UniformPack,
+    items: UniformPackItem[],
+    files: Readonly<Record<string, Uint8Array>>,
+): Uint8Array => packWithContents(pack, { items }, files);
 
 /** A file name for a pack called `name`: its own characters where a file system allows them */
 export function uniformPackFileName(name: string): string {

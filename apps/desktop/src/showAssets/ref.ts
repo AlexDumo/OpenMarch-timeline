@@ -17,9 +17,10 @@ export interface ShowAssetRef {
 
 /**
  * True for an id an asset can have: some characters, none of them `@` (which ends the id in a
- * reference) or whitespace.
+ * reference), `#` (which ends it in a Uniform cue's version-free value, `library:<id>#<mode>`,
+ * ADR 0004 amendment 2026-11-24) or whitespace. The app makes ids as UUIDs.
  */
-export const isShowAssetId = (id: string): boolean => /^[^@\s]+$/.test(id);
+export const isShowAssetId = (id: string): boolean => /^[^@#\s]+$/.test(id);
 
 /** The reference that names `ref`, for `items.model` or a cue value. */
 export function showAssetRefValue(ref: ShowAssetRef): string {

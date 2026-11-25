@@ -410,6 +410,8 @@ describe("uniform flats math", () => {
         expect(flatsArtworkOf(7)).toBeNull();
         expect(flatsArtworkOf("later-pack")).toBeNull();
         expect(flatsArtworkOf("library:abc@not-a-hash")).toBeNull();
+        // an asset id never holds `#` (it would read as a mode, ADR 0004 amendment 2026-11-24)
+        expect(flatsArtworkOf(`library:a#b@${"a".repeat(64)}`)).toBeNull();
         expect(flatsArtworkOf(undefined)).toBeNull();
     });
 });

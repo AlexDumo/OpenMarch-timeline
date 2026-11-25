@@ -40,10 +40,12 @@ import {
     FLATS_PAGE_IN,
     type UniformPackItem,
 } from "@/view3d/core/uniformPack/format";
+import { draftOrigin } from "@/view3d/window/uniformPack/itemDrafts";
 import {
-    draftOrigin,
-    drawnDraft,
-} from "@/view3d/window/uniformPack/itemDrafts";
+    packPageKey,
+    packPagePlan,
+    type PageLayers,
+} from "@/view3d/window/uniformPack/packPage";
 import { readStoredUniformPackBytes } from "@/hooks/queries/useUniformPack";
 import { runUniformPackJob } from "@/view3d/uniformPack/runUniformPackJob";
 import type { BodyType } from "@/view3d/core/marchers/looks";
@@ -75,16 +77,21 @@ let geometryPromise: Promise<{
     layout: FlatsLayout;
     regions: FlatsRegions;
 }> | null = null;
+/** The geometry once loaded, for {@link peekFlatsResources} */
+let geometryLoaded: { layout: FlatsLayout; regions: FlatsRegions } | null =
+    null;
 /** `layout.json` and `regions.json`, once. */
 export function loadFlatsGeometry() {
     geometryPromise ??= Promise.all([
         fetchJson<FlatsLayout>(layoutUrl),
         fetchJson<FlatsRegions>(regionsUrl),
-    ]).then(([layout, regions]) => ({ layout, regions }));
+    ]).then(([layout, regions]) => (geometryLoaded = { layout, regions }));
     return geometryPromise;
 }
 
 const lutPromises = new Map<BodyType, Promise<THREE.DataTexture>>();
+/** The tables once loaded, for {@link peekFlatsResources} */
+const tablesLoaded = new Map<BodyType, THREE.DataTexture>();
 /** A body type's lookup table as a half-float RGBA texture, once per window. */
 export function loadFlatsLut(body: BodyType): Promise<THREE.DataTexture> {
     let p = lutPromises.get(body);
@@ -95,7 +102,11 @@ export function loadFlatsLut(body: BodyType): Promise<THREE.DataTexture> {
                 if (!r.ok) throw new Error(`3D View: flats table ${r.status}`);
                 return r.arrayBuffer();
             }),
-        ]).then(([{ layout }, buf]) => flatsLutTexture(layout, buf));
+        ]).then(([{ layout }, buf]) => {
+            const lut = flatsLutTexture(layout, buf);
+            tablesLoaded.set(body, lut);
+            return lut;
+        });
         lutPromises.set(body, p);
     }
     return p;
@@ -240,15 +251,16 @@ const packPages = new Map<string, PackPage>();
  * A show's pack's layers flattened onto one bitmap of the whole page at
  * `dpi`, and its item images decoded, read in the uniform pack worker (never
  * in the window: the show may come from anyone). The window holds one bitmap
- * per pack, not one per layer, plus one per item image. Shared while atlases
- * are composed from it, then closed.
+ * per (pack, mode), not one per layer, plus one per item image. Shared while
+ * atlases are composed from it, then closed.
  */
 async function withPackPage<T>(
     key: string,
     dpi: number,
+    which: PageLayers,
     use: (drawing: PackDrawing) => Promise<T>,
 ): Promise<T> {
-    const cacheKey = `${key}|${dpi}`;
+    const cacheKey = packPageKey(key, dpi, which);
     let entry = packPages.get(cacheKey);
     if (!entry) {
         const promise = (async (): Promise<PackDrawing> => {
@@ -261,6 +273,18 @@ async function withPackPage<T>(
                 bytes: stored.bytes.slice(),
                 width: Math.round(FLATS_PAGE_IN.width * dpi),
                 height: Math.round(FLATS_PAGE_IN.height * dpi),
+                ...("files" in which
+                    ? {
+                          layers: which.files,
+                          // copies: the draft keeps its own
+                          extra: Object.fromEntries(
+                              Object.entries(which.extra).map(([f, png]) => [
+                                  f,
+                                  png.slice(),
+                              ]),
+                          ),
+                      }
+                    : { mode: which.mode }),
             });
             if (result.type !== "flattened")
                 throw new Error("3D View: the uniform didn't draw");
@@ -306,11 +330,11 @@ async function composeAtlas(
     dpi: number,
 ): Promise<FlatsAtlas> {
     if (isUniformPackValue(id)) {
-        // an item draft (`itemDrafts.ts`) draws over the pack it started from
-        const draft = drawnDraft(id);
+        // the mode it's worn in, and any draft it draws (step 5 of fork #1257)
+        const { pack, draft, which, items: planned } = packPagePlan(id);
         const draw = async (drawing: PackDrawing): Promise<FlatsAtlas> => {
             const { layout, regions } = await loadFlatsGeometry();
-            const items = draft ? draft.items : drawing.items;
+            const items = planned ?? drawing.items;
             const imageOf = (file: string) =>
                 draft?.images[file]?.bitmap ?? drawing.images.get(file);
             const rect = flatsAtlasLayout(
@@ -353,14 +377,14 @@ async function composeAtlas(
                 return Promise.resolve();
             });
         };
-        const from = draftOrigin(id);
+        const from = draftOrigin(pack);
         try {
-            return await withPackPage(from, dpi, draw);
+            return await withPackPage(from, dpi, which, draw);
         } catch (error) {
             // a burst's save removed that version while this composed: read the newest
-            const now = draftOrigin(id);
+            const now = draftOrigin(pack);
             if (!draft || now === from) throw error;
-            return await withPackPage(now, dpi, draw);
+            return await withPackPage(now, dpi, which, draw);
         }
     }
     return await composeBuiltIn(id, body, dpi);
@@ -632,6 +656,8 @@ async function composeFrom(
 interface CacheEntry {
     promise: Promise<FlatsAtlas>;
     refs: number;
+    /** The atlas once composed */
+    done?: FlatsAtlas;
 }
 const atlases = new Map<string, CacheEntry>();
 export const flatsKey = (id: FlatsArtworkKey, body: BodyType, dpi: number) =>
@@ -649,12 +675,39 @@ export function acquireFlats(
     const key = flatsKey(id, body, dpi);
     let e = atlases.get(key);
     if (!e) {
-        e = { promise: composeAtlas(id, body, dpi), refs: 0 };
-        atlases.set(key, e);
-        e.promise.catch(() => atlases.delete(key));
+        const entry: CacheEntry = {
+            promise: composeAtlas(id, body, dpi),
+            refs: 0,
+        };
+        e = entry;
+        atlases.set(key, entry);
+        entry.promise.then(
+            (atlas) => {
+                entry.done = atlas;
+            },
+            () => atlases.delete(key),
+        );
     }
     e.refs++;
     return e.promise;
+}
+
+/**
+ * An atlas already composed, with its body type's table and the layout, or null when any of
+ * them isn't ready yet. Lets a wear that waited for its atlases (`useSettledFlatsWear`) reach the
+ * marchers in the same render as its palette, instead of a few frames later. Doesn't acquire:
+ * call {@link acquireFlats} too (a released atlas stays a moment, so it's still there).
+ */
+export function peekFlatsResources(
+    id: FlatsArtworkKey,
+    body: BodyType,
+    dpi: number,
+): { atlas: FlatsAtlas; lut: THREE.DataTexture; layout: FlatsLayout } | null {
+    const atlas = atlases.get(flatsKey(id, body, dpi))?.done;
+    const lut = tablesLoaded.get(body);
+    return atlas && lut && geometryLoaded
+        ? { atlas, lut, layout: geometryLoaded.layout }
+        : null;
 }
 
 /** Lets go of an atlas from {@link acquireFlats}; the last user frees it. */

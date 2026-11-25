@@ -18,7 +18,8 @@ import {
     UNIFORM_ITEM_STORED_PX,
     UNIFORM_LAYER_MAX_PIXELS,
     UniformPackError,
-    packWithItems,
+    flattenPlan,
+    packWithContents,
     pngHeaderSize,
     readUniformPack,
 } from "@/view3d/core/uniformPack/format";
@@ -230,8 +231,9 @@ async function handle(request: UniformPackRequest) {
             // context, which goes when the worker ends after answering, and the window then
             // draws it blank (the band lost its fabric while editing items, fork #1287)
             const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
-            for (const layer of pack.layers) {
-                const { bitmap } = await decodePng(layer.png, w, h);
+            const plan = flattenPlan(pack, request);
+            for (const { png } of plan.images) {
+                const { bitmap } = await decodePng(png, w, h);
                 ctx.drawImage(bitmap, 0, 0, w, h);
                 bitmap.close();
             }
@@ -263,7 +265,7 @@ async function handle(request: UniformPackRequest) {
                 {
                     type: "flattened",
                     bitmap,
-                    items: pack.manifest.items ?? [],
+                    items: plan.items,
                     itemBitmaps,
                 },
                 [bitmap, ...itemBitmaps.map((i) => i.bitmap)],
@@ -309,20 +311,22 @@ async function handle(request: UniformPackRequest) {
             await finishItem(canvas);
             return;
         }
-        case "withItems": {
+        case "withContents": {
             const pack = readUniformPack(request.bytes);
             for (const [file, png] of Object.entries(request.files)) {
                 const size = pngHeaderSize(png);
-                if (
-                    !size ||
-                    size.width * size.height > UNIFORM_ITEM_MAX_PIXELS ||
-                    Math.max(size.width, size.height) > UNIFORM_ITEM_MAX_SIDE
-                )
-                    throw new Refused("notPng", `${file} isn't an item image`);
+                const ok = file.startsWith("layers/")
+                    ? // a new layer is a page, as a `png` or `pixels` job stored it
+                      size?.width === width && size.height === height
+                    : !!size &&
+                      size.width * size.height <= UNIFORM_ITEM_MAX_PIXELS &&
+                      Math.max(size.width, size.height) <=
+                          UNIFORM_ITEM_MAX_SIDE;
+                if (!ok) throw new Refused("notPng", `${file} isn't its image`);
             }
             let bytes: Uint8Array;
             try {
-                bytes = packWithItems(pack, request.items, request.files);
+                bytes = packWithContents(pack, request.contents, request.files);
             } catch (error) {
                 throw new Refused(
                     "damaged",

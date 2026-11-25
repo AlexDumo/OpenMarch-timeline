@@ -62,6 +62,7 @@ import {
     useItemDrafts,
 } from "@/view3d/window/uniformPack/itemDrafts";
 import { importItemFile } from "@/view3d/window/uniformPack/importItem";
+import { contentsOf } from "@/view3d/core/uniformPack/modeEdits";
 import { UniformImportError } from "@/view3d/window/uniformPack/importUniform";
 import { Segmented, SegmentedMany } from "./Panel";
 import { useVenueRequest } from "./VenueControls";
@@ -118,13 +119,13 @@ export function UniformItemsControls() {
     }, []);
 
     if (!uniformArtworkAvailable() || !wornPack || !pack) return null;
-    const stored = pack.manifest.items ?? [];
+    const stored = contentsOf(pack.manifest);
     // while the band's version loads, the stored items on screen are the version before's: shown,
     // but not editable, unless a draft holds the real ones
     const { items, editable } = itemListState(
         draft,
         wornPack,
-        stored,
+        stored.items,
         isPlaceholderData,
     );
     const presets = regions ? itemPresets(regions) : [];

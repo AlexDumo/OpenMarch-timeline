@@ -5,6 +5,7 @@
  * the 3D View draws it. One job per worker; `runUniformPackJob` starts a fresh one and ends it.
  */
 import type {
+    UniformPackContents,
     UniformPackItem,
     UniformPackManifest,
 } from "@/view3d/core/uniformPack/format";
@@ -34,9 +35,22 @@ export type UniformPackRequest =
     | { type: "pack"; bytes: Uint8Array; regions?: PageRegions }
     /**
      * A pack file's layers drawn in order onto one bitmap of the whole page, at this size, plus
-     * each item file decoded (fork #1258), for the window to place and grade per body type
+     * each item file decoded (fork #1258), for the window to place and grade per body type.
+     * It draws what the pack's mode `mode` draws (step 5 of fork #1257; the default mode when it
+     * names none), and answers with that mode's items. With `layers` (a draft's), it draws those
+     * layer files instead, bottom first, and answers with every item: a file the pack doesn't
+     * have is drawn from `extra` (a draft's new overlay, checked like any layer), and one in
+     * neither is refused.
      */
-    | { type: "flatten"; bytes: Uint8Array; width: number; height: number }
+    | {
+          type: "flatten";
+          bytes: Uint8Array;
+          width: number;
+          height: number;
+          mode?: string | null;
+          layers?: string[];
+          extra?: Record<string, Uint8Array>;
+      }
     /** A picked PNG for a placed item: decoded, trimmed to its art, capped in size, re-encoded */
     | { type: "item"; bytes: Uint8Array }
     /** An item already drawn (an SVG): trimmed, capped and encoded like a PNG's */
@@ -47,13 +61,14 @@ export type UniformPackRequest =
           pixels: Uint8ClampedArray;
       }
     /**
-     * A pack file rewritten with `items`: its layers kept, its item files kept where still named,
-     * and `files` (new item PNGs, from an `item` job) added
+     * A pack file rewritten with `contents` (its layers, items and modes): its files kept where
+     * still named, and `files` (new item PNGs from an `item` job, new layer PNGs from a `png` or
+     * `pixels` job) added
      */
     | {
-          type: "withItems";
+          type: "withContents";
           bytes: Uint8Array;
-          items: UniformPackItem[];
+          contents: UniformPackContents;
           files: Record<string, Uint8Array>;
       };
 

@@ -94,9 +94,16 @@ export async function setUniformPackInTransaction({
         },
     });
     const value = showAssetRefValue(ref);
-    const venue =
+    const stored =
         (await getStoredVenueSettings({ db: tx })) ??
         defaultVenueForField(field);
+    // a new uniform starts in its default mode; a new version of the same one keeps the mode
+    // the band wears while it still has it (step 5 of fork #1257)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- left out
+    const { uniformMode, ...rest } = stored;
+    const keepsMode =
+        !!id && (manifest.modes ?? []).some((m) => m.id === uniformMode);
+    const venue = keepsMode ? stored : rest;
     await updateVenueSettingsInTransaction({
         tx,
         settings: { ...venue, uniformArtwork: value },
