@@ -1,4 +1,4 @@
-import type { FieldTheme } from "@openmarch/core";
+import type { FieldProperties, FieldTheme } from "@openmarch/core";
 import type {
     FieldPlan,
     FieldRole,
@@ -6,7 +6,12 @@ import type {
     PlanItem,
 } from "@/view3d/core/field";
 import { TURF } from "@/view3d/core/field/turfPlan";
-import type { PaintedMarking } from "@/field/fieldPlan";
+import {
+    NOTHING_PAINTED,
+    type PaintedMarking,
+    type PaintedMarkings,
+} from "@/field/fieldPlan";
+import { turfHashRows } from "@/view3d/core/field/turfPlan";
 import {
     useUiSettingsStore,
     type FieldVenueAround,
@@ -164,7 +169,6 @@ export function venuePasses(
 
 const VENUE_MARKINGS: readonly PaintedMarking[] = [
     "yardLine",
-    "hash",
     "yLine",
     "yardNumber",
     "border",
@@ -173,16 +177,27 @@ const VENUE_MARKINGS: readonly PaintedMarking[] = [
 /**
  * The markings the look paints from the venue, which the 2D grid then leaves out
  * (`planField2d`'s `painted`): in Full color, each one the venue's surface has. Stadium turf
- * paints its yard lines, hashes, numbers and border, so the grid keeps only its step grid and
- * labels; a tarp paints only its edge, marks and dots, so the grid keeps its lines and numbers.
+ * paints its yard lines, hashes, numbers and border, so the grid keeps only its step grid, labels
+ * and any reference hash the turf skips; a tarp paints only its edge, marks and dots, so the grid
+ * keeps its lines and numbers.
  */
 export function venuePaintedMarkings(
     plan: FieldPlan,
     look: VenueLook,
-): ReadonlySet<PaintedMarking> {
-    if (!look.keepMarkings || look.ink) return new Set();
+    fieldProperties: FieldProperties,
+): PaintedMarkings {
+    if (!look.keepMarkings || look.ink) return NOTHING_PAINTED;
     const roles = new Set<FieldRole>(plan.items.map((i) => i.role));
-    return new Set(VENUE_MARKINGS.filter((m) => roles.has(m)));
+    return {
+        kinds: new Set(VENUE_MARKINGS.filter((m) => roles.has(m))),
+        hashRows: new Set(
+            roles.has("hash")
+                ? turfHashRows(fieldProperties.yCheckpoints).map(
+                      (c) => c.stepsFromCenterFront,
+                  )
+                : [],
+        ),
+    };
 }
 
 /** The color most of the surface is (its background rect), as 0..1 RGB. */

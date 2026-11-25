@@ -427,7 +427,15 @@ function planHashesAndTicks(
 }
 
 function realHashes(ctx: PlanContext): Checkpoint[] {
-    const ys = visible(ctx.fieldProperties.yCheckpoints);
+    return turfHashRows(ctx.fieldProperties.yCheckpoints);
+}
+
+/**
+ * The y checkpoints turf paints hashes on: every visible one but a reference hash within 2 steps
+ * of a real one (a college field's grid back hash beside the real NCAA hash).
+ */
+export function turfHashRows(yCheckpoints: Checkpoint[]): Checkpoint[] {
+    const ys = visible(yCheckpoints);
     return ys.filter(
         (c) =>
             !c.useAsReference ||

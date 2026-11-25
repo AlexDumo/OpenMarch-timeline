@@ -45,15 +45,13 @@ import type {
 } from "@/view3d/core/environment";
 import { useTheme } from "@/context/ThemeContext";
 import type { FieldVenueAround } from "@/stores/UiSettingsStore";
-import type { PaintedMarking } from "@/field/fieldPlan";
+import { NOTHING_PAINTED, type PaintedMarkings } from "@/field/fieldPlan";
 import {
     planBaseColor,
     venuePaintedMarkings,
     venuePasses,
     type VenueLook,
 } from "./fieldVenue";
-
-const NOTHING_PAINTED: ReadonlySet<PaintedMarking> = new Set();
 
 /**
  * The show's 3D venue under the 2D grid (fork #1207). The field surface is the
@@ -472,7 +470,7 @@ export default function VenueUnderlayLayer({
      * The markings the shown surface paints (`venuePaintedMarkings`), for the 2D grid to leave
      * out; called with the surface, so the grid's copies drop out as the venue's appear.
      */
-    onPainted?: (painted: ReadonlySet<PaintedMarking>) => void;
+    onPainted?: (painted: PaintedMarkings) => void;
 }) {
     const onPaintedRef = useRef(onPainted);
     onPaintedRef.current = onPainted;
@@ -539,7 +537,9 @@ export default function VenueUnderlayLayer({
             image,
         );
         setField(surface);
-        onPaintedRef.current?.(venuePaintedMarkings(plan, look));
+        onPaintedRef.current?.(
+            venuePaintedMarkings(plan, look, fieldProperties),
+        );
         return () => surface.dispose();
         // `lookKey` stands for `look`
         // eslint-disable-next-line react-hooks/exhaustive-deps

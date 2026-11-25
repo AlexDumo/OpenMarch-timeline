@@ -91,9 +91,34 @@ describe("venuePasses", () => {
 
 describe("venuePaintedMarkings", () => {
     it("hands the turf's lines, hashes, numbers and border to the venue in Full color", () => {
-        expect(venuePaintedMarkings(turf, VENUE_LOOKS.full)).toEqual(
-            new Set(["yardLine", "hash", "yardNumber", "border"]),
+        const painted = venuePaintedMarkings(turf, VENUE_LOOKS.full, fp);
+        expect(painted.kinds).toEqual(
+            new Set(["yardLine", "yardNumber", "border"]),
         );
+        expect(painted.hashRows).toEqual(
+            new Set(
+                fp.yCheckpoints
+                    .filter((c) => c.visible)
+                    .map((c) => c.stepsFromCenterFront),
+            ),
+        );
+    });
+
+    it("leaves a college field's grid back hash to the grid, since the turf paints the real one", () => {
+        const college =
+            FieldPropertiesTemplates.COLLEGE_FOOTBALL_FIELD_NO_END_ZONES;
+        const plan = planField({
+            fieldProperties: college,
+            style: "turf",
+            params: DEFAULT_VENUE_PARAMS,
+        });
+        const { hashRows } = venuePaintedMarkings(
+            plan,
+            VENUE_LOOKS.full,
+            college,
+        );
+        expect(hashRows.has(-53.33)).toBe(true);
+        expect(hashRows.has(-52)).toBe(false);
     });
 
     it("leaves the grid whole in the other looks", () => {
@@ -102,7 +127,10 @@ describe("venuePaintedMarkings", () => {
             VENUE_LOOKS.soft,
             VENUE_LOOKS.markings,
         ])
-            expect(venuePaintedMarkings(turf, look).size).toBe(0);
+            expect(venuePaintedMarkings(turf, look, fp)).toEqual({
+                kinds: new Set(),
+                hashRows: new Set(),
+            });
     });
 
     it("keeps the grid's lines and numbers on a tarp, which paints only its edge, marks and dots", () => {
@@ -111,9 +139,11 @@ describe("venuePaintedMarkings", () => {
             style: "tarp",
             params: DEFAULT_VENUE_PARAMS,
         });
-        expect(venuePaintedMarkings(tarp, VENUE_LOOKS.full)).toEqual(
-            new Set(["border"]),
-        );
+        const floor = indoorFloorTemplate(FULL_SIZE_FLOOR, 22.5);
+        expect(venuePaintedMarkings(tarp, VENUE_LOOKS.full, floor)).toEqual({
+            kinds: new Set(["border"]),
+            hashRows: new Set(),
+        });
     });
 });
 

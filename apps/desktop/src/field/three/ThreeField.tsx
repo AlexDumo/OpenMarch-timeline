@@ -98,7 +98,11 @@ import {
 import { PIXELS_PER_METER } from "@/items/itemOutlines";
 import { PIT_MANIFEST, pitModelName } from "@/view3d/core/pit/pitModels";
 import { isMacPlatform } from "@/shortcuts/platform";
-import { planFieldImage, type PaintedMarking } from "@/field/fieldPlan";
+import {
+    NOTHING_PAINTED,
+    planFieldImage,
+    type PaintedMarkings,
+} from "@/field/fieldPlan";
 import { dropMarchersOnTimeline } from "@/field/fieldDrop";
 import {
     fieldViewSize,
@@ -196,8 +200,6 @@ const FOCUS_ORDER = 1.4;
 const ITEMS_ORDER = 1.3;
 const PATHS_ORDER = 1.5;
 const COLLISIONS_ORDER = 4;
-/** No venue markings: the grid draws all of its own. */
-const NOTHING_PAINTED: ReadonlySet<PaintedMarking> = new Set();
 
 /**
  * The three.js field, or an explanation in its place when its canvas can't get
@@ -288,7 +290,7 @@ function ThreeFieldView() {
     // What the venue paints in Full color (its yard lines, hashes and numbers on turf): the grid
     // leaves those out, so the field's own markings show once
     const [venuePainted, setVenuePainted] =
-        useState<ReadonlySet<PaintedMarking>>(NOTHING_PAINTED);
+        useState<PaintedMarkings>(NOTHING_PAINTED);
     // Full color draws the grid in light ink over the dark turf
     const lineFieldProperties = useMemo(
         () =>
@@ -865,7 +867,13 @@ function ThreeFieldView() {
                                 lineFieldProperties ?? fieldProperties
                             }
                             strips={strips}
-                            painted={venuePainted}
+                            // Only while a look paints markings: off, the grid's come back
+                            // with the venue gone, not an effect later
+                            painted={
+                                venue3d?.keepMarkings
+                                    ? venuePainted
+                                    : NOTHING_PAINTED
+                            }
                             numberAtlas={atlases.number}
                             labelAtlas={atlases.checkpoint}
                         />

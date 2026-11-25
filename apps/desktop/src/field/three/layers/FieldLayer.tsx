@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 import type { FieldViewFrom } from "@/field/fieldViewFrom";
-import type { PaintedMarking } from "@/field/fieldPlan";
+import type { PaintedMarkings } from "@/field/fieldPlan";
 import { useFrame, useThree } from "@react-three/fiber";
 import {
     BufferAttribute,
@@ -203,7 +203,7 @@ export default function FieldLayer({
 }: {
     fieldProperties: FieldProperties;
     /** Markings the venue under the grid paints, left out here (`planField2d`). */
-    painted?: ReadonlySet<PaintedMarking>;
+    painted?: PaintedMarkings;
     /**
      * The side the field is seen from: the performers' turns it (exports only, #1265). The pit
      * area `strips` aren't turned, so don't pass both.
