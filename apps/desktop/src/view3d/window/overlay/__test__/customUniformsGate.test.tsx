@@ -40,10 +40,14 @@ const ASSET = "8a6f2c1e-4b3d-4e5f-9a0b-1c2d3e4f5a6b";
 const PACK = `library:${ASSET}@${"ab".repeat(32)}` as const;
 
 const venue = { current: defaultVenueForKit("hs") as object };
-/** What the show holds: whether it has the uniform, and whether its file reads (or is newer) */
+/**
+ * What the show holds: whether it has the uniform, and whether its file reads. A pack made by a
+ * newer OpenMarch, and one that couldn't be loaded, go through the real read in
+ * `uniformPickerReads.test.tsx`.
+ */
 const stored = {
     inShow: true,
-    read: "ok" as "ok" | "unreadable" | "newer",
+    read: "ok" as "ok" | "unreadable",
 };
 
 vi.mock("@/hooks/queries/useVenueSettings", () => ({
@@ -100,8 +104,6 @@ vi.mock("@/hooks/queries/useUniformPack", async (importOriginal) => {
                         : null,
                 enabled: !!value,
             }),
-        uniformPackIsNewer: (value: string | null | undefined) =>
-            value === PACK && stored.read === "newer",
     };
 });
 
@@ -236,24 +238,6 @@ describe("a custom uniform the band can't wear", () => {
         expect(
             screen.getByTestId("view3d-uniform-preview-turn-on"),
         ).toBeTruthy();
-    });
-
-    it("tells the person to update OpenMarch when it was made by a newer one, with the setting off or on", async () => {
-        stored.read = "newer";
-        wearing();
-        for (const on of [false, true]) {
-            setPreview(on);
-            openPanel();
-            const note = await screen.findByTestId("view3d-uniform-newer");
-            expect(note.textContent).toBe(
-                "The band's uniform was made with a newer version of OpenMarch, so the band wears its preset. Update OpenMarch to see it.",
-            );
-            // updating is the fix, not the preview
-            expect(
-                screen.queryByTestId("view3d-uniform-preview-turn-on"),
-            ).toBeNull();
-            cleanup();
-        }
     });
 
     it("keeps the setting-on wording, once, under the picker", async () => {

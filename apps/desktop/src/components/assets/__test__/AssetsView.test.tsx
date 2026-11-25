@@ -675,6 +675,102 @@ describeDbTests("Assets view", (it) => {
         ).toBeNull();
     });
 
+    it("says with Custom uniforms (preview) off that the band's uniform can't be read, and only to pick another", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        await wearUniform(db, "Undecodable off", UNDECODABLE);
+        void act(() => useCustomUniformsStore.getState().setEnabled(false));
+        try {
+            await setUpFeature(<SidebarModal />, 1, []);
+            await act(async () => showAssetsView());
+            await waitFor(() =>
+                expect(
+                    screen.getByTestId("assets-unreadable-uniform-note"),
+                ).toHaveTextContent(
+                    "The band's custom uniform is in this show, but its file can't be read (it may be damaged), so the band wears its preset. Pick another uniform in the 3D View settings.",
+                ),
+            );
+            expect(
+                screen.queryByTestId("assets-load-failed-uniform-note"),
+            ).toBeNull();
+        } finally {
+            void act(() => useCustomUniformsStore.getState().setEnabled(true));
+        }
+    });
+
+    it("says the band's uniform couldn't be loaded, not that it's damaged, when every read fails, and Try again reads it", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        const value = await wearUniform(db, "Never loads", 16);
+        // every job fails as a dead worker does, however often it's retried
+        worker.passingFailures = 1000;
+        worker.jobs = 0;
+        try {
+            await setUpFeature(<SidebarModal />, 1, []);
+            await act(async () => showAssetsView());
+            await waitFor(
+                () =>
+                    expect(
+                        screen.getByTestId("assets-load-failed-uniform-note"),
+                    ).toHaveTextContent(
+                        "The band's custom uniform couldn't be loaded just now, so the band wears its preset for now. Its file may be fine.",
+                    ),
+                // the read is retried, with the usual waits, before it fails
+                { timeout: 15000 },
+            );
+            // tried, and tried again, before saying so
+            expect(worker.jobs).toBeGreaterThan(1);
+            expect(
+                screen.queryByTestId("assets-unreadable-uniform-note"),
+            ).toBeNull();
+
+            worker.passingFailures = 0;
+            fireEvent.click(screen.getByTestId("assets-uniform-try-again"));
+            await waitFor(() =>
+                expect(
+                    harnessQueryClient()!.getQueryData(
+                        uniformPackQueryOptions(value).queryKey,
+                    ),
+                ).toBeTruthy(),
+            );
+            await waitFor(() =>
+                expect(
+                    screen.queryByTestId("assets-load-failed-uniform-note"),
+                ).toBeNull(),
+            );
+        } finally {
+            worker.passingFailures = 0;
+        }
+    });
+
+    it("says when the show's assets couldn't be listed, and Try again lists them", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        await wearUniform(db, "Listed later", 17);
+        // the assets can't be read: their table isn't where the read looks
+        await db.run(sql`ALTER TABLE show_assets RENAME TO show_assets_away`);
+        await setUpFeature(<SidebarModal />, 1, []);
+        await act(async () => showAssetsView());
+        // the list is retried, with the usual waits, before it fails
+        await screen.findByTestId("assets-load-failed-note", undefined, {
+            timeout: 15000,
+        });
+        expect(screen.queryAllByTestId("asset-row")).toHaveLength(0);
+
+        await db.run(sql`ALTER TABLE show_assets_away RENAME TO show_assets`);
+        fireEvent.click(screen.getByTestId("assets-try-again"));
+        await waitFor(() =>
+            expect(screen.getAllByTestId("asset-row")).toHaveLength(1),
+        );
+        expect(screen.queryByTestId("assets-load-failed-note")).toBeNull();
+    });
+
     it("counts the version the band wears in place of a removed one as in use (#1287)", async ({
         db,
         marchersAndPages,
