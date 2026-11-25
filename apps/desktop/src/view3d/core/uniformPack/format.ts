@@ -488,8 +488,14 @@ export function lookOfManifest(
     };
 }
 
-/** The same pack always makes the same bytes: every entry gets this date */
-const FIXED_MTIME = new Date(Date.UTC(1980, 0, 1, 12));
+/**
+ * The same pack always makes the same bytes: every entry gets this date. A zip stores DOS local
+ * time, which fflate reads from the Date's **local** fields, so the date is built from local fields
+ * too: 1980-01-01 12:00 in every timezone. (`Date.UTC(…)` wrote 07:00 in New York and 12:00 on a
+ * UTC CI runner, so the same pack made different bytes, and different Versions, by timezone.) Made
+ * at each write, not once: the system's timezone can change while the app runs.
+ */
+const fixedMtime = () => new Date(1980, 0, 1, 12);
 
 /**
  * The pack file for `manifest` and its layers' and items' PNGs, keyed by their `file`. It is
@@ -500,6 +506,7 @@ export function writeUniformPack(
     manifest: UniformPackManifest,
     files: Readonly<Record<string, Uint8Array>>,
 ): Uint8Array {
+    const mtime = fixedMtime();
     const checked = uniformPackManifestSchema.parse({
         ...manifest,
         formatVersion: requiredPackVersion(manifest),
@@ -510,7 +517,7 @@ export function writeUniformPack(
         // a readable manifest first, so a person opening the zip finds it
         [MANIFEST]: [
             strToU8(`${JSON.stringify(checked, null, 2)}\n`),
-            { level: 6, mtime: FIXED_MTIME },
+            { level: 6, mtime },
         ],
     };
     for (const layer of checked.layers) {
@@ -518,13 +525,13 @@ export function writeUniformPack(
         if (!png || !pngHeaderSize(png))
             throw new Error(`uniform pack: layer ${layer.file} isn't a PNG`);
         // PNGs are compressed already
-        zippable[layer.file] = [png, { level: 0, mtime: FIXED_MTIME }];
+        zippable[layer.file] = [png, { level: 0, mtime }];
     }
     for (const file of itemFilesOf(checked)) {
         const png = files[file];
         if (!png || !pngHeaderSize(png))
             throw new Error(`uniform pack: item ${file} isn't a PNG`);
-        zippable[file] = [png, { level: 0, mtime: FIXED_MTIME }];
+        zippable[file] = [png, { level: 0, mtime }];
     }
     return zipSync(zippable);
 }

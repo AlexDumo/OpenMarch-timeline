@@ -1,5 +1,5 @@
 // @vitest-environment node
-// cspell:words omasset
+// cspell:words omasset Kiritimati Pago
 /**
  * A committed version 3 pack file (Cadets 2019, fork #1257 step 5): this build reads it and still
  * writes the same bytes; step 4's reader, copied verbatim in `step4Format.ts`, refuses it; and
@@ -59,6 +59,39 @@ describe("the version 3 pack file", () => {
                 formatVersion: 2,
             }).success,
         ).toBe(false);
+    });
+});
+
+describe("the same pack in any timezone", () => {
+    it("writes the same bytes, stamped 1980-01-01 12:00, under every TZ", () => {
+        const before = process.env.TZ;
+        const out: Record<string, number[]> = {};
+        try {
+            for (const tz of [
+                "UTC",
+                "America/New_York",
+                "Pacific/Kiritimati",
+                "Pacific/Pago_Pago",
+            ]) {
+                process.env.TZ = tz;
+                out[tz] = Array.from(cadetsV3());
+            }
+        } finally {
+            if (before === undefined) delete process.env.TZ;
+            else process.env.TZ = before;
+        }
+        // the zone really changed for the Date the writer reads
+        process.env.TZ = "Pacific/Kiritimati";
+        const plus14Hour = new Date(Date.UTC(1980, 0, 1, 12)).getHours();
+        if (before === undefined) delete process.env.TZ;
+        else process.env.TZ = before;
+        expect(plus14Hour).toBe(2);
+        for (const bytes of Object.values(out)) expect(bytes).toEqual(out.UTC);
+        expect(out.UTC).toEqual(Array.from(file()));
+        // the first local header's DOS time and date: 12:00:00 on 1980-01-01
+        const view = new DataView(new Uint8Array(out.UTC).buffer);
+        expect(view.getUint16(10, true)).toBe(12 << 11);
+        expect(view.getUint16(12, true)).toBe((0 << 9) | (1 << 5) | 1);
     });
 });
 
