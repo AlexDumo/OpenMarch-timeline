@@ -120,6 +120,12 @@ import { GlyphText } from "./GlyphText";
 import { useShapePointerOver } from "../tool/shapeToolMode";
 import "./ShapeEditorSurface.css";
 import {
+    createRowLens,
+    RowSpots,
+    RowSpotsCount,
+    RowSpotsReadout,
+} from "./RowSpots";
+import {
     Divider,
     EDITOR_BAR,
     EditorButton,
@@ -1635,6 +1641,7 @@ function RowsMenu({ target }: { target: ShapeEditTarget }) {
     });
     const rows = target.kind.rows;
     const said = useRef<string | null>(null);
+    const lens = useMemo(createRowLens, []);
     const actions = useMemo(() => {
         const base = numberActions(target, run, chips);
         const step = (param: Param, by: -1 | 1) => {
@@ -1679,8 +1686,10 @@ function RowsMenu({ target }: { target: ShapeEditTarget }) {
               "shapes.rows.addNone",
               "No room for another row: every row needs a marcher",
           );
-    const longest = Math.max(...view.rows.map((r) => r.spots.length));
-    const dot = Math.max(4, Math.min(8, Math.floor(132 / longest) - 3));
+    lens.setRows(
+        view.rows.map((r) => ({ length: r.spots.length, shift: r.shift })),
+    );
+    const names = view.rows.map((r) => rowName(r, across));
     const removable = many || view.empty > 0;
     return (
         <Popover.Root open={open} onOpenChange={setOpen}>
@@ -1711,7 +1720,7 @@ function RowsMenu({ target }: { target: ShapeEditTarget }) {
                     sideOffset={6}
                     {...focus.content}
                     onPointerDown={(e) => e.stopPropagation()}
-                    className="rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal z-50 flex w-[360px] flex-col gap-2 border p-8"
+                    className="rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal z-50 flex w-420 flex-col gap-2 border p-8"
                     data-testid="shape-rows-content"
                 >
                     <div className="flex min-h-24 items-center justify-between gap-8 px-4">
@@ -1880,7 +1889,9 @@ function RowsMenu({ target }: { target: ShapeEditTarget }) {
                             data-testid="shape-rows-columns"
                         >
                             <span />
-                            <span />
+                            <span className="relative self-stretch">
+                                <RowSpotsCount lens={lens} across={across} />
+                            </span>
                             <span className="truncate">
                                 {tolgee.t(
                                     "shapes.rows.colMarchers",
@@ -1913,73 +1924,30 @@ function RowsMenu({ target }: { target: ShapeEditTarget }) {
                                     >
                                         {name}
                                     </span>
-                                    <span
-                                        className="flex items-center justify-center overflow-hidden"
-                                        style={{
-                                            transform: `translateX(${(row.shift * (dot + 2)) / 2}px)`,
-                                        }}
-                                    >
-                                        {row.spots.map((filled, j) => (
-                                            <button
-                                                key={j}
-                                                type="button"
-                                                aria-label={
-                                                    filled
-                                                        ? tolgee.t(
-                                                              "shapes.rows.leaveEmpty",
-                                                              "Leave this spot empty",
-                                                          )
-                                                        : tolgee.t(
-                                                              "shapes.rows.fillSpot",
-                                                              "Empty spot: press to take it out",
-                                                          )
-                                                }
-                                                title={
-                                                    filled
-                                                        ? tolgee.t(
-                                                              "shapes.rows.leaveEmpty",
-                                                              "Leave this spot empty",
-                                                          )
-                                                        : tolgee.t(
-                                                              "shapes.rows.fillSpot",
-                                                              "Empty spot: press to take it out",
-                                                          )
-                                                }
-                                                onClick={() =>
-                                                    env &&
-                                                    apply(
-                                                        rows.toggleSpot(
-                                                            target.params,
-                                                            target.spots,
-                                                            row.index,
-                                                            j,
-                                                            env,
-                                                        ),
-                                                    )
-                                                }
-                                                data-testid={`shape-rows-dot-${i}-${j}`}
-                                                className={clsx(
-                                                    "group flex h-24 items-center justify-center px-1",
-                                                    row.side === null
-                                                        ? "text-accent"
-                                                        : "text-text",
-                                                )}
-                                            >
-                                                <span
-                                                    className={clsx(
-                                                        "block rounded-full group-hover:scale-125",
-                                                        filled
-                                                            ? "bg-current"
-                                                            : "border border-current opacity-60",
-                                                    )}
-                                                    style={{
-                                                        width: dot,
-                                                        height: dot,
-                                                    }}
-                                                />
-                                            </button>
-                                        ))}
-                                    </span>
+                                    <RowSpots
+                                        lens={lens}
+                                        at={i}
+                                        spots={row.spots}
+                                        accent={row.side === null}
+                                        label={tolgee.t(
+                                            "shapes.rows.spotsLabel",
+                                            "{name}: its spots. Arrow keys move along them, Space leaves one empty or fills it",
+                                            { name },
+                                        )}
+                                        onPress={(j) =>
+                                            env &&
+                                            apply(
+                                                rows.toggleSpot(
+                                                    target.params,
+                                                    target.spots,
+                                                    row.index,
+                                                    j,
+                                                    env,
+                                                ),
+                                            )
+                                        }
+                                        testId={`shape-rows-spots-${i}`}
+                                    />
                                     <NumberChip
                                         param={param}
                                         display={param.display(
@@ -2070,12 +2038,12 @@ function RowsMenu({ target }: { target: ShapeEditTarget }) {
                             );
                         })}
                     </div>
-                    <span className="text-text/60 px-4">
-                        {tolgee.t(
-                            "shapes.rows.dotHint",
-                            "Press a dot to leave that spot empty",
-                        )}
-                    </span>
+                    <RowSpotsReadout
+                        lens={lens}
+                        names={names}
+                        spots={view.rows.map((r) => r.spots)}
+                        across={across}
+                    />
                     {many && (
                         <>
                             <div className="bg-stroke my-4 h-px" />
