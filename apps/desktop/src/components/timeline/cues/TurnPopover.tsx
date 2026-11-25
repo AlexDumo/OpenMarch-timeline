@@ -1,8 +1,9 @@
 /**
  * The turn popover (fork #993): a Facing cue's turn, opened by double-clicking its bar in the
  * Facing lane or by Edit turn…. A dial sets where the performers end up (drag past a full circle
- * to add a spin), From shows where they start (read-only), To and Counts take numbers, and the
- * chips pick a direction, which each performer reaches the nearest way. Every change is one undo
+ * to add a spin), From shows where they face as the turn starts (read-only), To is where they face
+ * on the cue's count, Counts is how many counts the turn takes before it (changing it moves where
+ * the turn starts), and the chips pick a direction, which each performer reaches the nearest way. Every change is one undo
  * step, through the cue commands (they act on the picked cue, which opening this picks).
  */
 import { useEffect, useRef, useState } from "react";
@@ -19,6 +20,7 @@ import {
     type FacingDirection,
 } from "@/cues/facing";
 import { facingTargetDegrees } from "@openmarch/core";
+import { transitionForTurn, turnCounts } from "@/cues/cueEdges";
 
 /** The dial's radius, in its own units (the SVG is 120 across) */
 const R = 44;
@@ -87,8 +89,10 @@ export function TurnPopover({
     const { t } = useTranslate();
     const commands = useCueCommands();
     const cue = show.cues.find((c) => c.id === cueId);
-    const start = cue ? (show.countOfBeat.get(cue.beatId) ?? 0) : 0;
-    const counts = cue?.transition ?? 0;
+    // The cue is its result on its count; its turn leads into it over `counts` counts
+    const at = cue ? (show.countOfBeat.get(cue.beatId) ?? 0) : 0;
+    const counts = turnCounts(cue?.transition ?? null);
+    const start = at - counts;
     const to = cue
         ? facingTargetDegrees(cue.value, cue.settings, fromDegrees)
         : fromDegrees;
@@ -114,7 +118,7 @@ export function TurnPopover({
     const setCounts = (value: number) => {
         if (!Number.isFinite(value) || value < 0) return;
         const whole = Math.round(value);
-        commands.editTurn({ transition: whole === 0 ? null : whole });
+        commands.editTurn({ transition: transitionForTurn(whole) });
     };
     const pointerAngle = (e: React.PointerEvent) => {
         const box = svg.current!.getBoundingClientRect();
@@ -157,7 +161,7 @@ export function TurnPopover({
                     <div className="text-body font-medium">
                         {t("cues.turn.title", {
                             name: rowName,
-                            where: whereOf(start),
+                            where: whereOf(at),
                         })}
                     </div>
                     <svg
@@ -283,7 +287,7 @@ export function TurnPopover({
                     </label>
                     <label className="text-body flex items-center justify-between gap-8">
                         {t("cues.turn.to", {
-                            where: whereOf(start + counts),
+                            where: whereOf(at),
                         })}
                         <input
                             data-testid="turn-to"

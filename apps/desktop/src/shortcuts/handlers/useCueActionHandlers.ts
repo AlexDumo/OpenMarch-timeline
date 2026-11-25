@@ -114,6 +114,7 @@ const END_REASONS = {
     beforeStart: "cues.reason.endBeforeStart",
     pastNext: "cues.reason.endPastNext",
     endsThere: "cues.reason.endsAtPlayhead",
+    lastingOnly: "cues.reason.facingLasting",
 } as const;
 
 /** Why a cue command can't run now, or undefined when it can. */

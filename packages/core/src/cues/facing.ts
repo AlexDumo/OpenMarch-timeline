@@ -5,9 +5,10 @@
  * turning the other way. Positive angles turn toward the performer's left as they face front (side
  * 2 is the audience's right).
  *
- * A Facing cue's turn starts on its count and runs for its turn length in counts at an even
- * speed; with no length it's instant on its count. Each performer turns from their own angle:
- * Front, Back, Side 1 and Side 2 go to the nearest equivalent angle from it, Turn left 45° and
+ * A Facing cue is its result: "facing 180° by count 3". Its turn leads into its count at an even
+ * speed, over its transition counted inclusively as every type's is (a transition of L counts
+ * starts on count − L + 1; 1, or none, is instant), and never starts before the cue before it.
+ * Each performer turns from the angle they held: Front, Back, Side 1 and Side 2 go to the nearest equivalent angle from it, Turn left 45° and
  * Turn right 45° from it, and Angle to exactly the angle the cue says.
  */
 import type { CueSegment } from "./types";

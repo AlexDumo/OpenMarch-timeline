@@ -70,8 +70,8 @@ describe("Facing angles (#993)", () => {
 
     it("keeps angles unwrapped: 360° is a spin, −270° ends where 90° does", () => {
         const compiled = compile([
-            angle(10, 4, 360, [1], 4),
-            angle(11, 4, -270, [2], 4),
+            angle(10, 8, 360, [1], 5),
+            angle(11, 8, -270, [2], 5),
         ]);
         expect(facingAt(compiled, 1, 8)).toBe(360);
         expect(facingAt(compiled, 2, 8)).toBe(-270);
@@ -80,12 +80,13 @@ describe("Facing angles (#993)", () => {
         expect(facingAt(compiled, 2, 6)).toBe(-135);
     });
 
-    it("starts the turn on the cue's count and runs it for its counts", () => {
+    it("is the result on its count: the turn leads into it, as every transition does", () => {
+        // A transition of 3 counts, counted inclusively: it starts 2 counts before the cue
         const compiled = compile([
-            facing(10, 8, "side2", [1], { transition: 2 }),
+            facing(10, 10, "side2", [1], { transition: 3 }),
         ]);
         expect(shape(compiled.segments(1, "facing"))).toEqual([
-            [0, 8, "default", undefined, 0],
+            [0, 8, "default", 0, 0],
             [8, 10, "transition", 0, 90],
             [10, 32, "lasting", 90, 90],
         ]);
@@ -95,7 +96,7 @@ describe("Facing angles (#993)", () => {
 
     it("turns at an even speed: each count turns as far as the last", () => {
         const compiled = compile([
-            facing(10, 8, "back", [1], { transition: 4 }),
+            facing(10, 12, "back", [1], { transition: 5 }),
         ]);
         expect([8, 9, 10, 11, 12].map((c) => facingAt(compiled, 1, c))).toEqual(
             [0, 45, 90, 135, 180],
@@ -103,22 +104,26 @@ describe("Facing angles (#993)", () => {
         expect(facingAt(compiled, 1, 8.5)).toBe(22.5);
     });
 
-    it("is instant until it's given counts", () => {
-        const compiled = compile([facing(10, 8, "back", [1])]);
-        expect(shape(compiled.segments(1, "facing"))).toEqual([
-            [0, 8, "default", undefined, 0],
-            [8, 8, "transition", 0, 180],
-            [8, 32, "lasting", 180, 180],
-        ]);
-        expect(compiled.segments(1, "facing")[1]!.snap).toBe(true);
-        expect(facingAt(compiled, 1, 7.99)).toBe(0);
-        expect(facingAt(compiled, 1, 8)).toBe(180);
+    it("is instant on its count with no transition, or a transition of 1", () => {
+        for (const transition of [null, 1]) {
+            const compiled = compile([
+                facing(10, 8, "back", [1], { transition }),
+            ]);
+            expect(shape(compiled.segments(1, "facing"))).toEqual([
+                [0, 8, "default", 0, 0],
+                [8, 8, "transition", 0, 180],
+                [8, 32, "lasting", 180, 180],
+            ]);
+            expect(compiled.segments(1, "facing")[1]!.snap).toBe(true);
+            expect(facingAt(compiled, 1, 7.99)).toBe(0);
+            expect(facingAt(compiled, 1, 8)).toBe(180);
+        }
     });
 
     it("turns each performer from their own angle", () => {
         const compiled = compile([
             facing(10, 2, "side2", [1]),
-            facing(11, 8, "back", [1, 2], { transition: 2 }),
+            facing(11, 10, "back", [1, 2], { transition: 3 }),
             facing(12, 16, "turnLeft", [1, 2]),
         ]);
         expect(shape(compiled.segments(1, "facing")).slice(-4, -1)).toEqual([
@@ -153,16 +158,16 @@ describe("Facing angles (#993)", () => {
         expect(facingAt(compiled, 2, 14)).toBe(540);
     });
 
-    it("cuts a turn the next cue starts inside, and turns on from where it got to", () => {
+    it("never starts a turn before the cue before it: it starts there, and is flagged", () => {
         const compiled = compile([
-            facing(10, 8, "back", [1], { transition: 4 }),
-            facing(11, 10, "front", [1], { transition: 2 }),
+            facing(10, 8, "back", [1], { transition: 3 }),
+            facing(11, 10, "side2", [1], { transition: 5 }),
         ]);
         expect(shape(compiled.segments(1, "facing"))).toEqual([
-            [0, 8, "default", undefined, 0],
-            [8, 10, "transition", 0, 90],
-            [10, 12, "transition", 90, 0],
-            [12, 32, "lasting", 0, 0],
+            [0, 6, "default", 0, 0],
+            [6, 8, "transition", 0, 180],
+            [8, 10, "transition", 180, 90],
+            [10, 32, "lasting", 90, 90],
         ]);
         expect(compiled.flags).toEqual([
             { kind: "transition_cut", cueIds: [10, 11], marcherIds: [1] },
@@ -218,7 +223,7 @@ describe("Facing targets (#993)", () => {
 
     it("reads a performer's angle at any time in their segments", () => {
         const segments = compile([
-            facing(10, 8, "back", [1], { transition: 4 }),
+            facing(10, 12, "back", [1], { transition: 5 }),
         ]).segments(1, "facing");
         expect(facingDegreesAt(segments, 0)).toBe(0);
         expect(facingDegreesAt(segments, 10)).toBe(90);

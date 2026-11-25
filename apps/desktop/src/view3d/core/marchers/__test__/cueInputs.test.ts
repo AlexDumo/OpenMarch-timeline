@@ -177,10 +177,11 @@ describe("Facing cues (#993)", () => {
     const degrees = (h: ArrayLike<number>) =>
         Array.from(h, (r) => Math.round((r / DEG) * 1e6) / 1e6);
 
-    it("starts the turn on the cue's count and turns at an even speed", () => {
-        // "back on 6 over 4 counts": from the click of 6 to the click of 10
+    it("leads the turn into the cue's count and turns at an even speed", () => {
+        // "back on 10, turning over the 4 counts before": a transition of 5, counted
+        // inclusively, from the click of 6 to the click of 10
         const out = inputs(drill(holds(12)), [
-            on(1, 6, "builtin:facing.back", { transition: 4 }),
+            on(1, 10, "builtin:facing.back", { transition: 5 }),
         ]);
         // boundary b is show count b - 1
         expect(degrees(out.heading)).toEqual([
@@ -193,18 +194,18 @@ describe("Facing cues (#993)", () => {
 
     it("spins a 360° turn all the way round, over 4 counts or in one", () => {
         const four = inputs(drill(holds(8)), [
-            on(1, 2, "builtin:facing.angle", {
+            on(1, 6, "builtin:facing.angle", {
                 settings: { degrees: 360 },
-                transition: 4,
+                transition: 5,
             }),
         ]);
         expect(degrees(four.heading)).toEqual([
             0, 0, 0, 0, 90, 180, 270, 360, 360,
         ]);
         const one = inputs(drill(holds(4)), [
-            on(1, 1, "builtin:facing.angle", {
+            on(1, 2, "builtin:facing.angle", {
                 settings: { degrees: 360 },
-                transition: 1,
+                transition: 2,
             }),
         ]);
         // halfway through the count it faces the back, not the front
@@ -213,9 +214,9 @@ describe("Facing cues (#993)", () => {
 
     it("goes the long way to −270°, though it ends where 90° does", () => {
         const out = inputs(drill(holds(6)), [
-            on(1, 1, "builtin:facing.angle", {
+            on(1, 4, "builtin:facing.angle", {
                 settings: { degrees: -270 },
-                transition: 3,
+                transition: 4,
             }),
         ]);
         expect(degrees(out.heading)).toEqual([0, 0, 0, -90, -180, -270, -270]);
@@ -236,7 +237,7 @@ describe("Facing cues (#993)", () => {
             cues: [
                 { ...on(1, 0, "builtin:facing.side2"), marcherIds: [1] },
                 {
-                    ...on(2, 4, "builtin:facing.back", { transition: 2 }),
+                    ...on(2, 6, "builtin:facing.back", { transition: 3 }),
                     marcherIds: [1, 2],
                 },
             ],

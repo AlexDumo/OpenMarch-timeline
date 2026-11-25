@@ -388,12 +388,14 @@ describe("planning from compiled cues", () => {
         expect(first![14]).toBeCloseTo(0);
     });
 
-    it("starts a Facing turn on its count and spins the long way round (#993)", () => {
-        // a 360° spin over 4 counts from count 8: boundary 9 is count 8
+    it("leads a Facing turn into its count and spins the long way round (#993)", () => {
+        // a 360° spin on count 12, over the 4 counts before (a transition of 5, counted
+        // inclusively): from count 8, boundary 9, to count 12
         const [first] = headingsOf([
             facing("builtin:facing.angle", {
                 settings: { degrees: 360 },
-                transition: 4,
+                transition: 5,
+                beatId: 62,
             }),
         ]);
         expect(first![9]).toBeCloseTo(0);

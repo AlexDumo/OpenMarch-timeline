@@ -80,8 +80,8 @@ const toss = (
     });
 
 /**
- * A Facing value: lasting only, and instant unless its cue gives the turn counts (fork #993). The
- * turn starts on the cue's count (`facing.ts`).
+ * A Facing value: lasting only, and instant (a snap) unless its cue gives a transition (fork
+ * #993). Its turn leads into the cue's count, as every transition does (`transitionSegment`).
  */
 const facing = (
     id: string,
@@ -91,6 +91,7 @@ const facing = (
 ): CueValue =>
     lasting(`facing.${id}`, "facing", name, label, ALL_CARRIES, {
         locked: true,
+        defaultTransition: 1,
         ...extra,
     });
 

@@ -4413,8 +4413,8 @@
             "expandRows": "Expand rows",
             "facing": "Facing",
             "facingEmpty": "No facing cues yet. Select performers, then right-click › Facing.",
-            "dragTurnEnd": "Drag to set how many counts the turn takes",
-            "turnMark": "{name}: {value}, {where}"
+            "turnMark": "{name}: {value}, {where}",
+            "dragTurnStart": "Drag to set where the turn starts"
         },
         "item": {
             "flag": "Flag",
@@ -4506,7 +4506,7 @@
             "angle": "Angle…"
         },
         "turn": {
-            "title": "{name} · turn at {where}",
+            "title": "{name} · turn into {where}",
             "from": "From ({where})",
             "to": "To ({where})",
             "counts": "Counts",

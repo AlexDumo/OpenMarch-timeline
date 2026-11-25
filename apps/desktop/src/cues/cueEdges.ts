@@ -114,7 +114,12 @@ export function cueEdgeDrag({
 }
 
 /** Why End cue at playhead can't end a cue on a count, as the action's reason picks it. */
-export type EndRefusal = "beforeStart" | "pastNext" | "endsThere";
+export type EndRefusal =
+    | "beforeStart"
+    | "pastNext"
+    | "endsThere"
+    /** A Facing cue: it lasts until the next one; its turn leads into it (#993) */
+    | "lastingOnly";
 
 /**
  * Ending `cue` on `count` (End cue at playhead), by the end edge's rule: its new length, or why
@@ -154,57 +159,45 @@ export function endAtCount({
     return { length: result.length };
 }
 
-/** A Facing cue's turn after dragging its end: its counts (null: instant) and where it ends. */
-export interface TurnEndResult {
+/** A Facing cue's turn after dragging its start: its transition (null: instant) and where it starts. */
+export interface TurnStartResult {
     readonly transition: number | null;
-    readonly end: number;
+    readonly start: number;
 }
 
 /**
- * Dragging a Facing turn's end `delta` counts (fork #993): the turn starts on the cue's count
- * `start` and takes `transition` counts (null: instant). It ends no earlier than it starts (then
- * it's instant) and no later than `until`, its performers' next Facing cue or the show's end.
+ * The counts a Facing turn takes, from its stored transition (fork #993): a transition of L
+ * counts is counted inclusively, landing on the cue's count, so the turn runs over L − 1 counts
+ * before it (none, or 1, is instant).
  */
-export function turnEndDrag({
-    start,
+export const turnCounts = (transition: number | null): number =>
+    Math.max(0, (transition ?? 1) - 1);
+
+/** The transition a turn of `counts` counts before its cue stores (0: instant, null) */
+export const transitionForTurn = (counts: number): number | null =>
+    counts > 0 ? counts + 1 : null;
+
+/**
+ * Dragging the start of a Facing cue's turn `delta` counts (fork #993): the cue is its result on
+ * count `count`, and its turn leads into it. Dragged left the turn grows backwards; back to the
+ * cue's count it's instant. It never starts before `floor`, the cue before it for its performers
+ * (or the show's first count), as the compile cuts it there.
+ */
+export function turnStartDrag({
+    count,
     transition,
-    until,
+    floor,
     delta,
 }: {
-    start: number;
-    transition: number | null;
-    until: number;
-    delta: number;
-}): TurnEndResult {
-    const end = Math.min(
-        Math.max(start + (transition ?? 0) + delta, start),
-        Math.max(until, start),
-    );
-    return { transition: end > start ? end - start : null, end };
-}
-
-/**
- * Ending a Facing cue's turn on `count` (End cue at playhead): its new counts, or why not. Before
- * its start, or past its performers' next Facing cue, it's refused; where it ends already too.
- */
-export function turnEndAtCount({
-    cues,
-    cue,
-    countOf,
-    count,
-    showEnd,
-}: {
-    cues: readonly DatabaseCue[];
-    cue: DatabaseCue;
-    countOf: (beatId: number) => number | undefined;
     count: number;
-    showEnd: number;
-}): { readonly transition: number | null } | { readonly refused: EndRefusal } {
-    const start = countOf(cue.beatId);
-    if (start === undefined || count < start) return { refused: "beforeStart" };
-    const until = cueNeighbours({ cues, cue, countOf }).nextLasting ?? showEnd;
-    if (count > until) return { refused: "pastNext" };
-    const transition = count > start ? count - start : null;
-    if (transition === cue.transition) return { refused: "endsThere" };
-    return { transition };
+    transition: number | null;
+    floor: number;
+    delta: number;
+}): TurnStartResult {
+    const from = count - turnCounts(transition);
+    const start = Math.min(
+        Math.max(from + delta, Math.min(floor, count)),
+        count,
+    );
+    return { transition: transitionForTurn(count - start), start };
 }

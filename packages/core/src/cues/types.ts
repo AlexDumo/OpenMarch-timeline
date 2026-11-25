@@ -70,10 +70,8 @@ export interface CueInput {
      */
     length?: number | null;
     /**
-     * How many counts the change takes (1 is a snap); null is the value's
-     * default. Ignored by a value that cuts. Facing (ADR 0015's 2026-11-24
-     * amendment): the turn starts on the cue's count and takes this many
-     * counts; null or 0 is instant. Other types land on the cue's count.
+     * How many counts the change takes, landing on the cue's count (1 is a
+     * snap); null is the value's default. Ignored by a value that cuts.
      */
     transition?: number | null;
     /**

@@ -201,9 +201,13 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("the Facing lane (#993)", () => {
-    it("draws a turn striped and the hold after it, with the grip where the turn ends", () => {
+    const grip = (container: HTMLElement, which: "result" | "turn") =>
+        container.querySelector(`[data-testid="facing-lane-${which}-start"]`)!;
+
+    it("draws the turn leading into the cue, striped, then the result solid, each with a start grip", () => {
+        // A transition of 3, counted inclusively: a 2-count turn into count 12
         const { container } = renderLane([
-            cue(1, 12, "side2", { transition: 2 }),
+            cue(1, 12, "side2", { transition: 3 }),
         ]);
         const turn = container.querySelector(
             '[data-testid="facing-lane-turn"]',
@@ -213,63 +217,80 @@ describe("the Facing lane (#993)", () => {
             '[data-testid="facing-lane-hold"]',
         )!;
         expect(hold.textContent).toContain("Side 2 · 90°");
-        expect(
-            hold.querySelector('[data-testid="facing-lane-turn-end"]'),
-        ).not.toBeNull();
+        expect(turn.contains(grip(container, "turn"))).toBe(true);
+        expect(hold.contains(grip(container, "result"))).toBe(true);
+    });
+
+    it("grows the turn backwards when the result's start is dragged left, keeping its count", async () => {
+        const { container } = renderLane([cue(1, 13, "side2")]);
+        await dragBy(grip(container, "result"), -32);
+        // Two counts before count 13, stored inclusively as 3
+        expect(written.at(-1)?.modifiedCues).toEqual([
+            { id: 1, transition: 3 },
+        ]);
     });
 
     it.each([
-        [null, 32, 2],
-        [2, 16, 3],
-        [2, -32, null],
+        [-16, 4],
+        [32, null],
     ] as const)(
-        "a turn of %s counts whose end is dragged %i px (16 px a count) takes %s counts",
-        async (from, dx, counts) => {
+        "a 2-count turn whose start is dragged %i px (16 px a count) stores %s",
+        async (dx, transition) => {
             const { container } = renderLane([
-                cue(1, 13, "side2", { transition: from }),
+                cue(1, 13, "side2", { transition: 3 }),
             ]);
-            await dragBy(
-                container.querySelector(
-                    '[data-testid="facing-lane-turn-end"]',
-                )!,
-                dx,
-            );
+            await dragBy(grip(container, "turn"), dx);
             expect(written.at(-1)?.modifiedCues).toEqual([
-                { id: 1, transition: counts },
+                { id: 1, transition },
             ]);
         },
     );
 
-    it("moves the turn's start when its bar is dragged, as far as the pointer went", async () => {
+    it("never starts the turn before the cue before it", async () => {
         const { container } = renderLane([
-            cue(1, 13, "back", { transition: 2 }),
+            cue(2, 5, "back"),
+            cue(1, 13, "side2"),
+        ]);
+        await dragBy(
+            container.querySelector(
+                '[data-testid="facing-lane-hold"][data-cue-id="1"] [data-testid="facing-lane-result-start"]',
+            )!,
+            -400,
+        );
+        // From count 5 into count 13: 8 counts, stored as 9
+        expect(written.at(-1)?.modifiedCues).toEqual([
+            { id: 1, transition: 9 },
+        ]);
+    });
+
+    it("moves the cue, its turn with it, when its bar is dragged", async () => {
+        const { container } = renderLane([
+            cue(1, 13, "back", { transition: 3 }),
         ]);
         await dragBy(
             container.querySelector('[data-testid="facing-lane-turn"]')!,
             32,
         );
-        expect(written.at(-1)?.modifiedCues).toEqual(
-            expect.arrayContaining([
-                expect.objectContaining({ id: 1, beatId: 100 + 15 }),
-            ]),
-        );
+        expect(written.at(-1)?.modifiedCues).toEqual([
+            { id: 1, beatId: 100 + 15 },
+        ]);
     });
 
-    it("picks a bar on a click and selects its counts; an empty-space click is the timeline's", async () => {
+    it("picks a bar on a click and selects its turn and result; an empty-space click is the timeline's", async () => {
         const onSeek = vi.fn();
         const onSelectRange = vi.fn();
         const { container } = renderLane(
-            [cue(1, 13, "back", { transition: 2 }), cue(2, 20, "front")],
+            [cue(1, 13, "back", { transition: 3 }), cue(2, 20, "front")],
             { onSeek, onSelectRange },
         );
         await clickAt(
             container.querySelector('[data-testid="facing-lane-turn"]')!,
-            14 * PPB,
+            12 * PPB,
         );
         expect(useCueSelectionStore.getState().cueId).toBe(1);
-        // From its count to the next Facing cue for its performers, in view beats
+        // From where its turn starts to the next Facing cue for its performers, in view beats
         expect(onSelectRange).toHaveBeenCalledWith({
-            startBeatIndex: 13,
+            startBeatIndex: 11,
             endBeatIndex: 20,
         });
         expect(onSeek).not.toHaveBeenCalled();

@@ -20,8 +20,9 @@
  * Facing (#993; ADR 0015's 2026-11-24 amendment), as headings in radians
  * about +Y (0 faces the audience, +pi/2 faces side 2; facing.ts): the
  * compile's angle in degrees, unwrapped, so 360 is a full spin and -270 ends
- * where 90 does after turning the other way. A turn starts on its cue's
- * count and runs for its counts at an even speed (`facingDegreesAt`), so the
+ * where 90 does after turning the other way. A cue is its result on its
+ * count: its turn leads into that count at an even speed, over its
+ * transition counted inclusively (`facingDegreesAt`), so the
  * headings at the count boundaries step evenly and the planner turns
  * linearly between them, never the short way. An instant turn lands on its
  * click in fixed time ({@link SNAP_SECONDS} before it, at the tempo of the

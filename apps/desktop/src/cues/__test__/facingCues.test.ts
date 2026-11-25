@@ -157,11 +157,12 @@ describe("stretching a turn (#993)", () => {
             planCueChange({
                 cues,
                 cueId: turn.id,
-                change: { transition: 2 },
+                change: { transition: 3 },
                 relabelFor,
             }).modifiedCues,
-        ).toEqual([{ id: turn.id, transition: 2 }]);
-        const stretched = { ...turn, transition: 2 };
+        ).toEqual([{ id: turn.id, transition: 3 }]);
+        // A transition of 3, counted inclusively: the turn leads into count 8 over 2 counts
+        const stretched = { ...turn, transition: 3 };
         expect(
             planCueChange({
                 cues: [stretched],
@@ -171,7 +172,9 @@ describe("stretching a turn (#993)", () => {
             }).modifiedCues,
         ).toEqual([{ id: turn.id, transition: null }]);
         const show = compileShowCues(MARCHERS, BEATS, [stretched]);
-        expect(facingAt(show.compiled, 1, 9)).toBe(90);
+        expect(facingAt(show.compiled, 1, 6)).toBe(0);
+        expect(facingAt(show.compiled, 1, 7)).toBe(90);
+        expect(facingAt(show.compiled, 1, 8)).toBe(180);
     });
 
     it("moves a turn onto a count where its performers have another: theirs is replaced", () => {
@@ -191,10 +194,10 @@ describe("stretching a turn (#993)", () => {
 describe("the Facing lane (#993)", () => {
     it("draws a row per facing history: turns striped, holds solid", () => {
         const cues = [
-            stored(8, "builtin:facing.side2", [1, 2], { transition: 2 }),
+            stored(8, "builtin:facing.side2", [1, 2], { transition: 3 }),
             stored(8, "builtin:facing.angle", [3], {
                 settings: { degrees: 360 },
-                transition: 4,
+                transition: 3,
             }),
         ];
         const show = compileShowCues(MARCHERS, BEATS, cues);
@@ -214,9 +217,10 @@ describe("the Facing lane (#993)", () => {
                 p.cueId,
             ]),
         ).toEqual([
-            [0, 8, "hold", 0, 0, null],
-            [8, 10, "turn", 0, 90, cues[0]!.id],
-            [10, 32, "hold", 90, 90, cues[0]!.id],
+            // The turn leads into the cue's count, and the result holds from there
+            [0, 6, "hold", 0, 0, null],
+            [6, 8, "turn", 0, 90, cues[0]!.id],
+            [8, 32, "hold", 90, 90, cues[0]!.id],
         ]);
         // an instant turn has no stripe: its hold starts on its count
         const instant = [stored(4, "builtin:facing.back", [4])];

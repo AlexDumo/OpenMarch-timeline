@@ -4233,18 +4233,18 @@
     "cues.facing.angle": "Menu entry in the field's Facing submenu: asks for a number of degrees to face. The ellipsis means it asks something first.",
     "cues.lane.facing": "Name of the timeline lane that shows where performers face over the show, and of its family in the Lanes menu.",
     "cues.lane.facingEmpty": "Shown in the empty Facing lane on the timeline. '›' separates a menu and its entry.",
-    "cues.lane.dragTurnEnd": "Tooltip of the grip at the end of a turn in the timeline's Facing lane.",
     "cues.lane.turnMark": "Label of a turn's mark in the folded Facing lane, read by screen readers: who turns ({name}), where to ({value}, such as '0° → 90°') and when ({where}, such as 'Page 3, count 2').",
     "cues.laneFamily.facing": "A family of timeline lanes in the Lanes menu's 'Add a lane' list: the lanes about where performers face.",
     "cues.reason.notFacing": "Why 'Edit turn…' is greyed out: no Facing cue is picked.",
     "cues.reason.facingLasting": "Why 'Make cue momentary' is greyed out for a Facing cue: Facing cues always last until the performers' next Facing cue.",
     "cues.reason.pausedFacing": "Why the Facing actions are greyed out while the show plays.",
-    "cues.turn.title": "Title of the panel that edits a Facing cue's turn: who turns ({name}, such as 'Trumpets') and where the turn starts ({where}, such as 'Page 2 count 1').",
+    "cues.turn.title": "Title of the panel that edits a Facing cue's turn: who turns ({name}, such as 'Trumpets') and the count the turn ends on, where they face the new way ({where}, such as 'Page 2 count 3').",
     "cues.turn.from": "Label of the read-only angle the performers face when the turn starts, at {where} (such as 'Page 2 count 1').",
-    "cues.turn.to": "Label of the angle field: where the performers face when the turn ends, at {where} (such as 'Page 2 count 3'). In degrees.",
-    "cues.turn.counts": "Label of the field for how many counts the turn takes. 0 is instant.",
+    "cues.turn.to": "Label of the angle field: where the performers face when the turn ends, on the cue's count {where} (such as 'Page 2 count 3'). In degrees.",
+    "cues.turn.counts": "Label of the field for how many counts the turn takes, leading into the cue's count. 0 is instant.",
     "cues.turn.dial": "Accessible name of the round dial in the turn panel: dragging its dot sets the angle the performers end up facing; dragging past a full circle adds a spin.",
     "cues.turn.dialHint": "Hint under the dial in the turn panel.",
     "cues.turn.instant": "Shown in the turn panel's Counts field when the turn takes no counts (it happens on its count).",
-    "field.menu.facing": "Submenu in the field's right-click menu with ways to set where the selected performers face (Front, Back, sides, 45° turns, an angle)."
+    "field.menu.facing": "Submenu in the field's right-click menu with ways to set where the selected performers face (Front, Back, sides, 45° turns, an angle).",
+    "cues.lane.dragTurnStart": "Tooltip of the grip at the start of a turn, or of the facing bar after it, in the timeline's Facing lane: dragging it left makes the performers start turning earlier, so the turn takes more counts and still ends on the same count."
 }

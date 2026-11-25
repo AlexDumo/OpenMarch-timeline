@@ -6,9 +6,11 @@
  * - Click a cue's bar (its turn or its hold) to pick it: the cue commands act on it, and the
  *   click selects its counts, as a move's bar does. Right-click or long-press it for its menu;
  *   double-click it, or choose Edit turn…, for the turn popover.
- * - Drag a bar to move the cue (when its turn starts), with the timeline's edge snapping. Drag the
- *   grip where the turn ends to set how many counts it takes; dragged back to its start it's
- *   instant.
+ * - A cue is its result on its count; its turn leads into it. Drag a bar to move the cue (its
+ *   turn goes with it), with the timeline's edge snapping. Drag the start of the result's bar, or
+ *   of its turn, to the left to set where the turn starts: the turn grows backwards and the hold
+ *   before it shrinks. Dragged back to the cue's count it's instant; it never starts before the
+ *   cue before it.
  * - A press on empty lane space is the timeline's, as on the audio lane.
  */
 import {
@@ -47,7 +49,7 @@ import {
     MENU_LABEL_CLASS,
     MENU_SEPARATOR_CLASS,
 } from "@/components/ui/popupClasses";
-import { cueNeighbours, turnEndDrag } from "@/cues/cueEdges";
+import { cueNeighbours, turnCounts, turnStartDrag } from "@/cues/cueEdges";
 import { withEquipmentSet } from "@/cues/equipment";
 import {
     facingLane,
@@ -100,7 +102,7 @@ import {
 } from "./cueLaneParts";
 import { TurnPopover } from "./TurnPopover";
 
-/** The grip where a turn ends: drawn 6 px wide, astride the edge */
+/** The grip where a turn starts: drawn 6 px wide, astride the edge */
 const GRIP_PX = 6;
 
 /** The lane's height: its header, then its rows, its folded row, or the empty hint */
@@ -156,6 +158,8 @@ export function useFacingLaneParts(): {
 }
 
 type LaneDrag = { cueId: number; edit: CueEdit | null };
+/** What a press on a cue drags: its bar, or where its turn starts from its result's or turn's start */
+type LaneDragMode = "move" | "resultStart" | "turnStart";
 type CueMenu = { x: number; y: number; cueId: number };
 
 export function FacingLaneView({
@@ -255,15 +259,15 @@ export function FacingLaneView({
     };
 
     /**
-     * A press on a cue's bar (`move`) or on the grip where its turn ends (`turnEnd`): past the slop
-     * it drags with the timeline's edge snapping, and on release writes the new count or turn
-     * counts as one undo step. Short of the slop it's a click: it picks the cue and selects its
-     * counts, as a move's bar does.
+     * A press on a cue's bar (`move`), or on the grip at the start of its result's bar (`resultStart`)
+     * or of its turn (`turnStart`): past the slop it drags with the timeline's edge snapping, and
+     * on release writes the new count or turn as one undo step. Short of the slop it's a click: it
+     * picks the cue and selects its counts (its turn and its result), as a move's bar does.
      */
     const startDrag = (
         e: ReactPointerEvent<HTMLElement>,
         cueId: number,
-        mode: "move" | "turnEnd",
+        mode: LaneDragMode,
     ) => {
         if (isPlaying || !show || e.button !== 0) return;
         const cue = show.cues.find((c) => c.id === cueId);
@@ -280,7 +284,9 @@ export function FacingLaneView({
             countOf: (beatId) => show.countOfBeat.get(beatId),
         });
         const until = specAt(near.nextLasting ?? show.beatIds.length);
-        const turnEnd = at + (cue.transition ?? 0);
+        // Its turn leads into it, never from before the cue before it (or the first count)
+        const turnStart = at - turnCounts(cue.transition);
+        const floor = specAt(near.previous ?? 0);
         const playhead = axis.toView(
             useTimelineSelectionStore.getState().playheadBeat,
         );
@@ -313,11 +319,13 @@ export function FacingLaneView({
                           words,
                       );
             }
-            const turned = turnEndDrag({
-                start: at,
-                transition: cue.transition,
-                until,
-                delta: landAt(ev, axis.toView(turnEnd), offset),
+            // The result's start begins the turn from the cue's count; the turn's, from its start
+            const origin = mode === "resultStart" ? at : turnStart;
+            const turned = turnStartDrag({
+                count: at,
+                transition: mode === "resultStart" ? null : cue.transition,
+                floor,
+                delta: landAt(ev, axis.toView(origin), offset),
             });
             return cueChangeEdit(
                 show,
@@ -340,7 +348,7 @@ export function FacingLaneView({
             // A click selects the cue's counts, as a move's bar does (not with Ctrl or Cmd)
             if (commit && !dragging && !e.ctrlKey && !e.metaKey)
                 geometry.onSelectRange?.({
-                    startBeatIndex: axis.toView(at),
+                    startBeatIndex: axis.toView(turnStart),
                     endBeatIndex: axis.toView(until),
                 });
             const write = dragging && commit ? planned : null;
@@ -598,7 +606,7 @@ function RowName({ row, name }: { row: FacingRow; name: string }) {
 
 /**
  * One piece of a row: a striped turn, a solid hold, or the dashed front before any cue. A cue's
- * hold has the grip where its turn ends at its left edge.
+ * turn and hold each have a grip at their left edge that sets where the turn starts.
  */
 function FacingBar({
     piece,
@@ -619,10 +627,7 @@ function FacingBar({
     dragging: boolean;
     picked: boolean;
     lockedReason?: string;
-    onPress: (
-        e: ReactPointerEvent<HTMLElement>,
-        mode: "move" | "turnEnd",
-    ) => void;
+    onPress: (e: ReactPointerEvent<HTMLElement>, mode: LaneDragMode) => void;
     onMenu: (clientX: number, clientY: number) => void;
     onOpen: () => void;
 }) {
@@ -631,7 +636,7 @@ function FacingBar({
     const turn = piece.kind === "turn";
     const longPress = useLongPressMenu(onMenu);
     const drawnWidth = Math.max(width - 1, 4);
-    const grip = isCue && !turn && !lockedReason;
+    const grip = isCue && !lockedReason;
     return (
         <div
             data-testid={
@@ -688,15 +693,19 @@ function FacingBar({
             <span className="min-w-0 truncate">{label}</span>
             {grip && (
                 <span
-                    data-testid="facing-lane-turn-end"
+                    data-testid={
+                        turn
+                            ? "facing-lane-turn-start"
+                            : "facing-lane-result-start"
+                    }
                     data-timeline-interactive=""
-                    title={t("cues.lane.dragTurnEnd")}
-                    aria-label={t("cues.lane.dragTurnEnd")}
+                    title={t("cues.lane.dragTurnStart")}
+                    aria-label={t("cues.lane.dragTurnStart")}
                     className="group/resize absolute top-0 z-[1] h-full cursor-ew-resize touch-none"
                     style={{ left: -GRIP_PX / 2, width: GRIP_PX }}
                     onPointerDown={(e) => {
                         e.stopPropagation();
-                        onPress(e, "turnEnd");
+                        onPress(e, turn ? "turnStart" : "resultStart");
                     }}
                 >
                     <span

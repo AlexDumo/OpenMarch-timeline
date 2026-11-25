@@ -175,60 +175,21 @@ function lastingTimeline(
 }
 
 /**
- * One performer's Facing (fork #993; ADR 0015's 2026-11-24 amendment): front, 0°, until their
- * first cue; then each lasting cue's turn starts on its count and runs for its `transition` in
- * counts at an even speed (none is instant, a snap on the count), from the angle the performer is
- * at then to where the value takes them from there (`facingTargetDegrees`). A cue that starts
- * inside the turn before it cuts that turn where it got to, and is flagged.
+ * Adds each performer's angle to their Facing segments (fork #993), which come from the same
+ * lasting timeline as every type's (`lastingTimeline`): front, 0°, until their first cue; a cue's
+ * turn leads into its count (`transitionSegment`) at an even speed, from the angle they held
+ * before to where the value takes them from there (`facingTargetDegrees`).
  */
-function facingTimeline(
-    lookup: CueValueLookup,
-    marcherId: number,
-    lasting: readonly PlacedCue[],
-    counts: number,
-    flags: FlagCollector<CueFlagKind>,
-): CueSegment[] {
-    const front = defaultSegment(lookup, 0, counts, {
-        at: 0,
-        value: defaultCueValue("facing", "none"),
-    });
-    const out: CueSegment[] = [{ ...front, degrees: 0 }];
-    for (const { cue, count, value } of lasting) {
-        // The hold before the cue ends on its count; a turn still running there is cut where
-        // it got to
-        let hold = out.pop()!;
-        const turn = out[out.length - 1];
-        if (turn?.kind === "transition" && turn.to > count) {
-            flags.add("transition_cut", [turn.cueId!, cue.id], marcherId);
-            const reached = facingDegreesAt([...out, hold], count);
-            out[out.length - 1] = { ...turn, to: count, degrees: reached };
-        } else {
-            hold = { ...hold, to: count };
-            if (hold.to > hold.from) out.push(hold);
+function withFacingDegrees(segments: readonly CueSegment[]): CueSegment[] {
+    let current = 0;
+    return segments.map((seg) => {
+        if (seg.kind === "transition") {
+            const from = current;
+            current = facingTargetDegrees(seg.value, seg.settings, from);
+            return { ...seg, fromDegrees: from, degrees: current };
         }
-        const from = facingDegreesAt(out, count);
-        const degrees = facingTargetDegrees(
-            value.id,
-            cueSettings(value, cue.settings),
-            from,
-        );
-        const end = Math.min(
-            count + Math.max(0, Math.round(cue.transition ?? 0)),
-            counts,
-        );
-        out.push(
-            segment(count, end, "transition", value, cue, {
-                fromDegrees: from,
-                degrees,
-                ...(end === count ? { snap: true } : {}),
-            }),
-            segment(end, counts, "lasting", value, cue, {
-                fromDegrees: degrees,
-                degrees,
-            }),
-        );
-    }
-    return out;
+        return { ...seg, fromDegrees: current, degrees: current };
+    });
 }
 
 /** Flags or notes merged across marchers: one per kind and set of cues. */
@@ -926,16 +887,19 @@ function resolveType(
         marcher.id,
         flags,
     );
-    // Facing turns from each performer's own angle, and only lasting (fork #993)
+    // Facing is lasting only, and turns each performer from their own angle (fork #993)
     if (type === "facing")
         return {
             placed,
-            segments: facingTimeline(
-                lookup,
-                marcher.id,
-                lasting,
-                counts,
-                flags,
+            segments: withFacingDegrees(
+                lastingTimeline(
+                    lookup,
+                    marcher.id,
+                    lasting,
+                    counts,
+                    flags,
+                    spans,
+                ),
             ),
         };
     const resolved = overlay(

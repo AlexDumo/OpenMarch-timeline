@@ -5,8 +5,9 @@ import {
     cueEdgeDrag,
     cueNeighbours,
     endAtCount,
-    turnEndAtCount,
-    turnEndDrag,
+    transitionForTurn,
+    turnCounts,
+    turnStartDrag,
 } from "../cueEdges";
 import { compileShowCues } from "../showCues";
 import { equipmentLane } from "../equipmentLane";
@@ -294,46 +295,31 @@ describe("cue edges among the performers' other cues (#992 review)", () => {
     });
 });
 
-describe("a Facing turn's end (#993)", () => {
-    it("sets how many counts the turn takes, never before its start nor past the next turn", () => {
-        const at = (delta: number, transition: number | null = null) =>
-            turnEndDrag({ start: 8, transition, until: 12, delta });
-        expect(at(2)).toEqual({ transition: 2, end: 10 });
-        expect(at(-3, 2)).toEqual({ transition: null, end: 8 });
-        expect(at(9)).toEqual({ transition: 4, end: 12 });
-        expect(at(-1, 2)).toEqual({ transition: 1, end: 9 });
+describe("where a Facing turn starts (#993)", () => {
+    it("counts a turn's transition inclusively: L counts lead into the cue over L − 1", () => {
+        expect(turnCounts(null)).toBe(0);
+        expect(turnCounts(1)).toBe(0);
+        expect(turnCounts(3)).toBe(2);
+        expect(transitionForTurn(0)).toBeNull();
+        expect(transitionForTurn(2)).toBe(3);
     });
 
-    it("ends a turn at the playhead, or says why not", () => {
-        const facing = (
-            id: number,
-            beatId: number,
-            transition: number | null = null,
-        ) =>
-            ({
-                id,
-                type: "facing",
-                beatId,
-                value: "builtin:facing.back",
-                settings: {},
-                length: null,
-                transition,
-                marcherIds: [1],
-                label: null,
-                notes: null,
-                createdAt: "",
-                updatedAt: "",
-            }) satisfies DatabaseCue;
-        const cue = facing(1, 108);
-        const cues = [cue, facing(2, 112)];
-        const countOf = (beatId: number) => beatId - 100;
-        const end = (count: number, c = cue) =>
-            turnEndAtCount({ cues, cue: c, countOf, count, showEnd: 32 });
-        expect(end(10)).toEqual({ transition: 2 });
-        expect(end(7)).toEqual({ refused: "beforeStart" });
-        expect(end(13)).toEqual({ refused: "pastNext" });
-        expect(end(8)).toEqual({ refused: "endsThere" });
-        expect(end(8, facing(1, 108, 2))).toEqual({ transition: null });
-        expect(end(10, facing(1, 108, 2))).toEqual({ refused: "endsThere" });
+    it("grows the turn backwards from the result, keeping the result on its count", () => {
+        // A cue on count 10, the cue before it on count 4
+        const at = (delta: number, transition: number | null = null) =>
+            turnStartDrag({ count: 10, transition, floor: 4, delta });
+        // From an instant cue: two counts left is a 2-count turn, stored as 3
+        expect(at(-2)).toEqual({ transition: 3, start: 8 });
+        // From a 2-count turn's start: one more count
+        expect(at(-1, 3)).toEqual({ transition: 4, start: 7 });
+        // Back to the cue's count, or past it: instant
+        expect(at(2, 3)).toEqual({ transition: null, start: 10 });
+        expect(at(5)).toEqual({ transition: null, start: 10 });
+    });
+
+    it("never starts the turn before the cue before it", () => {
+        expect(
+            turnStartDrag({ count: 10, transition: null, floor: 4, delta: -9 }),
+        ).toEqual({ transition: 7, start: 4 });
     });
 });

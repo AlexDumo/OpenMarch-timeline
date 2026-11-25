@@ -31,7 +31,7 @@ import {
     type EquipmentChoice,
 } from "./equipment";
 import { itemKeyOf } from "./equipmentItems";
-import { endAtCount, turnEndAtCount, type EndRefusal } from "./cueEdges";
+import { endAtCount, type EndRefusal } from "./cueEdges";
 import {
     facingAlready,
     planFacingSet,
@@ -105,8 +105,6 @@ export interface CueCommands {
     readonly endToPlayhead: () =>
         | {
               readonly length: number | null;
-              /** A Facing cue's new turn counts (null: instant) */
-              readonly transition?: number | null;
           }
         | { readonly refused: EndRefusal | "noCount" }
         | null;
@@ -222,19 +220,9 @@ export function useCueCommands(): CueCommands {
         const endToPlayhead = () => {
             if (!cue || !show) return null;
             if (count === null) return { refused: "noCount" as const };
-            // A Facing cue is lasting: its turn ends at the playhead (#993)
-            if (cue.type === "facing") {
-                const turn = turnEndAtCount({
-                    cues: show.cues,
-                    cue,
-                    countOf: (beatId) => show.countOfBeat.get(beatId),
-                    count,
-                    showEnd: show.beatIds.length,
-                });
-                return "refused" in turn
-                    ? turn
-                    : { length: null, transition: turn.transition };
-            }
+            // A Facing cue lasts until the next one; its turn leads into it (#993)
+            if (cue.type === "facing")
+                return { refused: "lastingOnly" as const };
             return endAtCount({
                 cues: show.cues,
                 cue,
@@ -339,9 +327,7 @@ export function useCueCommands(): CueCommands {
                 const plan = cueChangeEdit(
                     show,
                     cue.id,
-                    "transition" in end
-                        ? { transition: end.transition }
-                        : { length: end.length },
+                    { length: end.length },
                     words,
                 );
                 if (plan) edit(plan);

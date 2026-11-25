@@ -418,11 +418,10 @@ describe("transitions (ADR 0015 D-2)", () => {
             [7, 8, "transition", "builtin:horn.down"],
             [8, 32, "lasting", "builtin:horn.down"],
         ]);
-        // A turn starts on its count and takes its counts (#993)
         expect(shape(compiled.segments(1, "facing"))).toEqual([
-            [0, 8, "default", "builtin:facing.front"],
-            [8, 12, "transition", "builtin:facing.back"],
-            [12, 32, "lasting", "builtin:facing.back"],
+            [0, 5, "default", "builtin:facing.front"],
+            [5, 8, "transition", "builtin:facing.back"],
+            [8, 32, "lasting", "builtin:facing.back"],
         ]);
     });
 
@@ -653,23 +652,22 @@ describe("who has a value on a count (ADR 0015 D-10)", () => {
         expect(
             whoHasValue(compiled, "equipment", "builtin:equipment.rifle", 8),
         ).toEqual([1, 4, 5]);
-        // the turn to the back starts on 8 and ends on 12 (#993)
         expect(
-            whoHasValue(compiled, "facing", "builtin:facing.back", 12),
+            whoHasValue(compiled, "facing", "builtin:facing.back", 8),
         ).toEqual([1, 2]);
         expect(
-            whoHasValue(compiled, "facing", "builtin:facing.front", 12),
+            whoHasValue(compiled, "facing", "builtin:facing.front", 8),
         ).toEqual([3, 4, 5]);
     });
 
-    it("counts a facing from where its turn ends, not while it turns", () => {
-        expect(cueValueAt(compiled, 1, "facing", 10)).toBe(
+    it("counts a value from its count's click, not from its transition", () => {
+        expect(cueValueAt(compiled, 1, "facing", 6)).toBe(
             "builtin:facing.front",
         );
         expect(
-            whoHasValue(compiled, "facing", "builtin:facing.back", 10),
+            whoHasValue(compiled, "facing", "builtin:facing.back", 6),
         ).toEqual([]);
-        expect(cueValueAt(compiled, 1, "facing", 12)).toBe(
+        expect(cueValueAt(compiled, 1, "facing", 8)).toBe(
             "builtin:facing.back",
         );
     });
