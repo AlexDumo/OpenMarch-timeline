@@ -54,7 +54,10 @@ import {
     uniformPackIsNewer,
     uniformPackQueryOptions,
 } from "@/hooks/queries/useUniformPack";
-import { useCustomUniforms } from "@/view3d/window/uniformArtworkPreview";
+import {
+    useCustomUniforms,
+    useCustomUniformsAvailable,
+} from "@/view3d/window/uniformArtworkPreview";
 import { parseShowAssetRef, showAssetRefValue } from "@/showAssets/ref";
 
 /**
@@ -356,6 +359,7 @@ function AssetNotes({
     const tally = removableCount(removableLines(unused, all));
     const sizeText = useSizeText();
     const customUniforms = useCustomUniforms();
+    const customUniformsAvailable = useCustomUniformsAvailable();
     const notes: React.ReactNode[] = [];
     if (unused.length > 0)
         notes.push(
@@ -396,7 +400,8 @@ function AssetNotes({
                 />
             </li>,
         );
-    // with Custom uniforms (preview) off there's no Import button: the notes say how to get one
+    // with Custom uniforms (preview) off there's no Import button: the notes say how to get one,
+    // unless the build has no custom uniforms at all (a release, until the format is final)
     if (uniformProblem === "missing")
         notes.push(
             <li key="missingUniform" data-testid="assets-missing-uniform-note">
@@ -404,7 +409,9 @@ function AssetNotes({
                     keyName={
                         customUniforms
                             ? "assets.notes.missingUniform"
-                            : "assets.notes.missingUniformPreviewOff"
+                            : customUniformsAvailable
+                              ? "assets.notes.missingUniformPreviewOff"
+                              : "assets.notes.missingUniformUnavailable"
                     }
                 />
             </li>,

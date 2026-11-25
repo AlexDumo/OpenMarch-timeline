@@ -1,13 +1,14 @@
 /**
- * Custom uniforms (preview), the per-computer setting (step 7 of the uniform artwork build): its
- * default per build channel, the hidden flag's "1" read as on, and the once-only warning.
+ * Custom uniforms (preview), the per-computer setting (step 7 of the uniform artwork build): the
+ * builds that have it (none of the releases, until the format is final), the hidden flag's "1"
+ * read as on where it does, and the once-only warning.
  */
 import { afterEach, describe, expect, it } from "vitest";
 import {
     UNIFORM_ARTWORK_STORAGE_KEY,
     UNIFORM_PREVIEW_WARNED_STORAGE_KEY,
     _resetPreviewWarning,
-    customUniformsDefault,
+    customUniformsAvailable,
     loadCustomUniforms,
     markPreviewWarningShown,
     previewWarningShown,
@@ -42,12 +43,12 @@ afterEach(() => {
     _resetPreviewWarning();
 });
 
-describe("Custom uniforms (preview) default", () => {
-    it("is off in releases: packaged Electron and the stable, nightly and preview sites", () => {
-        expect(customUniformsDefault(release)).toBe(false);
+describe("the builds with Custom uniforms (preview)", () => {
+    it("leaves it out of releases: packaged Electron and the stable, nightly and preview sites", () => {
+        expect(customUniformsAvailable(release)).toBe(false);
         for (const webChannel of ["stable", "nightly", "preview"])
             expect(
-                customUniformsDefault({
+                customUniformsAvailable({
                     dev: false,
                     webChannel,
                     channelNamed: true,
@@ -55,12 +56,12 @@ describe("Custom uniforms (preview) default", () => {
             ).toBe(false);
     });
 
-    it("is on in a dev server and the dev, examples and lab web builds", () => {
+    it("has it in a dev server and the dev, examples and lab web builds", () => {
         expect(
-            customUniformsDefault({ dev: true, webChannel: undefined }),
+            customUniformsAvailable({ dev: true, webChannel: undefined }),
         ).toBe(true);
         expect(
-            customUniformsDefault({
+            customUniformsAvailable({
                 dev: true,
                 webChannel: "dev",
                 channelNamed: false,
@@ -68,7 +69,7 @@ describe("Custom uniforms (preview) default", () => {
         ).toBe(true);
         for (const webChannel of ["dev", "examples", "lab"])
             expect(
-                customUniformsDefault({
+                customUniformsAvailable({
                     dev: false,
                     webChannel,
                     channelNamed: true,
@@ -76,9 +77,9 @@ describe("Custom uniforms (preview) default", () => {
             ).toBe(true);
     });
 
-    it("is off in a production web build whose WEB_CHANNEL wasn't set, though it reads as dev", () => {
+    it("leaves it out of a production web build whose WEB_CHANNEL wasn't set, though it reads as dev", () => {
         expect(
-            customUniformsDefault({
+            customUniformsAvailable({
                 dev: false,
                 webChannel: "dev",
                 channelNamed: false,
@@ -92,9 +93,18 @@ describe("loadCustomUniforms", () => {
         expect(
             loadCustomUniforms(
                 memoryStorage({ [UNIFORM_ARTWORK_STORAGE_KEY]: "1" }),
-                release,
+                { dev: false, webChannel: "lab", channelNamed: true },
             ),
         ).toBe(true);
+    });
+
+    it('is off in a release whatever was saved, "1" too', () => {
+        expect(
+            loadCustomUniforms(
+                memoryStorage({ [UNIFORM_ARTWORK_STORAGE_KEY]: "1" }),
+                release,
+            ),
+        ).toBe(false);
     });
 
     it('reads "0" as off, even in a developer build', () => {
@@ -106,7 +116,7 @@ describe("loadCustomUniforms", () => {
         ).toBe(false);
     });
 
-    it("uses the build's default with nothing saved, a stray value or blocked storage", () => {
+    it("is on where the build has it with nothing saved, and off in a release, with a stray value or blocked storage too", () => {
         expect(loadCustomUniforms(memoryStorage(), release)).toBe(false);
         expect(
             loadCustomUniforms(memoryStorage(), {

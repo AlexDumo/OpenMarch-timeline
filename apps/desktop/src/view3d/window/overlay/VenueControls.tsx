@@ -55,6 +55,7 @@ import {
 import { wornPackProblem } from "@/view3d/core/uniformPack/wornPack";
 import {
     useCustomUniforms,
+    useCustomUniformsAvailable,
     useCustomUniformsStore,
 } from "@/view3d/window/uniformArtworkPreview";
 import { Button } from "@openmarch/ui";
@@ -275,7 +276,9 @@ const FLATS_SAMPLE = "flats:sample" as const;
  * With the setting off, a show whose band already wears a custom uniform (one from a colleague,
  * say) keeps wearing it: show data never changes on its own. The picker lists that one uniform,
  * picked, says the show uses a preview uniform and offers to turn the preview on. Picking a
- * preset still works, and nothing is removed from the show.
+ * preset still works, and nothing is removed from the show. A build without custom uniforms (a
+ * release, until the format is final) does the same without offering to turn it on, and its
+ * notes don't say to.
  *
  * When the band's uniform is gone from the show, doesn't read, or was made by a newer OpenMarch,
  * the band wears its preset and a note here says why, with the setting on or off. When it
@@ -286,6 +289,7 @@ export function UniformPicker() {
     const { t } = useTranslate();
     const { settings, request } = useVenueRequest();
     const flats = useCustomUniforms();
+    const available = useCustomUniformsAvailable();
     const turnOn = useCustomUniformsStore((s) => s.setEnabled);
     const named = settings ? flatsArtworkOf(settings.uniformArtwork) : null;
     const namedPack = named && isUniformPackValue(named) ? named : null;
@@ -431,11 +435,14 @@ export function UniformPicker() {
                         ? t("view3d.uniformImport.newer")
                         : flats
                           ? t(`view3d.uniformImport.${problem}`)
-                          : t(`view3d.uniformPreview.${problem}Off`)}
+                          : available
+                            ? t(`view3d.uniformPreview.${problem}Off`)
+                            : t(`view3d.uniformPreview.${problem}Unavailable`)}
                 </p>
             )}
             {(previewWorn ||
-                (!flats &&
+                (available &&
+                    !flats &&
                     problem &&
                     problem !== "newer" &&
                     problem !== "loadFailed")) && (
@@ -446,17 +453,23 @@ export function UniformPicker() {
                 >
                     {previewWorn && (
                         <span className="text-sub text-text/60">
-                            {t("view3d.uniformPreview.showUses")}
+                            {available
+                                ? t("view3d.uniformPreview.showUses")
+                                : t(
+                                      "view3d.uniformPreview.showUsesUnavailable",
+                                  )}
                         </span>
                     )}
-                    <Button
-                        variant="secondary"
-                        size="compact"
-                        onClick={() => turnOn(true)}
-                        data-testid="view3d-uniform-preview-turn-on"
-                    >
-                        {t("view3d.uniformPreview.turnOn")}
-                    </Button>
+                    {available && (
+                        <Button
+                            variant="secondary"
+                            size="compact"
+                            onClick={() => turnOn(true)}
+                            data-testid="view3d-uniform-preview-turn-on"
+                        >
+                            {t("view3d.uniformPreview.turnOn")}
+                        </Button>
+                    )}
                 </div>
             )}
         </>

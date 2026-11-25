@@ -16,14 +16,6 @@ const SILK_ARTWORK = path.join(
     "silk-artwork.png",
 );
 
-/** Neutral test art for an imported uniform: teal front and back with a gold band, no marks. */
-const PRACTICE_UNIFORM = path.join(
-    path.dirname(fileURLToPath(import.meta.url)),
-    "..",
-    "assets",
-    "Practice uniform.png",
-);
-
 /**
  * Opens 3D View settings › Performers, picks the Standard silk and imports
  * the demo Artwork; leaves the panel open and returns it.
@@ -124,23 +116,6 @@ async function open3d({ app, page, window: size, wait }) {
     await view.mouse.move(size.width - 4, size.height / 2);
     await wait(800);
     return { view, baked };
-}
-
-/**
- * Opens the 3D View's settings with Custom uniforms (preview) on (it's off in release builds,
- * which is what the recorder runs), on the Performers tab; returns the 3D View's page.
- */
-async function customUniformsOn(ctx) {
-    const { view } = await open3d(ctx);
-    await view.getByTestId("view3d-settings-button").click();
-    await view.getByTestId("view3d-settings").waitFor();
-    await view.getByTestId("view3d-settings-tab-preferences").click();
-    const toggle = view.getByTestId("view3d-custom-uniforms-toggle");
-    if ((await toggle.getAttribute("aria-checked")) !== "true")
-        await toggle.click();
-    await view.getByTestId("view3d-settings-tab-performers").click();
-    await view.getByTestId("view3d-uniform-import").waitFor();
-    return view;
 }
 
 /** Turns the input overlay on in another window, framed on `box`. */
@@ -907,113 +882,6 @@ const shots = [
             await ctx.wait(3000);
             return {
                 box: { x: 300, y: 340, width: 1000, height: 400 },
-                target: view,
-            };
-        },
-    },
-    {
-        id: "3d-custom-uniforms",
-        kind: "still",
-        covers: [
-            "apps/desktop/src/view3d/window/overlay/UniformPreview.tsx",
-            "apps/desktop/src/view3d/window/overlay/UniformImportControls.tsx",
-            "apps/desktop/src/view3d/window/overlay/UniformTemplateControls.tsx",
-        ],
-        // Custom uniforms (preview) turned on, the band in Sample flats: the Band uniform row with
-        // its Preview badge, the template downloads, Import uniform… and Save uniform file
-        async setup(ctx) {
-            await seekInPage(ctx.page, 3, 0.5);
-            const view = await customUniformsOn(ctx);
-            await view
-                .getByTestId("view3d-uniform-picker")
-                .locator('[data-value="flats:sample"]')
-                .click();
-            await ctx.wait(2500);
-            await tidy(view);
-            const picker = view.getByTestId("view3d-uniform-picker");
-            await picker.scrollIntoViewIfNeeded();
-            await view.mouse.move(4, ctx.window.height / 2);
-            await ctx.wait(1000);
-            return {
-                box: ctx.union(
-                    await ctx.around(
-                        view
-                            .getByTestId("view3d-uniform-preview-badge")
-                            .first(),
-                        10,
-                    ),
-                    await ctx.around(
-                        view.getByTestId("view3d-uniform-import"),
-                        8,
-                    ),
-                ),
-                target: view,
-            };
-        },
-    },
-    {
-        id: "3d-custom-uniforms-band",
-        kind: "still",
-        // The band in Sample flats, the preview's sample uniform, from the front row
-        async setup(ctx) {
-            await seekInPage(ctx.page, 3, 0.5);
-            const view = await customUniformsOn(ctx);
-            await view
-                .getByTestId("view3d-uniform-picker")
-                .locator('[data-value="flats:sample"]')
-                .click();
-            await ctx.wait(2500);
-            await view.getByTestId("view3d-settings-button").click();
-            await tidy(view);
-            await view.keyboard.press("Digit2");
-            await view.mouse.move(ctx.window.width - 4, ctx.window.height / 2);
-            await ctx.wait(4000);
-            return {
-                // the band only: the track in front of them stays out
-                box: { x: 300, y: 320, width: 1000, height: 240 },
-                target: view,
-            };
-        },
-    },
-    {
-        id: "3d-custom-uniforms-off",
-        kind: "still",
-        covers: ["apps/desktop/src/view3d/window/overlay/VenueControls.tsx"],
-        // A show whose band wears an imported custom uniform, with Custom uniforms (preview) off:
-        // the picker lists it, picked, with the note and Turn on custom uniforms
-        async setup(ctx) {
-            await seekInPage(ctx.page, 3, 0.5);
-            const view = await customUniformsOn(ctx);
-            // a uniform imported into the show (neutral test art), as a colleague's show has
-            await view
-                .getByTestId("view3d-uniform-import-file")
-                .setInputFiles(PRACTICE_UNIFORM);
-            await view
-                .getByTestId("view3d-uniform-picker")
-                .locator('[data-value^="library:"][aria-checked="true"]')
-                .waitFor({ timeout: 60000 });
-            await view
-                .getByTestId("view3d-uniform-preview-note-dismiss")
-                .click({ timeout: 3000 })
-                .catch(() => {});
-            await ctx.wait(2500);
-            await view.getByTestId("view3d-settings-tab-preferences").click();
-            const toggle = view.getByTestId("view3d-custom-uniforms-toggle");
-            await toggle.click();
-            await view.getByTestId("view3d-settings-tab-performers").click();
-            const note = view.getByTestId("view3d-uniform-preview-worn");
-            await note.waitFor();
-            await tidy(view);
-            await view.mouse.move(4, ctx.window.height / 2);
-            await ctx.wait(1000);
-            return {
-                box: ctx.union(
-                    await ctx.around(
-                        view.getByTestId("view3d-uniform-picker"),
-                        10,
-                    ),
-                    await ctx.around(note, 8),
-                ),
                 target: view,
             };
         },
