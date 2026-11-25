@@ -648,6 +648,21 @@
         "category": "field",
         "bindings": []
     },
+    "facingMarksOff": {
+        "label": "Facing on the field: Off",
+        "category": "field",
+        "bindings": []
+    },
+    "facingMarksTurned": {
+        "label": "Facing on the field: Not front",
+        "category": "field",
+        "bindings": []
+    },
+    "facingMarksEveryone": {
+        "label": "Facing on the field: Everyone",
+        "category": "field",
+        "bindings": []
+    },
     "equipmentIconsBeside": {
         "label": "Equipment icons: Next to the number",
         "category": "field",

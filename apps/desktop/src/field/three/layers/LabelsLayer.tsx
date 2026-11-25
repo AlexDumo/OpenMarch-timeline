@@ -20,6 +20,8 @@ import type {
     EquipmentIconPlace,
 } from "@/cues/equipmentIcons";
 import { IconBatch, useIconAtlas, type FieldIcon } from "../iconBatch";
+import type { FieldFacing } from "@/cues/useFieldFacing";
+import { anchorsClearOfPoints } from "../facingPoint";
 
 /**
  * A marcher label: 14 field units, its center 2.2 dot radii above the dot,
@@ -152,6 +154,7 @@ export default function LabelsLayer({
     icons = null,
     iconPlace = "beside",
     hovered = null,
+    facing = null,
 }: {
     marchers: FieldMarchers;
     /** Marchers whose labels are drawn dimmed (#201). */
@@ -182,6 +185,11 @@ export default function LabelsLayer({
         get(): number | null;
         subscribe(changed: () => void): () => void;
     } | null;
+    /**
+     * Which way each performer faces at the beat drawn (fork #1316): a label moves off its dot's
+     * point when the point aims at it
+     */
+    facing?: FieldFacing | null;
 }) {
     const invalidate = useThree((s) => s.invalidate);
     const draw = useFieldDraw();
@@ -221,6 +229,12 @@ export default function LabelsLayer({
         iconPlace,
         hoveredId: null as number | null,
         selectionVersion: -1,
+        facing: null as FieldFacing | null,
+    });
+    // The facing directions and the anchors moved off them, reused frame to frame
+    const scratch = useRef({
+        directions: new Float32Array(0),
+        anchors: new Float64Array(0),
     });
 
     useEffect(() => {
@@ -231,7 +245,7 @@ export default function LabelsLayer({
     // New labels, a new theme or style lay the text out again on the next frame
     useEffect(
         () => invalidate(),
-        [labels, theme, style, icons, iconPlace, invalidate],
+        [labels, theme, style, icons, iconPlace, facing, invalidate],
     );
     useEffect(() => hovered?.subscribe(invalidate), [hovered, invalidate]);
     // The icons carry the label's offset themselves: one in place of a dot has none
@@ -334,9 +348,15 @@ export default function LabelsLayer({
         } else if (weightsChanged) {
             text.setWeights((i) => weightOf(marchers.ids[i]!));
         }
-        if (newLayout || marchers.version !== last.version) {
-            text.setAnchors(marchers.positions);
-            iconBatch?.setAnchors(marchers.positions);
+        if (
+            newLayout ||
+            marchers.version !== last.version ||
+            facing !== last.facing
+        ) {
+            const anchors = anchorsOffPoints();
+            text.setAnchors(anchors);
+            // In place of a dot an icon stays on the spot
+            iconBatch?.setAnchors(onDots ? marchers.positions : anchors);
         }
         drawn.current = {
             version: marchers.version,
@@ -354,8 +374,29 @@ export default function LabelsLayer({
             iconPlace,
             hoveredId,
             selectionVersion: marchers.selectionVersion,
+            facing,
         };
     });
+
+    /** Each label's anchor: its marcher's spot, moved off the dot's facing point (#1316). */
+    function anchorsOffPoints(): Float64Array {
+        const beat = marchers.drawnBeat;
+        if (!facing || beat === null) return marchers.positions;
+        const n = marchers.positions.length;
+        const buffers = scratch.current;
+        if (buffers.anchors.length !== n) {
+            buffers.anchors = new Float64Array(n);
+            buffers.directions = new Float32Array(n);
+        }
+        if (!facing.write(marchers.ids, beat, buffers.directions))
+            return marchers.positions;
+        return anchorsClearOfPoints(
+            marchers.positions,
+            buffers.directions,
+            style.beside,
+            buffers.anchors,
+        );
+    }
 
     /** Whether a marcher's drill number shows in place of its icon: hovered or selected. */
     function revealed(id: number, i: number, hoveredId: number | null) {

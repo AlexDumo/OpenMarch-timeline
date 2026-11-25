@@ -24,16 +24,7 @@ import type { LabelIcons } from "@/cues/useEquipmentIcons";
 import type { EquipmentIconPlace } from "@/cues/equipmentIcons";
 import { useIconAtlas } from "../iconBatch";
 import type { FieldFacing } from "@/cues/useFieldFacing";
-
-/**
- * Facing (fork #1316): a dot facing somewhere is drawn to a point that way, in field units from
- * its center (the dot's radius is 5). The tip reaches 9.5, a little under half the 2-step interval
- * of a block (22.5), so points stay clear of the next dot. A circle tapers to it from its whole
- * width, a teardrop; the other shapes grow a narrower point from inside them.
- */
-const NOSE_TIP = 9.5;
-const NOSE_TIP_RADIUS = 0.75;
-const NOSE_BASE = 2.5;
+import { NOSE_BASE, NOSE_TIP, NOSE_TIP_RADIUS } from "../facingPoint";
 
 /**
  * Every marcher's dot in one instanced draw, shaded in the fragment shader so

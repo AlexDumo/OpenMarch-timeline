@@ -921,6 +921,7 @@ function ThreeFieldView() {
                             icons={equipmentIcons}
                             iconPlace={equipmentIconPlace}
                             hovered={hoveredMarcher}
+                            facing={facing}
                         />
                         <OverlayLayer
                             plan={timeline.collisions}

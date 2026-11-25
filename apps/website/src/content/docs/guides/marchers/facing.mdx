@@ -8,6 +8,10 @@ covers:
   - apps/desktop/src/components/timeline/cues/TurnPopover.tsx
   - packages/core/src/cues/facing.ts
   - apps/desktop/src/view3d/core/marchers/cueInputs.ts
+  - apps/desktop/src/cues/facingMarks.ts
+  - apps/desktop/src/cues/useFieldFacing.ts
+  - apps/desktop/src/field/three/facingPoint.ts
+  - apps/desktop/src/field/three/layers/MarchersLayer.tsx
   - action:facingFront
   - action:facingBack
   - action:facingSide1
@@ -17,9 +21,13 @@ covers:
   - action:facingAngle
   - action:cueEditTurn
   - action:toggleFacingLane
+  - action:facingMarksTurned
+  - action:facingMarksEveryone
+  - action:facingMarksOff
   - i18n:cues.facing
   - i18n:cues.turn
   - i18n:field.menu.facing
+  - i18n:toolbar.view.facing
 sidebar:
   order: 7
 ---
@@ -32,7 +40,7 @@ import { Steps } from "@astrojs/starlight/components";
 
 <InShort>Select the marchers, right-click one and choose <Ui k="field.menu.facing" /> › a direction, or press <Kbd action="facingSide2" /> for side 2. To turn over the counts before, pull the tab on the left of its diamond in the Facing lane to the left.</InShort>
 
-Every marcher faces the front until you turn them. A facing change says where the selected marchers face by a count: they face that way on it, and until their next facing change. They can turn into it instantly or over the counts before it. The 3D View turns them; the 2D field doesn't show facing yet.
+Every marcher faces the front until you turn them. A facing change says where the selected marchers face by a count: they face that way on it, and until their next facing change. They can turn into it instantly or over the counts before it. The field draws each turned marcher's dot with a point the way they face ([See facing on the field](#see-facing-on-the-field)), and the 3D View turns them.
 
 ## Turn marchers
 
@@ -123,6 +131,32 @@ Double-click a turn's bar in the <Ui k="cues.lane.facing" plain /> lane, or righ
 - Click a bar to pick its facing change. As when you click a move's bar, that also selects its counts: the start flag goes to where the turn starts and the playhead to those marchers' next facing change.
 - Right-click a bar, or press and hold it on a tablet, for its menu: <Ui k="actions.cues.editTurn" plain />, <Ui k="actions.cues.addSelected" plain />, <Ui k="actions.cues.removeSelected" plain />, <Ui k="cues.lane.selectPerformers" plain />, <Ui k="actions.cues.moveToPlayhead" plain /> and <Ui k="actions.cues.delete" plain />.
 - Click a row's name to select its marchers.
+
+## See facing on the field
+
+A marcher who faces anywhere but the front is drawn with a point on their dot, aimed the way they face: down the field toward the audience for the front, up for the back, and toward side 1 or side 2 for the sides. A plain dot faces the front.
+
+<Media
+  id="marchers-facing-field"
+  alt="The field at the end of Page 1. G6 to G10, along the front of the field, have dots pointed toward side 2, at the right. G14, G19 and G22 have dots pointed up the field, to the back, with their drill numbers above the points. Every other marcher is a plain round dot."
+  maxWidth={720}
+/>
+
+The point follows the playhead: as you scrub or play through a turn, it rotates at the same even speed as the turn, the way the turn goes, and lands on the facing change's count. It's the same facing the <Ui k="cues.lane.facing" plain /> lane and the 3D View show. The point takes the dot's own color and outline, and a selected marcher's ring goes around it. A drill number moves up off a point that aims at it.
+
+To choose who gets a point, select <Ui k="toolbar.view.facing" /> (the compass) in the bar at the field's top right:
+
+- <Ui k="toolbar.view.facingTurned" />, the starting choice: only marchers who don't face the front, as above. A show without facing changes looks as it always did.
+- <Ui k="toolbar.view.facingEveryone" />: every marcher, those facing the front included, so you can check that a block faces the audience.
+- <Ui k="toolbar.view.facingOff" />: plain dots.
+
+<Media
+  id="marchers-facing-setting"
+  alt="The bar at the top right of the field with its Facing popup open beside it: Not front, which is chosen, Everyone and Off."
+  maxWidth={240}
+/>
+
+The command palette has the same three choices. With <Ui k="toolbar.view.equipmentOnDot" plain /> chosen under <Ui k="toolbar.view.equipment" plain />, the equipment icon stands in for the dot and no point is drawn ([Change what performers hold](/guides/marchers/equipment/)).
 
 ## In the 3D View
 

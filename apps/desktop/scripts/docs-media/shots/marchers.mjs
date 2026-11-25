@@ -1183,6 +1183,45 @@ const shots = [
             };
         },
     },
+    {
+        id: "marchers-facing-field",
+        kind: "still",
+        // On the field at the end of Page 1 (fork #1316): G6–G10 drawn pointing to side 2 and
+        // G14, G19 and G22 to the back; everyone else faces the front and is a plain dot
+        async setup({ page, wait }) {
+            await toPage1(page, wait);
+            await setFacing(page, SABRES, "facingSide2", wait);
+            await setFacing(page, TUBAS, "facingBack", wait);
+            await page.keyboard.press("Escape");
+            await page.mouse.move(800, 990);
+            await wait(1000);
+            await hideToasts(page);
+            const b = bounds(
+                named(await marchers(page), [...SABRES, ...TUBAS]),
+            );
+            return {
+                box: {
+                    x: b.left - 70,
+                    y: b.top - 50,
+                    width: b.right - b.left + 160,
+                    height: b.bottom - b.top + 90,
+                },
+            };
+        },
+    },
+    {
+        id: "marchers-facing-setting",
+        kind: "still",
+        // The field display bar's Facing choices, open beside the bar (fork #1316)
+        async setup({ page, wait, union, around }) {
+            await toPage1(page, wait);
+            await page.getByTestId("field-display-facing").click();
+            await wait(800);
+            const bar = page.getByTestId("field-display-bar");
+            const pop = page.getByRole("dialog", { name: "Facing" });
+            return { box: union(await around(bar, 12), await around(pop, 12)) };
+        },
+    },
 ];
 
 export default shots;
