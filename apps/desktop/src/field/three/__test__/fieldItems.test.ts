@@ -270,6 +270,51 @@ describe("FieldItems for imported models", () => {
         expect(items.frameOf(2)!.keepsProportions).toBeUndefined();
     });
 
+    it("hits a model on its silhouette, not the empty corner of its footprint", () => {
+        // An L from above, 2 × 2 m: the top-right square meter is empty
+        const lLibrary = new Map([
+            [
+                "library:l@b",
+                {
+                    ...library.get("library:a@b")!,
+                    value: "library:l@b",
+                    sidecar: {
+                        sizeM: { width: 2, height: 1, depth: 2 },
+                        plan: {
+                            outline: [
+                                [
+                                    -1000, -1000, 0, -1000, 0, 0, 1000, 0, 1000,
+                                    1000, -1000, 1000,
+                                ],
+                            ],
+                            details: [],
+                        },
+                    } as never,
+                },
+            ],
+        ]);
+        const marchers = new FieldMarchers(positions);
+        const items = new FieldItems(marchers);
+        items.set({
+            itemIds: new Set([2]),
+            changes: new Map([[2, [change(0, { width: 2, depth: 2 })]]]),
+            hidden: new Set(),
+            models: new Map([[2, "library:l@b"]]),
+            library: lLibrary,
+        });
+        marchers.fill(1);
+        const m = PIXELS_PER_METER;
+        // The empty corner, inside the footprint
+        const corner = { x: 100 + 0.5 * m, y: 50 - 0.5 * m };
+        expect(items.itemAt(corner)).toBeNull();
+        expect(items.itemAt({ x: 100 - 0.5 * m, y: 50 + 0.5 * m })).toBe(2);
+        // Just past the silhouette's inner edge: only with reach
+        const nearEdge = { x: 100 + 0.5 * m, y: 50 - 2 };
+        expect(items.itemAt(nearEdge)).toBeNull();
+        expect(items.itemAt(nearEdge, () => true, 3)).toBe(2);
+        expect(items.itemAt(corner, () => true, 3)).toBeNull();
+    });
+
     it("draws the Outline for a model the show doesn't have", () => {
         expect(drawn(2, 1, "library:gone@b").plan).toBeNull();
     });
