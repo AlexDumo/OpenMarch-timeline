@@ -4,6 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import {
     applyFileVersionDecision,
     decideFileVersion,
+    fileTooNewMessage,
     isSupportedUserVersion,
     MAX_SUPPORTED_USER_VERSION,
     MIN_SUPPORTED_USER_VERSION,
@@ -12,10 +13,19 @@ import {
 } from "../fileVersion";
 
 describe("file-format version", () => {
-    it("supports the page model (7), the timeline model (8), the step-15 route model (10), the lane model (11), Adjust (12), trails (13) and arc legs (14)", () => {
+    it("supports the page model (7), the timeline model (8), the step-15 route model (10), the lane model (11), Adjust (12), trails (13), arc legs (14) and exact paths (19)", () => {
         expect(MIN_SUPPORTED_USER_VERSION).toBe(7);
-        expect(MAX_SUPPORTED_USER_VERSION).toBe(14);
+        expect(MAX_SUPPORTED_USER_VERSION).toBe(19);
         expect(NEW_FILE_USER_VERSION).toBe(8);
+    });
+
+    it("says a skipped number (15 to 18) is unknown rather than below the newest", () => {
+        expect(fileTooNewMessage(16)).toContain(
+            "file format 16, which this version doesn't know",
+        );
+        expect(fileTooNewMessage(20)).toContain(
+            "file format 20; this version supports up to 19",
+        );
     });
 
     describe("decideFileVersion", () => {
@@ -26,7 +36,7 @@ describe("file-format version", () => {
             });
         });
 
-        it.each([7, 8, 10, 11, 12, 13, 14])(
+        it.each([7, 8, 10, 11, 12, 13, 14, 19])(
             "accepts an existing file at %i",
             (version) => {
                 expect(decideFileVersion(version, false)).toEqual({
@@ -36,7 +46,7 @@ describe("file-format version", () => {
             },
         );
 
-        it.each([7, 8, 10, 11, 12, 13, 14])(
+        it.each([7, 8, 10, 11, 12, 13, 14, 19])(
             "accepts a 'new' file already at %i without rewriting it",
             (version) => {
                 expect(decideFileVersion(version, true)).toEqual({
@@ -56,7 +66,8 @@ describe("file-format version", () => {
             },
         );
 
-        it.each([15, 42, 2 ** 31 - 1])(
+        // 15 to 18: steps on branches not merged here wrote them (UNKNOWN_USER_VERSIONS)
+        it.each([15, 16, 17, 18, 20, 42, 2 ** 31 - 1])(
             "refuses a file at %i as too new, new or not",
             (version) => {
                 for (const isNewFile of [false, true]) {
@@ -84,7 +95,14 @@ describe("file-format version", () => {
         });
     });
 
-    it("isSupportedUserVersion covers exactly 7, 8, 10, 11, 12, 13 and 14", () => {
+    it("isSupportedUserVersion covers exactly 7, 8, 10, 11, 12, 13, 14 and 19", () => {
+        expect([16, 17, 18, 19, 20].map(isSupportedUserVersion)).toEqual([
+            false,
+            false,
+            false,
+            true,
+            false,
+        ]);
         expect(
             [0, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map(isSupportedUserVersion),
         ).toEqual([

@@ -160,6 +160,9 @@ export {
     exactPieces,
     exactPlayer,
     exactPointAt,
+    exactEnd,
+    exactPathOnSpots,
+    exactWalker,
     followExactEnds,
     measureCubic,
     retimeExactPath,
@@ -177,6 +180,7 @@ export type {
     ExactPlayer,
     ExactPoints,
     ExactShape,
+    ExactWalker,
 } from "./exactPath";
 export {
     EXACT_DEFAULT_TOLERANCE,

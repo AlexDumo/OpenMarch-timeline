@@ -162,9 +162,10 @@ export function fieldSvg(
         out.push(`<path d="${shape.path}" ${paint("fill", shape.color)} />`);
 
     const { border } = plan;
-    out.push(
-        `<rect x="${num(border.x)}" y="${num(border.y)}" width="${num(border.width)}" height="${num(border.height)}" fill="none" ${paint("stroke", border.color)} stroke-width="${num(border.strokeWidth)}" />`,
-    );
+    if (border)
+        out.push(
+            `<rect x="${num(border.x)}" y="${num(border.y)}" width="${num(border.width)}" height="${num(border.height)}" fill="none" ${paint("stroke", border.color)} stroke-width="${num(border.strokeWidth)}" />`,
+        );
 
     return out.join("\n");
 }

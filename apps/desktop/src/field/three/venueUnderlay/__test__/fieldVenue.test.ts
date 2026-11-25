@@ -4,11 +4,16 @@ import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates
 import { planField, type FieldRole } from "@/view3d/core/field";
 import { DEFAULT_VENUE_PARAMS } from "@/view3d/core/venueSettings";
 import {
+    FULL_SIZE_FLOOR,
+    indoorFloorTemplate,
+} from "@/global/classes/fieldTemplates/indoorFloors";
+import {
     VENUE_LOOKS,
     planBaseColor,
     styleBaseColor,
     venueAround,
     venueLook,
+    venuePaintedMarkings,
     venuePasses,
     washedColor,
     withLightLines,
@@ -81,6 +86,64 @@ describe("venuePasses", () => {
         expect(roles(marks.items)).toEqual(
             new Set(["endZoneText", "centerLogo"]),
         );
+    });
+});
+
+describe("venuePaintedMarkings", () => {
+    it("hands the turf's lines, hashes, numbers and border to the venue in Full color", () => {
+        const painted = venuePaintedMarkings(turf, VENUE_LOOKS.full, fp);
+        expect(painted.kinds).toEqual(
+            new Set(["yardLine", "yardNumber", "border"]),
+        );
+        expect(painted.hashRows).toEqual(
+            new Set(
+                fp.yCheckpoints
+                    .filter((c) => c.visible)
+                    .map((c) => c.stepsFromCenterFront),
+            ),
+        );
+    });
+
+    it("leaves a college field's grid back hash to the grid, since the turf paints the real one", () => {
+        const college =
+            FieldPropertiesTemplates.COLLEGE_FOOTBALL_FIELD_NO_END_ZONES;
+        const plan = planField({
+            fieldProperties: college,
+            style: "turf",
+            params: DEFAULT_VENUE_PARAMS,
+        });
+        const { hashRows } = venuePaintedMarkings(
+            plan,
+            VENUE_LOOKS.full,
+            college,
+        );
+        expect(hashRows.has(-53.33)).toBe(true);
+        expect(hashRows.has(-52)).toBe(false);
+    });
+
+    it("leaves the grid whole in the other looks", () => {
+        for (const look of [
+            VENUE_LOOKS.faint,
+            VENUE_LOOKS.soft,
+            VENUE_LOOKS.markings,
+        ])
+            expect(venuePaintedMarkings(turf, look, fp)).toEqual({
+                kinds: new Set(),
+                hashRows: new Set(),
+            });
+    });
+
+    it("keeps the grid's lines and numbers on a tarp, which paints only its edge, marks and dots", () => {
+        const tarp = planField({
+            fieldProperties: indoorFloorTemplate(FULL_SIZE_FLOOR, 22.5),
+            style: "tarp",
+            params: DEFAULT_VENUE_PARAMS,
+        });
+        const floor = indoorFloorTemplate(FULL_SIZE_FLOOR, 22.5);
+        expect(venuePaintedMarkings(tarp, VENUE_LOOKS.full, floor)).toEqual({
+            kinds: new Set(["border"]),
+            hashRows: new Set(),
+        });
     });
 });
 

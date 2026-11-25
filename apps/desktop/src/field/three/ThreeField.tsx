@@ -98,7 +98,11 @@ import {
 import { PIXELS_PER_METER } from "@/items/itemOutlines";
 import { PIT_MANIFEST, pitModelName } from "@/view3d/core/pit/pitModels";
 import { isMacPlatform } from "@/shortcuts/platform";
-import { planFieldImage } from "@/field/fieldPlan";
+import {
+    NOTHING_PAINTED,
+    planFieldImage,
+    type PaintedMarkings,
+} from "@/field/fieldPlan";
 import { dropMarchersOnTimeline } from "@/field/fieldDrop";
 import {
     fieldViewSize,
@@ -284,6 +288,10 @@ function ThreeFieldView() {
         : KIT_FIELD_STYLE[venueKit];
     const venue3d = venueLook(fieldVenue, venueStyle);
     useFieldVenueAction(venueStyle);
+    // What the venue paints in Full color (its yard lines, hashes and numbers on turf): the grid
+    // leaves those out, so the field's own markings show once
+    const [venuePainted, setVenuePainted] =
+        useState<PaintedMarkings>(NOTHING_PAINTED);
     // Full color draws the grid in light ink over the dark turf
     const lineFieldProperties = useMemo(
         () =>
@@ -574,11 +582,12 @@ function ThreeFieldView() {
                         ),
                     reachesInside: canReachInside,
                     doubleClickMarcher: enterBox,
-                    // C2.1: items are hit anywhere inside their Outline
+                    // C2.1: items are hit inside their Outline, or a model's silhouette
                     isItem: (id) => items.isItem(id),
                     // Locked items (the pit's equipment): no click, drag or marquee takes them
                     isLocked: (id) => items.isLocked(id),
-                    itemAt: (point, accept) => items.itemAt(point, accept),
+                    itemAt: (point, accept, reach) =>
+                        items.itemAt(point, accept, reach),
                     // Shown once asked for, with an item's Resize and turn (props epic step 2)
                     itemHandlesShown,
                     lockedItemClicked: (id, at) =>
@@ -852,6 +861,7 @@ function ThreeFieldView() {
                             fieldProperties={fieldProperties}
                             look={venue3d}
                             around={venueAround(fieldVenueAround, venueStyle)}
+                            onPainted={setVenuePainted}
                         />
                         <CameraMarkerLayer fieldProperties={fieldProperties} />
                         <FieldLayer
@@ -860,6 +870,13 @@ function ThreeFieldView() {
                                 lineFieldProperties ?? fieldProperties
                             }
                             strips={strips}
+                            // Only while a look paints markings: off, the grid's come back
+                            // with the venue gone, not an effect later
+                            painted={
+                                venue3d?.keepMarkings
+                                    ? venuePainted
+                                    : NOTHING_PAINTED
+                            }
                             numberAtlas={atlases.number}
                             labelAtlas={atlases.checkpoint}
                         />

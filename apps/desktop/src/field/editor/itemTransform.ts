@@ -64,6 +64,16 @@ export function itemSelectionFrame(frame: ItemFrame): SelectionFrame {
     };
 }
 
+/** Whether `point` is inside the frame drawn around an item, turned with it. */
+export function insideItemFrame(frame: ItemFrame, point: FieldPoint): boolean {
+    const radians = (-frame.rotation * Math.PI) / 180;
+    const dx = point.x - frame.center.x;
+    const dy = point.y - frame.center.y;
+    const x = dx * Math.cos(radians) - dy * Math.sin(radians);
+    const y = dx * Math.sin(radians) + dy * Math.cos(radians);
+    return Math.abs(x) <= frame.width / 2 && Math.abs(y) <= frame.depth / 2;
+}
+
 /** What an item handle drags: the size drawn, and the save at the release. */
 export interface ItemTransformHost {
     show(size: ItemSize): void;

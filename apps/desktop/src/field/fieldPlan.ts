@@ -82,7 +82,10 @@ export type FieldPlan2d = {
     texts: FieldPlanText[];
     /** Filled shapes (the yard numbers), over the lines with the texts. */
     shapes: FieldPlanShape[];
-    /** A rectangle stroked over everything, the stroke centered on its edge. */
+    /**
+     * A rectangle stroked over everything, the stroke centered on its edge; null when the venue
+     * paints the field's border (`painted`).
+     */
     border: {
         x: number;
         y: number;
@@ -90,7 +93,30 @@ export type FieldPlan2d = {
         height: number;
         strokeWidth: number;
         color: RgbaColor;
-    };
+    } | null;
+};
+
+/** Markings a field surface under the grid paints whole: every one of its kind. */
+export type PaintedMarking = "yardLine" | "yLine" | "yardNumber" | "border";
+
+/**
+ * What a field surface under the grid paints for it: the venue's turf in Full color
+ * (`venuePaintedMarkings`). The grid leaves these out so they don't show twice; the step grid,
+ * half lines and the labels outside the field stay, since no field paints those.
+ */
+export type PaintedMarkings = {
+    kinds: ReadonlySet<PaintedMarking>;
+    /**
+     * The hash rows the surface paints, by their y checkpoint's `stepsFromCenterFront`. Only
+     * these: a college turf paints the real back hash, not the grid's reference hash beside it,
+     * so the grid keeps that one (marchers are placed on it).
+     */
+    hashRows: ReadonlySet<number>;
+};
+
+export const NOTHING_PAINTED: PaintedMarkings = {
+    kinds: new Set(),
+    hashRows: new Set(),
 };
 
 export type FieldPlanOptions = {
@@ -105,6 +131,8 @@ export type FieldPlanOptions = {
     image?: { width: number; height: number } | null;
     /** The side the field is seen from; the audience's by default (`fieldViewFrom.ts`). */
     viewFrom?: FieldViewFrom;
+    /** Markings the surface under the grid already paints, left out here. */
+    painted?: PaintedMarkings;
 };
 
 const GRID_STROKE = FieldProperties.GRID_STROKE_WIDTH;
@@ -309,7 +337,7 @@ export function turnFieldPlan(plan: FieldPlan2d): FieldPlan2d {
             ...s,
             path: turnPathData(s.path, size),
         })),
-        border: {
+        border: border && {
             ...border,
             x: size.width - border.x - border.width,
             y: size.height - border.y - border.height,
@@ -321,7 +349,13 @@ export function turnFieldPlan(plan: FieldPlan2d): FieldPlan2d {
 // eslint-disable-next-line max-lines-per-function
 export function planField2d(
     fieldProperties: FieldProperties,
-    { gridLines, halfLines, image, viewFrom = "audience" }: FieldPlanOptions,
+    {
+        gridLines,
+        halfLines,
+        image,
+        viewFrom = "audience",
+        painted = NOTHING_PAINTED,
+    }: FieldPlanOptions,
 ): FieldPlan2d {
     const fp = fieldProperties;
     const { width, height, pixelsPerStep, centerFrontPoint, theme } = fp;
@@ -334,7 +368,14 @@ export function planField2d(
         y2: number,
         color: RgbaColor,
         lineWidth: number,
-    ) => lines.push({ role, x1, y1, x2, y2, color, width: lineWidth });
+    ) => {
+        if (
+            (role === "yardLine" || role === "yLine") &&
+            painted.kinds.has(role)
+        )
+            return;
+        lines.push({ role, x1, y1, x2, y2, color, width: lineWidth });
+    };
 
     const startY = gridStartY(fp);
     if (gridLines) {
@@ -389,6 +430,8 @@ export function planField2d(
         if (!fp.useHashes) continue;
         for (const yCheckpoint of fp.yCheckpoints) {
             if (!yCheckpoint.visible) continue;
+            if (painted.hashRows.has(yCheckpoint.stepsFromCenterFront))
+                continue;
             const y = checkpointY(fp, yCheckpoint);
             // As wide as the hash width plus the yard line, clipped to the field
             const half = (HASH_WIDTH + GRID_STROKE) / 2;
@@ -414,7 +457,9 @@ export function planField2d(
     // Border: three grid lines wide, just outside the field's edge
     const borderWidth = GRID_STROKE * 3;
     const inset = (borderWidth - GRID_STROKE) / 2;
-    const numbers = yardNumbers(fp);
+    const numbers = painted.kinds.has("yardNumber")
+        ? { shapes: [], texts: [] }
+        : yardNumbers(fp);
 
     const plan: FieldPlan2d = {
         width,
@@ -424,14 +469,16 @@ export function planField2d(
         lines,
         texts: [...checkpointLabels(fp), ...numbers.texts],
         shapes: numbers.shapes,
-        border: {
-            x: -inset,
-            y: -inset,
-            width: width + 2 * inset,
-            height: height + 2 * inset,
-            strokeWidth: borderWidth,
-            color: theme.primaryStroke,
-        },
+        border: painted.kinds.has("border")
+            ? null
+            : {
+                  x: -inset,
+                  y: -inset,
+                  width: width + 2 * inset,
+                  height: height + 2 * inset,
+                  strokeWidth: borderWidth,
+                  color: theme.primaryStroke,
+              },
     };
     return viewFrom === "performer" ? turnFieldPlan(plan) : plan;
 }

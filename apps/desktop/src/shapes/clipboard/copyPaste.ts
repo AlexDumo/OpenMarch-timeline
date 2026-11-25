@@ -22,6 +22,11 @@ import {
     openShapeTool,
     useShapeToolStore,
 } from "../tool/shapeToolStore";
+import {
+    openPaste,
+    usePasteSessionStore,
+    type PasteMode,
+} from "./pasteModeStore";
 import { openDrawn, slotsOf } from "../tool/toolMachine";
 import { mirrorParams, type Mirror } from "../tool/mirror";
 import { toolEnvFor } from "../tool/toolEnv";
@@ -207,12 +212,21 @@ export function pasteFormation(
             plan.marchers.map((m) => m.at),
             slotsOf(opened, ctx),
         );
+    const openedAt = planCanvasEdit();
     openShapeTool(
         kept ? { ...opened, assignment: kept } : opened,
-        planCanvasEdit(),
+        openedAt,
         undefined,
         { keepDiscarded: startingOver },
     );
+    // Kept so it can open again in another mode while it's open (`switchPasteMode`)
+    usePasteSessionStore.setState({
+        session: {
+            mode: inPlace ? "exact" : mirrored ? "mirrored" : "paste",
+            ids: [...ids],
+            openedAt,
+        },
+    });
     // How it doesn't fit, from what the paste does: spots left empty (a copy that fills so many
     // spots, onto fewer marchers) or marchers left out. Under the paste's editor while it's
     // open, and said to a screen reader with the preview
@@ -262,4 +276,47 @@ export function pasteFormation(
               : null;
     announceClipboard(misfit ? `${misfit}. ${preview}` : preview);
     return true;
+}
+
+/**
+ * Opens the open paste again in `mode` (owner 2026-11-25): Ctrl/Cmd+V starts a paste, and while
+ * it's open the Clipboard chip's Paste | Paste exactly | Paste mirrored switch, or any paste's
+ * keys, switch which way it pastes. It opens on the same marchers, fresh in that mode: a move or
+ * edit made to it in the last mode isn't carried over. The mode it's in already, or no paste
+ * open and showing, does nothing. True when it switched.
+ */
+export function switchPasteMode(mode: PasteMode): boolean {
+    const session = openPaste();
+    if (!session || !isShapeShown() || session.mode === mode) return false;
+    return pasteAgain(session.ids, mode);
+}
+
+/**
+ * Opens the open paste again in its own mode, after Paste as switched between the shape and its
+ * positions, so the switch shows on the paste at once. False with no paste open and showing.
+ */
+export function reopenPaste(): boolean {
+    const session = openPaste();
+    if (!session || !isShapeShown()) return false;
+    return pasteAgain(session.ids, session.mode);
+}
+
+/** Closes the open paste and pastes again on `ids` in `mode`; puts it back if that can't open */
+function pasteAgain(ids: readonly number[], mode: PasteMode): boolean {
+    const before = useShapeToolStore.getState();
+    const session = usePasteSessionStore.getState().session;
+    // Closed, not discarded: switching isn't something undo steps back through
+    useShapeToolStore.setState({ tool: null, openedAt: null, moment: null });
+    const opened = pasteFormation(ids, {
+        inPlace: mode === "exact",
+        mirrored: mode === "mirrored",
+    });
+    if (opened) {
+        // A shape Escape threw away before the paste can still come back after it, as before
+        useShapeToolStore.setState({ discarded: before.discarded });
+        return true;
+    }
+    useShapeToolStore.setState(before);
+    usePasteSessionStore.setState({ session });
+    return false;
 }
