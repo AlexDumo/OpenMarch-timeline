@@ -23,6 +23,9 @@
  * - A performer standing on a podium holds its stance (`PODIUM_CLIP`, second
  *   position: feet apart) instead of their step, at attention until that
  *   clip is baked; off the podium they march their drill again.
+ * - Each performer holds what their Equipment cues say at each count (ADR
+ *   0015 D-6): their section's piece, another (a rifle, a sabre, a flag) or
+ *   nothing, swapped on the cue's count (`equipmentSpans.ts`).
  *
  * - The camera can follow a performer (`camera/followStore.ts`): this
  *   tells it where each one is drawn (`camera/performerTrack.ts`) after
@@ -41,11 +44,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { recheckUniformPack } from "@/hooks/queries/useUniformPack";
-import type {
-    CueHoldStyle,
-    CueSection,
-    FieldProperties,
-    RgbaColor,
+import {
+    heldAt,
+    type CueHoldStyle,
+    type CueSection,
+    type FieldProperties,
+    type RgbaColor,
 } from "@openmarch/core";
 import {
     Color,
@@ -143,6 +147,12 @@ import { useSettledFlatsWear } from "@/view3d/window/uniformPack/useSettledFlats
 import { hornRowsOf } from "./marchers/hornRows";
 import { sectionCueCarry } from "@/view3d/core/marchers/hornChannel";
 import { DEFAULT_HOLD, windowHornEvents } from "./windowHorn";
+import type { Carry } from "@/view3d/core/instruments/catalog";
+import {
+    heldHornEvents,
+    slotEquipment,
+    type SlotEquipment,
+} from "@/view3d/core/marchers/equipmentSpans";
 import { useStoredCues } from "./useStoredCues";
 import { SilkMotion } from "./marchers/silkMotion";
 
@@ -241,7 +251,9 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             }),
         );
     }, [marchers, sectionAppearances, slots.ids]);
-    const marcherLooks = useMemo<MarcherSlotLook[] | null>(() => {
+    // Each slot's uniform: carrying its section's piece or, given `carry`,
+    // the piece an Equipment cue puts in its hands (null for nothing).
+    const uniformOf = useMemo(() => {
         if (!looksKey) return null;
         const rows = JSON.parse(looksKey) as [
             number,
@@ -252,10 +264,9 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             rows.map((r) => r[0]),
             rows.map((r) => r[1]),
         );
-        return rows.map(([id, section, fill], i) => ({
-            // varied heights at high quality; one height (one bake class) at low
-            body: defaultPerformerBody(id, { varyHeight: quality === "high" }),
-            uniform: sectionUniform(
+        return (i: number, carry?: Carry | null) => {
+            const [, section, fill] = rows[i];
+            return sectionUniform(
                 section,
                 DEFAULT_HOLD,
                 options[i],
@@ -263,15 +274,18 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 undefined,
                 uniformPreset,
                 guardUniformPreset,
-                { finish: brassFinish, tuba, silkShape, silkArtwork },
+                {
+                    finish: brassFinish,
+                    tuba,
+                    silkShape,
+                    silkArtwork,
+                    ...(carry !== undefined ? { carry } : {}),
+                },
                 uniformArtwork,
-            ),
-            // no Silk cues yet: the silks take the uniform's carry (the
-            // section's 2D fill, else the preset's color and pattern)
-        }));
+            );
+        };
     }, [
         looksKey,
-        quality,
         uniformPreset,
         guardUniformPreset,
         brassFinish,
@@ -280,6 +294,17 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         silkArtwork,
         uniformArtwork,
     ]);
+    const marcherLooks = useMemo<MarcherSlotLook[] | null>(() => {
+        if (!looksKey || !uniformOf) return null;
+        const ids = (JSON.parse(looksKey) as [number][]).map((r) => r[0]);
+        return ids.map((id, i) => ({
+            // varied heights at high quality; one height (one bake class) at low
+            body: defaultPerformerBody(id, { varyHeight: quality === "high" }),
+            uniform: uniformOf(i),
+            // no Silk cues yet: the silks take the uniform's carry (the
+            // section's 2D fill, else the preset's color and pattern)
+        }));
+    }, [looksKey, quality, uniformOf]);
     const heightClasses = useMemo(
         () => [...new Set((marcherLooks ?? []).map((l) => l.body.heightClass))],
         [marcherLooks],
@@ -337,8 +362,8 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             cueSectionsOf(
                 slots.ids.map((id, i) => ({
                     section: sectionById.get(id) ?? "",
-                    family:
-                        marcherLooks[i]?.uniform.options.carry?.family ?? null,
+                    model:
+                        marcherLooks[i]?.uniform.options.carry?.model ?? null,
                 })),
             ),
         );
@@ -394,6 +419,51 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         holdWhileBandMoves,
         holdStylesKey,
     ]);
+    // What Equipment cues put in each slot's hands over the show (ADR 0015
+    // D-6): null for a slot that holds its own piece all show. Keyed on its
+    // content, so a cue edit that changes nobody's pieces rebuilds nothing.
+    const equipmentKey = useMemo(() => {
+        if (!marcherLooks || !cues) return null;
+        return JSON.stringify(
+            slots.ids.map((id, i) =>
+                slotEquipment(
+                    cues.compiled.segments(id, "equipment"),
+                    (c) => heldAt(cues.compiled, id, c),
+                    marcherLooks[i]?.uniform.options.carry ?? null,
+                ),
+            ),
+        );
+    }, [marcherLooks, cues, slots.ids]);
+    const equipment = useMemo(
+        () =>
+            equipmentKey
+                ? (JSON.parse(equipmentKey) as (SlotEquipment | null)[])
+                : null,
+        [equipmentKey],
+    );
+    // The pieces alone decide the meshes: moving a cue to another count
+    // keeps them.
+    const heldKey = useMemo(
+        () => JSON.stringify(equipment?.map((e) => e?.carries ?? null) ?? []),
+        [equipment],
+    );
+    // The looks the meshes are built from: each slot's own, and the same
+    // uniform carrying every other piece it holds.
+    const slotLooks = useMemo<MarcherSlotLook[] | null>(() => {
+        if (!marcherLooks || !uniformOf) return marcherLooks;
+        const held = JSON.parse(heldKey) as ((Carry | null)[] | null)[];
+        if (!held.some((h) => h)) return marcherLooks;
+        return marcherLooks.map((look, i) => {
+            const carries = held[i];
+            if (!carries) return look;
+            return {
+                ...look,
+                held: carries.map((c, k) =>
+                    k === 0 ? look.uniform : uniformOf(i, c),
+                ),
+            };
+        });
+    }, [marcherLooks, uniformOf, heldKey]);
     const previousPlans = useRef<ShowPlans | null>(null);
     const showPlans = useMemo(() => {
         if (!marcherAssets || !marcherLooks || !cues) return null;
@@ -459,23 +529,27 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         return [...out];
     }, [marcherLooks, showPlans]);
     // Each carrier's Horn/Equipment channel over the show: horns up, then
-    // whatever the cues say.
+    // whatever the cues say, on the piece in hand (Equipment cues).
     const hornSlots = useMemo<(HornSlot | null)[] | null>(() => {
         if (!marcherLooks || !cues) return null;
         const secondsPerCount = (k: number) =>
             60 / (clock.bpm[Math.min(k, clock.bpm.length - 1)] || 120);
         return marcherLooks.map((look, i) => {
             const carry = look.uniform.options.carry;
-            if (!carry) return null;
+            const held = equipment?.[i] ?? null;
+            if (!carry && !held) return null;
+            const events = windowHornEvents(
+                cues.compiled.segments(slots.ids[i], "position"),
+                { secondsPerCount },
+            );
             return {
-                family: carry.family,
-                events: windowHornEvents(
-                    cues.compiled.segments(slots.ids[i], "position"),
-                    { secondsPerCount },
-                ),
+                family: carry?.family ?? null,
+                events: held
+                    ? heldHornEvents(events, held, DEFAULT_HOLD)
+                    : events,
             };
         });
-    }, [marcherLooks, cues, clock, slots.ids]);
+    }, [marcherLooks, cues, clock, slots.ids, equipment]);
     const hornRows = useMemo(() => {
         const out = new Set<string>();
         for (const h of hornSlots ?? [])
@@ -497,7 +571,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     const marcherBodies = useMarcherBodies(
         marcherAssets,
         clipNames,
-        marcherLooks,
+        slotLooks,
         quality,
         "left",
         bakeRows,

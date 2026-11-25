@@ -106,6 +106,11 @@ export interface SegmentOption<T extends string> {
     value: T;
     label: string;
     title?: string;
+    /**
+     * Why this option can't be chosen now. It shows dimmed, with the reason
+     * as its tooltip, and a click calls `onUnavailable` instead of choosing it.
+     */
+    unavailable?: string;
 }
 
 /**
@@ -116,6 +121,7 @@ export function Segmented<T extends string>({
     value,
     options,
     onChange,
+    onUnavailable,
     label,
     testId,
     className,
@@ -123,6 +129,8 @@ export function Segmented<T extends string>({
     value: T | null;
     options: readonly SegmentOption<T>[];
     onChange: (value: T) => void;
+    /** A click on an option that is `unavailable`, with its reason. */
+    onUnavailable?: (value: T, reason: string) => void;
     label: string;
     testId?: string;
     /** Layout for the group, for example a grid instead of a row. */
@@ -134,7 +142,12 @@ export function Segmented<T extends string>({
             value={value ?? ""}
             // Radix sends "" when the active item is clicked again; keep it.
             onValueChange={(next: string) => {
-                if (next) onChange(next as T);
+                if (!next) return;
+                const reason = options.find(
+                    (o) => o.value === next,
+                )?.unavailable;
+                if (reason) onUnavailable?.(next as T, reason);
+                else onChange(next as T);
             }}
             aria-label={label}
             data-testid={testId}
@@ -147,8 +160,10 @@ export function Segmented<T extends string>({
                 <ToggleGroupItem
                     key={option.value}
                     value={option.value}
-                    title={option.title}
+                    title={option.unavailable ?? option.title}
                     data-value={option.value}
+                    data-unavailable={option.unavailable ? "" : undefined}
+                    aria-disabled={option.unavailable ? true : undefined}
                     className={SEGMENT_CLASS}
                 >
                     {option.label}
@@ -160,7 +175,7 @@ export function Segmented<T extends string>({
 
 /** The look of a segment, shared by {@link Segmented} and {@link SegmentedMany} */
 const SEGMENT_CLASS =
-    "text-body rounded-4! hover:bg-text/10! data-[state=on]:bg-accent! data-[state=on]:hover:bg-accent! data-[state=on]:text-text-invert! h-28 border-0! px-10! whitespace-nowrap aria-disabled:cursor-not-allowed";
+    "data-[unavailable]:text-text/40 text-body rounded-4! hover:bg-text/10! data-[state=on]:bg-accent! data-[state=on]:hover:bg-accent! data-[state=on]:text-text-invert! h-28 border-0! px-10! whitespace-nowrap aria-disabled:cursor-not-allowed";
 
 /**
  * Like {@link Segmented}, but any number of options can be on. With `atLeastOne`, the last one

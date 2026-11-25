@@ -20,6 +20,11 @@ export type FieldTestMarcher = {
     id: number;
     /** The marcher's label text, as drawn on the field (its drill number). */
     label: string;
+    /**
+     * The equipment icon drawn after the label at the beat shown ("Rifle"), for whom the
+     * Equipment icons setting shows one (#992); "" for none.
+     */
+    equipmentIcon: string;
     /** Where the dot is drawn, in field units. */
     x: number;
     y: number;
@@ -243,7 +248,7 @@ export type FieldTestItem = {
     y: number;
     /** Its center in the viewport */
     screen: ScreenPoint;
-    /** Locked to one position for the whole show: drawn with a lock */
+    /** Locked: a click, drag or marquee on the field passes over it */
     locked?: boolean;
     /** A pit instrument's playing spot as drawn, in field units, or null for none */
     playingSpot?: { x: number; y: number } | null;
@@ -370,6 +375,19 @@ export type FieldTestShapeOverlay = {
         to: { x: number; y: number };
         across: string;
         deep: string;
+    } | null;
+    /**
+     * While a Line's Rows apart or Slant number is engaged: the gap from the drawn row to the
+     * next, field units, across to `corner` then along to `to`, with its labels ("4 steps apart",
+     * "Slant 1" or null). Null otherwise.
+     */
+    rowsGap: {
+        from: { x: number; y: number };
+        corner: { x: number; y: number };
+        to: { x: number; y: number };
+        outward: { x: number; y: number };
+        apart: string;
+        slant: string | null;
     } | null;
 };
 
