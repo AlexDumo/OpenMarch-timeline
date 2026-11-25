@@ -20,7 +20,7 @@ import {
     useItemDrafts,
     type ItemDraft,
 } from "../itemDrafts";
-import { packPageKey, packPagePlan } from "../packPage";
+import { composeFromNewest, packPageKey, packPagePlan } from "../packPage";
 
 const v = (n: number) =>
     `library:pack@${String(n).repeat(64)}` as UniformPackValue;
@@ -119,5 +119,49 @@ describe("whether an edit has settled in the venue", () => {
         // put that version back (and a burst's save may already have removed it)
         expect(editUnsettled(draft({ arrived: false }), false)).toBe(true);
         expect(editUnsettled(draft({}), false)).toBe(false);
+    });
+});
+
+describe("composing from a draft's newest version", () => {
+    it("composes again from each newer version while saves keep removing the one it read", async () => {
+        // two saves land while it composes: each removes the version the last try read
+        let newest = v(1);
+        const tried: UniformPackValue[] = [];
+        const art = await composeFromNewest(
+            () => newest,
+            true,
+            async (from) => {
+                tried.push(from);
+                if (from === v(1)) {
+                    newest = v(2);
+                    throw new Error("v1 removed");
+                }
+                if (from === v(2)) {
+                    newest = v(3);
+                    throw new Error("v2 removed");
+                }
+                return `art of ${from}`;
+            },
+        );
+        expect(tried).toEqual([v(1), v(2), v(3)]);
+        expect(art).toBe(`art of ${v(3)}`);
+    });
+
+    it("fails when the version didn't move, or for a saved pack", async () => {
+        const fail = async () => {
+            throw new Error("damaged");
+        };
+        await expect(composeFromNewest(() => v(1), true, fail)).rejects.toThrow(
+            "damaged",
+        );
+        let newest = v(1);
+        const compose = vi.fn(async () => {
+            newest = v(2);
+            throw new Error("damaged");
+        });
+        await expect(
+            composeFromNewest(() => newest, false, compose),
+        ).rejects.toThrow("damaged");
+        expect(compose).toHaveBeenCalledTimes(1);
     });
 });

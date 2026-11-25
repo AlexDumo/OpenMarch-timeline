@@ -169,9 +169,13 @@ async function drawSvgPage(text: string): Promise<Uint8ClampedArray> {
 
 const fromJob = (error: unknown): never => {
     if (error instanceof UniformPackJobError)
-        throw new UniformImportError(error.code, error.message);
+        throw new UniformImportError(refusalOf(error), error.message);
     throw error;
 };
+
+/** A worker job's failure as an import refusal: a worker that died couldn't read the file either */
+export const refusalOf = (error: UniformPackJobError): UniformImportRefusal =>
+    error.code === "failed" ? "unreadable" : error.code;
 
 /** A uniform file saved from a show: read and its first layer checked in the worker, kept as it is */
 async function importPackFile(
@@ -187,6 +191,8 @@ async function importPackFile(
             type: "pack",
             bytes: bytes.slice(),
             regions,
+            // every image decoded: a file whose image data is damaged isn't imported
+            decode: true,
         });
         if (result.type !== "pack")
             throw new UniformImportError("unreadable", "no pack");

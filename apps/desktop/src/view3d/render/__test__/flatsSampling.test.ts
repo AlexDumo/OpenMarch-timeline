@@ -15,7 +15,7 @@ import {
     type FlatsRegions,
 } from "@/view3d/core/marchers/uniformArtwork";
 import { BODY_TYPES } from "@/view3d/core/marchers/looks";
-import { FlatsSampler } from "./flatsSampler";
+import { FlatsSampler, hemInset } from "./flatsSampler";
 
 const assets = path.resolve(__dirname, "../../assets");
 const dir = path.join(assets, "uniform-flats");
@@ -27,8 +27,11 @@ const regions = JSON.parse(
 ) as FlatsRegions;
 const lutBytes = (body: string) =>
     fs.readFileSync(path.join(dir, "lut", `${body}.bin`));
-const sampler = (body: string, wrap: "repeat" | "clamp" = "repeat") =>
-    new FlatsSampler(layout, lutBytes(body), body, wrap);
+const sampler = (
+    body: string,
+    wrap: "repeat" | "clamp" = "repeat",
+    dpi?: number,
+) => new FlatsSampler(layout, lutBytes(body), body, wrap, dpi);
 
 const SEGMENTS = ["torso", "hips", ...layout.limbs.map((l) => l.id)];
 /** The region a segment draws from, without the panel. */
@@ -207,6 +210,45 @@ describe("the flats lookup on the bodies' own vertices", () => {
                 yoke.every((v) => S.sample(v.p, 1).valid),
                 body,
             ).toBe(true);
+        }
+    });
+});
+
+describe("the jacket hem", () => {
+    // The torso's rows end where the hips' start. A bilinear sample reads the texel rows either side of it,
+    // so a sample less than a pixel from the hem mixes the jacket's art with the pants' (review of #1286).
+    const hem = layout.segments.find((s) => s.id === "hips")!.y0;
+
+    it("starts the hips exactly on the template's hem line, where the torso ends", () => {
+        const guide = regions.guides.find((g) => g.id === "jacketHem")!;
+        expect(hem).toBe(guide.y);
+        const torso = layout.segments.find((s) => s.id === "torso")!;
+        expect(torso.y0 + torso.tEnd / 0.0254).toBeCloseTo(hem, 2);
+    });
+
+    it("keeps the jacket and the pants at least one atlas pixel off the hem, at Low and at High", () => {
+        for (const dpi of [16, 32]) {
+            const px = 1 / dpi;
+            expect(hemInset(dpi)).toBeGreaterThanOrEqual(px);
+            for (const body of BODY_TYPES) {
+                const S = sampler(body, "repeat", dpi);
+                const { verts } = bodies.get(body)!;
+                let jacketLow = -Infinity;
+                let pantsHigh = Infinity;
+                for (const { p, part } of verts) {
+                    if (part === 1) {
+                        const s = S.sample(p, 1);
+                        if (s.valid) jacketLow = Math.max(jacketLow, s.q[1]);
+                    } else if (part === 3 && p[1] > layout.tops.crotch) {
+                        const s = S.sample(p, 3);
+                        if (s.seg === 1)
+                            pantsHigh = Math.min(pantsHigh, s.q[1]);
+                    }
+                }
+                const at = `${body} at ${dpi} px/in`;
+                expect(hem - jacketLow, at).toBeGreaterThanOrEqual(px - 1e-6);
+                expect(pantsHigh - hem, at).toBeGreaterThanOrEqual(px - 1e-6);
+            }
         }
     });
 });

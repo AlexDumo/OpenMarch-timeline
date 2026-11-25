@@ -1,5 +1,5 @@
 import { describe, expect } from "vitest";
-import { describeDbTests } from "@/test/base";
+import { describeDbTests, schema } from "@/test/base";
 import FootballTemplates from "@/global/classes/fieldTemplates/Football";
 import {
     amendLatestUndoEntry,
@@ -9,6 +9,7 @@ import {
 } from "../history";
 import { updateVenueSettingsInTransaction } from "../view3dVenue";
 import { getStoredVenueSettings, updateVenueSettings } from "../view3dVenue";
+import { pickOnStoredUniform, venuePickBase } from "@/view3d/sync/venuePick";
 import {
     getShowAsset,
     getShowAssetReferences,
@@ -442,6 +443,117 @@ describeDbTests("view3dUniformPack", (it) => {
             ).toEqual({ amended: false });
         });
 
+        it("keeps the burst's newest version when a 3D View pick was made against an older one", async ({
+            db,
+        }) => {
+            const origin = await store(db, packFile("Home uniform", 1));
+            // the window still sees the origin when its draft ends and Band wears unlocks
+            const seen = (await getStoredVenueSettings({ db }))!;
+            const saved = await saveUniformItemsPack({
+                db,
+                pack: crestPack(4),
+                manifest: readUniformPack(crestPack(4)).manifest,
+                field,
+                versionOf: parseShowAssetRef(origin)!.id,
+                expect: origin,
+            });
+            const written = await updateVenueSettings({
+                db,
+                settings: { ...seen, crowd: !seen.crowd },
+                rebase: (next, stored) =>
+                    pickOnStoredUniform(next, venuePickBase(seen), stored),
+            });
+            expect(written.uniformArtwork).toBe(saved.value);
+            const now = (await getStoredVenueSettings({ db }))!;
+            expect(now.uniformArtwork).toBe(saved.value);
+            expect(now.crowd).toBe(!seen.crowd);
+        });
+
+        it("rolls back a failing amend and lets an undo queued behind it run", async ({
+            db,
+        }) => {
+            const origin = await store(db, packFile("Home uniform", 1));
+            const first = await saveUniformItemsPack({
+                db,
+                pack: crestPack(4),
+                manifest: readUniformPack(crestPack(4)).manifest,
+                field,
+                versionOf: parseShowAssetRef(origin)!.id,
+                expect: origin,
+            });
+            let release: () => void = () => undefined;
+            const gate = new Promise<void>((r) => (release = r));
+            const venue = (await getStoredVenueSettings({ db }))!;
+            const amending = amendLatestUndoEntry(
+                db,
+                first.token!,
+                ["view3d_venue"],
+                async (tx) => {
+                    await updateVenueSettingsInTransaction({
+                        tx,
+                        settings: { ...venue, crowd: !venue.crowd },
+                    });
+                    await gate;
+                    throw new Error("the save failed");
+                },
+            );
+            const undo = performUndo(db);
+            await new Promise((r) => setTimeout(r, 30));
+            release();
+            await expect(amending).rejects.toThrow("the save failed");
+            // the amend's write is gone, and the undo still undoes the burst's first save
+            expect((await undo).success).toBe(true);
+            const back = (await getStoredVenueSettings({ db }))!;
+            expect(back.uniformArtwork).toBe(origin);
+            expect(back.crowd).toBe(venue.crowd);
+        });
+
+        it("throws and rolls back an amend that writes a table it doesn't name", async ({
+            db,
+        }) => {
+            const origin = await store(db, packFile("Home uniform", 1));
+            const first = await saveUniformItemsPack({
+                db,
+                pack: crestPack(4),
+                manifest: readUniformPack(crestPack(4)).manifest,
+                field,
+                versionOf: parseShowAssetRef(origin)!.id,
+                expect: origin,
+            });
+            const venue = (await getStoredVenueSettings({ db }))!;
+            const utility = await db.query.utility.findFirst();
+            await expect(
+                amendLatestUndoEntry(
+                    db,
+                    first.token!,
+                    ["view3d_venue"],
+                    async (tx) => {
+                        await updateVenueSettingsInTransaction({
+                            tx,
+                            settings: { ...venue, crowd: !venue.crowd },
+                        });
+                        // a write to a table with history the amend doesn't name: it would
+                        // have no undo once the amend's rows are deleted
+                        await tx
+                            .update(schema.utility)
+                            .set({
+                                last_page_counts:
+                                    (utility?.last_page_counts ?? 0) + 1,
+                            })
+                            .run();
+                    },
+                ),
+            ).rejects.toThrow(/outside view3d_venue/);
+            expect((await getStoredVenueSettings({ db }))?.crowd).toBe(
+                venue.crowd,
+            );
+            expect((await db.query.utility.findFirst())?.last_page_counts).toBe(
+                utility?.last_page_counts,
+            );
+            // nothing changed the history: the burst's token still amends
+            expect(await getLatestUndoEntryToken(db)).toBe(first.token);
+        });
+
         it("never leaves a value the 3D View can still name unresolvable during a burst (#1258)", async ({
             db,
         }) => {
@@ -682,6 +794,36 @@ describeDbTests("view3dUniformPack", (it) => {
             expect(await valuesNamedInHistory({ db, values: [value] })).toEqual(
                 new Set([value]),
             );
+        });
+
+        it("matches inside SQLite: one query answers with the named values only, however many are asked", async ({
+            db,
+        }) => {
+            const worn = `library:worn@${HASH}`;
+            await wearThenDrop(db, worn);
+            const asked = [
+                ...Array.from(
+                    { length: 200 },
+                    (_, n) => `library:other-${n}@${HASH}`,
+                ),
+                worn,
+            ];
+            const all = db.all.bind(db);
+            const answers: unknown[][] = [];
+            const spy = Object.assign(Object.create(db) as typeof db, {
+                all: async (query: Parameters<typeof db.all>[0]) => {
+                    const rows = (await all(query)) as unknown[];
+                    answers.push(rows);
+                    return rows;
+                },
+            });
+            expect(
+                await valuesNamedInHistory({ db: spy, values: asked }),
+            ).toEqual(new Set([worn]));
+            // no history statement comes back: just the one value it names
+            expect(answers).toHaveLength(1);
+            expect(JSON.stringify(answers[0])).not.toContain("view3d_venue");
+            expect(answers[0]).toHaveLength(1);
         });
 
         it("encodes a value as the history's stored SQL holds it", () => {

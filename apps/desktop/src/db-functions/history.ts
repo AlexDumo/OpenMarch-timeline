@@ -5,7 +5,7 @@ import {
 import { assert } from "../utilities/assert";
 import { mainProcessLog } from "../utilities/mainProcessLog";
 import { DbConnection, DbTransaction } from "./types";
-import { and, asc, isNotNull, like, lt, max, or } from "drizzle-orm";
+import { asc, isNotNull, lt, max } from "drizzle-orm";
 import { DB, schema } from "../global/database/db";
 import { Constants } from "../global/Constants";
 import { getTableName, gt, sql, eq, desc, count, inArray } from "drizzle-orm";
@@ -865,11 +865,15 @@ export async function getLatestUndoEntryToken(
  * `{ amended: false }`, having run nothing, when it isn't.
  *
  * It runs under the same lock as transactionWithHistory and undo/redo, so no wrapped edit, undo
- * or redo can start or land inside it. The history rows `func`'s writes add to the tables named
- * in `tables` are deleted in the same transaction: the latest entry's own statements already put
- * those rows back to how they were before it, so Undo still returns to there. Rows any other write
- * added are kept, so nothing else becomes impossible to undo. Keep `func` short (no hashing or
- * building large values in it): it holds the lock.
+ * or redo can start or land inside it: every history row added after it starts is `func`'s. Those
+ * rows, which must all write the tables named in `tables`, are deleted in the same transaction:
+ * the latest entry's own statements already put those rows back to how they were before it, so
+ * Undo still returns to there. If `func` wrote any other table with history, it throws and the
+ * whole transaction rolls back, since that write would have no undo. Keep `func` short (no hashing
+ * or building large values in it): it holds the lock.
+ *
+ * Not for the timeline tables: their writes go through transactionWithHistory's change log and
+ * upkeep (timelineChanges, timelineHeldUpkeep), which an amend skips.
  */
 export async function amendLatestUndoEntry<T>(
     db: DbConnection,
@@ -892,26 +896,37 @@ export async function amendLatestUndoEntry<T>(
                         .get()
                 )?.last ?? 0;
             const result = await func(tx);
-            for (const table of tables)
+            const added = await tx
+                .select({
+                    sequence: history_undo.sequence,
+                    sql: history_undo.sql,
+                })
+                .from(history_undo)
+                .where(gt(history_undo.sequence, before))
+                .all();
+            const amended = new Set(tables);
+            const ours = added.filter((row) =>
+                amended.has(historyStatementTable(row.sql) ?? ""),
+            );
+            if (ours.length > 0)
                 await tx
                     .delete(history_undo)
                     .where(
-                        and(
-                            gt(history_undo.sequence, before),
-                            or(
-                                like(history_undo.sql, `UPDATE "${table}" %`),
-                                like(
-                                    history_undo.sql,
-                                    `DELETE FROM "${table}" %`,
-                                ),
-                                like(
-                                    history_undo.sql,
-                                    `INSERT INTO "${table}" %`,
-                                ),
-                            ),
+                        inArray(
+                            history_undo.sequence,
+                            ours.map((row) => row.sequence),
                         ),
                     )
                     .run();
+            const left = await tx
+                .select({ n: count() })
+                .from(history_undo)
+                .where(gt(history_undo.sequence, before))
+                .get();
+            if ((left?.n ?? 0) > 0)
+                throw new Error(
+                    `amendLatestUndoEntry: the amend wrote ${left!.n} history row(s) outside ${[...tables].join(", ")}`,
+                );
             await after?.(tx, result);
             return { result };
         });

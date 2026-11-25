@@ -88,11 +88,13 @@ const VIEW3D_API = {
 
     /**
      * Asks the editor to store new venue settings. The editor validates them,
-     * writes them with history, and then invalidates the venue query.
+     * writes them with history, and then invalidates the venue query. `base` is
+     * the band's uniform the settings were built against (`VenuePickBase`).
      */
-    requestVenueChange: (settings: unknown) =>
+    requestVenueChange: (settings: unknown, base?: unknown) =>
         ipcRenderer.send("view3d:venue-change-request", {
             settings,
+            base,
         } satisfies View3dVenueChangeRequest),
 
     /**

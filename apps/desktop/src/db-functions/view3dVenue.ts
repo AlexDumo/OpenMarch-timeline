@@ -86,13 +86,31 @@ export async function updateVenueSettingsInTransaction({
 export async function updateVenueSettings({
     db,
     settings,
+    rebase,
 }: {
     db: DbConnection;
     settings: unknown;
+    /**
+     * Rebases validated `settings` on the venue stored now, read in the same transaction (a 3D
+     * View pick made against an older venue: `pickOnStoredUniform`)
+     */
+    rebase?: (
+        settings: VenueSettings,
+        stored: VenueSettings | undefined,
+    ) => VenueSettings;
 }): Promise<VenueSettings> {
     return await transactionWithHistory(
         db,
         "updateVenueSettings",
-        async (tx) => await updateVenueSettingsInTransaction({ tx, settings }),
+        async (tx) =>
+            await updateVenueSettingsInTransaction({
+                tx,
+                settings: rebase
+                    ? rebase(
+                          parseVenueSettings(settings),
+                          await getStoredVenueSettings({ db: tx }),
+                      )
+                    : settings,
+            }),
     );
 }

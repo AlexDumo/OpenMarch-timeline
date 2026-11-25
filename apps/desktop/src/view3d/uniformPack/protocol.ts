@@ -30,9 +30,18 @@ export type UniformPackRequest =
       }
     /**
      * A pack file: read and checked. With `regions`, its first layer is decoded too, for the
-     * notes a picked page gets.
+     * notes a picked page gets. With `decode`, every layer and item image is decoded and let go
+     * of, so a pack whose headers read but whose image data doesn't is refused here rather than
+     * when the 3D View draws it; images whose sha256 is in `decoded` (they decoded before) are
+     * skipped.
      */
-    | { type: "pack"; bytes: Uint8Array; regions?: PageRegions }
+    | {
+          type: "pack";
+          bytes: Uint8Array;
+          regions?: PageRegions;
+          decode?: boolean;
+          decoded?: string[];
+      }
     /**
      * A pack file's layers drawn in order onto one bitmap of the whole page, at this size, plus
      * each item file decoded (fork #1258), for the window to place and grade per body type.
@@ -79,7 +88,9 @@ export type UniformPackRefusal =
     | "unreadable"
     | "notPack"
     | "newer"
-    | "damaged";
+    | "damaged"
+    /** The worker itself failed (out of memory, say): nothing is known about the file */
+    | "failed";
 
 export type UniformPackResponse =
     | {
@@ -96,6 +107,8 @@ export type UniformPackResponse =
           notes: PageNote[];
           /** Each item image's size, from its PNG header, by file (fork #1258) */
           itemSizes: Record<string, { width: number; height: number }>;
+          /** With `decode`: the sha256 of every image in the pack, all of which decode */
+          decoded?: string[];
       }
     | {
           type: "flattened";
@@ -113,3 +126,27 @@ export type UniformPackResponse =
       }
     | { type: "packFile"; bytes: Uint8Array }
     | { type: "refused"; code: UniformPackRefusal; message: string };
+
+/** A job the worker refused, or that failed or ran out of time */
+export class UniformPackJobError extends Error {
+    constructor(
+        /**
+         * Why: the worker's refusal (the file itself), or `timedOut` or `failed` (the worker ran
+         * out of time or died, which says nothing about the file: trying again may work)
+         */
+        readonly code: UniformPackRefusal | "timedOut" | "failed",
+        message: string,
+    ) {
+        super(message);
+        this.name = "UniformPackJobError";
+    }
+}
+
+/**
+ * Whether `error` says nothing about the file: the worker ran out of time or died, so the same
+ * job may well work next time. Anything else (a refusal) is the file's own.
+ */
+export const isPassingPackFailure = (error: unknown): boolean =>
+    !(error instanceof UniformPackJobError) ||
+    error.code === "timedOut" ||
+    error.code === "failed";

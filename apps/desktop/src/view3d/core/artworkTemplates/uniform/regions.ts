@@ -10,6 +10,11 @@
  *
  * Plain TypeScript only: this module lives under `view3d/core/`, so it must
  * not import React, React Three Fiber, drei, Electron or the database.
+ *
+ * Keep it free of imports altogether, type-only ones included: the asset
+ * generator (`scripts/view3d-assets/uniform-flats.mjs`) imports it straight
+ * into Node 24, which runs the TypeScript as it is, with no bundler to
+ * resolve `@/` paths or imports without a file extension.
  */
 // cspell:words inseam underarm paintable Hodgman
 

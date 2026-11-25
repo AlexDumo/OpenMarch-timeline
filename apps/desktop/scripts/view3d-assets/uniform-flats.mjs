@@ -1206,7 +1206,9 @@ const layoutJson = {
         rows: segRows[id].rows,
         tStart: r5(segRows[id].tStart),
         tEnd: r5(segRows[id].tEnd),
-        y0: r5(segY0(id)),
+        // the hips start exactly on the template's hem line, which the torso's art stops at (the shader keeps
+        // both off it by an atlas pixel); unrounded it sits 0.004 in lower
+        y0: id === "hips" ? GUIDE("jacketHem") : r5(segY0(id)),
     })),
     tops: {
         torso: r5(Y_TOP_TORSO),

@@ -97,8 +97,10 @@ function checkNewAsset(asset: NewShowAsset) {
  * refused. Not undoable on its own: inside `transactionWithHistory`, only the edit's other
  * changes are undone.
  *
- * The parts are hashed inside `tx`. For large files, an import should run this in a short
- * transaction of its own rather than inside a long edit.
+ * The parts are hashed here unless `hashes` comes in: for large files, work them out with
+ * {@link hashShowAsset} before taking a lock, so the transaction stays short. Hashes passed in
+ * must be this asset's: they must name exactly its part roles, and their Version hash must follow
+ * from them and its sidecar, or it throws (the bytes themselves aren't hashed again).
  */
 export async function addShowAssetInTransaction({
     tx,
@@ -113,6 +115,7 @@ export async function addShowAssetInTransaction({
     checkNewAsset(asset);
     const { partHashes, versionHash } = hashes ?? (await hashShowAsset(asset));
     const sidecar = canonicalJson(asset.sidecar ?? {});
+    if (hashes) await checkHashesFit(asset, hashes, sidecar);
 
     // Each part's bytes, stored once. On a re-import this also puts back bytes a damaged file
     // lost, or replaces stored bytes that no longer match their hash
@@ -184,6 +187,27 @@ export async function addShowAssetInTransaction({
 export interface ShowAssetHashes {
     partHashes: Record<string, string>;
     versionHash: string;
+}
+
+/**
+ * Throws unless `hashes` could be `asset`'s: one hash for each of its part roles and no other,
+ * and the Version hash those and its sidecar give. Cheap: the parts aren't hashed again.
+ */
+async function checkHashesFit(
+    asset: NewShowAsset,
+    hashes: ShowAssetHashes,
+    sidecar: string,
+): Promise<void> {
+    const roles = Object.keys(asset.parts).sort();
+    const hashed = Object.keys(hashes.partHashes).sort();
+    if (roles.join("\n") !== hashed.join("\n"))
+        throw new Error(
+            `The hashes for ${asset.name} name parts ${hashed.join(", ")}, not ${roles.join(", ")}`,
+        );
+    if (
+        (await versionHashOf(hashes.partHashes, sidecar)) !== hashes.versionHash
+    )
+        throw new Error(`The hashes for ${asset.name} aren't its Version's`);
 }
 
 /** The hashes {@link addShowAssetInTransaction} works out, for a caller to work out early */
@@ -381,8 +405,9 @@ export function historyEncoding(value: string): string {
  * Remove unused… is outside undo, so an asset a step would bring back must stay; the show keeps
  * an imported uniform the venue named before (fork #1257). The values are asset references
  * (`library:<id>@<hash>`), which history stores inside the venue's JSON, escaped
- * ({@link historyEncoding}). One pass over the steps that write the venue's row; the rest of
- * history never names a uniform.
+ * ({@link historyEncoding}). Matched inside SQLite (`instr` against each encoded value) over the
+ * steps that write the venue's row, so no history statement crosses the renderer's bridge; the
+ * rest of history never names a uniform.
  */
 export async function valuesNamedInHistory({
     db,
@@ -393,26 +418,23 @@ export async function valuesNamedInHistory({
 }): Promise<Set<string>> {
     const named = new Set<string>();
     if (values.length === 0) return named;
+    const wanted = sql.join(
+        values.map((value) => sql`(${value}, ${historyEncoding(value)})`),
+        sql`, `,
+    );
     // the triggers write `UPDATE "view3d_venue" …` and `INSERT INTO "view3d_venue" …` with the
     // row's data; `DELETE FROM` steps carry none
-    const rows = await db.all<{ sql: string } | [string]>(sql`
-        SELECT sql FROM history_undo
-        WHERE sql LIKE 'UPDATE "view3d_venue" %' OR sql LIKE 'INSERT INTO "view3d_venue" %'
-        UNION ALL
-        SELECT sql FROM history_redo
-        WHERE sql LIKE 'UPDATE "view3d_venue" %' OR sql LIKE 'INSERT INTO "view3d_venue" %'`);
-    const wanted = values.map((value) => ({
-        value,
-        encoded: historyEncoding(value),
-    }));
-    for (const row of rows) {
-        // the renderer's proxy may hand rows back as arrays
-        const text = Array.isArray(row) ? row[0] : row.sql;
-        for (const w of wanted)
-            if (!named.has(w.value) && text.includes(w.encoded))
-                named.add(w.value);
-        if (named.size === values.length) break;
-    }
+    const venueSteps = (table: "history_undo" | "history_redo") => sql`
+        SELECT 1 FROM ${sql.identifier(table)} AS h
+        WHERE (h.sql LIKE 'UPDATE "view3d_venue" %' OR h.sql LIKE 'INSERT INTO "view3d_venue" %')
+            AND instr(h.sql, w.encoded) > 0`;
+    const rows = await db.all<{ value: string } | [string]>(sql`
+        WITH w(value, encoded) AS (VALUES ${wanted})
+        SELECT w.value AS value FROM w
+        WHERE EXISTS (${venueSteps("history_undo")})
+            OR EXISTS (${venueSteps("history_redo")})`);
+    // the renderer's proxy may hand rows back as arrays
+    for (const row of rows) named.add(Array.isArray(row) ? row[0] : row.value);
     return named;
 }
 
