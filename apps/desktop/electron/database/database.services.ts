@@ -1,5 +1,11 @@
 /* eslint-disable no-console */
 import { ipcMain } from "electron";
+import {
+    parsePerformerFiguresWrite,
+    readPerformerFigures,
+    writePerformerFigures,
+    type PerformerFigureRow,
+} from "./performerFigures";
 import type { DatabaseSync } from "node:sqlite";
 import Constants from "../../src/global/Constants";
 import * as fs from "fs";
@@ -53,6 +59,8 @@ let DB_PATH = "";
 let SHOW_PATH = "";
 /** Called after each database handler, so a working copy notices commits at once. */
 let onDatabaseActivity: (() => void) | null = null;
+/** The working copy's `quietly`, while one is open */
+let quietWriter: (<T>(write: () => T) => T) | null = null;
 
 let persistentConnection: DatabaseSync | null = null;
 let persistentConnectionPath: string | null = null;
@@ -73,6 +81,7 @@ export function closeDatabase() {
     DB_PATH = "";
     SHOW_PATH = "";
     onDatabaseActivity = null;
+    quietWriter = null;
 }
 
 /**
@@ -83,11 +92,23 @@ export function connectToWorkingCopy(args: {
     showPath: string;
     workingPath: string;
     onActivity: () => void;
+    /** Runs a synchronous write whose commit isn't an edit (`WorkingCopySession.quietly`) */
+    quietly?: <T>(write: () => T) => T;
 }) {
     if (DB_PATH !== args.workingPath) closePersistentConnection();
     DB_PATH = args.workingPath;
     SHOW_PATH = args.showPath;
     onDatabaseActivity = args.onActivity;
+    quietWriter = args.quietly ?? null;
+}
+
+/**
+ * Runs `write`, a synchronous commit that isn't an edit, such as the performer figures (ADR
+ * 0019): with a working copy it doesn't publish the show on its own. Editing in place, it's an
+ * ordinary write.
+ */
+export function writeQuietly<T>(write: () => T): T {
+    return quietWriter ? quietWriter(write) : write();
 }
 
 /** Changes the show file a working copy publishes to, after Save As. */
@@ -373,6 +394,50 @@ function assertSqlProxyNotSuspended() {
         );
 }
 
+/** How long a figures write waits for another connection's lock before the editor tries later. */
+const FIGURES_BUSY_TIMEOUT_MS = 200;
+
+/** The show's performer figures, or only those named (ADR 0019). */
+export function handleReadPerformerFigures(
+    fingerprints: unknown,
+): PerformerFigureRow[] {
+    assertSqlProxyNotSuspended();
+    if (
+        fingerprints !== undefined &&
+        fingerprints !== null &&
+        !(
+            Array.isArray(fingerprints) &&
+            fingerprints.every((f) => typeof f === "string")
+        )
+    )
+        throw new Error("Performer figures: expected a list of fingerprints");
+    const db = connect();
+    try {
+        return readPerformerFigures(
+            db,
+            (fingerprints as string[] | null | undefined) ?? undefined,
+        );
+    } finally {
+        db.close();
+    }
+}
+
+/**
+ * Writes performer figures (ADR 0019) on a connection of its own, quietly: not an edit. Fails
+ * fast while another connection holds the write lock; the editor writes them again later.
+ */
+export function handleWritePerformerFigures(write: unknown): void {
+    assertSqlProxyNotSuspended();
+    const parsed = parsePerformerFiguresWrite(write);
+    const db = connect();
+    try {
+        db.exec(`PRAGMA busy_timeout = ${FIGURES_BUSY_TIMEOUT_MS}`);
+        writeQuietly(() => writePerformerFigures(db, parsed));
+    } finally {
+        db.close();
+    }
+}
+
 /** How long the audio handlers' connections wait for another connection's lock. */
 const AUDIO_BUSY_TIMEOUT_MS = 5000;
 
@@ -471,6 +536,14 @@ export function initHandlers() {
     ipcMain.handle("unsafeSql:proxy", trackingActivity(handleUnsafeSqlProxy));
     ipcMain.handle("sql:read-batch", (_, queries: unknown) =>
         handleSqlReadBatch(queries),
+    );
+
+    // Performer figures (ADR 0019): a cache, so the write isn't an edit (`writeQuietly`)
+    ipcMain.handle("figures:read", (_, fingerprints: unknown) =>
+        handleReadPerformerFigures(fingerprints),
+    );
+    ipcMain.handle("figures:write", (_, write: unknown) =>
+        handleWritePerformerFigures(write),
     );
 
     // File IO handlers located in electron/main/index.ts

@@ -274,6 +274,34 @@ describe("WorkingCopySession", () => {
         expect(readValues(showPath)).toEqual(["first", "a", "b", "c"]);
     });
 
+    it("doesn't publish for a quiet write alone, and publishes it with the next edit (ADR 0019)", async () => {
+        const before = fs.readFileSync(showPath);
+        const { session } = await openStarted({ debounceMs: 80, pollMs: 20 });
+        // A cache write, such as the performer figures, on a connection of its own
+        session.quietly(() => edit(session, "figures", false));
+
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        expect(published).toEqual([]);
+        expect(session.status().state).not.toBe("unsaved");
+        expect(fs.readFileSync(showPath).equals(before)).toBe(true);
+
+        edit(session, "an edit", false);
+        await waitFor(() => published.length === 1);
+        expect(readValues(showPath)).toEqual(["first", "figures", "an edit"]);
+    });
+
+    it("still notices an edit committed just before a quiet write", async () => {
+        const { session } = await openStarted({
+            debounceMs: 80,
+            pollMs: 60_000,
+        });
+        edit(session, "an edit", false);
+        session.quietly(() => edit(session, "figures", false));
+
+        await waitFor(() => published.length === 1);
+        expect(readValues(showPath)).toEqual(["first", "an edit", "figures"]);
+    });
+
     it("publishes at the maximum wait while edits keep coming", async () => {
         const { session } = await openStarted({
             debounceMs: 200,

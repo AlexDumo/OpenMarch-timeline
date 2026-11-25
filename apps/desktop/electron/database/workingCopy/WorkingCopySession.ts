@@ -752,6 +752,34 @@ export class WorkingCopySession {
         this.markDirty();
     }
 
+    /**
+     * Runs `write`, whose commit is not an edit (a cache such as the performer figures, ADR
+     * 0019): it doesn't schedule a publish, so it reaches the show with the next real save. Edits
+     * committed before it are noticed first. `write` must be synchronous, so no other commit can
+     * land between it and the version it leaves.
+     */
+    quietly<T>(write: () => T): T {
+        this.noteActivity();
+        try {
+            return write();
+        } finally {
+            if (this.dataVersionStatement && !this.closed) {
+                try {
+                    this.lastDataVersion = (
+                        this.dataVersionStatement.get() as {
+                            data_version: number;
+                        }
+                    ).data_version;
+                } catch (error) {
+                    console.error(
+                        "Couldn't read the working copy's version:",
+                        withoutPaths(error),
+                    );
+                }
+            }
+        }
+    }
+
     /** Records an edit and schedules a publish. */
     markDirty(): void {
         if (this.closed) return;

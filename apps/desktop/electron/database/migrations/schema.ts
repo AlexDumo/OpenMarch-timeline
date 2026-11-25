@@ -415,6 +415,43 @@ export const show_assets = sqliteTable(
 );
 
 /**
+ * Performer figures (ADR 0019, fork #1319): each look the show uses, seen from straight above,
+ * as the 2D field draws it. A cache the app bakes from the 3D View's models, kept in the file so
+ * another device draws the figures at once.
+ *
+ * - One row per look: `fingerprint` hashes everything that shapes the figure (carried model and
+ *   options, finish, hold, the bake's body and uniform, the app's model version).
+ * - A row no look uses is ignored, and dropped when the figures are next written; one that can't
+ *   be decoded is ignored and baked again. Nothing else depends on a row.
+ * - Not in the undo history, and writing it isn't an edit (the working copy doesn't publish for
+ *   it alone).
+ */
+export const performer_figures = sqliteTable(
+    "performer_figures",
+    {
+        /** lowercase hex sha256 of the look */
+        fingerprint: text().primaryKey(),
+        /** The picture: WebP, straight above, front of the performer down */
+        image: blob({ mode: "buffer" }).notNull(),
+        /**
+         * JSON object: the picture's size in pixels, pixels per meter, and the performer's spot in
+         * it (`{ w, h, pxPerMeter, cx, cy }`)
+         */
+        layout: text().notNull(),
+        created_at: text()
+            .notNull()
+            .default(sql`(CURRENT_TIMESTAMP)`),
+    },
+    () => [
+        check(
+            "performer_figures_fingerprint_check",
+            isSha256Hex("fingerprint"),
+        ),
+        check("performer_figures_layout_check", isJsonObject("layout")),
+    ],
+);
+
+/**
  * The show's 3D View cameras (ADR 0010 D-5, amended 2026-10-16). A single
  * row with `id = 1` whose `json_data` is validated by `showCamerasSchema` in
  * `src/view3d/core/cameraList.ts`: the show's own camera list for each venue
