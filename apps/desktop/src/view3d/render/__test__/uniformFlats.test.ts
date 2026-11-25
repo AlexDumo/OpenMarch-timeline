@@ -85,11 +85,9 @@ describe("withFlats", () => {
         expect(shader.uniforms.uFlatLut.value).toBe(params.lut);
         // one atlas pixel, for the hem's inset
         expect(shader.uniforms.uFlatPx.value).toBe(1 / 16);
-        expect(fs).toContain("max(OM_FLAT_HEM_INSET, uFlatPx)");
-        // and by the filter's footprint, so a coarser mip level doesn't reach across it
-        expect(fs).toContain(
-            "min(OM_FLAT_HEM_FOOTPRINT_MAX, omFlatHemReach(gx, gy))",
-        );
+        expect(fs).toContain("max(OM_FLAT_HEM_INSET, 1.5 * uFlatPx)");
+        // and its lookup's footprint shrunk near it, so a coarser mip level doesn't reach across
+        expect(fs).toContain("float reach = omFlatHemReach(gx, gy);");
         expect(shader.uniforms.uFlatArt.value).toBe(params.atlas);
         expect((shader.uniforms.uFlatSeg.value as THREE.Vector4[]).length).toBe(
             10,

@@ -42,12 +42,11 @@ const float OM_FLAT_IN = 0.0254;
 const float OM_FLAT_PI = 3.14159265;
 // The torso's rows end on the jacket hem, where the hips' rows start on the flats (the hips' y0 is the
 // template's hem line). The jacket's lowest few mm hang below it and clamp to its last row, and the pants' top
-// edge clamps to the hips' first: each is kept at least this far (in) from the hem, and at least one atlas pixel
-// (uFlatPx), so the jacket takes only the jacket's art and the pants only the pants', never a filtered blend of
-// both along the boundary.
+// edge clamps to the hips' first: each is kept at least this far (in) from the hem, and at least 1.5 atlas
+// pixels (uFlatPx), the most a bilinear lookup at full resolution reaches across a texel the hem falls inside.
+// Beyond that, the lookup's footprint is shrunk near the hem instead (omFlatArt), so a coarser mip level can't
+// blend the jacket's art with the pants' either, and art right at the hem (a trim stripe) is never moved off.
 const float OM_FLAT_HEM_INSET = 0.05;
-// The most (in) a sample's filter footprint keeps the torso and the hips off the hem (omFlatArt).
-const float OM_FLAT_HEM_FOOTPRINT_MAX = 0.5;
 // How far (in) along the flat's y a sample with gradients gx, gy (in per pixel) reads: the texel size at the
 // coarser of the two mip levels a trilinear, 4x anisotropic lookup blends (the level as the GPU picks it, from
 // the footprint's longer axis over its anisotropy), 1.5 texels so a texel straddling the hem stays clear
@@ -61,7 +60,7 @@ float omFlatHemReach(vec2 gx, vec2 gy) {
 }
 // The hem inset (in) at this atlas's resolution.
 float omFlatHemInset() {
-  return max(OM_FLAT_HEM_INSET, uFlatPx);
+  return max(OM_FLAT_HEM_INSET, 1.5 * uFlatPx);
 }
 float omFlatRow(int s, float t) {
   vec4 g = uFlatSeg[s];
@@ -194,11 +193,18 @@ vec4 omFlatArt() {
     gx = vec2(length(dFdx(vRest)) / OM_FLAT_IN, 0.0);
     gy = vec2(0.0, length(dFdy(vRest)) / OM_FLAT_IN);
   }
-  // off the hem by what the filter reads too: at a coarser mip level a texel can straddle the hem
+  // the lookup reads no further than the hem: near it, a finer mip level and a narrower footprint (the art
+  // stays where it is; only its filtering there is sharper)
   if (s == 0 || s == 1) {
-    float hem = uFlatY0[1];
-    float keep = max(omFlatHemInset(), min(OM_FLAT_HEM_FOOTPRINT_MAX, omFlatHemReach(gx, gy)));
-    q.y = s == 0 ? min(q.y, hem - keep) : max(q.y, hem + keep);
+    float room = abs(q.y - uFlatY0[1]);
+    for (int k = 0; k < 2; k++) {
+      float reach = omFlatHemReach(gx, gy);
+      if (reach > room) {
+        float f = max(room - 1.5 * uFlatPx, 0.0) / max(reach - 1.5 * uFlatPx, 1e-6);
+        gx *= f;
+        gy *= f;
+      }
+    }
   }
   if (valid < 0.5) return vec4(0.0);
   return textureGrad(uFlatArt, (org + q) / uFlatAtlas, gx / uFlatAtlas, gy / uFlatAtlas);

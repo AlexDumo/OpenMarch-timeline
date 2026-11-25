@@ -11,7 +11,7 @@ const IN = 0.0254;
 /** As OM_FLAT_HEM_INSET in uniform-flats.js, inches. */
 const HEM_INSET = 0.05;
 /** As omFlatHemInset() in uniform-flats.js: how far (in) the torso's end and the hips' start keep off the hem. */
-export const hemInset = (dpi: number) => Math.max(HEM_INSET, 1 / dpi);
+export const hemInset = (dpi: number) => Math.max(HEM_INSET, 1.5 / dpi);
 const PI = Math.PI;
 const sub = (a: V3, b: number[]): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const dot = (a: number[], b: number[]) =>
