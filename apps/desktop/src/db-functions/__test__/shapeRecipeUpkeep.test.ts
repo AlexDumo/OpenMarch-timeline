@@ -2,7 +2,7 @@ import { afterEach, expect, vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { describeDbTests, schema, type DbConnection } from "@/test/base";
 import { transactionWithHistory } from "../history";
-import { deleteTimeline } from "../timelineCommands";
+import { deleteTimeline, shiftTimeline } from "../timelineCommands";
 import { readAllShapeRecipes } from "../shapeRecipes";
 
 /**
@@ -49,7 +49,7 @@ const timed = async (run: () => Promise<unknown>) => {
 };
 
 describeDbTests("Shape recipe upkeep on a big show", (it) => {
-    it("300 marchers × 110 pages: edits bind no row-per-variable list, and deleting a page's move deletes its shape", async ({
+    it("300 marchers × 110 pages: edits bind no row-per-variable list, dragging a page's move takes its shape along, and deleting it deletes the shape", async ({
         db,
     }) => {
         await bigShow(db, 300, 110);
@@ -63,17 +63,24 @@ describeDbTests("Shape recipe upkeep on a big show", (it) => {
                     .run(),
             ),
         );
+        // An edit that re-times the arrival of every member of the last page's shape: it follows
+        const shift = await timed(() =>
+            shiftTimeline({ db, timelineId: 110, delta: 2 }),
+        );
+        expect((await readAllShapeRecipes(db)).map((r) => r.beat)).toContain(
+            882,
+        );
         // An edit that removes the arrivals of every member of the last page's shape
         const remove = await timed(() =>
             deleteTimeline({ db, timelineId: 110 }),
         );
         const beats = (await readAllShapeRecipes(db)).map((r) => r.beat);
         expect(beats).toHaveLength(109);
-        expect(beats).not.toContain(880);
+        expect(beats).not.toContain(882);
         expect(beats).toContain(872);
         // Timings for the record (the pull request quotes them), not a pass condition
         process.stdout.write(
-            `upkeep on 300 × 110: rename ${rename.toFixed(0)} ms, delete move ${remove.toFixed(0)} ms\n`,
+            `upkeep on 300 × 110: rename ${rename.toFixed(0)} ms, clip drag ${shift.toFixed(0)} ms, delete move ${remove.toFixed(0)} ms\n`,
         );
     });
 });
