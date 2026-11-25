@@ -16,16 +16,16 @@ import { useFieldDraw } from "../fieldDrawContext";
 import type { LabelIcons } from "@/cues/useEquipmentIcons";
 import type { EquipmentIconPlace } from "@/cues/equipmentIcons";
 import type { FieldFacing } from "@/cues/useFieldFacing";
-import { arrowSizes, ICON_DOT_REACH } from "../facingArrow";
+import { caretSizes, ICON_DOT_REACH } from "../facingCaret";
 
 /**
  * Facing carets (fork #1316): a small chevron just in front of every performer's dot, pointing
  * where they face, in one instanced draw, shaded in the fragment shader so edges are smooth
  * without MSAA (as the dots). Each instance is a quad laid along its facing; the shape is a signed
- * distance (two strokes meeting at a point, `facingArrow.ts`'s sizes) in the theme's label ink,
+ * distance (two strokes meeting at a point, `facingCaret.ts`'s sizes) in the theme's label ink,
  * edged with a halo of the field's background so it reads over yard lines and paths.
  *
- * Drawn under the dots (a neighbor's dot covers an arrow that reaches it) and over the labels,
+ * Drawn under the dots (a neighbor's dot covers a caret that reaches it) and over the labels,
  * which move off it.
  */
 const VERTEX = /* glsl */ `
@@ -42,7 +42,7 @@ void main() {
     vOpacity = aStyle.x;
     vStart = uStart * aStyle.y;
     if (dot(aDir, aDir) == 0.0 || aStyle.x <= 0.0) {
-        // No arrow: off screen
+        // No caret: off screen
         gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
         return;
     }
@@ -56,8 +56,8 @@ void main() {
 
 const FRAGMENT = /* glsl */ `
 uniform float uTip;
-uniform float uHeadHalf;
-uniform float uShaftHalf;
+uniform float uHalfWidth;
+uniform float uStroke;
 uniform float uHalo;
 uniform vec3 uInk;
 uniform vec3 uHaloColor;
@@ -75,9 +75,9 @@ void main() {
     // A caret: two strokes from its arms, beside the dot, to its point, the way they face
     vec2 point = vec2(vStart + uTip, 0.0);
     float d = min(
-        segment(vLocal, vec2(vStart, uHeadHalf), point),
-        segment(vLocal, vec2(vStart, -uHeadHalf), point)
-    ) - uShaftHalf;
+        segment(vLocal, vec2(vStart, uHalfWidth), point),
+        segment(vLocal, vec2(vStart, -uHalfWidth), point)
+    ) - uStroke;
     float aa = 0.5 * fwidth(d);
     float ink = 1.0 - smoothstep(-aa, aa, d);
     float edge = 1.0 - smoothstep(uHalo - aa, uHalo + aa, d);
@@ -99,8 +99,8 @@ type Drawn = {
 const rgb01 = (c: { r: number; g: number; b: number }) =>
     [c.r / 255, c.g / 255, c.b / 255] as const;
 
-/** Each performer's facing arrow at the beat drawn, while Show facing is on (`facing` not null). */
-export default function FacingArrowsLayer({
+/** Each performer's facing caret at the beat drawn, while Show facing is on (`facing` not null). */
+export default function FacingCaretsLayer({
     marchers,
     dimming,
     theme,
@@ -109,12 +109,12 @@ export default function FacingArrowsLayer({
     iconPlace = "beside",
 }: {
     marchers: FieldMarchers;
-    /** Marchers drawn dimmed (#201): their arrows fade as their dots do */
+    /** Marchers drawn dimmed (#201): their carets fade as their dots do */
     dimming: FieldDimming;
     theme: FieldTheme;
-    /** Which way each performer faces at the beat drawn; null draws no arrows */
+    /** Which way each performer faces at the beat drawn; null draws no carets */
     facing: FieldFacing | null;
-    /** In place of the dot, an equipment icon stands on the spot: the arrow starts past it */
+    /** In place of the dot, an equipment icon stands on the spot: the caret starts past it */
     icons?: LabelIcons | null;
     iconPlace?: EquipmentIconPlace;
 }) {
@@ -140,7 +140,7 @@ export default function FacingArrowsLayer({
         );
         geometry.setIndex([0, 1, 2, 0, 2, 3]);
         geometry.instanceCount = 0;
-        const arrows = new Mesh(
+        const carets = new Mesh(
             geometry,
             new ShaderMaterial({
                 vertexShader: VERTEX,
@@ -149,8 +149,8 @@ export default function FacingArrowsLayer({
                     uStart: { value: 0 },
                     uTip: { value: 0 },
                     uHalf: { value: 0 },
-                    uHeadHalf: { value: 0 },
-                    uShaftHalf: { value: 0 },
+                    uHalfWidth: { value: 0 },
+                    uStroke: { value: 0 },
                     uHalo: { value: 0 },
                     uInk: { value: [0, 0, 0] },
                     uHaloColor: { value: [1, 1, 1] },
@@ -161,10 +161,10 @@ export default function FacingArrowsLayer({
                 side: DoubleSide,
             }),
         );
-        arrows.frustumCulled = false;
-        // Over the labels (1.9), which move off arrows, and under the dots (2)
-        arrows.renderOrder = 1.95;
-        return arrows;
+        carets.frustumCulled = false;
+        // Over the labels (1.9), which move off carets, and under the dots (2)
+        carets.renderOrder = 1.95;
+        return carets;
     }, []);
 
     useEffect(() => invalidate(), [theme, facing, icons, invalidate]);
@@ -184,14 +184,14 @@ export default function FacingArrowsLayer({
             return;
         }
         const { zoom } = draw.view.getState();
-        const sizes = arrowSizes(zoom);
+        const sizes = caretSizes(zoom);
         const { uniforms } = mesh.material;
         uniforms.uStart.value = sizes.start;
-        uniforms.uTip.value = sizes.length;
+        uniforms.uTip.value = sizes.depth;
         uniforms.uHalf.value =
-            sizes.headHalfWidth + sizes.shaftHalfWidth + sizes.halo + 1 / zoom;
-        uniforms.uHeadHalf.value = sizes.headHalfWidth;
-        uniforms.uShaftHalf.value = sizes.shaftHalfWidth;
+            sizes.halfWidth + sizes.strokeHalfWidth + sizes.halo + 1 / zoom;
+        uniforms.uHalfWidth.value = sizes.halfWidth;
+        uniforms.uStroke.value = sizes.strokeHalfWidth;
         uniforms.uHalo.value = sizes.halo;
         uniforms.uInk.value = rgb01(theme.defaultMarcher.label);
         uniforms.uHaloColor.value = rgb01(theme.background);
@@ -230,7 +230,7 @@ export default function FacingArrowsLayer({
         const instanced = (name: string) =>
             geometry.getAttribute(name) as InstancedBufferAttribute;
         if (restyled) {
-            // Opacity (hidden marchers and items have none), and where the tail starts
+            // Opacity (hidden marchers and items have none), and where the arms start
             const style = instanced("aStyle");
             const styles = style.array as Float32Array;
             marchers.ids.forEach((id, i) => {

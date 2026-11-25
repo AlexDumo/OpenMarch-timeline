@@ -113,7 +113,7 @@ export interface UiSettings {
     /** Where those icons go: after the drill number, in place of the dot, or of the number */
     equipmentIconPlace?: EquipmentIconPlace;
     /**
-     * Whether the field draws an arrow from every performer's dot the way they face (fork #1316):
+     * Whether the field draws a caret in front of every performer's dot the way they face (fork #1316):
      * the field display bar's Show facing. Off by default. Was `facingMarks` (Not front, Everyone
      * or Off) in early builds; `parseSettings` carries it over
      */

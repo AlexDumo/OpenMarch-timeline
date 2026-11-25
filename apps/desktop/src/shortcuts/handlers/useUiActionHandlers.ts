@@ -20,7 +20,7 @@ export function useUiActionHandlers() {
     useActionHandler("toggleNextPagePaths", () =>
         setUiSettings({ ...settings(), nextPaths: !settings().nextPaths }),
     );
-    // Facing arrows on the field (fork #1316); the palette names what it will do
+    // Facing carets on the field (fork #1316); the palette names what it will do
     const facingOn = () => settings().facingArrows === true;
     useActionHandler("toggleFacingArrows", toggleFacingArrows, {
         label: () =>

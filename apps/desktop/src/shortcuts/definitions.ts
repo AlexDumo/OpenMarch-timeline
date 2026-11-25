@@ -967,7 +967,7 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: ["M"],
     },
-    // Facing arrows on the field (fork #1316): the display bar's Show facing. Unbound
+    // Facing carets on the field (fork #1316): the display bar's Show facing. Unbound
     toggleFacingArrows: {
         labelKey: "actions.ui.toggleFacingArrows",
         keywordsKey: "actions.ui.toggleFacingArrowsKeywords",

@@ -1192,7 +1192,7 @@ const shots = [
     {
         id: "marchers-facing-field",
         kind: "still",
-        // On the field at the end of Page 1 with Show facing on (fork #1316): G6–G10's arrows
+        // On the field at the end of Page 1 with Show facing on (fork #1316): G6–G10's carets
         // point to side 2 and G14, G19 and G22's to the back; everyone else's to the front
         async setup({ page, wait }) {
             await toPage1(page, wait);

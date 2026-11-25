@@ -291,7 +291,7 @@ describe("line order setting", () => {
     });
 });
 
-describe("facing arrows setting (fork #1316)", () => {
+describe("Show facing setting (fork #1316)", () => {
     it("starts off", () => {
         expect(parseSettings("{}").facingArrows).toBe(false);
     });
