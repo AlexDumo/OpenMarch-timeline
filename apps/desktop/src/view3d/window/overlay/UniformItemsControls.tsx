@@ -8,8 +8,8 @@
  * moment later as a new version of the uniform, with undo like any venue change. Every control is
  * a visible button, menu or field, so touch reaches all of it.
  *
- * A preview, like the uniform import: only where `uniformArtworkAvailable()`, and only for a
- * uniform imported into the show.
+ * A preview, like the uniform import: only with Custom uniforms (preview) on
+ * (`useCustomUniforms`), and only for a uniform imported into the show.
  */
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -51,7 +51,8 @@ import {
     type ItemGrade,
     type UniformPackItem,
 } from "@/view3d/core/uniformPack/format";
-import { uniformArtworkAvailable } from "@/view3d/window/uniformArtworkPreview";
+import { useCustomUniforms } from "@/view3d/window/uniformArtworkPreview";
+import { PreviewTitle } from "./UniformPreview";
 import { loadFlatsGeometry } from "@/view3d/window/performers/marchers/flatsAtlas";
 import {
     editItems,
@@ -91,6 +92,7 @@ const presetOf = (presets: ItemPreset[], item: UniformPackItem) =>
 export function UniformItemsControls() {
     const { t } = useTranslate();
     const { settings } = useVenueRequest();
+    const customUniforms = useCustomUniforms();
     const input = useRef<HTMLInputElement>(null);
     const [busy, setBusy] = useState(false);
     const [problem, setProblem] = useState<string | null>(null);
@@ -118,7 +120,7 @@ export function UniformItemsControls() {
         };
     }, []);
 
-    if (!uniformArtworkAvailable() || !wornPack || !pack) return null;
+    if (!customUniforms || !wornPack || !pack) return null;
     const stored = contentsOf(pack.manifest);
     // while the band's version loads, the stored items on screen are the version before's: shown,
     // but not editable, unless a draft holds the real ones
@@ -191,7 +193,7 @@ export function UniformItemsControls() {
 
     return (
         <div className="flex flex-col gap-8" data-testid="view3d-uniform-items">
-            <span className="text-body">{t("view3d.uniformItems.title")}</span>
+            <PreviewTitle>{t("view3d.uniformItems.title")}</PreviewTitle>
             <div className="flex flex-wrap items-center gap-6">
                 <Button
                     variant="secondary"

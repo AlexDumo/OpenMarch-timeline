@@ -8,8 +8,8 @@
  *   change goes to the editor, which saves it with undo.
  * - Preferences, saved on this computer only (ADR 0010 D-5): opening the 3D
  *   View with a show (also in Settings › General), quality, resolution, the
- *   control scheme, following a performer, and the keys, so they can be
- *   found.
+ *   control scheme, following a performer, Custom uniforms (preview), and the
+ *   keys, so they can be found.
  *
  * Each tab says where its choices are saved in its first line. The panel
  * floats at the right and doesn't block the scene, so the viewer can orbit
@@ -42,6 +42,8 @@ import { UniformTemplateControls } from "./UniformTemplateControls";
 import { UniformImportControls } from "./UniformImportControls";
 import { UniformItemsControls } from "./UniformItemsControls";
 import { UniformModesControls } from "./UniformModesControls";
+import { CustomUniformsRow, PreviewTitle } from "./UniformPreview";
+import { useCustomUniforms } from "../uniformArtworkPreview";
 import {
     BrassFinishPicker,
     LightingControl,
@@ -96,6 +98,7 @@ export function SettingsPanel({
     const kitId = useView3dSceneStore((s) => s.kitId);
     const hasStands = !!kit && kit.seatRows.length > 0;
     const [tab, setTab] = useState<SettingsTab>(() => loadSettingsTab());
+    const customUniforms = useCustomUniforms();
 
     return (
         <section
@@ -182,7 +185,18 @@ export function SettingsPanel({
                         icon={FileIcon}
                         text={t("view3d.settings.showNote")}
                     />
-                    <Row label={t("view3d.settings.uniforms")} stacked>
+                    <Row
+                        label={
+                            customUniforms ? (
+                                <PreviewTitle>
+                                    {t("view3d.settings.uniforms")}
+                                </PreviewTitle>
+                            ) : (
+                                t("view3d.settings.uniforms")
+                            )
+                        }
+                        stacked
+                    >
                         <UniformPicker />
                         <UniformTemplateControls />
                         <UniformImportControls />
@@ -218,6 +232,7 @@ export function SettingsPanel({
                     <ResolutionRow />
                     <ControlsRow />
                     <FollowRows />
+                    <CustomUniformsRow />
                     <Row label={t("view3d.settings.shortcuts")} stacked>
                         <ShortcutList />
                     </Row>
@@ -267,7 +282,7 @@ function Row({
     stacked = false,
     children,
 }: {
-    label: string;
+    label: ReactNode;
     /** Puts the control under the label instead of beside it. */
     stacked?: boolean;
     children: ReactNode;

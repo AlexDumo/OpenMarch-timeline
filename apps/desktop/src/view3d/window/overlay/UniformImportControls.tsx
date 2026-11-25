@@ -5,7 +5,9 @@
  * pack worker), then sent to the editor, which stores it in the show and dresses the band in it
  * with undo. Save uniform file writes the pack the band wears back out as its portable file.
  *
- * A preview, like the sample flats: only where `uniformArtworkAvailable()`.
+ * A preview, like the sample flats: only with Custom uniforms (preview) on (`useCustomUniforms`).
+ * A line under the buttons says uniform files may change, and the first import or save on a
+ * computer says it once more as a note.
  */
 import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -34,7 +36,8 @@ import {
     uniformPackFileName,
 } from "@/view3d/core/uniformPack/format";
 import { wornPackProblem } from "@/view3d/core/uniformPack/wornPack";
-import { uniformArtworkAvailable } from "@/view3d/window/uniformArtworkPreview";
+import { useCustomUniforms } from "@/view3d/window/uniformArtworkPreview";
+import { PreviewWarningLine, useFirstUseWarning } from "./UniformPreview";
 import { loadFlatsGeometry } from "@/view3d/window/performers/marchers/flatsAtlas";
 import {
     UniformImportError,
@@ -53,6 +56,8 @@ const ACCEPT = `image/png,image/svg+xml,.png,.svg,${ASSET_FILE_EXTENSION}`;
 export function UniformImportControls() {
     const { t } = useTranslate();
     const { settings } = useVenueRequest();
+    const customUniforms = useCustomUniforms();
+    const firstUse = useFirstUseWarning();
     const input = useRef<HTMLInputElement>(null);
     const [busy, setBusy] = useState(false);
     const [problem, setProblem] = useState<string | null>(null);
@@ -79,7 +84,7 @@ export function UniformImportControls() {
         packRead ? pack : undefined,
     );
 
-    if (!uniformArtworkAvailable()) return null;
+    if (!customUniforms) return null;
 
     const refusal = (error: unknown): string => {
         const code =
@@ -100,6 +105,7 @@ export function UniformImportControls() {
             // the band wears it once the editor has stored it
             await storeUniformPack(result.pack);
             setDone({ result, preset });
+            firstUse.notice();
         } catch (error) {
             console.warn("3D View: couldn't import the uniform", error);
             setProblem(
@@ -144,6 +150,7 @@ export function UniformImportControls() {
             return;
         }
         saveFile(uniformPackFileName(pack.name), ASSET_FILE_MIME, pack.bytes);
+        firstUse.notice();
     };
 
     return (
@@ -200,6 +207,8 @@ export function UniformImportControls() {
             <p className="text-sub text-text/60">
                 {t("view3d.uniformImport.hint")}
             </p>
+            <PreviewWarningLine />
+            {firstUse.note}
             {done && (
                 <div
                     className="text-sub flex flex-col gap-2"

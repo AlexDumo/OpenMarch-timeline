@@ -3567,7 +3567,9 @@
             "computerNote": "Saved on this computer only. Not part of the show.",
             "shortcuts": "Keyboard shortcuts",
             "followTurns": "Following: turn with the performer",
-            "povShowsBody": "Point of view: show their arms and instrument"
+            "povShowsBody": "Point of view: show their arms and instrument",
+            "customUniforms": "Custom uniforms (preview)",
+            "customUniformsDescription": "Make your own band uniforms: the uniform template, importing and saving uniform files, logos and numbers, and modes. This is a preview, so uniform files may change in a later version of OpenMarch."
         },
         "keys": {
             "playPause": "Play or pause",
@@ -3685,7 +3687,7 @@
             "saveNeedsImported": "Pick an imported uniform above to save it as a file.",
             "saveNeedsImport": "Import a uniform first.",
             "missing": "The band's uniform isn't in this show anymore, so the band wears its preset. Import it again to bring it back.",
-            "unreadable": "The band's uniform is in this show, but its file can't be read (it may be damaged, or from a newer OpenMarch), so the band wears its preset. Pick another uniform, or import one.",
+            "unreadable": "The band's uniform is in this show, but its file can't be read, so the band wears its preset. If it was made with a newer version of OpenMarch, update OpenMarch to see it. Otherwise pick another uniform, or import one.",
             "hint": "Paint on the template, hide the template layer, then import a transparent PNG or an SVG. A saved uniform file imports too.",
             "imported": "The band now wears “{name}”.",
             "saveFailed": "Couldn't save the imported uniform",
@@ -3830,6 +3832,13 @@
             "removeUnused": "Remove unused images",
             "loading": "Wait until the uniform has loaded.",
             "lastRemoved": "Removing the last mode also removed what it didn't show: {images, plural, =0 {no images} =1 {one image} other {# images}} and {items, plural, =0 {no logos or numbers} =1 {one logo or number} other {# logos or numbers}}."
+        },
+        "uniformPreview": {
+            "badge": "Preview",
+            "warning": "Preview: uniform files may change in a later version of OpenMarch, and uniforms you make now may need to be imported again. Keep your original artwork.",
+            "dismiss": "Got it",
+            "showUses": "This show uses a preview uniform.",
+            "turnOn": "Turn on custom uniforms"
         }
     },
     "web": {
