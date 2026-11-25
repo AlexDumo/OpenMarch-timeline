@@ -748,6 +748,8 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         selected: new Set<number>(),
         /** The slot left out for the camera's point of view, or -1. */
         hidden: -1,
+        /** The marcher bodies the last frame posed */
+        bodies: null as typeof marcherBodies,
     });
     // The camera for instrument detail, and where it was when last applied.
     const cameraRef = useRef<[number, number, number]>([0, 0, 0]);
@@ -790,7 +792,12 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         const closed =
             !sync.clock?.playing &&
             useView3dSceneStore.getState().pausedPose === "closed";
+        // new bodies (a look changed) have no poses yet: write them before their first draw,
+        // or the marchers vanish until an effect marks the frame dirty (fork #1287)
+        const freshBodies = marcherBodies !== frame.bodies;
+        frame.bodies = marcherBodies;
         const moved =
+            freshBodies ||
             dirtyRef.current ||
             hiddenChanged ||
             ms !== frame.lastMs ||

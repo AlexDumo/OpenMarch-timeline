@@ -72,6 +72,13 @@ export interface ItemDraft {
     shown: number;
     /** The revision `latest` holds */
     saved: number;
+    /**
+     * A save of this draft is running. Its result can reach the venue before its answer reaches
+     * the window, so meanwhile a version of the same uniform the draft doesn't know yet is taken
+     * as that result, not as an Undo (fork #1287: that ended the draft and lost the edits made
+     * since, and the fields showed the older stored values)
+     */
+    inFlight?: boolean;
 }
 
 interface ItemDraftState {
@@ -155,7 +162,24 @@ export const draftApplies = (
 ): draft is ItemDraft =>
     !!draft &&
     !!worn &&
-    (worn === draft.latest || (!draft.arrived && worn === draft.previous));
+    (worn === draft.latest ||
+        (!draft.arrived && worn === draft.previous) ||
+        (!!draft.inFlight && sameUniform(worn, draft.latest)));
+
+/** Whether two values name versions of the same uniform asset */
+const sameUniform = (a: string, b: string) => {
+    const id = parseShowAssetRef(a)?.id;
+    return id !== undefined && id === parseShowAssetRef(b)?.id;
+};
+
+/** What the venue last named, and whether its pack had loaded, for a save to reconcile with */
+let lastWorn: UniformPackValue | null = null;
+let lastLoaded = false;
+/** What the venue named while the running save ran */
+const seenInFlight = new Set<string>();
+/** How long a saved version has to reach the venue before the draft takes it as gone, ms */
+const ARRIVE_MS = 4000;
+let arriveTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
  * The key the 3D View draws for the band's `worn` pack: the draft's while it applies to it and
@@ -201,21 +225,42 @@ export const itemsFor = (
 function end() {
     if (showTimer) clearTimeout(showTimer);
     if (saveTimer) clearTimeout(saveTimer);
-    showTimer = saveTimer = null;
+    if (arriveTimer) clearTimeout(arriveTimer);
+    showTimer = saveTimer = arriveTimer = null;
     useItemDrafts.setState({ draft: null });
 }
 
 /**
  * Tells the drafts what the venue's band wears now. Ends the draft once the venue shows its
- * saved pack with nothing left to save, or when the venue moves anywhere else (Undo wins).
+ * saved pack with nothing left to save and that pack has loaded, or when the venue moves
+ * anywhere else (Undo wins).
  */
-export function observeWorn(worn: UniformPackValue | null) {
+export function observeWorn(
+    worn: UniformPackValue | null,
+    /**
+     * Whether `worn`'s own pack has loaded (not a placeholder from the version before): until it
+     * has, the stored items on screen are the old version's, so the draft keeps showing its own
+     */
+    loaded: boolean,
+) {
+    lastWorn = worn;
+    lastLoaded = loaded;
     const { draft, saving } = useItemDrafts.getState();
     if (!draft) return;
+    if (draft.inFlight && worn) seenInFlight.add(worn);
+    // possibly the running save's result: wait for its answer (`save` reconciles)
+    if (
+        worn !== draft.latest &&
+        worn !== draft.previous &&
+        draft.inFlight &&
+        worn !== null &&
+        sameUniform(worn, draft.latest)
+    )
+        return;
     if (worn === draft.latest) {
         if (!draft.arrived)
             useItemDrafts.setState({ draft: { ...draft, arrived: true } });
-        if (draft.saved === draft.revision && !saving) end();
+        if (draft.saved === draft.revision && !saving && loaded) end();
         return;
     }
     if (!draft.arrived && worn === draft.previous) return;
@@ -314,7 +359,13 @@ async function save(): Promise<void> {
     if (state.saving || !state.draft) return;
     const draft = state.draft;
     if (draft.saved === draft.revision) return;
-    useItemDrafts.setState({ saving: true });
+    // only what the venue names while this runs: a save can reproduce an older version's bytes
+    // (an item put back where it was), so a version named before it started proves nothing
+    seenInFlight.clear();
+    useItemDrafts.setState({
+        saving: true,
+        draft: { ...draft, inFlight: true },
+    });
     const revision = draft.revision;
     try {
         const stored = await readStoredUniformPackBytes(draft.latest);
@@ -350,20 +401,50 @@ async function save(): Promise<void> {
         const value = saved.value as UniformPackValue;
         burst = saved.token ? { value, token: saved.token } : null;
         const now = useItemDrafts.getState().draft;
-        // the draft ended meanwhile (Undo, another uniform): the save stands, the draft doesn't
+        // the draft ended meanwhile (another uniform): the save stands, the draft doesn't
         if (now && now.origin === draft.origin && now.latest === draft.latest) {
             const next: ItemDraft =
                 value === now.latest
-                    ? { ...now, saved: revision }
+                    ? { ...now, saved: revision, inFlight: false }
                     : {
                           ...now,
                           previous: now.latest,
                           latest: value,
-                          arrived: false,
+                          // the venue may have shown it already, before this answer
+                          arrived: lastWorn === value,
                           saved: revision,
+                          inFlight: false,
                       };
             remember(next);
-            useItemDrafts.setState({ draft: next });
+            useItemDrafts.setState({ draft: next, saving: false });
+            if (lastWorn !== value && seenInFlight.has(value)) {
+                // the venue showed this save, then moved on: an Undo after it, which wins
+                end();
+            } else {
+                // what the venue names now: this save's result, or not yet
+                observeWorn(lastWorn, lastLoaded);
+                const d = useItemDrafts.getState().draft;
+                if (d && !d.arrived) {
+                    // a venue that never shows it went elsewhere (an Undo the window saw
+                    // only as no change): end the draft then
+                    if (arriveTimer) clearTimeout(arriveTimer);
+                    const waiting = d.latest;
+                    arriveTimer = setTimeout(() => {
+                        arriveTimer = null;
+                        const { draft: now, saving } = useItemDrafts.getState();
+                        // only with nothing saving or left to save: a pending save's `expect`
+                        // decides instead (the editor refuses it if the venue moved on)
+                        if (
+                            now &&
+                            !now.arrived &&
+                            now.latest === waiting &&
+                            now.saved === now.revision &&
+                            !saving
+                        )
+                            end();
+                    }, ARRIVE_MS);
+                }
+            }
         }
     } catch (error) {
         burst = null;
@@ -379,7 +460,11 @@ async function save(): Promise<void> {
             end();
         }
     } finally {
-        useItemDrafts.setState({ saving: false });
+        const d = useItemDrafts.getState().draft;
+        useItemDrafts.setState({
+            saving: false,
+            ...(d?.inFlight ? { draft: { ...d, inFlight: false } } : {}),
+        });
     }
     const after = useItemDrafts.getState().draft;
     if (after && after.saved < after.revision && !saveTimer) await save();
@@ -397,4 +482,47 @@ export function newItemId(
         const file = `items/${id}.png`;
         if (!ids.has(id) && !files.has(file)) return { id, file };
     }
+}
+
+/**
+ * What the item list shows for the band's `worn` pack: the draft's items while it applies,
+ * otherwise the stored ones. The list can be edited unless the stored items on screen are a
+ * placeholder (the version before, while `worn`'s own pack loads): an edit made on those would
+ * save the old version's items over the new one, undoing a save or an Undo.
+ */
+export function itemListState(
+    draft: ItemDraft | null,
+    worn: UniformPackValue,
+    stored: UniformPackItem[],
+    placeholder: boolean,
+): { items: UniformPackItem[]; editable: boolean } {
+    if (draftApplies(draft, worn))
+        return { items: draft.contents.items, editable: true };
+    return { items: stored, editable: !placeholder };
+}
+
+/**
+ * {@link itemListState} for the whole pack (the modes list, step 5 of fork #1257): the draft's
+ * contents while it applies, otherwise the stored ones, editable unless they're a placeholder
+ */
+export function packListState(
+    draft: ItemDraft | null,
+    worn: UniformPackValue,
+    stored: PackContents,
+    placeholder: boolean,
+): { contents: PackContents; editable: boolean } {
+    if (draftApplies(draft, worn))
+        return { contents: draft.contents, editable: true };
+    return { contents: stored, editable: !placeholder };
+}
+
+/** Puts the module back as it starts, for tests that mustn't depend on each other's order */
+export function resetItemDraftsForTests() {
+    end();
+    burst = null;
+    lastEditAt = 0;
+    lastWorn = null;
+    lastLoaded = false;
+    seenInFlight.clear();
+    useItemDrafts.setState({ draft: null, saving: false, failed: false });
 }

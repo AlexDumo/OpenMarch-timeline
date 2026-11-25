@@ -20,6 +20,7 @@ import {
 import { sql } from "drizzle-orm";
 import {
     UniformPackSupersededError,
+    resolveStoredUniformPack,
     saveUniformItemsPack,
     setUniformPack,
 } from "../view3dUniformPack";
@@ -439,6 +440,104 @@ describeDbTests("view3dUniformPack", (it) => {
                     Promise.resolve(1),
                 ),
             ).toEqual({ amended: false });
+        });
+
+        it("never leaves a value the 3D View can still name unresolvable during a burst (#1258)", async ({
+            db,
+        }) => {
+            // The window hears of each save's asset change and venue change separately, so for a
+            // moment it can name any value the venue named since the burst began. Each must still
+            // resolve to a stored pack: the version itself, or its uniform's newest.
+            const origin = await store(db, packFile("Home uniform", 1));
+            const id = parseShowAssetRef(origin)!.id;
+            const seen = [origin];
+            let latest = origin;
+            let token: string | null | undefined;
+            for (let n = 1; n <= 12; n++) {
+                const pack = crestPack(n);
+                const saved = await saveUniformItemsPack({
+                    db,
+                    pack,
+                    manifest: readUniformPack(pack).manifest,
+                    field,
+                    versionOf: id,
+                    expect: latest,
+                    amend: token ?? undefined,
+                });
+                token = saved.token;
+                latest = saved.value;
+                seen.push(latest);
+                for (const value of seen) {
+                    const resolved = await resolveStoredUniformPack({
+                        db,
+                        value,
+                    });
+                    expect(resolved, `${value} after save ${n}`).not.toBeNull();
+                    // a removed version reads as the newest: never an older look
+                    if (value !== origin) expect(resolved!.value).toBe(latest);
+                    const bytes = await readShowAssetBlob({
+                        db,
+                        hash: resolved!.hash,
+                    });
+                    expect(bytes).toBeDefined();
+                }
+            }
+            // the burst removed its intermediate versions; they still resolve
+            expect(
+                (await getShowAssets({ db })).filter((a) => a.id === id),
+            ).toHaveLength(2);
+            // a uniform the show doesn't have at all still reads as missing
+            expect(
+                await resolveStoredUniformPack({
+                    db,
+                    value: `library:00000000-0000-4000-8000-000000000000@${"0".repeat(64)}`,
+                }),
+            ).toBeNull();
+        });
+
+        it("resolves a removed version to what the venue names, even when a save reused an older row (#1287)", async ({
+            db,
+        }) => {
+            // O, then A (one burst), then a burst B whose content goes back to O's bytes
+            const originPack = packFile("Home uniform", 1);
+            const origin = await store(db, originPack);
+            const id = parseShowAssetRef(origin)!.id;
+            const a = await saveUniformItemsPack({
+                db,
+                pack: crestPack(4),
+                manifest: readUniformPack(crestPack(4)).manifest,
+                field,
+                versionOf: id,
+                expect: origin,
+            });
+            const b = await saveUniformItemsPack({
+                db,
+                pack: crestPack(5),
+                manifest: readUniformPack(crestPack(5)).manifest,
+                field,
+                versionOf: id,
+                expect: a.value,
+            });
+            const back = await saveUniformItemsPack({
+                db,
+                pack: originPack,
+                manifest: readUniformPack(originPack).manifest,
+                field,
+                versionOf: id,
+                expect: b.value,
+                amend: b.token ?? undefined,
+            });
+            // the save reused O's row, and removed B
+            expect(back.value).toBe(origin);
+            expect(
+                (await getShowAssets({ db }))
+                    .filter((x) => x.id === id)
+                    .map((x) => showAssetValue(x)),
+            ).toEqual([origin, a.value]);
+            // a window still naming B sees O, the look the venue has, not A
+            expect(
+                (await resolveStoredUniformPack({ db, value: b.value }))?.value,
+            ).toBe(origin);
         });
 
         it("refuses a manifest that doesn't parse, changing nothing", async ({

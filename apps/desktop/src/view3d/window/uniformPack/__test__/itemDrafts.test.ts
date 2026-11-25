@@ -3,6 +3,7 @@
  * resolved when composing, since a burst's save removes the version a revision was drawn over.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { UniformPackItem } from "@/view3d/core/uniformPack/format";
 import type { UniformPackValue } from "@/view3d/core/marchers/uniformArtwork";
 import { addMode, contentsOf } from "@/view3d/core/uniformPack/modeEdits";
 import { sampleManifest } from "@/view3d/core/uniformPack/__test__/fixtures";
@@ -11,6 +12,9 @@ import {
     draftOrigin,
     editItems,
     editPack,
+    itemListState,
+    observeWorn,
+    resetItemDraftsForTests,
     useItemDrafts,
     type ItemDraft,
 } from "../itemDrafts";
@@ -23,7 +27,7 @@ const draft = (latest: UniformPackValue): ItemDraft => ({
     latest,
     previous: null,
     arrived: true,
-    contents: { layers: [], items: [], modes: [] },
+    contents: contentsOf(sampleManifest()),
     images: {},
     layerImages: {},
     revision: 3,
@@ -32,7 +36,7 @@ const draft = (latest: UniformPackValue): ItemDraft => ({
 });
 
 describe("item drafts", () => {
-    afterEach(() => useItemDrafts.setState({ draft: null }));
+    afterEach(() => resetItemDraftsForTests());
 
     it("reads a live draft's newest saved pack, not the one it was drawn over", () => {
         const key = draftKey(v(1), 3);
@@ -92,5 +96,95 @@ describe("one draft for items and modes (#1257 step 5)", () => {
                 .getState()
                 .draft!.contents.modes.every((m) => m.items.length === 0),
         ).toBe(true);
+    });
+});
+
+/** A pack's contents holding `items` */
+const withItems = (items: UniformPackItem[]) => ({
+    ...contentsOf(sampleManifest()),
+    items,
+});
+
+const item = (id: string, width: number): UniformPackItem => ({
+    id,
+    file: `items/${id}.png`,
+    panel: "front",
+    at: [17, 25.32],
+    width,
+});
+
+describe("an edit right after a save or an Undo (#1287 re-review)", () => {
+    afterEach(() => {
+        resetItemDraftsForTests();
+        vi.clearAllTimers();
+        vi.useRealTimers();
+    });
+
+    // P: the version before, with a crest and a number. The draft deleted the number and was
+    // saved as N, which the venue now names, but N's pack is still loading, so the list's stored
+    // items are P's (a placeholder).
+    const P = v(1);
+    const N = v(2);
+    const pItems = [item("crest", 6), item("number", 8)];
+    const saved: ItemDraft = {
+        origin: P,
+        latest: N,
+        previous: P,
+        arrived: false,
+        contents: withItems([item("crest", 6)]),
+        images: {},
+        layerImages: {},
+        revision: 2,
+        shown: 2,
+        saved: 2,
+    };
+
+    it("keeps showing the draft's items while the saved version loads, and an edit keeps the earlier change", () => {
+        vi.useFakeTimers();
+        useItemDrafts.setState({ draft: saved, saving: false });
+        // the venue reaches N; N's pack hasn't loaded
+        observeWorn(N, false);
+        const draft = useItemDrafts.getState().draft;
+        expect(draft).not.toBeNull();
+        const shown = itemListState(draft, N, pItems, true);
+        // not the deleted number coming back
+        expect(shown).toEqual({ items: [item("crest", 6)], editable: true });
+        // resizing the crest now edits the draft's items, so the number stays deleted
+        editItems(N, withItems(pItems), (list) =>
+            list.map((i) => (i.id === "crest" ? { ...i, width: 7 } : i)),
+        );
+        expect(useItemDrafts.getState().draft?.contents.items).toEqual([
+            item("crest", 7),
+        ]);
+        // once N's pack has loaded and everything is saved, the draft ends
+        useItemDrafts.setState({
+            draft: { ...useItemDrafts.getState().draft!, saved: 3 },
+        });
+        observeWorn(N, true);
+        expect(useItemDrafts.getState().draft).toBeNull();
+    });
+
+    it("ends the draft once the saved version's own pack has loaded", () => {
+        useItemDrafts.setState({ draft: saved, saving: false });
+        observeWorn(N, true);
+        expect(useItemDrafts.getState().draft).toBeNull();
+    });
+
+    it("makes the list read only after an Undo until the version undone to has loaded", () => {
+        useItemDrafts.setState({ draft: { ...saved, arrived: true } });
+        // Undo: the venue goes back to P, whose pack isn't loaded; the list's stored items are
+        // N's as a placeholder
+        observeWorn(P, false);
+        expect(useItemDrafts.getState().draft).toBeNull();
+        const nItems = [item("crest", 6)];
+        expect(itemListState(null, P, nItems, true)).toEqual({
+            items: nItems,
+            editable: false,
+        });
+        // P's own pack loads: its items, editable
+        expect(itemListState(null, P, pItems, false)).toEqual({
+            items: pItems,
+            editable: true,
+        });
     });
 });

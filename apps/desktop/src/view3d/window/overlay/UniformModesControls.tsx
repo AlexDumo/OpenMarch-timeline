@@ -30,7 +30,10 @@ import {
 } from "@phosphor-icons/react";
 import { Button, Input } from "@openmarch/ui";
 import { touchSafeAccept } from "@/utilities/fileAccept";
-import { uniformPackQueryOptions } from "@/hooks/queries/useUniformPack";
+import {
+    keepSameUniform,
+    uniformPackQueryOptions,
+} from "@/hooks/queries/useUniformPack";
 import {
     flatsArtworkOf,
     isUniformPackValue,
@@ -63,8 +66,8 @@ import {
 import { uniformArtworkAvailable } from "@/view3d/window/uniformArtworkPreview";
 import { loadFlatsGeometry } from "@/view3d/window/performers/marchers/flatsAtlas";
 import {
-    contentsFor,
     editPack,
+    packListState,
     editUnsettled,
     observeWorn,
     useItemDrafts,
@@ -91,23 +94,44 @@ export function UniformModesControls() {
 
     const worn = flatsArtworkOf(settings?.uniformArtwork);
     const wornPack = worn && isUniformPackValue(worn) ? worn : null;
-    const { data: pack } = useQuery(uniformPackQueryOptions(wornPack));
-    useEffect(() => observeWorn(wornPack), [wornPack, draft]);
+    // each save is a new version: keep the list while the band moves to it
+    const { data: pack, isPlaceholderData } = useQuery({
+        ...uniformPackQueryOptions(wornPack),
+        placeholderData: keepSameUniform(wornPack),
+    });
+    const loaded = !!pack && !isPlaceholderData;
+    useEffect(() => observeWorn(wornPack, loaded), [wornPack, loaded, draft]);
 
     if (!uniformArtworkAvailable() || !wornPack || !pack) return null;
     const stored = contentsOf(pack.manifest);
-    const contents = contentsFor(draft, wornPack, stored);
+    // while the band's version loads, the modes on screen are the version before's: shown, but
+    // not editable, unless a draft holds the real ones (as for the logos, fork #1287)
+    const { contents, editable } = packListState(
+        draft,
+        wornPack,
+        stored,
+        isPlaceholderData,
+    );
+    const loadingReason = editable ? null : t("view3d.uniformModes.loading");
     const { modes } = contents;
     const unused = unusedLayers(contents);
     const wearing = modeOf(contents, settings?.uniformMode);
     const edit = (
         change: (c: PackContents) => PackContents,
         options?: PackEditOptions,
-    ) => editPack(wornPack, stored, change, options);
-    // a venue change sends the whole venue: while an edit is unsaved, it would put back the
-    // uniform version it was made from, so the picker waits for the save
-    const unsaved = editUnsettled(draft, saving);
-    const pickReason = unsaved ? t("view3d.uniformModes.waitForSave") : null;
+    ) => {
+        if (editable) editPack(wornPack, stored, change, options);
+        else setProblem(loadingReason);
+    };
+    // a venue change sends the whole venue: while an edit is unsaved, or saved but not yet back
+    // in the venue (the drafts' own arrive check, `seenInFlight` and its timer), it would put back
+    // the version the edit replaced, so the picker waits
+    const unsaved = editUnsettled(draft, saving) || !editable;
+    const pickReason = !editable
+        ? loadingReason
+        : unsaved
+          ? t("view3d.uniformModes.waitForSave")
+          : null;
     const addReason = addModeRefusal(contents, { withLayer: false })
         ? t("view3d.uniformModes.full", { count: UNIFORM_PACK_MAX_MODES })
         : null;

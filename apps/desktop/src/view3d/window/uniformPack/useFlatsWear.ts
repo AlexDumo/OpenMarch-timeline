@@ -14,7 +14,7 @@
  * mode's changes.
  */
 import { useEffect, useMemo } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
     UNIFORM_ARTWORK,
     flatsArtworkOf,
@@ -23,7 +23,10 @@ import {
     type FlatsWear,
 } from "@/view3d/core/marchers/uniformArtwork";
 import { lookOfManifest, modeOf } from "@/view3d/core/uniformPack/format";
-import { uniformPackQueryOptions } from "@/hooks/queries/useUniformPack";
+import {
+    keepSameUniform,
+    uniformPackQueryOptions,
+} from "@/hooks/queries/useUniformPack";
 import { uniformArtworkAvailable } from "@/view3d/window/uniformArtworkPreview";
 import {
     draftApplies,
@@ -39,13 +42,14 @@ export function useFlatsWear(
     const key = uniformArtworkAvailable() ? flatsArtworkOf(value) : null;
     const packValue = key && isUniformPackValue(key) ? key : null;
     // a saved item edit is a new pack: keep the last one's palette while it loads
-    const { data: pack } = useQuery({
+    const { data: pack, isPlaceholderData } = useQuery({
         ...uniformPackQueryOptions(packValue),
-        placeholderData: keepPreviousData,
+        placeholderData: keepSameUniform(packValue),
     });
     const manifest = pack?.manifest;
     const draft = useItemDrafts((s) => s.draft);
-    useEffect(() => observeWorn(packValue), [packValue, draft]);
+    const loaded = !!pack && !isPlaceholderData;
+    useEffect(() => observeWorn(packValue, loaded), [packValue, loaded, draft]);
     return useMemo(() => {
         if (!key) return null;
         if (!isUniformPackValue(key))

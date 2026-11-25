@@ -46,6 +46,7 @@ import {
 } from "@/view3d/core/marchers/uniformArtwork";
 import {
     uniformPackQueryOptions,
+    uniformEntryOf,
     uniformPacksQueryOptions,
 } from "@/hooks/queries/useUniformPack";
 import { wornPackProblem } from "@/view3d/core/uniformPack/wornPack";
@@ -183,9 +184,7 @@ export function UniformPicker() {
         uniformPackQueryOptions(namedPack),
     );
     // the uniform whose version the band wears (editing items adds versions, fork #1258)
-    const wornEntry = namedPack
-        ? packs?.find((p) => p.versions.includes(namedPack))
-        : undefined;
+    const wornEntry = namedPack ? uniformEntryOf(packs, namedPack) : undefined;
     // a uniform the show no longer has (an undo after Remove unused…), or one whose file
     // doesn't read: the band wears its preset, so the preset is the one picked
     const worn = wornPackProblem(

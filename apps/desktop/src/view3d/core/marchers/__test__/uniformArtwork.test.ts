@@ -21,6 +21,9 @@ import {
     itemDraw,
     itemPresets,
     itemSize,
+    itemSizeAdvice,
+    itemSizeRange,
+    sizeBySwitch,
     itemStrips,
     MAX_TILES_PER_REGION,
     tileLayout,
@@ -683,5 +686,62 @@ describe("placed items on the 7 body types", () => {
                 MAX_TILES_PER_REGION,
             );
         }
+    });
+
+    it("keeps a pinstripe's size through Size by and says what size works (#1287 hands-on)", () => {
+        // a 1024 × 1 px pinstripe, 6 in wide
+        const aspect = 1024;
+        const stripe = { width: 6 };
+        // its height would be 0.006 in: under the Size field's 0.25 in, so the switch is refused
+        const toHeight = sizeBySwitch(stripe, aspect, "height");
+        expect(toHeight.ok).toBe(false);
+        expect(toHeight.value).toBeCloseTo(6 / 1024, 9);
+        // a 4 × 2 logo goes there and back exactly, no rounding drift
+        const logo = { width: 6 };
+        const h = sizeBySwitch(logo, 2, "height");
+        expect(h).toEqual({ ok: true, value: 3 });
+        expect(sizeBySwitch({ height: h.value }, 2, "width")).toEqual({
+            ok: true,
+            value: 6,
+        });
+        const odd = sizeBySwitch({ width: 6 }, 3, "height");
+        expect(sizeBySwitch({ height: odd.value }, 3, "width").value).toBe(6);
+
+        // drawn, but 0.006 in thick: too thin to see, and it says which sizes show it
+        for (const grade of ["proportional", "line"] as const) {
+            const advice = itemSizeAdvice({ ...stripe, grade }, aspect);
+            expect(advice.state).toBe("tooThin");
+            if (advice.state === "ok") continue;
+            expect(advice.thickness).toBeCloseTo(6 / 1024, 9);
+            expect(advice.fix).toEqual({ kind: "range", lo: 32, hi: 120 });
+        }
+        expect(itemSizeAdvice({ width: 40 }, aspect)).toEqual({ state: "ok" });
+        // as a repeating print no size works: 1 in tall would be 1024 in wide
+        const tile = itemSizeAdvice({ ...stripe, grade: "tile" }, aspect);
+        expect(tile.state).toBe("notDrawn");
+        if (tile.state !== "ok")
+            expect(tile.fix).toEqual({ kind: "none", ratio: 1024 });
+        expect(itemSizeRange(aspect, "width", "tile")).toBeNull();
+        expect(itemSizeRange(aspect, "height", "tile")).toBeNull();
+        // a 100 × 1 stripe can repeat: 1 to 1.2 in tall makes copies 100 to 120 in wide
+        const wide = itemSizeAdvice({ height: 0.5, grade: "tile" }, 100);
+        expect(wide.state).toBe("notDrawn");
+        if (wide.state !== "ok") {
+            expect(wide.fix.kind).toBe("range");
+            if (wide.fix.kind === "range") {
+                expect(wide.fix.lo).toBe(1);
+                expect(wide.fix.hi).toBeCloseTo(1.2, 9);
+            }
+        }
+        // sized by its width at 1 in, it says to size it by its height instead
+        const byWidth = itemSizeAdvice({ width: 1, grade: "tile" }, 100);
+        if (byWidth.state !== "ok") {
+            expect(byWidth.fix.kind).toBe("range");
+            if (byWidth.fix.kind === "range") expect(byWidth.fix.lo).toBe(100);
+        }
+        // a 1 × 2048 pinstripe 120 in wide isn't drawn; sized by height it works up to 120 in
+        const tall = itemSizeAdvice({ width: 120 }, 1 / 2048);
+        expect(tall.state).toBe("notDrawn");
+        if (tall.state !== "ok") expect(tall.fix.kind).toBe("otherSide");
     });
 });

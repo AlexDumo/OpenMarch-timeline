@@ -135,3 +135,126 @@ export function sizeParts(bytes: number): {
     if (bytes >= KB) return { value: one(bytes / KB), unit: "kb" };
     return { value: String(bytes), unit: "bytes" };
 }
+
+/** One asset as the Assets view lists it: the version it shows, and its other versions */
+export interface AssetGroup {
+    /** The version in use, else the newest */
+    row: AssetUse;
+    /** Every other version, in the store's order */
+    others: AssetUse[];
+    /** Whether every other version is older than `row` */
+    allOlder: boolean;
+    /** The other versions' bytes, each blob once and none `row` holds */
+    othersBytes: number;
+}
+
+/**
+ * The Assets view's rows: one per asset, however many versions it has (editing a uniform's
+ * items adds versions, fork #1258), in the order each asset first appears. The row shows the
+ * version in use (the newest one in use, if several are), else the newest; the others are
+ * counted beside it, and Remove unused… still takes out the ones nothing names.
+ */
+export function groupAssetVersions(
+    rows: readonly AssetUse[],
+    sizes: ReadonlyMap<string, number>,
+): AssetGroup[] {
+    const byId = new Map<string, AssetUse[]>();
+    for (const row of rows) {
+        const list = byId.get(row.asset.id);
+        if (list) list.push(row);
+        else byId.set(row.asset.id, [row]);
+    }
+    return [...byId.values()].map((versions) => {
+        const used = versions.filter((v) => v.uses > 0);
+        const row = (used.length ? used : versions).at(-1)!;
+        const others = versions.filter((v) => v !== row);
+        const own = new Set(Object.values(row.asset.parts));
+        const blobs = new Set<string>();
+        for (const v of others)
+            for (const hash of Object.values(v.asset.parts))
+                if (!own.has(hash)) blobs.add(hash);
+        let othersBytes = 0;
+        for (const hash of blobs) othersBytes += sizes.get(hash) ?? 0;
+        return {
+            row,
+            others,
+            allOlder: others.every(
+                (v) => versions.indexOf(v) < versions.indexOf(row),
+            ),
+            othersBytes,
+        };
+    });
+}
+
+/** A line of Remove unused…: one asset's unused versions */
+export interface RemovableLine {
+    id: string;
+    name: string;
+    /** How many of its versions go */
+    count: number;
+    bytes: number;
+    /** Whether another version of it stays (in use or kept for undo) */
+    olderOnly: boolean;
+    /** With `olderOnly`: whether every version that goes was added before the one in use */
+    allOlder: boolean;
+}
+
+/**
+ * Remove unused…'s list, one line per asset (fork #1287): an item edit leaves versions of a
+ * uniform that look alike, so they are counted on one line, as older versions when a version of
+ * the same uniform stays.
+ */
+export function removableLines(
+    unused: readonly AssetUse[],
+    all: readonly AssetUse[],
+): RemovableLine[] {
+    const going = new Set(unused.map((row) => row.value));
+    const order = new Map(all.map((row, i) => [row.value, i]));
+    const lines = new Map<string, RemovableLine>();
+    for (const row of unused) {
+        const line = lines.get(row.asset.id);
+        if (line) {
+            line.count++;
+            line.bytes += row.bytes;
+            line.name = row.asset.name;
+        } else
+            lines.set(row.asset.id, {
+                id: row.asset.id,
+                name: row.asset.name,
+                count: 1,
+                bytes: row.bytes,
+                olderOnly: false,
+                allOlder: false,
+            });
+    }
+    for (const line of lines.values()) {
+        const versions = all.filter((r) => r.asset.id === line.id);
+        const staying = versions.filter((r) => !going.has(r.value));
+        line.olderOnly = staying.length > 0;
+        // older than the version in use, not just than one kept for undo
+        const inUse = staying.filter((r) => r.uses > 0);
+        const firstInUse = Math.min(
+            ...inUse.map((r) => order.get(r.value) ?? 0),
+        );
+        line.allOlder =
+            inUse.length > 0 &&
+            versions
+                .filter((r) => going.has(r.value))
+                .every((r) => (order.get(r.value) ?? 0) < firstInUse);
+    }
+    return [...lines.values()];
+}
+
+/**
+ * What Remove unused… counts, consistent with its grouped list: versions when any line is a
+ * group of versions, otherwise assets (one line each)
+ */
+export function removableCount(lines: readonly RemovableLine[]): {
+    count: number;
+    unit: "assets" | "versions";
+} {
+    const versions = lines.some((l) => l.olderOnly || l.count > 1);
+    return versions
+        ? { count: lines.reduce((n, l) => n + l.count, 0), unit: "versions" }
+        : { count: lines.length, unit: "assets" };
+}

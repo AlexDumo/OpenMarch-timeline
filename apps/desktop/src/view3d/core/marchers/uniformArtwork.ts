@@ -498,6 +498,109 @@ export function itemSize(
     return { w, h };
 }
 
+/** The smallest a size field takes, inches: a tile's 1 in, else a quarter inch */
+export const itemFieldMin = (grade: ItemGrade | undefined) =>
+    grade === "tile" ? ITEM_MIN_TILE_IN : 0.25;
+
+/** Under this, inches, an item's thinner side draws nothing visible (a pixel at 32 px/in) */
+export const ITEM_MIN_VISIBLE_IN = 1 / 32;
+
+/**
+ * The sizes the Size field can take for an image of `aspect` (width over height) sized by
+ * `sizeBy`, so the item is drawn and seen: within the field's own limits, its other side at most
+ * 120 in (and, for a tile, at least 1 in), and its thinner side at least
+ * {@link ITEM_MIN_VISIBLE_IN} (except a tile, whose copies are at least 1 in anyway). Null when
+ * no size works: the image is too long and thin for this grade.
+ */
+export function itemSizeRange(
+    aspect: number,
+    sizeBy: "width" | "height",
+    grade: ItemGrade | undefined,
+): { lo: number; hi: number } | null {
+    if (!(aspect > 0) || !Number.isFinite(aspect)) return null;
+    // the other side is `v * ratio`
+    const ratio = sizeBy === "width" ? 1 / aspect : aspect;
+    const tile = grade === "tile";
+    let lo = itemFieldMin(grade);
+    let hi = ITEM_MAX_IN;
+    hi = Math.min(hi, ITEM_MAX_IN / ratio);
+    lo = Math.max(lo, (tile ? ITEM_MIN_TILE_IN : ITEM_MIN_VISIBLE_IN) / ratio);
+    if (!tile) lo = Math.max(lo, ITEM_MIN_VISIBLE_IN);
+    return lo <= hi ? { lo, hi } : null;
+}
+
+/** What the item list says about an item's size, and how to fix it */
+export type ItemSizeAdvice =
+    | { state: "ok" }
+    | {
+          /** `notDrawn`: a side is out of range; `tooThin`: drawn, but too thin to see */
+          state: "notDrawn" | "tooThin";
+          /** Its thinner side, inches, for `tooThin` */
+          thickness: number;
+          fix:
+              | { kind: "range"; lo: number; hi: number }
+              | {
+                    kind: "otherSide";
+                    side: "width" | "height";
+                    lo: number;
+                    hi: number;
+                }
+              /** No size works: the image is `ratio` times longer than it is wide */
+              | { kind: "none"; ratio: number };
+      };
+
+/**
+ * Whether `item`, an image of `aspect`, is drawn and visible at its size, and if not, what size
+ * would be: a range for its Size field, the same by its other side, or none at all (a 1024 × 1
+ * line can't be a repeating print: copies 1 in tall would be 1024 in wide).
+ */
+export function itemSizeAdvice(
+    item: Pick<FlatsItem, "width" | "height" | "grade">,
+    aspect: number,
+): ItemSizeAdvice {
+    const box = itemSize(item, aspect);
+    const tile = item.grade === "tile";
+    const thickness = box ? Math.min(box.w, box.h) : 0;
+    const state: "ok" | "notDrawn" | "tooThin" = !box
+        ? "notDrawn"
+        : !tile && thickness < ITEM_MIN_VISIBLE_IN
+          ? "tooThin"
+          : "ok";
+    if (state === "ok") return { state };
+    const sizeBy = item.width !== undefined ? "width" : "height";
+    const other = sizeBy === "width" ? "height" : "width";
+    const own = itemSizeRange(aspect, sizeBy, item.grade);
+    const alt = itemSizeRange(aspect, other, item.grade);
+    return {
+        state,
+        thickness,
+        fix: own
+            ? { kind: "range", ...own }
+            : alt
+              ? { kind: "otherSide", side: other, ...alt }
+              : { kind: "none", ratio: Math.max(aspect, 1 / aspect) },
+    };
+}
+
+/**
+ * Switching an item's Size by keeps its size exactly: the new number is its other side's length,
+ * unrounded. Refused (`ok: false`) when that length is outside the Size field's limits.
+ */
+export function sizeBySwitch(
+    item: Pick<FlatsItem, "width" | "height" | "grade">,
+    aspect: number,
+    to: "width" | "height",
+): { ok: boolean; value: number } {
+    const from = item.width !== undefined ? "width" : "height";
+    const v = (from === "width" ? item.width : item.height) ?? 0;
+    const value = from === to ? v : to === "height" ? v / aspect : v * aspect;
+    const ok =
+        Number.isFinite(value) &&
+        value >= itemFieldMin(item.grade) &&
+        value <= ITEM_MAX_IN;
+    return { ok, value };
+}
+
 /** The largest side an item is drawn at, inches */
 export const ITEM_MAX_IN = 120;
 /** A tile item's region with more tiles than this isn't drawn */

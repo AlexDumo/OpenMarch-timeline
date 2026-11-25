@@ -24,13 +24,19 @@ import {
     UnitInput,
 } from "@openmarch/ui";
 import { touchSafeAccept } from "@/utilities/fileAccept";
-import { uniformPackQueryOptions } from "@/hooks/queries/useUniformPack";
+import {
+    keepSameUniform,
+    uniformPackQueryOptions,
+} from "@/hooks/queries/useUniformPack";
 import {
     flatsArtworkOf,
     isUniformPackValue,
+    ITEM_MAX_IN,
+    itemFieldMin,
     itemPresets,
-    itemSize,
+    itemSizeAdvice,
     regionUnder,
+    sizeBySwitch,
     type FlatsRegions,
     type ItemPreset,
 } from "@/view3d/core/marchers/uniformArtwork";
@@ -49,6 +55,7 @@ import { uniformArtworkAvailable } from "@/view3d/window/uniformArtworkPreview";
 import { loadFlatsGeometry } from "@/view3d/window/performers/marchers/flatsAtlas";
 import {
     editItems,
+    itemListState,
     itemsFor,
     newItemId,
     observeWorn,
@@ -68,6 +75,9 @@ const CUSTOM = "custom";
 const NEW_ITEM_IN = 6;
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
+/** A length for a note: two decimals, or three significant digits when smaller */
+const fmt = (v: number) =>
+    v >= 0.1 ? String(round2(v)) : String(Number(v.toPrecision(2)));
 
 /** The preset an item sits on, if any */
 const presetOf = (presets: ItemPreset[], item: UniformPackItem) =>
@@ -91,8 +101,13 @@ export function UniformItemsControls() {
 
     const worn = flatsArtworkOf(settings?.uniformArtwork);
     const wornPack = worn && isUniformPackValue(worn) ? worn : null;
-    const { data: pack } = useQuery(uniformPackQueryOptions(wornPack));
-    useEffect(() => observeWorn(wornPack), [wornPack, draft]);
+    // each save is a new version: keep the list while the band moves to it
+    const { data: pack, isPlaceholderData } = useQuery({
+        ...uniformPackQueryOptions(wornPack),
+        placeholderData: keepSameUniform(wornPack),
+    });
+    const loaded = !!pack && !isPlaceholderData;
+    useEffect(() => observeWorn(wornPack, loaded), [wornPack, loaded, draft]);
     useEffect(() => {
         let live = true;
         void loadFlatsGeometry().then(({ regions: r }) => {
@@ -105,7 +120,14 @@ export function UniformItemsControls() {
 
     if (!uniformArtworkAvailable() || !wornPack || !pack) return null;
     const stored = contentsOf(pack.manifest);
-    const items = itemsFor(draft, wornPack, stored);
+    // while the band's version loads, the stored items on screen are the version before's: shown,
+    // but not editable, unless a draft holds the real ones
+    const { items, editable } = itemListState(
+        draft,
+        wornPack,
+        stored.items,
+        isPlaceholderData,
+    );
     const presets = regions ? itemPresets(regions) : [];
     const full = items.length >= UNIFORM_PACK_MAX_ITEMS;
     /** An item image's width over height: a new one's bitmap, else its stored PNG's header */
@@ -119,7 +141,9 @@ export function UniformItemsControls() {
     const edit = (
         change: (items: UniformPackItem[]) => UniformPackItem[],
         options?: Parameters<typeof editItems>[3],
-    ) => editItems(wornPack, stored, change, options);
+    ) => {
+        if (editable) editItems(wornPack, stored, change, options);
+    };
     const update = (id: string, patch: Partial<UniformPackItem>) =>
         edit((list) =>
             list.map((item) =>
@@ -172,7 +196,7 @@ export function UniformItemsControls() {
                 <Button
                     variant="secondary"
                     size="compact"
-                    disabled={busy}
+                    disabled={busy || !editable}
                     aria-disabled={full || undefined}
                     tooltipText={
                         full
@@ -199,9 +223,13 @@ export function UniformItemsControls() {
                         ? t("view3d.uniformItems.adding")
                         : t("view3d.uniformItems.add")}
                 </Button>
-                {saving && (
+                {(saving || !editable) && (
                     <span className="text-sub text-text/60" role="status">
-                        {t("view3d.uniformItems.saving")}
+                        {t(
+                            saving
+                                ? "view3d.uniformItems.saving"
+                                : "view3d.uniformItems.loading",
+                        )}
                     </span>
                 )}
                 <input
@@ -222,24 +250,34 @@ export function UniformItemsControls() {
                     {t("view3d.uniformItems.hint")}
                 </p>
             ) : (
-                <ul className="flex flex-col gap-8">
-                    {items.map((item) => (
-                        <ItemRow
-                            key={item.id}
-                            item={item}
-                            aspect={aspectOf(item.file)}
-                            presets={presets}
-                            onChange={(patch) => update(item.id, patch)}
-                            onRemove={() =>
-                                edit(
-                                    (list) =>
-                                        list.filter((i) => i.id !== item.id),
-                                    { now: true },
-                                )
-                            }
-                        />
-                    ))}
-                </ul>
+                // read only while the band's version loads (see `itemListState`)
+                <fieldset
+                    disabled={!editable}
+                    aria-busy={!editable || undefined}
+                    className="contents"
+                    data-testid="view3d-uniform-item-list"
+                >
+                    <ul className="flex flex-col gap-8">
+                        {items.map((item) => (
+                            <ItemRow
+                                key={item.id}
+                                item={item}
+                                aspect={aspectOf(item.file)}
+                                presets={presets}
+                                onChange={(patch) => update(item.id, patch)}
+                                onRemove={() =>
+                                    edit(
+                                        (list) =>
+                                            list.filter(
+                                                (i) => i.id !== item.id,
+                                            ),
+                                        { now: true },
+                                    )
+                                }
+                            />
+                        ))}
+                    </ul>
+                </fieldset>
             )}
             {failed && (
                 <p className="text-sub text-red" role="alert">
@@ -311,9 +349,25 @@ function ItemRow({
     const size = item[sizeBy] ?? NEW_ITEM_IN;
     const grade = item.grade ?? "proportional";
     const change = onChange;
-    // its box on the median body; null when the image's shape makes a side too long (or, for a
-    // tile, too short) to draw
-    const box = aspect === null ? undefined : itemSize(item, aspect);
+    /** The Size by choice last refused; its reason shows while it's still refused */
+    const [refusedBy, setRefusedBy] = useState<"width" | "height" | null>(null);
+    const sizeByReason = (value: number) =>
+        t("view3d.uniformItems.sizeByRefused", {
+            value: fmt(value),
+            min: itemFieldMin(grade),
+            max: ITEM_MAX_IN,
+        });
+    // clears itself once the item's size makes that choice valid
+    const stillRefused =
+        refusedBy && aspect !== null && refusedBy !== sizeBy
+            ? sizeBySwitch(item, aspect, refusedBy)
+            : null;
+    const refusal =
+        stillRefused && !stillRefused.ok
+            ? sizeByReason(stillRefused.value)
+            : null;
+    // drawn and visible at its size? If not, what size would be (`itemSizeAdvice`)
+    const advice = aspect === null ? null : itemSizeAdvice(item, aspect);
 
     return (
         <li
@@ -412,14 +466,26 @@ function ItemRow({
                             value={sizeBy}
                             onValueChange={(value) => {
                                 const by = value as "width" | "height";
-                                if (by === sizeBy) return;
-                                // the item keeps its box: the other side's length becomes the number
-                                const other = box
-                                    ? round2(by === "width" ? box.w : box.h)
-                                    : size;
+                                if (by === sizeBy || aspect === null) {
+                                    // any choice answers the last refusal
+                                    setRefusedBy(null);
+                                    return;
+                                }
+                                // the item keeps its size exactly: its other side's length
+                                const next = sizeBySwitch(item, aspect, by);
+                                // unavailable: say why, where a click or a tap lands
+                                if (!next.ok) {
+                                    setRefusedBy(by);
+                                    return;
+                                }
+                                setRefusedBy(null);
                                 onChange({
-                                    width: by === "width" ? other : undefined,
-                                    height: by === "height" ? other : undefined,
+                                    width:
+                                        by === "width" ? next.value : undefined,
+                                    height:
+                                        by === "height"
+                                            ? next.value
+                                            : undefined,
                                 });
                             }}
                         >
@@ -428,12 +494,34 @@ function ItemRow({
                                 label={t(`view3d.uniformItems.${sizeBy}`)}
                             />
                             <SelectContent>
-                                <SelectItem value="width">
-                                    {t("view3d.uniformItems.width")}
-                                </SelectItem>
-                                <SelectItem value="height">
-                                    {t("view3d.uniformItems.height")}
-                                </SelectItem>
+                                {(["width", "height"] as const).map((by) => {
+                                    const next =
+                                        aspect === null || by === sizeBy
+                                            ? null
+                                            : sizeBySwitch(item, aspect, by);
+                                    const refused = next !== null && !next.ok;
+                                    return (
+                                        <SelectItem
+                                            key={by}
+                                            value={by}
+                                            // not `disabled`: that swallows the pointer, and the
+                                            // reason must show on hover and when tapped
+                                            aria-disabled={refused || undefined}
+                                            className={
+                                                refused
+                                                    ? "cursor-not-allowed opacity-50"
+                                                    : undefined
+                                            }
+                                            title={
+                                                refused
+                                                    ? sizeByReason(next.value)
+                                                    : undefined
+                                            }
+                                        >
+                                            {t(`view3d.uniformItems.${by}`)}
+                                        </SelectItem>
+                                    );
+                                })}
                             </SelectContent>
                         </Select>
                     )}
@@ -442,11 +530,14 @@ function ItemRow({
                     label={t("view3d.uniformItems.size")}
                     unit="in"
                     value={size}
-                    min={grade === "tile" ? ITEM_MIN_TILE_IN : 0.25}
-                    max={120}
+                    min={itemFieldMin(grade)}
+                    max={ITEM_MAX_IN}
                     step={0.25}
                     testId="view3d-uniform-item-size"
-                    onValue={(v) => change({ [sizeBy]: v })}
+                    onValue={(v) => {
+                        setRefusedBy(null);
+                        change({ [sizeBy]: v });
+                    }}
                 />
                 <NumberField
                     label={t("view3d.uniformItems.rotate")}
@@ -482,17 +573,52 @@ function ItemRow({
                 </Field>
             </div>
             {grade === "tile" && <TileRegions item={item} onChange={change} />}
-            {box === null && (
+            {/* always mounted, so a screen reader announces the text when it appears */}
+            <p
+                className={refusal ? "text-sub text-text/60" : "sr-only"}
+                role="status"
+                data-testid="view3d-uniform-item-size-by-refused"
+            >
+                {refusal ?? ""}
+            </p>
+            {advice && advice.state !== "ok" && (
                 <p
                     className="text-sub text-yellow"
                     role="status"
                     data-testid="view3d-uniform-item-not-drawn"
                 >
-                    {t(
-                        grade === "tile"
-                            ? "view3d.uniformItems.notDrawnTile"
-                            : "view3d.uniformItems.notDrawn",
-                    )}
+                    {[
+                        advice.state === "tooThin"
+                            ? t("view3d.uniformItems.tooThin", {
+                                  thickness: fmt(advice.thickness),
+                              })
+                            : t(
+                                  grade === "tile"
+                                      ? "view3d.uniformItems.notDrawnTile"
+                                      : "view3d.uniformItems.notDrawn",
+                              ),
+                        advice.fix.kind === "range"
+                            ? t("view3d.uniformItems.fixRange", {
+                                  lo: fmt(advice.fix.lo),
+                                  hi: fmt(advice.fix.hi),
+                              })
+                            : advice.fix.kind === "otherSide"
+                              ? t(
+                                    advice.fix.side === "width"
+                                        ? "view3d.uniformItems.fixByWidth"
+                                        : "view3d.uniformItems.fixByHeight",
+                                    {
+                                        lo: fmt(advice.fix.lo),
+                                        hi: fmt(advice.fix.hi),
+                                    },
+                                )
+                              : t(
+                                    grade === "tile"
+                                        ? "view3d.uniformItems.noSizeTile"
+                                        : "view3d.uniformItems.noSize",
+                                    { ratio: Math.round(advice.fix.ratio) },
+                                ),
+                    ].join(" ")}
                 </p>
             )}
         </li>
@@ -540,11 +666,13 @@ function TileRegions({
                 label={t("view3d.uniformItems.repeatOver")}
                 testId="view3d-uniform-item-regions"
             />
-            {refused && (
-                <span className="text-sub text-text/60" role="status">
-                    {needsOne}
-                </span>
-            )}
+            {/* always mounted, so a screen reader announces the text when it appears */}
+            <span
+                className={refused ? "text-sub text-text/60" : "sr-only"}
+                role="status"
+            >
+                {refused ? needsOne : ""}
+            </span>
         </div>
     );
 }
