@@ -8,6 +8,7 @@ import {
     shapeBackedTransitionIds,
     shiftSlotDestinations,
     type SlotShift,
+    type TimelineAfterWrite,
     type TimelineEditTarget,
     type TimelineMarcherMove,
     type TimelineMoveResult,
@@ -328,11 +329,8 @@ export async function moveMarchersAndOfferFollowUp({
      * them out (a copy of a shape without them would drop them from it)
      */
     setAll?: boolean;
-    /** App data written in the same edit (`moveMarchersInTarget`) */
-    afterWrite?: (
-        tx: DbTransaction,
-        timelineId: number | null,
-    ) => Promise<void | boolean>;
+    /** App data written in the same edit (`moveMarchersInTarget`), once per move written */
+    afterWrite?: TimelineAfterWrite;
     /**
      * The edit saves shape recipes itself (the Shape tool's Place, filling a box), so placed
      * boxes aren't kept up to date around it
@@ -365,11 +363,15 @@ export async function moveMarchersAndOfferFollowUp({
         keepLaterPages,
         keepUnchanged,
         afterWrite: membership
-            ? async (tx, timelineId) => {
+            ? async (tx, timelineId, written) => {
                   const own = afterWrite
-                      ? (await afterWrite(tx, timelineId)) !== false
+                      ? (await afterWrite(tx, timelineId, written)) !== false
                       : false;
-                  const boxes = await membership.afterWrite(tx, timelineId);
+                  const boxes = await membership.afterWrite(
+                      tx,
+                      timelineId,
+                      written,
+                  );
                   return own || boxes;
               }
             : afterWrite,

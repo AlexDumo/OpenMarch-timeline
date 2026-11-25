@@ -51,7 +51,7 @@ const HOLD_BAR_ATTRIBUTE = "data-timeline-hold-bar";
 /**
  * The selection's holds (holds README decisions 10 and 11; fork #472, #477), at exact counts on
  * the page row's bottom edge, where the keyframe diamonds are: **Held** solid, **Not defined**
- * lighter and dashed, a shape carried on solid (it is the shape's hold), Held dashed where some of
+ * lighter and dashed, Held dashed where some of
  * the selection is Not defined over the same counts, and a tick at each
  * **departure**, where the next move takes over. At rest each is a thin, quiet line. A bar an edit
  * would carry into is lit: it grows thicker, in the accent, during a field drag and while
@@ -96,7 +96,7 @@ export const TimelineHoldBars = memo(function TimelineHoldBars({
     // element and its line grows or shrinks in place
     const keys = new Set<string>();
     const keyOf = (bar: SelectionHoldBar) => {
-        const key = `${bar.kind}:${bar.start}:${bar.end}:${bar.shape}`;
+        const key = `${bar.kind}:${bar.start}:${bar.end}`;
         if (!keys.has(key)) {
             keys.add(key);
             return key;
@@ -173,7 +173,7 @@ function sweepThenPulse(fill: HTMLElement, line: HTMLElement) {
 }
 
 /**
- * One bar: solid (Held, or a shape carried on) or dashed (Not defined), lit or not. A Held bar
+ * One bar: solid (Held) or dashed (Not defined), lit or not. A Held bar
  * draws dashed, in its own color, over `mixed` (`notDefinedOver`): where some of the selection is
  * Not defined over the same counts, the stretch mustn't read as solid.
  *
@@ -235,7 +235,6 @@ function HoldBar({
             {...{ [HOLD_BAR_ATTRIBUTE]: "" }}
             data-testid={`timeline-${solid ? "held" : "not-defined"}-bar-${bar.start}-${bar.end}`}
             data-held={solid ? bar.marcherIds.length : undefined}
-            data-shape={bar.shape || undefined}
             data-lit={bar.lit}
             data-preview={bar.preview || undefined}
             data-mixed={mixed.length > 0 || undefined}
@@ -360,7 +359,7 @@ function holdBarLabel(
     const { first, last } = barPages(bar, pages);
     const held = bar.kind === "held";
     const params = { ...holdTerms(), page: last, first, last };
-    let title = held
+    const title = held
         ? first === last
             ? tolgee.t("timeline.heldBar.title", "{held} · Page {page}", params)
             : tolgee.t(
@@ -379,18 +378,6 @@ function holdBarLabel(
                 "{notDefined} · Pages {first}–{last}",
                 params,
             );
-    if (bar.shape)
-        title = tolgee.t(
-            "timeline.heldBar.titleWithDetail",
-            "{title}. {detail}",
-            {
-                title,
-                detail: tolgee.t(
-                    "timeline.heldBar.shape",
-                    "Its shape carries on here",
-                ),
-            },
-        );
     if (bar.total === 1) return title;
     return tolgee.t("timeline.heldBar.titleWithDetail", "{title}. {detail}", {
         title,

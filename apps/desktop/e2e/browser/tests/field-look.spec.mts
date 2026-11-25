@@ -14,8 +14,8 @@ import { seedShowSql } from "../seed.mjs";
 import { isolate } from "../timeline.mjs";
 
 // The field look (#478, holds decisions 8 and 9): a marcher draws solid whenever
-// its position is decided (walking in a move, arriving, Held, or in a carried
-// shape) and dashed only when Not defined. Its label is bold only on a keyframe,
+// its position is decided (walking in a move, arriving, or Held) and dashed only
+// when Not defined. Its label is bold only on a keyframe,
 // the count where a coordinate of its own is set (a move of its own ends there,
 // moved or not, #468).
 //

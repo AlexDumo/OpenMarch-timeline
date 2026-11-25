@@ -10,7 +10,7 @@ import type { DbTransaction } from "./types";
 import type { DatabaseTimelineAssignment } from "./timelineAssignments";
 import { removeAssignmentRowsInTransaction } from "./timelineMembership";
 import { deleteTimelinesInTransaction, oldestOnSharedRange } from "./timelines";
-import { dropUngroupedLeavers } from "./shapeRecipes";
+import { dropRecipeLeavers } from "./shapeRecipes";
 
 /**
  * Two helpers the move writers share (`timelineMoves`, `timelinePointMoves`, `timelineUnset` and
@@ -66,19 +66,19 @@ export const sampleShape = (
  * a transition sharing a marcher with an inheriting follow-the-leader one, stays (`compact`).
  *
  * An emptied page timeline that a move split off it still shares the range with is kept, empty
- * (UI-25, `oldestOnSharedRange`). Ungrouped marks on the moves let go of `dropUngrouped`, the
- * marchers the edit clears off them (`dropUngroupedLeavers`).
+ * (UI-25, `oldestOnSharedRange`). The moves' recipes, shapes and ungrouped marks, let go of
+ * `dropLeavers`, the marchers the edit clears off them (`dropRecipeLeavers`).
  */
 export const clearOwnPageMoves = async (
     tx: DbTransaction,
     rows: readonly DatabaseTimelineAssignment[],
     {
         tidyShared = false,
-        dropUngrouped = [],
+        dropLeavers = [],
     }: {
         tidyShared?: boolean;
-        /** The marchers cleared off these moves, who leave the moves' ungrouped marks */
-        dropUngrouped?: readonly number[];
+        /** The marchers cleared off these moves, who leave the moves' recipes (`dropRecipeLeavers`) */
+        dropLeavers?: readonly number[];
     } = {},
 ): Promise<void> => {
     if (rows.length === 0) return;
@@ -101,8 +101,8 @@ export const clearOwnPageMoves = async (
         compact: tidyShared,
         deleteEmptied: tidyShared,
     });
-    // An Ungroup on a page they're cleared off no longer claims them (`dropUngroupedLeavers`)
-    await dropUngroupedLeavers(tx, timelineIds, dropUngrouped);
+    // A shape or an Ungroup on a page they're cleared off no longer claims them
+    await dropRecipeLeavers(tx, timelineIds, dropLeavers);
     const left = new Set(
         (
             await tx

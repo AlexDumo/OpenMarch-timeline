@@ -786,7 +786,7 @@ describeDbTests("Clear this page on a converted show (holds 4, #469)", (it) => {
         expect(everyBeat(last)).toEqual(before);
     });
 
-    it("skips and names a shape member, and clears the others", async ({
+    it("clears a placed shape's member like the others, leaving the shape with holes (owner, 2026-11-15)", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -815,7 +815,7 @@ describeDbTests("Clear this page on a converted show (holds 4, #469)", (it) => {
             }),
         );
 
-        const { result, writeTimeline, notify } = await runTimeline(db, {
+        const { result, writeTimeline } = await runTimeline(db, {
             page,
             pages,
             direction: "previous",
@@ -823,21 +823,19 @@ describeDbTests("Clear this page on a converted show (holds 4, #469)", (it) => {
             selected: [shapeMember!, other!],
         });
 
-        expect(result).toBe(1);
-        // Counts only the marcher it cleared; one quiet message names the one it skipped
-        expect(notify.success).not.toHaveBeenCalled();
-        expect(notify.note).toHaveBeenCalledExactlyOnceWith(
-            expect.stringMatching(/is in a shape, so it keeps its move here/),
-        );
+        expect(result).toBe(2);
         const written = (await writeTimeline.mock.results[0]!
             .value) as TimelineMoveResult;
-        expect(written.cleared).toEqual([other]);
-        expect(written.skipped!.refusal).toBe("inShapeOrFollowTheLeader");
-        expect(written.skipped!.marcherIds).toEqual([shapeMember]);
-        expect(written.skipped!.message).toMatch(
-            /^\S+ is in a shape, so it keeps its move here\.$/,
+        expect(written.cleared).toEqual(
+            [shapeMember, other].sort((x, y) => x! - y!),
         );
-        expect(await rowsOverPage(db, page, [other!])).toEqual([]);
-        expect(await rowsOverPage(db, page, [shapeMember!])).toHaveLength(1);
+        expect(written.skipped).toBeUndefined();
+        expect(await rowsOverPage(db, page, [shapeMember!, other!])).toEqual(
+            [],
+        );
+        // Its only member cleared off the page, the shape went with it
+        expect(
+            await db.select().from(schema.timeline_shape_recipes).all(),
+        ).toEqual([]);
     });
 });

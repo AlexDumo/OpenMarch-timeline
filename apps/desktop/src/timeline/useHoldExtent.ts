@@ -17,6 +17,7 @@ import { useHoldEdgeDragStore } from "./holdEdgeDragStore";
 import { toastTimelineError } from "./timelineErrorMessages";
 import { refreshHeldMarks, useHeldMarksStore } from "./useHeldMarks";
 import { resolverSpans, useTimelineResolverStore } from "./timelineStore";
+import { useAddToSelection } from "./useAddToSelection";
 
 /**
  * **Shaping a hold** as the timeline runs it (fork #475): the draggable ends of the selected
@@ -62,6 +63,8 @@ export function useHoldExtentCommands(
     splitHold: TimelineSplitHoldMenu | undefined;
 } {
     const marks = useHeldMarksStore((s) => s.marks);
+    // The rest of a shape changed with them joins the selection (a shape is Held whole)
+    const selectAlso = useAddToSelection();
     const resolver = useTimelineResolverStore((s) => s.resolver);
     const version = useTimelineResolverStore((s) => s.version);
     const showEnd = useTimelineSelectionStore((s) =>
@@ -83,7 +86,11 @@ export function useHoldExtentCommands(
             commit: async (drag) => {
                 useHoldEdgeDragStore.setState({ drag });
                 try {
-                    await setHoldEdge({ db, ...drag });
+                    const { alsoChanged } = await setHoldEdge({
+                        db,
+                        ...drag,
+                    });
+                    if (alsoChanged) selectAlso(alsoChanged);
                     // Drawn where it was dropped until the marks it wrote are read
                     await refreshHeldMarks(db);
                 } catch (error) {
@@ -100,7 +107,7 @@ export function useHoldExtentCommands(
                 }
             },
         };
-    }, [enabled, resolver, version, marcherIds, marks, showEnd]);
+    }, [enabled, resolver, version, marcherIds, marks, showEnd, selectAlso]);
     const splitHold = useMemo<TimelineSplitHoldMenu | undefined>(() => {
         if (!enabled || marcherIds.length === 0) return undefined;
         const selected = new Set(marcherIds);
@@ -110,17 +117,21 @@ export function useHoldExtentCommands(
             offeredAt: (beat) =>
                 Number.isInteger(beat) && splitsAnyHold(own, beat),
             onSplit: (beat) => {
-                void splitHoldAt({ db, marcherIds, beat }).catch((error) =>
-                    toastTimelineError(
-                        error,
-                        tolgee.t(
-                            "timeline.holdEdge.splitError",
-                            "Couldn't split the hold",
+                void splitHoldAt({ db, marcherIds, beat })
+                    .then(({ alsoSplit }) => {
+                        if (alsoSplit) selectAlso(alsoSplit);
+                    })
+                    .catch((error) =>
+                        toastTimelineError(
+                            error,
+                            tolgee.t(
+                                "timeline.holdEdge.splitError",
+                                "Couldn't split the hold",
+                            ),
                         ),
-                    ),
-                );
+                    );
             },
         };
-    }, [enabled, marcherIds, marks]);
+    }, [enabled, marcherIds, marks, selectAlso]);
     return { holdEdges, splitHold };
 }

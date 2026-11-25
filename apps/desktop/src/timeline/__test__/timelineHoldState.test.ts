@@ -124,58 +124,29 @@ describe("withHoldKind (#478)", () => {
     } as const;
     const since2 = { page: { beat: 9, name: "2" }, fromStart: false };
 
-    it("names a hold Held over a carried shape, and Not defined otherwise", () => {
-        expect(
-            withHoldKind(holding, { held: since2, carried: since2 }),
-        ).toMatchObject({ how: "held" });
-        expect(
-            withHoldKind(holding, { held: null, carried: since2 }),
-        ).toMatchObject({ how: "carried" });
-        expect(
-            withHoldKind(holding, { held: null, carried: null }),
-        ).toMatchObject({ how: "notDefined" });
+    it("names a hold Held over a Held mark, and Not defined otherwise", () => {
+        expect(withHoldKind(holding, { held: since2 })).toMatchObject({
+            how: "held",
+        });
+        expect(withHoldKind(holding, { held: null })).toMatchObject({
+            how: "notDefined",
+        });
     });
 
     it("leaves a move on the page, or no state, as it is", () => {
         const moves = { kind: "movesHere" } as const;
-        expect(withHoldKind(moves, { held: since2, carried: null })).toBe(
-            moves,
-        );
-        expect(withHoldKind(null, { held: since2, carried: null })).toBeNull();
+        expect(withHoldKind(moves, { held: since2 })).toBe(moves);
+        expect(withHoldKind(null, { held: since2 })).toBeNull();
     });
 
     it("shares the page but not the state when the selection's kinds differ", () => {
-        const held = withHoldKind(holding, { held: since2, carried: null });
-        const notDefined = withHoldKind(holding, {
-            held: null,
-            carried: null,
-        });
+        const held = withHoldKind(holding, { held: since2 });
+        const notDefined = withHoldKind(holding, { held: null });
         expect(sharedHoldState([held, notDefined])).toEqual(holding);
         expect(sharedHoldState([held, held])).toEqual(held);
     });
 
-    it("names a carried hold by the page its shape was placed on, not the last arrival", () => {
-        // Arrived on page 2; the shape around it was placed (laid out again) on page 3
-        const since3 = { page: { beat: 17, name: "3" }, fromStart: false };
-        expect(withHoldKind(holding, { held: null, carried: since3 })).toEqual({
-            kind: "holding",
-            page: { beat: 17, name: "3" },
-            fromStart: false,
-            how: "carried",
-        });
-    });
-
-    it("shares Held between Held and carried marchers on the same page, and nothing with Not defined", () => {
-        const held = withHoldKind(holding, { held: since2, carried: null });
-        const carried = withHoldKind(holding, { held: null, carried: since2 });
-        const notDefined = withHoldKind(holding, {
-            held: null,
-            carried: null,
-        });
-        expect(sharedHoldState([carried, held])).toEqual(carried);
-        expect(sharedHoldState([held, carried])).toEqual(held);
-        expect(sharedHoldState([carried, notDefined])).toEqual(holding);
-        expect(readsHeld("carried")).toBe(true);
+    it("reads Held only over a Held mark", () => {
         expect(readsHeld("held")).toBe(true);
         expect(readsHeld("notDefined")).toBe(false);
         expect(readsHeld(undefined)).toBe(false);
@@ -189,12 +160,7 @@ describe("withHoldKind (#478)", () => {
             { beat: 25, name: "4" },
         ];
         // Arrived on page 2; page 3 Not defined; Hold from last keyframe on page 4: (17, 25]
-        expect(
-            withHoldKind(holding, {
-                held: heldSince(17, flags),
-                carried: null,
-            }),
-        ).toEqual({
+        expect(withHoldKind(holding, { held: heldSince(17, flags) })).toEqual({
             kind: "holding",
             page: { beat: 17, name: "3" },
             fromStart: false,

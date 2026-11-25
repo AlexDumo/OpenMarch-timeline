@@ -48,7 +48,7 @@ export type FieldTestMarcher = {
     labelShown: boolean;
     /**
      * Drawn Not defined (a dashed edge) because nothing decides its position on the count shown:
-     * no move it's walking or arriving in, no Held hold, no shape carried there (#478, holds
+     * no move it's walking or arriving in, no Held hold (#478, holds
      * decisions 8 and 9). Reports the drawn look: false while playing, and false when dimmed,
      * which takes over. A Not defined marcher can still be selected.
      */

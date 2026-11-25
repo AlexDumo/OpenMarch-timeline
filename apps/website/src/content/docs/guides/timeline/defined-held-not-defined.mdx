@@ -36,7 +36,7 @@ On every page, each marcher is <Ui k="timeline.terms.defined" />, <Ui k="timelin
 
 - <Ui k="timeline.terms.defined" />: you've set the marcher's position on this page, with a <Term id="keyframe">keyframe</Term>: a move of its own ends on this page, at the page's flag or at a count partway through it. It reaches that spot at that count, wherever it was before. Changing an earlier page changes how it gets here, not where it ends up.
 - <Ui k="timeline.terms.notDefined" />: nothing has been decided for the marcher on this page. It stands where it last was, and when you change that earlier position, it moves here too. Every marcher on a new page is Not defined, and so is every marcher you add: they stand where the last set left them.
-- <Ui k="timeline.terms.held" />: you've chosen to keep the marcher still, with a hold. A hold grows out of whatever last put the marcher there: the keyframe where it last arrived, or its starting spot if it hasn't moved since the start of the show. Like a Not defined marcher, it follows changes to that keyframe. The difference is what a drag does: see [Drag marchers that are Held](#drag-marchers-that-are-held). A placed shape holds its marchers the same way: on the pages after it, they're Held for as long as every one of them stays on its spot, with no hold of their own.
+- <Ui k="timeline.terms.held" />: you've chosen to keep the marcher still, with a hold. A hold grows out of whatever last put the marcher there: the keyframe where it last arrived, or its starting spot if it hasn't moved since the start of the show. Like a Not defined marcher, it follows changes to that keyframe. The difference is what a drag does: see [Drag marchers that are Held](#drag-marchers-that-are-held). A shape shown on later pages doesn't hold its marchers by itself: until you hold it, those pages are Not defined.
 
 Use Held when the marcher's standing still is part of the drill and should stay that way. Use Not defined, the default, for marchers you haven't got to yet. [Make marchers stand still](/guides/timeline/holds/) shows how to hold them, and [Reset or lock marchers on a page](/guides/timeline/reset-marchers/) how to make them Defined or Not defined by hand.
 
@@ -45,7 +45,7 @@ Use Held when the marcher's standing still is part of the drill and should stay 
 Select marchers, and the timeline marks their states along the bottom edge of the page row, as in the picture above:
 
 - A diamond marks each count where they have a keyframe. It's filled when every selected marcher has one there, and hollow when only some do.
-- A thin line runs from a keyframe over the counts where they stand still: solid where they're Held, dashed where they're Not defined. Where some are Held and some Not defined over the same counts, it's dashed. A shape carried onto later pages draws a solid line too.
+- A thin line runs from a keyframe over the counts where they stand still: solid where they're Held, dashed where they're Not defined. Where some are Held and some Not defined over the same counts, it's dashed.
 - A short upright tick marks where they move again.
 
 On the field, a marcher is drawn with a dashed outline where it's Not defined at the playhead, and solid otherwise. A marcher's label is bold at its keyframes and lighter between them.

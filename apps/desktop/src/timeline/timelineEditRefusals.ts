@@ -41,6 +41,16 @@ export const CANVAS_EDIT_REFUSALS = {
         defaultMessage:
             "Some of these marchers are in a shape or follow the leader, so they keep their move here.",
     },
+    /**
+     * A shape is Held whole or not at all: placing or changing one whose marchers are Held here
+     * and not Held, or Held from different moves, would split it across those moves
+     * (`oneMoveForShape`)
+     */
+    shapePartlyHeld: {
+        key: "timeline.edit.shapePartlyHeld",
+        defaultMessage:
+            "Some of these marchers are Held here and some aren't. Hold all of them here, or none, to place or change a shape.",
+    },
 } as const;
 
 export type CanvasEditRefusal = keyof typeof CANVAS_EDIT_REFUSALS;

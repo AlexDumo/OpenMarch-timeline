@@ -37,9 +37,12 @@ const UNGROUPED_RECIPE = {
  * - On the shape's own page (or an edit window reaching back over its move), its recipe becomes
  *   an ungrouped mark (`UNGROUPED_KIND`) in place, so no earlier shape over the same spots shows
  *   again there (a later page's own copy of a page's box), and later pages that held it follow.
- * - On a later page it's only carried onto, the change is that page's: its members are set there,
+ * - On a later page it's only shown on, the change is that page's: its members are set there,
  *   as an edit that moves no one sets them, and an ungrouped mark on that move ends the shape from
  *   there on. Earlier pages keep it, and later pages holding the form follow.
+ * - On a later page where it's Held, the members' edits go to the move the hold grows out of, as
+ *   any edit inside a hold does (owner, 2026-11-15): the ungrouped mark lands there, so the shape
+ *   ends over the whole hold. Partly Held, it's refused (`oneMoveForShape`).
  *
  * Where no edit can be made (past the last page in Basic, the timeline not ready) it's refused as
  * an edit is. Isolating a move, a shape from another move is refused too: the isolated move

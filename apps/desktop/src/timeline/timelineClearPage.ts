@@ -12,11 +12,8 @@ import { samePosition } from "@/db-functions/timelineMoves";
 import {
     useTimelineSelectionStore,
     type PageBox,
-    type StoredTimelineMembership,
 } from "@/stores/TimelineSelectionStore";
 import type { HeldMark } from "@/db-functions/timelineHeldMarks";
-import { usePlacedBoxStore } from "@/shapes/placed/placedBoxStore";
-import { isOrderMarkKind } from "@/db-functions/shapeRecipes";
 import { useHeldMarksStore } from "./useHeldMarks";
 import { getTimelineHost } from "./timelineStore";
 import { pageEndBeat } from "./timelineCanvas";
@@ -56,14 +53,6 @@ export interface ClearPageSkips {
     readonly held?: readonly HeldMark[];
     /** The resolver's transitions, for follow-the-leader and shape-backed rows */
     readonly transitions?: Readonly<Record<number, TransitionRow>>;
-    /** The shape recipes and their members (`usePlacedBoxStore`) */
-    readonly recipes?: readonly {
-        readonly kind?: string;
-        readonly timelineId: number | null;
-        readonly members: readonly { readonly marcherId: number }[];
-    }[];
-    /** The stored moves and who is in them (`storedTimelines`), to place the recipes */
-    readonly timelines?: readonly StoredTimelineMembership[] | null;
 }
 
 /** `ClearPageSkips` from the stores as they are now. */
@@ -71,37 +60,15 @@ export function clearPageSkipsNow(): ClearPageSkips {
     return {
         held: useHeldMarksStore.getState().marks,
         transitions: getTimelineHost()?.snapshot.transitions,
-        recipes: usePlacedBoxStore.getState().recipes,
-        timelines: useTimelineSelectionStore.getState().storedTimelines,
     };
 }
-
-/** Whether `marcherId` is in a shape recipe of a move that `over` says yes to. */
-const inShapeOf = (
-    skips: ClearPageSkips,
-    marcherId: number,
-    over: (move: StoredTimelineMembership) => boolean,
-): boolean =>
-    (skips.recipes ?? []).some(
-        (r) =>
-            r.timelineId !== null &&
-            // An order set by hand (pathways step 4g) is no shape: the clear doesn't leave its marchers
-            !(r.kind !== undefined && isOrderMarkKind(r.kind)) &&
-            r.members.some((m) => m.marcherId === marcherId) &&
-            (skips.timelines ?? []).some(
-                (t) =>
-                    t.id === r.timelineId &&
-                    t.marcherIds.has(marcherId) &&
-                    over(t),
-            ),
-    );
 
 /**
  * The later pages that would follow back if `marcherIds` were cleared from the page box `box`
  * instead of keeping them (plain **Clear Page N**), in page order, or null when following back
  * would change nothing. A marcher counts when the clear takes it out of the page and moves it
  * (it has a move of its own over the page that leaves it somewhere else than where the page
- * starts, and isn't a shape or follow-the-leader member, whom the clear leaves), and plain Clear
+ * starts, and isn't a follow-the-leader member, whom the clear leaves), and plain Clear
  * would keep the next page for it (`keepNextPageInTransaction`):
  *
  * - the run of boxes it follows into with no move of its own (`followingPages`), or
@@ -150,11 +117,6 @@ export function clearFollowingPages({
         return (
             own.length > 0 &&
             !own.some((s) => transitionOf(s)?.style === "follow_the_leader") &&
-            !inShapeOf(
-                skips,
-                id,
-                (t) => t.start < box.end && t.end > box.start,
-            ) &&
             !samePosition(
                 resolver.positionAt(id, box.end),
                 resolver.positionAt(id, box.start),
@@ -178,8 +140,7 @@ export function clearFollowingPages({
             // clearing the page doesn't change it
             !spans.some((s) => s.end > box.end && s.end <= across[0]!.start) &&
             transitionOf(across[0]!)?.style !== "follow_the_leader" &&
-            (transitionOf(across[0]!)?.dest ?? null) === null &&
-            !inShapeOf(skips, id, (t) => t.start < flag && t.end > flag)
+            (transitionOf(across[0]!)?.dest ?? null) === null
         );
     });
     return cut ? [next.name] : null;
@@ -286,8 +247,6 @@ export function clearPageFollowBackReader(
             boxes,
             skips.held,
             skips.transitions,
-            skips.recipes,
-            skips.timelines,
             tolgee.getLanguage(),
         ];
         const hit = cache.get(marcherIds);
@@ -341,8 +300,6 @@ export function useClearPageLabels(
     const version = useTimelineResolverStore((s) => s.version);
     const boxes = useTimelineSelectionStore((s) => s.pageBoxes);
     const held = useHeldMarksStore((s) => s.marks);
-    const recipes = usePlacedBoxStore((s) => s.recipes);
-    const timelines = useTimelineSelectionStore((s) => s.storedTimelines);
     const name = page?.name;
     const start = page?.box.start;
     const end = page?.box.end;
@@ -357,23 +314,10 @@ export function useClearPageLabels(
             boxes,
             skips: {
                 held,
-                recipes,
-                timelines,
                 transitions: getTimelineHost()?.snapshot.transitions,
             },
         });
-    }, [
-        resolver,
-        version,
-        boxes,
-        held,
-        recipes,
-        timelines,
-        marcherIds,
-        name,
-        start,
-        end,
-    ]);
+    }, [resolver, version, boxes, held, marcherIds, name, start, end]);
 }
 
 /** The page Clear this page acts on, as `useClearPageLabels` reads it. */

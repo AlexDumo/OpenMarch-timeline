@@ -55,15 +55,15 @@ const SKIP_WORDS: Record<SkipReason, { key: string; defaultValue: string }> = {
         defaultValue:
             "{names}: the hold would start where a follow-the-leader move ends",
     },
-    homeShape: {
-        key: "timeline.expertHolds.homeShape",
-        defaultValue:
-            "{names}: a shape sets the starting spot. Ungroup it at the start of the show to hold them one by one",
-    },
     endsWithoutArriving: {
         key: "timeline.expertHolds.endsWithoutArriving",
         defaultValue:
             "{names}: the last move before the start flag ends without arriving there",
+    },
+    shapeOwnMove: {
+        key: "timeline.expertHolds.shapeOwnMove",
+        defaultValue:
+            "{names}: in the same shape, but moving on their own between the start flag and the playhead",
     },
 };
 
@@ -105,12 +105,16 @@ export function expertHoldSkipMessage(
     };
 }
 
-/** **Hold over the window** `[start, end)` for `marcherIds` (`holdOverWindow`). */
+/**
+ * **Hold over the window** `[start, end)` for `marcherIds` (`holdOverWindow`). `onAlsoHeld` gets
+ * the marchers held that weren't selected (the rest of a shape), to add them to the selection.
+ */
 export async function holdOverWindowOn(
     window: { start: number; end: number },
     marcherIds: readonly number[],
     nameOf: MarcherNameOf | undefined,
     database: DbConnection = db,
+    onAlsoHeld?: (marcherIds: readonly number[]) => void,
 ): Promise<HoldOverWindowResult> {
     try {
         const result = await holdOverWindow({
@@ -118,6 +122,7 @@ export async function holdOverWindowOn(
             window,
             marcherIds,
         });
+        if (result.alsoHeld && onAlsoHeld) onAlsoHeld(result.alsoHeld);
         const message = expertHoldSkipMessage(result, nameOf);
         if (message)
             toast.info(message.title, { description: message.description });

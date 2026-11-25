@@ -52,7 +52,9 @@ While you point at the command, before you select it, the timeline shows the hol
 
 A marcher that had its own move on the page loses it and stays still for the page. When the pages before it are Not defined for the marcher, the hold reaches back over them to its last keyframe, or to the start of the show, so it's one hold over all those pages, and a message says who is now Held and on which pages. A hold that touches another hold of the same marcher joins it.
 
-Some marchers can't be held, such as marchers placed in a shape on the page (the shape already holds them on the pages after; see [Defined, Held, Not defined](/guides/timeline/defined-held-not-defined/#the-three-states)) or in the middle of a move that runs past a page's flag; a message names them with the reason.
+A shape is held whole. When the selected marchers stand in a shape placed on an earlier page, the rest of the shape is held with them and added to the selection, and the message says so. Their own positions on the page go, as the selected marchers' do, so the shape stands as it was placed. After that, changing the shape on the Held page changes it on the page the hold grows out of. A member who has walked off since stays as it is, and so does one with a move of its own on the page, which the message names.
+
+Some marchers can't be held, such as marchers following the leader on the page, or in the middle of a move that runs past a page's flag; a message names them with the reason.
 
 ## Hold from the start flag to the playhead
 
@@ -64,7 +66,7 @@ This needs Expert mode: see [Basic and Expert](/guides/start/basic-and-expert/).
 2. Select the marchers.
 3. Right-click a selected marcher on the field and select <Ui k="timeline.terms.holdOverWindow" />, or find it in the command palette. It has no shortcut.
 
-It works like Hold from last keyframe, and also takes out the marchers' moves between the start flag and the playhead. A move that crosses the start flag is cut there. A move that crosses the playhead keeps its destination, so the marchers walk the rest of it faster, and a step size warning shows if it's too fast.
+It works like Hold from last keyframe, shapes held whole included, and also takes out the marchers' moves between the start flag and the playhead. A move that crosses the start flag is cut there. A move that crosses the playhead keeps its destination, so the marchers walk the rest of it faster, and a step size warning shows if it's too fast.
 
 ## Change how long a hold lasts
 
@@ -81,7 +83,7 @@ A hold's end can move: marchers can hold longer, or leave earlier. Its start can
 
 While you drag, a label says where the hold will end, such as <Ui k="timeline.holdEdge.readoutEnd" values={{ held: "Held", page: 4, count: 2 }} plain />, and what stops it: a hold can't run past the marchers' next move or the end of the show, and lasts at least one count. Hold <Kbd keys="Alt" gesture="drag" /> to put the end on any count, and press <Kbd keys="Escape" /> to put it back.
 
-Each selected marcher's hold changes, so you can select one marcher and shorten only its hold.
+Each selected marcher's hold changes, so you can select one marcher and shorten only its hold. A shape's hold changes whole: the rest of the shape's holds change with it and join the selection. The same goes for ending a hold at a count and clearing the page.
 
 ## End a hold at a count
 

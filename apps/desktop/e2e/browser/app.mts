@@ -21,7 +21,7 @@ export type DrawnMarcher = {
     dimmed: boolean;
     /**
      * Drawn Not defined (a dashed edge): nothing decides its position on the count shown, no move
-     * it's walking or arriving in, no Held hold, no carried shape (#478).
+     * it's walking or arriving in, no Held hold (#478).
      */
     notDefined: boolean;
     /** Its label is drawn bold: a coordinate of its own is set on the count shown (#478). */

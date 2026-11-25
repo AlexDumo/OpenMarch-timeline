@@ -12,6 +12,7 @@ import type { BoxLeave } from "./boxMembership";
 import { nameOf } from "./leftOutToast";
 import { closeUp, isPlacedBox, resplit, type BoxRecipe } from "./placedBox";
 import { closedOf } from "../distribute/modes";
+import { oneMoveForShape } from "../tool/shapePlacement";
 
 /** One toast per box, so marchers leaving two boxes in one edit can fill either */
 const leftBoxToastId = (recipeId: number) => `shape-left-box-${recipeId}`;
@@ -20,7 +21,11 @@ const LEFT_BOX_TOAST_MS = 8000;
 /** Writes `moves` at the edit's moment, saving a recipe beside them in the same undo step */
 export type BoxRewrite = (
     moves: readonly { marcherId: number; x: number; y: number }[],
-    afterWrite: (tx: DbTransaction, timelineId: number | null) => Promise<void>,
+    afterWrite: (
+        tx: DbTransaction,
+        timelineId: number | null,
+        written: readonly number[],
+    ) => Promise<void | boolean>,
 ) => Promise<unknown>;
 
 /** The box's remaining members filled in again by `fill`, as one edit */
@@ -43,6 +48,7 @@ async function refill(
         })),
     );
     if (!out) return;
+    const inThisMove = oneMoveForShape(out.members.map((m) => m.marcherId));
     try {
         await rewrite(
             out.members.map((m) => ({
@@ -50,7 +56,8 @@ async function refill(
                 x: m.x,
                 y: m.y,
             })),
-            async (tx, timelineId) => {
+            async (tx, timelineId, written) => {
+                if (inThisMove(written).length === 0) return false;
                 // No keepOrderMarks: Close up and Re-split lay the shape out again, so it redefines the line's order there, as any later shape does (pathways step 4g)
                 await saveShapeRecipeInTransaction({
                     tx,

@@ -67,10 +67,10 @@ const SKIP_WORDS: Record<
         key: "timeline.holdFromPrevious.arrivalFollowLeader",
         defaultValue: "{names}: the move before {page} follows the leader",
     },
-    homeShape: {
-        key: "timeline.holdFromPrevious.homeShape",
+    shapeOwnMove: {
+        key: "timeline.holdFromPrevious.shapeOwnMove",
         defaultValue:
-            "{names}: a shape sets the starting spot. Ungroup it at the start of the show to hold them one by one",
+            "{names}: in the same shape, but moving on their own on {page}",
     },
 };
 
@@ -111,17 +111,28 @@ export function holdFromPreviousMessage(
         );
     });
     // Everyone held on just this page: the field shows it, so there is nothing to say. A hold
-    // that reached back over earlier pages is worth naming.
+    // that reached back over earlier pages is worth naming, and so are marchers held that weren't
+    // selected (the rest of a shape)
     const reachedBack = (result.pagesCovered?.length ?? 0) > 1;
-    if (reasons.length === 0 && !reachedBack) return null;
+    if (reasons.length === 0 && !reachedBack && !result.alsoHeld?.length)
+        return null;
+    const pagesHeld = result.pagesCovered
+        ? pagesText(result.pagesCovered)
+        : page;
+    const asked = result.held.filter((id) => !result.alsoHeld?.includes(id));
     const title =
         result.held.length > 0
-            ? t("timeline.holdFromPrevious.done", "{names} {held} on {page}", {
-                  names: names(result.held),
-                  page: result.pagesCovered
-                      ? pagesText(result.pagesCovered)
-                      : page,
-              })
+            ? result.alsoHeld && asked.length > 0
+                ? t(
+                      "timeline.holdFromPrevious.doneWithShape",
+                      "{names} and the rest of their shape {held} on {page}",
+                      { names: names(asked), page: pagesHeld },
+                  )
+                : t(
+                      "timeline.holdFromPrevious.done",
+                      "{names} {held} on {page}",
+                      { names: names(result.held), page: pagesHeld },
+                  )
             : t("timeline.holdFromPrevious.none", "Nobody {held} on {page}", {
                   page,
               });
@@ -212,6 +223,8 @@ export function holdFromPreviousLight({
  *
  * @param run the command, for tests; defaults to `holdFromPreviousOn`
  * @param marks every Held mark (`useHeldMarksStore`)
+ * @param onAlsoHeld given the marchers held that weren't selected (the rest of a shape), so the
+ *   caller can add them to the selection and their new holds show
  */
 export function holdFromPreviousMenu(
     states: readonly PageKeepState[],
@@ -222,6 +235,7 @@ export function holdFromPreviousMenu(
         marcherIds: readonly number[],
     ) => Promise<HoldFromPreviousResult> = holdFromPreviousOn,
     marks: readonly HeldMark[] = [],
+    onAlsoHeld?: (marcherIds: readonly number[]) => void,
 ): TimelinePageCommandMenu {
     const of = (pageId: string | number) =>
         states.find((s) => String(s.pageId) === String(pageId));
@@ -247,6 +261,7 @@ export function holdFromPreviousMenu(
             const state = of(pageId);
             if (!state || marcherIds.length === 0) return;
             void run(state.box, marcherIds).then((result) => {
+                if (result.alsoHeld && onAlsoHeld) onAlsoHeld(result.alsoHeld);
                 const message = holdFromPreviousMessage(
                     result,
                     state.pageName,

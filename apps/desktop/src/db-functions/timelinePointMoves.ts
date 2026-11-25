@@ -469,7 +469,7 @@ const writePlan = async (
         // Only marchers cleared off the page leave its Ungroup; a mid-page point only re-cuts
         await clearOwnPageMoves(tx, removed, {
             tidyShared: true,
-            dropUngrouped: plan.cleared,
+            dropLeavers: plan.cleared,
         });
     }
 

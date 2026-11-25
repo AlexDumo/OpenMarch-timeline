@@ -55,16 +55,22 @@ export function boxMembershipEdit({
     afterWrite: (
         tx: DbTransaction,
         timelineId: number | null,
+        written: readonly number[],
     ) => Promise<boolean>;
     readonly leaves: readonly BoxLeave[];
 } {
     const leaves: BoxLeave[] = [];
-    const moved = new Map(
+    const movedAll = new Map(
         moves.map((m) => [m.marcherId, { x: m.x, y: m.y }] as const),
     );
     return {
         leaves,
-        async afterWrite(tx, timelineId) {
+        async afterWrite(tx, timelineId, written) {
+            // Only the marchers whose positions went to this move: a drag inside a hold writes
+            // the Held ones to the move arriving at it, and is called again for the rest
+            const here = new Set(written);
+            const moved = new Map([...movedAll].filter(([id]) => here.has(id)));
+            if (moved.size === 0) return false;
             const recipes = await readShapeRecipesOf({
                 db: tx,
                 marcherIds: [...moved.keys()],

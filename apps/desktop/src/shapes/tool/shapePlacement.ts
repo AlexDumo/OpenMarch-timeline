@@ -18,6 +18,10 @@ import {
 } from "@/timeline/timelineCoordinateWrites";
 import { withoutLockedMarchers } from "@/timeline/basicLocks";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
+import { TimelineEditRefusedError } from "@/timeline/timelineEditRefusals";
+import { isInsideHeldMark } from "@/db-functions/timelineHeldArrival";
+import type { HeldMark } from "@/db-functions/timelineHeldArrival";
+import { windowWinsOverHold } from "@/timeline/heldRules";
 import { showLeftOutToast } from "../placed/leftOutToast";
 import { invalidatePlacedBoxes, placedBoxesAt } from "../placed/placedBoxStore";
 import type { ShapeContext } from "../types";
@@ -50,6 +54,60 @@ export interface ShapePlacement {
      * of marchers does, and any shape they stood in loses them
      */
     readonly plain?: boolean;
+}
+
+/**
+ * A shape's positions go to one move: its recipe is saved with that move (ADR 0006), so a shape
+ * can't be split across two. An edit writes Held marchers to the moves arriving at their holds and
+ * the rest to the window's move, calling its after-write step once per move
+ * (`TimelineAfterWrite`). Returns, for each call, the members whose positions went there (none:
+ * nothing to save there), and throws `shapePartlyHeld` once a second move gets some, so the edit
+ * rolls back and says why: a shape is Held whole or not at all.
+ */
+export function oneMoveForShape(
+    memberIds: readonly number[],
+): (written: readonly number[]) => number[] {
+    let moves = 0;
+    return (written) => {
+        const here = new Set(written);
+        const mine = memberIds.filter((id) => here.has(id));
+        if (mine.length === 0) return mine;
+        if (++moves > 1)
+            throw new TimelineEditRefusedError("shapePartlyHeld", {
+                marcherIds: [...memberIds].sort((a, b) => a - b),
+            });
+        return mine;
+    };
+}
+
+/**
+ * Whether an edit at `plan` would write some of `memberIds` to the moves their holds grow out of
+ * and the rest elsewhere: some are inside a Held mark at the edit's count and some aren't (an Expert
+ * window starting inside a hold wins over it, `windowWinsOverHold`, as the write decides). The
+ * shape tool asks before it shows an edit as saved, so it can refuse at once rather than snap back;
+ * `oneMoveForShape` is the write's own check.
+ */
+export function partlyHeldAt(
+    memberIds: readonly number[],
+    plan: CanvasEditPlan,
+    marks: readonly HeldMark[],
+): boolean {
+    if (!plan.ok || memberIds.length < 2) return false;
+    const { target } = plan;
+    if (target.kind !== "range" && target.kind !== "point") return false;
+    const beat = target.kind === "range" ? target.end : target.beat;
+    const heldIds = new Set(
+        marks
+            .filter(
+                (m) =>
+                    isInsideHeldMark(m, beat) &&
+                    (target.kind !== "range" ||
+                        !windowWinsOverHold(target.start, m)),
+            )
+            .map((m) => m.marcherId),
+    );
+    const held = memberIds.filter((id) => heldIds.has(id)).length;
+    return held > 0 && held < memberIds.length;
 }
 
 /** What placing the open shape would write; null while there is nothing to place */
@@ -146,6 +204,8 @@ export async function writePlacement(
     const to = new Map(members.map((m) => [m.marcherId, m]));
     const marcherIds = members.map((m) => m.marcherId);
     let saved = false;
+    let skippedSome = false;
+    const inThisMove = oneMoveForShape(marcherIds);
     const spotsOf = (current: readonly { readonly marcher_id: number }[]) =>
         current.flatMap((c) => {
             const spot = to.get(c.marcher_id);
@@ -190,7 +250,11 @@ export async function writePlacement(
             // `setAll`
             setUnmoved: true,
             setAll: placement.setAll,
-            afterWrite: async (tx, timelineId) => {
+            onWritten: (result) => {
+                skippedSome = result.skipped !== undefined;
+            },
+            afterWrite: async (tx, timelineId, written) => {
+                if (inThisMove(written).length === 0) return false;
                 // A move none of the members are in would keep no one: the edit moved nobody there,
                 // and is saved below instead (#485)
                 if (!(await moveHoldsAnyOf(tx, timelineId, marcherIds)))
@@ -216,8 +280,9 @@ export async function writePlacement(
         });
         showLeftOutToast(leftOut);
         // Nobody moved and no move here holds the shape's members (a change without `setAll`):
-        // the change goes to the recipe shown, in its own move
-        if (!saved && replaces) {
+        // the change goes to the recipe shown, in its own move. Not when the edit left members
+        // alone (a hold growing out of a follow-the-leader move): their shape didn't change
+        if (!saved && replaces && !skippedSome) {
             await transactionWithHistory(db, "editShapeRecipe", (tx) =>
                 saveShapeRecipeInTransaction({
                     tx,

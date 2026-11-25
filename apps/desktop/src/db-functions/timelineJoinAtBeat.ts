@@ -312,6 +312,7 @@ async function planTake(
                     marcherIds: ids,
                     range: { start: move.start_beat, end: move.end_beat },
                     timelineId: id,
+                    intoOwnMove: true,
                 }),
             });
         }
