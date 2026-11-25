@@ -51,7 +51,8 @@ import {
     effectivePlaybackSpeed,
     usePlaybackSpeedStore,
 } from "@/stores/PlaybackSpeedStore";
-import { updateVenueSettingsMutationOptions } from "@/hooks/queries/useVenueSettings";
+import { venuePickMutationOptions } from "@/hooks/queries/useVenueSettings";
+import { parseVenuePickBase } from "./venuePick";
 import { venueSettingsSchema } from "@/view3d/core/venueSettings";
 import { updateShowCamerasMutationOptions } from "@/hooks/queries/useShowCameras";
 import { showCamerasSchema } from "@/view3d/core/cameraList";
@@ -169,7 +170,7 @@ export function useView3dPublisher() {
     // What Play does, for the window's Play tooltip, as the editor's transport reads it
     const playLoops = useTimelineSelectionStore((s) => loopBounds(s) !== null);
     const { mutate: updateVenue } = useMutation(
-        updateVenueSettingsMutationOptions(queryClient),
+        venuePickMutationOptions(queryClient),
     );
     // Without history: camera lists aren't undoable.
     const { mutate: updateCameras } = useMutation(
@@ -339,7 +340,10 @@ export function useView3dPublisher() {
                 }
                 // Writes with history, then invalidates ["view3d_venue"],
                 // which the relay below forwards to the window.
-                updateVenue(parsed.data);
+                updateVenue({
+                    settings: parsed.data,
+                    base: parseVenuePickBase(request?.base),
+                });
             }),
         ];
         return () => {

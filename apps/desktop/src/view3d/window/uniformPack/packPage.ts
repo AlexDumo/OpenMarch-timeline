@@ -60,3 +60,25 @@ export const packPageKey = (key: string, dpi: number, which: PageLayers) =>
     `${key}|${dpi}|${
         "files" in which ? which.files.join("+") : `#${which.mode ?? ""}`
     }`;
+
+/**
+ * Composes a pack's art with `compose`, from the version `newest` names now. A draft's newest
+ * version moves while an editing burst saves, and each save removes the version before: when
+ * composing fails and the newest version has moved meanwhile, it composes again from the new one,
+ * for as long as it keeps moving (each move is a save, so it settles), rather than trying once
+ * more and failing on a second save. A failure with the version unchanged is the pack's own.
+ */
+export async function composeFromNewest<T>(
+    newest: () => UniformPackValue,
+    isDraft: boolean,
+    compose: (from: UniformPackValue) => Promise<T>,
+): Promise<T> {
+    for (;;) {
+        const from = newest();
+        try {
+            return await compose(from);
+        } catch (error) {
+            if (!isDraft || newest() === from) throw error;
+        }
+    }
+}

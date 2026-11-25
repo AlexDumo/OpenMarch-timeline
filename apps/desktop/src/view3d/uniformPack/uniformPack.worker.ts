@@ -27,6 +27,7 @@ import {
     pageNotes,
     type PageRegions,
 } from "@/view3d/core/uniformPack/pageChecks";
+import { sha256Hex } from "@/showAssets/hash";
 import type {
     UniformPackRefusal,
     UniformPackRequest,
@@ -208,6 +209,32 @@ async function handle(request: UniformPackRequest) {
         }
         case "pack": {
             const pack = readUniformPack(request.bytes);
+            let decoded: string[] | undefined;
+            if (request.decode) {
+                // as "flatten" decodes them: a damaged image refuses the pack now. Images that
+                // decoded before (by content) are skipped: an edit's new version shares most
+                const before = new Set(request.decoded ?? []);
+                decoded = [];
+                const images = [
+                    ...pack.layers.map(({ png }) => ({ png, item: false })),
+                    ...pack.itemFiles.map(({ png }) => ({ png, item: true })),
+                ];
+                for (const { png, item } of images) {
+                    const hash = await sha256Hex(png);
+                    if (!before.has(hash))
+                        (
+                            await decodePng(
+                                png,
+                                undefined,
+                                undefined,
+                                item
+                                    ? UNIFORM_ITEM_MAX_PIXELS
+                                    : UNIFORM_LAYER_MAX_PIXELS,
+                            )
+                        ).bitmap.close();
+                    decoded.push(hash);
+                }
+            }
             let notes: ReturnType<typeof pageNotes> = [];
             if (request.regions) {
                 const { canvas } = await pageCanvas(pack.layers[0].png);
@@ -219,7 +246,13 @@ async function handle(request: UniformPackRequest) {
                 const size = pngHeaderSize(png);
                 if (size) itemSizes[file] = size;
             }
-            reply({ type: "pack", manifest: pack.manifest, notes, itemSizes });
+            reply({
+                type: "pack",
+                manifest: pack.manifest,
+                notes,
+                itemSizes,
+                decoded,
+            });
             return;
         }
         case "flatten": {
@@ -348,9 +381,11 @@ onmessage = (event: MessageEvent<UniformPackRequest>) => {
                 message: error.message,
             });
         else
+            // not a refusal of the file: the worker failed (a canvas or bitmap it couldn't
+            // allocate, say), so the caller may try again
             reply({
                 type: "refused",
-                code: "unreadable",
+                code: "failed",
                 message: error instanceof Error ? error.message : String(error),
             });
     });

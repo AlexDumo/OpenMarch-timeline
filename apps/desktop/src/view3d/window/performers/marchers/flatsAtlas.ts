@@ -42,6 +42,7 @@ import {
 } from "@/view3d/core/uniformPack/format";
 import { draftOrigin } from "@/view3d/window/uniformPack/itemDrafts";
 import {
+    composeFromNewest,
     packPageKey,
     packPagePlan,
     type PageLayers,
@@ -377,15 +378,11 @@ async function composeAtlas(
                 return Promise.resolve();
             });
         };
-        const from = draftOrigin(pack);
-        try {
-            return await withPackPage(from, dpi, which, draw);
-        } catch (error) {
-            // a burst's save removed that version while this composed: read the newest
-            const now = draftOrigin(pack);
-            if (!draft || now === from) throw error;
-            return await withPackPage(now, dpi, which, draw);
-        }
+        return await composeFromNewest(
+            () => draftOrigin(pack),
+            !!draft,
+            (from) => withPackPage(from, dpi, which, draw),
+        );
     }
     return await composeBuiltIn(id, body, dpi);
 }
@@ -634,6 +631,7 @@ async function composeFrom(
     texture.generateMipmaps = true;
     texture.minFilter = THREE.LinearMipmapLinearFilter;
     texture.magFilter = THREE.LinearFilter;
+    // 4: the shader keeps the hem clear by what this filter reads (omFlatHemReach)
     texture.anisotropy = 4;
     texture.wrapS = THREE.ClampToEdgeWrapping;
     texture.wrapT = THREE.ClampToEdgeWrapping;
@@ -648,6 +646,7 @@ async function composeFrom(
             front: rect.front,
             back: rect.back,
             cape: rect.cape,
+            dpi,
         },
         bytes: Math.round((W * H * 4 * 4) / 3),
     };

@@ -11,6 +11,8 @@ export interface FlatsAtlasRect {
     front: readonly [number, number];
     back: readonly [number, number];
     cape: readonly [number, number] | null;
+    /** The atlas's pixels per inch: the shader keeps the hem at least one pixel clear. */
+    dpi: number;
 }
 
 export interface FlatsParams {

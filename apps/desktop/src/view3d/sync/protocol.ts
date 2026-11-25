@@ -174,6 +174,13 @@ export interface View3dInvalidate {
 export interface View3dVenueChangeRequest {
     /** Unchecked: the editor validates it against the venue schema. */
     settings?: unknown;
+    /**
+     * With `settings`: the band's uniform fields the window's venue had when the pick was made
+     * (`VenuePickBase`, unchecked). The editor rebases the pick on the venue it holds
+     * (`pickOnStoredUniform`), so a window behind an item edit's save can't write back a
+     * version of the uniform the save replaced.
+     */
+    base?: unknown;
     /** Unchecked: the editor validates it against `showCamerasSchema`. */
     cameras?: unknown;
     /**

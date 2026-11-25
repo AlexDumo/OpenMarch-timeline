@@ -21,6 +21,7 @@ import {
 import {
     UNIFORM_SVG_MAX_BYTES,
     UniformImportError,
+    refusalOf,
     sizedSvg,
     svgViewBox,
     uniformFileKind,
@@ -255,7 +256,7 @@ export async function importItemFile(
     } catch (error) {
         if (error instanceof UniformImportError) throw error;
         if (error instanceof UniformPackJobError)
-            throw new UniformImportError(error.code, error.message);
+            throw new UniformImportError(refusalOf(error), error.message);
         throw error;
     }
 }

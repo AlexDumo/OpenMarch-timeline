@@ -56,6 +56,7 @@ import {
 } from "@/view3d/window/uniformArtworkPreview";
 import { Button, ToggleGroup, ToggleGroupItem } from "@openmarch/ui";
 import { Segmented } from "./Panel";
+import { venuePickBase } from "@/view3d/sync/venuePick";
 import {
     applyVenueChange,
     venueChanged,
@@ -78,7 +79,11 @@ export function useVenueRequest(): {
             try {
                 const next = applyVenueChange(settings, change);
                 if (venueChanged(settings, next)) {
-                    window.view3d.requestVenueChange(next);
+                    // the uniform it was made against: the editor keeps a newer one
+                    window.view3d.requestVenueChange(
+                        next,
+                        venuePickBase(settings),
+                    );
                 }
             } catch (error) {
                 console.error("3D View: invalid venue change", error);
