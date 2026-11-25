@@ -1,7 +1,8 @@
 # A shape that changes while marchers follow around it
 
-Status: proposed, 2026-11-24. Design and a throwaway prototype only. No app code, nothing built,
-nothing decided. For fork issues #1174, #355, #1208 and #434.
+Status: proposed, 2026-11-24. Design and a throwaway prototype only. No app code, nothing built.
+The owner settled the editing rules on 2026-11-25 (see [Decisions](#decisions)). For fork issues
+#1174, #355, #1208 and #434.
 
 Code references are to `pathways/host-10` at `9e455d0f2`. Paths are under `apps/desktop/src/`
 unless they start with `packages/` or `docs/`.
@@ -18,8 +19,7 @@ Read this first: it limits everything below.
 - **It builds on a proposal.** "A shape is a formation at a count" (the ADR 0006 revision of
   2026-11-22, branch `adr/0006-shape-at-count`, fork #1151) isn't accepted yet. If it changes,
   the linking part of this design changes with it.
-- **Nobody has tried it.** The owner hasn't played with the prototype yet, and there was no lab
-  test.
+- **Only the owner has tried it,** in the prototype, on 2026-11-24 and 25. There was no lab test.
 - **Export sizes are estimates,** worked out by hand.
 - **Precedents:** the After Effects and Blender behaviors were checked against the pages linked
   under [Precedents](#precedents) on 2026-11-24. The Logic Pro one is from memory.
@@ -74,7 +74,10 @@ a browser. It also works on a phone.
 - Drag the page 2 shape, turn it with the round knob, stretch it with the squares, or pick another
   outline. Press Play.
 - "How the two combine" switches between the proposed rule and three others, described below.
-- The Shape and Follow rows under the field are the two layers.
+- The Shape and Follow rows under the field are the two layers. A diamond on the Shape row is a
+  shape mark (see [Decisions](#decisions)).
+- "Match page 1" takes page 2's mark away. Then an edit on page 1 carries to page 2, and an edit
+  on page 2 gives it a mark again, with a toast that has Undo and "Match page 1".
 
 ![The proposed rule halfway through a move: a bean turning, flattening and traveling while twelve marchers go three spots around it](images/two-layers.png)
 
@@ -366,17 +369,18 @@ Today's rules carry over, because the outline is defined at every moment:
 - **No migration.** Nothing is added to the schema: the route JSON grows and the link table
   exists. v0.1.7 files have no routes and no shapes, convert as they do today, and are not
   touched. The prerequisite (the ADR 0006 revision's migration) carries its own risk and tests.
-- **Numbers to fix when these land.** On `pathways/host-10`, file versions go up to 17, with 15 and
-  16 reserved by open pull requests (`electron/database/fileVersion.ts`), and migrations go up to 0028. The ADR 0006 revision's draft names file version 15 and migration 0029 from an older
-  base, so its numbers need another look.
+- **Numbers are taken when these land.** On `pathways/host-10`, file versions go up to 17, with 15
+  and 16 reserved by open pull requests (`electron/database/fileVersion.ts`), and migrations go up
+  to 0028. The ADR 0006 revision now takes the next free migration and file version when its step
+  2 lands (0029 and 18 today), and `change` takes the one after it.
 
 ### 9. Basic and Expert
 
 - **Basic:** go to the page, select the shape, and move, turn, resize or swap it with the shape
   editor that is already there. Nothing new to learn, and no new panel. The Follow bar's line
-  says what is going on: "Following around Bean → Flat oval · 3 spots · turns 40°".
-- **Expert:** the same, plus the shape marks at the two counts that the ADR 0006 revision
-  proposes. The move's clip shows a small "shape changes" glyph when its two ends differ. No new
+  says what is going on: "Following around Bean → Flat oval · 3 spots · turns 40°". Shape marks
+  show on the page row, and sit only on pages.
+- **Expert:** the same, plus shape marks at any count, which the ADR 0006 revision proposes. The move's clip shows a small "shape changes" glyph when its two ends differ. No new
   lane and no curves editor (#355: "no per-parameter animation curves or graph editor").
 - The prototype's Shape and Follow rows explain the model. They are not a proposed timeline.
 
@@ -388,6 +392,10 @@ Today's rules carry over, because the outline is defined at every moment:
 - **The turn handle counts turns:** dragging it around twice is two turns, and the bar says "turns
   720°". Shift snaps to 15°. The shortest way is the default.
 - **Scrubbing the move** shows the shape as it is at that count, as a ghost outline.
+- **A page with no shape mark** draws the shape it carries dotted, labeled "Same as page 14".
+  Selecting it shows the usual handles, dashed. The first edit gives the page its own mark and
+  shows a toast: "Page 15 now has its own shape. It changes during the move.", with Undo and
+  "Match page 14".
 - **Start point:** a small marker on the end outline, shown while the shape is selected and the
   two ends are different kinds. Dragging it is the prototype's Twist.
 - **Commands** (every feature is a command): "Make shape match previous page", "Unlink Follow from
@@ -440,27 +448,48 @@ Later, each its own decision: a free transform for drawn trails (option A), a sh
 with nobody walking (#355 for blocks), split at a count, joiners that merge onto a moving outline,
 and a shape that flips between two pages.
 
-## Questions for the owner
+## Decisions
 
-Each has a recommendation. The prototype shows most of them.
+The owner, on 2026-11-25, after trying the prototype with shape marks.
 
-1. **You edit the shape on page 1 after a Follow, and page 2's shape has no change of its own.
-   Should page 2 change with it?** Recommended: yes. The move still goes the same number of spots
-   around, around the new shape.
-2. **Once page 2's shape has its own change, should a later edit on page 1 leave page 2 alone?**
-   Recommended: yes, with "Make page 2 match page 1" to undo the change.
-3. **Between the pages, are gaps that are close to even good enough, or must they be exactly even
-   on every count?** In the prototype: "Keep gaps even on every count". Recommended: close to
-   even.
-4. **Can a shape turn more than once around in one move?** Recommended: yes, up to a limit to be
-   set in the spec.
-5. **Should a drawn trail that isn't a placed shape (a snake) also be able to turn, move or
-   resize during its move?** Recommended: later. The storage already allows it.
-6. **If you drag one marcher off its spot on page 2, should it leave the shape while the rest
-   stay linked, or should the drag be refused?** Recommended: it leaves, as it does in any shape
-   today.
-7. **Going from one outline to a different one (bean to box), is one "start point" you can slide
-   enough to fix a morph that twists?** In the prototype: Twist. Recommended: yes for now.
+**How it's tracked and shown: shape marks.** A shape mark is the ADR 0006 revision's recipe at a
+count: one saved shape at one count. The owner asked how the app would keep track of "page 2
+follows page 1 until you change page 2" without edge cases. The answer is that nothing else is
+stored: a page either has a mark or it doesn't, and you can see which.
+
+- Between two marks, the shape blends from one to the other. After the last mark it holds.
+- An edit where the shape has a mark changes that mark. A page without one keeps following.
+- An edit where it has no mark adds a mark there, so the shape now changes during the move.
+- "Make shape match previous page" deletes the page's mark. It is one undo step.
+- On the timeline, a diamond at each count with a mark. On the field, a page without a mark
+  draws the carried shape dotted, labeled "Same as page 14" (§10).
+- Precedents: After Effects keyframes and DAW automation points (see [Precedents](#precedents)).
+
+**The questions,** each answered as recommended:
+
+1. An edit on page 1 carries to page 2 while page 2 has no mark of its own.
+2. Once page 2 has a mark, a later edit on page 1 leaves it alone. "Make shape match previous
+   page" removes the mark.
+3. Gaps between the pages are close to even, not exactly even on every count.
+4. A shape can turn more than once in one move, up to a limit set in the spec.
+5. Drawn trails that aren't placed shapes (snakes) changing during a move: later.
+6. A marcher dragged off its spot on page 2 leaves the shape. The others stay linked.
+7. One start point (the prototype's Twist) is enough for now. It shows only when the two ends are
+   different outlines.
+
+**Considered and dropped for now:** a per-move choice between going around the turning shape and
+walking straight to the spots. The owner asked for it, tried it, and went back to the shape-mark
+model alone. Both choices ended on the same spots, so it can come back as one more fact on the
+link without changing anything above.
+
+**Edge cases still open:**
+
+- An edit partway through a move adds a mark at that count. Basic allows marks only on pages.
+- Deleting the start shape while the end page has its own: the end page keeps it and the move
+  unlinks.
+- Re-timing or splitting pages: marks move with their counts, as order marks do (ADR 0006
+  revision §4).
+- Joiners and leavers between two marks: later (§6).
 
 ## Related
 
