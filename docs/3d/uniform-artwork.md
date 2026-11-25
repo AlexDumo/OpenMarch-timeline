@@ -304,10 +304,12 @@ palette uniforms.
     custom uniforms isn't in this version of OpenMarch yet." and no Turn on button. The notes for
     a uniform the band can't wear only say what happened.
   - The user guide describes only that case ("A show with a custom uniform" in
-    `venue-and-uniforms.mdx`). The full guide section, its three pictures (`3d-custom-uniforms`,
-    `3d-custom-uniforms-band`, `3d-custom-uniforms-off`, still recorded by the docs-media script)
-    and the Preferences row in `reference/settings.mdx` were taken out when the feature was hidden:
-    restore them from the commit "feat(3d): hide custom uniforms in releases".
+    `venue-and-uniforms.mdx`). The full guide section, the Preferences row in
+    `reference/settings.mdx`, and the three pictures (`3d-custom-uniforms`,
+    `3d-custom-uniforms-band`, `3d-custom-uniforms-off`) with their docs-media shots and
+    `Practice uniform.png` came out when the feature was hidden, because the recorder runs a
+    release build. Restore them from the commits "feat(3d): hide custom uniforms in releases" and
+    "docs(3d): drop the custom-uniform guide shots".
 - **What it shows:** the template downloads (PNG, SVG, PDF and JSON), Import uniform…, Save
   uniform file, Logos and numbers, Modes and the Sample flats entry in the Band uniform picker.
   With it off, none of them show.
