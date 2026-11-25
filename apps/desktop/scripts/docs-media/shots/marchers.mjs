@@ -228,9 +228,11 @@ async function openOverlays(page, wait) {
     await wait(500);
 }
 
-/** Sets Show on field's What they hold choice (`changed`, `everyone`, `off`), leaving the panel open. */
+/** Sets who Show on field's Equipment icons shows for (`changed`, `everyone`), leaving the panel open. */
 async function setEquipmentIcons(page, value, wait) {
     await openOverlays(page, wait);
+    await page.getByTestId("field-display-equipment-who").click();
+    await wait(300);
     await page.getByTestId(`field-display-equipment-${value}`).click();
     await wait(800);
 }
@@ -239,18 +241,12 @@ async function setEquipmentIcons(page, value, wait) {
  * The guard given sabres and tubas at the end of Page 1, at the field's normal zoom, with the
  * Equipment icons choice `value`: the field around them, nothing selected.
  */
-async function equipmentIconsField(page, wait, value, place = "beside") {
+async function equipmentIconsField(page, wait, value) {
     await toPage1(page, wait);
     await setEquipment(page, SABRES, "guard", "equipmentSabre", wait);
     await setEquipment(page, TUBAS, "brass", "equipmentTuba", wait);
     await page.keyboard.press("Escape");
     await setEquipmentIcons(page, value, wait);
-    if (place !== "beside") {
-        await page
-            .getByTestId(`field-display-equipment-place-${place}`)
-            .click();
-        await wait(800);
-    }
     await page.keyboard.press("Escape");
     await page.mouse.move(800, 990);
     await wait(1000);
@@ -956,30 +952,42 @@ const shots = [
     {
         id: "marchers-equipment-icons-on-dot",
         kind: "still",
-        // In place of the dot: the sabre and tuba icons where those guard's dots were
+        // Settings › Field › Icon place: Instead of the dot: the sabre and tuba icons where those
+        // guard's dots were
+        uiSettings: { equipmentIconPlace: "dot" },
         async setup({ page, wait }) {
-            return await equipmentIconsField(page, wait, "changed", "dot");
+            return await equipmentIconsField(page, wait, "changed");
         },
     },
     {
         id: "marchers-equipment-icons-on-number",
         kind: "still",
-        // In place of the number: the icons where those guard's drill numbers were
+        // Settings › Field › Icon place: Instead of the drill number: the icons where those
+        // guard's drill numbers were
+        uiSettings: { equipmentIconPlace: "label" },
         async setup({ page, wait }) {
-            return await equipmentIconsField(page, wait, "changed", "label");
+            return await equipmentIconsField(page, wait, "changed");
         },
     },
     {
         id: "marchers-equipment-icons-setting",
         kind: "still",
-        // The Show on field panel open beside the field display bar: What they hold, Icon goes
+        // The Show on field panel open beside the field display bar, its Equipment icons menu
+        // open: Not their own, Everyone, and the show's sections
         async setup({ page, wait, union, around }) {
             await toPage1(page, wait);
             await openOverlays(page, wait);
+            await page.getByTestId("field-display-equipment-who").click();
             await wait(300);
             const bar = page.getByTestId("field-display-bar");
             const pop = page.getByTestId("field-display-overlays-panel");
-            return { box: union(await around(bar, 12), await around(pop, 12)) };
+            const menu = page.getByTestId("field-display-equipment-menu");
+            return {
+                box: union(
+                    union(await around(bar, 12), await around(pop, 12)),
+                    await around(menu, 12),
+                ),
+            };
         },
     },
     {

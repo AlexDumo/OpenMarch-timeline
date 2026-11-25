@@ -30,6 +30,7 @@ import {
     useTurnPopoverStore,
 } from "@/cues/turnPopoverStore";
 import { useEffect } from "react";
+import { setEquipmentIcons } from "@/field/fieldShow";
 
 /** The Facing quick picks' actions (fork #993), by pick */
 export const FACING_ACTIONS: Readonly<Record<FacingPick, ActionId>> = {
@@ -166,13 +167,6 @@ export const EQUIPMENT_ICONS_ACTIONS: Readonly<
     everyone: "equipmentIconsEveryone",
 };
 
-/** Sets who shows an equipment icon on the field (saved with the UI settings). */
-export function setEquipmentIcons(shown: EquipmentIcons) {
-    const { uiSettings, setUiSettings } = useUiSettingsStore.getState();
-    if (uiSettings.equipmentIcons !== shown)
-        setUiSettings({ ...uiSettings, equipmentIcons: shown });
-}
-
 /** The Equipment icons Where choices' actions, by place. */
 export const EQUIPMENT_PLACE_ACTIONS: Readonly<
     Record<EquipmentIconPlace, ActionId>
@@ -198,16 +192,22 @@ function useEquipmentPlaceChoice(place: EquipmentIconPlace) {
             enabled: !off && current !== place,
             checked: !off && current === place,
             disabledReason: off
-                ? tolgee.t("toolbar.view.equipmentPlaceOffReason")
+                ? tolgee.t("fieldDisplay.equipmentOffReason")
                 : undefined,
         },
     );
 }
 
-/** One Equipment icons choice: checked while it's the one in effect. */
+/**
+ * One Equipment icons choice: checked while it's the one in effect (neither is while some
+ * sections are picked in Show on field)
+ */
 function useEquipmentIconsChoice(shown: EquipmentIcons) {
-    const current = useUiSettingsStore(
-        (s) => s.uiSettings.equipmentIcons ?? "changed",
+    const current = useUiSettingsStore((s) =>
+        (s.uiSettings.equipmentIcons ?? "changed") !== "off" &&
+        (s.uiSettings.equipmentIconSections ?? []).length > 0
+            ? "sections"
+            : (s.uiSettings.equipmentIcons ?? "changed"),
     );
     useActionHandler(
         EQUIPMENT_ICONS_ACTIONS[shown],

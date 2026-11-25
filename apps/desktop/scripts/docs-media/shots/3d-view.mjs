@@ -1475,8 +1475,9 @@ const shots = [
     {
         id: "venue-on-field",
         kind: "still",
-        // The editor's field with the venue on it (Faint), and the Show on field panel open
-        // beside the display bar (fork #1207)
+        // The editor's field with the venue on it (Faint, Settings › Field's look), and the Show
+        // on field panel open beside the display bar (fork #1207)
+        uiSettings: { fieldVenueLast: "faint", fieldVenueAround: "edge" },
         covers: [
             "apps/desktop/src/components/canvas/display/OverlaysButton.tsx",
             "apps/desktop/src/field/three/venueUnderlay",
@@ -1484,11 +1485,9 @@ const shots = [
         async setup(ctx) {
             const { page } = ctx;
             await tidy(page);
-            // Show on field, then Venue on and its look
+            // Show on field, then Venue on
             await page.getByTestId("field-display-overlays").click();
             await page.getByTestId("field-display-venue").click();
-            await page.getByTestId("field-display-venue-look-faint").click();
-            await page.getByTestId("field-display-venue-around-edge").click();
             await page.mouse.move(4, ctx.window.height / 2);
             await ctx.wait(1500);
             const menu = page
@@ -1508,14 +1507,14 @@ const shots = [
     {
         id: "venue-on-field-stands",
         kind: "still",
-        // Zoomed out with Soft and Stands: the stadium around the field, from above
+        // Zoomed out with Soft and Stands (Settings › Field): the stadium around the field, from
+        // above
+        uiSettings: { fieldVenueLast: "soft", fieldVenueAround: "stands" },
         async setup(ctx) {
             const { page } = ctx;
             await tidy(page);
             await page.getByTestId("field-display-overlays").click();
             await page.getByTestId("field-display-venue").click();
-            await page.getByTestId("field-display-venue-look-soft").click();
-            await page.getByTestId("field-display-venue-around-stands").click();
             await page.keyboard.press("Escape");
             // No tooltip on the button the menu closed back to
             await ctx.wait(400);
@@ -1559,14 +1558,18 @@ const shots = [
             "apps/desktop/src/field/three/venueUnderlay/CameraHandle.tsx",
             "apps/desktop/src/field/three/venueUnderlay/CameraMarkerLayer.tsx",
         ],
+        // The camera shows on the field (its switch is only in Show on field while the 3D View
+        // is open)
+        uiSettings: {
+            fieldVenueLast: "faint",
+            fieldVenueAround: "edge",
+            view3dCameraOnField: true,
+        },
         async setup(ctx) {
             const { page } = ctx;
             await tidy(page);
             await page.getByTestId("field-display-overlays").click();
             await page.getByTestId("field-display-venue").click();
-            await page.getByTestId("field-display-venue-look-faint").click();
-            await page.getByTestId("field-display-venue-around-edge").click();
-            await page.getByTestId("field-display-venue-camera").click();
             await page.keyboard.press("Escape");
             await open3d(ctx);
             await page.bringToFront();

@@ -639,7 +639,7 @@
         "bindings": []
     },
     "equipmentIconsChanged": {
-        "label": "Equipment icons: Changed only",
+        "label": "Equipment icons: Not their own",
         "category": "field",
         "bindings": []
     },
@@ -648,18 +648,23 @@
         "category": "field",
         "bindings": []
     },
+    "toggleEquipmentIcons": {
+        "label": "Show or hide equipment icons",
+        "category": "field",
+        "bindings": []
+    },
     "equipmentIconsBeside": {
-        "label": "Equipment icons: Next to the number",
+        "label": "Equipment icons: After the drill number",
         "category": "field",
         "bindings": []
     },
     "equipmentIconsOnDot": {
-        "label": "Equipment icons: In place of the dot",
+        "label": "Equipment icons: Instead of the dot",
         "category": "field",
         "bindings": []
     },
     "equipmentIconsOnNumber": {
-        "label": "Equipment icons: In place of the number",
+        "label": "Equipment icons: Instead of the drill number",
         "category": "field",
         "bindings": []
     },
@@ -1131,6 +1136,16 @@
                 }
             }
         ]
+    },
+    "toggleMarcherLabels": {
+        "label": "Show or hide drill numbers",
+        "category": "ui",
+        "bindings": []
+    },
+    "toggleShapeOutlines": {
+        "label": "Show or hide shape outlines",
+        "category": "ui",
+        "bindings": []
     },
     "toggleFacingArrows": {
         "label": "Show or hide which way performers face",

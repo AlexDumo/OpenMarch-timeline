@@ -4,7 +4,7 @@ import { useShortcutsDialogStore } from "@/stores/ShortcutsDialogStore";
 import { isBasicMode, useEditorModeStore } from "@/stores/EditorModeStore";
 import tolgee from "@/global/singletons/Tolgee";
 import { useActionHandler } from "../useActionHandler";
-import { toggleFacingArrows } from "@/cues/useFieldFacing";
+import { useFieldShowActionHandlers } from "@/field/useFieldShowActionHandlers";
 import { useTempoModeStore } from "@/tempo/tempoModeStore";
 import {
     openFrontEnsemble,
@@ -20,31 +20,10 @@ export function useUiActionHandlers() {
     useActionHandler("toggleNextPagePaths", () =>
         setUiSettings({ ...settings(), nextPaths: !settings().nextPaths }),
     );
-    // Facing carets on the field (fork #1316); the palette names what it will do
-    const facingOn = () => settings().facingArrows === true;
-    useActionHandler("toggleFacingArrows", toggleFacingArrows, {
-        label: () =>
-            tolgee.t(
-                facingOn()
-                    ? "actions.ui.hideFacingArrows"
-                    : "actions.ui.showFacingArrows",
-            ),
-    });
-    // Show or hide venue on field is the field's (useFieldVenueAction), which knows the venue
-    const cameraOn = () => settings().view3dCameraOnField === true;
-    useActionHandler(
-        "toggleView3dCameraOnField",
-        () =>
-            setUiSettings({ ...settings(), view3dCameraOnField: !cameraOn() }),
-        {
-            label: () =>
-                tolgee.t(
-                    cameraOn()
-                        ? "actions.ui.hideView3dCameraOnField"
-                        : "actions.ui.showView3dCameraOnField",
-                ),
-        },
-    );
+    // Show on field's switches (fork #1332): drill numbers, equipment icons, facing, shape
+    // outlines and the 3D View's camera. Show or hide venue on field is the field's
+    // (useFieldVenueAction), which knows the venue; Line order is useMarcherOrder's
+    useFieldShowActionHandlers();
     // Start flag positions (#331): N shows the Hold N state while held, and a quick tap latches
     // it. A lost key (the window lost focus) lets go without counting as a tap. The palette has
     // no key to let go, so it toggles the latch.

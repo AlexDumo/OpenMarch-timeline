@@ -346,11 +346,12 @@ function ThreeFieldView() {
     const startOver = useCallback(() => setCanvasKey((key) => key + 1), []);
 
     const marchers = useMemo(() => new FieldMarchers(), []);
-    // The View tab's label form: full drill numbers ("OT12"), or the number only ("12")
+    // Show on field's Drill numbers: full drill numbers ("OT12"), the number only ("12"), or off;
+    // Settings › Field's size (Auto shrinks them where crowded) and position
     const { labelForm, labelSize, labelPosition } = useUiSettingsStore(
         useShallow((s) => ({
-            labelForm: s.uiSettings.marcherLabels ?? "auto",
-            labelSize: s.uiSettings.marcherLabelSize ?? "normal",
+            labelForm: s.uiSettings.marcherLabels ?? "names",
+            labelSize: s.uiSettings.marcherLabelSize ?? "auto",
             labelPosition: s.uiSettings.marcherLabelPosition ?? "above",
         })),
     );
@@ -383,10 +384,10 @@ function ThreeFieldView() {
     const labelStyle = useMemo(
         (): LabelStyle => ({
             form:
-                labelForm === "auto"
-                    ? "auto"
-                    : labelForm === "off"
-                      ? "off"
+                labelForm === "off"
+                    ? "off"
+                    : labelSize === "auto"
+                      ? "auto"
                       : "fixed",
             scale: LABEL_SIZE_SCALE[labelSize],
             beside: labelPosition === "beside",

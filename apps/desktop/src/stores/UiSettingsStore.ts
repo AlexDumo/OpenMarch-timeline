@@ -84,11 +84,15 @@ export interface UiSettings {
         referencePointY?: number;
     };
     /**
-     * Marcher labels on the field: full drill numbers, numbers only, off, or `auto` (full drill
-     * numbers, shrunk as far as a smallest readable size where they would touch)
+     * Marcher labels on the field (Show on field's Drill numbers): full drill numbers ("T12"),
+     * numbers only ("12"), or off. Was also `auto` until fork #1332's redesign, which made Auto
+     * a size (`marcherLabelSize`); `parseSettings` carries it over
      */
     marcherLabels?: MarcherLabelForm;
-    /** Marcher labels' size on the field */
+    /**
+     * Marcher labels' size on the field (Settings › Field): `auto` draws them at the normal size,
+     * shrunk together as far as a smallest readable size where they would touch (the default)
+     */
     marcherLabelSize?: MarcherLabelSize;
     /** Marcher labels above their dots, or beside them (to the right) */
     marcherLabelPosition?: "above" | "beside";
@@ -110,6 +114,12 @@ export interface UiSettings {
      * performers holding something other than their own instrument, everyone, or nobody
      */
     equipmentIcons?: EquipmentIcons;
+    /**
+     * Show on field's Equipment icons for some sections only (fork #1332: "guard only"), by the
+     * sections' stored names. While any is listed, everyone in those sections shows an icon and
+     * nobody else does, whatever `equipmentIcons` says (other than off). Empty by default
+     */
+    equipmentIconSections?: string[];
     /** Where those icons go: after the drill number, in place of the dot, or of the number */
     equipmentIconPlace?: EquipmentIconPlace;
     /**
@@ -140,6 +150,11 @@ export interface UiSettings {
     fieldVenueAround?: FieldVenueAround;
     /** Whether the 2D field shows where the 3D View's camera is while the 3D View is open */
     view3dCameraOnField?: boolean;
+    /**
+     * The choice each of Show on field's switches turns back on to (fork #1332): what the row
+     * showed when it was last switched off. A row not here turns on to its default
+     */
+    fieldShowLast?: FieldShowLast;
     /** Whether props show their names on the canvas, unless `propNameOverrides` says otherwise */
     showPropNames: boolean;
     /** Per prop: whether its name shows. Key is the item id. */
@@ -152,9 +167,16 @@ export interface UiSettings {
     tolgeeApiKey?: string;
 }
 
-export type MarcherLabelForm = "auto" | "names" | "numbers" | "off";
-export type MarcherLabelSize = "small" | "normal" | "large";
+export type MarcherLabelForm = "names" | "numbers" | "off";
+export type MarcherLabelSize = "auto" | "small" | "normal" | "large";
 export type ShapeOutlines = "selected" | "always" | "off";
+/** What a Show on field switch with a choice beside it turns back on to */
+export interface FieldShowLast {
+    marcherLabels?: Exclude<MarcherLabelForm, "off">;
+    equipmentIcons?: Exclude<EquipmentIcons, "off">;
+    shapes?: Exclude<ShapeOutlines, "off">;
+    lineOrder?: Exclude<ShapeOutlines, "off">;
+}
 export type { EquipmentIconPlace, EquipmentIcons };
 
 export const FIELD_VENUE_LOOKS = [
@@ -175,8 +197,9 @@ const oneOf = <T extends string>(
 ): T =>
     (values as readonly unknown[]).includes(value) ? (value as T) : fallback;
 
-/** How much each label size scales the labels' normal size */
+/** How much each label size scales the labels' normal size (Auto shrinks from normal) */
 export const LABEL_SIZE_SCALE: Record<MarcherLabelSize, number> = {
+    auto: 1,
     small: 0.7,
     normal: 1,
     large: 1.4,
@@ -218,10 +241,12 @@ export const defaultSettings: UiSettings = {
         nearestYSteps: 0,
         referencePointY: undefined,
     },
-    marcherLabels: "auto",
+    marcherLabels: "names",
+    marcherLabelSize: "auto",
     shapes: "selected",
     lineOrder: "off",
     equipmentIcons: "changed",
+    equipmentIconSections: [],
     equipmentIconPlace: "beside",
     facingArrows: false,
     shapeWalks: false,
@@ -230,6 +255,7 @@ export const defaultSettings: UiSettings = {
     fieldVenueLast: "faint",
     fieldVenueAround: "edge",
     view3dCameraOnField: false,
+    fieldShowLast: {},
     showPropNames: false,
     propNameOverrides: {},
     hiddenPropIds: {},
@@ -280,6 +306,7 @@ export const parseSettings = (raw: string): UiSettings => {
     if (parsed.facingArrows === undefined && facingMarks !== undefined)
         parsed.facingArrows =
             facingMarks === "turned" || facingMarks === "everyone";
+    const labels = parseMarcherLabels(parsed.marcherLabels as unknown);
     const mergedMouseSettings = {
         ...defaultSettings.mouseSettings,
         ...parsed.mouseSettings,
@@ -301,7 +328,18 @@ export const parseSettings = (raw: string): UiSettings => {
         timelineLanes: booleanMap(parsed.timelineLanes),
         timelineFoldedCueLanes: stringList(parsed.timelineFoldedCueLanes),
         recentEquipment: stringList(parsed.recentEquipment).slice(0, 4),
+        marcherLabels: labels.form,
+        marcherLabelSize: labels.autoSize
+            ? "auto"
+            : oneOf(
+                  LABEL_SIZES,
+                  parsed.marcherLabelSize,
+                  // Labels picked by hand before Auto was a size kept the normal size
+                  parsed.marcherLabels === undefined ? "auto" : "normal",
+              ),
+        fieldShowLast: parseFieldShowLast(parsed.fieldShowLast),
         equipmentIcons: parseEquipmentIcons(parsed.equipmentIcons),
+        equipmentIconSections: stringList(parsed.equipmentIconSections),
         equipmentIconPlace: parseEquipmentIconPlace(parsed.equipmentIconPlace),
         facingArrows: parsed.facingArrows === true,
         startFlagPositions: parseStartFlagPositions(parsed.startFlagPositions),
@@ -324,6 +362,39 @@ export const parseSettings = (raw: string): UiSettings => {
               }
             : defaultSettings.coordinateRounding,
     };
+};
+
+const LABEL_SIZES = ["auto", "small", "normal", "large"] as const;
+
+/**
+ * A stored Drill numbers choice. Auto was a fourth form until fork #1332 made it a size: it
+ * becomes full drill numbers with the Auto size
+ */
+const parseMarcherLabels = (
+    value: unknown,
+): { form: MarcherLabelForm; autoSize: boolean } =>
+    value === "auto"
+        ? { form: "names", autoSize: true }
+        : {
+              form: oneOf(["names", "numbers", "off"], value, "names"),
+              autoSize: false,
+          };
+
+/** The stored choices Show on field's switches turn back on to, keeping only valid ones */
+const parseFieldShowLast = (value: unknown): FieldShowLast => {
+    if (value === null || typeof value !== "object" || Array.isArray(value))
+        return {};
+    const v = value as Record<string, unknown>;
+    const last: FieldShowLast = {};
+    if (v.marcherLabels === "names" || v.marcherLabels === "numbers")
+        last.marcherLabels = v.marcherLabels;
+    if (v.equipmentIcons === "changed" || v.equipmentIcons === "everyone")
+        last.equipmentIcons = v.equipmentIcons;
+    if (v.shapes === "selected" || v.shapes === "always")
+        last.shapes = v.shapes;
+    if (v.lineOrder === "selected" || v.lineOrder === "always")
+        last.lineOrder = v.lineOrder;
+    return last;
 };
 
 /** A stored Equipment icons choice, or the default for anything else. */

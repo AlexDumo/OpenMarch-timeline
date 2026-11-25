@@ -22,6 +22,14 @@ import {
     FIELD_SELECT_TOOL_KEY,
     useFieldSelectToolStore,
 } from "@/field/fieldSelectTool";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useView3dWindowStore } from "@/stores/View3dWindowStore";
+import { useFieldShowActionHandlers } from "@/field/useFieldShowActionHandlers";
+import { useFieldVenueAction } from "@/field/three/venueUnderlay/useFieldVenueAction";
+import { useVenueFieldStyle } from "@/hooks/queries/useVenueFieldStyle";
+import { toggleFieldShown } from "@/field/fieldShow";
+import { useActionHandler } from "@/shortcuts/useActionHandler";
+import { registerActionHandler } from "@/shortcuts/registry";
 import FieldDisplayBar from "../FieldDisplayBar";
 
 /** The field's display bar: start flag positions, and Show on field's one flat panel. */
@@ -38,11 +46,34 @@ vi.mock("@/hooks/queries/useVenueFieldStyle", async () => {
     };
 });
 
+// The show's performers, for Equipment icons' sections
+vi.mock("@/hooks/queries/useMarchers", () => ({
+    allMarchersQueryOptions: () => ({
+        queryKey: ["test-marchers"],
+        queryFn: async () => [
+            { id: 1, section: "Color Guard" },
+            { id: 2, section: "Trumpet" },
+            { id: 3, section: "Trumpet" },
+        ],
+    }),
+}));
+
+/** The switches' actions, registered where the app registers them */
+function Handlers() {
+    useFieldShowActionHandlers();
+    useFieldVenueAction(useVenueFieldStyle());
+    useActionHandler("toggleMarcherOrder", () => toggleFieldShown("lineOrder"));
+    return null;
+}
+
 const open = () =>
     render(
-        <TolgeeProvider tolgee={tolgee}>
-            <FieldDisplayBar />
-        </TolgeeProvider>,
+        <QueryClientProvider client={new QueryClient()}>
+            <TolgeeProvider tolgee={tolgee}>
+                <Handlers />
+                <FieldDisplayBar />
+            </TolgeeProvider>
+        </QueryClientProvider>,
     );
 
 beforeAll(async () => {
@@ -53,8 +84,12 @@ beforeEach(() => {
     const { uiSettings, setUiSettings } = useUiSettingsStore.getState();
     setUiSettings({
         ...uiSettings,
-        marcherLabels: "auto",
+        marcherLabels: "names",
+        marcherLabelSize: "auto",
         shapes: "selected",
+        lineOrder: "off",
+        equipmentIconSections: [],
+        fieldShowLast: {},
         nextPaths: false,
         equipmentIcons: "changed",
         equipmentIconPlace: "beside",
@@ -66,6 +101,7 @@ beforeEach(() => {
 });
 afterEach(() => {
     cleanup();
+    useView3dWindowStore.setState({ open: false });
     useInputModeStore.setState({ mode: "pointer" });
     useFieldSelectToolStore.getState().setTool("box");
 });
@@ -125,75 +161,120 @@ describe("FieldDisplayBar", () => {
         expect(screen.getByTestId("field-display-overlays")).toBeTruthy();
     });
 
-    it("lays the panel out flat: Performers, then Field, no further popups", () => {
+    it("lays out one row per thing shown, one switch each, no Off segments or Auto", () => {
         open();
         const p = panel();
-        const headings = within(p)
-            .getAllByRole("heading")
-            .map((h) => h.textContent);
-        expect(headings).toEqual(["Show on field", "Performers", "Field"]);
-        // Each choice is a segmented switch or a switch in the panel itself
-        for (const name of [
+        expect(
+            within(p)
+                .getAllByRole("switch")
+                .map((s) => s.getAttribute("aria-label")),
+        ).toEqual([
             "Drill numbers",
-            "What they hold",
-            "Icon goes",
+            "Equipment icons",
+            "Facing",
             "Shape outlines",
-        ])
-            expect(within(p).getByRole("group", { name })).toBeTruthy();
-        for (const name of ["Facing", "Venue"])
-            expect(within(p).getByRole("switch", { name })).toBeTruthy();
-        // Order only with Follow-the-leader on
-        expect(within(p).queryByRole("group", { name: "Order" })).toBeNull();
+            "Venue",
+        ]);
+        // The choices beside the switches that are on: no Off, no Auto
+        expect(
+            within(p).getByRole("group", { name: "Drill numbers" }),
+        ).toBeTruthy();
+        expect(
+            within(p).getByRole("group", { name: "Shape outlines" }),
+        ).toBeTruthy();
+        expect(within(p).queryByText("Off")).toBeNull();
+        expect(within(p).queryByText("Auto")).toBeNull();
+        // Mode rows only in their mode
+        expect(
+            within(p).queryByText("While Follow-the-leader is on"),
+        ).toBeNull();
+        expect(within(p).queryByText("While the 3D View is open")).toBeNull();
+        // Set-once looks are a link away
+        expect(within(p).getByText("Settings › Field")).toBeTruthy();
     });
 
-    it("sets the drill numbers and keeps the panel open", () => {
+    it("Drill numbers: the switch hides its choice and brings back the one last shown", () => {
         open();
         panel();
-        fireEvent.click(screen.getByTestId("field-display-labels-off"));
-        expect(settings().marcherLabels).toBe("off");
-        expect(checked("field-display-labels-off")).toBe("true");
-        // The examples read as words to a screen reader
-        expect(
-            screen.getByRole("radio", { name: "Drill numbers" }),
-        ).toBeTruthy();
         fireEvent.click(screen.getByTestId("field-display-labels-numbers"));
         expect(settings().marcherLabels).toBe("numbers");
+        // The examples read as words to a screen reader
+        expect(
+            screen.getByRole("radio", { name: "Numbers only" }),
+        ).toBeTruthy();
+        fireEvent.click(screen.getByRole("switch", { name: "Drill numbers" }));
+        expect(settings().marcherLabels).toBe("off");
+        expect(screen.queryByTestId("field-display-labels")).toBeNull();
+        fireEvent.click(screen.getByRole("switch", { name: "Drill numbers" }));
+        expect(settings().marcherLabels).toBe("numbers");
+        expect(checked("field-display-labels-numbers")).toBe("true");
     });
 
-    it("sets the shape outlines", () => {
+    it("Shape outlines: Selected or All while on", () => {
         open();
         panel();
         fireEvent.click(screen.getByTestId("field-display-shapes-always"));
         expect(settings().shapes).toBe("always");
+        fireEvent.click(screen.getByRole("switch", { name: "Shape outlines" }));
+        expect(settings().shapes).toBe("off");
+        fireEvent.click(screen.getByRole("switch", { name: "Shape outlines" }));
+        expect(settings().shapes).toBe("always");
     });
 
-    it("What they hold: who, then where, in the same panel (#992)", () => {
+    it("Equipment icons: who from a menu, Not their own, Everyone or some sections (owner, 2026-11-25)", async () => {
         open();
         panel();
-        fireEvent.click(screen.getByTestId("field-display-equipment-everyone"));
-        expect(settings().equipmentIcons).toBe("everyone");
-        fireEvent.click(
-            screen.getByTestId("field-display-equipment-place-dot"),
-        );
-        expect(settings().equipmentIconPlace).toBe("dot");
-        expect(checked("field-display-equipment-place-dot")).toBe("true");
-    });
-
-    it("greys Icon goes out while the icons are off and says why (#992)", () => {
-        open();
-        panel();
-        fireEvent.click(screen.getByTestId("field-display-equipment-off"));
-        const onNumber = screen.getByTestId(
-            "field-display-equipment-place-label",
-        ) as HTMLButtonElement;
-        expect(onNumber.disabled).toBe(true);
+        const who = screen.getByTestId("field-display-equipment-who");
+        expect(who.textContent).toBe("Not their own");
+        const openMenu = () =>
+            fireEvent.keyDown(
+                screen.getByTestId("field-display-equipment-who"),
+                { key: "Enter" },
+            );
+        openMenu();
+        const menu = await screen.findByTestId("field-display-equipment-menu");
+        // The show's sections, once read
+        await within(menu).findByText("Color Guard");
         expect(
-            screen.getByText(
-                "Equipment icons are off. Choose Changed only or Everyone to show them.",
-            ),
-        ).toBeTruthy();
-        fireEvent.click(onNumber);
-        expect(settings().equipmentIconPlace).toBe("beside");
+            within(menu)
+                .getAllByRole("menuitemcheckbox")
+                .map((item) => item.textContent),
+        ).toEqual(["Not their own", "Everyone", "Trumpet", "Color Guard"]);
+        // Ticking a section keeps the menu open for the next
+        fireEvent.click(
+            screen.getByTestId("field-display-equipment-section-Color Guard"),
+        );
+        expect(settings().equipmentIconSections).toEqual(["Color Guard"]);
+        expect(screen.getByTestId("field-display-equipment-menu")).toBeTruthy();
+        expect(who.textContent).toBe("Color Guard");
+        fireEvent.click(
+            screen.getByTestId("field-display-equipment-section-Trumpet"),
+        );
+        expect(who.textContent).toBe("Color Guard, Trumpet");
+        // Everyone means everyone: the sections go
+        fireEvent.click(screen.getByTestId("field-display-equipment-everyone"));
+        expect(settings()).toMatchObject({
+            equipmentIcons: "everyone",
+            equipmentIconSections: [],
+        });
+        expect(
+            screen.getByTestId("field-display-equipment-who").textContent,
+        ).toBe("Everyone");
+    });
+
+    it("Equipment icons: off and back on keeps who", () => {
+        useUiSettingsStore.getState().setUiSettings({
+            ...settings(),
+            equipmentIcons: "everyone",
+        });
+        open();
+        panel();
+        const sw = screen.getByRole("switch", { name: "Equipment icons" });
+        fireEvent.click(sw);
+        expect(settings().equipmentIcons).toBe("off");
+        expect(screen.queryByTestId("field-display-equipment-who")).toBeNull();
+        fireEvent.click(sw);
+        expect(settings().equipmentIcons).toBe("everyone");
     });
 
     it("Facing: a switch, off by default (#1316)", () => {
@@ -207,7 +288,7 @@ describe("FieldDisplayBar", () => {
         expect(settings().facingArrows).toBe(false);
     });
 
-    it("shows Order with its key only with Follow-the-leader on", () => {
+    it("shows Line order with its key under a While line, only with Follow-the-leader on", () => {
         useUiSettingsStore.getState().setUiSettings({
             ...settings(),
             followTheLeader: true,
@@ -215,12 +296,27 @@ describe("FieldDisplayBar", () => {
         });
         open();
         const p = panel();
-        expect(within(p).getByRole("group", { name: "Order" })).toBeTruthy();
+        expect(
+            within(p).getByText("While Follow-the-leader is on"),
+        ).toBeTruthy();
+        const sw = within(p).getByRole("switch", { name: "Line order" });
+        fireEvent.click(sw);
+        expect(settings().lineOrder).toBe("selected");
         fireEvent.click(screen.getByTestId("field-display-order-always"));
         expect(settings().lineOrder).toBe("always");
     });
 
-    it("turns the venue on in the look last picked, with its look and surroundings under it", () => {
+    it("shows the 3D View camera only while the 3D View is open", () => {
+        useView3dWindowStore.setState({ open: true });
+        open();
+        const p = panel();
+        expect(within(p).getByText("While the 3D View is open")).toBeTruthy();
+        fireEvent.click(screen.getByRole("switch", { name: "3D View camera" }));
+        expect(settings().view3dCameraOnField).toBe(true);
+        expect(settings().fieldVenue).toBe("off");
+    });
+
+    it("turns the venue on in the look Settings › Field picks", () => {
         venue.kit = "hs";
         useUiSettingsStore.getState().setUiSettings({
             ...settings(),
@@ -228,29 +324,11 @@ describe("FieldDisplayBar", () => {
         });
         open();
         panel();
-        expect(screen.queryByTestId("field-display-venue-look")).toBeNull();
         fireEvent.click(screen.getByRole("switch", { name: "Venue" }));
         expect(settings().fieldVenue).toBe("soft");
-        expect(checked("field-display-venue-look-soft")).toBe("true");
-        fireEvent.click(screen.getByTestId("field-display-venue-look-full"));
-        expect(settings().fieldVenue).toBe("full");
-        expect(settings().fieldVenueLast).toBe("full");
-        fireEvent.click(
-            screen.getByTestId("field-display-venue-around-stands"),
-        );
-        expect(settings().fieldVenueAround).toBe("stands");
-        fireEvent.click(screen.getByRole("switch", { name: "3D View camera" }));
-        expect(settings().view3dCameraOnField).toBe(true);
-        fireEvent.click(screen.getByRole("switch", { name: "Venue" }));
-        expect(settings().fieldVenue).toBe("off");
+        // No look or surroundings in the panel: they're Settings › Field's
         expect(screen.queryByTestId("field-display-venue-look")).toBeNull();
-    });
-
-    it("shows the 3D View camera with the venue on or off", () => {
-        open();
-        panel();
-        fireEvent.click(screen.getByRole("switch", { name: "3D View camera" }));
-        expect(settings().view3dCameraOnField).toBe(true);
+        fireEvent.click(screen.getByRole("switch", { name: "Venue" }));
         expect(settings().fieldVenue).toBe("off");
     });
 
@@ -266,37 +344,13 @@ describe("FieldDisplayBar", () => {
         venue.kit = "hs";
     });
 
-    it("checks None, not the greyed-out Turf edge, where there's no turf", () => {
-        venue.kit = "gym";
-        useUiSettingsStore.getState().setUiSettings({
-            ...settings(),
-            fieldVenue: "faint",
-            fieldVenueAround: undefined,
-        });
-        open();
-        panel();
-        expect(checked("field-display-venue-around-field")).toBe("true");
-        expect(checked("field-display-venue-around-edge")).toBe("false");
-        expect(
-            (
-                screen.getByTestId(
-                    "field-display-venue-around-edge",
-                ) as HTMLButtonElement
-            ).disabled,
-        ).toBe(true);
-        expect(
-            screen.getByText("Only stadiums have a turf edge."),
-        ).toBeTruthy();
-        venue.kit = "hs";
-    });
-
     it("dots the button while anything differs from how it ships, and Reset puts it all back", () => {
         open();
         const button = screen.getByTestId("field-display-overlays");
         expect(screen.queryByTestId("field-display-overlays-dot")).toBeNull();
         panel();
         expect(screen.queryByTestId("field-display-overlays-reset")).toBeNull();
-        fireEvent.click(screen.getByTestId("field-display-labels-off"));
+        fireEvent.click(screen.getByRole("switch", { name: "Drill numbers" }));
         fireEvent.click(screen.getByRole("switch", { name: "Facing" }));
         fireEvent.click(screen.getByTestId("field-display-shapes-always"));
         expect(screen.getByTestId("field-display-overlays-dot")).toBeTruthy();
@@ -305,13 +359,38 @@ describe("FieldDisplayBar", () => {
         );
         fireEvent.click(screen.getByTestId("field-display-overlays-reset"));
         expect(settings()).toMatchObject({
-            marcherLabels: "auto",
+            marcherLabels: "names",
             facingArrows: false,
             shapes: "selected",
             equipmentIcons: "changed",
+            equipmentIconSections: [],
             fieldVenue: "off",
         });
         expect(screen.queryByTestId("field-display-overlays-dot")).toBeNull();
+    });
+
+    it("leaves Settings › Field's looks alone: a label size or icon place isn't a change here", () => {
+        useUiSettingsStore.getState().setUiSettings({
+            ...settings(),
+            marcherLabelSize: "large",
+            equipmentIconPlace: "dot",
+        });
+        open();
+        expect(screen.queryByTestId("field-display-overlays-dot")).toBeNull();
+    });
+
+    it("opens Settings at Field from the footer", () => {
+        const opened = vi.fn();
+        const unregister = registerActionHandler("openSettings", {
+            run: opened,
+            isEnabled: () => true,
+        });
+        open();
+        panel();
+        fireEvent.click(screen.getByTestId("field-display-settings-link"));
+        expect(opened).toHaveBeenCalled();
+        expect(localStorage.getItem("openmarch:settingsSection")).toBe("field");
+        unregister();
     });
 
     it("toggles next paths from the paths popover", () => {

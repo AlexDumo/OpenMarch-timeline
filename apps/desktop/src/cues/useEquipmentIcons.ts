@@ -21,8 +21,9 @@ const NONE = { key: "", icons: new Map<number, EquipmentIconKey>() } as const;
 
 /**
  * What each performer holds at the field's beat, as the icon the 2D field draws after their drill
- * number (fork #992), for whom the field display bar's Equipment icons setting says: performers
- * holding something other than their own instrument (the default), everyone, or nobody (null).
+ * number (fork #992), for whom Show on field's Equipment icons says: performers holding something
+ * other than their own instrument (the default), everyone, everyone in some sections, or nobody
+ * (null).
  * `at` takes a spec beat (fractional while playing) and is cheap to call every frame: it works the
  * icons out again only when the count changes.
  */
@@ -32,10 +33,16 @@ export function useEquipmentIcons(): LabelIcons | null {
     const shown = useUiSettingsStore(
         (s) => s.uiSettings.equipmentIcons ?? "changed",
     );
+    // Some sections only (fork #1332), as one key so the list's identity doesn't matter
+    const sectionsKey = useUiSettingsStore((s) =>
+        (s.uiSettings.equipmentIconSections ?? []).join("\n"),
+    );
     return useMemo(() => {
         if (!show || !beats || shown === "off") return null;
+        const only = new Set(sectionsKey ? sectionsKey.split("\n") : []);
         if (
             shown === "changed" &&
+            only.size === 0 &&
             !show.cues.some((c) => c.type === "equipment")
         )
             return null;
@@ -66,11 +73,12 @@ export function useEquipmentIcons(): LabelIcons | null {
                     sectionOf: (id) => sections.get(id),
                     count,
                     shown,
+                    sections: only,
                 });
                 lastCount = count;
                 last = { key: iconsKey(icons), icons };
                 return last;
             },
         };
-    }, [show, beats, shown]);
+    }, [show, beats, shown, sectionsKey]);
 }

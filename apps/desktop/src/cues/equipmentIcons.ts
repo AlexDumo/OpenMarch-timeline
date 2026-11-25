@@ -95,6 +95,7 @@ export function equipmentIconsAt({
     sectionOf,
     count,
     shown,
+    sections,
 }: {
     compiled: CompiledCues;
     usualValue: ReadonlyMap<number, string | null>;
@@ -102,13 +103,20 @@ export function equipmentIconsAt({
     sectionOf: (id: number) => string | undefined;
     count: number;
     shown: EquipmentIcons;
+    /**
+     * Only these sections (by stored name), everyone in them, whatever `shown` says other than
+     * off (Show on field's Equipment icons for some sections, fork #1332). Empty or left out: all
+     */
+    sections?: ReadonlySet<string>;
 }): Map<number, EquipmentIconKey> {
     const icons = new Map<number, EquipmentIconKey>();
     if (shown === "off") return icons;
+    const some = sections !== undefined && sections.size > 0;
     for (const [id, usual] of usualValue) {
+        if (some && !sections.has(sectionOf(id) ?? "")) continue;
         const held = heldValueAt(compiled, id, count);
         if (held !== usual) icons.set(id, iconOfValue(held));
-        else if (shown === "everyone") {
+        else if (some || shown === "everyone") {
             const own = iconOfValue(usual);
             icons.set(
                 id,
