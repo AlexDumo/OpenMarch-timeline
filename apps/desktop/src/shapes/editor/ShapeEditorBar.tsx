@@ -2586,10 +2586,17 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
                     e.target instanceof Element
                         ? (e.target.closest("button, input") ?? e.target)
                         : null;
-                pressed.current = control && {
-                    el: control,
-                    left: control.getBoundingClientRect().left,
-                };
+                // Only a control in the editor itself: one in a menu it opened (the Rows menu's
+                // numbers, a portal the press reaches through React) moves with the menu, and
+                // following it would slide the editor, and the menu with it, as a dragged number
+                // changes width (owner)
+                pressed.current =
+                    control && ref.current?.contains(control)
+                        ? {
+                              el: control,
+                              left: control.getBoundingClientRect().left,
+                          }
+                        : null;
                 setPressing(true);
             },
         },
