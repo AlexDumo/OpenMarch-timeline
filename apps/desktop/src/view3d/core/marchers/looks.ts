@@ -76,17 +76,56 @@ export function bassOptions(
     return out;
 }
 
-/** om-pose's seven body types (`assets/body-v4u/<type>.glb`). */
+/**
+ * om-pose's body types (`assets/body-v4u/<type>.glb`): a feminine and a
+ * masculine frame, each in four builds, plus `neutral-average`. No performer
+ * gets `neutral-average` by default: it is the median body the uniform
+ * artwork template is drawn on, and the low quality tier's flats use it.
+ */
 export const BODY_TYPES = [
-    "neutral-slim",
     "neutral-average",
-    "neutral-athletic",
-    "neutral-broad",
-    "neutral-full",
+    "feminine-slim",
     "feminine-average",
+    "feminine-athletic",
+    "feminine-full",
+    "masculine-slim",
     "masculine-average",
+    "masculine-athletic",
+    "masculine-full",
 ] as const;
 export type BodyType = (typeof BODY_TYPES)[number];
+
+/** The two frames a performer gets by default, half each. */
+export const BODY_FRAMES = ["feminine", "masculine"] as const;
+
+/**
+ * The builds a performer gets by default, out of 100: most performers are
+ * average, with slim, full and athletic around them.
+ */
+export const BODY_BUILD_WEIGHTS = [
+    ["slim", 25],
+    ["average", 40],
+    ["athletic", 15],
+    ["full", 20],
+] as const;
+
+/** The body types performers get by default: every frame in every build. */
+export const DEFAULT_BODY_TYPES: readonly BodyType[] = BODY_FRAMES.flatMap(
+    (frame) =>
+        BODY_BUILD_WEIGHTS.map(
+            ([build]) => `${frame}-${build}` as const satisfies BodyType,
+        ),
+);
+
+/** The build for a hash value: `BODY_BUILD_WEIGHTS` over 0 ... 99. */
+function buildFor(n: number): (typeof BODY_BUILD_WEIGHTS)[number][0] {
+    let left = n % 100;
+    for (const [build, weight] of BODY_BUILD_WEIGHTS) {
+        if (left < weight) return build;
+        left -= weight;
+    }
+    return "average";
+}
 
 /** The skin tones om-pose's viewers use, light to dark. */
 export const SKIN_TONES = [
@@ -156,7 +195,8 @@ export function defaultPerformerBody(
     const b = hash32(a ^ 0x9e3779b9);
     const c = hash32(b ^ 0x85ebca6b);
     return {
-        bodyType: BODY_TYPES[a % BODY_TYPES.length],
+        // frame from the top bit, build from the bits below it
+        bodyType: `${BODY_FRAMES[a >>> 31]}-${buildFor(a >>> 8)}`,
         skinTone: SKIN_TONES[b % SKIN_TONES.length],
         // high bits: this chained hash's low two bits are uneven
         heightClass: varyHeight

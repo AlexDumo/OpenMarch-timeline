@@ -155,7 +155,7 @@ export const panelOfRegion = (id: FlatsRegionId) =>
     id === "cape" ? "cape" : id.startsWith("front-") ? "front" : "back";
 
 /**
- * How an item follows the 7 body types (docs/3d/uniform-artwork.md, "Grading across the 7 body
+ * How an item follows the body types (docs/3d/uniform-artwork.md, "Grading across body
  * types"):
  *
  * - `proportional` (the default): scales with the girth factor k and keeps its aspect (logos,

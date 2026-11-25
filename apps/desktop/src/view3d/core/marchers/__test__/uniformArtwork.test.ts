@@ -460,11 +460,11 @@ describe("a look with flats", () => {
 });
 
 /**
- * Placed items on all 7 body types (fork #1258): the table widens every atlas row by its own
+ * Placed items on every body type (fork #1258): the table widens every atlas row by its own
  * grade factor k, so an item's width on the body is each row's chord times that row's k, and its
  * height is real.
  */
-describe("placed items on the 7 body types", () => {
+describe("placed items on every body type", () => {
     it("keeps a round item round within 1% at every preset on every body, row by row", () => {
         const presets = itemPresets(regions);
         expect(presets.map((p) => p.id)).toEqual([
@@ -604,7 +604,8 @@ describe("placed items on the 7 body types", () => {
                 // body a tile is 4 × 2 in at that row
                 expect(t.w * t.k).toBeCloseTo(4, 6);
                 expect(t.h).toBe(2);
-                if (body === "neutral-full") expect(t.k).toBeGreaterThan(1.05);
+                if (body === "masculine-full")
+                    expect(t.k).toBeGreaterThan(1.05);
                 // elsewhere in the region the row's own k differs, so the tiles drift from their
                 // real width there: measured, not hidden
                 const ys = t.polygon.map((q) => q[1]);

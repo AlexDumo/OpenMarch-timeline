@@ -50,13 +50,15 @@ const BODIES_DIR = path.join(DESKTOP, "src/view3d/assets/om-pose/bodies");
 const OUT = path.join(DESKTOP, "src/view3d/assets/uniform-flats");
 
 const BODY_TYPES = [
-    "neutral-slim",
     "neutral-average",
-    "neutral-athletic",
-    "neutral-broad",
-    "neutral-full",
+    "feminine-slim",
     "feminine-average",
+    "feminine-athletic",
+    "feminine-full",
+    "masculine-slim",
     "masculine-average",
+    "masculine-athletic",
+    "masculine-full",
 ];
 const MEDIAN = "neutral-average";
 const IN = 0.0254;

@@ -1,5 +1,5 @@
 /**
- * uniform:render — renders a uniform pack on the 7 body types with the 3D View's own renderer, on
+ * uniform:render — renders a uniform pack on every body type with the 3D View's own renderer, on
  * the GPU. See README.md. Run from apps/desktop: `pnpm uniform:render <pack> <outDir> [options]`.
  *
  * Exit codes: 0 rendered, 2 render error, 3 no GPU (refused, nothing drawn), 4 bad arguments or

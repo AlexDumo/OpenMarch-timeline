@@ -1,6 +1,6 @@
 // cspell:words omasset
 /**
- * uniform:render (README.md): renders a pack on the 7 body types with the 3D View's own
+ * uniform:render (README.md): renders a pack on every body type with the 3D View's own
  * renderer, on the GPU, and writes the views, a contact sheet per mode and `report.json`.
  *
  * The GPU is checked first, before anything is loaded or drawn, and before the output folder is
