@@ -13,7 +13,7 @@ import { useFieldTopInset } from "@/components/canvas/fieldLayers";
 import { useShallow } from "zustand/react/shallow";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import type { OrthographicCamera, WebGLRenderer } from "three";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DEFAULT_FIELD_THEME, type FieldProperties } from "@openmarch/core";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
@@ -73,10 +73,14 @@ import { useShapeFieldModes } from "@/shapes/field/useShapeFieldModes";
 import {
     boxPressSelection,
     canReachInside,
-    enterBox,
 } from "@/shapes/placed/boxSelection";
+import { doubleClickMember } from "@/shapes/placed/selectLinkedShapes";
+import { dropOnShapes } from "@/shapes/placed/commitBox";
+import { useBoxSelectionStore } from "@/shapes/placed/boxSelectionStore";
+import { setLivePositions } from "@/shapes/placed/livePositionsStore";
 import {
     drawnPlacedBoxes,
+    drawnShapeJoints,
     PlacedBoxesOverlay,
 } from "@/shapes/placed/PlacedBoxesOverlay";
 import { ShapeEditor } from "@/shapes/editor/ShapeEditorBar";
@@ -224,6 +228,7 @@ export default function ThreeField() {
  */
 function ThreeFieldView() {
     const databaseReady = useDatabaseReady();
+    const queryClient = useQueryClient();
     const { data: fieldProperties } = useQuery(
         fieldPropertiesQueryOptions(databaseReady),
     );
@@ -497,10 +502,15 @@ function ThreeFieldView() {
                     // Step 4j: the box stands clear of the order lane drawn on the selection
                     selectionCovers: () =>
                         useSelectionCoverStore.getState().covers,
-                    showPositions: (positions) =>
-                        marchers.setOverrides(positions),
-                    // #196: drops go through the drop-to-timeline path
+                    showPositions: (positions) => {
+                        marchers.setOverrides(positions);
+                        // Placed shapes' outlines go with them (#1236)
+                        setLivePositions(positions);
+                    },
+                    // #196: drops go through the drop-to-timeline path; one that turned or
+                    // scaled placed shapes selected whole takes them with it (#1236)
                     drop: (positions) =>
+                        dropOnShapes(positions, queryClient) ??
                         dropMarchersOnTimeline(
                             positions,
                             latest.current.moveMarchers,
@@ -508,15 +518,20 @@ function ThreeFieldView() {
                             (id) => items.isLocked(id),
                         ),
                     // #204: a click on a placed box's member selects the whole box
-                    pressSelection: (hit, shift, reachInside) =>
+                    pressSelection: (hit, shift, reachInside, click) =>
                         boxPressSelection(
                             hit,
                             shift,
                             selection.current,
                             reachInside,
+                            click,
                         ),
                     reachesInside: canReachInside,
-                    doubleClickMarcher: enterBox,
+                    // #1236: on a linked figure selected whole, the shape clicked; else inside it
+                    doubleClickMarcher: doubleClickMember,
+                    // #1236: shapes selected whole scale evenly, so arcs stay round
+                    keepsRatio: () =>
+                        useBoxSelectionStore.getState().shapes.length > 0,
                     // C2.1: items are hit anywhere inside their Outline
                     isItem: (id) => items.isItem(id),
                     // The pit's locked equipment: no marquee or lasso takes it
@@ -561,11 +576,14 @@ function ThreeFieldView() {
                     ),
                 },
             ),
-        [marchers, items, dimming],
+        [marchers, items, dimming, queryClient],
     );
     useEffect(() => {
         setActiveFieldEditor(editor);
-        return () => setActiveFieldEditor(null);
+        return () => {
+            setActiveFieldEditor(null);
+            setLivePositions(null);
+        };
     }, [editor]);
     // Preview edits nothing: the editor hears no presses there at all (`EditorInput`), only
     // navigation
@@ -631,6 +649,7 @@ function ThreeFieldView() {
                 selectionPivot: () => editor.selectionPivot(),
                 modeDrawing: () => editor.modeDrawing(),
                 placedBoxes: drawnPlacedBoxes,
+                shapeJoints: drawnShapeJoints,
                 items,
                 propTool: () => editor.propToolShape(),
                 fieldImage: () => latest.current.fieldImage,

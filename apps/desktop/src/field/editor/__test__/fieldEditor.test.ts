@@ -36,6 +36,7 @@ function setup({
     onScreen = undefined as FieldOnScreen | undefined,
     snap = undefined as FieldEditorPorts["snap"],
     snapOn = undefined as (() => boolean) | undefined,
+    keepsRatio = undefined as FieldEditorPorts["keepsRatio"],
 } = {}) {
     const clock = { now: 1000 };
     const state = {
@@ -73,6 +74,7 @@ function setup({
         selectionBoxPadding: () => 10,
         selectionCovers,
         snap,
+        keepsRatio,
         openMenu: vi.fn(),
         showPositions: vi.fn((positions) => {
             state.shown = positions;
@@ -2231,6 +2233,16 @@ describe("FieldEditor scale and rotate handles (#198)", () => {
             useShapeEditorStore.setState({ ratioLocked: true });
             expect(dropped({}, EQUAL)).toEqual(BOTH_WAYS);
         });
+
+        it("keeps the ratio with nothing held when placed shapes are selected whole (#1236)", () => {
+            const { editor, state } = setup({
+                selected: ALL,
+                positions: TALL,
+                keepsRatio: () => true,
+            });
+            drag(editor, EAST, { x: 560, y: 150 }, {});
+            expect(state.drops[0].positions).toEqual(BOTH_WAYS);
+        });
     });
 
     it("scales at a quarter speed with fine (Shift)", () => {
@@ -3089,6 +3101,46 @@ describe("FieldEditor modes (#204)", () => {
         expect(calls.filter((c) => c.startsWith("release"))).toEqual([
             "release 101,100 double after the editor's click",
         ]);
+    });
+
+    it("keeps a double-click going when the first click on a marcher turns a mode on (#1236)", () => {
+        // A click on a placed shape's member selects the shape, whose mode then comes on: the
+        // second click is the mode's, and still the double-click's
+        const { editor, state, clock } = setup();
+        click(editor, 100, 100);
+        expect(state.selected).toEqual([1]);
+        const { mode, calls } = fakeMode();
+        editor.setMode(mode);
+        clock.now += DOUBLE_CLICK_MS - 1;
+        click(editor, 101, 100);
+        expect(calls.filter((c) => c.startsWith("release"))).toEqual([
+            "release 101,100 double after the editor's click",
+        ]);
+    });
+
+    it("tells the app a double-click on a marcher whose first click was a mode's that then went off (#1236)", () => {
+        // A click on a selected shape's member goes inside it, so its mode goes off: the second
+        // click, the editor's, is a double-click on that marcher
+        const doubleClickMarcher = vi.fn();
+        const { editor, clock } = setup({ doubleClickMarcher });
+        const { mode, calls } = fakeMode();
+        editor.setMode(mode);
+        click(editor, 100, 100);
+        expect(calls.filter((c) => c.startsWith("release"))).toEqual([
+            "release 100,100 click",
+        ]);
+        editor.setMode(null);
+        clock.now += 100;
+        click(editor, 101, 100);
+        expect(doubleClickMarcher).toHaveBeenCalledWith(1);
+        // A mode's click off any marcher, then one on a marcher, is no double-click
+        clock.now += 1000;
+        editor.setMode(mode);
+        click(editor, EMPTY.x, EMPTY.y);
+        editor.setMode(null);
+        clock.now += 100;
+        click(editor, EMPTY.x, EMPTY.y);
+        expect(doubleClickMarcher).toHaveBeenCalledTimes(1);
     });
 
     it("tells the mode a drag, not a click, when the press went past the slop and came back", () => {

@@ -3,19 +3,40 @@ import type { PlacedBox } from "./placedBox";
 
 /**
  * Placed boxes and the selection (docs/timeline/research/shapes/07-placed-boxes.md): the box whose
- * members are exactly the selected marchers, if any, and the box you've double-clicked into.
+ * members are exactly the selected marchers, if any, the shapes they are when they're several
+ * selected whole, and the box you've double-clicked into.
  */
 export const useBoxSelectionStore = create<{
     /** The placed box that is selected as a whole */
     readonly selected: PlacedBox | null;
+    /**
+     * Two or more placed shapes on one move that the selection is made of, each whole (a linked
+     * figure, #1236; `wholeShapesOf`), which the nudge keys move together; empty otherwise
+     */
+    readonly shapes: readonly PlacedBox[];
     /** The recipe id of the box you're inside, picking its marchers one by one */
     readonly inside: number | null;
+    /**
+     * A shape of the linked figure you've gone into (#1236): a click picks one of its shapes,
+     * not the whole figure. Null when you're in none
+     */
+    readonly figure: number | null;
     /** Whether a click on a member selects its box (`useBoxSelection`) */
     readonly enabled: boolean;
-}>(() => ({ selected: null, inside: null, enabled: false }));
+}>(() => ({
+    selected: null,
+    shapes: [],
+    inside: null,
+    figure: null,
+    enabled: false,
+}));
 
 export const setInsideBox = (inside: number | null): void =>
     useBoxSelectionStore.setState({ inside });
+
+/** Goes into the linked figure placed shape `figure` is in, or out of any with null */
+export const setInsideFigure = (figure: number | null): void =>
+    useBoxSelectionStore.setState({ figure });
 
 /**
  * The selected box as a number in its floating editor is being dragged, before it's saved on

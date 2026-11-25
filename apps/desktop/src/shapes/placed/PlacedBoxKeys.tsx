@@ -10,8 +10,8 @@ import { currentShapeField } from "../field/shapeFieldContext";
 import { nudgeEnvFor, toolEnvFor } from "../tool/toolEnv";
 import type { AnyToolKind } from "../tool/toolKind";
 import { useBoxSelectionStore } from "./boxSelectionStore";
-import { commitBox } from "./commitBox";
-import { leaveBox, selectOnField } from "./boxSelection";
+import { commitBox, moveShapes } from "./commitBox";
+import { leaveBox, leaveFigure, selectOnField } from "./boxSelection";
 import { clearLiveBoxSelection } from "./liveBoxMode";
 import { ungroupShape } from "./ungroupShape";
 
@@ -45,18 +45,21 @@ export function stepPlacedBoxFiles(
 
 /**
  * The keys a selected placed shape takes over (07-placed-boxes.md). Mounted only while a shape is
- * selected or you're inside one, on top of the editor's handlers.
+ * selected (or several, whole) or you're inside one, on top of the editor's handlers.
  *
  * - The nudge keys move the whole shape through its kind, every member the same distance, so it
  *   keeps its form (the plain nudge rounds each marcher on its own, which bends a box on half
- *   steps).
+ *   steps, and takes an arc's marchers off it). Several shapes selected whole (a linked figure,
+ *   #1236) move together the same way, so the links between them hold.
  * - Escape with a handle selected (a Line's point, #557) clears that; inside a box it selects the
- *   whole box again, and on a box selected whole deselects it.
+ *   whole box again, on a shape of a linked figure you've gone into the whole figure (#1236), and
+ *   on a box selected whole deselects it.
  * - Ungroup (shapeUngroup) ungroups the shape selected whole; its marchers stay selected.
  */
 export function PlacedBoxKeys(): null {
     const queryClient = useQueryClient();
     const selected = useBoxSelectionStore((s) => s.selected !== null);
+    const several = useBoxSelectionStore((s) => s.shapes.length > 0);
     const inside = useBoxSelectionStore((s) => s.inside !== null);
     const rounding = useUiSettingsStore((s) => s.uiSettings.coordinateRounding);
 
@@ -64,21 +67,23 @@ export function PlacedBoxKeys(): null {
         NUDGE_ACTION_IDS,
         (_id, args) => {
             const field = currentShapeField();
-            const box = useBoxSelectionStore.getState().selected;
-            if (!field || !box) return;
+            const { selected: box, shapes } = useBoxSelectionStore.getState();
+            if (!field || (!box && shapes.length === 0)) return;
             const nudge = args as unknown as NudgeArgs;
             const steps = resolveNudgeDistance(nudge, rounding);
             const d = DIRECTIONS[nudge.direction];
             const px = steps * field.fieldProperties.pixelsPerStep;
-            const params = box.kind.move(
-                box.params,
-                box.spots,
-                { x: d.x * px, y: d.y * px },
-                nudgeEnvFor(field, nudge),
-            );
+            const by = { x: d.x * px, y: d.y * px };
+            const env = nudgeEnvFor(field, nudge);
+            // Several shapes selected whole (a linked figure, #1236) move together
+            if (!box) {
+                void moveShapes(shapes, by, env, queryClient);
+                return;
+            }
+            const params = box.kind.move(box.params, box.spots, by, env);
             void commitBox(box, params, queryClient);
         },
-        { enabled: selected },
+        { enabled: selected || several },
     );
     // On top of the app's Escape, so it must handle a box selected whole too: it deselects
     useActionHandler(
@@ -87,7 +92,7 @@ export function PlacedBoxKeys(): null {
             // A selected point first (#557), then the box
             if (clearLiveBoxSelection()) return;
             if (inside) leaveBox();
-            else selectOnField([]);
+            else if (!leaveFigure()) selectOnField([]);
         },
         { enabled: inside || selected },
     );

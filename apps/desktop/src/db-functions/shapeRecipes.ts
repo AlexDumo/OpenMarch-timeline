@@ -747,6 +747,66 @@ export async function hasShapeRecipes(
     return row !== undefined;
 }
 
+/** A placed shape as an undo or redo may change it: its move and members, and all of it as text */
+export interface ShapeRecipeState {
+    readonly timelineId: number | null;
+    readonly marcherIds: readonly number[];
+    /** Its row and member rows, to compare */
+    readonly key: string;
+}
+
+/**
+ * Every placed shape now, by recipe id, to compare before and after an undo or redo
+ * (`changedShapeRecipes`). Order marks and ungrouped marks are no shapes, so they're left out.
+ * Empty in a show from before recipes.
+ */
+export async function shapeRecipeStates(
+    db: DbConnection | DbTransaction,
+): Promise<Map<number, ShapeRecipeState>> {
+    const states = new Map<number, ShapeRecipeState>();
+    if (!(await hasShapeRecipes(db))) return states;
+    const rows = await db
+        .select()
+        .from(recipes)
+        .where(
+            notInArray(recipes.kind, [
+                ...ORDER_MARK_KINDS,
+                UNGROUPED_RECIPE_KIND,
+            ]),
+        )
+        .all();
+    if (rows.length === 0) return states;
+    const memberRows = await db
+        .select()
+        .from(members)
+        .orderBy(members.recipe_id, members.marcher_id)
+        .all();
+    const byRecipe = new Map<number, (typeof memberRows)[number][]>();
+    for (const m of memberRows) {
+        const list = byRecipe.get(m.recipe_id) ?? [];
+        list.push(m);
+        byRecipe.set(m.recipe_id, list);
+    }
+    for (const { created_at: _, ...row } of rows) {
+        const own = (byRecipe.get(row.id) ?? []).map(({ id: _id, ...m }) => m);
+        states.set(row.id, {
+            timelineId: row.timeline_id,
+            marcherIds: own.map((m) => m.marcher_id),
+            key: JSON.stringify([row, own]),
+        });
+    }
+    return states;
+}
+
+/** The shapes in `after` that are new since `before`, or changed (`shapeRecipeStates`) */
+export const changedShapeRecipes = (
+    before: ReadonlyMap<number, ShapeRecipeState>,
+    after: ReadonlyMap<number, ShapeRecipeState>,
+): ShapeRecipeState[] =>
+    [...after].flatMap(([id, state]) =>
+        before.get(id)?.key === state.key ? [] : [state],
+    );
+
 /** Deletes move `timelineId`'s recipes nobody is in anymore (every move's when omitted) */
 export async function deleteEmptyRecipes(
     tx: DbTransaction,

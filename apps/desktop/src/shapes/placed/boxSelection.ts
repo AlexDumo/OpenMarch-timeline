@@ -13,15 +13,18 @@ import { clickOnMarcher } from "./boxClick";
 import {
     savingBoxAt,
     setInsideBox,
+    setInsideFigure,
     useBoxSelectionStore,
     useSavingBoxStore,
 } from "./boxSelectionStore";
 import type { PlacedBox } from "./placedBox";
+import { wholeShapesOf } from "./movedShapes";
 import {
     placedBoxesAt,
     usePlacedBoxStore,
     usePlacedBoxBeat,
 } from "./placedBoxStore";
+import { linkedFigure, linksOf, liveLinks } from "./shapeLinks";
 
 /** Selects `ids` on the field, through its editor, which writes the app's selection */
 export function selectOnField(ids: readonly number[]): void {
@@ -30,6 +33,26 @@ export function selectOnField(ids: readonly number[]): void {
 
 const boxesNow = (): PlacedBox[] =>
     placedBoxesAt(displayedBeat(useTimelineSelectionStore.getState()));
+
+/**
+ * The linked figure (#1236) placed shape `box` is in, among `boxes` shown at `beat`: its shapes,
+ * by recipe id. Empty for a shape in no link.
+ */
+export function figureOf(
+    box: PlacedBox,
+    boxes: readonly PlacedBox[],
+    beat: number,
+): PlacedBox[] {
+    const links = liveLinks(boxes, beat);
+    return linksOf(box, links).length === 0
+        ? []
+        : linkedFigure(box, links).sort((a, b) => a.recipe.id - b.recipe.id);
+}
+
+/** The member ids of `boxes`, in order, each once */
+export const membersOf = (boxes: readonly PlacedBox[]): number[] => [
+    ...new Set(boxes.flatMap((b) => b.recipe.members.map((m) => m.marcherId))),
+];
 
 const boxOf = (marcherId: number): PlacedBox | undefined =>
     boxesNow().find((b) =>
@@ -40,7 +63,9 @@ const boxOf = (marcherId: number): PlacedBox | undefined =>
  * The selection a press on marcher `hit` makes when placed boxes are on the field
  * (`FieldEditorPorts.pressSelection`), Figma-style (07-placed-boxes.md, `clickOnMarcher`): a
  * member selects its whole box, Shift adds or removes a whole box, and inside a box (after a
- * double click) Shift toggles one marcher. A press that reaches inside ($mod, `reachInside`) goes
+ * double click) Shift toggles one marcher. A linked figure is a level above its shapes (#1236): a
+ * click selects it whole, and a click on it selected goes into it at the shape clicked
+ * (`click`). A press that reaches inside ($mod, `reachInside`) goes
  * inside the box and is then a press inside it: the editor picks the marcher. Null leaves the
  * press to the editor's rules. Also keeps which box you're inside. Off when the View tab's Shapes
  * setting is Off, during playback and while the Shape tool is open (`useBoxSelection` says so).
@@ -50,11 +75,17 @@ export function boxPressSelection(
     shift: boolean,
     selection: readonly number[],
     reachInside = false,
+    click?: "single" | "double",
 ): readonly number[] | null {
     const state = useBoxSelectionStore.getState();
     if (!state.enabled) return null;
-    const box = boxOf(hit) ?? null;
+    const beat = displayedBeat(useTimelineSelectionStore.getState());
+    const boxes = placedBoxesAt(beat);
+    const box =
+        boxes.find((b) => b.recipe.members.some((m) => m.marcherId === hit)) ??
+        null;
     const selected = new Set(selection);
+    const figure = box ? figureOf(box, boxes, beat) : [];
     const out = clickOnMarcher({
         marcherId: hit,
         shift,
@@ -65,8 +96,18 @@ export function boxPressSelection(
             members: box.recipe.members.map((m) => m.marcherId),
         },
         inside: state.inside,
+        figure: figure.length > 0 ? membersOf(figure) : null,
+        inFigure: figure.some((b) => b.recipe.id === state.figure),
+        click,
     });
     setInsideBox(out.inside);
+    const wasInFigure = figure.some((b) => b.recipe.id === state.figure);
+    setInsideFigure(out.inFigure && box ? box.recipe.id : null);
+    // A double-click's second click comes after this: when its first went into the figure, that
+    // was the double-click's step down (`doubleClickMember`)
+    if (click !== "double")
+        enteredFigureAt =
+            click === "single" && out.inFigure && !wasInFigure ? hit : null;
     // A click on a member of a box selected whole keeps the box, where the editor's rule would
     // narrow the selection to that marcher (a drag moves the box either way)
     if (!out.select && box && out.inside === null && !shift) {
@@ -74,6 +115,21 @@ export function boxPressSelection(
         if (members.every((id) => selected.has(id))) return [...selection];
     }
     return out.select;
+}
+
+/** The marcher whose click last went into a linked figure, until the next press */
+let enteredFigureAt: number | null = null;
+
+/**
+ * Whether the click just before a double-click's second on marcher `id` went into its linked
+ * figure (#1236), so the double-click has gone down its one level already: a double-click on a
+ * figure selected whole selects the shape clicked, as a double-click on a group does in Figma,
+ * not one of its marchers. Answers once.
+ */
+export function enteredFigureByClick(id: number): boolean {
+    const entered = enteredFigureAt === id;
+    enteredFigureAt = null;
+    return entered;
 }
 
 /**
@@ -97,6 +153,23 @@ export function enterBox(marcherId: number): void {
     setInsideBox(box.recipe.id);
 }
 
+/**
+ * Leaves the linked figure you've gone into (#1236), selecting it whole again, when a shape of it
+ * is selected whole; returns whether it did
+ */
+export function leaveFigure(): boolean {
+    const { figure, selected } = useBoxSelectionStore.getState();
+    if (figure === null || !selected) return false;
+    const beat = displayedBeat(useTimelineSelectionStore.getState());
+    const boxes = placedBoxesAt(beat);
+    const box = boxes.find((b) => b.recipe.id === selected.recipe.id);
+    const shapes = box ? figureOf(box, boxes, beat) : [];
+    if (!shapes.some((b) => b.recipe.id === figure)) return false;
+    selectOnField(membersOf(shapes));
+    setInsideFigure(null);
+    return true;
+}
+
 /** Leaves the box you're inside, selecting it whole again */
 export function leaveBox(): void {
     const { inside } = useBoxSelectionStore.getState();
@@ -107,8 +180,9 @@ export function leaveBox(): void {
 
 /**
  * Placed boxes in the field's selection: whether a click selects a whole box (on unless the View
- * tab's Shapes setting is Off, during playback or while the Shape tool is open), and
- * `useBoxSelectionStore.selected`, the box whose members are exactly the selection. You leave the
+ * tab's Shapes setting is Off, during playback or while the Shape tool is open),
+ * `useBoxSelectionStore.selected`, the box whose members are exactly the selection, and `shapes`,
+ * the shapes it's made of when it's several selected whole. You leave the
  * box you're inside when the selection leaves it (a click on the empty field, Escape).
  */
 export function useBoxSelection({ isPlaying }: { isPlaying: boolean }): void {
@@ -165,9 +239,22 @@ export function useBoxSelection({ isPlaying }: { isPlaying: boolean }): void {
             [...ids].every((id) =>
                 insideBox.recipe.members.some((m) => m.marcherId === id),
             );
+        // In a linked figure until the selection leaves it
+        const figureBox = boxes.find(
+            (b) => b.recipe.id === useBoxSelectionStore.getState().figure,
+        );
+        const figureIds = new Set(
+            figureBox ? membersOf(figureOf(figureBox, boxes, beat)) : [],
+        );
+        const stillInFigure =
+            ids.size > 0 && [...ids].every((id) => figureIds.has(id));
+        // Several shapes selected whole, which the nudge keys move together (#1236)
+        const shapes = box ? [] : wholeShapesOf(ids, boxes);
         useBoxSelectionStore.setState({
             selected: box,
+            shapes,
             ...(stillInside ? {} : { inside: null }),
+            ...(stillInFigure ? {} : { figure: null }),
         });
     }, [enabled, selected, recipes, ends, version, beat, saving]);
 }

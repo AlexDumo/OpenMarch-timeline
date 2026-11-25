@@ -19,6 +19,7 @@ import {
 } from "../field/fieldModeBase";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import { toolEnvFor } from "./toolEnv";
+import type { ToolEnv } from "./toolKind";
 import { rolesOf, type Roles } from "@/input/modifierRoles";
 import { pressShapeKeys, type HeldFieldGesture } from "../field/heldGesture";
 import {
@@ -48,6 +49,24 @@ import {
     useShapePointerStore,
     guideGesture,
 } from "../field/shapePointer";
+import type { AttachRef, LineParams } from "../line/lineGeometry";
+import { otherEnd } from "../line/lineLinks";
+import { placedBoxesAt, usePlacedBoxStore } from "../placed/placedBoxStore";
+import { useTimelineResolverStore } from "@/timeline/timelineStore";
+import {
+    ATTACH_REACH,
+    attachedParams,
+    drawnAttach,
+    drawnFreeEnds,
+    handleEndOf,
+    linksKind,
+    nearestEnd,
+    snapEnds,
+    type FreeEnd,
+} from "../placed/shapeLinks";
+import { linkDragTip, type LinkTip } from "../placed/linkTip";
+import { clearLinkDrag, useLinkDragStore } from "../placed/linkDragStore";
+import { toolBeat } from "./drawnLinks";
 
 /**
  * `hover`: the spot the pointer rests on, with who will stand there, on shapes too big to label
@@ -85,6 +104,10 @@ interface Shown {
     readonly groupMenu: GroupMenuState | null;
     /** A number setting the kind's step is engaged: the step drawn (owner on #596) */
     readonly stepShown: boolean;
+    /** What the readout by the pointer says about linking the shape's end (#1235) */
+    readonly linkTip: LinkTip | null;
+    /** Where that readout shows with no gesture under way: by the ring; by the pointer when null */
+    readonly linkTipAt: XY | null;
 }
 let shown: Shown | null = null;
 const shownNow = (): Shown | null => {
@@ -92,6 +115,11 @@ const shownNow = (): Shown | null => {
     if (!tool) return null;
     const { hover } = useSpotHover.getState();
     const calm = shapeCalm(!!tool.gesture);
+    // A click's link is said only while its ring shows: gone with it, as when the tool closes
+    const tipNow =
+        linkTip?.kind === "click" && useLinkDragStore.getState().ring === null
+            ? null
+            : linkTip;
     const walks = useUiSettingsStore.getState().uiSettings.shapeWalks ?? false;
     const { pivotPreview, scrubbing, groupMenu, stepShown } =
         useShapePointerStore.getState();
@@ -103,7 +131,9 @@ const shownNow = (): Shown | null => {
         shown.pivotPreview !== pivotPreview ||
         shown.scrubbing !== scrubbing ||
         shown.groupMenu !== groupMenu ||
-        shown.stepShown !== stepShown
+        shown.stepShown !== stepShown ||
+        shown.linkTip !== tipNow ||
+        shown.linkTipAt !== linkTipAt
     )
         shown = {
             tool,
@@ -114,6 +144,8 @@ const shownNow = (): Shown | null => {
             scrubbing,
             groupMenu,
             stepShown,
+            linkTip: tipNow,
+            linkTipAt,
         };
     return shown;
 };
@@ -179,126 +211,144 @@ function hoverAt(tool: ToolState, at: XY, radius: number): void {
         useSpotHover.setState({ hover });
 }
 
-const drawingOf = memoDrawing(
-    ({ tool, hover, calm, walks, scrubbing, groupMenu, stepShown }: Shown) => {
-        const field = currentShapeField();
-        if (!field) return null;
-        const n = tool.spots;
-        const spots = slotsNow(tool, field);
-        // The marchers' ghosts stand where they start the move: at the start flag (#346, #417). They
-        // always show, so where the marchers come from reads; the pathways toggle is only the walks
-        // (owner lab feedback on #417)
-        const rings = startsOf(tool);
-        const ringIds = tool.marchers.map((m) => m.id);
-        if (tool.params === null)
-            return {
-                outline: null,
-                spots,
-                walks: [],
-                handles: [],
-                rings,
-                ringIds,
-            };
-        // While a drag or clicked points draw a new shape: its spots and a dashed outline, no walks
-        // yet (06). Every other gesture holds who goes where, so the walks follow it live.
-        const drawing =
-            tool.gesture?.type === "draw" || tool.gesture?.type === "points";
-        const targets = drawing ? [] : targetsNow(tool, field);
-        const names = drillNumbers(field);
-        const env = toolEnvFor(field);
-        const gap = drawing ? null : outlineGapAt(tool.kind, tool.params, n);
-        const g =
-            tool.gesture &&
-            tool.gesture.type !== "draw" &&
-            tool.gesture.type !== "points" &&
-            tool.gesture.type !== "edit" &&
-            tool.gesture.type !== "mirror"
-                ? tool.gesture
-                : null;
+/** What the open shape draws, `shown` */
+const drawShown = ({
+    tool,
+    hover,
+    calm,
+    walks,
+    scrubbing,
+    groupMenu,
+    stepShown,
+}: Shown): FieldModeDrawing | null => {
+    const field = currentShapeField();
+    if (!field) return null;
+    const n = tool.spots;
+    const spots = slotsNow(tool, field);
+    // The marchers' ghosts stand where they start the move: at the start flag (#346, #417). They
+    // always show, so where the marchers come from reads; the pathways toggle is only the walks
+    // (owner lab feedback on #417)
+    const rings = startsOf(tool);
+    const ringIds = tool.marchers.map((m) => m.id);
+    if (tool.params === null)
         return {
-            stage: drawing ? ("drawing" as const) : ("open" as const),
-            outline: shapeOutline(tool.kind, tool.params, n),
-            openOutline: tool.kind.outlineOpen?.(tool.params, n) ?? false,
-            construction: tool.kind.construction?.(tool.params, n) ?? [],
+            outline: null,
             spots,
-            walks: walks
-                ? targets.map((t) => ({ from: t.from, to: t.to }))
-                : [],
+            walks: [],
+            handles: [],
             rings,
             ringIds,
-            // The controls stay at full strength while the pointer is on the shape, a gesture runs or
-            // the keyboard is in its editor
-            calm,
-            gaps: gap ? [gap] : [],
-            emptySpots: tool.kind.emptySpots?.(tool.params, n) ?? [],
-            labels:
-                n <= SPOT_LABEL_LIMIT
-                    ? targets.map((t) => ({
-                          at: t.to,
-                          text: names.get(t.id) ?? "",
-                      }))
-                    : [],
-            ...(drawing
-                ? { handles: [] }
-                : handleDrawing(tool.kind, tool.params, n, tool.selected)),
-            ...(drawing
-                ? {}
-                : stepDrawing(
-                      tool.kind,
-                      tool.params,
-                      n,
-                      stepShown,
-                      tool.gesture,
-                      env.stepPx,
-                  )),
-            ...(drawing
-                ? {}
-                : frameDrawing(
-                      tool.kind,
-                      tool.params,
-                      n,
-                      g,
-                      tool.pointer ?? null,
-                      env,
-                  )),
-            ...guideDrawing(
-                tool.kind,
-                tool.params,
-                n,
-                spots,
-                guideGesture(tool.gesture, scrubbing),
-                env,
-                field,
-            ),
-            ...(drawing
-                ? {}
-                : groupDrawing(
-                      tool.kind,
-                      tool.params,
-                      n,
-                      spots,
-                      groupMenu,
-                      env.stepPx,
-                  )),
-            ...(hover && !tool.gesture
-                ? { labels: [{ at: hover.at, text: hover.text }] }
-                : {}),
-            ...(tool.mirror && !drawing ? mirrorDrawing(tool) : {}),
-            // A mirrored paste only mirrors: no knob, handles or pivot to turn or resize it
-            ...(tool.mirror && !drawing
-                ? {
-                      handles: [],
-                      addHandles: [],
-                      selectedHandles: [],
-                      barHandles: [],
-                      knob: undefined,
-                      pivotMark: undefined,
-                      pivotPreview: undefined,
-                  }
-                : {}),
         };
-    },
-);
+    // While a drag or clicked points draw a new shape: its spots and a dashed outline, no walks
+    // yet (06). Every other gesture holds who goes where, so the walks follow it live.
+    const drawing =
+        tool.gesture?.type === "draw" || tool.gesture?.type === "points";
+    const targets = drawing ? [] : targetsNow(tool, field);
+    const names = drillNumbers(field);
+    const env = toolEnvFor(field);
+    const gap = drawing ? null : outlineGapAt(tool.kind, tool.params, n);
+    const g =
+        tool.gesture &&
+        tool.gesture.type !== "draw" &&
+        tool.gesture.type !== "points" &&
+        tool.gesture.type !== "edit" &&
+        tool.gesture.type !== "mirror"
+            ? tool.gesture
+            : null;
+    return {
+        stage: drawing ? ("drawing" as const) : ("open" as const),
+        outline: shapeOutline(tool.kind, tool.params, n),
+        openOutline: tool.kind.outlineOpen?.(tool.params, n) ?? false,
+        construction: tool.kind.construction?.(tool.params, n) ?? [],
+        spots,
+        walks: walks ? targets.map((t) => ({ from: t.from, to: t.to })) : [],
+        rings,
+        ringIds,
+        // The controls stay at full strength while the pointer is on the shape, a gesture runs or
+        // the keyboard is in its editor
+        calm,
+        gaps: gap ? [gap] : [],
+        emptySpots: tool.kind.emptySpots?.(tool.params, n) ?? [],
+        labels:
+            n <= SPOT_LABEL_LIMIT
+                ? targets.map((t) => ({
+                      at: t.to,
+                      text: names.get(t.id) ?? "",
+                  }))
+                : [],
+        ...(drawing
+            ? { handles: [] }
+            : handleDrawing(tool.kind, tool.params, n, tool.selected)),
+        ...(drawing
+            ? {}
+            : stepDrawing(
+                  tool.kind,
+                  tool.params,
+                  n,
+                  stepShown,
+                  tool.gesture,
+                  env.stepPx,
+              )),
+        ...(drawing
+            ? {}
+            : frameDrawing(
+                  tool.kind,
+                  tool.params,
+                  n,
+                  g,
+                  tool.pointer ?? null,
+                  env,
+              )),
+        ...guideDrawing(
+            tool.kind,
+            tool.params,
+            n,
+            spots,
+            guideGesture(tool.gesture, scrubbing),
+            env,
+            field,
+        ),
+        ...(drawing
+            ? {}
+            : groupDrawing(
+                  tool.kind,
+                  tool.params,
+                  n,
+                  spots,
+                  groupMenu,
+                  env.stepPx,
+              )),
+        ...(hover && !tool.gesture
+            ? { labels: [{ at: hover.at, text: hover.text }] }
+            : {}),
+        ...(tool.mirror && !drawing ? mirrorDrawing(tool) : {}),
+        // A mirrored paste only mirrors: no knob, handles or pivot to turn or resize it
+        ...(tool.mirror && !drawing
+            ? {
+                  handles: [],
+                  addHandles: [],
+                  selectedHandles: [],
+                  barHandles: [],
+                  knob: undefined,
+                  pivotMark: undefined,
+                  pivotPreview: undefined,
+              }
+            : {}),
+    };
+};
+
+/** The open shape as drawn, with what the pointer's readout says about linking it (#1235) */
+const drawingOf = memoDrawing((shown: Shown) => {
+    const drawing = drawShown(shown);
+    return (
+        drawing &&
+        linkDragTip(
+            drawing,
+            shown.linkTipAt ?? shown.tool.pointer ?? null,
+            shown.linkTip,
+        )
+    );
+});
 
 /**
  * A mirrored paste's mirror point (Paste mirrored): the point, a line through it each way, the
@@ -445,11 +495,254 @@ const endHeld = () => {
     held = null;
 };
 
+/**
+ * Linking while drawing (#1235): the placed shapes' free ends the gesture under way can attach
+ * the open Line, Curve or Arc to, read at its press, and where the press was
+ */
+let linkScene: {
+    readonly targets: readonly FreeEnd[];
+    readonly pressed: XY;
+} | null = null;
+/** What the readout by the pointer says about linking, mid-gesture or clicking points (#1235) */
+let linkTip: LinkTip | null = null;
+/** Where that readout shows before the first point is clicked: by the ring */
+let linkTipAt: XY | null = null;
+
+/**
+ * The placed shapes' free ends the open shape can link to, worked out once per beat and the
+ * placed shapes there: hovering asks on every pointer move
+ */
+let freeEndsCache: {
+    readonly key: readonly unknown[];
+    readonly ends: readonly FreeEnd[];
+} | null = null;
+function toolFreeEnds(): readonly FreeEnd[] {
+    const beat = toolBeat(useShapeToolStore.getState().openedAt);
+    // What placedBoxesAt reads: the placed shapes' store and the resolver
+    const key = [
+        beat,
+        usePlacedBoxStore.getState(),
+        useTimelineResolverStore.getState().resolver,
+    ];
+    if (!freeEndsCache || key.some((k, i) => k !== freeEndsCache!.key[i]))
+        freeEndsCache = {
+            key,
+            ends: drawnFreeEnds(placedBoxesAt(beat), beat),
+        };
+    return freeEndsCache.ends;
+}
+
+/** The free ends a gesture of the open shape `tool` pressed at `at` can attach it to */
+function startLinks(tool: ToolState, at: XY): void {
+    const g = tool.gesture;
+    linkScene = null;
+    if (
+        !g ||
+        (g.type !== "draw" && g.type !== "handle" && g.type !== "move") ||
+        !linksKind(tool.kind) ||
+        tool.mirror
+    )
+        return;
+    const targets = toolFreeEnds();
+    if (targets.length > 0) linkScene = { targets, pressed: at };
+}
+
+/** The gesture's link state let go, and the free ends read again at the next */
+function endLinks(): void {
+    freeEndsCache = null;
+    linkScene = null;
+    linkTip = null;
+    linkTipAt = null;
+    clearLinkDrag();
+}
+
+/** The {@link AttachRef} that links an end to `target` */
+const refTo = (target: FreeEnd): AttachRef => ({
+    recipe: target.owner.recipe.id,
+    end: target.ownerEnd,
+});
+
+/**
+ * `env` for the open Line or Curve drawn by clicking points (#1235): a point clicked within the
+ * same reach of a placed shape's free end as a drag lands exactly on it, linked to it. Not with
+ * `constrain` ($mod) held, a way to click without linking. `env` itself for any other kind.
+ */
+function linkingEnv(
+    env: ToolEnv,
+    tool: ToolState,
+    constrain: boolean,
+): ToolEnv {
+    if (constrain || !tool.kind.clickPoints?.link || tool.mirror) return env;
+    const targets = toolFreeEnds();
+    if (targets.length === 0) return env;
+    const radius = env.hitRadius * ATTACH_REACH;
+    return {
+        ...env,
+        linkPoint: (at, except) => {
+            const not = except as AttachRef | undefined;
+            const target = nearestEnd(
+                not
+                    ? targets.filter(
+                          (t) =>
+                              t.owner.recipe.id !== not.recipe ||
+                              t.ownerEnd !== not.end,
+                      )
+                    : targets,
+                at,
+                radius,
+            );
+            return target ? { at: target.at, to: refTo(target) } : null;
+        },
+    };
+}
+
+/** The free end the link `to` (from {@link linkingEnv}) names */
+function freeEndOf(to: unknown): FreeEnd | null {
+    if (to === undefined) return null;
+    const ref = to as AttachRef;
+    return (
+        toolFreeEnds().find(
+            (t) => t.owner.recipe.id === ref.recipe && t.ownerEnd === ref.end,
+        ) ?? null
+    );
+}
+
+/**
+ * The ring on the placed shape's free end a click would link the open shape to (#1235), and the
+ * readout saying so (by the ring, `atRing`, before the first point; by the pointer after); none
+ * when `ring` is null
+ */
+function showClickLink(ring: FreeEnd | null, atRing: boolean): void {
+    linkTip = ring
+        ? { kind: "click", shape: ring.owner.kind.shape.label }
+        : null;
+    linkTipAt = ring && atRing ? ring.at : null;
+    if (!ring) clearLinkDrag();
+    else if (useLinkDragStore.getState().ring !== ring.at)
+        useLinkDragStore.setState({ ring: ring.at, followers: [] });
+}
+
+/**
+ * While a Line or Curve's points are clicked, or its first is pressed and not yet dragged: the
+ * free end the click would link it to, ringed (#1235)
+ */
+function showPointLink(): void {
+    const g = useShapeToolStore.getState().tool?.gesture;
+    showClickLink(
+        freeEndOf(
+            g?.type === "points"
+                ? g.nextLink
+                : g?.type === "draw"
+                  ? g.firstLink
+                  : undefined,
+        ),
+        false,
+    );
+}
+
+/** {@link envOf} with clicked points linking ({@link linkingEnv}) */
+const clickEnvOf = (
+    field: ShapeField,
+    tool: ToolState,
+    roles?: Roles,
+    kind?: PointerKind,
+) =>
+    linkingEnv(
+        envOf(field, tool, roles, kind),
+        tool,
+        roles?.constrain ?? false,
+    );
+
+/**
+ * The open Line, Curve or Arc mid-gesture (#1235), linked as a placed one is when dragged: a new
+ * one drawn from or to a placed shape's free end, an end handle dragged onto one or the shape
+ * moved whole with an end onto one, within the same reach of the pointer, lands exactly there
+ * and is attached to it, a ring marking it and the readout saying letting go links them. Not with
+ * `constrain` ($mod) held, a way to draw without attaching. Placing it stores the link.
+ */
+function linkWhileDrawing(constrain: boolean, pointer: XY): void {
+    const field = currentShapeField();
+    const tool = useShapeToolStore.getState().tool;
+    const g = tool?.gesture;
+    // Clicking points, or a click's press not dragged yet: what the click links (#1235)
+    if (
+        g?.type === "points" ||
+        (g?.type === "draw" && tool!.params === g.before.params)
+    ) {
+        showPointLink();
+        return;
+    }
+    const scene = linkScene;
+    let ring: FreeEnd | null = null;
+    let tip: LinkTip | null = null;
+    let params: LineParams | null = null;
+    if (scene && field && tool && g && tool.params !== null && !constrain) {
+        const radius = envOf(field, tool, undefined).hitRadius * ATTACH_REACH;
+        const p = tool.params as LineParams;
+        if (g.type === "draw" && tool.params !== g.before.params) {
+            const out = drawnAttach({
+                params: p,
+                pressed: scene.pressed,
+                pointer,
+                targets: scene.targets,
+                radius,
+            });
+            params = out.params;
+            ring = out.snapped.at(-1) ?? null;
+        } else if (g.type === "handle") {
+            const end = handleEndOf(tool.kind, g.base, tool.spots, g.key);
+            // Not onto the end its other end is attached to
+            const other = (g.base as LineParams).attach?.[
+                end ? otherEnd(end) : "start"
+            ];
+            const targets = scene.targets.filter(
+                (t) =>
+                    !other ||
+                    t.owner.recipe.id !== other.recipe ||
+                    t.ownerEnd !== other.end,
+            );
+            const snap = end
+                ? snapEnds({
+                      params: p,
+                      was: g.base as LineParams,
+                      targets,
+                      radius,
+                      dragged: { end, pointer, base: g.base },
+                  })
+                : null;
+            if (snap) {
+                params = attachedParams(p, snap, false);
+                ring = snap;
+            } else if (end && targets.length > 0) tip = { kind: "drop" };
+        } else if (g.type === "move") {
+            const snap = snapEnds({
+                params: p,
+                was: g.base as LineParams,
+                targets: scene.targets,
+                radius,
+            });
+            if (snap) {
+                params = attachedParams(p, snap, true);
+                ring = snap;
+            }
+        }
+    }
+    if (ring) tip = { kind: "release", shape: ring.owner.kind.shape.label };
+    if (params !== null && params !== tool?.params) {
+        const next = params;
+        updateTool((t) => (t.gesture === g ? { ...t, params: next } : t));
+    }
+    linkTip = tip;
+    if (ring) useLinkDragStore.setState({ ring: ring.at, followers: [] });
+    else clearLinkDrag();
+}
+
 /** A role key pressed or released mid-drag: the last move again, at the last pointer */
 function rerun(at: XY, roles: Roles) {
     const field = currentShapeField();
     if (!field) return;
-    updateTool((t) => pointerMove(t, at, envOf(field, t, roles)));
+    updateTool((t) => pointerMove(t, at, clickEnvOf(field, t, roles)));
+    linkWhileDrawing(roles.constrain, at);
 }
 
 /**
@@ -458,6 +751,7 @@ function rerun(at: XY, roles: Roles) {
  */
 export function cancelShapeGesture(): void {
     endHeld();
+    endLinks();
     updateTool(cancelGesture);
 }
 
@@ -469,7 +763,8 @@ export function removeLastShapePoint(): boolean {
     const field = currentShapeField();
     const tool = useShapeToolStore.getState().tool;
     if (!field || tool?.gesture?.type !== "points") return false;
-    updateTool((t) => removeLastPoint(t, envOf(field, t)));
+    updateTool((t) => removeLastPoint(t, clickEnvOf(field, t)));
+    showPointLink();
     return true;
 }
 
@@ -501,23 +796,33 @@ export const shapeToolMode: FieldMode = {
         );
         held = pressed.held;
         const roles = held.roles();
+        endLinks();
         updateTool((t) =>
             press(t, pointer.field, {
-                ...envOf(field, t, roles),
+                ...clickEnvOf(field, t, roles, pointer.kind),
                 reachInside: pressed.reachInside,
             }),
         );
+        const now = useShapeToolStore.getState().tool;
+        if (now) startLinks(now, pointer.field);
+        showPointLink();
     },
     move(pointer) {
         const field = currentShapeField();
         if (!field) return;
         const roles = held?.move(pointer);
         updateTool((t) =>
-            pointerMove(t, pointer.field, envOf(field, t, roles, pointer.kind)),
+            pointerMove(
+                t,
+                pointer.field,
+                clickEnvOf(field, t, roles, pointer.kind),
+            ),
         );
+        linkWhileDrawing(roles?.constrain ?? false, pointer.field);
     },
     release(_pointer, click) {
         endHeld();
+        endLinks();
         const field = currentShapeField();
         if (!field) return;
         updateTool((t) => release(t, shapeContextFor(field), click));
@@ -526,6 +831,7 @@ export const shapeToolMode: FieldMode = {
     // points only that press's point is dropped, not the points already down
     cancel() {
         endHeld();
+        endLinks();
         updateTool(losePress);
     },
     // A right-click on a handle with a menu (a Line's point or segment, #569) opens it. While
@@ -593,9 +899,10 @@ export const shapeToolMode: FieldMode = {
                 pointerMove(
                     t,
                     pointer.field,
-                    envOf(field, t, roles, pointer.kind),
+                    clickEnvOf(field, t, roles, pointer.kind),
                 ),
             );
+            showPointLink();
             return "crosshair";
         }
         // The editor asks for the cursor as the pointer moves, so this is where hovering is seen
@@ -606,6 +913,21 @@ export const shapeToolMode: FieldMode = {
             return "grab";
         }
         const target = pressTarget(tool, pointer.field, env);
+        // Before a Line or Curve's first point: a click in reach of a placed shape's free end
+        // starts it there, linked (#1235)
+        if (!tool.gesture)
+            showClickLink(
+                target.type === "draw"
+                    ? freeEndOf(
+                          linkingEnv(
+                              env,
+                              tool,
+                              rolesOf(pointer, "shape").constrain,
+                          ).linkPoint?.(pointer.field)?.to,
+                      )
+                    : null,
+                true,
+            );
         setShapePointerOver(target.type !== "draw");
         if (target.type === "draw") return "crosshair";
         return shapeCursor(
@@ -618,6 +940,9 @@ export const shapeToolMode: FieldMode = {
     },
     leave() {
         setShapePointerOver(false);
+        const g = useShapeToolStore.getState().tool?.gesture;
+        if (!g || (g.type === "points" && !g.pressed))
+            showClickLink(null, false);
         if (useSpotHover.getState().hover)
             useSpotHover.setState({ hover: null });
     },
@@ -627,12 +952,15 @@ export const shapeToolMode: FieldMode = {
         const offHover = useSpotHover.subscribe(listener);
         const offPointer = useShapePointerStore.subscribe(listener);
         const offSettings = useUiSettingsStore.subscribe(listener);
+        // The ring a click would link at comes and goes with the readout saying so (#1235)
+        const offLink = useLinkDragStore.subscribe(listener);
         glideListeners.add(listener);
         return () => {
             offTool();
             offHover();
             offPointer();
             offSettings();
+            offLink();
             glideListeners.delete(listener);
         };
     },

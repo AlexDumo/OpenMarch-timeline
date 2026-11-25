@@ -658,3 +658,80 @@ adds no table and changes no recipe: a paste is an ordinary placement.
 
 Verification: `copyPaste.test.ts` (what is copied, and what a paste opens for each kind and
 count) and the browser scenarios in `copy-paste.spec.mts`.
+
+## Amendment, 2026-11-24: linked shapes
+
+Linked shapes (#1235, epic #1216, owner 2026-11-23): placed Lines, Curves and Arcs whose ends are
+attached stay separate shapes, each with its own kind, marchers, spacing and interval, but an
+attached end follows the shape it's attached to. It adds no table and no migration: the link is a
+Line parameter (decision 5, "new kinds and parameters never need a migration"). It's keyed by recipe
+id and end only, so it doesn't depend on how a recipe is anchored to its move.
+
+1. **What's stored.** A Line recipe (`line` or `arc`, version 2; a Curve saves a Line) may store
+   `attach`: `{ start?: { recipe, end }, end?: { recipe, end } }`, by its own end, the id of the
+   recipe it's attached to and which end of it (`"start"` is the first point, `"end"` the last). Only
+   an open line has it; closing a line drops it. The attaching line's own points still end exactly
+   on the joint, so its layout never reads another recipe.
+2. **Who owns the joint's marcher.** The shape attached to (the one that stayed put while the other
+   was dragged onto it) holds the one marcher on the joint, as its end always does. An attached end
+   holds none: the line is laid out as if that end held a marcher, which is then left out, so its
+   first marcher stands one of its own intervals in from the joint (counted groups count that
+   marcher too, in the first group for the start and the last for the end). An end is in one link
+   at most, and the attached-to end is never itself an attached end.
+3. **When a link is live.** A stored attachment links only while the recipe it names is shown at
+   the beat, on the same move (`timeline_id`), an open Line, Curve or Arc, with the named end on the
+   joint (within 0.01 field units), and both shapes are on their own page: the end of the move they
+   were placed in. Two attachments to the same end: the lower recipe id's links. Anything else is a
+   dead attachment: no mark, nothing follows, and the shape's next save drops it, its end holding a
+   marcher again (nobody moves until then).
+4. **Cascade on edit.** Saving an edit of a linked shape (any edit: a drag, a handle, a number in
+   the floating editor, a menu) moves the end at each live joint of every shape linked to it to
+   where the edited shape's end now is. That shape stretches: turned and scaled about its far end
+   (its points, a bend's sweep and an ellipse turned with it, its offset turned and scaled), its far
+   end staying put, and its marchers re-spaced along it by its own spacing. Dragging the joint moves
+   both ends. The edited shape and every follower are written in one edit (`writePlacement`'s
+   `also`), so it's one undo step and redo restores all of them. Only the shapes at the moved joints
+   change: a follower's far end stays, so nothing cascades further.
+5. **Attaching** is a drag of a selected placed shape's end handle, or of the whole shape, that
+   leaves one of its free ends within 1.6 handle reaches of another live, free end on the same move:
+   a ring marks it during the drag, and on release the end lands exactly on that end and stores the
+   attachment, in the same save as the drag. Holding the `constrain` role key ($mod: Ctrl, or Cmd on
+   a Mac, or the touch pill's toggle) during the drag skips attaching. Boxes, Circles and groups
+   don't attach. A new Line, Curve or Arc drawn with the shape tool attaches the same way, before
+   it's placed: the drag that draws it starting (by the press) or ending (by the pointer) within
+   that reach of a free end, or one of its end handles or the whole shape dragged there before
+   Place. A Line or Curve drawn by clicking points attaches the same way by its first point or the
+   point that is last when it's finished, clicked within that reach of a free end (a middle point
+   doesn't, nor a line closed by clicking its first point). Its end lands exactly on that end, and the attachment is in the recipe Place saves, in
+   the same edit. Until then, any change that takes the end off that end, or a change to the
+   other shape that leaves it no longer free, drops the attachment. The new shape goes into the
+   move placing it at that beat picks; on another move than the shape it's attached to, the
+   attachment is dead (rule 3).
+6. **Detach** (the joint's right-click or long-press menu, the field's menu, the command palette)
+   saves the attaching shape without that attachment: its end holds its own marcher again and its
+   marchers re-space. Nothing else moves, so its new end marcher stands on the joint with the other
+   shape's until one end is dragged away. Detaching several links is one undo step.
+7. **What drops a link** (it goes dead, rule 3): ungrouping or deleting either shape (a recipe
+   emptied, or one of kind `ungrouped`), the shapes ending up on different moves (a split or merge
+   that carries one recipe and not the other), an edit elsewhere that leaves the ends apart, and an
+   edit on a later page the shapes are only carried onto: that page gets an unlinked copy of the
+   edited shape (Revision 2026-10-29 rule 4), and nothing follows there. Isolation needs no rule of
+   its own: links are within one move.
+8. **Older builds.** The release v0.1.7 has no Line recipes, so its files are unaffected and open
+   unchanged. Builds with Line v2 from before this amendment refuse `attach` (decision 5 and the
+   Line amendment's decision 5) and show an attached line as plain positions; its marchers are where
+   they were.
+
+Verification: `line/__test__/lineLinks.test.ts` lays out attached starts, ends and both (Fit, Keep
+interval, counted groups on the path, an Arc), reads `attach` back and refuses a broken one or one
+on a closed line, and stretches lines, curves and arcs about their far end.
+`placed/__test__/shapeLinks.test.ts` finds live links and dead ones (another move, off the joint, a
+later page, a shape gone), puts one marcher on the joint, snaps a dragged end and keeps the new
+attachment through the save (not on a later page), finds the followers of a moved line, a dragged
+joint and a deeper bend (none), and against the database saves the link and reads it back, moves
+the line with the arc following as one undo step that undo and redo take back and bring back with
+the link, and detaches; a Curve drawn from the line's end through the shape tool's functions
+places linked, one marcher on the joint, as one undo step that undo and redo keep whole.
+`__test__/drawnLinks.test.ts` draws through the shape tool's field mode: from and to a placed
+line's end, an end handle dragged onto it before Place, out of reach and with `constrain` held,
+and the attachment dropped once the end leaves the joint.

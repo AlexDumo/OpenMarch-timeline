@@ -1,5 +1,5 @@
 import tolgee from "@/global/singletons/Tolgee";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
     planCanvasEdit,
@@ -18,6 +18,8 @@ import type { ToolState } from "./toolMachine";
 import { useShapePaletteSource } from "../command/useShapePaletteSource";
 import { GROUP_MIN, groupMarchers } from "../placed/groupMarchers";
 import { useBoxSelectionStore } from "../placed/boxSelectionStore";
+import { useDetachLinks } from "../placed/useDetachLinks";
+import { useSelectLinkedShapes } from "../placed/selectLinkedShapes";
 import {
     closeShapeTool,
     isShapeHidden,
@@ -64,8 +66,8 @@ export function useApplyShape(): () => Promise<void> {
 }
 
 /**
- * Opens and places the shape tool from shortcuts, buttons and the command palette, and groups the
- * selection (#603)
+ * Opens and places the shape tool from shortcuts, buttons and the command palette, groups the
+ * selection (#603), and detaches linked shapes (#1235)
  */
 export function useShapeToolActions(): void {
     const { ready, selectedPerformers } = useEditorReadiness();
@@ -111,6 +113,14 @@ export function useShapeToolActions(): void {
                     : undefined,
         },
     );
+    // Linked lines, curves and arcs come apart (#1235); not while a shape is open
+    const selectedIds = useMemo(
+        () => selectedPerformers.map((m) => m.id),
+        [selectedPerformers],
+    );
+    useDetachLinks(ready && !shown, selectedIds);
+    // A linked shape's whole figure selected together (#1236)
+    useSelectLinkedShapes(ready && !shown, selectedIds);
     useActionHandler(
         "applyShape",
         () => {

@@ -62,6 +62,8 @@ export type ThreeFieldState = {
     modeDrawing(): FieldModeDrawing | null;
     /** The placed boxes outlined on the field (#204). */
     placedBoxes(): readonly FieldTestPlacedBox[];
+    /** The joints of linked shapes marked on the field (#1235). */
+    shapeJoints(): readonly FieldPoint[];
     /** The items drawn (C2.1). */
     items: FieldItems;
     /** The editor's prop tool, or null when it's off (C2.1). */
@@ -150,6 +152,7 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
                 label,
                 rect: { ...rect },
             })),
+        shapeJoints: () => field.shapeJoints().map(({ x, y }) => ({ x, y })),
         items: () => itemsOnScreen(field),
         propTool: () => propToolOf(field),
     };

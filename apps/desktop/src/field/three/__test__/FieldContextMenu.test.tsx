@@ -321,6 +321,8 @@ describe("FieldContextMenu", () => {
         for (const id of FIELD_MENU_ACTIONS) handle(id);
         handle("shapeGroup", { enabled: false, reason: null });
         handle("shapeUngroup", { enabled: false, reason: null });
+        handle("shapeDetach", { enabled: false, reason: null });
+        handle("shapeSelectLinked", { enabled: false, reason: null });
         // The Path group shows only what applies: here Edit path, Edit <name>'s line, then after a
         // line Detach, Detach all and Remove path
         for (const id of [
@@ -560,6 +562,25 @@ describe("FieldContextMenu", () => {
         handle("shapeEnterBox", { enabled: false });
         open({ marcher: 7 });
         expect(item("shapeEnterBox")).toBeNull();
+    });
+
+    it("offers Select linked shapes after Detach while a linked shape is selected, and runs it; leaves it out otherwise (#1236)", () => {
+        handle("shapeDetach");
+        const run = handle("shapeSelectLinked");
+        open();
+        const select = item("shapeSelectLinked")!;
+        expect(select).toHaveTextContent("Select linked shapes");
+        expect(item("shapeDetach")!.nextElementSibling).toBe(select);
+        fireEvent.click(select);
+        expect(run).toHaveBeenCalled();
+        cleanup();
+        handlers.splice(0).forEach((off) => off());
+        handle("shapeSelectLinked", {
+            enabled: false,
+            reason: "Select a linked line, curve or arc first",
+        });
+        open();
+        expect(item("shapeSelectLinked")).toBeNull();
     });
 
     it("offers Swap only with two marchers selected", () => {

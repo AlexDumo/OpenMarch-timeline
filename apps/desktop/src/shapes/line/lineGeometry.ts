@@ -162,7 +162,29 @@ export interface LineParams {
      * ⟳); editing its points never does. Absent is 0, so a Line saved before reads 0° as it is.
      */
     readonly turn?: number;
+    /**
+     * Ends attached to another placed Line's end (#1235, ADR 0006's linked-shapes amendment): by
+     * end, the recipe and end it's attached to. An attached end holds no marcher, the shape it's
+     * attached to holding the one on the joint, so the first marcher stands one of this line's
+     * own intervals in from it ({@link emptyEnds}). Only on an open line.
+     */
+    readonly attach?: LineAttach;
 }
+
+/** An open line's end: its first point or its last */
+export type LineEnd = "start" | "end";
+
+/** Both ends, first point first */
+export const LINE_ENDS: readonly LineEnd[] = ["start", "end"];
+
+/** The end of another placed shape a line's end is attached to: its recipe's id and which end */
+export interface AttachRef {
+    readonly recipe: number;
+    readonly end: LineEnd;
+}
+
+/** A line's attached ends ({@link LineParams.attach}) */
+export type LineAttach = Readonly<Partial<Record<LineEnd, AttachRef>>>;
 
 /** Whether `p` joins its last point to its first */
 export const isClosed = (p: Pick<LineParams, "closed">): boolean =>
@@ -262,7 +284,28 @@ const KEYS = new Set([
     "offset",
     "turn",
     "pivot",
+    "attach",
 ]);
+
+/** A stored attachment: one end or both, each a recipe id and an end (#1235) */
+const isAttach = (a: unknown): a is LineAttach => {
+    if (typeof a !== "object" || a === null) return false;
+    const keys = Object.keys(a);
+    if (
+        keys.length === 0 ||
+        keys.some((k) => !LINE_ENDS.includes(k as LineEnd))
+    )
+        return false;
+    return Object.values(a).every((ref: unknown) => {
+        if (typeof ref !== "object" || ref === null) return false;
+        if (Object.keys(ref).some((k) => k !== "recipe" && k !== "end"))
+            return false;
+        const { recipe, end } = ref as AttachRef;
+        return (
+            Number.isInteger(recipe) && recipe > 0 && LINE_ENDS.includes(end)
+        );
+    });
+};
 
 /** A stored turn: degrees from 0 up to 360 */
 const isTurn = (t: unknown): t is number =>
@@ -286,6 +329,9 @@ export function isLineParams(params: unknown): params is LineParams {
     if ((p.measured === "offset") !== (p.offset !== undefined)) return false;
     if (p.offset !== undefined && !isOffset(p.offset)) return false;
     if (p.turn !== undefined && !isTurn(p.turn)) return false;
+    // Attached ends (#1235): only an open line has ends
+    if (p.attach !== undefined && (p.closed === true || !isAttach(p.attach)))
+        return false;
     // A closed line has three points, or two joined by a bent segment (an Arc's chord or circle)
     if (
         !Array.isArray(p.points) ||
@@ -1142,10 +1188,44 @@ function axisRunSpots(
 }
 
 /**
+ * How many of an open line's ends are attached to another shape's end and so hold no marcher
+ * (#1235, {@link LineParams.attach}): the line is laid out as if they held one each, which is
+ * then left out, so its first marcher stands one of its intervals in from an attached end
+ */
+export const emptyEnds = (p: LineParams): number =>
+    isClosed(p) || !p.attach
+        ? 0
+        : (p.attach.start ? 1 : 0) + (p.attach.end ? 1 : 0);
+
+/**
+ * `p` without its attachments, laid out with a marcher on each attached end ({@link emptyEnds}):
+ * groups that are all counted count that marcher too, in the first group for the start and the
+ * last for the end; a rest group takes it as any marcher
+ */
+function laidOutWhole(p: LineParams): LineParams {
+    const { attach, ...rest } = p;
+    const groups = p.spacing.groups;
+    if (!attach || !groups || groups.some((g) => g.count === undefined))
+        return rest;
+    const counted = groups.map((g, i) => {
+        const extra =
+            (i === 0 && attach.start ? 1 : 0) +
+            (i === groups.length - 1 && attach.end ? 1 : 0);
+        return extra > 0 ? { ...g, count: (g.count ?? 0) + extra } : g;
+    });
+    return {
+        ...rest,
+        spacing: { ...p.spacing, groups: counted } as LineSpacing,
+    };
+}
+
+/**
  * The interval between neighbors, in field units: the typed one, or in Fit the one the drawn
  * line works out to, measured as the line measures it
  */
 export function lineInterval(p: LineParams, n: number): number {
+    const empty = emptyEnds(p);
+    if (empty > 0) return lineInterval(laidOutWhole(p), n + empty);
     const typed = typedInterval(p);
     if (typed !== null) return typed;
     if (n <= 1) return 0;
@@ -1337,6 +1417,15 @@ function cornerSpots(p: LineParams, runs: readonly number[][]): Slot[] {
  */
 export function lineSpots(p: LineParams, n: number, stepPx?: number): Slot[] {
     if (n <= 0) return [];
+    // An attached end holds no marcher (#1235): laid out with one there, which is then left out
+    const empty = emptyEnds(p);
+    if (empty > 0) {
+        const all = lineSpots(laidOutWhole(p), n + empty, stepPx);
+        return all.slice(
+            p.attach?.start ? 1 : 0,
+            p.attach?.end ? all.length - 1 : all.length,
+        );
+    }
     // Measured as an offset, each marcher that far from the one before, exactly
     if (offsetOf(p) && n > 1) {
         const o = lineOffset(p, n);
@@ -3482,7 +3571,9 @@ export function closeLine(
     env: Pick<ToolEnv, "pivot" | "anchor">,
 ): LineParams {
     if (isClosed(p) || p.points.length < 3) return p;
-    const closed: LineParams = { ...p, closed: true };
+    // A closed line has no ends to stay attached by (#1235)
+    const { attach: _attach, ...open } = p;
+    const closed: LineParams = { ...open, closed: true };
     if (p.spacing.mode === "fit") return closed;
     return withGroups(closed, n, p.spacing.groups, env);
 }

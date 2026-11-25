@@ -19,7 +19,7 @@ import {
 } from "../frame/gestures";
 import { gapPickAt } from "../distribute/outlineGap";
 import type { ShapeContext, Slot, XY } from "../types";
-import type { AnyToolKind, ToolEnv } from "./toolKind";
+import type { AnyToolKind, ToolClickPoints, ToolEnv } from "./toolKind";
 import type { FlipAxis } from "../frame/frame";
 import {
     mirroredOf,
@@ -88,6 +88,8 @@ export type Gesture =
            * press be a click rather than a drag
            */
           readonly first?: XY;
+          /** What `first` links to, landed on a placed shape's free end (#1235) */
+          readonly firstLink?: unknown;
       }
     /**
      * Clicking point after point (#524): it lasts from click to click, the pointer up between,
@@ -112,6 +114,13 @@ export type Gesture =
            * closes the line (#529), as the preview shows
            */
           readonly onFirst?: boolean;
+          /**
+           * What each point clicked links to, landed on a placed shape's free end (#1235), by
+           * index: only the first's and the last's are the line's ends, which link. Absent: none.
+           */
+          readonly links?: readonly unknown[];
+          /** What `next` links to, landed on a placed shape's free end; undefined when it doesn't */
+          readonly nextLink?: unknown;
           readonly before: ToolSnapshot;
       }
     /** A number in the floating editor being dragged: the shape follows it live */
@@ -381,7 +390,7 @@ export function press(state: ToolState, at: XY, env: ToolEnv): ToolState {
               from: env.snap ? env.gridSnap(at) : at,
               before,
               ...(state.kind.clickPoints
-                  ? { first: state.kind.clickPoints.land([], at, env) }
+                  ? firstPoint(state.kind.clickPoints, at, env)
                   : {}),
           };
     return {
@@ -394,6 +403,21 @@ export function press(state: ToolState, at: XY, env: ToolEnv): ToolState {
 }
 
 type PointsGesture = Extract<Gesture, { type: "points" }>;
+
+/**
+ * Where the first point of a press on a kind drawn by clicking lands: exactly on a placed shape's
+ * free end in reach (#1235), linked to it, or as the kind lands it
+ */
+function firstPoint(
+    draw: ToolClickPoints<unknown>,
+    at: XY,
+    env: ToolEnv,
+): { first: XY; firstLink?: unknown } {
+    const link = draw.link ? env.linkPoint?.(at) : null;
+    return link
+        ? { first: link.at, firstLink: link.to }
+        : { first: draw.land([], at, env) };
+}
 
 /** A press while clicking points: its release adds a point, or finishes on the last one */
 function pressPoint(
@@ -432,17 +456,29 @@ function previewPoints(
     env: ToolEnv,
 ): ToolState {
     const draw = state.kind.clickPoints!;
-    const next = draw.land(g.points, at, env);
-    const drawn = draw.draw(g.points, state.spots, env);
-    // On the first point, what a click there draws: the line closed
+    // On the first point, what a click there draws: the line closed, which has no ends to link
     const onFirst = closesAt(state, g, at, env);
+    // In reach of a placed shape's free end, the point lands on it and the line's end links there
+    // while it's the last (#1235); not on the end its first point links to
+    const start = g.links?.[0];
+    const link =
+        !onFirst && draw.link ? (env.linkPoint?.(at, start) ?? null) : null;
+    const next = link ? link.at : draw.land(g.points, at, env);
+    const linked = (p: unknown, end: unknown) =>
+        p !== undefined && draw.link && (start ?? end) !== undefined
+            ? draw.link(p, start, end)
+            : p;
+    const drawn = linked(
+        draw.draw(g.points, state.spots, env),
+        g.points.length > 1 ? g.links?.[g.points.length - 1] : undefined,
+    );
     const adding = onFirst
         ? draw.close!(g.points, state.spots, env)
-        : draw.draw([...g.points, next], state.spots, env);
+        : linked(draw.draw([...g.points, next], state.spots, env), link?.to);
     return {
         ...state,
         params: adding ?? drawn ?? g.before.params,
-        gesture: { ...g, next, drawn, adding, onFirst },
+        gesture: { ...g, next, drawn, adding, onFirst, nextLink: link?.to },
     };
 }
 
@@ -477,7 +513,13 @@ export function removeLastPoint(state: ToolState, env: ToolEnv): ToolState {
     const points = g.points.slice(0, -1);
     return previewPoints(
         state,
-        { ...g, points, onLast: false },
+        {
+            ...g,
+            points,
+            // The taken-back point's link goes with it
+            ...(g.links ? { links: g.links.slice(0, points.length) } : {}),
+            onLast: false,
+        },
         state.pointer ?? points.at(-1)!,
         env,
     );
@@ -543,6 +585,7 @@ export function release(
             gesture: {
                 type: "points",
                 points: [g.first],
+                ...(g.firstLink !== undefined ? { links: [g.firstLink] } : {}),
                 next: null,
                 drawn: undefined,
                 adding: undefined,
@@ -637,6 +680,16 @@ function releasePoint(
         gesture: {
             ...g,
             points: [...g.points, g.next],
+            // The point added is the line's end, linked if it landed on a free end (#1235),
+            // until another is added after it
+            ...(g.links || g.nextLink !== undefined
+                ? {
+                      links: [
+                          ...g.points.map((_, i) => g.links?.[i]),
+                          g.nextLink,
+                      ],
+                  }
+                : {}),
             drawn: g.adding,
             pressed: false,
             onLast: false,

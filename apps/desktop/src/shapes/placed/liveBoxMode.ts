@@ -47,6 +47,26 @@ import {
     useSavingBoxStore,
 } from "./boxSelectionStore";
 import { outlineGapAt } from "../distribute/outlineGap";
+import type { LineParams } from "../line/lineGeometry";
+import { placedBoxesAt } from "./placedBoxStore";
+import {
+    ATTACH_REACH,
+    attachedParams,
+    attachSnap,
+    followersOf,
+    freeEnds,
+    handleEnd,
+    isLinkable,
+    linkAt,
+    linkedEnd,
+    liveLinks,
+    type AttachSnap,
+    type ShapeLink,
+} from "./shapeLinks";
+import { linkDragTip, type LinkTip } from "./linkTip";
+import { clearLinkDrag, useLinkDragStore } from "./linkDragStore";
+import { openJointMenu } from "./detachLinks";
+import { doubleClickMember } from "./selectLinkedShapes";
 import { openHandleMenu } from "../field/handleMenu";
 import { groupDrawing } from "../field/groupDrawing";
 import { stepDrawing } from "../field/stepDrawing";
@@ -90,92 +110,102 @@ interface Shown {
     readonly groupMenu: GroupMenuState | null;
     /** A number setting the kind's step is engaged: the step drawn (owner on #596) */
     readonly stepShown: boolean;
+    /** What the readout by the pointer says about linking the dragged end (#1235) */
+    readonly linkTip: LinkTip | null;
 }
 
-const drawingOf = memoDrawing(
-    ({
-        live: saved,
-        preview,
+/** What the selected placed shape draws, `shown` */
+const drawShown = ({
+    live: saved,
+    preview,
+    calm,
+    scrubbing,
+    groupMenu,
+    stepShown,
+}: Shown) => {
+    const live =
+        preview && !saved.gesture ? { ...saved, params: preview } : saved;
+    const changing = live.gesture !== null || preview !== null;
+    const field = currentShapeField();
+    if (!field) return null;
+    const { kind, spots: n } = live.box;
+    const ctx = shapeContextFor(field);
+    // Each member keeps their spot (or the box is laid out again for a new count across); a
+    // spread drafts its spots while a handle is dragged (#439), and the commit lays them out
+    const targets = changing
+        ? liveTargets(
+              live.box,
+              live.params,
+              live.gesture ? { ...ctx, draft: true } : ctx,
+          ).members
+        : [];
+    const names = drillNumbers(field);
+    const env = toolEnvFor(field);
+    return {
+        stage: "open" as const,
+        outline: shapeOutline(kind, live.params, n),
+        openOutline: kind.outlineOpen?.(live.params, n) ?? false,
+        construction: kind.construction?.(live.params, n) ?? [],
+        // While a gesture goes, where the marchers will stand, and who
+        spots: targets,
+        walks: [],
+        labels:
+            targets.length <= SPOT_LABEL_LIMIT
+                ? targets.map((t) => ({
+                      at: t,
+                      text: names.get(t.marcherId) ?? "",
+                  }))
+                : [],
         calm,
-        scrubbing,
-        groupMenu,
-        stepShown,
-    }: Shown) => {
-        const live =
-            preview && !saved.gesture ? { ...saved, params: preview } : saved;
-        const changing = live.gesture !== null || preview !== null;
-        const field = currentShapeField();
-        if (!field) return null;
-        const { kind, spots: n } = live.box;
-        const ctx = shapeContextFor(field);
-        // Each member keeps their spot (or the box is laid out again for a new count across); a
-        // spread drafts its spots while a handle is dragged (#439), and the commit lays them out
-        const targets = changing
-            ? liveTargets(
-                  live.box,
+        ...handleDrawing(kind, live.params, n, live.selected),
+        gaps: gapsOf(kind, live.params, n),
+        ...stepDrawing(
+            kind,
+            live.params,
+            n,
+            stepShown,
+            live.gesture,
+            env.stepPx,
+        ),
+        ...frameDrawing(
+            kind,
+            live.params,
+            n,
+            live.gesture,
+            live.pointer ?? null,
+            env,
+        ),
+        ...guideDrawing(
+            kind,
+            live.params,
+            n,
+            targets,
+            guideGesture(live.gesture, scrubbing),
+            env,
+            field,
+        ),
+        // The members stand on the spots, laid out in order along the shape
+        ...(groupMenu
+            ? groupDrawing(
+                  kind,
                   live.params,
-                  live.gesture ? { ...ctx, draft: true } : ctx,
-              ).members
-            : [];
-        const names = drillNumbers(field);
-        const env = toolEnvFor(field);
-        return {
-            stage: "open" as const,
-            outline: shapeOutline(kind, live.params, n),
-            openOutline: kind.outlineOpen?.(live.params, n) ?? false,
-            construction: kind.construction?.(live.params, n) ?? [],
-            // While a gesture goes, where the marchers will stand, and who
-            spots: targets,
-            walks: [],
-            labels:
-                targets.length <= SPOT_LABEL_LIMIT
-                    ? targets.map((t) => ({
-                          at: t,
-                          text: names.get(t.marcherId) ?? "",
-                      }))
-                    : [],
-            calm,
-            ...handleDrawing(kind, live.params, n, live.selected),
-            gaps: gapsOf(kind, live.params, n),
-            ...stepDrawing(
-                kind,
-                live.params,
-                n,
-                stepShown,
-                live.gesture,
-                env.stepPx,
-            ),
-            ...frameDrawing(
-                kind,
-                live.params,
-                n,
-                live.gesture,
-                live.pointer ?? null,
-                env,
-            ),
-            ...guideDrawing(
-                kind,
-                live.params,
-                n,
-                targets,
-                guideGesture(live.gesture, scrubbing),
-                env,
-                field,
-            ),
-            // The members stand on the spots, laid out in order along the shape
-            ...(groupMenu
-                ? groupDrawing(
-                      kind,
-                      live.params,
-                      n,
-                      kind.shape.generate(live.params, n, ctx),
-                      groupMenu,
-                      env.stepPx,
-                  )
-                : {}),
-        };
-    },
-);
+                  n,
+                  kind.shape.generate(live.params, n, ctx),
+                  groupMenu,
+                  env.stepPx,
+              )
+            : {}),
+    };
+};
+
+/** The shape as drawn, with what the pointer's readout says about linking its end (#1235) */
+const drawingOf = memoDrawing((shown: Shown) => {
+    const drawing = drawShown(shown);
+    return (
+        drawing &&
+        linkDragTip(drawing, shown.live.pointer ?? null, shown.linkTip)
+    );
+});
 
 /** The live mode of the selected placed shape, for its keys; null with none selected */
 let activeLive: LiveBoxMode | null = null;
@@ -204,7 +234,7 @@ export const clearLiveBoxSelection = (): boolean =>
  * A selected placed shape of any kind, edited in place (07-placed-boxes.md), as a field editor
  * mode: it claims presses on its handles and inside it. Its handles resize it (a box's stretch it),
  * a drag inside moves it, and each gesture is saved when it ends, as one undo step. A double click
- * on a member goes inside the box. A press that reaches inside ($mod on a member, away from the
+ * on a member goes inside the box; on a linked shape it selects the shape's whole figure (#1236). A press that reaches inside ($mod on a member, away from the
  * box's controls) and other presses go through the editor's rules as usual. The selection box's own handles (#198) are off while it's on.
  */
 export class LiveBoxMode implements FieldMode {
@@ -227,6 +257,19 @@ export class LiveBoxMode implements FieldMode {
     private readDuringGesture: PlacedBox | null = null;
     /** What made the last press: a held key's rerun goes on with its reach (tablet 1.4) */
     private pressKind: PointerKind = "mouse";
+    /**
+     * The placed shapes and links around the gesture under way (#1235), read at its press: what
+     * a dragged end can attach to, and who follows
+     */
+    private linkScene: {
+        readonly boxes: readonly PlacedBox[];
+        readonly links: readonly ShapeLink[];
+        readonly beat: number;
+    } | null = null;
+    /** Where the dragged end attaches on release, shown by a ring there (#1235) */
+    private snap: AttachSnap | null = null;
+    /** What the readout by the pointer says about linking, mid-drag (#1235) */
+    private linkTip: LinkTip | null = null;
 
     constructor(
         box: PlacedBox,
@@ -356,17 +399,109 @@ export class LiveBoxMode implements FieldMode {
                 ...toolEnvFor(field, held.roles(), { kind: pointer.kind }),
                 reachInside,
             }) ?? this.live;
+        this.linkScene = null;
+        this.snap = null;
+        if (this.live.gesture && isLinkable(this.live.box)) {
+            const beat =
+                this.pressedAt ??
+                displayedBeat(useTimelineSelectionStore.getState());
+            const boxes = placedBoxesAt(beat);
+            this.linkScene = { boxes, links: liveLinks(boxes, beat), beat };
+        }
         this.emit();
+    }
+
+    /**
+     * Linked shapes mid-drag (#1235): a moved end of this shape near a free end of another on its
+     * move snaps onto it, a ring there saying it attaches on release (not with `constrain`, $mod,
+     * held: a way to place without attaching, as drawing tools have), and the shapes linked to
+     * this one follow, their outlines and marchers drawn where they'll be
+     */
+    private followLinks(constrain: boolean, pointer: XY): void {
+        const scene = this.linkScene;
+        const g = this.live.gesture;
+        const field = currentShapeField();
+        if (!scene || !g || !field) {
+            this.snap = null;
+            this.linkTip = null;
+            clearLinkDrag();
+            return;
+        }
+        const whole = g.type === "move";
+        const box = this.live.box;
+        // An end's drag is measured from the pointer, whatever the kind does with the end
+        const end = g.type === "handle" ? handleEnd(box, g.base, g.key) : null;
+        const free =
+            end !== null &&
+            !linkedEnd(box, end, scene.links) &&
+            !(g.base as LineParams).attach?.[end];
+        this.snap =
+            (whole || g.type === "handle") && !constrain
+                ? attachSnap({
+                      box,
+                      params: this.live.params,
+                      boxes: scene.boxes,
+                      links: scene.links,
+                      radius:
+                          toolEnvFor(field, undefined, { kind: this.pressKind })
+                              .hitRadius * ATTACH_REACH,
+                      beat: scene.beat,
+                      ...(end
+                          ? { dragged: { end, pointer, base: g.base } }
+                          : {}),
+                  })
+                : null;
+        this.linkTip = this.snap
+            ? { kind: "release", shape: this.snap.owner.kind.shape.label }
+            : free &&
+                !constrain &&
+                freeEnds(box, scene.boxes, scene.links, scene.beat).length > 0
+              ? { kind: "drop" }
+              : null;
+        if (this.snap)
+            this.live = {
+                ...this.live,
+                params: attachedParams(
+                    this.live.params as LineParams,
+                    this.snap,
+                    whole,
+                ),
+            };
+        const ctx = { ...shapeContextFor(field), draft: true };
+        useLinkDragStore.setState({
+            ring: this.snap?.at ?? null,
+            followers: followersOf(
+                this.live.box,
+                this.live.params,
+                scene.links,
+            ).map((f) => ({
+                id: f.box.recipe.id,
+                outline: shapeOutline(f.box.kind, f.params, f.box.spots),
+                spots: liveTargets(f.box, f.params, ctx).members.map(
+                    ({ x, y }) => ({ x, y }),
+                ),
+            })),
+        });
+    }
+
+    /** The gesture's link state let go */
+    private endLinks(): void {
+        this.linkScene = null;
+        this.snap = null;
+        this.linkTip = null;
+        clearLinkDrag();
     }
 
     move(pointer: FieldPointer): void {
         const field = currentShapeField();
         if (!field) return;
+        const roles = this.held?.move(pointer);
         this.live = moveLive(
             this.live,
             pointer.field,
-            toolEnvFor(field, this.held?.move(pointer), { kind: pointer.kind }),
+            toolEnvFor(field, roles, { kind: pointer.kind }),
         );
+        this.followLinks(roles?.constrain ?? false, pointer.field);
         this.emit();
     }
 
@@ -379,6 +514,7 @@ export class LiveBoxMode implements FieldMode {
             at,
             toolEnvFor(field, roles, { kind: this.pressKind }),
         );
+        this.followLinks(roles.constrain, at);
         this.emit();
     }
 
@@ -389,6 +525,7 @@ export class LiveBoxMode implements FieldMode {
 
     release(pointer: FieldPointer, click: LiveClick | null): void {
         this.endHeld();
+        this.endLinks();
         const before = this.live;
         const out = releaseLive(
             before,
@@ -409,7 +546,7 @@ export class LiveBoxMode implements FieldMode {
         }
         this.catchUp();
         this.emit();
-        if (!out.changed && out.enter) this.enterAt(pointer);
+        if (!out.changed && out.enter) this.enterAt(pointer, !!click?.double);
     }
 
     /**
@@ -425,6 +562,26 @@ export class LiveBoxMode implements FieldMode {
     openMenu(pointer: FieldPointer): boolean {
         const field = currentShapeField();
         if (!field || this.live.gesture) return false;
+        // A joint (#1235): its own menu, Detach
+        const beat = displayedBeat(useTimelineSelectionStore.getState());
+        const joint = isLinkable(this.live.box)
+            ? linkAt(
+                  this.live.box,
+                  pointer.field,
+                  liveLinks(placedBoxesAt(beat), beat),
+                  toolEnvFor(field, undefined, { kind: pointer.kind })
+                      .hitRadius,
+              )
+            : null;
+        if (joint) {
+            openJointMenu(
+                joint,
+                this.live.box,
+                pointer.screen,
+                this.queryClient,
+            );
+            return true;
+        }
         const { kind, spots } = this.live.box;
         const target = shapeTargetAt(
             kind,
@@ -480,6 +637,7 @@ export class LiveBoxMode implements FieldMode {
 
     cancel(): void {
         this.endHeld();
+        this.endLinks();
         this.live = openLive(this.live.box, this.live.selected);
         this.catchUp();
         this.emit();
@@ -531,7 +689,8 @@ export class LiveBoxMode implements FieldMode {
             this.shown.pivotPreview !== pivotPreview ||
             this.shown.scrubbing !== scrubbing ||
             this.shown.groupMenu !== groupMenu ||
-            this.shown.stepShown !== stepShown
+            this.shown.stepShown !== stepShown ||
+            this.shown.linkTip !== this.linkTip
         )
             this.shown = {
                 live: this.live,
@@ -541,6 +700,7 @@ export class LiveBoxMode implements FieldMode {
                 scrubbing,
                 groupMenu,
                 stepShown,
+                linkTip: this.linkTip,
             };
         return drawingOf(this.shown);
     }
@@ -578,15 +738,20 @@ export class LiveBoxMode implements FieldMode {
         return hit?.marcherId ?? null;
     }
 
-    /** Goes inside the box at the member nearest `pointer` */
-    private enterAt(pointer: FieldPointer): void {
+    /**
+     * Goes inside the box at the member nearest `pointer`; for a double-click, a linked shape's
+     * whole figure is selected instead (#1236), unless it's selected already
+     */
+    private enterAt(pointer: FieldPointer, double: boolean): void {
         const at = pointer.field;
         let best: { id: number; d: number } | null = null;
         for (const m of this.live.box.recipe.members) {
             const d = Math.hypot(m.x - at.x, m.y - at.y);
             if (!best || d < best.d) best = { id: m.marcherId, d };
         }
-        if (best) enterBox(best.id);
+        if (!best) return;
+        if (double) doubleClickMember(best.id);
+        else enterBox(best.id);
     }
 
     private emit(): void {

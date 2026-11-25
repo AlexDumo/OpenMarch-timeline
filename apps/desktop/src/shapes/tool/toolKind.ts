@@ -72,6 +72,13 @@ export interface ToolEnv {
      * mirrored). Not the open shape's spots, which move with the point. None when absent.
      */
     readonly marcherSnaps?: () => readonly XY[];
+    /**
+     * Linking clicked points (#1235): where a point clicked at `at` lands exactly when it's in
+     * reach of a placed shape's free end, and what it links to there, `except` left out; null out
+     * of reach. The field mode sets it for a Line or Curve while `constrain` isn't held; absent,
+     * clicked points don't link.
+     */
+    readonly linkPoint?: (at: XY, except?: unknown) => PointLink | null;
     /** The box's ratio lock: changing one spacing changes the other in proportion */
     readonly ratioLocked?: boolean;
     /** An Arc's lock: changing its width changes its depth in proportion, and back (#634) */
@@ -494,6 +501,19 @@ export interface ToolClickPoints<P> {
      * first point draws once there are three (#529). Absent: that click adds a point as any does.
      */
     close?(points: readonly XY[], n: number, env: ToolEnv): P | undefined;
+    /**
+     * The shape drawn through clicked points with its ends linked to placed shapes' ends (#1235):
+     * its first point's to `start`, its last's to `end`, each what {@link ToolEnv.linkPoint} gave
+     * (undefined: not linked). A closed shape as it is. Absent: clicked ends don't link.
+     */
+    link?(params: P, start: unknown, end: unknown): P;
+}
+
+/** Where a point clicked in reach of a placed shape's free end lands, and what it links to there */
+export interface PointLink {
+    readonly at: XY;
+    /** Opaque to the tool; the kind's {@link ToolClickPoints.link} reads it */
+    readonly to: unknown;
 }
 
 /**

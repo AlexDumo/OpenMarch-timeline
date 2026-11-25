@@ -4,6 +4,8 @@ import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { usePreviewModeStore } from "@/stores/PreviewModeStore";
 import { keepMirror, type ToolState } from "./toolMachine";
 import { isAwayFrom, momentOf, type ShapeMoment } from "./shapeMoment";
+import { keepToolLinks, toolBeat } from "./drawnLinks";
+import { clearLinkDrag } from "../placed/linkDragStore";
 
 /**
  * The open shape tool, if any. Every change goes through the pure functions in `toolMachine.ts`;
@@ -29,12 +31,16 @@ export interface OpenShape {
 
 /**
  * Applies `change` to the open tool; nothing happens when it's closed. A mirrored paste stays tied
- * to its mirror point through it, or is untied by it (`keepMirror`).
+ * to its mirror point through it, or is untied by it (`keepMirror`), and a new line's end attached
+ * to a placed shape's stays attached only while it's on that end (`keepToolLinks`, #1235).
  */
 export function updateTool(change: (tool: ToolState) => ToolState): void {
-    const { tool } = useShapeToolStore.getState();
+    const { tool, openedAt } = useShapeToolStore.getState();
     if (!tool) return;
-    const next = keepMirror(tool, change(tool));
+    const next = keepToolLinks(
+        keepMirror(tool, change(tool)),
+        toolBeat(openedAt),
+    );
     if (next !== tool) useShapeToolStore.setState({ tool: next });
 }
 
@@ -70,6 +76,8 @@ export function useShapeShown(): boolean {
 }
 
 export function closeShapeTool(): void {
+    // The ring of a link a click would make (#1235) goes with the tool
+    clearLinkDrag();
     if (useShapeToolStore.getState().tool)
         useShapeToolStore.setState({
             tool: null,
