@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
     UNIFORM_ARTWORK_STORAGE_KEY,
     UNIFORM_PREVIEW_WARNED_STORAGE_KEY,
+    _resetPreviewWarning,
     customUniformsDefault,
     loadCustomUniforms,
     markPreviewWarningShown,
@@ -38,27 +39,51 @@ const release = { dev: false, webChannel: undefined };
 
 afterEach(() => {
     localStorage.clear();
+    _resetPreviewWarning();
 });
 
 describe("Custom uniforms (preview) default", () => {
-    it("is off in release builds: packaged Electron, the stable and the preview sites", () => {
+    it("is off in releases: packaged Electron and the stable, nightly and preview sites", () => {
         expect(customUniformsDefault(release)).toBe(false);
-        expect(
-            customUniformsDefault({ dev: false, webChannel: "stable" }),
-        ).toBe(false);
-        expect(
-            customUniformsDefault({ dev: false, webChannel: "preview" }),
-        ).toBe(false);
+        for (const webChannel of ["stable", "nightly", "preview"])
+            expect(
+                customUniformsDefault({
+                    dev: false,
+                    webChannel,
+                    channelNamed: true,
+                }),
+            ).toBe(false);
     });
 
-    it("is on in developer builds and lab builds", () => {
+    it("is on in a dev server and the dev, examples and lab web builds", () => {
         expect(
             customUniformsDefault({ dev: true, webChannel: undefined }),
         ).toBe(true);
-        for (const webChannel of ["dev", "examples", "nightly", "lab"])
-            expect(customUniformsDefault({ dev: false, webChannel })).toBe(
-                true,
-            );
+        expect(
+            customUniformsDefault({
+                dev: true,
+                webChannel: "dev",
+                channelNamed: false,
+            }),
+        ).toBe(true);
+        for (const webChannel of ["dev", "examples", "lab"])
+            expect(
+                customUniformsDefault({
+                    dev: false,
+                    webChannel,
+                    channelNamed: true,
+                }),
+            ).toBe(true);
+    });
+
+    it("is off in a production web build whose WEB_CHANNEL wasn't set, though it reads as dev", () => {
+        expect(
+            customUniformsDefault({
+                dev: false,
+                webChannel: "dev",
+                channelNamed: false,
+            }),
+        ).toBe(false);
     });
 });
 
@@ -128,9 +153,10 @@ describe("the once-only warning's flag", () => {
         expect(storage.getItem(UNIFORM_PREVIEW_WARNED_STORAGE_KEY)).toBe("1");
     });
 
-    it("reads as not shown when storage is blocked, without throwing", () => {
+    it("shows once per session when storage is blocked, without throwing", () => {
         const storage = memoryStorage({}, true);
-        expect(() => markPreviewWarningShown(storage)).not.toThrow();
         expect(previewWarningShown(storage)).toBe(false);
+        expect(() => markPreviewWarningShown(storage)).not.toThrow();
+        expect(previewWarningShown(storage)).toBe(true);
     });
 });

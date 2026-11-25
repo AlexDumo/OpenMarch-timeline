@@ -26,6 +26,7 @@ import { defaultVenueForKit } from "@/view3d/core/venueSettings";
 import { sampleManifest } from "@/view3d/core/uniformPack/__test__/fixtures";
 import {
     UNIFORM_PREVIEW_WARNED_STORAGE_KEY,
+    _resetPreviewWarning,
     useCustomUniformsStore,
 } from "@/view3d/window/uniformArtworkPreview";
 import { useFlatsWear } from "@/view3d/window/uniformPack/useFlatsWear";
@@ -39,6 +40,11 @@ const ASSET = "8a6f2c1e-4b3d-4e5f-9a0b-1c2d3e4f5a6b";
 const PACK = `library:${ASSET}@${"ab".repeat(32)}` as const;
 
 const venue = { current: defaultVenueForKit("hs") as object };
+/** What the show holds: whether it has the uniform, and whether its file reads (or is newer) */
+const stored = {
+    inShow: true,
+    read: "ok" as "ok" | "unreadable" | "newer",
+};
 
 vi.mock("@/hooks/queries/useVenueSettings", () => ({
     useVenueSettings: () => ({
@@ -67,20 +73,23 @@ vi.mock("@/hooks/queries/useUniformPack", async (importOriginal) => {
         uniformPacksQueryOptions: () =>
             queryOptions({
                 queryKey: ["test", "packs"],
-                queryFn: async () => [
-                    {
-                        id: ASSET,
-                        value: PACK,
-                        name: "Colleague's uniform",
-                        versions: [PACK],
-                    },
-                ],
+                queryFn: async () =>
+                    stored.inShow
+                        ? [
+                              {
+                                  id: ASSET,
+                                  value: PACK,
+                                  name: "Colleague's uniform",
+                                  versions: [PACK],
+                              },
+                          ]
+                        : [],
             }),
         uniformPackQueryOptions: (value: string | null | undefined) =>
             queryOptions({
                 queryKey: ["test", "pack", value ?? ""],
                 queryFn: async () =>
-                    value === PACK
+                    value === PACK && stored.inShow && stored.read === "ok"
                         ? {
                               value: PACK,
                               name: "Colleague's uniform",
@@ -91,6 +100,8 @@ vi.mock("@/hooks/queries/useUniformPack", async (importOriginal) => {
                         : null,
                 enabled: !!value,
             }),
+        uniformPackIsNewer: (value: string | null | undefined) =>
+            value === PACK && stored.read === "newer",
     };
 });
 
@@ -137,6 +148,9 @@ afterEach(() => {
     localStorage.clear();
     saved.mockReset();
     venue.current = defaultVenueForKit("hs");
+    stored.inShow = true;
+    stored.read = "ok";
+    _resetPreviewWarning();
 });
 
 describe("Custom uniforms (preview) off", () => {
@@ -158,7 +172,9 @@ describe("Custom uniforms (preview) off", () => {
         };
         openPanel();
         const note = await screen.findByTestId("view3d-uniform-preview-worn");
-        expect(note.textContent).toContain("This show uses a preview uniform.");
+        expect(note.textContent).toContain(
+            "This show's band wears a custom uniform, a preview feature.",
+        );
         const picker = screen.getByTestId("view3d-uniform-picker");
         await waitFor(() =>
             expect(picker.textContent).toContain("Colleague's uniform"),
@@ -181,6 +197,76 @@ describe("Custom uniforms (preview) off", () => {
         await waitFor(() => expect(result.current?.key).toBe(PACK));
         const sample = renderHook(() => useFlatsWear("sample"), { wrapper });
         expect(sample.result.current?.key).toBe("sample");
+    });
+});
+
+describe("a custom uniform the band can't wear", () => {
+    const wearing = () => {
+        venue.current = { ...defaultVenueForKit("hs"), uniformArtwork: PACK };
+    };
+
+    it("says with the setting off that its file can't be read, and offers to turn the preview on", async () => {
+        setPreview(false);
+        stored.read = "unreadable";
+        wearing();
+        openPanel();
+        const note = await screen.findByTestId("view3d-uniform-unreadable");
+        expect(note.textContent).toBe(
+            "The band's custom uniform is in this show, but its file can't be read, so the band wears its preset. Pick another uniform, or turn on custom uniforms to import one.",
+        );
+        expect(
+            screen.getByTestId("view3d-uniform-preview-turn-on"),
+        ).toBeTruthy();
+        expect(
+            screen.getByTestId("view3d-uniform-preview-worn").textContent,
+        ).not.toContain("wears a custom uniform");
+        for (const id of GATED) expect(screen.queryByTestId(id)).toBeNull();
+    });
+
+    it("says with the setting off that it isn't in the show anymore", async () => {
+        setPreview(false);
+        stored.inShow = false;
+        wearing();
+        openPanel();
+        const note = await screen.findByTestId("view3d-uniform-missing");
+        expect(note.textContent).toContain("isn't in this show anymore");
+        expect(note.textContent).toContain(
+            "turn on custom uniforms and import it again",
+        );
+        expect(
+            screen.getByTestId("view3d-uniform-preview-turn-on"),
+        ).toBeTruthy();
+    });
+
+    it("tells the person to update OpenMarch when it was made by a newer one, with the setting off or on", async () => {
+        stored.read = "newer";
+        wearing();
+        for (const on of [false, true]) {
+            setPreview(on);
+            openPanel();
+            const note = await screen.findByTestId("view3d-uniform-newer");
+            expect(note.textContent).toBe(
+                "The band's uniform was made with a newer version of OpenMarch, so the band wears its preset. Update OpenMarch to see it.",
+            );
+            // updating is the fix, not the preview
+            expect(
+                screen.queryByTestId("view3d-uniform-preview-turn-on"),
+            ).toBeNull();
+            cleanup();
+        }
+    });
+
+    it("keeps the setting-on wording, once, under the picker", async () => {
+        setPreview(true);
+        stored.read = "unreadable";
+        wearing();
+        openPanel();
+        await screen.findByTestId("view3d-uniform-import");
+        const notes = await screen.findAllByTestId("view3d-uniform-unreadable");
+        expect(notes).toHaveLength(1);
+        expect(notes[0].textContent).toContain(
+            "Pick another uniform, or import one.",
+        );
     });
 });
 
