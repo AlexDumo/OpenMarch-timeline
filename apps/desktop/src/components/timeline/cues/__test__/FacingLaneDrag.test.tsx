@@ -557,6 +557,16 @@ describe("edits follow the selection (#1318)", () => {
         expect(
             container.querySelectorAll('[data-testid="facing-lane-row"]'),
         ).toHaveLength(1);
+        // Its bars don't drag, but have their cue's menu, to add the selection back
+        const restHold = rest.querySelector(
+            '[data-testid="facing-lane-hold"]',
+        )!;
+        await dragBy(restHold, 32);
+        expect(written).toEqual([]);
+        await act(async () => {
+            fireEvent.contextMenu(restHold, { clientX: 500, clientY: 10 });
+        });
+        expect(useCueSelectionStore.getState().cueId).toBe(1);
         fireEvent.click(getByTestId("facing-lane-rest-name"));
         expect(select).toHaveBeenLastCalledWith([2]);
         cleanup();

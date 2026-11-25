@@ -20,8 +20,9 @@
  * - **Edits follow the selection (#1318).** With only some of a cue's performers selected, an edit
  *   to its row (a drag, the turn popover, Move cue to playhead) changes only them: they split off
  *   into a cue of their own. The row's name says how many are selected ("Trumpets 3 of 12"); a
- *   click on it selects them all. After a split the rest of the old cue keeps a dimmed, read-only
- *   row under the selection's until the selection changes; a click on its name selects them.
+ *   click on it selects them all. After a split the rest of the old cue keeps a dimmed row under
+ *   the selection's until the selection changes: no handles, but its menu (Add selected to this
+ *   cue joins the selection back), and a click on its name selects them.
  * - A press on empty lane space is the timeline's, as on the audio lane.
  */
 import {
@@ -820,8 +821,8 @@ export function FacingLaneView({
                         </div>
                     ))}
                     {restRows.map((row) => (
-                        // The rest of a cue the selection split off: drawn to show the split,
-                        // not edited here (#1318)
+                        // The rest of a cue the selection split off: drawn to show the split, with
+                        // no handles; its menu (Add selected to this cue joins them back, #1318)
                         <div
                             key={row.key}
                             data-testid="facing-lane-rest-row"
@@ -829,7 +830,7 @@ export function FacingLaneView({
                             className="relative"
                             style={{ height: ROW }}
                         >
-                            <div className="pointer-events-none opacity-50">
+                            <div className="opacity-50">
                                 {row.pieces.map((piece) => (
                                     <FacingBar
                                         key={`${piece.from}-${piece.kind}-${piece.cueId ?? "d"}`}
@@ -858,7 +859,10 @@ export function FacingLaneView({
                                         picked={false}
                                         readOnly
                                         onPress={() => {}}
-                                        onMenu={() => {}}
+                                        onMenu={(x, y) =>
+                                            piece.cueId !== null &&
+                                            openMenu(piece.cueId, x, y)
+                                        }
                                         onOpen={() => {}}
                                     />
                                 ))}
@@ -1073,7 +1077,7 @@ function FacingBar({
     dragging: boolean;
     picked: boolean;
     lockedReason?: string;
-    /** Drawn only, with no handles (a split's rest) */
+    /** No handles: it can't be dragged or opened, only its menu (a split's rest) */
     readOnly?: boolean;
     onPress: (e: ReactPointerEvent<HTMLElement>, mode: LaneDragMode) => void;
     onMenu: (clientX: number, clientY: number) => void;
@@ -1138,7 +1142,7 @@ function FacingBar({
                           e.stopPropagation();
                       },
                   })}
-            onDoubleClick={isCue ? onOpen : undefined}
+            onDoubleClick={isCue && !readOnly ? onOpen : undefined}
             onPointerDown={(e) => {
                 // The front before any cue is empty lane space: its press is the timeline's
                 if (!isCue) return;
