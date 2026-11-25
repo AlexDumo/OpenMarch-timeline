@@ -72,10 +72,12 @@ export function ChoiceMenu({
     const own = useState(false);
     const [open, setOpen] = nested ? own : shared;
     // Opened by keyboard, focus goes to the answer the shape has now
-    const focus = useMenuFocus((el) =>
-        el.querySelector<HTMLElement>(
-            '[role="menuitemradio"][aria-checked="true"]',
-        ),
+    const focus = useMenuFocus(
+        (el) =>
+            el.querySelector<HTMLElement>(
+                '[role="menuitemradio"][aria-checked="true"]',
+            ),
+        nested,
     );
     const options = choice.options(target.params, target.spots);
     const current = choice.current(target.params, target.spots);
