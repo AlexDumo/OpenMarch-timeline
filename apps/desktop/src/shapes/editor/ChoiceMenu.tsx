@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import { useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import {
     CaretDownIcon,
@@ -52,16 +53,24 @@ export function ChoiceMenus({
     );
 }
 
-function ChoiceMenu({
+/**
+ * One of a kind's menus. `nested` inside another of the editor's menus (the Rows menu's "Rows go",
+ * #1193), it opens beside it and keeps its own open state, so opening it doesn't close that menu.
+ */
+export function ChoiceMenu({
     choice,
     target,
     envFor,
+    nested = false,
 }: {
     choice: Choice;
     target: Pick<ShapeEditTarget, "params" | "spots" | "apply">;
     envFor: () => ToolEnv | null;
+    nested?: boolean;
 }) {
-    const [open, setOpen] = useEditorMenu();
+    const shared = useEditorMenu();
+    const own = useState(false);
+    const [open, setOpen] = nested ? own : shared;
     // Opened by keyboard, focus goes to the answer the shape has now
     const focus = useMenuFocus((el) =>
         el.querySelector<HTMLElement>(
@@ -107,7 +116,7 @@ function ChoiceMenu({
             </Tip>
             <Popover.Portal>
                 <Popover.Content
-                    side="bottom"
+                    side={nested ? "right" : "bottom"}
                     align="start"
                     sideOffset={6}
                     {...focus.content}
@@ -166,6 +175,11 @@ function ChoiceMenu({
                                             size={12}
                                         />
                                     </span>
+                                    {option.detail && !option.disabled && (
+                                        <span className="text-text/60 text-sub">
+                                            {option.detail}
+                                        </span>
+                                    )}
                                     {option.disabled && (
                                         <span
                                             id={`shape-choice-${choice.key}-${option.value}-reason`}

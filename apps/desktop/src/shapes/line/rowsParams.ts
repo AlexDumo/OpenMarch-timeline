@@ -21,7 +21,18 @@ export interface LineRows {
      * side, in field units; below 0 the other way. None when absent.
      */
     readonly slant?: number;
+    /**
+     * Which way the rows step from the drawn line (#1193): absent, the whole line slid square to
+     * the line between its ends; `follow` square to the line wherever it is (an arc's rows are
+     * rings round its center, a curve's follow its bends); `back` straight front to back on the
+     * field; `side` straight side to side. Always toward the line's left-hand side for the rows
+     * after the drawn one in {@link list}.
+     */
+    readonly go?: RowsGo;
 }
+
+/** Which way the rows step from the drawn line, other than sliding it ({@link LineRows.go}) */
+export type RowsGo = "follow" | "back" | "side";
 
 /** One row */
 export interface LineRow {
@@ -42,7 +53,8 @@ export interface LineRow {
 /** The most rows a line can have, the drawn one among them */
 export const MAX_ROWS = 20;
 
-const ROWS_KEYS = new Set(["list", "drawn", "apart", "slant"]);
+const ROWS_KEYS = new Set(["list", "drawn", "apart", "slant", "go"]);
+const GOES: readonly string[] = ["follow", "back", "side"];
 const ROW_KEYS = new Set(["count", "shift", "empty"]);
 
 const isInt = (x: unknown): x is number =>
@@ -70,7 +82,7 @@ export function isRows(r: unknown): r is LineRows | undefined {
     if (r === undefined) return true;
     if (typeof r !== "object" || r === null) return false;
     if (Object.keys(r).some((key) => !ROWS_KEYS.has(key))) return false;
-    const { list, drawn, apart, slant } = r as LineRows;
+    const { list, drawn, apart, slant, go } = r as LineRows;
     if (!Array.isArray(list) || list.length < 1 || list.length > MAX_ROWS)
         return false;
     if (!list.every(isRow)) return false;
@@ -83,7 +95,8 @@ export function isRows(r: unknown): r is LineRows | undefined {
         drawn < list.length &&
         isFiniteNumber(apart) &&
         apart > 0 &&
-        (slant === undefined || isFiniteNumber(slant))
+        (slant === undefined || isFiniteNumber(slant)) &&
+        (go === undefined || GOES.includes(go))
     );
 }
 

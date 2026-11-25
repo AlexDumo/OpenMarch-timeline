@@ -150,7 +150,7 @@ import { LayoutMenu } from "./LayoutPicker";
 import { ReshuffleButton } from "./ReshuffleButton";
 import { EdgeToggle } from "./EdgeToggle";
 import { ModeMenu } from "./ModeMenu";
-import { ChoiceMenus, GuidesMenu } from "./ChoiceMenu";
+import { ChoiceMenu, ChoiceMenus, GuidesMenu } from "./ChoiceMenu";
 import { GroupChips } from "./GroupChips";
 import { GROUP_MENU_ATTRIBUTE, GroupMenu } from "./GroupMenu";
 import { useFocusCarry } from "./focusCarry";
@@ -2050,6 +2050,19 @@ function RowsMenu({ target }: { target: ShapeEditTarget }) {
                             <span className="text-text/60 px-4">
                                 {tolgee.t("shapes.rows.spacing", "Spacing")}
                             </span>
+                            {/* Which way the rows step from the drawn shape (#1193) */}
+                            <div
+                                className="flex min-h-24 items-center justify-between gap-8 pl-4"
+                                data-testid="shape-rows-go"
+                            >
+                                <span>{rows.go.label}</span>
+                                <ChoiceMenu
+                                    choice={rows.go}
+                                    target={target}
+                                    envFor={envFor}
+                                    nested
+                                />
+                            </div>
                             {[rows.apart, rows.slant].map((param) => (
                                 <div
                                     key={param.key}

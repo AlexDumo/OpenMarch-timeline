@@ -2779,7 +2779,25 @@
             "spotUpDown": "{name}, spot {spot} of {count}: {left} toward the front, {right} toward the back",
             "spotsLabel": "{name}: its spots. Arrow keys move along them, Space leaves one empty or fills it",
             "summary": "Rows · {count}",
-            "tip": "Split these marchers into rows alongside the line"
+            "tip": "Split these marchers into rows alongside the line",
+            "go": "Rows go",
+            "goBack": "Front to back",
+            "goBackDetail": "Straight back on the grid",
+            "goFollow": "Follow the bends",
+            "goFollowCurveDetail": "Each row square to the curve",
+            "goFollowLineDetail": "Each row square to the line",
+            "goOut": "Out from the line",
+            "goOutDetail": "Each row square to the line",
+            "goRings": "Rings",
+            "goRingsDetail": "Round the arc's center",
+            "goSide": "Side to side",
+            "goSideDetail": "Straight across on the grid",
+            "goSlideArc": "Slide the whole arc",
+            "goSlideArcDetail": "The same arc, moved",
+            "goSlideCurve": "Slide the whole curve",
+            "goSlideCurveDetail": "The same curve, moved",
+            "goSlideLine": "Slide the whole line",
+            "goSlideLineDetail": "The same line, moved"
         }
     },
     "tags": {
