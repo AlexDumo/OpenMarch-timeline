@@ -22,7 +22,7 @@ import {
 import {
     fileTooNewMessage,
     isSupportedUserVersion,
-    MAX_SUPPORTED_USER_VERSION,
+    isTooNewUserVersion,
     PAGE_MODEL_USER_VERSION,
     readUserVersion,
     markLaneModelIfLaned,
@@ -54,6 +54,9 @@ export const CONVERTER_SCHEMA_MIGRATION_TAGS = [
     // Route sources (K6, pathways step 3c): not read by the converter or the resolver, but a new
     // table, so it is made here with the others and the conversion's own stage only drops tables
     "0028_timeline_route_sources",
+    // Exact paths (ADR 0018 step 3): a column on `timeline_routes`, which the resolver's cold
+    // build selects with the rest of the table. Safe twice (`addColumnGuard.ts`)
+    "0029_timeline_exact_paths",
 ];
 
 /** The migrations folder, also found from a built `dist-electron/main`. */
@@ -287,7 +290,7 @@ export class DrizzleMigrationService {
      */
     async applyPendingMigrations(migrationsFolder?: string): Promise<void> {
         const userVersion = readUserVersion(this.rawDb);
-        if (userVersion > MAX_SUPPORTED_USER_VERSION) {
+        if (isTooNewUserVersion(userVersion)) {
             throw new Error(fileTooNewMessage(userVersion));
         }
         if (!isSupportedUserVersion(userVersion)) {

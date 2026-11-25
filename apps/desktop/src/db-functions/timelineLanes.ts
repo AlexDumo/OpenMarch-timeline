@@ -12,20 +12,27 @@
  * - **AP-R20** (`deleteLanesFromSlotInTransaction`): lanes above a lowered slot count go first;
  * - K6 links (`timeline_route_sources`, spec J.1): the group path a Detached copy came from, and
  *   deleting the links that name routes about to go (AP-H3 step 3, AP-R2);
- * - the file version (11) written with a file's first lane (ADR 0017 §9).
+ * - the file version (11) written with a file's first lane (ADR 0017 §9), and the later ones;
+ * - EP-T retime (`retimeExactPathsInTransaction`): an exact path keeps its move's length in ticks.
  *
  * Standalone on purpose (schema and drizzle only), so the transition and membership procedures
  * can use it without importing the route procedures. The schema comes from the migrations module,
  * not `@/global/database/db`: the in-transaction transition writes import this module, and the
  * main process and the convert-on-open worker (P9.8) must load no renderer module.
  */
-import { and, asc, eq, gte, inArray, or, sql } from "drizzle-orm";
-import type { XY } from "@openmarch/core";
+import { and, asc, eq, gte, inArray, isNotNull, or, sql } from "drizzle-orm";
+import {
+    retimeExactPath,
+    TICKS_PER_BEAT,
+    type ExactPath,
+    type XY,
+} from "@openmarch/core";
 import {
     ADJUST_MODEL_USER_VERSION,
     LANE_MODEL_USER_VERSION,
     TRAIL_MODEL_USER_VERSION,
     ARC_MODEL_USER_VERSION,
+    EXACT_PATH_USER_VERSION,
 } from "@om-electron/database/fileVersion";
 import * as schema from "@om-electron/database/migrations/schema";
 import type { DbConnection, DbTransaction } from "./types";
@@ -248,3 +255,57 @@ export const markTrailModelInTransaction = (tx: DbTransaction) =>
 /** Writes the arc file version (14) with a file's first arc leg (pathways step 10a, Appendix L). */
 export const markArcModelInTransaction = (tx: DbTransaction) =>
     raiseFileVersion(tx, ARC_MODEL_USER_VERSION);
+
+/** Writes the exact-path file version (19) with a file's first exact path (ADR 0018 step 3). */
+export const markExactPathModelInTransaction = (tx: DbTransaction) =>
+    raiseFileVersion(tx, EXACT_PATH_USER_VERSION);
+
+/**
+ * EP-T retime (ADR 0018 §5, spec M.4a) after a range edit: every exact path walked through a lane
+ * of `transitionIds` (every one when omitted) whose last key isn't its move's length in ticks is
+ * stretched or squeezed to it (`retimeExactPath`: ticks scaled and rounded, a key that lands on the
+ * tick before it dropped). Shifting a move in time changes no key. Returns the routes rewritten.
+ * The resolver plays a path stretched to its move anyway, so this keeps the file's keys in ticks
+ * from the move's start (EP-5) rather than changing what plays, apart from the rounding.
+ */
+export async function retimeExactPathsInTransaction(
+    tx: DbTransaction,
+    transitionIds?: Iterable<number>,
+): Promise<number[]> {
+    const ids =
+        transitionIds === undefined ? null : [...new Set(transitionIds)];
+    if (ids !== null && ids.length === 0) return [];
+    const R = schema.timeline_routes;
+    const L = schema.timeline_lanes;
+    const T = schema.timeline_transitions;
+    const rows = await tx
+        .select({
+            routeId: R.id,
+            exact: R.exact_path,
+            start: T.start_beat,
+            end: T.end_beat,
+        })
+        .from(R)
+        .innerJoin(L, eq(L.route_id, R.id))
+        .innerJoin(T, eq(T.id, L.transition_id))
+        .where(
+            ids === null
+                ? isNotNull(R.exact_path)
+                : and(isNotNull(R.exact_path), inArray(T.id, ids)),
+        )
+        .orderBy(asc(R.id))
+        .all();
+    const rewritten: number[] = [];
+    for (const row of rows) {
+        const path = JSON.parse(row.exact!) as ExactPath;
+        const ticks = (row.end - row.start) * TICKS_PER_BEAT;
+        if (path.keys[path.keys.length - 1]!.tick === ticks || !(ticks >= 1))
+            continue;
+        await tx
+            .update(R)
+            .set({ exact_path: JSON.stringify(retimeExactPath(path, ticks)) })
+            .where(eq(R.id, row.routeId));
+        rewritten.push(row.routeId);
+    }
+    return rewritten;
+}

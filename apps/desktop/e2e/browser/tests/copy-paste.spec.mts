@@ -734,7 +734,7 @@ test("the chip's line says how the copy fits or why Paste can't run, its Paste i
     }
     await expect(preview(page)).toBeVisible();
     // Mid-paste, the chip says what to do, not why Paste can't run
-    await expect(status).toHaveText("Place or discard the open shape");
+    await expect(status).toHaveText("Enter places it, Escape discards it");
     await expect(status).toHaveAttribute("data-status", "shapeOpen");
     await expect(page.getByTestId("clipboard-live")).toHaveText(
         "2 spots stay empty. Paste preview. Enter places it, Escape discards it.",
@@ -1010,6 +1010,83 @@ test("Paste mirrored opens the copy's mirror image across the 50, follows its pi
     expect(await savedShapes(show)).toBe(0);
     // The copied marchers stay put
     expect(await savedAt(show, [1, 2, 3, 4])).toEqual(copied);
+});
+
+test("an open paste switches between Paste, Paste exactly and Paste mirrored from the chip's switch or any paste's keys, and Enter places it as one undo step", async ({
+    show,
+}) => {
+    const { page } = show;
+    const copied = asPositions(HOME).filter((p) => p.id <= 4);
+    await select(page, [1, 2, 3, 4]);
+    await page.keyboard.press("ControlOrMeta+c");
+    await expect(chip(page)).toContainText("4 marchers");
+    await select(page, [5, 6, 7, 8]);
+    const steps = await undoSteps(show);
+
+    // Ctrl/Cmd+V starts pasting; the chip shows which way, Paste picked
+    await page.keyboard.press("ControlOrMeta+v");
+    await expect(preview(page)).toBeVisible();
+    const centered = sorted((await shapeOverlay(page))!.spots);
+    expect(centered).not.toEqual(sorted(copied));
+    const mode = (value: string) =>
+        page.getByTestId(`clipboard-paste-mode-${value}`);
+    await expect(page.getByTestId("clipboard-paste-mode")).toBeVisible();
+    await expect(mode("paste")).toHaveAttribute("aria-checked", "true");
+
+    // Paste exactly on the chip: the same paste, now where it was copied
+    await mode("exact").click();
+    await expect(mode("exact")).toHaveAttribute("aria-checked", "true");
+    await expect
+        .poll(async () => sorted((await shapeOverlay(page))!.spots))
+        .toEqual(sorted(copied));
+    // The press left the focus off the chip, so the field's keys reach the paste
+    const focusedInChip = () =>
+        page.evaluate(
+            () =>
+                !!document
+                    .querySelector('[data-testid="clipboard-chip"]')
+                    ?.contains(document.activeElement),
+        );
+    expect(await focusedInChip()).toBe(false);
+
+    // Paste mirrored's keys switch it too: the mirror point and its editor
+    await page.keyboard.press("ControlOrMeta+Alt+v");
+    await expect(mode("mirrored")).toHaveAttribute("aria-checked", "true");
+    await expect
+        .poll(async () => (await shapeOverlay(page))!.mirror)
+        .not.toBeNull();
+    await expect(page.getByTestId("fieldShapeMirrorPoint")).toBeVisible();
+
+    // The card opened mid-paste shows the same switch in place of the three buttons
+    const card = await openCard(page);
+    await expect(card.getByTestId("clipboard-paste-mode")).toBeVisible();
+    await expect(card.getByTestId("clipboard-paste")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(card).toBeHidden();
+    await expect(preview(page)).toBeVisible();
+
+    // Ctrl/Cmd+V goes back to Paste, centered on the marchers again
+    await page.keyboard.press("ControlOrMeta+v");
+    await expect(mode("paste")).toHaveAttribute("aria-checked", "true");
+    await expect
+        .poll(async () => (await shapeOverlay(page))!.mirror ?? null)
+        .toBeNull();
+    expect(sorted((await shapeOverlay(page))!.spots)).toEqual(centered);
+    // Pressed again in the mode it's in, nothing changes
+    await page.keyboard.press("ControlOrMeta+v");
+    await expect(mode("paste")).toHaveAttribute("aria-checked", "true");
+
+    // Switching was never an undo step: Enter places it as one
+    await blur(page);
+    await page.keyboard.press("Enter");
+    await expect(preview(page)).toBeHidden();
+    await expect
+        .poll(async () => sorted(await savedAt(show, [5, 6, 7, 8])))
+        .toEqual(centered);
+    await waitForIdle(page);
+    expect(await undoSteps(show)).toBe(steps + 1);
+    // Placed, the chip has no switch
+    await expect(page.getByTestId("clipboard-paste-mode")).toHaveCount(0);
 });
 
 test.describe("on a touch screen", () => {

@@ -155,7 +155,12 @@ describe(`Migration ${ROUTES_MIGRATION.tag} (QA-MIG-R1)`, () => {
         expect(await open(showPath)).toMatchObject({ kind: "conversion" });
         withDb(showPath, (db) => {
             expect(columns(db, "timeline_transitions")).toContain("route_id");
-            expect(columns(db, "timeline_routes")).toEqual(["id", "geometry"]);
+            // exact_path from 0029 (ADR 0018 step 3)
+            expect(columns(db, "timeline_routes")).toEqual([
+                "id",
+                "geometry",
+                "exact_path",
+            ]);
             expect(
                 db
                     .prepare(
@@ -282,7 +287,7 @@ describe(`Migration ${ROUTES_MIGRATION.tag} (QA-MIG-R1)`, () => {
             const undo = history(db).undo.filter((r) => r.history_group === 8);
             expect(undo.map((r) => r.sql)).toEqual([
                 'DELETE FROM "timeline_routes" WHERE rowid=41',
-                `INSERT INTO "timeline_routes" ("id","geometry") VALUES (41,'{"v":1,"from":[0,0],"to":[1,1],"points":[]}')`,
+                `INSERT INTO "timeline_routes" ("id","geometry","exact_path") VALUES (41,'{"v":1,"from":[0,0],"to":[1,1],"points":[]}',NULL)`,
             ]);
         });
     });

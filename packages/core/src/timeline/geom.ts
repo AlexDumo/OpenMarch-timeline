@@ -19,6 +19,7 @@ import type {
     TransitionRow,
     XY,
 } from "./types";
+import type { ExactWalker } from "./exactPath";
 
 export const dist = (a: XY, b: XY): number =>
     Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -1287,6 +1288,11 @@ export interface LaneWalk {
     schedule?: GroupSchedule;
     /** The lane's Adjust on `schedule`, cached per lane (J.7); null or absent for none */
     adjust?: ResolvedAdjust | null;
+    /**
+     * The route's exact path (ADR 0018 step 3), walked in place of `route` on an own lane; absent
+     * for a drawn path
+     */
+    exact?: ExactWalker;
 }
 
 /**
@@ -1311,6 +1317,8 @@ export function walkedPoint(
 ): XY {
     if (lane) {
         if (!founding) return lerp(A, B, p); // joins and resumes walk straight (step 15)
+        // an exact path (ADR 0018 step 3): its ends follow the spots (EP-F), then EP-R
+        if (lane.exact) return lane.exact.at(A, B, p);
         const { route, offset } = lane;
         if (offset)
             // a group lane walks the group schedule, placed by its offset and Adjust (R-14′)
