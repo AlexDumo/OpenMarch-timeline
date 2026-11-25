@@ -973,7 +973,7 @@ const shots = [
         id: "marchers-equipment-icons-setting",
         kind: "still",
         // The Show on field panel open beside the field display bar, its Equipment icons menu
-        // open: Not their own, Everyone, and the show's sections
+        // open: Holding something else (with its line saying what it means), Everyone, and the show's sections
         async setup({ page, wait, union, around }) {
             await toPage1(page, wait);
             await openOverlays(page, wait);

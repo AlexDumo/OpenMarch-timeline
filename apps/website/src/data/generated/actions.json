@@ -639,7 +639,7 @@
         "bindings": []
     },
     "equipmentIconsChanged": {
-        "label": "Equipment icons: Not their own",
+        "label": "Equipment icons: Holding something else",
         "category": "field",
         "bindings": []
     },

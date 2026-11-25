@@ -6,7 +6,7 @@
  * - A row with a choice beside its switch (Drill numbers, Equipment icons, Shape outlines, Line
  *   order) keeps that choice while off: switching it off remembers it in `fieldShowLast`, and
  *   switching it on brings it back (its default the first time).
- * - Equipment icons' "who" is Not their own, Everyone, or some of the show's sections.
+ * - Equipment icons' "who" is Holding something else, Everyone, or some of the show's sections.
  * - Reset puts every row back as shipped. Set-once preferences (label size and position, where
  *   equipment icons go, the venue's look) live in Settings › Field and aren't touched.
  */
@@ -81,7 +81,7 @@ export function setFieldChoice<K extends FieldShowChoiceKey>(
     if (settings()[key] !== value) change({ [key]: value });
 }
 
-/** Who shows an equipment icon: Not their own, Everyone, or the sections picked */
+/** Who shows an equipment icon: Holding something else, Everyone, or the sections picked */
 export type EquipmentWho =
     | { kind: "changed" }
     | { kind: "everyone" }

@@ -221,11 +221,11 @@ describe("FieldDisplayBar", () => {
         expect(settings().shapes).toBe("always");
     });
 
-    it("Equipment icons: who from a menu, Not their own, Everyone or some sections (owner, 2026-11-25)", async () => {
+    it("Equipment icons: who from a menu, Holding something else, Everyone or some sections (owner, 2026-11-25)", async () => {
         open();
         panel();
         const who = screen.getByTestId("field-display-equipment-who");
-        expect(who.textContent).toBe("Not their own");
+        expect(who.textContent).toBe("Holding something else");
         const openMenu = () =>
             fireEvent.keyDown(
                 screen.getByTestId("field-display-equipment-who"),
@@ -239,7 +239,14 @@ describe("FieldDisplayBar", () => {
             within(menu)
                 .getAllByRole("menuitemcheckbox")
                 .map((item) => item.textContent),
-        ).toEqual(["Not their own", "Everyone", "Trumpet", "Color Guard"]);
+        ).toEqual([
+            // Said under the item, not in a tooltip (owner, 2026-11-25)
+            "Holding something else" +
+                "Only performers not holding their own instrument, like a trumpet holding a flag.",
+            "Everyone",
+            "Trumpet",
+            "Color Guard",
+        ]);
         // Ticking a section keeps the menu open for the next
         fireEvent.click(
             screen.getByTestId("field-display-equipment-section-Color Guard"),

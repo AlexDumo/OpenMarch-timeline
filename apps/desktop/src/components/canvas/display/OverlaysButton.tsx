@@ -475,7 +475,7 @@ function useShowSections(): string[] {
     }, [marchers]);
 }
 
-/** What the who button says: Not their own, Everyone, a section or two by name, or a count */
+/** What the who button says: Holding something else, Everyone, a section or two, or a count */
 function whoText(who: EquipmentWho, t: TFnType): string {
     if (who.kind === "changed") return t("fieldDisplay.equipmentNotOwn");
     if (who.kind === "everyone") return t("fieldDisplay.equipmentEveryone");
@@ -489,8 +489,9 @@ function whoText(who: EquipmentWho, t: TFnType): string {
 }
 
 /**
- * Who shows an equipment icon (owner, 2026-11-25, in place of a Not their own / Everyone switch):
- * Not their own (anyone holding something other than their own instrument), Everyone, or a tick
+ * Who shows an equipment icon (owner, 2026-11-25, in place of a changed-only / Everyone switch):
+ * Holding something else (anyone holding something other than their own instrument, said in a
+ * line under the item; owner, 2026-11-25: "Not their own" confused), Everyone, or a tick
  * per section of the show ("guard only"). Ticking a section keeps the menu open for the next.
  */
 function EquipmentWhoMenu() {
@@ -500,19 +501,38 @@ function EquipmentWhoMenu() {
     );
     const sections = useShowSections();
     const picked = who.kind === "sections" ? who.sections : [];
-    const item = (kind: "changed" | "everyone", key: string) => (
+    const item = (
+        kind: "changed" | "everyone",
+        key: string,
+        descriptionKey?: string,
+    ) => (
         <DropdownMenu.CheckboxItem
             checked={who.kind === kind}
             data-testid={`field-display-equipment-${kind}`}
             onSelect={() => setEquipmentIcons(kind)}
-            className={clsx(MENU_ITEM_CLASS, "touch:min-h-44 pl-4")}
+            className={clsx(
+                MENU_ITEM_CLASS,
+                "touch:min-h-44 pl-4",
+                // Not squeezed when the menu scrolls (a tall menu on a tablet)
+                descriptionKey && "shrink-0 items-start",
+            )}
         >
-            <span className="flex w-16 justify-center">
+            <span className="h-lh flex w-16 shrink-0 items-center justify-center">
                 <DropdownMenu.ItemIndicator className="flex">
                     <CheckIcon size={14} />
                 </DropdownMenu.ItemIndicator>
             </span>
-            {t(key)}
+            {descriptionKey ? (
+                <span className="flex flex-col gap-2">
+                    {t(key)}
+                    {/* Said on the item, not in a tooltip: tooltips don't show on touch */}
+                    <span className="text-sub text-text-subtitle max-w-240">
+                        {t(descriptionKey)}
+                    </span>
+                </span>
+            ) : (
+                t(key)
+            )}
         </DropdownMenu.CheckboxItem>
     );
     return (
@@ -524,7 +544,7 @@ function EquipmentWhoMenu() {
                         who: whoText(who, t),
                     })}
                     data-testid="field-display-equipment-who"
-                    className="text-body bg-fg-2 border-stroke hover:border-accent focus-visible:ring-accent data-[state=open]:border-accent touch:min-h-44 flex h-26 max-w-160 shrink-0 items-center gap-4 rounded-full border pr-6 pl-10 outline-hidden transition-colors duration-150 focus-visible:ring-2"
+                    className="text-body bg-fg-2 border-stroke hover:border-accent focus-visible:ring-accent data-[state=open]:border-accent touch:min-h-44 flex h-26 max-w-192 shrink-0 items-center gap-4 rounded-full border pr-6 pl-10 outline-hidden transition-colors duration-150 focus-visible:ring-2"
                 >
                     <span className="truncate">{whoText(who, t)}</span>
                     <CaretDownIcon size={12} aria-hidden className="shrink-0" />
@@ -538,7 +558,11 @@ function EquipmentWhoMenu() {
                     data-testid="field-display-equipment-menu"
                     className={clsx(MENU_CONTENT_CLASS, "min-w-200")}
                 >
-                    {item("changed", "fieldDisplay.equipmentNotOwn")}
+                    {item(
+                        "changed",
+                        "fieldDisplay.equipmentNotOwn",
+                        "fieldDisplay.equipmentNotOwnDescription",
+                    )}
                     {item("everyone", "fieldDisplay.equipmentEveryone")}
                     {sections.length > 0 && (
                         <>
