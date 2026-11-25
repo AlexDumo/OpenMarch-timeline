@@ -534,6 +534,7 @@ describe("a Line's segment menu (#569)", () => {
             "add",
             "straight",
             "curved",
+            "arc",
         ]);
         t = pickMenu(t, "m0", "add", ctx, env);
         expect(paramsOf(t).points).toHaveLength(4);

@@ -2477,6 +2477,7 @@
                     "fewestClosed": "A closed line needs at least three points",
                     "fewestOpen": "A line needs at least two points",
                     "open": "Open here",
+                    "arc": "Arc",
                     "close": "Close line",
                     "closeFew": "A line needs three points to close",
                     "add": "Add point here",

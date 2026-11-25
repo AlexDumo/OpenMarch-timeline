@@ -82,12 +82,9 @@ import {
     onLine,
     openLine,
     segmentMidpoint,
-    segmentStraight,
     setPointMarcher,
-    setSegmentCurved,
     setTension,
     SMOOTH,
-    splitSegment,
     tensionHandle,
     fitGroupsNow,
     offsetBlock,
@@ -109,6 +106,13 @@ import {
     type LineGroup,
     type LineParams,
 } from "./lineGeometry";
+import {
+    bendPieceThrough,
+    pieceAt,
+    pieceType,
+    setPieceType,
+    splitPiece,
+} from "./linePieces";
 
 /** A handle's key for point `i`: `p0` is the first marcher's end */
 const POINT_KEY = /^p(\d+)$/;
@@ -1186,11 +1190,13 @@ function pointMenu(p: LineParams, n: number, index: number): ToolMenuSection[] {
     return sections;
 }
 
-/** Right-click on segment `index`'s middle (#569) */
+/** Right-click on segment `index`'s middle (#569): a new point, and straight, curved or an arc (#1218) */
 function segmentMenu(p: LineParams, index: number): ToolMenuSection[] {
-    const straight = segmentStraight(p, index);
+    const type = pieceType(p, index);
     // Smooth points in a straight run still make a straight segment
-    const curves = !segmentStraight(setSegmentCurved(p, index, true), index);
+    const curves =
+        type !== "straight" ||
+        pieceType(setPieceType(p, index, "curved"), index) !== "straight";
     return [
         {
             items: [
@@ -1211,12 +1217,12 @@ function segmentMenu(p: LineParams, index: number): ToolMenuSection[] {
                         "shapes.kinds.line.menu.straight",
                         "Straight",
                     ),
-                    checked: straight,
+                    checked: type === "straight",
                 },
                 {
                     value: "curved",
                     label: tolgee.t("shapes.kinds.line.menu.curved", "Curved"),
-                    checked: !straight,
+                    checked: type === "curved",
                     ...(curves
                         ? {}
                         : {
@@ -1225,6 +1231,11 @@ function segmentMenu(p: LineParams, index: number): ToolMenuSection[] {
                                   "The line runs straight through here",
                               ),
                           }),
+                },
+                {
+                    value: "arc",
+                    label: tolgee.t("shapes.kinds.line.menu.arc", "Arc"),
+                    checked: type === "arc",
                 },
             ],
         },
@@ -1237,6 +1248,7 @@ function segmentMenu(p: LineParams, index: number): ToolMenuSection[] {
  * segment's new point and whether it's straight or curved.
  */
 const MENU: ToolHandleMenu<LineParams> = {
+    keyAt: (p, n, at, env) => pieceAt(p, n, at, env),
     sections(p, n, key) {
         const index = pointOf(p, key);
         if (index >= 0) return pointMenu(p, n, index);
@@ -1248,11 +1260,11 @@ const MENU: ToolHandleMenu<LineParams> = {
         if (segment >= 0) {
             if (value === "add")
                 return {
-                    params: splitSegment(p, segment, n),
+                    params: splitPiece(p, segment, n),
                     selected: `p${segment + 1}`,
                 };
-            if (value === "straight" || value === "curved") {
-                const next = setSegmentCurved(p, segment, value === "curved");
+            if (value === "straight" || value === "curved" || value === "arc") {
+                const next = setPieceType(p, segment, value);
                 // The ticked answer again changes nothing, not even a Keep interval line's size
                 return next === p
                     ? null
@@ -1443,18 +1455,15 @@ export const lineTool: ToolKind<LineParams> = {
         // A midpoint dragged: a corner added there, and dragged, taking neither constrain nor
         // from center (`lineHonors`)
         const segment = midpointOf(base, key);
+        // An arc's middle dragged bends it through the pointer, its ends kept (#1218)
+        if (segment >= 0 && pieceType(base, segment) === "arc")
+            return keptInterval(bendPieceThrough(base, segment, to), n, env);
         if (segment >= 0)
-            return dragPoint(
-                splitSegment(base, segment, n),
-                n,
-                segment + 1,
-                to,
-                {
-                    ...env,
-                    constrain: false,
-                    fromCenter: false,
-                },
-            );
+            return dragPoint(splitPiece(base, segment, n), n, segment + 1, to, {
+                ...env,
+                constrain: false,
+                fromCenter: false,
+            });
         const tension = tangentOf(base, key);
         if (tension)
             return keptInterval(
@@ -1469,7 +1478,7 @@ export const lineTool: ToolKind<LineParams> = {
     // A midpoint clicked splits its segment; a point clicked is selected by the host (#557)
     clickHandle(params, n, key) {
         const segment = midpointOf(params, key);
-        return segment >= 0 ? splitSegment(params, segment, n) : null;
+        return segment >= 0 ? splitPiece(params, segment, n) : null;
     },
     // A point double-clicked turns smooth, or a corner again (#557)
     doubleClickHandle(params, n, key) {

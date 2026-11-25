@@ -583,12 +583,13 @@ export class LiveBoxMode implements FieldMode {
             return true;
         }
         const { kind, spots } = this.live.box;
+        const env = toolEnvFor(field, undefined, { kind: pointer.kind });
         const target = shapeTargetAt(
             kind,
             this.live.params,
             spots,
             pointer.field,
-            toolEnvFor(field, undefined, { kind: pointer.kind }),
+            env,
             this.live.selected,
         );
         return openHandleMenu(
@@ -598,6 +599,7 @@ export class LiveBoxMode implements FieldMode {
             target,
             pointer.screen,
             (key, value) => this.pickMenu(key, value),
+            { at: pointer.field, env },
         );
     }
 
