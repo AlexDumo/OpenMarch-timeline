@@ -5,7 +5,9 @@
  * pack worker), then sent to the editor, which stores it in the show and dresses the band in it
  * with undo. Save uniform file writes the pack the band wears back out as its portable file.
  *
- * A preview, like the sample flats: only where `uniformArtworkAvailable()`.
+ * A preview, like the sample flats: only with Custom uniforms (preview) on (`useCustomUniforms`).
+ * A line under the buttons says uniform files may change, and the first import or save on a
+ * computer says it once more as a note.
  */
 import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -15,7 +17,6 @@ import { touchSafeAccept } from "@/utilities/fileAccept";
 import {
     uniformPackQueryOptions,
     keepSameUniform,
-    uniformEntryOf,
     uniformPacksQueryOptions,
 } from "@/hooks/queries/useUniformPack";
 import {
@@ -33,8 +34,8 @@ import {
     FLATS_PAGE_PX,
     uniformPackFileName,
 } from "@/view3d/core/uniformPack/format";
-import { wornPackProblem } from "@/view3d/core/uniformPack/wornPack";
-import { uniformArtworkAvailable } from "@/view3d/window/uniformArtworkPreview";
+import { useCustomUniforms } from "@/view3d/window/uniformArtworkPreview";
+import { PreviewWarningLine, useFirstUseWarning } from "./UniformPreview";
 import { loadFlatsGeometry } from "@/view3d/window/performers/marchers/flatsAtlas";
 import {
     UniformImportError,
@@ -53,6 +54,8 @@ const ACCEPT = `image/png,image/svg+xml,.png,.svg,${ASSET_FILE_EXTENSION}`;
 export function UniformImportControls() {
     const { t } = useTranslate();
     const { settings } = useVenueRequest();
+    const customUniforms = useCustomUniforms();
+    const firstUse = useFirstUseWarning();
     const input = useRef<HTMLInputElement>(null);
     const [busy, setBusy] = useState(false);
     const [problem, setProblem] = useState<string | null>(null);
@@ -64,22 +67,14 @@ export function UniformImportControls() {
 
     const worn = flatsArtworkOf(settings?.uniformArtwork);
     const wornPack = worn && isUniformPackValue(worn) ? worn : null;
-    const { data: pack, isSuccess: packRead } = useQuery({
+    const { data: pack } = useQuery({
         ...uniformPackQueryOptions(wornPack),
         // an item edit's save moves the band to a new version: keep Save uniform file meanwhile
         placeholderData: keepSameUniform(wornPack),
     });
     const { data: packs } = useQuery(uniformPacksQueryOptions());
-    // the venue names a uniform the show doesn't have (an undo after Remove unused…) or whose
-    // file doesn't read: the band wears its preset
-    const wornProblem = wornPackProblem(
-        wornPack,
-        // any version of it: editing items adds versions and replaces them (fork #1258)
-        packs ? uniformEntryOf(packs, wornPack) !== undefined : undefined,
-        packRead ? pack : undefined,
-    );
 
-    if (!uniformArtworkAvailable()) return null;
+    if (!customUniforms) return null;
 
     const refusal = (error: unknown): string => {
         const code =
@@ -100,6 +95,7 @@ export function UniformImportControls() {
             // the band wears it once the editor has stored it
             await storeUniformPack(result.pack);
             setDone({ result, preset });
+            firstUse.notice();
         } catch (error) {
             console.warn("3D View: couldn't import the uniform", error);
             setProblem(
@@ -144,6 +140,7 @@ export function UniformImportControls() {
             return;
         }
         saveFile(uniformPackFileName(pack.name), ASSET_FILE_MIME, pack.bytes);
+        firstUse.notice();
     };
 
     return (
@@ -200,6 +197,8 @@ export function UniformImportControls() {
             <p className="text-sub text-text/60">
                 {t("view3d.uniformImport.hint")}
             </p>
+            <PreviewWarningLine />
+            {firstUse.note}
             {done && (
                 <div
                     className="text-sub flex flex-col gap-2"
@@ -217,17 +216,6 @@ export function UniformImportControls() {
                         </span>
                     ))}
                 </div>
-            )}
-            {wornProblem && (
-                <p
-                    className="text-sub text-yellow"
-                    role="status"
-                    data-testid={`view3d-uniform-${wornProblem}`}
-                >
-                    {wornProblem === "missing"
-                        ? t("view3d.uniformImport.missing")
-                        : t("view3d.uniformImport.unreadable")}
-                </p>
             )}
             {problem && (
                 <p className="text-sub text-red" role="alert">

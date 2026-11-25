@@ -45,13 +45,17 @@ import {
     type UniformPackValue,
 } from "@/view3d/core/marchers/uniformArtwork";
 import {
+    uniformPackIsNewer,
     uniformPackQueryOptions,
     uniformEntryOf,
     uniformPacksQueryOptions,
 } from "@/hooks/queries/useUniformPack";
 import { wornPackProblem } from "@/view3d/core/uniformPack/wornPack";
-import { uniformArtworkAvailable } from "@/view3d/window/uniformArtworkPreview";
-import { ToggleGroup, ToggleGroupItem } from "@openmarch/ui";
+import {
+    useCustomUniforms,
+    useCustomUniformsStore,
+} from "@/view3d/window/uniformArtworkPreview";
+import { Button, ToggleGroup, ToggleGroupItem } from "@openmarch/ui";
 import { Segmented } from "./Panel";
 import { venuePickBase } from "@/view3d/sync/venuePick";
 import {
@@ -166,92 +170,141 @@ export function FieldLinesControl() {
     );
 }
 
-/** The picker's value for the sample flats uniform (a preview, `uniformArtworkAvailable`). */
+/** The picker's value for the sample flats uniform (part of the custom-uniform preview). */
 const FLATS_SAMPLE = "flats:sample" as const;
 
 /**
- * The band's uniform: every built-in preset, two to a row, then (in preview
- * builds) the sample uniform drawn as flats and each uniform imported into
- * the show (fork #1257), by its name.
+ * The band's uniform: every built-in preset, two to a row, then (with Custom uniforms (preview)
+ * on) the sample uniform drawn as flats and each uniform imported into the show (fork #1257), by
+ * its name.
+ *
+ * With the setting off, a show whose band already wears a custom uniform (one from a colleague,
+ * say) keeps wearing it: show data never changes on its own. The picker lists that one uniform,
+ * picked, says the show uses a preview uniform and offers to turn the preview on. Picking a
+ * preset still works, and nothing is removed from the show.
+ *
+ * When the band's uniform is gone from the show, doesn't read, or was made by a newer OpenMarch,
+ * the band wears its preset and a note here says why, with the setting on or off.
  */
 export function UniformPicker() {
     const { t } = useTranslate();
     const { settings, request } = useVenueRequest();
-    const flats = uniformArtworkAvailable();
+    const flats = useCustomUniforms();
+    const turnOn = useCustomUniformsStore((s) => s.setEnabled);
+    const named = settings ? flatsArtworkOf(settings.uniformArtwork) : null;
+    const namedPack = named && isUniformPackValue(named) ? named : null;
     const { data: packs } = useQuery({
         ...uniformPacksQueryOptions(),
-        enabled: flats,
+        enabled: flats || namedPack !== null,
     });
-    const named =
-        flats && settings ? flatsArtworkOf(settings.uniformArtwork) : null;
-    const namedPack = named && isUniformPackValue(named) ? named : null;
     const { data: pack, isSuccess: packRead } = useQuery(
         uniformPackQueryOptions(namedPack),
     );
     // the uniform whose version the band wears (editing items adds versions, fork #1258)
     const wornEntry = namedPack ? uniformEntryOf(packs, namedPack) : undefined;
     // a uniform the show no longer has (an undo after Remove unused…), or one whose file
-    // doesn't read: the band wears its preset, so the preset is the one picked
-    const worn = wornPackProblem(
+    // doesn't read (or was made by a newer OpenMarch): the band wears its preset, so the preset
+    // is the one picked, and a note under the picker says why, with the setting on or off
+    const problem = wornPackProblem(
         namedPack,
         packs ? wornEntry !== undefined : undefined,
         packRead ? pack : undefined,
-    )
-        ? null
-        : named;
+        uniformPackIsNewer(namedPack),
+    );
+    const worn = problem ? null : named;
     type Value = UniformPresetId | typeof FLATS_SAMPLE | UniformPackValue;
+    const sampleOption = {
+        value: FLATS_SAMPLE as Value,
+        label: t("view3d.uniformPreset.flatsSample"),
+    };
+    // each uniform once: the version the band wears, else its newest
+    const packOptions = (packs ?? []).map((entry) => ({
+        value: (entry === wornEntry && namedPack
+            ? namedPack
+            : entry.value) as Value,
+        label: entry.name,
+    }));
+    // with the preview off, only the custom uniform the band wears
+    const wornOptions = !worn
+        ? []
+        : isUniformPackValue(worn)
+          ? packOptions.filter((option) => option.value === worn)
+          : [sampleOption];
+    const previewWorn = !flats && wornOptions.length > 0;
     return (
-        <Segmented<Value>
-            value={
-                settings
-                    ? worn
-                        ? isUniformPackValue(worn)
-                            ? worn
-                            : FLATS_SAMPLE
-                        : uniformPresetOf(settings.uniforms)
-                    : null
-            }
-            options={[
-                ...UNIFORM_PRESET_IDS.map((preset) => ({
-                    value: preset as Value,
-                    label: t(`view3d.uniformPreset.${preset}`),
-                })),
-                ...(flats
-                    ? [
-                          {
-                              value: FLATS_SAMPLE as Value,
-                              label: t("view3d.uniformPreset.flatsSample"),
-                          },
-                          // each uniform once: the version the band wears, else its newest
-                          ...(packs ?? []).map((pack) => ({
-                              value: (pack === wornEntry && namedPack
-                                  ? namedPack
-                                  : pack.value) as Value,
-                              label: pack.name,
-                          })),
-                      ]
-                    : []),
-            ]}
-            onChange={(next) =>
-                next === FLATS_SAMPLE
-                    ? request({
-                          kind: "uniformArtwork",
-                          uniformArtwork: "sample",
-                      })
-                    : next.startsWith("library:")
-                      ? request({
-                            kind: "uniformArtwork",
-                            uniformArtwork: next as UniformPackValue,
-                        })
-                      : request({
-                            kind: "uniforms",
-                            uniforms: next as UniformPresetId,
-                        })
-            }
-            label={t("view3d.settings.uniforms")}
-            testId="view3d-uniform-picker"
-            className="grid! grid-cols-2 [&>*]:justify-start"
-        />
+        <>
+            <Segmented<Value>
+                value={
+                    settings
+                        ? worn
+                            ? isUniformPackValue(worn)
+                                ? worn
+                                : FLATS_SAMPLE
+                            : uniformPresetOf(settings.uniforms)
+                        : null
+                }
+                options={[
+                    ...UNIFORM_PRESET_IDS.map((preset) => ({
+                        value: preset as Value,
+                        label: t(`view3d.uniformPreset.${preset}`),
+                    })),
+                    ...(flats ? [sampleOption, ...packOptions] : wornOptions),
+                ]}
+                onChange={(next) =>
+                    next === FLATS_SAMPLE
+                        ? request({
+                              kind: "uniformArtwork",
+                              uniformArtwork: "sample",
+                          })
+                        : next.startsWith("library:")
+                          ? request({
+                                kind: "uniformArtwork",
+                                uniformArtwork: next as UniformPackValue,
+                            })
+                          : request({
+                                kind: "uniforms",
+                                uniforms: next as UniformPresetId,
+                            })
+                }
+                label={t("view3d.settings.uniforms")}
+                testId="view3d-uniform-picker"
+                className="grid! grid-cols-2 [&>*]:justify-start"
+            />
+            {problem && (
+                <p
+                    className="text-sub text-yellow"
+                    role="status"
+                    data-testid={`view3d-uniform-${problem}`}
+                >
+                    {problem === "newer"
+                        ? t("view3d.uniformImport.newer")
+                        : flats
+                          ? t(`view3d.uniformImport.${problem}`)
+                          : t(`view3d.uniformPreview.${problem}Off`)}
+                </p>
+            )}
+            {(previewWorn || (!flats && problem && problem !== "newer")) && (
+                <div
+                    className="flex flex-wrap items-center gap-6"
+                    role="status"
+                    data-testid="view3d-uniform-preview-worn"
+                >
+                    {previewWorn && (
+                        <span className="text-sub text-text/60">
+                            {t("view3d.uniformPreview.showUses")}
+                        </span>
+                    )}
+                    <Button
+                        variant="secondary"
+                        size="compact"
+                        onClick={() => turnOn(true)}
+                        data-testid="view3d-uniform-preview-turn-on"
+                    >
+                        {t("view3d.uniformPreview.turnOn")}
+                    </Button>
+                </div>
+            )}
+        </>
     );
 }
 

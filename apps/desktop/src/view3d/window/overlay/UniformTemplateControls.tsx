@@ -4,6 +4,8 @@
  * front and back flats page as PNG, SVG or PDF, and its regions as JSON for
  * scripts and agents. Shaped like the flag silk template's buttons; an
  * InfoTip says what the JSON is for, so a tap reaches it too.
+ *
+ * Part of the custom-uniform preview: only with Custom uniforms (preview) on.
  */
 import { useState } from "react";
 import { useTranslate } from "@tolgee/react";
@@ -16,6 +18,7 @@ import {
     type UniformCanvasContext,
     type UniformTemplateFormat,
 } from "@/view3d/core/artworkTemplates/uniform";
+import { useCustomUniforms } from "@/view3d/window/uniformArtworkPreview";
 import { saveFile } from "./saveFile";
 
 /** An `OffscreenCanvas` for the template PNG. */
@@ -37,6 +40,8 @@ export function UniformTemplateControls() {
     const { t } = useTranslate();
     const [busy, setBusy] = useState<UniformTemplateFormat | null>(null);
     const [problem, setProblem] = useState<string | null>(null);
+    const customUniforms = useCustomUniforms();
+    if (!customUniforms) return null;
 
     const download = async (format: UniformTemplateFormat) => {
         setBusy(format);

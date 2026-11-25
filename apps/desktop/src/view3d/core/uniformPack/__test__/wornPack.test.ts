@@ -26,6 +26,13 @@ describe("wornPackProblem", () => {
         expect(wornPackProblem(VALUE, true, null)).toBe("unreadable");
     });
 
+    it("says newer when the file was refused as made by a newer OpenMarch", () => {
+        expect(wornPackProblem(VALUE, true, null, true)).toBe("newer");
+        // a missing uniform is missing, and a pack that reads is fine
+        expect(wornPackProblem(VALUE, false, null, true)).toBe("missing");
+        expect(wornPackProblem(VALUE, true, PACK, true)).toBeNull();
+    });
+
     it("waits for the read, and is quiet once the pack reads", () => {
         expect(wornPackProblem(VALUE, true, undefined)).toBeNull();
         expect(wornPackProblem(VALUE, true, PACK)).toBeNull();

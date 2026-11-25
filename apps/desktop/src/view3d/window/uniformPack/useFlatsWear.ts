@@ -2,8 +2,10 @@
  * What flats the band wears, from the venue's `uniformArtwork`
  * (docs/3d/uniform-artwork.md): a built-in's art and palette, or a show's
  * imported pack and the palette in its manifest (fork #1257). Null for the
- * band's preset, outside preview builds, and while a pack is still loading
- * (the band shows its preset until the pack is read).
+ * band's preset, and while a pack is still loading (the band shows its preset
+ * until the pack is read). It doesn't depend on Custom uniforms (preview):
+ * that setting only shows the controls, and a show that wears a custom uniform
+ * draws it either way.
  *
  * While its items or modes are being edited (fork #1258), the pack's key is
  * the draft's (`itemDrafts.ts`), so the 3D View shows each change at once.
@@ -27,7 +29,6 @@ import {
     keepSameUniform,
     uniformPackQueryOptions,
 } from "@/hooks/queries/useUniformPack";
-import { uniformArtworkAvailable } from "@/view3d/window/uniformArtworkPreview";
 import {
     draftApplies,
     observeWorn,
@@ -39,7 +40,7 @@ export function useFlatsWear(
     value: unknown,
     modeId?: string | null,
 ): FlatsWear | null {
-    const key = uniformArtworkAvailable() ? flatsArtworkOf(value) : null;
+    const key = flatsArtworkOf(value);
     const packValue = key && isUniformPackValue(key) ? key : null;
     // a saved item edit is a new pack: keep the last one's palette while it loads
     const { data: pack, isPlaceholderData } = useQuery({

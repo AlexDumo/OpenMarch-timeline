@@ -38,6 +38,8 @@ import {
 } from "@/db-functions/view3dVenue";
 import { tableNamesToQueryKeys } from "@/hooks/queries/utils";
 import { uniformPackQueryOptions } from "@/hooks/queries/useUniformPack";
+import { useCustomUniformsStore } from "@/view3d/window/uniformArtworkPreview";
+import { strToU8, zipSync } from "fflate";
 import {
     readUniformPack,
     writeUniformPack,
@@ -526,6 +528,63 @@ describeDbTests("Assets view", (it) => {
         expect(
             screen.queryByTestId("assets-unreadable-uniform-note"),
         ).toBeNull();
+    });
+
+    it("says to update OpenMarch for a uniform made by a newer one, and words each note for Custom uniforms (preview) off", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        // the band wears a pack of a later format version, as a later build stored it
+        const later = zipSync({
+            "manifest.json": strToU8(
+                JSON.stringify({
+                    ...sampleManifest("Later"),
+                    formatVersion: 4,
+                }),
+            ),
+        });
+        await setUniformPack({
+            db,
+            pack: later,
+            manifest: sampleManifest("Later"),
+            field: await fieldPropertiesOf(db),
+        });
+        await setUpFeature(<SidebarModal />, 1, []);
+        await act(async () => showAssetsView());
+        await waitFor(() =>
+            expect(
+                screen.getByTestId("assets-newer-uniform-note"),
+            ).toHaveTextContent(
+                "made with a newer version of OpenMarch, so the band wears its preset. Update OpenMarch to see it.",
+            ),
+        );
+        expect(
+            screen.queryByTestId("assets-unreadable-uniform-note"),
+        ).toBeNull();
+
+        // with the preview off, a missing uniform's note says how to get Import back
+        void act(() => useCustomUniformsStore.getState().setEnabled(false));
+        try {
+            const venue = (await getStoredVenueSettings({ db }))!;
+            await updateVenueSettings({
+                db,
+                settings: {
+                    ...venue,
+                    uniformArtwork: `library:gone@${"c".repeat(64)}`,
+                },
+            });
+            await refresh();
+            await waitFor(() =>
+                expect(
+                    screen.getByTestId("assets-missing-uniform-note"),
+                ).toHaveTextContent(
+                    "turn on Custom uniforms (preview) in the 3D View settings' Preferences, then import it again",
+                ),
+            );
+        } finally {
+            void act(() => useCustomUniformsStore.getState().setEnabled(true));
+        }
     });
 
     it("says the uniform can't be read when its header reads but its image data doesn't decode", async ({

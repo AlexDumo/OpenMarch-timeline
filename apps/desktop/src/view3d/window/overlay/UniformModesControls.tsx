@@ -15,8 +15,8 @@
  * shows it at once, it is saved as a new version of the uniform, and a burst of edits is one undo
  * step. Every control is a visible button, field or toggle, so touch reaches all of it.
  *
- * A preview, like the uniform import: only where `uniformArtworkAvailable()`, and only for a
- * uniform imported into the show.
+ * A preview, like the uniform import: only with Custom uniforms (preview) on
+ * (`useCustomUniforms`), and only for a uniform imported into the show.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -64,7 +64,8 @@ import {
     unusedLayers,
 } from "@/view3d/core/uniformPack/modeEdits";
 import { parseShowAssetRef } from "@/showAssets/ref";
-import { uniformArtworkAvailable } from "@/view3d/window/uniformArtworkPreview";
+import { useCustomUniforms } from "@/view3d/window/uniformArtworkPreview";
+import { PreviewTitle } from "./UniformPreview";
 import { loadFlatsGeometry } from "@/view3d/window/performers/marchers/flatsAtlas";
 import {
     editPack,
@@ -87,6 +88,7 @@ const ACCEPT = "image/png,image/svg+xml,.png,.svg";
 export function UniformModesControls() {
     const { t } = useTranslate();
     const { settings, request } = useVenueRequest();
+    const customUniforms = useCustomUniforms();
     const draft = useItemDrafts((s) => s.draft);
     const saving = useItemDrafts((s) => s.saving);
     const [adding, setAdding] = useState(false);
@@ -111,7 +113,7 @@ export function UniformModesControls() {
     const loaded = !!pack && !isPlaceholderData;
     useEffect(() => observeWorn(wornPack, loaded), [wornPack, loaded, draft]);
 
-    if (!uniformArtworkAvailable() || !wornPack || !pack) return null;
+    if (!customUniforms || !wornPack || !pack) return null;
     const stored = contentsOf(pack.manifest);
     // while the band's version loads, the modes on screen are the version before's: shown, but
     // not editable, unless a draft holds the real ones (as for the logos, fork #1287)
@@ -157,7 +159,7 @@ export function UniformModesControls() {
 
     return (
         <div className="flex flex-col gap-8" data-testid="view3d-uniform-modes">
-            <span className="text-body">{t("view3d.uniformModes.title")}</span>
+            <PreviewTitle>{t("view3d.uniformModes.title")}</PreviewTitle>
             {modes.length >= 2 && (
                 <div className="flex flex-col gap-4">
                     <span className="text-sub text-text/70">

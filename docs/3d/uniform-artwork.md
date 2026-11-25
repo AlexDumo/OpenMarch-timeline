@@ -268,7 +268,59 @@ Built in step 3 (fork #1257), with items added in step 4 (fork #1258) and modes 
 - **The same bytes in a show.** A show stores the file as its asset of kind `uniform`, unchanged,
   and Save uniform file writes it back out. This is the first kind of the portable asset file in
   fork #1262.
-- **Preview.** The format can still change until the human test (#1259).
+- **Preview.** The format can still change until the human test (#1259). Packs of format
+  versions 1 to 3 stay readable by every later build, or are refused with a clear message (see
+  [Opt-in preview](#opt-in-preview)).
+
+### Opt-in preview
+
+Built in step 7 (owner decision, 2026-11-24). Making custom uniforms is a preview that each person
+turns on for themselves, because the pack format can still change.
+
+- **The setting.** _Custom uniforms (preview)_ is a switch in the 3D View settings' Preferences tab,
+  saved on this computer. Its description says the feature is a preview and that uniform files may
+  change.
+  - It's off by default in release builds: packaged Electron, and the stable, nightly and preview
+    sites. The nightly is public once this is upstream, so it counts as a release.
+  - It's on by default in dev servers and in the web builds named `dev`, `examples` (the fork's
+    preview) and `lab`.
+  - A production web build whose `WEB_CHANNEL` wasn't set reads as `dev`, but starts with the
+    setting off, like a release (`VITE_PUBLIC_WEB_CHANNEL_NAMED`), so a deploy that forgot its
+    channel doesn't turn the preview on for its users.
+  - It's saved as `localStorage["view3d.uniformArtwork"]`, `"1"` or `"0"`, the key of the hidden
+    flag it replaces, so a computer that had set the flag to `"1"` finds it on.
+- **What it shows:** the template downloads (PNG, SVG, PDF and JSON), Import uniform…, Save
+  uniform file, Logos and numbers, Modes and the Sample flats entry in the Band uniform picker.
+  With it off, none of them show.
+- **Warnings**, while it's on:
+  - A **Preview** badge beside Band uniform, Logos and numbers, and Modes.
+  - A line under Import uniform… and Save uniform file: "Preview: uniform files may change in a
+    later version of OpenMarch, and uniforms you make now may need to be imported again. Keep your
+    original artwork."
+  - The same text once per computer, as a note that doesn't block anything and closes with
+    **Got it**, after the first import or save.
+- **A show that already uses a custom uniform**, opened with the setting off (a show from a
+  colleague, say):
+  - The band still wears it. It's show data, so a setting on this computer never changes it.
+  - The Band uniform picker lists that one uniform, picked, with the note "This show's band
+    wears a custom uniform, a preview feature." and a **Turn on custom uniforms** button.
+  - Picking a preset still works, and nothing is removed from the show.
+- **A custom uniform the band can't wear.** When the show's uniform is gone from the show
+  (an undo after Remove unused…), its file can't be read, or it was made by a newer OpenMarch,
+  the band wears its preset, and a note under the Band uniform picker says why, with the setting
+  on or off:
+  - Gone or unreadable, setting off: the note says so, with **Turn on custom uniforms**, since
+    importing is the fix.
+  - Newer: "The band's uniform was made with a newer version of OpenMarch, so the band wears its
+    preset. Update OpenMarch to see it.", with no button.
+  - The Assets view says the same, in words for each state of the setting.
+- **Reading preview packs later.** A later build either reads a pack of format versions 1 to 3, or
+  refuses it with a message that says why; it never draws one wrong. An older build refuses a
+  newer pack with "That uniform file is from a newer version of OpenMarch. Update OpenMarch to
+  import it." A show whose stored uniform was made by a newer OpenMarch says so in the 3D View
+  settings and the Assets view, and tells the person to update. `previewPacks.test.ts` pins this:
+  committed v1, v2 and v3 files, written by the builds that shipped each version, must read and
+  draw the same in every later build.
 
 ### Ways in
 

@@ -114,7 +114,7 @@ export const venueSettingsSchema = z.object({
      * The flats uniform the band wears in place of its preset
      * (`marchers/uniformArtwork.ts`, docs/3d/uniform-artwork.md); absent
      * means the preset. A string names a built-in flats uniform (only the
-     * sample, "sample", offered in preview builds) or the show's imported
+     * sample, "sample", offered with Custom uniforms (preview) on) or the show's imported
      * uniform, a show asset of kind `uniform`, as `library:<id>@<version
      * hash>` (fork #1257, `src/showAssets/ref.ts`). Numbers are kept so a
      * value an earlier preview wrote still parses, and name nothing. Read
