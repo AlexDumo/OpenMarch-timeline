@@ -15,6 +15,7 @@ import {
     selectionAfterArea,
     type FieldRect,
 } from "./selectionArea";
+import { fieldDragUndone } from "@/field/fieldInputTrace";
 
 /**
  * The marquee and the lasso (#195): drags on empty field that select an area.
@@ -242,7 +243,14 @@ export function startLasso(
         },
         end(next) {
             points.push(next.field);
-            if (!closes(next.field)) return;
+            if (!closes(next.field)) {
+                // By the rules, but it looks like a marquee that selected nothing (a click then a
+                // quick drag from the same spot is a double-click lasso): counted with the rest
+                fieldDragUndone(
+                    "a lasso released away from its start selects nothing",
+                );
+                return;
+            }
             ports.select(
                 selectionAfterArea(ports.selection(), picks(), choice),
             );
