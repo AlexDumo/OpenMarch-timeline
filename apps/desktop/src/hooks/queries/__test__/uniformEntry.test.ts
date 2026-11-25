@@ -8,7 +8,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { UniformPackJobError } from "@/view3d/uniformPack/protocol";
 import {
     keepSameUniform,
-    noteUniformPackDamaged,
+    recheckUniformPack,
     uniformPackQueryOptions,
     uniformEntryOf,
     type StoredUniformPack,
@@ -47,20 +47,22 @@ describe("a uniform's art that didn't compose", () => {
     const key = uniformPackQueryOptions(value).queryKey;
     const read = { value } as StoredUniformPack;
 
-    it("marks the pack unreadable when the worker refused its image", () => {
+    it("reads the pack again, fully decoded, when the worker refused its art", () => {
         const qc = new QueryClient();
         qc.setQueryData(key, read);
         expect(
-            noteUniformPackDamaged(
+            recheckUniformPack(
                 qc,
                 value,
                 new UniformPackJobError("unreadable", "won't decode"),
             ),
         ).toBe(true);
-        expect(qc.getQueryData(key)).toBeNull();
+        // not marked damaged on one refusal: the read that decides is due again
+        expect(qc.getQueryData(key)).toBe(read);
+        expect(qc.getQueryState(key)?.isInvalidated).toBe(true);
     });
 
-    it("marks nothing when the worker ran out of time or died", () => {
+    it("rechecks nothing when the worker ran out of time or died", () => {
         const qc = new QueryClient();
         qc.setQueryData(key, read);
         for (const error of [
@@ -68,8 +70,9 @@ describe("a uniform's art that didn't compose", () => {
             new UniformPackJobError("failed", "the worker failed"),
             new Error("out of memory"),
         ])
-            expect(noteUniformPackDamaged(qc, value, error)).toBe(false);
+            expect(recheckUniformPack(qc, value, error)).toBe(false);
         expect(qc.getQueryData(key)).toBe(read);
+        expect(qc.getQueryState(key)?.isInvalidated).toBe(false);
     });
 
     it("retries a read only when the failure says nothing about the file", () => {

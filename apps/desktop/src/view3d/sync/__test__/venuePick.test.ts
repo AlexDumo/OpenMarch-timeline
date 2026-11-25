@@ -51,9 +51,38 @@ describe("a venue pick rebased on the editor's venue", () => {
             next,
             venuePickBase(seen),
             wearing(v(A, 2), "home"),
+            (value) => (value === v(A, 2) ? ["home", "away"] : undefined),
         );
         expect(out.uniformArtwork).toBe(v(A, 2));
         expect(out.uniformMode).toBe("away");
+    });
+
+    it("drops a picked mode the newer version doesn't have, as setUniformPack does", () => {
+        const seen = wearing(v(A, 1), "home");
+        const next = applyVenueChange(seen, {
+            kind: "uniformMode",
+            uniformMode: "away",
+        });
+        const stored = wearing(v(A, 2), "home");
+        // the edit that made version 2 removed "away"
+        const without = pickOnStoredUniform(
+            next,
+            venuePickBase(seen),
+            stored,
+            (value) => (value === v(A, 2) ? ["home"] : undefined),
+        );
+        expect(without.uniformArtwork).toBe(v(A, 2));
+        expect(without.uniformMode).toBeUndefined();
+        // not known: dropped too, the default mode is safe
+        const unknown = pickOnStoredUniform(next, venuePickBase(seen), stored);
+        expect(unknown.uniformMode).toBeUndefined();
+        // a pick made on the version the venue still wears needs no check
+        const same = pickOnStoredUniform(
+            next,
+            venuePickBase(seen),
+            wearing(v(A, 1), "home"),
+        );
+        expect(same.uniformMode).toBe("away");
     });
 
     it("keeps what an Undo put back when the picked mode was for another uniform", () => {

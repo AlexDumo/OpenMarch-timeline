@@ -66,22 +66,30 @@ vi.mock("@/App", () => ({
 app.client = harnessQueryClient;
 
 // The uniform pack worker doesn't run in jsdom: read packs here, with the same reader, refusing
-// as the worker does. Decoding is stood in for: a PNG whose tag byte is 0xdd (its header reads,
-// its image data doesn't decode) is refused when asked to decode, and while `passingFailures` is
-// above 0 a job fails as a dead worker does.
-const worker = vi.hoisted(() => ({ passingFailures: 0, jobs: 0 }));
+// as the worker does, and skipping images by hash as it does. Decoding is stood in for: a PNG
+// whose tag byte is 0xdd (its header reads, its image data doesn't decode) is refused when asked
+// to decode; while `refusalsLeft` is above 0 a decode is refused as one that couldn't allocate
+// its bitmap is; and while `passingFailures` is above 0 a job fails as a dead worker does.
+const worker = vi.hoisted(() => ({
+    passingFailures: 0,
+    refusalsLeft: 0,
+    jobs: 0,
+    decodes: 0,
+}));
 const UNDECODABLE = 0xdd;
 vi.mock("@/view3d/uniformPack/runUniformPackJob", async () => {
     const { readUniformPack, UniformPackError } =
         await import("@/view3d/core/uniformPack/format");
     const { UniformPackJobError } =
         await import("@/view3d/uniformPack/protocol");
+    const { sha256Hex } = await import("@/showAssets/hash");
     return {
         UniformPackJobError,
         runUniformPackJob: async (request: {
             type: string;
             bytes: Uint8Array;
             decode?: boolean;
+            decoded?: string[];
         }) => {
             if (request.type !== "pack")
                 throw new Error(`no ${request.type} jobs in this test`);
@@ -101,21 +109,36 @@ vi.mock("@/view3d/uniformPack/runUniformPackJob", async () => {
                     String(error),
                 );
             }
-            if (
-                request.decode &&
-                [...pack.layers, ...pack.itemFiles].some(
-                    (f) => f.png[32] === 0xdd,
-                )
-            )
-                throw new UniformPackJobError(
-                    "unreadable",
-                    "the image data doesn't decode",
-                );
+            let decoded: string[] | undefined;
+            if (request.decode) {
+                const before = new Set(request.decoded ?? []);
+                decoded = [];
+                for (const { png } of [...pack.layers, ...pack.itemFiles]) {
+                    const hash = await sha256Hex(png);
+                    if (!before.has(hash)) {
+                        worker.decodes++;
+                        if (worker.refusalsLeft > 0) {
+                            worker.refusalsLeft--;
+                            throw new UniformPackJobError(
+                                "unreadable",
+                                "couldn't allocate the bitmap",
+                            );
+                        }
+                        if (png[32] === 0xdd)
+                            throw new UniformPackJobError(
+                                "unreadable",
+                                "the image data doesn't decode",
+                            );
+                    }
+                    decoded.push(hash);
+                }
+            }
             return {
                 type: "pack",
                 manifest: pack.manifest,
                 notes: [],
                 itemSizes: {},
+                decoded,
             };
         },
     };
@@ -519,6 +542,56 @@ describeDbTests("Assets view", (it) => {
             ).toHaveTextContent("can't be read"),
         );
         expect(screen.queryByTestId("assets-missing-uniform-note")).toBeNull();
+    });
+
+    it("believes a refusal only when a fresh worker refuses too", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        const value = await wearUniform(db, "Tight memory", 14);
+        // one decode can't allocate its bitmap (two workers at once, an integrated GPU)
+        worker.refusalsLeft = 1;
+        worker.jobs = 0;
+        await setUpFeature(<SidebarModal />, 1, []);
+        await act(async () => showAssetsView());
+        const read = () =>
+            harnessQueryClient()!.getQueryData(
+                uniformPackQueryOptions(value).queryKey,
+            );
+        await waitFor(() => expect(read()).toBeTruthy());
+        // the second, fresh worker read it
+        expect(worker.jobs).toBe(2);
+        expect(
+            screen.queryByTestId("assets-unreadable-uniform-note"),
+        ).toBeNull();
+    });
+
+    it("decodes a version's images once, and an image another version shares not again", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        await wearUniform(db, "Decoded once", 15);
+        worker.decodes = 0;
+        await setUpFeature(<SidebarModal />, 1, []);
+        await act(async () => showAssetsView());
+        await waitFor(() => expect(worker.decodes).toBe(1));
+        // any asset change reads the pack again: its version decoded already
+        const jobs = worker.jobs;
+        await refresh();
+        await waitFor(() => expect(worker.jobs).toBeGreaterThan(jobs));
+        expect(worker.decodes).toBe(1);
+        // another uniform with the same page: a new version, but its image decoded already
+        await wearUniform(db, "Same page", 15);
+        await refresh();
+        await waitFor(() =>
+            expect(screen.queryAllByTestId("asset-row")).toHaveLength(2),
+        );
+        await act(async () => {
+            await harnessQueryClient()!.refetchQueries();
+        });
+        expect(worker.decodes).toBe(1);
     });
 
     it("reads the uniform again after a worker failure instead of keeping it as damaged", async ({

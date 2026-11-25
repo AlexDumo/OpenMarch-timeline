@@ -77,15 +77,15 @@ export function pickOnStoredUniform(
     const sameWorn =
         base.uniformArtwork === now.uniformArtwork ||
         sameUniform(base.uniformArtwork, now.uniformArtwork);
-    let mode =
-        artworkPicked || (modePicked && sameWorn)
-            ? picked.uniformMode
-            : now.uniformMode;
+    // a mode picked for the uniform the venue still wears (any version), or that a picked
+    // uniform starts in; otherwise the stored one
+    const modeFromPick = artworkPicked || (modePicked && sameWorn);
+    let mode = modeFromPick ? picked.uniformMode : now.uniformMode;
     // a mode picked from one version and written onto another: only if that one has it
     if (
         mode !== null &&
+        modeFromPick &&
         !artworkPicked &&
-        modePicked &&
         artwork !== base.uniformArtwork &&
         !(typeof artwork === "string" && modesOf(artwork)?.includes(mode))
     )
