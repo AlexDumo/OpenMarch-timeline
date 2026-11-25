@@ -3,6 +3,7 @@
 - Status: accepted
 - Date: 2026-10-10
 - Accepted: 2026-10-29
+- Revision of 2026-11-22 (a shape is a formation at a count): proposed
 
 ## Context
 
@@ -658,3 +659,348 @@ adds no table and changes no recipe: a paste is an ordinary placement.
 
 Verification: `copyPaste.test.ts` (what is copied, and what a paste opens for each kind and
 count) and the browser scenarios in `copy-paste.spec.mts`.
+
+## Revision, 2026-11-22 (accepted 2026-11-25): a shape is a formation at a count
+
+_Accepted by the owner on 2026-11-25, with §9 (membership by listing, one identity per shape)
+folded in. Built in the steps of §7._
+
+A placed shape stops belonging to one move. **A shape is a set of marchers on its spots at one
+count.** Members don't need to share a move to be in it: one can take 5 counts to get there and
+another 10, or they can arrive at different times.
+
+### Why
+
+Today a recipe hangs off one move (`timeline_shape_recipes.timeline_id`, cascading when the move is
+deleted), and rule 1 of the revision of 2026-10-29 lists only marchers whose rows are in that move
+(`saveShapeRecipeInTransaction`, `moveMembers`). Membership therefore depends on how the timeline
+happens to be cut, not on where marchers stand:
+
+- In Basic, a mid-page position cuts one marcher's page into two moves, `[9, 13)` and `[13, 17)`.
+  The marcher arrives at the flag in a different move from everyone else, so a shape placed at
+  the flag can't list it, though it stands on its spot. Fork PR #1118 added toasts for this
+  (`leftOutByOtherCounts`, `recipesFollowMembersInTransaction`, `shapes/placed/leftOutToast.ts`),
+  and `basicDrift.test.ts` pins the wanted behaviour as an `it.fails` ("BUG 2").
+- A marcher who arrived earlier and holds still has no row in the move, so rule 1 drops it too
+  (homes are the one exception).
+- Splits, merges and cuts each need their own rule to carry recipes between moves (rule 3, Split
+  at playhead's re-pointing in `timelineSplitAtBeat.ts`, the merge in `moveShapeRecipesInTransaction`),
+  and holds commands skip shape members until fork #504.
+
+Pathways' order marks (step 4g) already work the way this revision proposes: they keep their own
+beat (`params.beat`), are stored in no move, and keep members who stand still. This revision makes
+every recipe do that.
+
+It **supersedes** decisions 6, 9 and 10 of the ownership grilling of 2026-10-30
+(`docs/timeline/research/ownership-model/`, branch `research/ownership-model`): recipes are not
+re-keyed onto the transition (P1), fork #504 is closed as replaced by this revision, and marchers
+split off into another move stay in their shape instead of becoming freeform. Decision 1 of
+2026-10-26 ("a shape is a distribution; it has nothing to do with timing") is what this restores.
+
+### 1. Storage
+
+1. **A recipe is anchored to a count.** `timeline_shape_recipes.timeline_id` is replaced by
+   `beat` (`REAL NOT NULL`, `CHECK (typeof(beat) IN ('integer', 'real') AND beat >= 0)`, indexed):
+   the beat ordinal its formation is defined at, in the same units as `timelines.end_beat`
+   (ADR 0012, `timelineRipple.ts`). `0` is the starting spots, which `NULL` meant before. A shape
+   is always at a whole count; `REAL` is only for order marks, whose beat can fall partway through
+   a count (`orderMarkPlace`). Order marks stop writing `params.beat`; the column holds it.
+2. **Members are listed as now.** `timeline_shape_recipe_marchers` is unchanged: `recipe_id`,
+   `marcher_id`, `slot`, `x`, `y`, one row per marcher and recipe. There is no move or arrival
+   column: how a member gets to its spot is the timeline's business.
+3. **A member is a marcher listed on one of the recipe's spots** (§9.1). It is listed however
+   and whenever it gets there: a move of its own ending at the count, in any move or layer, or
+   standing still since an earlier arrival, Held or not (§2). Whether it is on its spot at the
+   count is a status the field shows, not a condition of membership.
+4. **One recipe per marcher at a count.** Rule 2 of 2026-10-29 becomes literal: saving a recipe
+   takes its members out of every other shape recipe at the same count, and order marks out of
+   other order marks at it. Shapes and marks don't take members from each other, as now. The spot
+   the marcher leaves behind stays, empty (§9.1). Recipes left with no member are deleted. Checked by the write functions; the database has no join
+   constraint for it.
+5. **One identity per shape** (§9.2). `timeline_shape_recipes` gains `shape_key`
+   (`INTEGER NOT NULL`, indexed): every mark of one shape carries the same key, the id of its
+   first mark. A mark made by editing a carried shape at a later count takes the key of the mark
+   it was carried from.
+6. **Migration `0029_shape_recipes_at_count`** (the next free number when step 2 of §7 lands; 0029
+   today, after `0028_timeline_route_sources`):
+   - Rebuilds `timeline_shape_recipes` with `beat` in place of `timeline_id` (SQLite can't drop a
+     column that has a foreign key). The rebuild runs with foreign keys off, as drizzle's rebuilds
+     do, so dropping the old table doesn't cascade into `timeline_shape_recipe_marchers`.
+   - Fills `shape_key` with each recipe's own id: older files never recorded which copies belong
+     together, so each becomes its own shape.
+   - Fills `beat` from, in order: an order mark's `params.beat`; the end of the recipe's move
+     (`timelines.end_beat`); `0` for a recipe in no move.
+   - Where two shape recipes now share a count and a marcher (possible only from data older than
+     rule 2, or a bug), the newer recipe (higher id) keeps the marcher and the older loses it;
+     recipes left empty are deleted. The same for two order marks.
+   - Members that no longer stand on their spot convert as they are: the read side already treats
+     a member off its spot as a hole.
+   - Clears both undo and redo stacks in a file whose history names `timeline_shape_recipes`, as
+     the kept-spots drop did (ADR 0012, amendment of 2026-10-29), since replaying an old step would
+     write `timeline_id`. Other files keep their history.
+   - The history triggers are recreated with the table, and `repair.ts`'s copy order no longer
+     needs recipes after moves.
+7. **Rollback.** `electron/database/__test__/migrationRollback.ts` registers how a test rolls 0029
+   back: it rebuilds the table as 0017 made it, each recipe pointed at the move where most of its
+   members have a row ending at its beat (`NULL` when none, or for beat 0), so a round trip (0029,
+   roll back, 0029) keeps every recipe at the same count. `newFileSchema.test.ts` and `_blank.dots`
+   are regenerated. No table is added, so `TABLES_AFTER_0018` in `convertOnOpen.test.ts` is
+   unchanged.
+8. **File version.** Builds before 0029 (fork builds and the 0.2.0 betas so far) select
+   `timeline_id` and would fail on every recipe query, not just play or edit one fact wrong. So a
+   file is written as the next free version (`SHAPE_AT_COUNT_USER_VERSION`) once 0029 has run on
+   it, new files included. That is **18** today: on `pathways/host-10`, 17 is the outline model and
+   15 and 16 are reserved by open pull requests (`electron/database/fileVersion.ts`). Older builds
+   refuse it with the "made with a newer OpenMarch" message instead of breaking the Shape tool. This is ADR 0017 §9's rule, applied to a fact every file now has.
+9. **Which files convert, and how:**
+   - **v0.1.7 files** (page era, `user_version` 7) have no recipe tables, and the converter writes
+     no recipes (it only reports curved page-era shapes). 0029 runs in the conversion's second
+     stage, after `0018_drop_page_era`, on an empty table. Nothing converts, so the risk is only
+     that 0029 must run inside the conversion's transaction without needing rows.
+     `v017Files.test.ts` gains a check that every sample converts to a file with the new column.
+   - **Fork files** are repaired to `0017_timeline_model` first (ADR 0011), then take 0018 to 0029
+     as usual, so their recipes convert by the rules above. The repair needs no change.
+   - **0.2.0 beta files** are ordinary 0017 files and convert the same way. They are released
+     files, so their conversion gets the same tests as fork files.
+
+### 2. Holding marchers
+
+**Confirmed: a marcher holding still through the count is a member**, as the owner leans, because
+a holder is listed like any member (1.3). How an edit treats it follows the holds
+rules (ADR 0012, amendments of 2026-10-30), so a shape edit at the count is a drag at that count of
+every member:
+
+- **Held through the count** (a `timeline_held_marks` row covering it): editing the shape moves
+  the member's arrival and the whole hold with it. It still gets there early, at its new spot.
+- **Not set at the count** (standing since its last keyframe, nothing stored): placing the shape
+  sets it there, as placing does today (`setAll`): the move of the edit's window ends on its spot
+  at the count, though it doesn't move. That pins it, so an edit at an earlier count stops at the
+  shape's count instead of carrying through and quietly pulling it off its spot. Editing the shape
+  later then moves it inside that window, arriving at the shape's count.
+
+Concerns:
+
+- **A hold that covers two shapes' counts.** Editing the later shape moves the whole hold, so the
+  marcher moves at the earlier shape's count too and leaves it (a hole), with the left-box toast
+  naming the earlier shape's count. The alternative is to refuse the edit for that marcher.
+  Proposed: leave and say so.
+- **Arrival timing.** "Got there early" survives a shape edit only for Held members. A Not-set
+  member's pinning move starts at the edit window's start, so an edit makes it travel until the
+  shape's count. This matches what a drag at that count does today.
+- **Starting spots.** A recipe at beat 0 is the starting spots, as `NULL` was. Placing a shape there
+  still drops its members' holds from the starting spots (`dropShapeHomeHoldsInTransaction`).
+
+### 3. Expert
+
+A shape belongs to a count on the timeline, not to a clip.
+
+- **Shows:** a small shape mark at its count on the page row, drawn like a flag's tick, with the
+  shape's glyph. The field draws the shape from its count on, while all its members stand on their
+  spots (unchanged). The clips holding members' arrivals at the count are not badged: a shape can
+  span several of them.
+- **Selects:** clicking a member on the field at the count selects the shape, as now. Clicking the
+  mark selects its members and puts the playhead on the count.
+- **Edits:** the floating editor writes a drag at the shape's count for every member, whichever
+  move holds its arrival (a new edit target, `{ kind: "count", beat }`, the Expert form of Basic's
+  point target): a row ending at the count is edited in place; a Held member moves its hold; a
+  Not-set member gets its move in the selected window, or the page's window when none is selected.
+  An edit at a later count the shape is carried onto still saves a copy there (rule 4 of
+  2026-10-29), anchored at that count.
+- **Isolates:** while one move is isolated, a shape shows when any member arrives at its count in
+  that move. Members arriving elsewhere are ghosted like other marchers outside the move. Editing
+  or ungrouping it is allowed only when every member arrives in the isolated move, and refused
+  otherwise with a toast ("This shape has marchers in other moves. Edit it outside isolation.").
+  Isolation promises edits stay in one move, and this keeps that promise. It generalises today's
+  Ungroup refusal (`ungroupShape.ts`).
+- **Carries:** a shape is shown at later counts while its members stand on their spots
+  (revision of 2026-10-14), unchanged.
+
+### 4. Edits and membership
+
+Membership changes only by editing the shape (§9.1), so most edits need no recipe rule: what
+they change is where members stand, which the field shows as each member's status. After each
+edit, inside `transactionWithHistory` and in the same undo step, an **upkeep** step (beside the
+Held marks' upkeep, never during undo or redo replay) deletes recipes whose every member no longer
+arrives at the count because the moves that brought them there were deleted. It replaces the
+foreign-key cascade from moves. Where the table below says a member "leaves", read §9.1: only a
+drag at the count, Remove from shape, joining another shape at the count, or deleting the marcher
+takes it off the list; anything else changes its status.
+
+| Edit                                                            | What happens to the shape                                                                                                                                                                                   |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Split marchers into a new move (UI-25)                          | Nothing. Members stay, whichever move they're in. Rule 3's carry goes.                                                                                                                                      |
+| Split at playhead, Basic mid-page positions, **+** / Split page | Nothing. Positions at the count don't change. Fixes BUG 2.                                                                                                                                                  |
+| Merge moves over the same counts                                | Nothing.                                                                                                                                                                                                    |
+| Merge with a refit, clip drag, edge resize, flag drag           | If the edit re-times the arrival of **every** member at the count to one new count, the recipe moves there. Otherwise members no longer on their spot at the count leave (holes), and the toast names them. |
+| Delete a move                                                   | Members whose arrival went leave; a recipe with nobody left is deleted. Deleting a page's move with all members still deletes the shape, as the cascade did.                                                |
+| Insert or delete counts, tempo edits, page flag edits           | The recipe's count ripples as an order mark's does (`orderMarkPlace`): with the page flag it's on, else with its count; a shape inside a deleted page goes.                                                 |
+| Member dragged away at the count                                | Leaves, leaving a hole, with the left-box toast (`leftBoxToast.ts`), as now; found by count instead of move.                                                                                                |
+| A member's earlier keyframe edited                              | No effect while the member is pinned at the count (§2). A Held member's hold follows its arrival; if that takes it off its spot, it leaves.                                                                 |
+| Remove keyframe, Clear this page at the count                   | The member leaves the shape (a hole). See 5.3.                                                                                                                                                              |
+| Marcher deleted                                                 | Its member rows cascade, as now.                                                                                                                                                                            |
+
+- **Ungroup marks** (`UNGROUPED_RECIPE_KIND`) are stored at a count, like shapes: on the shape's
+  own count the recipe becomes the mark in place; on a later count the mark is saved at that
+  count. A mark claims its members from its count until a recipe at a later count takes them, as
+  now. `dropUngroupedLeavers` reads "still at the count" instead of "still in the move".
+- **Order marks** (`ORDER_MARK_KINDS`) keep their behaviour; their beat moves from `params.beat`
+  to the column, and the fallback to their move's end for older marks is done once by 0029.
+- **Trails** (`dealRecipesAgainInTransaction`) find the recipes at the trail move's end count
+  instead of by its id.
+
+### 5. What goes away
+
+1. Rule 1 of 2026-10-29 (members must be in the move) and rule 3 (splits and merges carry
+   recipes). Rule 2 is restated as 1.4. Rule 4 (later-count copies) stays.
+2. In `shapeRecipes.ts`: `sameMove`, `moveMembers`/`moveMembersOf`, `moveHoldsAnyOf`,
+   `placedBeatOf`, `movesEndingAtPlacedBeat`, `splitShapeRecipesInTransaction`, the shape half of
+   `moveShapeRecipesInTransaction`, `keepOrderMarksBeat` and `orderMarkBeat`'s fallback; Split at
+   playhead's recipe re-pointing; `readTimelineEndBeats` in `placedBoxStore.ts` and `endBeatOf` in
+   `boxesAt` and `timelineCarried.ts`; the `own`-move test in `boxMembership.ts` and
+   `writePlacement`, which compare counts instead.
+3. Later, as a separate step that amends ADR 0012: the "shape members are skipped" interim in
+   Clear this page, the drag back, Remove keyframe at a split, Hold from previous page and
+   `timelineMoveCuts.ts` (until fork #504). A member a hold command takes off its spot simply
+   leaves the shape.
+4. From fork PR #1118: `leftOutByOtherCounts` and `showLeftOutToast`,
+   `snapshotRecipesInTransaction`, `recipesFollowMembersInTransaction` and
+   `showDroppedAtFlagToast`, their i18n keys (`shapes.placed.leftOut.*`,
+   `shapes.placed.droppedAtFlag.*`) and the guide's lines about them; "BUG 2" becomes a plain
+   `it`. `nameOf` stays for the left-box toast.
+
+### 6. Risks
+
+- **Statuses need positions.** The statuses of §9.1 and the re-time rule need where members
+  stand at a count, which comes from the resolver, not from rows. Statuses are worked out only for
+  shapes drawn at the playhead, and the re-time rule only for recipes whose counts an edit
+  touched, or big shows slow down. Measured in step 3.
+- **Ripple coverage.** A shape's count used to ride along with its move's end for free. Every edit
+  that moves beats must now ripple recipes, or shapes drift off their counts and show as holes.
+  Mitigation: one ripple for order marks and shapes, and a test per beat-moving edit.
+- **The rebuild.** If foreign keys are on when 0029 drops the old table, every member row cascades
+  away. Tested on fork, beta and converted v0.1.7 files with members present.
+- **Older builds** refuse migrated files (1.8). Beta testers who downgrade lose access, not data.
+- **Undo history** is cleared once on files with recipe history.
+- **Expert UI** is a new surface (the shape mark), needing owner design feedback in the lab.
+- **Re-time ambiguity:** a clip drag that moves some members' arrivals and not others now splits a
+  shape into leavers and stayers, where today the whole shape went with the clip.
+- **Upstream:** recipes are in 0017, which 0.2.0 betas shipped, so 0029 must go to
+  `prerelease/0.2` with the rest of the shape host.
+
+### 7. Order of work
+
+Each step is one PR with a lab build and things to try, and none changes behaviour beyond what it
+names.
+
+1. **Read seam, no behaviour change.** Every reader asks one function for a recipe's count
+   (its move's end, a mark's `params.beat` or 0), its shape key (its own id until step 2) and
+   the recipes at a count. Unit tests.
+2. **Migration and writes at a count.** 0029 with `beat` and `shape_key`, rollback, the file
+   version, writers and readers on `beat`, rule 1 and rule 3 removed, membership by listing
+   (§9.1), upkeep replacing the cascade, and shapes drawn with open spots instead of vanishing. Tests: fork, beta and v0.1.7
+   conversions, round trip, BUG 2 passing, split and merge keep members. Lab: a Basic mid-page
+   position, then a shape at the flag.
+3. **Re-times and ripple.** The re-time rule and the count ripple for shapes. Tests for clip drag,
+   resize, flag drag, merge refit, inserting and deleting counts, and the timing of upkeep.
+4. **Remove the #1118 stopgaps** (5.4) and update the guide.
+5. **Shape marks (§8) and statuses (§9):** diamonds in Basic and Expert, joined for the selected
+   shape; carried shapes drawn "Same as page N"; status labels on open spots; Make shape match
+   previous page; Remove from shape; and in Expert the count edit target and the isolation rule.
+   Lab with things to try.
+6. **Holds:** lift the shape-member skips (5.3), amending ADR 0012.
+7. Close fork #504 as replaced, and mark the ownership research's decisions 6, 9 and 10 as
+   superseded.
+
+### 8. Shape marks (owner, 2026-11-25)
+
+A recipe at a count is shown as a **shape mark**, in Basic and in Expert. This is how a designer
+sees which counts have a shape of their own and which carry one from before. It is also the rule
+for shapes that change while marchers follow around them (fork #1174, research
+`docs/timeline/research/shape-over-time/`, branch `research/shape-over-time`, fork PR #1247),
+which builds on this revision.
+
+1. **A mark is a recipe at a count.** Nothing else is stored to say whether a later page "follows"
+   an earlier one: it has a mark or it doesn't.
+2. **Between two marks of the same shape, the shape blends; after the last, it holds.** Holding is
+   the carry of the revision of 2026-10-14, unchanged. Blending is new and belongs to the
+   shape-over-time work: a follow move linked to the shape at both counts stores the outline at
+   each end, and the resolver blends them. Without such a move, two marks are two shapes, as now.
+3. **An edit where the shape has a mark changes that mark.** A later count without a mark keeps
+   carrying it, so the edit shows there too.
+4. **An edit where the shape has no mark adds one there.** This is rule 4 of 2026-10-29 (a
+   later-count copy), unchanged. The first such edit shows a toast: "Page 15 now has its own
+   shape. It changes during the move." with Undo and "Match page 14". The second sentence appears
+   only when a follow move links the two counts.
+5. **"Make shape match previous page"** deletes the mark at the playhead's count, in one undo
+   step. The page carries the shape from the mark before it again, and its members go back to
+   the carried spots. Greyed out, with its reason, on a count with no mark of its own.
+6. **Basic puts marks only on pages:** an edit there is always at a page's count. Expert can add a
+   mark at any count, as §3 says.
+7. **Shown:**
+   - **Timeline:** a diamond with the shape's glyph at each mark's count, on the page row in Basic
+     and as in §3 in Expert. One diamond: the shape doesn't change. Two: it changes between them.
+   - **Field:** on a count with a mark, the shape draws solid with its handles. On a count that
+     carries one, it draws dotted and labeled "Same as page 14". Selecting it shows the handles
+     dashed; the first drag adds the mark (4).
+8. **Edge cases:**
+   - Deleting the earlier mark while the later one exists: the later keeps its shape, and a
+     follow move between them unlinks and plays as it did.
+   - Re-timing, splitting and merging: marks move with their counts, as in §4.
+   - Members joining or leaving between two marks: out of scope here, left to the shape-over-time
+     work.
+
+The prototype with marks is `docs/timeline/research/shape-over-time/demo/shape-over-time.html` on
+`research/shape-over-time`.
+
+### 9. Owner review, 2026-11-25: membership by listing, one identity per shape
+
+The owner asked for the model to be stress-tested for composability: a shape built over several
+counts, and marchers that head for a shape and are taken over before they reach it. Two gaps
+came out, and both are folded in above.
+
+**9.1. Membership changes only when the shape is edited.** As first written, upkeep dropped any
+member not on its spot at the count. That silently removed a marcher whose move was stolen by a
+higher layer (spec: "the overridden transition keeps running hypothetically"), or that a clip drag
+made late, and moving the clip back didn't restore it. Today's app does worse: `boxesAt` draws a
+shape only while every member is on its spot, so the whole shape vanishes.
+
+- **Listed** is stored: the recipe's member rows. It changes only when the designer places or
+  edits the shape, drags a member off its spot at the count, uses **Remove from shape** on an
+  open spot, places the marcher in another shape at the same count (1.4), or deletes the marcher.
+- **Status** is worked out from positions at the count and from the member's moves, for shapes
+  drawn at the playhead only: **here**; **on the way** (before its arrival); **late** (arrives
+  after the count); **taken over at N** (a higher layer cuts in before it arrives); **left at N**
+  (carried counts, after it moves off); **empty** (its marcher joined another shape at the count).
+- **The field** draws the shape whenever it has a mark at or before the playhead and at least one
+  member here, with every listed spot: members here as today, other spots as open rings with the
+  status as a label. Statuses show at the mark's own count, and at carried counts while the shape
+  is selected.
+- **Remove from shape** on an open spot takes the member and its spot out, and the shape re-deals
+  its spots for the members left, as placing it with fewer marchers does. One undo step.
+- Still **one shape per marcher at a count** (1.4). The owner ruled out double membership; the
+  check costs what it does today.
+
+**9.2. One identity per shape.** As first written, marks at different counts didn't know they were
+the same shape, so "Make shape match previous page" had to guess, and only a Follow could tie two
+marks together. Every mark now carries `shape_key` (1.5):
+
+- "Previous mark" in §8 means the previous mark with the same key.
+- Selecting a shape lights its marks on the timeline and joins them; other shapes' marks dim.
+- A shape can grow or shrink between marks: each mark lists its own members.
+- A shape built over several counts is one mark, with members arriving at different counts; they
+  show **on the way** until they arrive.
+- The shape-over-time link (fork PR #1247) joins two marks of one key.
+
+### Verification
+
+- Migration tests: 0029 on a 0017 file with recipes in moves, in no move and order marks, keeps
+  every member and fills each `beat` and `shape_key` as 1.6 says; duplicate members at a count go to the newer
+  recipe; the history is cleared only when it names the table; v0.1.7 samples convert with the new
+  column; the rollback round trip keeps every recipe at its count.
+- `shapeRecipes.test.ts`: one recipe per marcher at a count; members from different moves and
+  Held members are kept; upkeep drops leavers and deletes empty recipes in the same undo step.
+- `basicDrift.test.ts` "BUG 2" passes as a plain `it`.
+- Edit tests for each row of the table in §4, with undo and redo.
+- Browser scenarios: Basic mid-page position then a shape at the flag lists everyone; in Expert,
+  a shape whose members arrive in two moves is selected from its mark, edited, and refused while
+  one move is isolated.
