@@ -457,7 +457,7 @@
         "title": "Command palette",
         "unavailable": "Not available right now",
         "offInPreview": "Not in Preview — exit Preview to edit",
-        "offInEditMusic": "Not while editing music — select Edit music to go back",
+        "offInEditMusic": "Not while editing music — select Done to go back",
         "shape": "Shape",
         "next": "Next",
         "done": "Done",
@@ -1888,12 +1888,8 @@
             "medium": "Medium",
             "large": "Large",
             "summary": {
-                "small": "2 marimbas, 2 vibes, a rack, a synth and 2 speakers",
-                "medium": "4 marimbas, 3 vibes, xylophone, glockenspiel, rack, drum set, synth and 4 speakers",
-                "large": "6 marimbas, 4 vibes, xylophone, glockenspiel, 2 racks, drum set, 2 synths and 6 speakers",
                 "none": "No pit. You can set one up later in the Marchers panel."
             },
-            "always": "Each also adds a podium on the 50 and a mixer behind the pit.",
             "addPerformers": "Also add performers",
             "apply": "Apply",
             "use": "Use this preset",
@@ -3651,7 +3647,7 @@
             "gym": "Indoor gym",
             "hs": "High school",
             "markDiesel": "Mark Diesel Stadium",
-            "nightpound": "Nightpound, OH",
+            "nightpound": "Taydon, OH",
             "pro": "Pro dome"
         },
         "lighting": {
@@ -3795,6 +3791,14 @@
             "goTo": "Go to {name}",
             "setView": "Set to current view",
             "setViewTooltip": "Move this camera to where the view is now",
+            "more": "More for {name}",
+            "dragToReorder": "Drag to reorder {name}",
+            "hideSettings": "Hide camera settings",
+            "alreadyFirst": "Already the first camera",
+            "alreadyLast": "Already the last camera",
+            "duplicate": "Duplicate",
+            "copyName": "{name} copy",
+            "copyNameN": "{name} copy {n}",
             "moveUp": "Move up",
             "moveDown": "Move down",
             "remove": "Remove",
@@ -3807,7 +3811,21 @@
             "removed": "Removed “{name}”",
             "undo": "Undo",
             "replace": "Replace",
-            "saveFailed": "Couldn't save the 3D View cameras"
+            "saveFailed": "Couldn't save the 3D View cameras",
+            "settings": "Camera settings",
+            "settingsTooltip": "Exact position, aim, lens and follow",
+            "followsBehind": "Follows a performer",
+            "followsEyes": "Looks out of a performer's eyes",
+            "export": "Export…",
+            "exportTooltip": "Save these cameras to a file",
+            "exportEmpty": "No cameras to export",
+            "import": "Import…",
+            "importTooltip": "Replace these cameras with a file's",
+            "importConfirm": "Replace your cameras with the {count, plural, one {# camera} other {# cameras}} in this file? You can undo it right after.",
+            "imported": "Imported {count, plural, one {# camera} other {# cameras}}",
+            "importNotCameras": "That file isn't an OpenMarch cameras file.",
+            "importInvalid": "That cameras file has a mistake in it, so nothing was imported.",
+            "importUnreadable": "Couldn't read that file."
         },
         "venue": {
             "updateFailed": "Couldn't change the 3D View venue"
@@ -3843,6 +3861,58 @@
             "unreadable": "That PNG couldn't be read.",
             "templateFailed": "The template couldn't be made.",
             "saveFailed": "Couldn't save the flag silk artwork"
+        },
+        "cameraSettings": {
+            "does": "Camera",
+            "follows": "Follows",
+            "around": "Angle",
+            "aroundTooltip": "Where the camera is around them: 0° behind, 90° their right, 180° in front, −90° their left",
+            "followTiltTooltip": "How far above them the camera looks down from. Below 0 looks up at them",
+            "distance": "Distance",
+            "distanceTooltip": "How far the camera is from them",
+            "lookTurn": "Turn",
+            "lookTurnTooltip": "Turns their look to the right. Below 0 turns it left",
+            "lookTiltTooltip": "Looks up. Below 0 looks down, e.g. at a drum",
+            "nobody": "Nobody",
+            "followView": "View",
+            "behind": "Outside",
+            "eyes": "Eyes",
+            "performer": "Performer",
+            "position": "Position",
+            "camera": "Camera",
+            "lookAt": "Looks at",
+            "across": "Across",
+            "acrossTooltip": "Toward side 2 from the center of the field (negative is toward side 1)",
+            "height": "Height",
+            "heightTooltip": "Above the field",
+            "front": "Front",
+            "frontTooltip": "Toward the audience from the front sideline (negative is onto the field)",
+            "units": "In {unit} from the center of the front sideline",
+            "ft": "feet",
+            "m": "meters",
+            "pan": "Pan",
+            "panTooltip": "Turned toward side 2 (negative toward side 1); 0 looks from the audience toward the back of the field. Drag to change.",
+            "tilt": "Tilt",
+            "tiltTooltip": "Aimed up (negative is down). Drag to change.",
+            "roll": "Roll",
+            "rollTooltip": "Turned clockwise around where it looks, tilting the picture. Drag to change.",
+            "lens": "Lens",
+            "focalLength": "Focal length",
+            "focalLengthTooltip": "As on a full-frame camera. Higher zooms in. Drag to change.",
+            "fieldOfView": "Field of view",
+            "fieldOfViewTooltip": "How much the camera takes in, top to bottom. Smaller zooms in. Drag to change.",
+            "mm": "mm",
+            "focus": "Focus",
+            "focusOff": "Off",
+            "focusLookAt": "Look-at",
+            "focusPerformer": "Performer",
+            "focusDistance": "Distance",
+            "focusDistanceField": "Focus distance",
+            "focusDistanceTooltip": "How far from the camera things are sharp. Drag to change.",
+            "fStop": "f-stop",
+            "fStopTooltip": "Lower blurs more of what's nearer and farther, as on a real lens. Drag to change.",
+            "sharpRange": "Looks sharp from {near} to {far} {unit}",
+            "sharpBeyond": "Looks sharp from {near} {unit} to the far distance"
         },
         "venueKind": {
             "fitted": "Sized to your field",
@@ -4738,9 +4808,7 @@
         },
         "button": {
             "hint": "The music file, and lining the counts up with it: tempo, time signatures, rehearsal marks",
-            "hintOn": "Line the counts up with the music. <escape></escape> or <toggle></toggle> leaves.",
             "label": "Edit music",
-            "labelOn": "Editing music",
             "text": "Edit music"
         },
         "errors": {
@@ -4748,53 +4816,6 @@
             "moveOneCountLong": "That move is only one count long",
             "wouldHideSet": "That would leave a keyframe ending on the same count as the move under it, hiding that move's set. Remove fewer counts, or end the keyframe a count earlier.",
             "wouldRemovePage": "That would remove a page. Remove fewer counts, or delete the page first."
-        },
-        "help": {
-            "doubleClickLane": {
-                "title": "Add a tempo change",
-                "text": "Double-click the tempo lane where it should change. Double-click a change's dot to remove it."
-            },
-            "dragChangeDot": {
-                "title": "Move a tempo change",
-                "text": "Drag its dot up or down to change the tempo, or sideways to move where it changes."
-            },
-            "dragEndDot": {
-                "title": "Set where a rit. ends",
-                "text": "Drag the square dot at the end of a stretch, so the next tempo can jump back (a tempo)."
-            },
-            "dragLine": {
-                "title": "Set a tempo",
-                "text": "Drag the tempo line up or down. To type a tempo, right-click and choose Set tempo…"
-            },
-            "dragMeasures": {
-                "title": "Select counts",
-                "text": "Drag along the measures or the music, then edit them all at once."
-            },
-            "dragRoundHandle": {
-                "title": "Change tempo gradually",
-                "text": "Drag the round handle in the middle of a stretch. Double-click it to jump again."
-            },
-            "keys": {
-                "escape": "Clear the selection, or cancel a drag; with nothing to clear, stop editing music",
-                "play": "Play from the playhead, or stop where it is",
-                "tap": "Tap tempo: tap on each beat to see how fast it is",
-                "toggle": "Start or stop editing music",
-                "metronome": "Metronome on or off"
-            },
-            "label": "How editing music works",
-            "rightClick": {
-                "title": "Holds and counts",
-                "text": "Right-click a count to make it a hold, change tempo gradually, or add and remove counts."
-            },
-            "rightClickMeasure": {
-                "title": "Measures and rehearsal marks",
-                "text": "Right-click a measure to renumber it, set its time signature or add a mark. Drag a mark to move it."
-            },
-            "title": "Line the counts up with the music",
-            "musicFile": {
-                "title": "Change the music",
-                "text": "Click the file's name in the header to switch, import or delete audio, or set the music offset."
-            }
         },
         "importScore": {
             "choose": "Choose a file…",

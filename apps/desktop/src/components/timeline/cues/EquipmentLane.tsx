@@ -163,6 +163,8 @@ export function useEquipmentLaneBand(): TimelineBand | undefined {
         const lanesHeight = equipmentHeight + facingHeight;
         return {
             height: lanesHeight + LANES_ROW_HEIGHT,
+            // Only a shown cue lane keeps the playhead and start flag above it
+            takesPresses: shown || facingHeight > 0,
             render: (geometry) => (
                 <>
                     {shown && (

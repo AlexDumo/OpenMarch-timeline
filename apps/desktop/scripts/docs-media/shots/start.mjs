@@ -1,3 +1,4 @@
+// cspell:words filechooser
 // The Start here chapter (guides/start/*).
 import fs from "node:fs";
 import path from "node:path";
@@ -9,6 +10,8 @@ const DESKTOP = path.resolve(
 );
 /** A show from before timelines (the demo, as 0.1.7 saved it). */
 const PAGE_ERA_SHOW = path.join(DESKTOP, "web/public/demos/part1-demo.dots");
+/** A winter guard floor's art, 3:2 like a 60 × 90 floor. */
+const FLOOR_ART = path.join(DESKTOP, "scripts/docs-media/assets/floor-art.jpg");
 
 /** Hides toasts and closes the low-quality field notice, so nothing sits over the picture. */
 async function tidy(page) {
@@ -79,10 +82,10 @@ export async function settingsWindow({ app, page, wait }, sectionLabel) {
 }
 
 /**
- * Opens File › New File and goes through the new-show steps up to Performers, with eight
- * trumpets entered and not yet created. Returns the dialog.
+ * Opens File › New File and goes through the new-show steps up to Activity and field, a blank
+ * show named Fall Show. Returns the dialog.
  */
-async function newShowToPerformers({ page, wait }) {
+async function newShowToField({ page, wait }) {
     await wait(3000);
     await tidy(page);
     await page.getByRole("tab", { name: "File" }).click();
@@ -100,7 +103,17 @@ async function newShowToPerformers({ page, wait }) {
     await wait(600);
     await next(); // Project details
     await wait(800);
-    await next(); // Activity and field
+    return dialog;
+}
+
+/**
+ * Opens File › New File and goes through the new-show steps up to Performers, with eight
+ * trumpets entered and not yet created. Returns the dialog.
+ */
+async function newShowToPerformers(ctx) {
+    const { page, wait } = ctx;
+    const dialog = await newShowToField(ctx);
+    await dialog.getByRole("button", { name: "Next", exact: true }).click(); // Activity and field
     await wait(1000);
     await dialog.getByLabel(/quantity/i).fill("8");
     await dialog.getByRole("combobox").first().click();
@@ -268,6 +281,32 @@ const shots = [
         // The new-show window's Performers step, eight trumpets entered
         async setup(ctx) {
             const dialog = await newShowToPerformers(ctx);
+            return { box: await ctx.around(dialog, 0) };
+        },
+    },
+    {
+        id: "start-new-show-floor",
+        kind: "still",
+        // The new-show window's Activity and field step for Winter Guard: the floor picker
+        // with a floor image added, beside the preview drawn over it
+        async setup(ctx) {
+            const { page, wait } = ctx;
+            const dialog = await newShowToField(ctx);
+            await dialog.getByRole("combobox").first().click();
+            await wait(400);
+            await page
+                .getByRole("option", { name: "Winter Guard", exact: true })
+                .click();
+            await wait(800);
+            const chooser = page.waitForEvent("filechooser");
+            await dialog.getByTestId("indoor-floor-image-add").click();
+            await (await chooser).setFiles(FLOOR_ART);
+            await dialog.getByTestId("indoor-floor-image").waitFor();
+            // The step bar redraws for Winter Guard's steps (no Front ensemble); let it settle
+            await wait(3000);
+            await page.mouse.move(5, 500);
+            await page.evaluate(() => document.activeElement?.blur());
+            await wait(300);
             return { box: await ctx.around(dialog, 0) };
         },
     },
