@@ -147,6 +147,47 @@ describe("planPack", () => {
         },
     );
 
+    it.runIf(UNIFORM_PACK_VERSION >= 3)(
+        "writes modes as format 3, with their palette in lowercase",
+        () => {
+            const json = exampleSource();
+            json.modes = [
+                {
+                    id: "plain",
+                    name: "Plain",
+                    layers: ["base"],
+                    items: ["crest"],
+                },
+                {
+                    id: "white",
+                    name: "White",
+                    layers: ["base"],
+                    palette: { primary: "#EEEEEE" },
+                },
+            ];
+            const { manifest } = planPack(parsePackSource(json), all);
+            expect(manifest.formatVersion).toBe(3);
+            const modes = (
+                manifest as unknown as {
+                    modes: { id: string; items: string[]; palette?: object }[];
+                }
+            ).modes;
+            expect(modes.map((m) => m.items)).toEqual([["crest"], []]);
+            expect(modes[1].palette).toEqual({ primary: "#eeeeee" });
+        },
+    );
+
+    it("names a mode's missing layer", () => {
+        const json = exampleSource();
+        json.modes = [{ id: "plain", name: "Plain", layers: ["sash"] }];
+        const problems = problemsOf(() => planPack(parsePackSource(json), all));
+        expect(problems.join("\n")).toMatch(
+            UNIFORM_PACK_VERSION >= 3
+                ? /mode "plain"|layer the pack doesn't have/
+                : /^modes: /,
+        );
+    });
+
     it("writes the lowest version that holds the pack", () => {
         const json = exampleSource();
         expect(
