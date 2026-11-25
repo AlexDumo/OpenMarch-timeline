@@ -1808,6 +1808,7 @@
     "shapes.placed.splitError": "Error toast when splitting a placed shape into two shapes fails.",
     "shapes.placed.splitIsolated": "Error toast when Split here is used while one move on the timeline is isolated, on a shape that was made on an earlier page. The user has to leave isolation first.",
     "shapes.placed.splitRows": "Reason shown next to the greyed-out \"Split here\" menu item when the line has extra rows of marchers alongside it. Splitting those comes in a later version.",
+    "shapes.placed.splitNotLine": "Reason shown next to the greyed-out \"Shape: Split here\" menu item when the user right-clicks a selected box or circle of marchers. Only lines, curves and arcs can be cut in two in this version.",
     "shapes.placed.summary.empty": "Part of the summary line of a placed shape: how many of its spots are empty because marchers left it (for example \"2 empty\"). Plural message: {count} (shown as #) is that number; translate the forms your language needs. Joined to other parts with \"·\"; each part stands alone.",
     "shapes.placed.summary.steps": "Part of the summary line of a placed shape. {interval} is the spacing between marchers in steps, a number or two joined with \"×\" (for example \"2\" or \"2 × 1½\"). Plural message: {count} is the last spacing number, which the word 'step' agrees with. Joined to other parts with \"·\"; each part stands alone.",
     "shapes.placed.ungroupError": "Error toast when ungrouping a placed shape (turning it back into plain marchers) fails.",

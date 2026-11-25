@@ -28,6 +28,7 @@ import type { PropToolShape } from "@/field/editor/propTool";
 import type { FieldMarchers } from "./fieldMarchers";
 import type { FieldItems } from "./fieldItems";
 import { fieldToElement, useFieldViewStore } from "./fieldView";
+import { useSplitPreviewStore } from "@/shapes/placed/splitPreview";
 import {
     drawnSelectionBox,
     selectionHandles,
@@ -325,6 +326,7 @@ export default function FieldOverlay({
                     />
                 )}
                 {propTool && <PropToolPreview tool={propTool} theme={theme} />}
+                <SplitMark />
             </svg>
             {modeDrawing?.tip && (
                 <ModeTip tip={modeDrawing.tip} touch={touch} />
@@ -821,6 +823,46 @@ type MirrorShown = NonNullable<FieldModeDrawing["mirror"]>;
  * canvas, at any zoom, and the point itself, which drags. The lines the paste mirrors across are
  * dashed and strong; the other is faint, so which way it mirrors reads before anything is pressed.
  */
+/**
+ * Where Split here would cut a placed line while its menu entry is pointed at (#1336): a dashed
+ * stroke across the gap, at its middle, square to it
+ */
+function SplitMark() {
+    const gap = useSplitPreviewStore((s) => s.gap);
+    const view = useFieldViewStore();
+    if (!gap) return null;
+    const a = fieldToElement(view, gap.from.x, gap.from.y);
+    const b = fieldToElement(view, gap.to.x, gap.to.y);
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    // Across the gap, half a gap long each way but never under a finger's width
+    const half = Math.max(14, len / 2);
+    const n = { x: (-(b.y - a.y) / len) * half, y: ((b.x - a.x) / len) * half };
+    const p1 = { x: mid.x + n.x, y: mid.y + n.y };
+    const p2 = { x: mid.x - n.x, y: mid.y - n.y };
+    return (
+        <g data-testid="fieldSplitMark" pointerEvents="none">
+            <line
+                x1={p1.x}
+                y1={p1.y}
+                x2={p2.x}
+                y2={p2.y}
+                stroke={GUIDE_CASING}
+                strokeWidth={GUIDE_CASING_WIDTH}
+            />
+            <line
+                x1={p1.x}
+                y1={p1.y}
+                x2={p2.x}
+                y2={p2.y}
+                stroke={MIRROR_COLOR}
+                strokeWidth={MIRROR_LINE_WIDTH}
+                strokeDasharray="6 4"
+            />
+        </g>
+    );
+}
+
 function MirrorMark({
     mirror,
     at,

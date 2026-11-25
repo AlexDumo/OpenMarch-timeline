@@ -45,6 +45,8 @@ export type SplitCheck =
           readonly ok: true;
           readonly box: PlacedBox<LineParams>;
           readonly k: number;
+          /** The spots either side of the cut, for showing where it falls */
+          readonly gap: { readonly from: XY; readonly to: XY };
       }
     | { readonly ok: false; readonly reason: string };
 
@@ -79,8 +81,18 @@ export function splitCheck(box: PlacedBox, at: XY): SplitCheck | null {
                 "Right-click between two marchers to split there",
             ),
         );
-    return { ok: true, box, k };
+    const spots = lineSpots(p, box.spots)
+        .slice()
+        .sort((a, b) => (a.s ?? 0) - (b.s ?? 0));
+    return { ok: true, box, k, gap: { from: spots[k - 1]!, to: spots[k]! } };
 }
+
+/** Why a placed shape that isn't a line can't be split, until step 2 of #1335 */
+export const notALineReason = (): string =>
+    tolgee.t(
+        "shapes.placed.splitNotLine",
+        "Only lines, curves and arcs can be split for now",
+    );
 
 /** The entry the menus on a placed line show: Split here, greyed with its reason when it can't */
 export function splitSection(check: SplitCheck): ToolMenuSection {
