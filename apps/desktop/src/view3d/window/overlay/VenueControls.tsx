@@ -285,7 +285,9 @@ const FLATS_SAMPLE = "flats:sample" as const;
  * preset still works, and nothing is removed from the show.
  *
  * When the band's uniform is gone from the show, doesn't read, or was made by a newer OpenMarch,
- * the band wears its preset and a note here says why, with the setting on or off.
+ * the band wears its preset and a note here says why, with the setting on or off. When it
+ * couldn't be loaded just now (reading it, or listing the show's uniforms, failed after its
+ * retries), the note says so, apart from a damaged file, with Try again.
  */
 export function UniformPicker() {
     const { t } = useTranslate();
@@ -294,13 +296,20 @@ export function UniformPicker() {
     const turnOn = useCustomUniformsStore((s) => s.setEnabled);
     const named = settings ? flatsArtworkOf(settings.uniformArtwork) : null;
     const namedPack = named && isUniformPackValue(named) ? named : null;
-    const { data: packs } = useQuery({
+    const packsQuery = useQuery({
         ...uniformPacksQueryOptions(),
         enabled: flats || namedPack !== null,
     });
-    const { data: pack, isSuccess: packRead } = useQuery(
-        uniformPackQueryOptions(namedPack),
-    );
+    const packs = packsQuery.data;
+    const packQuery = useQuery(uniformPackQueryOptions(namedPack));
+    const { data: pack, isSuccess: packRead } = packQuery;
+    // a read that failed after its retries with nothing read: not a damaged file (Try again)
+    const packsFailed = packsQuery.isError && packs === undefined;
+    const packFailed = packQuery.isError && pack === undefined;
+    const tryAgain = () => {
+        if (packsFailed) void packsQuery.refetch();
+        if (packFailed) void packQuery.refetch();
+    };
     // the uniform whose version the band wears (editing items adds versions, fork #1258)
     const wornEntry = namedPack ? uniformEntryOf(packs, namedPack) : undefined;
     // a uniform the show no longer has (an undo after Remove unused…), or one whose file
@@ -311,8 +320,11 @@ export function UniformPicker() {
         packs ? wornEntry !== undefined : undefined,
         packRead ? pack : undefined,
         uniformPackIsNewer(namedPack),
+        packsFailed || packFailed,
     );
     const worn = problem ? null : named;
+    // with the setting on, the list of the show's uniforms failed though the band wears none
+    const listFailed = flats && packsFailed && !problem;
     type Value = UniformPresetId | typeof FLATS_SAMPLE | UniformPackValue;
     const sampleOption = {
         value: FLATS_SAMPLE as Value,
@@ -371,7 +383,32 @@ export function UniformPicker() {
                 testId="view3d-uniform-picker"
                 className="grid! grid-cols-2 [&>*]:justify-start"
             />
-            {problem && (
+            {(problem === "loadFailed" || listFailed) && (
+                <div
+                    className="flex flex-col items-start gap-6"
+                    role="status"
+                    data-testid={
+                        listFailed
+                            ? "view3d-uniform-list-failed"
+                            : "view3d-uniform-loadFailed"
+                    }
+                >
+                    <p className="text-sub text-yellow">
+                        {listFailed
+                            ? t("view3d.uniformImport.listFailed")
+                            : t("view3d.uniformImport.loadFailed")}
+                    </p>
+                    <Button
+                        variant="secondary"
+                        size="compact"
+                        onClick={tryAgain}
+                        data-testid="view3d-uniform-try-again"
+                    >
+                        {t("view3d.uniformImport.tryAgain")}
+                    </Button>
+                </div>
+            )}
+            {problem && problem !== "loadFailed" && (
                 <p
                     className="text-sub text-yellow"
                     role="status"
@@ -384,7 +421,11 @@ export function UniformPicker() {
                           : t(`view3d.uniformPreview.${problem}Off`)}
                 </p>
             )}
-            {(previewWorn || (!flats && problem && problem !== "newer")) && (
+            {(previewWorn ||
+                (!flats &&
+                    problem &&
+                    problem !== "newer" &&
+                    problem !== "loadFailed")) && (
                 <div
                     className="flex flex-wrap items-center gap-6"
                     role="status"

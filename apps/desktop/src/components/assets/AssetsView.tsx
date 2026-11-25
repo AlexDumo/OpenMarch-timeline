@@ -75,10 +75,16 @@ export function useSizeText() {
     };
 }
 
-/** The show's assets and who uses them, live */
+/**
+ * The show's assets and who uses them, live (`use`, null until they've loaded); whether the
+ * list of assets couldn't be loaded (`listFailed`); and Try again, which reads again whatever
+ * failed: the list, or the band's uniform ("loadFailed")
+ */
 function useAssetUse() {
-    const { data: assets } = useQuery(showAssetsQueryOptions());
-    const { data: sizes } = useQuery(showAssetSizesQueryOptions());
+    const assetsQuery = useQuery(showAssetsQueryOptions());
+    const sizesQuery = useQuery(showAssetSizesQueryOptions());
+    const { data: assets } = assetsQuery;
+    const { data: sizes } = sizesQuery;
     const { data: items } = useQuery(allItemsQueryOptions());
     const { data: cues } = useQuery(allCuesQueryOptions());
     // the band's imported uniform is a use too (fork #1257)
@@ -104,8 +110,18 @@ function useAssetUse() {
             ? venue.uniformArtwork
             : null;
     // whether the band's uniform reads: when it doesn't, the band wears its preset
-    const { data: wornPack } = useQuery(uniformPackQueryOptions(worn));
-    return useMemo(() => {
+    const wornPackQuery = useQuery(uniformPackQueryOptions(worn));
+    const { data: wornPack } = wornPackQuery;
+    // failed after its retries with nothing read: not a damaged file (Try again)
+    const assetsFailed = assetsQuery.isError && assets === undefined;
+    const sizesFailed = sizesQuery.isError && sizes === undefined;
+    const wornFailed = wornPackQuery.isError && wornPack === undefined;
+    const tryAgain = () => {
+        if (assetsFailed) void assetsQuery.refetch();
+        if (sizesFailed) void sizesQuery.refetch();
+        if (wornFailed) void wornPackQuery.refetch();
+    };
+    const use = useMemo(() => {
         // `venue` is null with no venue row, undefined while it loads
         if (!assets || !sizes || !items || !cues || venue === undefined)
             return null;
@@ -144,6 +160,7 @@ function useAssetUse() {
                 ),
             wornPack,
             uniformPackIsNewer(worn),
+            wornFailed,
         );
         return {
             ...use,
@@ -164,7 +181,9 @@ function useAssetUse() {
         inHistory,
         historyFailed,
         wornPack,
+        wornFailed,
     ]);
+    return { use, listFailed: assetsFailed || sizesFailed, tryAgain };
 }
 
 export function AssetsContents({
@@ -173,7 +192,7 @@ export function AssetsContents({
     /** Opens Remove unused… at once (the `removeUnusedAssets` action) */
     openRemove?: boolean;
 }) {
-    const use = useAssetUse();
+    const { use, listFailed, tryAgain } = useAssetUse();
     const [removing, setRemoving] = useState(openRemove);
     // Remove unused… reads again which uniforms undo or redo names: an edit elsewhere may have
     // cleared the redo steps since. Its list and size wait for that read.
@@ -203,6 +222,25 @@ export function AssetsContents({
                 className="flex w-[28rem] grow flex-col gap-16 overflow-y-auto"
                 data-testid="assets-view"
             >
+                {!use && listFailed && (
+                    <div
+                        className="bg-fg-2 border-stroke rounded-6 text-sub flex items-center justify-between gap-12 border p-12"
+                        role="status"
+                        data-testid="assets-load-failed-note"
+                    >
+                        <span>
+                            <T keyName="assets.notes.loadFailed" />
+                        </span>
+                        <Button
+                            size="compact"
+                            variant="secondary"
+                            onClick={tryAgain}
+                            data-testid="assets-try-again"
+                        >
+                            <T keyName="assets.tryAgain" />
+                        </Button>
+                    </div>
+                )}
                 {use && (
                     <AssetNotes
                         unused={use.unused}
@@ -213,6 +251,7 @@ export function AssetsContents({
                         uniformProblem={use.uniformProblem}
                         historyFailed={use.historyFailed}
                         onRemove={() => setRemoving(true)}
+                        onTryAgain={tryAgain}
                     />
                 )}
                 {use && use.assets.length === 0 && (
@@ -254,6 +293,7 @@ function AssetNotes({
     uniformProblem,
     historyFailed,
     onRemove,
+    onTryAgain,
 }: {
     unused: readonly AssetUse[];
     /** Every asset version, to count unused ones as the Remove unused… list groups them */
@@ -264,6 +304,8 @@ function AssetNotes({
     uniformProblem: WornPackProblem | null;
     historyFailed: boolean;
     onRemove: () => void;
+    /** Reads the band's uniform again after it couldn't be loaded */
+    onTryAgain: () => void;
 }) {
     const tally = removableCount(removableLines(unused, all));
     const sizeText = useSizeText();
@@ -334,6 +376,27 @@ function AssetNotes({
                             : "assets.notes.unreadableUniformPreviewOff"
                     }
                 />
+            </li>,
+        );
+    // couldn't be loaded just now: the file may be fine, so this isn't the damaged note
+    if (uniformProblem === "loadFailed")
+        notes.push(
+            <li
+                key="loadFailedUniform"
+                className="flex items-center justify-between gap-12"
+                data-testid="assets-load-failed-uniform-note"
+            >
+                <span>
+                    <T keyName="assets.notes.loadFailedUniform" />
+                </span>
+                <Button
+                    size="compact"
+                    variant="secondary"
+                    onClick={onTryAgain}
+                    data-testid="assets-uniform-try-again"
+                >
+                    <T keyName="assets.tryAgain" />
+                </Button>
             </li>,
         );
     if (uniformProblem === "newer")
