@@ -20,6 +20,16 @@ import { showAssetRefValue } from "./ref";
 import { silkShapeOf, type SilkShapeId } from "@/view3d/core/sizes/silkShapes";
 
 export const FLAG_ASSET_KIND = "flag";
+
+/**
+ * The silk shapes a new flag can have, for now (owner, 2026-11-25): a few common ones, more as
+ * designers ask. A flag stored with another shape still reads and draws as that shape.
+ */
+export const FLAG_SHAPES: readonly SilkShapeId[] = [
+    "rectangle",
+    "standard",
+    "swing",
+];
 /** The part that holds the Artwork's PNG */
 export const FLAG_ARTWORK_PART = "artwork";
 /** The part that holds the flag's small picture (PNG) */

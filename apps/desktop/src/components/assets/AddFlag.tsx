@@ -1,18 +1,12 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { T, useTranslate } from "@tolgee/react";
-import { FlagIcon } from "@phosphor-icons/react";
-import {
-    Button,
-    Input,
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTriggerButton,
-} from "@openmarch/ui";
+import * as RadioGroup from "@radix-ui/react-radio-group";
+import clsx from "clsx";
+import { Button, Input } from "@openmarch/ui";
 import { addShowFlagMutationOptions } from "@/hooks/queries/useShowFlags";
 import { drawFlagPicture } from "@/showAssets/flagPicture";
-import { flagNameOfFile } from "@/showAssets/flags";
+import { FLAG_SHAPES, flagNameOfFile } from "@/showAssets/flags";
 import { deflate, readArtwork } from "@/showAssets/silkArtworkFile";
 import {
     artworkTemplateFile,
@@ -22,19 +16,19 @@ import {
 import type { SilkArtworkImport } from "@/view3d/core/silkArtwork";
 import {
     DEFAULT_SILK_SHAPE,
-    SILK_SHAPE_IDS,
     silkShape,
     type SilkShapeId,
 } from "@/view3d/core/sizes/silkShapes";
 import { saveFile } from "@/view3d/window/overlay/saveFile";
 import { useBytesUrl } from "@/components/items/modelImport/ModelImportReview";
+import { SilkShapeOutline } from "./SilkShapeOutline";
 
 const FORMATS: readonly TemplateFormat[] = ["png", "svg", "pdf"];
 
 /**
- * Adds a flag to the show (fork #985): pick its silk shape, download that shape's template to
- * paint, choose the painted PNG, name it, and add it. The picture shows the silk as it will look,
- * cut to the shape. A show may have as many flags as it likes; each is handed to performers as
+ * Adds a flag to the show (fork #985): pick its silk shape (each drawn as its outline), download
+ * that shape's template to paint, choose the painted PNG, name it, and add it. The picture shows
+ * the silk as it will look, cut to the shape; until a PNG is chosen, the shape's outline. A show may have as many flags as it likes; each is handed to performers as
  * Equipment (the field's right-click menu, Equipment › Guard equipment).
  */
 export function AddFlag({ onDone }: { onDone: () => void }) {
@@ -137,6 +131,38 @@ export function AddFlag({ onDone }: { onDone: () => void }) {
             <h3 className="text-body font-medium">
                 <T keyName="assets.flags.addTitle" />
             </h3>
+            <div className="flex flex-col gap-6">
+                <span id={shapeId} className="text-sub text-text-subtitle">
+                    <T keyName="assets.flags.shape" />
+                </span>
+                <RadioGroup.Root
+                    value={shape}
+                    onValueChange={(next) => setShape(next as SilkShapeId)}
+                    aria-labelledby={shapeId}
+                    className="grid grid-cols-3 gap-8"
+                    data-testid="assets-add-flag-shape"
+                >
+                    {FLAG_SHAPES.map((id) => (
+                        <RadioGroup.Item
+                            key={id}
+                            value={id}
+                            data-testid={`assets-add-flag-shape-${id}`}
+                            className={clsx(
+                                "rounded-6 flex min-w-0 flex-col items-center gap-4 border px-6 py-6 transition-colors duration-150 ease-out",
+                                "focus-visible:outline-accent outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2",
+                                id === shape
+                                    ? "bg-accent/20 border-accent"
+                                    : "bg-fg-2 border-stroke hover:border-accent/60",
+                            )}
+                        >
+                            <SilkShapeOutline shape={id} className="size-48" />
+                            <span className="text-sub text-text truncate">
+                                {t(`view3d.silkShape.${id}`)}
+                            </span>
+                        </RadioGroup.Item>
+                    ))}
+                </RadioGroup.Root>
+            </div>
             <div className="flex items-start gap-12">
                 <span className="rounded-4 border-stroke bg-fg-2 flex h-96 w-96 shrink-0 items-center justify-center overflow-hidden border">
                     {pictureUrl ? (
@@ -148,37 +174,13 @@ export function AddFlag({ onDone }: { onDone: () => void }) {
                             data-testid="assets-add-flag-picture"
                         />
                     ) : (
-                        <FlagIcon
-                            size={32}
-                            className="text-text-subtitle"
-                            aria-hidden
+                        <SilkShapeOutline
+                            shape={shape}
+                            className="h-full w-full"
                         />
                     )}
                 </span>
                 <div className="flex min-w-0 grow flex-col gap-8">
-                    <label
-                        htmlFor={shapeId}
-                        className="text-sub text-text-subtitle"
-                    >
-                        <T keyName="assets.flags.shape" />
-                    </label>
-                    <Select
-                        value={shape}
-                        onValueChange={(next) => setShape(next as SilkShapeId)}
-                    >
-                        <SelectTriggerButton
-                            id={shapeId}
-                            label={t(`view3d.silkShape.${shape}`)}
-                            data-testid="assets-add-flag-shape"
-                        />
-                        <SelectContent>
-                            {SILK_SHAPE_IDS.map((id) => (
-                                <SelectItem key={id} value={id}>
-                                    {t(`view3d.silkShape.${id}`)}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
                     <div className="flex flex-wrap items-center gap-6">
                         <span className="text-sub text-text-subtitle">
                             <T keyName="assets.flags.template" />
