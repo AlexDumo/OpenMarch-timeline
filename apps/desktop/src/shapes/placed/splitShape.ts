@@ -88,7 +88,8 @@ export function splitSection(check: SplitCheck): ToolMenuSection {
         items: [
             {
                 value: SPLIT_VALUE,
-                label: tolgee.t("shapes.placed.split", "Split here"),
+                // The field menu's entry's name: one action, one name (`shapeSplitHere`)
+                label: tolgee.t("actions.shape.splitHere", "Shape: Split here"),
                 ...(check.ok ? {} : { disabled: check.reason }),
             },
         ],

@@ -4,6 +4,7 @@ import type { FieldEditor } from "@/field/editor/fieldEditor";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { useBoxSelection } from "../placed/boxSelection";
+import { useSplitHere } from "../placed/useSplitHere";
 import {
     clearReleasedPreview,
     previewPlacedBox,
@@ -80,6 +81,7 @@ export function useShapeFieldModes(
     const box = useBoxSelectionStore((s) => s.selected);
     const queryClient = useQueryClient();
     useBoxSelection({ isPlaying });
+    useSplitHere();
 
     // One live mode per box, told when the box is saved or read again
     const boxId = box?.recipe.id ?? null;

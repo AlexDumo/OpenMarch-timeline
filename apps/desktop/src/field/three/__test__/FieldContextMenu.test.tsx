@@ -317,10 +317,34 @@ describe("FieldContextMenu", () => {
         expect(screen.queryByTestId("field-menu-editSelectedItem")).toBeNull();
     });
 
+    it("offers Split here only where it applies: runnable, or greyed with why (#1336)", () => {
+        handle("shapeSplitHere", { enabled: false, reason: null });
+        open();
+        expect(screen.queryByTestId("field-menu-shapeSplitHere")).toBeNull();
+        cleanup();
+        handle("shapeSplitHere", {
+            enabled: false,
+            reason: "A closed line can't be split yet",
+        });
+        open();
+        expect(screen.getByTestId("field-menu-shapeSplitHere")).toBeTruthy();
+        expect(
+            screen.getByTestId("field-menu-shapeSplitHere-reason"),
+        ).toBeTruthy();
+        cleanup();
+        handle("shapeSplitHere");
+        open();
+        expect(screen.getByTestId("field-menu-shapeSplitHere")).toBeTruthy();
+        expect(
+            screen.queryByTestId("field-menu-shapeSplitHere-reason"),
+        ).toBeNull();
+    });
+
     it("lists the actions in groups, with the page state commands together", () => {
         for (const id of FIELD_MENU_ACTIONS) handle(id);
         handle("shapeGroup", { enabled: false, reason: null });
         handle("shapeUngroup", { enabled: false, reason: null });
+        handle("shapeSplitHere", { enabled: false, reason: null });
         // The Path group shows only what applies: here Edit path, Edit <name>'s line, then after a
         // line Detach, Detach all and Remove path
         for (const id of [

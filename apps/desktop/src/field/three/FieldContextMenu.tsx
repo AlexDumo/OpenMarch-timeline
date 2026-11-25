@@ -59,7 +59,8 @@ import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { useIsTouchMode } from "@/stores/InputModeStore";
 import { useShowShortcutHints } from "@/stores/KeyboardSeenStore";
 import type { FieldMarchers } from "./fieldMarchers";
-import { fieldToElement, useFieldViewStore } from "./fieldView";
+import { elementToField, fieldToElement, useFieldViewStore } from "./fieldView";
+import { useFieldMenuPointStore } from "./fieldMenuPoint";
 import {
     MENU_CONTENT_CLASS,
     POINT_MENU_PLACEMENT,
@@ -179,7 +180,7 @@ const GROUPS: readonly (readonly ActionId[])[] = [
         "pasteFormationInPlace",
         "pasteMirrored",
     ],
-    ["shapeGroup", "shapeUngroup", "shapeEnterBox"],
+    ["shapeGroup", "shapeUngroup", "shapeEnterBox", "shapeSplitHere"],
     PATH,
     PATH_END,
     STATE_GROUP,
@@ -303,6 +304,12 @@ const WHILE_AVAILABLE: ReadonlySet<ActionId> = new Set([
     "timelineHoldOverWindow",
 ]);
 
+/**
+ * Entries about the place the menu was opened at (a placed line's Split here, #1336): shown when
+ * they can run there, or greyed with why; not at all where they don't apply
+ */
+const AT_A_PLACE: ReadonlySet<ActionId> = new Set(["shapeSplitHere"]);
+
 /** Entries about the marcher the menu was opened on: shown only when it was opened on one */
 const ON_A_MARCHER: ReadonlySet<ActionId> = new Set(["shapeEnterBox"]);
 
@@ -413,20 +420,22 @@ export default function FieldContextMenu({
             ? pathShown(id)
             : ON_A_MARCHER.has(id) && marcher === null
               ? false
-              : HOLD_STYLES.has(id)
-                ? holdStyles
-                : WHILE_AVAILABLE.has(id)
-                  ? isActionEnabled(id)
-                  : HOLDS.has(id)
-                    ? timelineMode
-                    : MOVES.has(id)
-                      ? timelineMode && hasActionHandler(id)
-                      : ORDER.has(id)
-                        ? // Gone with Follow-the-leader off (#1095): no handler then
-                          timelineMode &&
-                          selectedCount >= 2 &&
-                          hasActionHandler(id)
-                        : true;
+              : AT_A_PLACE.has(id)
+                ? isActionEnabled(id) || actionDisabledReason(id) !== undefined
+                : HOLD_STYLES.has(id)
+                  ? holdStyles
+                  : WHILE_AVAILABLE.has(id)
+                    ? isActionEnabled(id)
+                    : HOLDS.has(id)
+                      ? timelineMode
+                      : MOVES.has(id)
+                        ? timelineMode && hasActionHandler(id)
+                        : ORDER.has(id)
+                          ? // Gone with Follow-the-leader off (#1095): no handler then
+                            timelineMode &&
+                            selectedCount >= 2 &&
+                            hasActionHandler(id)
+                          : true;
     // Swap's handler counts the marchers (props aren't swapped), so its own state is the answer
     const enabled = (id: ActionId) => isActionEnabled(id);
     // An entry that can't run and can't say why isn't shown: with nobody selected, that's every
@@ -811,20 +820,32 @@ export function useFieldMenu({
             point: MenuPoint,
             marcher: number | null = null,
             actions?: readonly string[],
-        ) =>
+        ) => {
+            useFieldMenuPointStore.setState({
+                at: elementToField(
+                    useFieldViewStore.getState(),
+                    point.x,
+                    point.y,
+                ),
+            });
             setOpen({
                 at: point,
                 marcher,
                 actions: (actions as readonly ActionId[] | undefined) ?? null,
-            }),
+            });
+        },
         [],
     );
-    const close = useCallback(() => setOpen(null), []);
+    const close = useCallback(() => {
+        useFieldMenuPointStore.setState({ at: null });
+        setOpen(null);
+    }, []);
     // A press on the field while the menu is open only closes it, as a click outside a menu
     // does (#315). The menu closes itself on a mouse's press outside it, but after a finger's
     // it waits for a click, which the field's touch handling stops (#876)
     const takePress = useCallback(() => {
         if (!shown.current) return false;
+        useFieldMenuPointStore.setState({ at: null });
         setOpen(null);
         return true;
     }, []);
@@ -835,6 +856,8 @@ export function useFieldMenu({
             if (editor.blocksFieldMenu()) return;
             const center = selectedCenter(marchers);
             const view = useFieldViewStore.getState();
+            // From the keyboard it points at no place on the field
+            useFieldMenuPointStore.setState({ at: null });
             setOpen({
                 at: center
                     ? fieldToElement(view, center.x, center.y)
