@@ -9,6 +9,7 @@ import {
 } from "../history";
 import { updateVenueSettingsInTransaction } from "../view3dVenue";
 import { getStoredVenueSettings, updateVenueSettings } from "../view3dVenue";
+import { pickOnStoredUniform, venuePickBase } from "@/view3d/sync/venuePick";
 import {
     getShowAsset,
     getShowAssetReferences,
@@ -440,6 +441,32 @@ describeDbTests("view3dUniformPack", (it) => {
                     Promise.resolve(1),
                 ),
             ).toEqual({ amended: false });
+        });
+
+        it("keeps the burst's newest version when a 3D View pick was made against an older one", async ({
+            db,
+        }) => {
+            const origin = await store(db, packFile("Home uniform", 1));
+            // the window still sees the origin when its draft ends and Band wears unlocks
+            const seen = (await getStoredVenueSettings({ db }))!;
+            const saved = await saveUniformItemsPack({
+                db,
+                pack: crestPack(4),
+                manifest: readUniformPack(crestPack(4)).manifest,
+                field,
+                versionOf: parseShowAssetRef(origin)!.id,
+                expect: origin,
+            });
+            const written = await updateVenueSettings({
+                db,
+                settings: { ...seen, crowd: !seen.crowd },
+                rebase: (next, stored) =>
+                    pickOnStoredUniform(next, venuePickBase(seen), stored),
+            });
+            expect(written.uniformArtwork).toBe(saved.value);
+            const now = (await getStoredVenueSettings({ db }))!;
+            expect(now.uniformArtwork).toBe(saved.value);
+            expect(now.crowd).toBe(!seen.crowd);
         });
 
         it("rolls back a failing amend and lets an undo queued behind it run", async ({

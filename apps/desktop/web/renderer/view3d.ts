@@ -49,7 +49,7 @@ type FromEditor =
 type FromView3d =
     | { type: "hello" }
     | { type: "bye" }
-    | { type: "venue"; settings: unknown }
+    | { type: "venue"; settings: unknown; base?: unknown }
     | { type: "cameras"; cameras: unknown }
     | { type: "silkArtwork"; silkArtwork: unknown }
     | { type: "uniformPack"; uniformPack: unknown }
@@ -193,6 +193,7 @@ export function registerView3dHost() {
                 case "venue":
                     emit(VIEW3D_VENUE_CHANGE_REQUEST_CHANNEL, {
                         settings: message.settings,
+                        base: message.base,
                     });
                     break;
                 case "cameras":
@@ -403,7 +404,8 @@ export function installView3dApi() {
                 set.delete(listener);
             };
         },
-        requestVenueChange: (settings) => post({ type: "venue", settings }),
+        requestVenueChange: (settings, base) =>
+            post({ type: "venue", settings, base }),
         requestCamerasChange: (cameras) => post({ type: "cameras", cameras }),
         requestSilkArtwork: (silkArtwork) =>
             post({ type: "silkArtwork", silkArtwork }),

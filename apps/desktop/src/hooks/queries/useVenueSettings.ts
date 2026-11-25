@@ -20,6 +20,10 @@ import {
 import { conToastError } from "@/utilities/utils";
 import tolgee from "@/global/singletons/Tolgee";
 import { DEFAULT_STALE_TIME } from "./constants";
+import {
+    pickOnStoredUniform,
+    type VenuePickBase,
+} from "@/view3d/sync/venuePick";
 import { fieldPropertiesQueryOptions } from "./useFieldProperties";
 
 /**
@@ -106,6 +110,39 @@ export const updateVenueSettingsMutationOptions = (qc: QueryClient) =>
             await qc.invalidateQueries({ queryKey: venueSettingsKeys.all() });
         },
         onError: (error, settings) => {
+            conToastError(
+                tolgee.t("view3d.venue.updateFailed"),
+                error,
+                settings,
+            );
+        },
+    });
+
+/**
+ * A 3D View venue pick: like {@link updateVenueSettingsMutationOptions}, but rebased on the venue
+ * stored now, in the write's transaction, when the window sent the uniform it was made against
+ * (`pickOnStoredUniform`)
+ */
+export const venuePickMutationOptions = (qc: QueryClient) =>
+    mutationOptions({
+        mutationFn: ({
+            settings,
+            base,
+        }: {
+            settings: VenueSettings;
+            base?: VenuePickBase;
+        }) =>
+            updateVenueSettings({
+                db,
+                settings,
+                rebase: base
+                    ? (next, stored) => pickOnStoredUniform(next, base, stored)
+                    : undefined,
+            }),
+        onSuccess: async () => {
+            await qc.invalidateQueries({ queryKey: venueSettingsKeys.all() });
+        },
+        onError: (error, { settings }) => {
             conToastError(
                 tolgee.t("view3d.venue.updateFailed"),
                 error,
