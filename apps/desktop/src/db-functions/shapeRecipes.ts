@@ -287,6 +287,18 @@ export async function dropOrderMarksInTransaction(
     await deleteEmptyRecipes(tx);
 }
 
+/** The recipes the page ripple moved in each transaction (`recipesRippledIn`) */
+const rippledRecipes = new WeakMap<object, Set<number>>();
+
+/**
+ * The recipes the page ripple moved to a new count in `tx`. The re-time step after an edit
+ * (`shapeRecipeUpkeep.ts`) leaves them alone: the ripple re-times rows over the whole grid, and its
+ * rule for recipes (with the flag or count they were set on) already placed them, so a recipe it
+ * brought onto a count whose arrivals moved on mustn't follow those too.
+ */
+export const recipesRippledIn = (tx: DbTransaction): ReadonlySet<number> =>
+    rippledRecipes.get(tx) ?? new Set();
+
 /**
  * Moves every recipe's count after a page or beat edit (the page ripple), shapes and order marks
  * alike (ADR 0006 revision of 2026-11-22, §4): `place` gives a recipe's new count from its old one,
@@ -297,6 +309,8 @@ export async function rippleShapeRecipesInTransaction(
     place: (beat: number) => number | null,
 ): Promise<void> {
     if (!(await hasShapeRecipes(tx))) return;
+    const rippled = rippledRecipes.get(tx) ?? new Set<number>();
+    rippledRecipes.set(tx, rippled);
     const all = await tx
         .select({ id: recipes.id, beat: recipes.beat, kind: recipes.kind })
         .from(recipes)
@@ -316,12 +330,13 @@ export async function rippleShapeRecipesInTransaction(
             was: recipe.beat,
             now: next,
         });
-        if (!sameBeat(next, recipe.beat))
-            await tx
-                .update(recipes)
-                .set({ beat: next })
-                .where(eq(recipes.id, recipe.id))
-                .run();
+        if (sameBeat(next, recipe.beat)) continue;
+        rippled.add(recipe.id);
+        await tx
+            .update(recipes)
+            .set({ beat: next })
+            .where(eq(recipes.id, recipe.id))
+            .run();
     }
     if (gone.length > 0)
         await tx.delete(recipes).where(inArray(recipes.id, gone)).run();
@@ -336,11 +351,12 @@ export async function rippleShapeRecipesInTransaction(
 }
 
 /**
- * Recipes of one class the ripple brought onto one count: a marcher stays in the one that was
- * latest before it (then the newest), as saving a recipe takes its marchers out of the others at
- * its count. Recipes left empty are deleted.
+ * Recipes of one class an edit brought onto one count (the page ripple, or a re-time): a marcher
+ * stays in the one that was latest before it (then the newest), as saving a recipe takes its
+ * marchers out of the others at its count. Recipes left empty are deleted. `kept` lists each
+ * recipe's count before (`was`) and after (`now`) the edit, those that didn't move too.
  */
-async function settleRecipesMetInTransaction(
+export async function settleRecipesMetInTransaction(
     tx: DbTransaction,
     kept: readonly { id: number; was: number; now: number }[],
 ): Promise<void> {
