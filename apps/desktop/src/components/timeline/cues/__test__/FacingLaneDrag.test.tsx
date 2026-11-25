@@ -319,4 +319,32 @@ describe("the Facing lane (#993)", () => {
         expect(view.getByTestId("turn-from").textContent).toBe("90°");
         await act(async () => useTurnPopoverStore.getState().close());
     });
+
+    // The simulated director's finding (#993, round 2): the double-click that opens the popover
+    // began with a click that selected the bar's counts, throwing the playhead to the show's end
+    it("leaves the playhead where it was when a double-click opens the popover", async () => {
+        useTimelineSelectionStore.getState().selectRange(3, 9);
+        // As the timeline does: a bar's click selects its counts
+        const onSelectRange = vi.fn((range: TimelineBeatRange) =>
+            useTimelineSelectionStore
+                .getState()
+                .selectRange(range.startBeatIndex, range.endBeatIndex),
+        );
+        const view = renderLane([cue(1, 13, "back", { transition: 3 })], {
+            onSelectRange,
+        });
+        const turn = view.container.querySelector(
+            '[data-testid="facing-lane-turn"]',
+        )!;
+        await clickAt(turn, 12 * PPB);
+        expect(useTimelineSelectionStore.getState().playheadBeat).not.toBe(9);
+        await act(async () => {
+            fireEvent.doubleClick(turn);
+        });
+        expect(await view.findByTestId("turn-popover")).toBeTruthy();
+        const { startBeat, playheadBeat } =
+            useTimelineSelectionStore.getState();
+        expect([startBeat, playheadBeat]).toEqual([3, 9]);
+        await act(async () => useTurnPopoverStore.getState().close());
+    });
 });

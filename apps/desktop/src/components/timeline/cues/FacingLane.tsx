@@ -102,6 +102,9 @@ import {
 } from "./cueLaneParts";
 import { TurnPopover } from "./TurnPopover";
 
+/** A second click this soon after a bar's click is a double-click (the popover's) */
+const DOUBLE_CLICK_MS = 600;
+
 /** The grip where a turn starts: drawn 6 px wide, astride the edge */
 const GRIP_PX = 6;
 
@@ -253,8 +256,24 @@ export function FacingLaneView({
         pick(cueId);
         setMenu({ x: clientX - rect.left, y: clientY - rect.top, cueId });
     };
+    // The window before a bar's click selected its counts, so the double-click that opens the
+    // popover leaves the playhead where it was (the simulated users' finding: the first click threw
+    // it to the end of the show)
+    const beforeClick = useRef<{
+        at: number;
+        startBeat: number;
+        playheadBeat: number;
+    } | null>(null);
     const openPopover = (cueId: number) => {
         pick(cueId);
+        const before = beforeClick.current;
+        beforeClick.current = null;
+        if (before && performance.now() - before.at < DOUBLE_CLICK_MS) {
+            const store = useTimelineSelectionStore.getState();
+            if (before.startBeat < before.playheadBeat)
+                store.selectRange(before.startBeat, before.playheadBeat);
+            else store.seekKeepingStart(before.playheadBeat);
+        }
         useTurnPopoverStore.getState().open(cueId);
     };
 
@@ -346,11 +365,19 @@ export function FacingLaneView({
             window.removeEventListener("pointerup", onUp);
             window.removeEventListener("pointercancel", onCancel);
             // A click selects the cue's counts, as a move's bar does (not with Ctrl or Cmd)
-            if (commit && !dragging && !e.ctrlKey && !e.metaKey)
+            if (commit && !dragging && !e.ctrlKey && !e.metaKey) {
+                const { startBeat, playheadBeat } =
+                    useTimelineSelectionStore.getState();
+                beforeClick.current = {
+                    at: performance.now(),
+                    startBeat,
+                    playheadBeat,
+                };
                 geometry.onSelectRange?.({
                     startBeatIndex: axis.toView(turnStart),
                     endBeatIndex: axis.toView(until),
                 });
+            }
             const write = dragging && commit ? planned : null;
             if (!write) {
                 setDrag(null);
