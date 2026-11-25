@@ -1149,9 +1149,13 @@ function FacingBar({
                 press(e, turn ? "turnStart" : "move");
             }}
         >
-            <span className={clsx("min-w-0 truncate", !turn && "pl-8")}>
-                {label}
-            </span>
+            {/* The front before any cue keeps its words in the tooltip: drawn, they started under
+                the row's name, which covered all but a clipped "0°" */}
+            {isCue && (
+                <span className={clsx("min-w-0 truncate", !turn && "pl-8")}>
+                    {label}
+                </span>
+            )}
             {turn && editable && (
                 // The turn's left edge: where it starts, the one handle for its length
                 <span
