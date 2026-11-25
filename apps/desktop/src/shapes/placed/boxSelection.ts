@@ -17,6 +17,7 @@ import {
     useSavingBoxStore,
 } from "./boxSelectionStore";
 import type { PlacedBox } from "./placedBox";
+import { wholeShapesOf } from "./movedShapes";
 import {
     placedBoxesAt,
     usePlacedBoxStore,
@@ -107,8 +108,9 @@ export function leaveBox(): void {
 
 /**
  * Placed boxes in the field's selection: whether a click selects a whole box (on unless the View
- * tab's Shapes setting is Off, during playback or while the Shape tool is open), and
- * `useBoxSelectionStore.selected`, the box whose members are exactly the selection. You leave the
+ * tab's Shapes setting is Off, during playback or while the Shape tool is open),
+ * `useBoxSelectionStore.selected`, the box whose members are exactly the selection, and `shapes`,
+ * the shapes it's made of when it's several selected whole. You leave the
  * box you're inside when the selection leaves it (a click on the empty field, Escape).
  */
 export function useBoxSelection({ isPlaying }: { isPlaying: boolean }): void {
@@ -165,8 +167,11 @@ export function useBoxSelection({ isPlaying }: { isPlaying: boolean }): void {
             [...ids].every((id) =>
                 insideBox.recipe.members.some((m) => m.marcherId === id),
             );
+        // Several shapes selected whole, which the nudge keys move together (#1236)
+        const shapes = box ? [] : wholeShapesOf(ids, boxes);
         useBoxSelectionStore.setState({
             selected: box,
+            shapes,
             ...(stillInside ? {} : { inside: null }),
         });
     }, [enabled, selected, recipes, ends, version, beat, saving]);

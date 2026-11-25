@@ -68,7 +68,7 @@ export function EditorActionHandlers() {
     const shapeToolOpen = useShapeToolStore((s) => s.tool !== null);
     const shapeHidden = useShapeHidden();
     const boxSelected = useBoxSelectionStore(
-        (s) => s.selected !== null || s.inside !== null,
+        (s) => s.selected !== null || s.shapes.length > 0 || s.inside !== null,
     );
     const shapeDiscarded = useShapeToolStore((s) => s.discarded !== null);
     // The Field panel (#824) takes its keys over everything while it's open

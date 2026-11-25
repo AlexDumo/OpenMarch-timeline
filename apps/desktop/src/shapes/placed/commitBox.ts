@@ -14,9 +14,11 @@ import {
 } from "@/stores/TimelineSelectionStore";
 import { writePlacement, type LinkedPlacement } from "../tool/shapePlacement";
 import type { ShapeContext } from "../types";
+import type { ToolEnv } from "../tool/toolKind";
 import type { LineParams } from "../line/lineGeometry";
 import { followersOf, liveLinks, withoutDeadLinks } from "./shapeLinks";
 import { liveTargets } from "./liveBox";
+import { shapesMoved } from "./movedShapes";
 import type { PlacedBox } from "./placedBox";
 import { placedOrderChoice } from "./placedOrder";
 import { useSavingBoxStore } from "./boxSelectionStore";
@@ -141,6 +143,62 @@ export function commitBox(
         } finally {
             unsaved--;
             // The box read back is the one selected again
+            if (unsaved === 0)
+                useSavingBoxStore.setState({ box: null, beats: [] });
+        }
+    }, undefined);
+}
+
+/**
+ * Moves the placed shapes `boxes`, selected whole together (a linked figure, #1236), `by` field
+ * units: the first through its kind, as a nudge of it alone moves it (`env` snaps it), and every
+ * other the same distance, so each keeps its form and every link between them holds
+ * (`shapesMoved`). Saved as one step, queued with {@link commitBox}'s saves and worked out from
+ * the shapes as the saves before it left them, so quick nudges add up.
+ */
+export function moveShapes(
+    boxes: readonly PlacedBox[],
+    by: XY,
+    env: ToolEnv,
+    queryClient: QueryClient,
+): Promise<void> {
+    if (!currentShapeField() || boxes.length === 0) return Promise.resolve();
+    const at: SaveAt = {
+        plan: planCanvasEdit(),
+        beat: displayedBeat(useTimelineSelectionStore.getState()),
+        waits: unsaved > 0 || historyStepsPending(),
+    };
+    unsaved++;
+    return queueHistoryStep(async () => {
+        try {
+            await timelinePositionsSettled();
+            await placedBoxesRead();
+            // As the saves before it left them; one ungrouped meanwhile isn't moved
+            const [first, ...rest] = boxes
+                .filter((b) => shownStill(b, at.beat))
+                .map((b) => storedBox(b, at.beat));
+            if (!first) return;
+            const params = first.kind.move(first.params, first.spots, by, env);
+            const shown = placedBoxesAt(at.beat);
+            const others = shapesMoved(
+                [first, ...rest],
+                params,
+                carriedOnto(at.plan, first) ? [] : liveLinks(shown, at.beat),
+            );
+            await saveBox(
+                first,
+                params,
+                at,
+                queryClient,
+                undefined,
+                undefined,
+                placedOrderChoice(first),
+                others,
+            );
+        } catch (e) {
+            console.error("Couldn't move the shapes", e);
+        } finally {
+            unsaved--;
             if (unsaved === 0)
                 useSavingBoxStore.setState({ box: null, beats: [] });
         }
