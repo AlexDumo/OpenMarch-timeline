@@ -76,6 +76,22 @@ describe("useSettledFlatsWear", () => {
         expect(held.get(`${sash.key}|tall`)).toBe(0);
     });
 
+    it("lets go of the held atlases when the view closes", async () => {
+        const { c, pending, held } = cache();
+        const plain = wear("plain-0001", 0x111111);
+        const sash = wear("sash-out-0002", 0x222222);
+        const { result, rerender, unmount } = renderHook(
+            ({ w }) => useSettledFlatsWear(w, "average", 32, c),
+            { initialProps: { w: plain } },
+        );
+        rerender({ w: sash });
+        await act(async () => pending.get(`${sash.key}|average`)!());
+        expect(result.current).toBe(sash);
+        expect(held.get(`${sash.key}|average`)).toBe(1);
+        unmount();
+        expect(held.get(`${sash.key}|average`)).toBe(0);
+    });
+
     it("passes the first wear, no wear, and wears nobody has on straight through", () => {
         const { c, pending } = cache();
         const plain = wear("plain-0001", 0x111111);

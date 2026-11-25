@@ -63,6 +63,7 @@ import {
     type PartOption,
     unusedLayers,
 } from "@/view3d/core/uniformPack/modeEdits";
+import { parseShowAssetRef } from "@/showAssets/ref";
 import { uniformArtworkAvailable } from "@/view3d/window/uniformArtworkPreview";
 import { loadFlatsGeometry } from "@/view3d/window/performers/marchers/flatsAtlas";
 import {
@@ -91,8 +92,14 @@ export function UniformModesControls() {
     const [adding, setAdding] = useState(false);
     const [open, setOpen] = useState<string | null>(null);
     const [problem, setProblem] = useState<string | null>(null);
-    /** What the last edit did that isn't obvious on screen */
-    const [notice, setNotice] = useState<string | null>(null);
+    /**
+     * What the last edit did that isn't obvious on screen, and the uniform it was about: shown
+     * until the next action, or until the uniform has modes again (Undo) or is another one
+     */
+    const [notice, setNotice] = useState<{
+        text: string;
+        asset: string;
+    } | null>(null);
 
     const worn = flatsArtworkOf(settings?.uniformArtwork);
     const wornPack = worn && isUniformPackValue(worn) ? worn : null;
@@ -116,14 +123,24 @@ export function UniformModesControls() {
     );
     const loadingReason = editable ? null : t("view3d.uniformModes.loading");
     const { modes } = contents;
+    const asset = parseShowAssetRef(wornPack)?.id ?? wornPack;
+    // an Undo that brings modes back, or another uniform, ends the note
+    if (notice && (modes.length > 0 || notice.asset !== asset)) setNotice(null);
     const unused = unusedLayers(contents);
     const wearing = modeOf(contents, settings?.uniformMode);
     const edit = (
         change: (c: PackContents) => PackContents,
         options?: PackEditOptions,
-    ) => {
-        if (editable) editPack(wornPack, stored, change, options);
-        else setProblem(loadingReason);
+    ): boolean => {
+        if (!editable) {
+            setProblem(loadingReason);
+            return false;
+        }
+        // a new action: the last refusal's reason and the last note are old news
+        setProblem(null);
+        setNotice(null);
+        editPack(wornPack, stored, change, options);
+        return true;
     };
     // a venue change sends the whole venue: while an edit is unsaved, or saved but not yet back
     // in the venue (the drafts' own arrive check, `seenInFlight` and its timer), it would put back
@@ -161,11 +178,14 @@ export function UniformModesControls() {
                             }))}
                             onChange={(uniformMode) => {
                                 if (pickReason) setProblem(pickReason);
-                                else
+                                else {
+                                    setProblem(null);
+                                    setNotice(null);
                                     request({
                                         kind: "uniformMode",
                                         uniformMode,
                                     });
+                                }
                             }}
                             label={t("view3d.uniformModes.wears")}
                             testId="view3d-uniform-mode-picker"
@@ -262,7 +282,7 @@ export function UniformModesControls() {
                             }
                             edit={edit}
                             onRefused={setProblem}
-                            onNotice={setNotice}
+                            onNotice={(text) => setNotice({ text, asset })}
                         />
                     ))}
                 </ul>
@@ -295,7 +315,7 @@ export function UniformModesControls() {
                     role="status"
                     data-testid="view3d-uniform-modes-notice"
                 >
-                    {notice}
+                    {notice.text}
                 </p>
             )}
             {problem && (
@@ -510,14 +530,15 @@ function ModeRow({
     contents: PackContents;
     open: boolean;
     onToggle: () => void;
+    /** Applies an edit; false when it was refused (the uniform is still loading) */
     edit: (
         change: (c: PackContents) => PackContents,
         options?: PackEditOptions,
-    ) => void;
+    ) => boolean;
     /** Says why a greyed-out control did nothing */
     onRefused: (reason: string) => void;
     /** Says what an edit did that isn't obvious on screen */
-    onNotice: (text: string | null) => void;
+    onNotice: (text: string) => void;
 }) {
     const { t } = useTranslate();
     const { palette, options } = contents;
@@ -618,22 +639,30 @@ function ModeRow({
                     testId="view3d-uniform-mode-remove"
                     onRefused={onRefused}
                     onClick={() => {
-                        // the last mode's removal drops the images it didn't show (the pack then
-                        // draws every layer): say so, since nothing else on screen does
-                        const dropped =
+                        // the last mode's removal drops the images and logos it didn't show (the
+                        // pack then draws everything): say so, since nothing else on screen does
+                        const images =
                             count === 1
                                 ? contents.layers.filter(
                                       (l) => !mode.layers.includes(l.id),
                                   ).length
                                 : 0;
-                        edit((c) => removeMode(c, mode.id), { now: true });
-                        onNotice(
-                            dropped > 0
-                                ? t("view3d.uniformModes.lastRemoved", {
-                                      count: dropped,
-                                  })
-                                : null,
-                        );
+                        const items =
+                            count === 1
+                                ? contents.items.filter(
+                                      (i) => !mode.items.includes(i.id),
+                                  ).length
+                                : 0;
+                        const ran = edit((c) => removeMode(c, mode.id), {
+                            now: true,
+                        });
+                        if (ran && images + items > 0)
+                            onNotice(
+                                t("view3d.uniformModes.lastRemoved", {
+                                    images,
+                                    items,
+                                }),
+                            );
                     }}
                 >
                     <TrashIcon size={16} />

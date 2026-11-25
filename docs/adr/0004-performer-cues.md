@@ -630,32 +630,45 @@ Uniform cue exists in the app yet. This sets the contract #976 builds to.
   uniformCurrent?: string[],  // one `library:<id>@<hash>` per uniform
   ```
 
-  Whenever a write sets `uniformArtwork` to a Version of a uniform, it puts
-  that value in `uniformCurrent` in place of the uniform's earlier entry, in
-  the same write. The venue row is under undo, so Undo and Redo move the
-  pointer with the band's uniform. A cue naming `library:X#<mode>` draws the
-  Version `uniformCurrent` holds for X.
+  The pointer only says which Version a cue resolves to. It is not a use:
+  on its own it keeps nothing from being removed (see Removal below).
+  - **Writing it.** Whenever a write sets `uniformArtwork` to a Version of a
+    uniform, it puts that value in `uniformCurrent` in place of the
+    uniform's earlier entry, in the same write. #976 does this in the single
+    helper every venue write goes through (`updateVenueSettingsInTransaction`
+    in `db-functions/view3dVenue.ts`), so no write path can skip it. The
+    venue row is under undo, so Undo and Redo move the pointer with the
+    band's uniform.
+  - **Resolving it.** A cue naming `library:X#<mode>` draws:
+    1. the Version `uniformCurrent` holds for X, when the show still has it;
+    2. otherwise X's newest Version: the entry is missing (a uniform imported
+       before the pointer, never worn, or a venue an older build saved) or
+       stale (its Version was removed);
+    3. otherwise, when the show has no uniform X at all, the band's uniform
+       in its default mode, flagged as below.
   - Example: X v1, an edit makes v2, Undo, then pick uniform Y. The pointer
     for X is back on v1 after the Undo, and picking Y doesn't touch it, so a
-    cue for X draws v1. v2 lingers in the show (Redo was cleared), but nothing
-    names it. "The newest Version" would have drawn the undone v2.
-  - A uniform with no entry (imported before the pointer existed, or never
-    worn) draws its newest Version, and the next write that names it adds
-    its entry.
+    cue for X draws v1. v2 lingers in the show (Redo was cleared), but
+    nothing names it. "The newest Version" would have drawn the undone v2.
+  - Entries for uniforms the show no longer has are dropped the next time
+    the helper writes the venue.
 - **A mode the uniform no longer has** (removed), or a uniform the show no
   longer has, falls back to the band's uniform in its default mode. The cue
   is flagged as a value the compiler doesn't know, like any other.
 - **Removal and delete-protection without a Version.** A version-free value
   protects the uniform by its asset id:
   - Remove unused… (ADR 0010, amendment 2026-11-15) counts a
-    `library:<asset id>#…` value as a use of the Version `uniformCurrent`
-    holds for that asset (the newest only when it has no entry), the one the
-    cue draws. The pointer itself is a reference too: each Version it holds
-    is in use. Older Versions that nothing names, like the undone v2 above,
-    stay removable.
+    `library:<asset id>#…` value as a use of the Version it resolves to (the
+    one `uniformCurrent` holds for that asset, or its newest). So the pointer
+    protects that Version **only while some cue names that uniform**. A
+    uniform no cue names and the band doesn't wear is unused, whatever the
+    pointer says, as ADR 0010 sets out for uniforms ("Removal"). Older
+    Versions that nothing names, like the undone v2 above, stay removable.
   - History: `uniformCurrent` is in the venue row, so the history check
-    (`valuesNamedInHistory`) finds the Versions an undo or redo step would
-    point it back to, as it does for `uniformArtwork`.
+    (`valuesNamedInHistory`) also sees the Versions an undo or redo step
+    would point it back to. Like a value it finds in `uniformArtwork`, such a
+    Version is kept only while a cue in the show names its uniform, since
+    that's when an undo could make a cue draw it.
   - Deleting a uniform that a cue names (any Version) offers "Replace with…"
     and lists the cues that name its asset id, as for a Version-pinned value
     [26.10].
