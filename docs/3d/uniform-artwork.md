@@ -268,7 +268,44 @@ Built in step 3 (fork #1257), with items added in step 4 (fork #1258) and modes 
 - **The same bytes in a show.** A show stores the file as its asset of kind `uniform`, unchanged,
   and Save uniform file writes it back out. This is the first kind of the portable asset file in
   fork #1262.
-- **Preview.** The format can still change until the human test (#1259).
+- **Preview.** The format can still change until the human test (#1259). Packs of format
+  versions 1 to 3 stay readable by every later build, or are refused with a clear message (see
+  [Opt-in preview](#opt-in-preview)).
+
+### Opt-in preview
+
+Built in step 7 (owner decision, 2026-11-24). Making custom uniforms is a preview that each person
+turns on for themselves, because the pack format can still change.
+
+- **The setting.** _Custom uniforms (preview)_ is a switch in the 3D View settings' Preferences tab,
+  saved on this computer. Its description says the feature is a preview and that uniform files may
+  change.
+  - It's off by default in release builds: packaged Electron, and the stable and preview sites.
+  - It's on by default in developer builds (dev servers, the fork's examples and nightly Workers)
+    and in lab builds.
+  - It's saved as `localStorage["view3d.uniformArtwork"]`, `"1"` or `"0"`, the key of the hidden
+    flag it replaces, so a computer that had set the flag to `"1"` finds it on.
+- **What it shows:** the template downloads (PNG, SVG, PDF and JSON), Import uniform…, Save
+  uniform file, Logos and numbers, Modes and the Sample flats entry in the Band uniform picker.
+  With it off, none of them show.
+- **Warnings**, while it's on:
+  - A **Preview** badge beside Band uniform, Logos and numbers, and Modes.
+  - A line under Import uniform… and Save uniform file: "Preview: uniform files may change in a
+    later version of OpenMarch, and uniforms you make now may need to be imported again. Keep your
+    original artwork."
+  - The same text once per computer, as a note that doesn't block anything and closes with
+    **Got it**, after the first import or save.
+- **A show that already uses a custom uniform**, opened with the setting off (a show from a
+  colleague, say):
+  - The band still wears it. It's show data, so a setting on this computer never changes it.
+  - The Band uniform picker lists that one uniform, picked, with the note "This show uses a
+    preview uniform." and a **Turn on custom uniforms** button.
+  - Picking a preset still works, and nothing is removed from the show.
+- **Reading preview packs later.** A later build either reads a pack of format versions 1 to 3, or
+  refuses it with a message that says why; it never draws one wrong. An older build refuses a
+  newer pack with "That uniform file is from a newer version of OpenMarch. Update OpenMarch to
+  import it." A show whose stored uniform can't be read says so in the 3D View settings, and tells
+  the person to update OpenMarch if the uniform came from a newer version.
 
 ### Ways in
 
