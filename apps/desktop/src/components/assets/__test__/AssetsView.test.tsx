@@ -37,6 +37,7 @@ import {
     updateVenueSettings,
 } from "@/db-functions/view3dVenue";
 import { tableNamesToQueryKeys } from "@/hooks/queries/utils";
+import { uniformPackQueryOptions } from "@/hooks/queries/useUniformPack";
 import {
     readUniformPack,
     writeUniformPack,
@@ -64,20 +65,57 @@ vi.mock("@/App", () => ({
 }));
 app.client = harnessQueryClient;
 
-// The uniform pack worker doesn't run in jsdom: read packs here, with the same reader
+// The uniform pack worker doesn't run in jsdom: read packs here, with the same reader, refusing
+// as the worker does. Decoding is stood in for: a PNG whose tag byte is 0xdd (its header reads,
+// its image data doesn't decode) is refused when asked to decode, and while `passingFailures` is
+// above 0 a job fails as a dead worker does.
+const worker = vi.hoisted(() => ({ passingFailures: 0, jobs: 0 }));
+const UNDECODABLE = 0xdd;
 vi.mock("@/view3d/uniformPack/runUniformPackJob", async () => {
-    const { readUniformPack } =
+    const { readUniformPack, UniformPackError } =
         await import("@/view3d/core/uniformPack/format");
+    const { UniformPackJobError } =
+        await import("@/view3d/uniformPack/protocol");
     return {
+        UniformPackJobError,
         runUniformPackJob: async (request: {
             type: string;
             bytes: Uint8Array;
+            decode?: boolean;
         }) => {
             if (request.type !== "pack")
                 throw new Error(`no ${request.type} jobs in this test`);
+            worker.jobs++;
+            if (worker.passingFailures > 0) {
+                worker.passingFailures--;
+                throw new UniformPackJobError("failed", "the worker failed");
+            }
+            let pack;
+            try {
+                pack = readUniformPack(request.bytes);
+            } catch (error) {
+                throw new UniformPackJobError(
+                    error instanceof UniformPackError
+                        ? error.code
+                        : "unreadable",
+                    String(error),
+                );
+            }
+            if (
+                request.decode &&
+                [...pack.layers, ...pack.itemFiles].some(
+                    (f) => f.png[32] === 0xdd,
+                )
+            )
+                throw new UniformPackJobError(
+                    "unreadable",
+                    "the image data doesn't decode",
+                );
             return {
                 type: "pack",
-                manifest: readUniformPack(request.bytes).manifest,
+                manifest: pack.manifest,
+                notes: [],
+                itemSizes: {},
             };
         },
     };
@@ -462,6 +500,44 @@ describeDbTests("Assets view", (it) => {
                 screen.getByTestId("assets-missing-uniform-note"),
             ).toHaveTextContent("isn't in this show anymore"),
         );
+        expect(
+            screen.queryByTestId("assets-unreadable-uniform-note"),
+        ).toBeNull();
+    });
+
+    it("says the uniform can't be read when its header reads but its image data doesn't decode", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        await wearUniform(db, "Undecodable", UNDECODABLE);
+        await setUpFeature(<SidebarModal />, 1, []);
+        await act(async () => showAssetsView());
+        await waitFor(() =>
+            expect(
+                screen.getByTestId("assets-unreadable-uniform-note"),
+            ).toHaveTextContent("can't be read"),
+        );
+        expect(screen.queryByTestId("assets-missing-uniform-note")).toBeNull();
+    });
+
+    it("reads the uniform again after a worker failure instead of keeping it as damaged", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        const value = await wearUniform(db, "Flaky", 13);
+        worker.passingFailures = 1;
+        worker.jobs = 0;
+        await setUpFeature(<SidebarModal />, 1, []);
+        await act(async () => showAssetsView());
+        const read = () =>
+            harnessQueryClient()!.getQueryData(
+                uniformPackQueryOptions(value).queryKey,
+            );
+        // the first read fails as a dead worker does; the retry reads it
+        await waitFor(() => expect(read()).toBeTruthy(), { timeout: 5000 });
+        expect(worker.jobs).toBeGreaterThanOrEqual(2);
         expect(
             screen.queryByTestId("assets-unreadable-uniform-note"),
         ).toBeNull();

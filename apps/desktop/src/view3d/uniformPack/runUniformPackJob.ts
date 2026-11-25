@@ -9,23 +9,16 @@
 import UniformPackWorker from "./uniformPack.worker.ts?worker";
 import {
     UNIFORM_PACK_JOB_TIMEOUT_MS,
-    type UniformPackRefusal,
+    UniformPackJobError,
     type UniformPackRequest,
     type UniformPackResponse,
 } from "./protocol";
 
-export { UNIFORM_PACK_JOB_TIMEOUT_MS } from "./protocol";
-
-/** A job the worker refused, or that failed or ran out of time */
-export class UniformPackJobError extends Error {
-    constructor(
-        readonly code: UniformPackRefusal | "timedOut",
-        message: string,
-    ) {
-        super(message);
-        this.name = "UniformPackJobError";
-    }
-}
+export {
+    UNIFORM_PACK_JOB_TIMEOUT_MS,
+    UniformPackJobError,
+    isPassingPackFailure,
+} from "./protocol";
 
 export type UniformPackResult = Exclude<
     UniformPackResponse,
@@ -74,7 +67,7 @@ export function runUniformPackJob(
             finish(() =>
                 reject(
                     new UniformPackJobError(
-                        "unreadable",
+                        "failed",
                         event.message || "the worker failed",
                     ),
                 ),

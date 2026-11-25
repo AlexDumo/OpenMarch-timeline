@@ -4,8 +4,12 @@
  * version, never across uniforms (fork #1258).
  */
 import { describe, expect, it } from "vitest";
+import { QueryClient } from "@tanstack/react-query";
+import { UniformPackJobError } from "@/view3d/uniformPack/protocol";
 import {
     keepSameUniform,
+    noteUniformPackDamaged,
+    uniformPackQueryOptions,
     uniformEntryOf,
     type StoredUniformPack,
     type UniformPackEntry,
@@ -35,5 +39,51 @@ describe("the band's uniform by id", () => {
         expect(keepSameUniform(v(A, 2))(last)).toBe(last);
         expect(keepSameUniform(v(B, 2))(last)).toBeUndefined();
         expect(keepSameUniform(v(A, 2))(null)).toBeFalsy();
+    });
+});
+
+describe("a uniform's art that didn't compose", () => {
+    const value = v(A, 4);
+    const key = uniformPackQueryOptions(value).queryKey;
+    const read = { value } as StoredUniformPack;
+
+    it("marks the pack unreadable when the worker refused its image", () => {
+        const qc = new QueryClient();
+        qc.setQueryData(key, read);
+        expect(
+            noteUniformPackDamaged(
+                qc,
+                value,
+                new UniformPackJobError("unreadable", "won't decode"),
+            ),
+        ).toBe(true);
+        expect(qc.getQueryData(key)).toBeNull();
+    });
+
+    it("marks nothing when the worker ran out of time or died", () => {
+        const qc = new QueryClient();
+        qc.setQueryData(key, read);
+        for (const error of [
+            new UniformPackJobError("timedOut", "no answer"),
+            new UniformPackJobError("failed", "the worker failed"),
+            new Error("out of memory"),
+        ])
+            expect(noteUniformPackDamaged(qc, value, error)).toBe(false);
+        expect(qc.getQueryData(key)).toBe(read);
+    });
+
+    it("retries a read only when the failure says nothing about the file", () => {
+        const retry = uniformPackQueryOptions(value).retry as (
+            failures: number,
+            error: Error,
+        ) => boolean;
+        expect(retry(0, new UniformPackJobError("failed", "died"))).toBe(true);
+        expect(retry(0, new UniformPackJobError("timedOut", "slow"))).toBe(
+            true,
+        );
+        expect(retry(3, new UniformPackJobError("failed", "died"))).toBe(false);
+        expect(retry(0, new UniformPackJobError("damaged", "bad zip"))).toBe(
+            false,
+        );
     });
 });

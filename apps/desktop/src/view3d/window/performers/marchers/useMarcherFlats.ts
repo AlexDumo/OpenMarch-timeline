@@ -9,10 +9,14 @@
  * palette; its atlases are let go of only then.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
     flatsDpi,
+    isUniformPackValue,
     type FlatsArtworkKey,
 } from "@/view3d/core/marchers/uniformArtwork";
+import { noteUniformPackDamaged } from "@/hooks/queries/useUniformPack";
+import { packPagePlan } from "@/view3d/window/uniformPack/packPage";
 import type { BodyType } from "@/view3d/core/marchers/looks";
 import {
     acquireFlats,
@@ -35,6 +39,7 @@ export function useMarcherFlats(
     looks: readonly MarcherSlotLook[] | null,
     quality: MarcherQuality,
 ): FlatsResources {
+    const qc = useQueryClient();
     const wantedKey = useMemo(() => {
         const out = new Set<string>();
         for (const l of looks ?? []) {
@@ -87,7 +92,16 @@ export function useMarcherFlats(
         Promise.all(
             pairs.map(async ([id, body]) => {
                 const [atlas, lut, { layout }] = await Promise.all([
-                    acquireFlats(id, body, dpi),
+                    acquireFlats(id, body, dpi).catch((error: unknown) => {
+                        // a saved pack whose image the worker refused: the settings, the
+                        // picker and Assets say its art is damaged (a draft's is its editor's)
+                        if (isUniformPackValue(id)) {
+                            const plan = packPagePlan(id);
+                            if (!plan.draft)
+                                noteUniformPackDamaged(qc, plan.pack, error);
+                        }
+                        throw error;
+                    }),
                     loadFlatsLut(body),
                     loadFlatsGeometry(),
                 ]);
@@ -129,7 +143,7 @@ export function useMarcherFlats(
                 held.current.delete(setKey);
             }
         };
-    }, [wantedKey, quality]);
+    }, [wantedKey, quality, qc]);
     const transition = useMemo(
         () =>
             ready && ready.quality === quality && ready.key !== wantedKey

@@ -208,6 +208,20 @@ async function handle(request: UniformPackRequest) {
         }
         case "pack": {
             const pack = readUniformPack(request.bytes);
+            if (request.decode) {
+                // as "flatten" decodes them: a damaged image refuses the pack now
+                for (const { png } of pack.layers)
+                    (await decodePng(png)).bitmap.close();
+                for (const { png } of pack.itemFiles)
+                    (
+                        await decodePng(
+                            png,
+                            undefined,
+                            undefined,
+                            UNIFORM_ITEM_MAX_PIXELS,
+                        )
+                    ).bitmap.close();
+            }
             let notes: ReturnType<typeof pageNotes> = [];
             if (request.regions) {
                 const { canvas } = await pageCanvas(pack.layers[0].png);

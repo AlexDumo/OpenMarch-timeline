@@ -25,6 +25,7 @@ import {
     type UniformPackManifest,
 } from "@/view3d/core/uniformPack/format";
 import { runUniformPackJob } from "@/view3d/uniformPack/runUniformPackJob";
+import { isPassingPackFailure } from "@/view3d/uniformPack/protocol";
 import { conToastError } from "@/utilities/utils";
 import tolgee from "@/global/singletons/Tolgee";
 import { DEFAULT_STALE_TIME } from "./constants";
@@ -111,20 +112,28 @@ export async function readPackManifest(
     return (await readPackInWorker(bytes)).manifest;
 }
 
-/** A pack file's manifest and its item images' sizes, read in the worker */
-async function readPackInWorker(bytes: Uint8Array) {
+/**
+ * A pack file's manifest and its item images' sizes, read in the worker. With `decode`, every
+ * image in it is decoded too, so damaged image data is refused here.
+ */
+async function readPackInWorker(bytes: Uint8Array, decode = false) {
     // a copy: the worker takes it, and callers' bytes may be shared
     const result = await runUniformPackJob({
         type: "pack",
         bytes: bytes.slice(),
+        decode,
     });
     if (result.type !== "pack") throw new Error("uniform pack: no manifest");
     return result;
 }
 
 /**
- * The pack `value` names, read, or null when it names no uniform asset the show has (or its
- * bytes don't read as a pack). Under the assets' key, so adding one refreshes it.
+ * The pack `value` names, read, or null when it names no uniform asset the show has, or its
+ * bytes don't read as a pack, or an image in it doesn't decode (the art couldn't be drawn: see
+ * `wornPackProblem`). Under the assets' key, so adding one refreshes it.
+ *
+ * A worker that ran out of time or died says nothing about the file: that read throws, so it
+ * is tried again (here, and on the next use) rather than kept as "may be damaged" for good.
  */
 export const uniformPackQueryOptions = (value: string | null | undefined) =>
     queryOptions<StoredUniformPack | null>({
@@ -135,16 +144,34 @@ export const uniformPackQueryOptions = (value: string | null | undefined) =>
             try {
                 const { manifest, itemSizes } = await readPackInWorker(
                     stored.bytes,
+                    true,
                 );
                 return { ...stored, manifest, itemSizes };
             } catch (error) {
+                if (isPassingPackFailure(error)) throw error;
                 console.warn("3D View: the show's uniform doesn't read", error);
                 return null;
             }
         },
         enabled: parseShowAssetRef(value) !== null,
         staleTime: DEFAULT_STALE_TIME,
+        retry: (failures, error) => failures < 3 && isPassingPackFailure(error),
     });
+
+/**
+ * Marks the pack `value` names as unreadable, for every view that asks `wornPackProblem`: its
+ * art didn't compose because the worker refused an image in it (fork #1257 hardening). A failure
+ * that says nothing about the file (see `isPassingPackFailure`) marks nothing.
+ */
+export function noteUniformPackDamaged(
+    qc: QueryClient,
+    value: string,
+    error: unknown,
+): boolean {
+    if (isPassingPackFailure(error)) return false;
+    qc.setQueryData(uniformPackQueryOptions(value).queryKey, null);
+    return true;
+}
 
 /**
  * Stores a pack file in the show and dresses the band in it, as one undo step; then refreshes
