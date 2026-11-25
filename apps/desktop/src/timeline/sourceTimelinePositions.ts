@@ -54,6 +54,18 @@ export async function hasTimelineTables(db: DbConnection): Promise<boolean> {
     return rows.length === TIMELINE_TABLES.length;
 }
 
+/** Whether `table` has `column`; a source from before the migration that added it hasn't. */
+async function hasColumn(
+    db: DbConnection,
+    table: string,
+    column: string,
+): Promise<boolean> {
+    const rows = await db.all<{ name: string }>(
+        sql`SELECT name FROM pragma_table_info(${table}) WHERE name = ${column}`,
+    );
+    return rows.length > 0;
+}
+
 /**
  * The last page's end beat in resolver beats, computed the way `fromDatabasePages` and
  * `pageEndBeat` do (without loading those renderer classes into the main process). The last page
@@ -126,7 +138,10 @@ export async function readSourceTimelinePositions({
     });
 
     try {
-        const { snapshot } = await readTimelineTables(db);
+        // A source saved before 0029 has no exact paths (ADR 0018 step 3)
+        const { snapshot } = await readTimelineTables(db, {
+            exactPaths: await hasColumn(db, "timeline_routes", "exact_path"),
+        });
         const resolver = createResolver(snapshot);
         const marcherIds = resolver.marcherIds();
         const buffer = new Float64Array(2 * marcherIds.length);

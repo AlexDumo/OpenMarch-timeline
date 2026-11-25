@@ -6,6 +6,7 @@ import { deleteTimelineTransitionsInTransaction } from "./timelineTransitions";
 import { moveInSentence } from "@/timeline/timelineRangeWords";
 import { readPageGrid, type GridPage, type PageGrid } from "./timelinePageGrid";
 import { rippleOrderMarksInTransaction } from "./shapeRecipes";
+import { retimeExactPathsInTransaction } from "./timelineLanes";
 import {
     readHeldMarkArrivals,
     type HeldMarkArrival,
@@ -699,6 +700,8 @@ export async function rippleTimelineToPageGridInTransaction({
             tx.delete(L).where(inArray(L.id, [...emptied])),
         );
     await deleteStrayEmptyTimelinesInTransaction(tx, pageTimelines, after);
+    // 9. EP-T: an exact path keeps its move's length in ticks (ADR 0018 §5, retime)
+    await mapDbErrors(() => retimeExactPathsInTransaction(tx));
 }
 
 interface Span {
