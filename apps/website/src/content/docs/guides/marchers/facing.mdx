@@ -25,7 +25,7 @@ covers:
   - i18n:cues.facing
   - i18n:cues.turn
   - i18n:field.menu.facing
-  - i18n:toolbar.view.facing
+  - i18n:fieldDisplay.facing
 sidebar:
   order: 7
 ---
@@ -132,12 +132,12 @@ Double-click a turn's bar in the <Ui k="cues.lane.facing" plain /> lane, or righ
 
 ## See facing on the field
 
-To see which way everyone faces, select <Ui k="toolbar.view.facing" /> (the compass) in the bar at the field's top right. It's off when you start; select it again to hide the arrows. The command palette has <Ui k="actions.ui.showFacingArrows" /> and <Ui k="actions.ui.hideFacingArrows" /> too.
+To see which way everyone faces, select <Ui k="fieldDisplay.overlays" /> (the stack of layers) in the bar at the field's top right and turn on <Ui k="fieldDisplay.facing" />. It's off when you start; turn it off again to hide the arrows. The command palette has <Ui k="actions.ui.showFacingArrows" /> and <Ui k="actions.ui.hideFacingArrows" /> too.
 
 <Media
   id="marchers-facing-setting"
-  alt="The bar at the top right of the field, its compass button pressed and its tooltip open beside it: Show facing, Arrows on."
-  maxWidth={240}
+  alt="The Show on field panel open beside the bar at the top right of the field, with Facing turned on under Performers."
+  maxWidth={480}
 />
 
 While it's on, every marcher has an arrow from their dot, pointing the way they face: down the field toward the audience for the front, up for the back, and toward side 1 or side 2 for the sides. Marchers without a facing change face the front, so their arrows point down.
@@ -154,7 +154,7 @@ The arrows follow the playhead: as you scrub or play through a turn, they rotate
 - A drill number moves to the other side of its dot when the arrow points through it: below the dot for a marcher facing the back.
 - Props and equipment don't get an arrow.
 
-With <Ui k="toolbar.view.equipmentOnDot" plain /> chosen under <Ui k="toolbar.view.equipment" plain />, the arrow starts outside the equipment icon instead of the dot ([Change what performers hold](/guides/marchers/equipment/)).
+With <Ui k="fieldDisplay.equipmentOnDot" plain /> chosen for <Ui k="fieldDisplay.equipmentPlace" plain /> in the same panel, the arrow starts outside the equipment icon instead of the dot ([Change what performers hold](/guides/marchers/equipment/)).
 
 ## In the 3D View
 

@@ -1475,18 +1475,19 @@ const shots = [
     {
         id: "venue-on-field",
         kind: "still",
-        // The editor's field with the venue on it (Faint), and the Venue button's menu open
+        // The editor's field with the venue on it (Faint), and the Show on field panel open
         // beside the display bar (fork #1207)
         covers: [
-            "apps/desktop/src/components/canvas/display/VenueButton.tsx",
+            "apps/desktop/src/components/canvas/display/OverlaysButton.tsx",
             "apps/desktop/src/field/three/venueUnderlay",
         ],
         async setup(ctx) {
             const { page } = ctx;
             await tidy(page);
-            const button = page.getByTestId("field-display-venue");
-            await button.click();
-            await page.getByTestId("field-display-venue-faint").click();
+            // Show on field, then Venue on and its look
+            await page.getByTestId("field-display-overlays").click();
+            await page.getByTestId("field-display-venue").click();
+            await page.getByTestId("field-display-venue-look-faint").click();
             await page.getByTestId("field-display-venue-around-edge").click();
             await page.mouse.move(4, ctx.window.height / 2);
             await ctx.wait(1500);
@@ -1511,8 +1512,9 @@ const shots = [
         async setup(ctx) {
             const { page } = ctx;
             await tidy(page);
+            await page.getByTestId("field-display-overlays").click();
             await page.getByTestId("field-display-venue").click();
-            await page.getByTestId("field-display-venue-soft").click();
+            await page.getByTestId("field-display-venue-look-soft").click();
             await page.getByTestId("field-display-venue-around-stands").click();
             await page.keyboard.press("Escape");
             // No tooltip on the button the menu closed back to
@@ -1560,8 +1562,9 @@ const shots = [
         async setup(ctx) {
             const { page } = ctx;
             await tidy(page);
+            await page.getByTestId("field-display-overlays").click();
             await page.getByTestId("field-display-venue").click();
-            await page.getByTestId("field-display-venue-faint").click();
+            await page.getByTestId("field-display-venue-look-faint").click();
             await page.getByTestId("field-display-venue-around-edge").click();
             await page.getByTestId("field-display-venue-camera").click();
             await page.keyboard.press("Escape");

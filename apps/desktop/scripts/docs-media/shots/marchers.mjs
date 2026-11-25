@@ -222,9 +222,15 @@ const hideToasts = (page) =>
         )
         .catch(() => {});
 
-/** Sets the field display bar's Equipment icons choice (`changed`, `everyone`, `off`). */
+/** Opens the field display bar's Show on field panel. */
+async function openOverlays(page, wait) {
+    await page.getByTestId("field-display-overlays").click();
+    await wait(500);
+}
+
+/** Sets Show on field's What they hold choice (`changed`, `everyone`, `off`), leaving the panel open. */
 async function setEquipmentIcons(page, value, wait) {
-    await page.getByTestId("field-display-equipment").click();
+    await openOverlays(page, wait);
     await page.getByTestId(`field-display-equipment-${value}`).click();
     await wait(800);
 }
@@ -966,13 +972,13 @@ const shots = [
     {
         id: "marchers-equipment-icons-setting",
         kind: "still",
-        // The field display bar's Equipment icons choices, open beside the bar
+        // The Show on field panel open beside the field display bar: What they hold, Icon goes
         async setup({ page, wait, union, around }) {
             await toPage1(page, wait);
-            await page.getByTestId("field-display-equipment").click();
-            await wait(800);
+            await openOverlays(page, wait);
+            await wait(300);
             const bar = page.getByTestId("field-display-bar");
-            const pop = page.getByRole("dialog", { name: "Equipment icons" });
+            const pop = page.getByTestId("field-display-overlays-panel");
             return { box: union(await around(bar, 12), await around(pop, 12)) };
         },
     },
@@ -1193,7 +1199,9 @@ const shots = [
             await setFacing(page, SABRES, "facingSide2", wait);
             await setFacing(page, TUBAS, "facingBack", wait);
             await page.keyboard.press("Escape");
+            await openOverlays(page, wait);
             await page.getByTestId("field-display-facing").click();
+            await page.keyboard.press("Escape");
             await page.mouse.move(800, 990);
             await wait(1000);
             await hideToasts(page);
@@ -1213,22 +1221,15 @@ const shots = [
     {
         id: "marchers-facing-setting",
         kind: "still",
-        // The field display bar's Show facing button, pressed, with its tooltip (fork #1316)
+        // The Show on field panel beside the field display bar, Facing on (fork #1316)
         async setup({ page, wait, union, around }) {
             await toPage1(page, wait);
-            const button = page.getByTestId("field-display-facing");
-            await button.click();
-            // Off and back on, so the tooltip opens from a hover rather than the click
-            await button.blur();
-            await page.mouse.move(800, 500);
-            await wait(300);
-            await button.hover();
-            await wait(1500);
-            const tip = page
-                .locator("[data-radix-popper-content-wrapper]")
-                .first();
+            await openOverlays(page, wait);
+            await page.getByTestId("field-display-facing").click();
+            await wait(800);
             const bar = page.getByTestId("field-display-bar");
-            return { box: union(await around(bar, 12), await around(tip, 12)) };
+            const pop = page.getByTestId("field-display-overlays-panel");
+            return { box: union(await around(bar, 12), await around(pop, 12)) };
         },
     },
 ];

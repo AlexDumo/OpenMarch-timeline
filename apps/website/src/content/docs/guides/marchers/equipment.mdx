@@ -18,7 +18,7 @@ covers:
   - action:equipmentIconsOnDot
   - action:equipmentIconsOnNumber
   - action:cueEndAtPlayhead
-  - i18n:toolbar.view.equipment
+  - i18n:fieldDisplay.equipment
   - apps/desktop/src/view3d/window/performers/cueSections.ts
   - packages/core/src/cues/library.ts
   - action:equipmentUsual
@@ -89,23 +89,23 @@ The change is a **cue**: it remembers the performers who were selected when you 
     maxWidth={720}
   />
 
-  To choose who shows an icon, click <Ui k="toolbar.view.equipment" /> in the bar at the field's top right:
+  To choose who shows an icon, select <Ui k="fieldDisplay.overlays" /> (the stack of layers) in the bar at the field's top right, and pick a choice beside <Ui k="fieldDisplay.equipment" />:
 
   - <Ui k="toolbar.view.equipmentChanged" />, the starting choice: only performers holding something other than their own instrument, as above.
   - <Ui k="toolbar.view.equipmentEveryone" />: every performer. Those holding their own instrument show its icon too: a trumpet for the Trumpets, a flag for the Color Guard. A section with no instrument of its own in the list, such as Marimba, shows its section's icon, and one without an icon, such as Timpani, the plain figure.
   - <Ui k="toolbar.view.equipmentOff" />: no icons.
 
-  Under <Ui k="toolbar.view.equipmentPlace" /> in the same popup, choose where the icons go:
+  Beside <Ui k="fieldDisplay.equipmentPlace" />, under it in the same panel, choose where the icons go:
 
-  - <Ui k="toolbar.view.equipmentBeside" />, the starting choice: after the drill number, as above.
-  - <Ui k="toolbar.view.equipmentOnDot" />: the icon stands in for the dot, centered on the performer's spot in the dot's color. You select and drag them as you would the dot, and a selected performer's ring goes around it. A facing arrow starts outside the icon ([Set where marchers face](/guides/marchers/facing/#see-facing-on-the-field)).
-  - <Ui k="toolbar.view.equipmentOnNumber" />: the icon stands in for the drill number. Point at the performer, or select them, to see the number.
+  - <Ui k="fieldDisplay.equipmentBeside" />, the starting choice: after the drill number, as above.
+  - <Ui k="fieldDisplay.equipmentOnDot" />: the icon stands in for the dot, centered on the performer's spot in the dot's color. You select and drag them as you would the dot, and a selected performer's ring goes around it. A facing arrow starts outside the icon ([Set where marchers face](/guides/marchers/facing/#see-facing-on-the-field)).
+  - <Ui k="fieldDisplay.equipmentOnNumber" />: the icon stands in for the drill number. Point at the performer, or select them, to see the number.
 
-  With <Ui k="toolbar.view.equipmentOff" plain /> chosen there's nothing to place, so these choices are greyed out; the ? beside <Ui k="toolbar.view.equipmentPlace" plain /> says why.
+  With <Ui k="toolbar.view.equipmentOff" plain /> chosen there's nothing to place, so these choices are greyed out, and the panel says why under them.
 
   <Media
     id="marchers-equipment-icons-setting"
-    alt="The bar at the top right of the field with its Equipment icons popup open beside it: Changed only, which is chosen, Everyone and Off, then under Where: Next to the number, which is chosen, In place of the dot and In place of the number."
+    alt="The Show on field panel open beside the bar at the top right of the field. Under Performers, What they hold has Changed only, which is chosen, Everyone and Off, and Icon goes, under it, has Beside number, which is chosen, As the dot and As the number."
     maxWidth={480}
   />
 
