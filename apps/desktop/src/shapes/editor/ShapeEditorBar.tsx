@@ -31,6 +31,7 @@ import {
     type Rect,
 } from "@/components/canvas/fieldLayers";
 import { usePlacedBoxPreviewStore } from "../placed/boxSelectionStore";
+import { useMenuOffShape } from "./useMenuOffShape";
 import { keepInView } from "./keepInView";
 import { glideTo, isGliding } from "@/field/three/fieldNavigation";
 import { activeFieldEditor } from "@/field/editor/activeFieldEditor";
@@ -1656,8 +1657,27 @@ function RowsMenu({ target }: { target: ShapeEditTarget }) {
             more: (param: Param) => step(param, 1),
         };
     }, [target]);
+    // A placed shape's number drag is previewed until it's saved on release: the menu shows the
+    // preview meanwhile, so Rows apart and Slant count along with the drag (owner)
+    const previewed = usePlacedBoxPreviewStore((s) =>
+        s.held ? s.params : null,
+    );
+    const params =
+        !target.place && previewed !== null ? previewed : target.params;
+    const { spots } = target;
+    const dragging = useDraggedNumberStore((s) => s.key) !== null;
+    // Off the shape: under the editor, else above it or beside it (owner)
+    const placement = useMenuOffShape({
+        open,
+        trigger: focus.trigger.ref,
+        content: focus.content.ref,
+        kind: target.kind,
+        params,
+        spots,
+        stepPx: envFor()?.stepPx,
+        hold: dragging,
+    });
     if (!rows) return null;
-    const { params, spots } = target;
     const view = rows.view(params, spots);
     if (!view) return null;
     const env = envFor();
@@ -1715,13 +1735,17 @@ function RowsMenu({ target }: { target: ShapeEditTarget }) {
             </Tip>
             <Popover.Portal>
                 <Popover.Content
-                    side="bottom"
-                    align="start"
-                    sideOffset={6}
+                    side={placement.side}
+                    align={placement.align}
+                    sideOffset={placement.sideOffset}
+                    collisionBoundary={placement.collisionBoundary}
+                    collisionPadding={placement.collisionPadding}
+                    style={placement.style}
                     {...focus.content}
                     onPointerDown={(e) => e.stopPropagation()}
-                    className="rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal z-50 flex w-420 flex-col gap-2 border p-8"
+                    className="rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal z-50 flex w-360 flex-col gap-2 border p-8"
                     data-testid="shape-rows-content"
+                    data-where={placement.where}
                 >
                     <div className="flex min-h-24 items-center justify-between gap-8 px-4">
                         <span
