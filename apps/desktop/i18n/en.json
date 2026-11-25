@@ -2698,6 +2698,7 @@
             "chipLabel": "Clipboard: {name}, {count}. {status}. Show details",
             "chipLaidOut": "{count, plural, one {Laid out for # marcher} other {Laid out for # marchers}}",
             "chipLeftOut": "{count, plural, one {# marcher has no spot} other {# marchers have no spot}}",
+            "chipPasting": "Enter places it, Escape discards it",
             "chipShapeOpen": "Place or discard the open shape",
             "fitEmptySpots": "{count, plural, one {With {selected} selected, # spot stays empty} other {With {selected} selected, # spots stay empty}}",
             "fitExact": "{count, plural, one {Fits the # marcher selected} other {Fits the # marchers selected}}",
@@ -2709,7 +2710,9 @@
             "marchers": "{count, plural, one {# marcher} other {# marchers}}",
             "pasteAs": "Paste as",
             "pasteExactlyHint": "Puts the copy on the exact spot it was copied from, and the selected marchers take its spots by shortest walk.",
+            "pasteHint": "Lays the copy out on the selected marchers, centered where they stand.",
             "pasteMirroredHint": "Puts the copy's mirror image across a point you drag, such as the 50, a yard line or a marcher. Choose side to side, front to back or both in its editor.",
+            "pasteMode": "How to paste",
             "pictureLabel": "Picture of the copied formation",
             "positions": "Positions",
             "reasonEmpty": "Nothing is copied",
@@ -3391,7 +3394,8 @@
                 "refitNotNeeded": "The path already fits where its marchers stand",
                 "refitNoFounder": "Nobody starts on this path, so it has no ends to re-fit to",
                 "arcTooRound": "An arc can bend at most into a half circle",
-                "smoothBesideArc": "A point at an end of an arc must be a corner"
+                "smoothBesideArc": "A point at an end of an arc must be a corner",
+                "exactPathFixed": "Exact paths are fixed. Redraw the path to change it."
             },
             "trail": {
                 "tooFew": "Follow is for two or more marchers",

@@ -21,6 +21,8 @@ import {
     type PictureSummary,
 } from "./picture";
 import { useCopiedPictureStore } from "./pictureStore";
+import { useOpenPasteMode } from "./pasteModeStore";
+import { PasteModeSwitch } from "./PasteModeSwitch";
 
 /**
  * What's copied and how it fits the selection now (#961), for the Clipboard chip and its card:
@@ -93,6 +95,8 @@ export function ClipboardCard({
 }) {
     const { t } = useTranslate();
     const { picture, pasteAs, copied, summary, fit, name, drawnCount } = view;
+    // While a paste is open, its three ways are one switch with its own picked (owner 2026-11-25)
+    const pasteMode = useOpenPasteMode();
     return (
         <section
             data-testid="clipboard-section"
@@ -162,31 +166,35 @@ export function ClipboardCard({
                     />
                 </div>
             )}
-            <div className="flex flex-wrap gap-8">
-                <ActionButton
-                    action="pasteFormation"
-                    data-testid="clipboard-paste"
-                    className={CLIPBOARD_BUTTON_CLASS}
-                >
-                    {t("actions.edit.paste")}
-                </ActionButton>
-                <ActionButton
-                    action="pasteFormationInPlace"
-                    data-testid="clipboard-paste-in-place"
-                    hint={t("shapes.clipboard.pasteExactlyHint")}
-                    className={CLIPBOARD_BUTTON_CLASS}
-                >
-                    {t("actions.edit.pasteInPlace")}
-                </ActionButton>
-                <ActionButton
-                    action="pasteMirrored"
-                    data-testid="clipboard-paste-mirrored"
-                    hint={t("shapes.clipboard.pasteMirroredHint")}
-                    className={CLIPBOARD_BUTTON_CLASS}
-                >
-                    {t("actions.edit.pasteMirrored")}
-                </ActionButton>
-            </div>
+            {pasteMode ? (
+                <PasteModeSwitch mode={pasteMode} />
+            ) : (
+                <div className="flex flex-wrap gap-8">
+                    <ActionButton
+                        action="pasteFormation"
+                        data-testid="clipboard-paste"
+                        className={CLIPBOARD_BUTTON_CLASS}
+                    >
+                        {t("actions.edit.paste")}
+                    </ActionButton>
+                    <ActionButton
+                        action="pasteFormationInPlace"
+                        data-testid="clipboard-paste-in-place"
+                        hint={t("shapes.clipboard.pasteExactlyHint")}
+                        className={CLIPBOARD_BUTTON_CLASS}
+                    >
+                        {t("actions.edit.pasteInPlace")}
+                    </ActionButton>
+                    <ActionButton
+                        action="pasteMirrored"
+                        data-testid="clipboard-paste-mirrored"
+                        hint={t("shapes.clipboard.pasteMirroredHint")}
+                        className={CLIPBOARD_BUTTON_CLASS}
+                    >
+                        {t("actions.edit.pasteMirrored")}
+                    </ActionButton>
+                </div>
+            )}
             {/* One line about the fit: how it fits the marchers selected, or with none selected
                 how many it takes (Clear is the chip's X). Room for two lines, so the buttons
                 above it don't move as the selection changes (sims, 2026-11-16) */}

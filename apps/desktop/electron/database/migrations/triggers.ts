@@ -5,7 +5,7 @@ import { DatabaseSync } from "node:sqlite";
  * (migration 0024): a file opened with an older migrations folder, as some migration tests do,
  * logs transitions without it.
  */
-const buildTriggers = (transitionRoute = true) => ({
+const buildTriggers = (transitionRoute = true, routeExact = true) => ({
     prevent_first_beat_modification: `
             CREATE TRIGGER IF NOT EXISTS prevent_first_beat_modification
                 BEFORE UPDATE ON beats
@@ -55,19 +55,31 @@ const buildTriggers = (transitionRoute = true) => ({
             END;
     `,
     ...timelineInvariantTriggers(),
-    ...timelineChangeLogTriggers(transitionRoute),
+    ...timelineChangeLogTriggers(transitionRoute, routeExact),
 });
 const triggers = buildTriggers();
 
-/** Whether the file's `timeline_transitions` has `route_id` (migration 0024). */
-const hasTransitionRoute = (dbConnection: DatabaseSync): boolean =>
+/** Whether the file's `table` has `column`. */
+const hasColumn = (
+    dbConnection: DatabaseSync,
+    table: string,
+    column: string,
+): boolean =>
     (
         dbConnection
             .prepare(
-                "SELECT 1 FROM pragma_table_info('timeline_transitions') WHERE name = 'route_id'",
+                `SELECT 1 FROM pragma_table_info('${table}') WHERE name = '${column}'`,
             )
             .all() as unknown[]
     ).length > 0;
+
+/** Whether the file's `timeline_transitions` has `route_id` (migration 0024). */
+const hasTransitionRoute = (dbConnection: DatabaseSync): boolean =>
+    hasColumn(dbConnection, "timeline_transitions", "route_id");
+
+/** Whether the file's `timeline_routes` has `exact_path` (migration 0029). */
+const hasRouteExact = (dbConnection: DatabaseSync): boolean =>
+    hasColumn(dbConnection, "timeline_routes", "exact_path");
 
 /**
  * Views that depend on tables created by migrations. Dropped before migrations run (so a table
@@ -424,6 +436,7 @@ function exactReal(column: string): string {
  */
 function timelineChangeLogTriggers(
     transitionRoute = true,
+    routeExact = true,
 ): Record<string, string> {
     const loggedTables: {
         table: string;
@@ -462,12 +475,14 @@ function timelineChangeLogTriggers(
                 (transitionRoute ? `, 'route', ${r}.route_id)` : `)`),
         },
         {
-            // Routes are logged like shapes (spec v0.9 §10.2)
+            // Routes are logged like shapes (spec v0.9 §10.2), with their exact path (ADR 0018
+            // step 3) when the file has the column
             table: "timeline_routes",
             logicalName: "routes",
             rowId: (r) => `${r}.id`,
             image: (r) =>
-                `json_object('id', ${r}.id, 'geometry', json(${r}.geometry))`,
+                `json_object('id', ${r}.id, 'geometry', json(${r}.geometry)` +
+                (routeExact ? `, 'exact', json(${r}.exact_path))` : `)`),
         },
         {
             // Lanes are logged like routes (spec v0.10 J.1, §10.2); the resolver reads them from
@@ -555,7 +570,10 @@ export const recreateChangeLogTriggers = (dbConnection: DatabaseSync) =>
         dbConnection,
         onExistingTables(
             dbConnection,
-            timelineChangeLogTriggers(hasTransitionRoute(dbConnection)),
+            timelineChangeLogTriggers(
+                hasTransitionRoute(dbConnection),
+                hasRouteExact(dbConnection),
+            ),
         ),
     );
 
@@ -666,7 +684,10 @@ export const createAllTriggers = (dbConnection: DatabaseSync) => {
     for (const [name, trigger] of Object.entries(
         onExistingTables(
             dbConnection,
-            buildTriggers(hasTransitionRoute(dbConnection)),
+            buildTriggers(
+                hasTransitionRoute(dbConnection),
+                hasRouteExact(dbConnection),
+            ),
         ),
     )) {
         try {
@@ -689,13 +710,15 @@ export const createAllTriggers = (dbConnection: DatabaseSync) => {
 /**
  * The statements `dropAllTriggers` and `createAllTriggers` run, for a caller without a raw
  * connection (tests that convert through the SQL proxy). `tables` are the file's tables after the
- * migrations, and `transitionRoute` whether `timeline_transitions` has `route_id`.
+ * migrations, `transitionRoute` whether `timeline_transitions` has `route_id`, and `routeExact`
+ * whether `timeline_routes` has `exact_path`.
  */
 export function triggerStatements(
     tables: ReadonlySet<string>,
     transitionRoute: boolean,
+    routeExact = true,
 ): { drop: string[]; create: string[] } {
-    const all = buildTriggers(transitionRoute);
+    const all = buildTriggers(transitionRoute, routeExact);
     return {
         drop: [
             ...Object.keys(triggers).map(

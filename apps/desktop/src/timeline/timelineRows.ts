@@ -6,6 +6,7 @@ import type {
     PathParams,
     PathStyle,
     RouteGeometry,
+    ExactPath,
     RouteRow,
     RowImage,
     ShapeKind,
@@ -14,7 +15,7 @@ import type {
     TransitionRow,
     XY,
 } from "@openmarch/core";
-import { asc } from "drizzle-orm";
+import { asc, sql } from "drizzle-orm";
 // The schema itself, not the renderer's `@/global/database/db`: the main process loads this module
 // (through `sourceTimelinePositions`, for the previous-show import).
 import * as schema from "@om-electron/database/migrations/schema";
@@ -96,6 +97,11 @@ export const transitionFromRow = (row: TransitionDbRow): TransitionRow => ({
 /** A route (spec v0.9 §5.2): its geometry, parsed. */
 export const routeFromRow = (row: RouteDbRow): RouteRow => ({
     geometry: JSON.parse(row.geometry) as RouteGeometry,
+    // An exact path (ADR 0018 step 3), walked in place of `geometry`
+    exact:
+        row.exact_path === null
+            ? null
+            : (JSON.parse(row.exact_path) as ExactPath),
 });
 
 /** A lane (spec v0.10 J.1): its slot, route and start offset (null for an own lane). */
@@ -192,7 +198,7 @@ export const transitionFromImage = (image: RowImage): TransitionRow => {
     };
 };
 
-/** A route from its change-log image `{id, geometry}` (spec v0.9 §10.2). */
+/** A route from its change-log image `{id, geometry, exact}` (spec v0.9 §10.2, ADR 0018 step 3). */
 export const routeFromImage = (image: RowImage): RouteRow => ({
     geometry: field<RouteGeometry>(
         image,
@@ -200,6 +206,8 @@ export const routeFromImage = (image: RowImage): RouteRow => ({
         "routes",
         (v) => typeof v === "object" && v !== null,
     ),
+    // absent in an image from a file without the column (before migration 0029)
+    exact: (image.exact ?? null) as ExactPath | null,
 });
 
 /** A lane from its change-log image `{id, transition, slot, route, offset, adjust}` (spec v0.10). */
@@ -276,8 +284,18 @@ export interface TimelineTables {
     destinations: SlotDestinationIndex;
 }
 
+/** How `readTimelineTables` reads a file that may predate a column (another `.dots` file, never migrated). */
+export interface TimelineTableReadOptions {
+    /** Whether `timeline_routes` has `exact_path` (migration 0029); without it every route is drawn */
+    exactPaths?: boolean;
+}
+
 /** The seven reads of a cold build, in the order a snapshot assembles them. */
-function timelineTableQueries(db: DbConnection | DbTransaction) {
+function timelineTableQueries(
+    db: DbConnection | DbTransaction,
+    { exactPaths = true }: TimelineTableReadOptions = {},
+) {
+    const R = schema.timeline_routes;
     return [
         db
             .select({
@@ -294,7 +312,15 @@ function timelineTableQueries(db: DbConnection | DbTransaction) {
             .from(schema.timeline_assignments)
             .orderBy(asc(schema.timeline_assignments.id)),
         db.select().from(schema.timeline_slot_destinations),
-        db.select().from(schema.timeline_routes),
+        db
+            .select({
+                id: R.id,
+                geometry: R.geometry,
+                exact_path: exactPaths
+                    ? R.exact_path
+                    : sql<string | null>`NULL`,
+            })
+            .from(R),
         db.select().from(schema.timeline_lanes),
     ] as const;
 }
@@ -342,6 +368,7 @@ function assembleTimelineTables([
  */
 export async function readTimelineTables(
     db: DbConnection | DbTransaction,
+    options?: TimelineTableReadOptions,
 ): Promise<TimelineTables> {
     const [
         marchers,
@@ -351,7 +378,7 @@ export async function readTimelineTables(
         slotDestinations,
         routes,
         lanes,
-    ] = timelineTableQueries(db);
+    ] = timelineTableQueries(db, options);
     return assembleTimelineTables([
         await marchers,
         await shapes,

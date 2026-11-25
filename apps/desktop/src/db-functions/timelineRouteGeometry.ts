@@ -2,22 +2,26 @@
  * The one place a route's geometry is rewritten (pathways step 3b, spec v0.10 AP-H1): every path
  * edit, redraw, cut and Re-fit goes through `writeRouteGeometryInTransaction`, so a key anchored on
  * a point that went is re-homed in the same edit and never dropped silently. A new route has
- * nothing anchored on it, so inserting one doesn't come here.
+ * nothing anchored on it, so inserting one doesn't come here. An exact path (ADR 0018 step 3) is
+ * refused here: it changes only by being drawn again, set again, cut or retimed, which write it
+ * through `writeExactPathInTransaction` below.
  *
  * What AP-H1 also names and doesn't exist yet plugs in here beside the lanes' profiles: handoff
  * ramps (step 25), pins and holds (step 5) and linked Adjusts (step 26). AP-R21's merge and join
  * (still refused, AP-R6) write through this helper when they arrive.
  */
 import {
+    exactEnd,
     isRouteBulge,
     limitRouteEdit,
     rehomeProfile,
     smoothBesideArc,
     validateRouteGeometry,
     type AdjustProfile,
+    type ExactPath,
     type RouteGeometry,
 } from "@openmarch/core";
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { schema } from "@/global/database/db";
 import { text } from "@/timeline/timelineText";
 import type { DbTransaction } from "./types";
@@ -30,6 +34,12 @@ export const arcRefusal = {
     tooRound: () => text.t("timeline.refusals.route.arcTooRound"),
     /** A smooth point at an end of an arc leg */
     smoothBesideArc: () => text.t("timeline.refusals.route.smoothBesideArc"),
+};
+
+/** ADR 0018 §5's refusal for an exact path, with the reason the app shows */
+export const exactPathRefusal = {
+    /** A point drag, Corner/Smooth, Re-fit, Adjust or any other edit of its drawn geometry */
+    fixed: () => text.t("timeline.refusals.route.exactPathFixed"),
 };
 
 /**
@@ -117,6 +127,8 @@ export async function writeRouteGeometryInTransaction(
     const L = schema.timeline_lanes;
     const row = await tx.select().from(R).where(eq(R.id, routeId)).get();
     if (!row) refuse(`route ${routeId} does not exist`);
+    // An exact path is fixed (ADR 0018 §5): only drawing it again replaces it, which clears it first
+    if (row.exact_path !== null) refuse(exactPathRefusal.fixed());
     refuseArcRules(next);
     const old = JSON.parse(row.geometry) as RouteGeometry;
     const adjusted = (await lanesOfRoute(tx, routeId)).flatMap((lane) => {
@@ -150,4 +162,48 @@ export async function writeRouteGeometryInTransaction(
         else report.clearedSpots++;
     }
     return report;
+}
+
+/** The plain route geometry beside an exact path: its ends and no points. */
+export const exactRouteGeometry = (path: ExactPath): RouteGeometry => {
+    const end = exactEnd(path);
+    return {
+        v: 1,
+        from: [path.from[0], path.from[1]],
+        to: [end[0], end[1]],
+        points: [],
+    };
+};
+
+/**
+ * Writes route `routeId`'s exact path (ADR 0018 step 3): `exact` a path stores it, with the path's
+ * ends as its geometry; `exact` null clears it, the route then walking `geometry` (its stored one
+ * when omitted). Only an own lane walks an exact path and an Adjust lives only on a group path's
+ * lane, so there is nothing to re-home.
+ */
+export async function writeExactPathInTransaction(
+    tx: DbTransaction,
+    routeId: number,
+    exact: ExactPath | null,
+    geometry?: RouteGeometry,
+): Promise<void> {
+    const R = schema.timeline_routes;
+    const plain = exact ? exactRouteGeometry(exact) : geometry;
+    if (plain) {
+        refuseArcRules(plain);
+        assertValid(validateRouteGeometry(plain), "route");
+    }
+    await tx
+        .update(R)
+        .set({
+            exact_path: exact ? JSON.stringify(exact) : null,
+            ...(plain ? { geometry: JSON.stringify(plain) } : {}),
+        })
+        // Clearing a path that isn't there writes nothing (no undo step, no change)
+        .where(
+            plain
+                ? eq(R.id, routeId)
+                : and(eq(R.id, routeId), isNotNull(R.exact_path)),
+        );
+    if (plain) await markArcsInTransaction(tx, plain);
 }

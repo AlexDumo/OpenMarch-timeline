@@ -28,7 +28,7 @@ Use this template:
 - [0003: App menu items run renderer actions over one IPC channel](0003-menu-actions-ipc.md)
 - [0004: Performer cues in the show file](0004-performer-cues.md)
 - [0005: A three.js field behind a renderer-independent editor](0005-three-field-renderer.md)
-- [0006: Shapes are stored as recipes beside the positions they place](0006-shape-recipes.md)
+- [0006: Shapes are stored as recipes beside the positions they place](0006-shape-recipes.md) (revision accepted 2026-11-25: a shape at a count, membership by listing, one identity per shape)
 - [0007: Tempo mode stores holds, tempo changes, time signatures, measure numbers and the music offset in the show](0007-tempo-mode-storage.md)
 - [0009: Show issues: pure checks, a worker sweep, and dismissals in the show file](0009-show-issues.md)
 - [0010: 3D View window, venues and sync contract](0010-3d-view.md)

@@ -43,6 +43,7 @@ import {
     type ResolvedAdjust,
     type RouteWalk,
 } from "./geom";
+import { exactWalker, type ExactWalker } from "./exactPath";
 import type {
     AssignmentRow,
     Beat,
@@ -352,7 +353,12 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
     // routeGeometry (9.2 #7): route -> points, from, to; and its group schedule (J.7), on first use
     const routeGeo = new Map<
         number,
-        { walk: RouteWalk; schedule: GroupSchedule | null }
+        {
+            walk: RouteWalk;
+            schedule: GroupSchedule | null;
+            /** An exact path's walker (ADR 0018 step 3), keeping its last followed player */
+            exact: ExactWalker | null;
+        }
     >();
     // ---- cascading caches (9.2 #5-6)
     const origins = new Map<string, XY>(); // `${m}|${start}` -> xy
@@ -431,6 +437,7 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
                         : { toBulge: r.geometry.toBulge }),
                 },
                 schedule: null,
+                exact: r.exact ? exactWalker(r.exact) : null,
             });
     }
     for (const t of Object.values(host.transitions)) {
@@ -641,6 +648,8 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
             throw new Error(
                 `lane ${id} on ${tid}:${slot} has no route ${lane.route} (I-D3)`,
             );
+        if (geo.exact)
+            return { route: geo.walk, offset: null, exact: geo.exact };
         if (lane.offset === null) return { route: geo.walk, offset: null };
         geo.schedule ??= groupSchedule(geo.walk);
         return {
@@ -1134,9 +1143,15 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
             if (t.style !== FTL)
                 return `stale ftlEntry ${tid}: transition is not follow-the-leader`;
         }
-        for (const rid of routeGeo.keys())
-            if (!host.routes?.[rid])
-                return `stale routeGeometry ${rid}: route deleted`;
+        for (const [rid, geo] of routeGeo) {
+            const r = host.routes?.[rid];
+            if (!r) return `stale routeGeometry ${rid}: route deleted`;
+            if (
+                JSON.stringify(r.exact ?? null) !==
+                JSON.stringify(geo.exact?.path ?? null)
+            )
+                return `stale exact path on route ${rid}`;
+        }
         for (const [tid, rid] of trailOf)
             if ((tMaybe(tid)?.route ?? null) !== rid)
                 return `stale trail index for transition ${tid}`;
