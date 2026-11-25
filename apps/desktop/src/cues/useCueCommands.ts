@@ -39,6 +39,12 @@ import {
     facingValueOf,
     type FacingChoice,
 } from "./facing";
+import {
+    facingSplitVariant,
+    partOf,
+    planFacingSplit,
+    useSplitFollowStore,
+} from "./facingSplit";
 
 /**
  * The beat a cue made at the paused playhead sits on: the beat whose click is the playhead. Spec
@@ -124,6 +130,10 @@ export interface CueCommands {
         readonly transition?: number | null;
     }) => void;
     readonly deleteCue: () => void;
+    /** PROTOTYPE: the selected part of the picked Facing cue, when it's some but not all */
+    readonly splitPart: readonly number[] | null;
+    /** PROTOTYPE: splits the selected part of the picked Facing cue into their own cue */
+    readonly splitSelected: () => void;
 }
 
 /** A cue's name for these performers, after its performers change: who they are. */
@@ -369,6 +379,25 @@ export function useCueCommands(): CueCommands {
             editTurn: ({ choice, transition }) => {
                 if (!cue || !show || cue.type !== "facing") return;
                 const set = choice ? facingValueOf(choice) : null;
+                // PROTOTYPE variant A: the dial edits only the selected part of the cue
+                const part =
+                    facingSplitVariant() === "A"
+                        ? partOf(cue, selectedIds)
+                        : null;
+                if (part) {
+                    const plan = planFacingSplit({
+                        cues: show.cues,
+                        cueId: cue.id,
+                        marcherIds: part,
+                        change: transition !== undefined ? { transition } : {},
+                        ...(set ? { set } : {}),
+                        relabelFor: relabelIn(show, words),
+                    });
+                    if (!plan) return;
+                    useSplitFollowStore.getState().follow(part, true);
+                    edit(plan);
+                    return;
+                }
                 const changed =
                     (set !== null &&
                         (set.value !== cue.value ||
@@ -387,6 +416,22 @@ export function useCueCommands(): CueCommands {
                         },
                     ],
                 });
+            },
+            splitPart:
+                cue && cue.type === "facing" ? partOf(cue, selectedIds) : null,
+            splitSelected: () => {
+                if (!cue || !show || cue.type !== "facing") return;
+                const part = partOf(cue, selectedIds);
+                if (!part) return;
+                const plan = planFacingSplit({
+                    cues: show.cues,
+                    cueId: cue.id,
+                    marcherIds: part,
+                    relabelFor: relabelIn(show, words),
+                });
+                if (!plan) return;
+                useSplitFollowStore.getState().follow(part, false);
+                edit(plan);
             },
             deleteCue: () => {
                 if (!cue) return;

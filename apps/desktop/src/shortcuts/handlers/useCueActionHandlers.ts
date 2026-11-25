@@ -1,4 +1,5 @@
 import { equipmentCatalog, EQUIPMENT_NONE } from "@openmarch/core";
+import { useFacingSplitVariant } from "@/cues/facingSplitVariant";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import tolgee from "@/global/singletons/Tolgee";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
@@ -315,6 +316,23 @@ export function useCueActionHandlers() {
                       : undefined),
         },
     );
+    // PROTOTYPE (facing split study): variants B and C
+    const splitVariant = useFacingSplitVariant();
+    useActionHandler("cueSplitSelected", () => commands.splitSelected(), {
+        enabled:
+            (splitVariant === "B" || splitVariant === "C") &&
+            editable &&
+            commands.splitPart !== null,
+        disabledReason:
+            cueWhy ??
+            (!facingCue
+                ? tolgee.t("cues.reason.notFacing")
+                : commands.selectedIds.length === 0
+                  ? tolgee.t("actions.shape.noMarchersSelected")
+                  : commands.splitPart === null
+                    ? tolgee.t("cues.reason.splitWhole")
+                    : undefined),
+    });
     const lasting = commands.cue?.length === null;
     // Facing cues are lasting only (#993)
     const lastingOnly = facingCue

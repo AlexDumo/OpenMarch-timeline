@@ -337,7 +337,8 @@
             "facingAngle": "Facing: Angle…",
             "facingKeywords": "facing face turn direction angle degrees spin front back side",
             "editTurn": "Edit turn…",
-            "toggleFacingLane": "Show or hide the Facing lane"
+            "toggleFacingLane": "Show or hide the Facing lane",
+            "splitSelected": "Split selected into their own cue"
         },
         "path": {
             "pen": "Path pen",
@@ -4493,7 +4494,10 @@
             "keyHint": "Click to select who changes here, Shift-click to add them. Drag to move.",
             "keyHintPlaying": "Click to select who changes here. Pause to move it.",
             "keySelectAll": "Select everyone who changes here",
-            "keySelectGroup": "Select {name}"
+            "keySelectGroup": "Select {name}",
+            "partOf": "{part} of {count}",
+            "splitChip": "Split off",
+            "partHint": "{part} of these {count} performers are selected"
         },
         "item": {
             "flag": "Flag",
@@ -4573,7 +4577,8 @@
             "movesBasic": "Moves have bars in Expert only",
             "notFacing": "Pick a turn in the Facing lane first",
             "facingLasting": "Facing cues last until the next one",
-            "pausedFacing": "Pause to change facing"
+            "pausedFacing": "Pause to change facing",
+            "splitWhole": "Select some of its performers, not all of them"
         },
         "facing": {
             "front": "Front",

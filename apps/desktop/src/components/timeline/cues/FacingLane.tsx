@@ -20,6 +20,7 @@
  * - A press on empty lane space is the timeline's, as on the audio lane.
  */
 import {
+    useEffect,
     useMemo,
     useRef,
     useState,
@@ -28,7 +29,7 @@ import {
     type ReactNode,
 } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { EyeSlashIcon } from "@phosphor-icons/react";
+import { ArrowsSplitIcon, EyeSlashIcon } from "@phosphor-icons/react";
 import { useTranslate } from "@tolgee/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
@@ -70,6 +71,14 @@ import {
     type FacingRow,
 } from "@/cues/facing";
 import { compileShowCues } from "@/cues/showCues";
+import {
+    cueFor,
+    partOf,
+    planFacingSplit,
+    useFacingSplitVariant,
+    useSplitFollowStore,
+    type FacingSplitVariant,
+} from "@/cues/facingSplit";
 import { countToSpecBeat } from "@/cues/equipmentLane";
 import { useShowCues, type EditorCues } from "@/cues/useShowCues";
 import { pickedCueIn, useCueSelectionStore } from "@/cues/cueSelectionStore";
@@ -244,6 +253,18 @@ export function FacingLaneView({
         short: (icon: string, amount: string) =>
             t("cues.lane.turnLabelShort", { icon, amount }),
     };
+    // PROTOTYPE (facing split study)
+    const variant = useFacingSplitVariant();
+    const followIds = useSplitFollowStore((s) => s.ids);
+    useEffect(() => {
+        if (!followIds || !show) return;
+        const made = cueFor(show.cues, followIds);
+        if (!made) return;
+        const { popover, clear } = useSplitFollowStore.getState();
+        clear();
+        pickCue(made);
+        if (popover) useTurnPopoverStore.getState().open(made.id);
+    }, [followIds, show, pickCue]);
     const [menu, setMenu] = useState<CueMenu | null>(null);
     const [keyMenu, setKeyMenu] = useState<KeyMenu | null>(null);
     const [drag, setDrag] = useState<LaneDrag | null>(null);
@@ -265,7 +286,23 @@ export function FacingLaneView({
     // While dragging, the lane as the drop would leave it: the same edit, compiled
     const previewLane = useMemo(() => {
         if (!drag?.edit || !show) return null;
-        const cues = withEquipmentSet(show.cues, drag.edit);
+        // PROTOTYPE: a split's new cue is drawn too, under a stand-in id
+        const cues = withEquipmentSet(show.cues, drag.edit).concat(
+            drag.edit.newCues.map((n, i) => ({
+                id: -1 - i,
+                type: n.type,
+                beatId: n.beatId,
+                value: n.value,
+                settings: n.settings ?? {},
+                length: n.length ?? null,
+                transition: n.transition ?? null,
+                marcherIds: [...n.marcherIds],
+                label: n.label ?? null,
+                notes: n.notes ?? null,
+                createdAt: "",
+                updatedAt: "",
+            })),
+        );
         return facingLane({
             compiled: compileShowCues(show.marchers, beats, cues).compiled,
             cues,
@@ -378,6 +415,7 @@ export function FacingLaneView({
         cueIds: readonly number[],
         plan: ((ev: PointerEvent) => CueEdit | null) | null,
         onClick: () => void,
+        onWrite?: () => void,
     ) => {
         e.currentTarget.setPointerCapture(e.pointerId);
         const startX = e.clientX;
@@ -401,6 +439,7 @@ export function FacingLaneView({
                 setDrag(null);
                 return;
             }
+            onWrite?.();
             edit(write, { onSettled: () => setDrag(null) });
         };
         const onUp = (ev: PointerEvent) => {
@@ -442,6 +481,18 @@ export function FacingLaneView({
         const floor = specAt(near.previous ?? 0);
         const landAt = snapper();
         const startX = e.clientX;
+        // PROTOTYPE variant A: an edit in a partly-selected row splits the selected off first
+        const part = variant === "A" ? partOf(cue, selectedIds) : null;
+        const change = (c: { beatId?: number; transition?: number | null }) =>
+            part
+                ? planFacingSplit({
+                      cues: show.cues,
+                      cueId,
+                      marcherIds: part,
+                      change: c,
+                      relabelFor: relabelIn(show, words),
+                  })
+                : cueChangeEdit(show, cueId, c, words);
         const plan = (ev: PointerEvent): CueEdit | null => {
             const offset = (ev.clientX - startX) / ppb;
             if (mode === "move") {
@@ -452,12 +503,7 @@ export function FacingLaneView({
                 );
                 return delta === 0
                     ? null
-                    : cueChangeEdit(
-                          show,
-                          cueId,
-                          { beatId: beats[at + delta]!.id },
-                          words,
-                      );
+                    : change({ beatId: beats[at + delta]!.id });
             }
             // The result's start begins the turn from the cue's count; the turn's, from its start
             const origin = mode === "resultStart" ? at : turnStart;
@@ -467,31 +513,60 @@ export function FacingLaneView({
                 floor,
                 delta: landAt(ev, axis.toView(origin), offset),
             });
-            return cueChangeEdit(
-                show,
-                cueId,
-                { transition: turned.transition },
-                words,
-            );
+            return turned.transition === cue.transition
+                ? null
+                : change({ transition: turned.transition });
         };
         const ctrl = e.ctrlKey || e.metaKey;
-        follow(e, [cueId], plan, () => {
-            // A click selects the cue's counts, as a move's bar does (not with Ctrl or Cmd)
-            if (ctrl) return;
-            // A double-click's second click keeps what the first found: by then the first has
-            // moved the playhead
-            const now = performance.now();
-            const earlier = beforeClick.current;
-            if (!earlier || now - earlier.at >= DOUBLE_CLICK_MS) {
-                const { startBeat, playheadBeat } =
-                    useTimelineSelectionStore.getState();
-                beforeClick.current = { at: now, startBeat, playheadBeat };
-            }
-            geometry.onSelectRange?.({
-                startBeatIndex: axis.toView(turnStart),
-                endBeatIndex: axis.toView(until),
-            });
+        const onWrite = part
+            ? () => useSplitFollowStore.getState().follow(part, false)
+            : undefined;
+        follow(
+            e,
+            [cueId],
+            plan,
+            () => {
+                // A click selects the cue's counts, as a move's bar does (not with Ctrl or Cmd)
+                if (ctrl) return;
+                // A double-click's second click keeps what the first found: by then the first has
+                // moved the playhead
+                const now = performance.now();
+                const earlier = beforeClick.current;
+                if (!earlier || now - earlier.at >= DOUBLE_CLICK_MS) {
+                    const { startBeat, playheadBeat } =
+                        useTimelineSelectionStore.getState();
+                    beforeClick.current = { at: now, startBeat, playheadBeat };
+                }
+                geometry.onSelectRange?.({
+                    startBeatIndex: axis.toView(turnStart),
+                    endBeatIndex: axis.toView(until),
+                });
+            },
+            onWrite,
+        );
+    };
+    /** PROTOTYPE variant C: the row's chip splits the selected part of its cue off */
+    const splitRow = (row: FacingRow) => {
+        if (!show) return;
+        const rowCues = [
+            ...new Set(
+                row.pieces.flatMap((p) => (p.cueId === null ? [] : [p.cueId])),
+            ),
+        ];
+        const cueId =
+            picked !== null && rowCues.includes(picked) ? picked : rowCues[0];
+        const cue = show.cues.find((c) => c.id === cueId);
+        const part = cue ? partOf(cue, selectedIds) : null;
+        if (!cue || !part) return;
+        const plan = planFacingSplit({
+            cues: show.cues,
+            cueId: cue.id,
+            marcherIds: part,
+            relabelFor: relabelIn(show, words),
         });
+        if (!plan) return;
+        useSplitFollowStore.getState().follow(part, false);
+        edit(plan);
     };
 
     /**
@@ -721,6 +796,9 @@ export function FacingLaneView({
                             <RowName
                                 row={row}
                                 name={rowName(row.marcherIds, row.label)}
+                                selected={selected}
+                                variant={variant}
+                                onSplit={() => splitRow(row)}
                             />
                         </div>
                     ))}
@@ -771,15 +849,25 @@ export function FacingLaneView({
                             side2: sides?.terseRight ?? "S2",
                         }}
                         rowName={
-                            popoverRow >= 0
-                                ? rowName(
-                                      rows[popoverRow]!.marcherIds,
-                                      rows[popoverRow]!.label,
-                                  )
-                                : rowName(
-                                      popoverCue.marcherIds,
-                                      popoverCue.label,
-                                  )
+                            // PROTOTYPE variant A: the dial edits only the selected part
+                            variant === "A" && partOf(popoverCue, selectedIds)
+                                ? `${rowName(partOf(popoverCue, selectedIds)!, null)} (${t(
+                                      "cues.lane.partOf",
+                                      {
+                                          part: partOf(popoverCue, selectedIds)!
+                                              .length,
+                                          count: popoverCue.marcherIds.length,
+                                      },
+                                  )})`
+                                : popoverRow >= 0
+                                  ? rowName(
+                                        rows[popoverRow]!.marcherIds,
+                                        rows[popoverRow]!.label,
+                                    )
+                                  : rowName(
+                                        popoverCue.marcherIds,
+                                        popoverCue.label,
+                                    )
                         }
                         // Where they face as the turn starts: the turn's own start, which an
                         // instant turn has no bar for
@@ -819,20 +907,65 @@ export function FacingLaneView({
     );
 }
 
-/** A row's name: selects its performers */
-function RowName({ row, name }: { row: FacingRow; name: string }) {
+/**
+ * A row's name: selects its performers. PROTOTYPE (facing split study): with a variant on, a row
+ * only some of whose performers are selected says how many ("3 of 12"); variant C adds a chip
+ * that splits them off.
+ */
+function RowName({
+    row,
+    name,
+    selected,
+    variant,
+    onSplit,
+}: {
+    row: FacingRow;
+    name: string;
+    selected: ReadonlySet<number>;
+    variant: FacingSplitVariant | null;
+    onSplit: () => void;
+}) {
     const { t } = useTranslate();
+    const count = row.marcherIds.length;
+    const part = row.marcherIds.filter((id) => selected.has(id)).length;
+    const partial = variant !== null && part > 0 && part < count;
     return (
-        <button
-            type="button"
-            data-testid="facing-lane-row-name"
-            title={t("cues.lane.selectRow")}
-            className="bg-bg-1/80 text-micro text-text hover:text-accent touch:min-h-44 sticky left-0 z-[5] flex h-full max-w-160 items-center gap-4 truncate rounded-full px-6 backdrop-blur-sm"
-            onClick={() => activeFieldEditor()?.select(row.marcherIds)}
-        >
-            <span className="truncate">{name}</span>
-            <span className="text-text-subtitle">{row.marcherIds.length}</span>
-        </button>
+        <div className="sticky left-0 z-[5] flex h-full w-fit items-center gap-4">
+            <button
+                type="button"
+                data-testid="facing-lane-row-name"
+                data-part={partial ? part : undefined}
+                title={
+                    partial
+                        ? `${t("cues.lane.partHint", { part, count })}\n${t("cues.lane.selectRow")}`
+                        : t("cues.lane.selectRow")
+                }
+                className="bg-bg-1/80 text-micro text-text hover:text-accent touch:min-h-44 flex h-full max-w-200 items-center gap-4 truncate rounded-full px-6 backdrop-blur-sm"
+                onClick={() => activeFieldEditor()?.select(row.marcherIds)}
+            >
+                <span className="truncate">{name}</span>
+                {partial ? (
+                    <span className="text-accent font-medium">
+                        {t("cues.lane.partOf", { part, count })}
+                    </span>
+                ) : (
+                    <span className="text-text-subtitle">{count}</span>
+                )}
+            </button>
+            {partial && variant === "C" && (
+                <button
+                    type="button"
+                    data-testid="facing-lane-split-chip"
+                    title={t("actions.cues.splitSelected")}
+                    aria-label={t("actions.cues.splitSelected")}
+                    className="border-stroke bg-bg-1 text-micro text-text hover:border-accent hover:text-accent touch:min-h-44 flex h-[16px] items-center gap-2 rounded-full border px-6"
+                    onClick={onSplit}
+                >
+                    <ArrowsSplitIcon size={11} />
+                    {t("cues.lane.splitChip")}
+                </button>
+            )}
+        </div>
     );
 }
 
@@ -1214,6 +1347,7 @@ const FACING_MENU_ACTIONS: readonly ActionId[] = [
     "cueEditTurn",
     "cueAddSelected",
     "cueRemoveSelected",
+    "cueSplitSelected",
     "cueMoveToPlayhead",
     "cueEndAtPlayhead",
     "cueDelete",
@@ -1238,6 +1372,7 @@ function FacingMenuView({
     onClose: () => void;
 }) {
     const { t } = useTranslate();
+    const variant = useFacingSplitVariant();
     // Opened by the press that picks the cue: the commands catch up a moment later
     useSyncExternalStore(subscribeToActionHandlers, menuSnapshot);
     const cue = show.cues.find((c) => c.id === menu.cueId);
@@ -1294,6 +1429,8 @@ function FacingMenuView({
                     <DropdownMenu.Separator className={MENU_SEPARATOR_CLASS} />
                     {item("cueAddSelected")}
                     {item("cueRemoveSelected")}
+                    {(variant === "B" || variant === "C") &&
+                        item("cueSplitSelected")}
                     <DropdownMenu.Item
                         data-testid="facing-menu-select"
                         disabled={!cue}

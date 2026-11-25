@@ -1,4 +1,5 @@
 import { isWebBuild } from "@/utilities/webBuild";
+import { facingSplitVariant } from "@/cues/facingSplitVariant";
 /**
  * Where an action's key works. `canvas` keys beat `global` ones on the same key; `fieldEdit` keys
  * work only in the Edit field mode (#824), whose handlers exist only while it's on, and beat both
@@ -852,6 +853,18 @@ const STATIC_ACTIONS = {
         category: "batchEdit",
         scope: "canvas",
         defaultBindings: [],
+    },
+    // PROTOTYPE (facing split study): only in variants B and C
+    cueSplitSelected: {
+        labelKey: "actions.cues.splitSelected",
+        keywordsKey: "actions.cues.cueKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: [],
+        get hiddenFromPalette() {
+            const v = facingSplitVariant();
+            return v !== "B" && v !== "C";
+        },
     },
     setAllMarchersToNextPage: {
         labelKey: "actions.batchEdit.moveAllToNextSpots",

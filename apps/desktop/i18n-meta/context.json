@@ -4296,5 +4296,10 @@
     "cues.lane.keyHint": "Second line of the tooltip of a diamond on the top row of the timeline's Facing lane. Each diamond is a count where some performers change where they face. Clicking it selects those performers on the field; Shift-click adds them to the selection; dragging it moves the change to another count.",
     "cues.lane.keyHintPlaying": "Second line of the same diamond's tooltip while the show is playing: clicking still selects the performers, but it can only be moved once playback is paused.",
     "cues.lane.keySelectAll": "Menu entry on a diamond in the timeline's Facing lane shared by several groups: selects every performer who changes facing on that count.",
-    "cues.lane.keySelectGroup": "Menu entry on a diamond in the timeline's Facing lane shared by several groups, one per group: selects that group's performers. {name} describes the facing change and who it is for, such as 'Side 2 · 90° · Trumpets'."
+    "cues.lane.keySelectGroup": "Menu entry on a diamond in the timeline's Facing lane shared by several groups, one per group: selects that group's performers. {name} describes the facing change and who it is for, such as 'Side 2 · 90° · Trumpets'.",
+    "actions.cues.splitSelected": "Prototype. Name of a command in a Facing cue's right-click menu and the command palette. Takes the selected performers out of the cue and gives them a cue of their own with the same facing and turn, so they can be edited separately. Matches \"Add selected to this cue\".",
+    "cues.lane.partHint": "Prototype. Tooltip on a Facing lane row's name when only some of its performers are selected: how many of them are. {part} and {count} are numbers.",
+    "cues.lane.partOf": "Prototype. Short marker beside a Facing lane row's name when only some of its performers are selected, e.g. \"3 of 12\". {part} and {count} are numbers.",
+    "cues.lane.splitChip": "Prototype. Text of a small button beside a partly selected Facing lane row's name; it splits the selected performers off into their own cue. Keep very short.",
+    "cues.reason.splitWhole": "Prototype. Why \"Split selected into their own cue\" is greyed out: the selection must be some, but not all, of the cue's performers."
 }
