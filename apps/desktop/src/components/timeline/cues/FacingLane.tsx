@@ -478,13 +478,15 @@ export function FacingLaneView({
         follow(e, [cueId], plan, () => {
             // A click selects the cue's counts, as a move's bar does (not with Ctrl or Cmd)
             if (ctrl) return;
-            const { startBeat, playheadBeat } =
-                useTimelineSelectionStore.getState();
-            beforeClick.current = {
-                at: performance.now(),
-                startBeat,
-                playheadBeat,
-            };
+            // A double-click's second click keeps what the first found: by then the first has
+            // moved the playhead
+            const now = performance.now();
+            const earlier = beforeClick.current;
+            if (!earlier || now - earlier.at >= DOUBLE_CLICK_MS) {
+                const { startBeat, playheadBeat } =
+                    useTimelineSelectionStore.getState();
+                beforeClick.current = { at: now, startBeat, playheadBeat };
+            }
             geometry.onSelectRange?.({
                 startBeatIndex: axis.toView(turnStart),
                 endBeatIndex: axis.toView(until),

@@ -377,6 +377,13 @@
         "width": 1468,
         "height": 1404
     },
+    "marchers-facing-keys": {
+        "chapter": "marchers",
+        "kind": "clip",
+        "width": 1280,
+        "height": 612,
+        "seconds": 7.1
+    },
     "marchers-facing-lane": {
         "chapter": "marchers",
         "kind": "still",

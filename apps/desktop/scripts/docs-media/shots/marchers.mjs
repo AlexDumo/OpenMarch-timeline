@@ -155,6 +155,9 @@ async function setFacing(page, labels, entry, wait) {
     await wait(1200);
     await page.keyboard.press("Escape");
     await page.getByTestId("facing-lane").waitFor();
+    // Escape let go of the selection too: select them again, so the lane shows their row
+    await page.mouse.click(points[0].x, points[0].y);
+    await shiftSelect(page, points.slice(1), wait);
     await wait(600);
 }
 
@@ -201,6 +204,21 @@ const countWidth = (page) =>
     });
 
 /** The field around `labels`, down to the bottom of the timeline. */
+/** Clicks empty field, away from every marcher, so nobody is selected */
+async function clearFieldSelection(page, wait) {
+    const all = [...(await marchers(page)).values()];
+    for (let y = 200; y <= 560; y += 40)
+        for (let x = 300; x <= 1300; x += 40)
+            if (all.every((m) => Math.hypot(m.x - x, m.y - y) > 40)) {
+                await page.mouse.click(x, y);
+                await wait(600);
+                const left = await page.evaluate(
+                    () => window.fieldTest?.selection().length ?? 0,
+                );
+                if (left === 0) return;
+            }
+    throw new Error("couldn't clear the selection");
+}
 async function fieldToTimeline(page, labels) {
     const pane = await page.getByTestId("timeline-pane").boundingBox();
     const b = bounds(named(await marchers(page), labels));
@@ -1161,6 +1179,60 @@ const shots = [
             await film.hold(0.5);
             await film.drag(page, grab, { x: grab.x - two, y: grab.y }, 1.2);
             await film.hold(1.5);
+        },
+    },
+    {
+        id: "marchers-facing-keys",
+        kind: "clip",
+        // Three groups turn on their own: G6–G10 to side 2 over 2 counts and G14, G19 and G22 to
+        // the back at once, both at the end of Page 1, then G1–G3 to side 1 four counts later.
+        // Nothing selected, the Facing lane is one row of diamonds; a click on the shared one
+        // selects both groups and shows their turns, and a Shift-click on the next adds G1–G3
+        async setup({ page, wait }) {
+            await toPage1(page, wait);
+            await setFacing(page, SABRES, "facingSide2", wait);
+            await setTurnCounts(page, 2, wait);
+            await setFacing(page, TUBAS, "facingBack", wait);
+            for (let i = 0; i < 4; i++) await page.keyboard.press("Shift+KeyE");
+            await wait(600);
+            await setFacing(page, range("G", 1, 3), "facingSide1", wait);
+            await clearFieldSelection(page, wait);
+            await page.mouse.move(800, 990);
+            await wait(800);
+            await hideToasts(page);
+            return {
+                box: await fieldToTimeline(page, [
+                    ...SABRES,
+                    ...TUBAS,
+                    ...range("G", 1, 3),
+                ]),
+            };
+        },
+        async perform({ page, film, overlay, wait }) {
+            await overlay.enable();
+            const keys = page.getByTestId("facing-lane-key");
+            const shared = await keys.first().boundingBox();
+            const at = {
+                x: shared.x + shared.width / 2,
+                y: shared.y + shared.height / 2,
+            };
+            await film.moveTo(page, { x: at.x - 80, y: at.y - 140 }, at, 0.7);
+            await film.hold(0.6);
+            await page.mouse.click(at.x, at.y);
+            await wait(400);
+            await film.hold(1.6);
+            const next = await keys.nth(1).boundingBox();
+            const to = {
+                x: next.x + next.width / 2,
+                y: next.y + next.height / 2,
+            };
+            await film.moveTo(page, at, to, 0.6);
+            await page.keyboard.down("Shift");
+            await film.hold(0.4);
+            await page.mouse.click(to.x, to.y);
+            await wait(400);
+            await page.keyboard.up("Shift");
+            await film.hold(2);
         },
     },
     {

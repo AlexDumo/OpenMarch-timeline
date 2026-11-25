@@ -373,6 +373,9 @@ describe("the Facing lane (#993)", () => {
         )!;
         await clickAt(turn, 12 * PPB);
         expect(useTimelineSelectionStore.getState().playheadBeat).not.toBe(9);
+        // A browser's double-click is two clicks, then the double-click (#1315: the second click
+        // found the playhead the first had moved)
+        await clickAt(turn, 12 * PPB);
         await act(async () => {
             fireEvent.doubleClick(turn);
         });
