@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_VIEWS, UsageError, parseRenderArgs } from "../args";
+import { BODIES, DEFAULT_VIEWS, UsageError, parseRenderArgs } from "../args";
 import {
     GPU_FLAGS,
     gpuProblem,
@@ -247,7 +247,10 @@ describe("runRender", () => {
             const { page } = fakePage(answers({}));
             const r = run(page, out, {}, pack);
             expect(await r.code).toBe(EXIT.ok);
-            expect(reportOf(out).modes.default.files).toHaveLength(32);
+            // Every body in every view, two stride shots and two stands shots.
+            expect(reportOf(out).modes.default.files).toHaveLength(
+                BODIES.length * DEFAULT_VIEWS.length + 4,
+            );
         });
 
         it("exits non-zero when a mode has errors", async () => {
