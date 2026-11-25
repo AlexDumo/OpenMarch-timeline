@@ -1,42 +1,34 @@
 import { useMemo } from "react";
+import { facingAt } from "@openmarch/core";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { isPerformer } from "@/global/classes/Marcher";
-import {
-    cueClockAtBeat,
-    facingMarkAt,
-    writeFacingMarks,
-    type FacingMarks,
-} from "./facingMarks";
+import { cueClockAtBeat, writeFacingDirections } from "./fieldFacing";
 import { useShowCues } from "./useShowCues";
 
-/** Which way each performer faces at a beat, for the 2D field (fork #1316). */
+/** Which way each performer faces at a beat, for the 2D field's facing arrows (fork #1316). */
 export interface FieldFacing {
     /**
      * Writes each of `ids`' facing direction at spec beat `beat` (fractional while playing) into
-     * `out`, x, y per id in field units, 0, 0 for none. Returns whether any is shown. Cheap enough
-     * to call every frame.
+     * `out`, x, y per id in field units, 0, 0 for one with no arrow. Cheap enough to call every
+     * frame.
      */
-    write(ids: readonly number[], beat: number, out: Float32Array): boolean;
-    /** The facing shown for `id` at `beat`, in unwrapped degrees, or null for none. */
+    write(ids: readonly number[], beat: number, out: Float32Array): void;
+    /** The facing drawn for `id` at `beat`, in unwrapped degrees, or null for no arrow. */
     degreesAt(id: number, beat: number): number | null;
 }
 
 /**
- * The facing the 2D field draws, for whom the field display bar's Facing choice says: performers
- * not facing front (the default), everyone, or nobody (null). Null too while nobody would show:
- * "Not front" in a show without Facing cues. Props and equipment don't face.
+ * The facing the 2D field draws arrows for while the field display bar's Show facing is on, or
+ * null while it's off. Every performer gets one: a performer with no Facing cue faces front.
+ * Props and equipment don't face.
  */
 export function useFieldFacing(): FieldFacing | null {
     const show = useShowCues();
     const beats = useTimingObjects()?.beats;
-    const shown: FacingMarks = useUiSettingsStore(
-        (s) => s.uiSettings.facingMarks ?? "turned",
-    );
+    const on = useUiSettingsStore((s) => s.uiSettings.facingArrows === true);
     return useMemo(() => {
-        if (!show || !beats || shown === "off") return null;
-        if (shown === "turned" && !show.cues.some((c) => c.type === "facing"))
-            return null;
+        if (!show || !beats || !on) return null;
         const performers = new Set(
             show.marchers.filter(isPerformer).map((m) => m.id),
         );
@@ -45,19 +37,24 @@ export function useFieldFacing(): FieldFacing | null {
             cueClockAtBeat(beats, show.countOfBeat, beat);
         return {
             write(ids, beat, out) {
-                return writeFacingMarks({
+                writeFacingDirections({
                     compiled: show.compiled,
                     ids,
                     clock: clockAt(beat),
-                    shown,
                     include,
                     out,
                 });
             },
             degreesAt(id, beat) {
                 if (!include(id)) return null;
-                return facingMarkAt(show.compiled, id, clockAt(beat), shown);
+                return facingAt(show.compiled, id, clockAt(beat));
             },
         };
-    }, [show, beats, shown]);
+    }, [show, beats, on]);
+}
+
+/** Show facing on or off (the display bar's button and the palette's action). */
+export function toggleFacingArrows(): void {
+    const { uiSettings, setUiSettings } = useUiSettingsStore.getState();
+    setUiSettings({ ...uiSettings, facingArrows: !uiSettings.facingArrows });
 }

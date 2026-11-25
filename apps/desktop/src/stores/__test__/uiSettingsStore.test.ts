@@ -290,3 +290,25 @@ describe("line order setting", () => {
         expect(parsed.lineOrder).toBe("selected");
     });
 });
+
+describe("facing arrows setting (fork #1316)", () => {
+    it("starts off", () => {
+        expect(parseSettings("{}").facingArrows).toBe(false);
+    });
+
+    it("carries the first builds' Facing choice over: Not front or Everyone on, Off off", () => {
+        const from = (facingMarks: string) =>
+            parseSettings(JSON.stringify({ facingMarks }));
+        expect(from("turned").facingArrows).toBe(true);
+        expect(from("everyone").facingArrows).toBe(true);
+        expect(from("off").facingArrows).toBe(false);
+        expect("facingMarks" in from("turned")).toBe(false);
+    });
+
+    it("keeps a toggle already set", () => {
+        const parsed = parseSettings(
+            JSON.stringify({ facingMarks: "everyone", facingArrows: false }),
+        );
+        expect(parsed.facingArrows).toBe(false);
+    });
+});

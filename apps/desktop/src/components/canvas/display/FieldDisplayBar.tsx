@@ -22,7 +22,6 @@ import {
     useUiSettingsStore,
     type EquipmentIconPlace,
     type EquipmentIcons,
-    type FacingMarks,
     type MarcherLabelForm,
     type ShapeOutlines,
     type UiSettings,
@@ -32,6 +31,7 @@ import { DISPLAY_BUTTON_CLASS } from "./displayButton";
 import { StartFlagPositionsButton } from "./StartFlagPositionsButton";
 import SelectToolBar from "./SelectToolBar";
 import VenueButton from "./VenueButton";
+import { toggleFacingArrows } from "@/cues/useFieldFacing";
 import { MENU_BUTTON_CLASS } from "@/components/ui/popupClasses";
 import { useShowsSelectTool } from "@/field/fieldSelectTool";
 import { useFollowTheLeader } from "@/pathways/followTheLeader";
@@ -68,13 +68,6 @@ const EQUIPMENT_PLACE_CHOICES: readonly Choice<EquipmentIconPlace>[] = [
     { value: "label", key: "toolbar.view.equipmentOnNumber" },
 ];
 
-/** Who is drawn pointed the way they face (fork #1316); the palette's names */
-const FACING_CHOICES: readonly Choice<FacingMarks>[] = [
-    { value: "turned", key: "toolbar.view.facingTurned" },
-    { value: "everyone", key: "toolbar.view.facingEveryone" },
-    { value: "off", key: "toolbar.view.facingOff" },
-];
-
 const ORDER_CHOICES: readonly Choice<ShapeOutlines>[] = [
     { value: "selected", key: "toolbar.view.orderSelected" },
     { value: "always", key: "toolbar.view.orderAlways" },
@@ -84,8 +77,8 @@ const ORDER_CHOICES: readonly Choice<ShapeOutlines>[] = [
 /**
  * How the field is displayed, apart from the timeline: a small bar at the field's top right (the
  * zoom controls hold the bottom right). It replaced the toolbar's View tab. Path overlays, marcher
- * labels, equipment icons (fork #992), which way performers face (fork #1316), placed shapes' outlines, the venue under the field (#1207)
- * and a line's order (pathways step 4g). The Select tool's Box
+ * labels, equipment icons (fork #992), facing arrows (fork #1316), placed shapes' outlines, the
+ * venue under the field (#1207) and a line's order (pathways step 4g). The Select tool's Box
  * and Lasso sit above it in a bar of their own, outside the touch layout (whose pill has its own
  * drag modes).
  */
@@ -131,15 +124,8 @@ export default function FieldDisplayBar() {
                         keepOpen
                         more={<EquipmentPlaceChoices />}
                     />
-                    {/* Which way performers face, as a point on their dots (fork #1316) */}
-                    <ChoiceButton
-                        setting="facingMarks"
-                        fallback="turned"
-                        choices={FACING_CHOICES}
-                        icon={CompassIcon}
-                        labelKey="toolbar.view.facing"
-                        testId="field-display-facing"
-                    />
+                    {/* Which way performers face, as an arrow from each dot (fork #1316) */}
+                    <FacingButton />
                     {/* Placed boxes' outlines (docs/timeline/research/shapes/07-placed-boxes.md) */}
                     <ChoiceButton
                         setting="shapes"
@@ -170,6 +156,38 @@ export default function FieldDisplayBar() {
     );
 }
 
+/**
+ * Show facing (fork #1316): an arrow from every performer's dot the way they face, on or off.
+ * Pressed while the arrows show; off by default.
+ */
+function FacingButton() {
+    const { t } = useTranslate();
+    const on = useUiSettingsStore((s) => s.uiSettings.facingArrows === true);
+    const label = t("toolbar.view.facing");
+    return (
+        <ShortcutTooltip
+            label={label}
+            hint={t(on ? "toolbar.view.facingOn" : "toolbar.view.facingOff")}
+            side="left"
+            action="toggleFacingArrows"
+        >
+            <button
+                type="button"
+                aria-label={label}
+                aria-pressed={on}
+                data-testid="field-display-facing"
+                onClick={toggleFacingArrows}
+                className={clsx(
+                    DISPLAY_BUTTON_CLASS,
+                    on ? "text-text" : "text-text-disabled",
+                )}
+            >
+                <CompassIcon size={16} />
+            </button>
+        </ShortcutTooltip>
+    );
+}
+
 interface Choice<T extends string> {
     readonly value: T;
     readonly key: string;
@@ -181,12 +199,7 @@ interface Choice<T extends string> {
  * them, as the View tab's select did.
  */
 function ChoiceButton<
-    K extends
-        | "marcherLabels"
-        | "shapes"
-        | "lineOrder"
-        | "equipmentIcons"
-        | "facingMarks",
+    K extends "marcherLabels" | "shapes" | "lineOrder" | "equipmentIcons",
 >({
     setting,
     fallback,

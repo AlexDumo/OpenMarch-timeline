@@ -21,7 +21,11 @@ import type {
 } from "@/cues/equipmentIcons";
 import { IconBatch, useIconAtlas, type FieldIcon } from "../iconBatch";
 import type { FieldFacing } from "@/cues/useFieldFacing";
-import { anchorsClearOfPoints } from "../facingPoint";
+import {
+    anchorsClearOfArrows,
+    arrowSizes,
+    type ArrowSizes,
+} from "../facingArrow";
 
 /**
  * A marcher label: 14 field units, its center 2.2 dot radii above the dot,
@@ -186,8 +190,8 @@ export default function LabelsLayer({
         subscribe(changed: () => void): () => void;
     } | null;
     /**
-     * Which way each performer faces at the beat drawn (fork #1316): a label moves off its dot's
-     * point when the point aims at it
+     * Which way each performer faces at the beat drawn, while facing arrows show (fork #1316): a
+     * label moves to the other side of its dot when the arrow points through it
      */
     facing?: FieldFacing | null;
 }) {
@@ -230,10 +234,14 @@ export default function LabelsLayer({
         hoveredId: null as number | null,
         selectionVersion: -1,
         facing: null as FieldFacing | null,
+        /** The arrows' size the anchors were moved off (it changes with zoom when zoomed out) */
+        arrowLength: 0,
     });
-    // The facing directions and the anchors moved off them, reused frame to frame
+    // The facing directions, the labels' widths and the anchors moved off the arrows, reused
+    // frame to frame
     const scratch = useRef({
         directions: new Float32Array(0),
+        widths: new Float64Array(0),
         anchors: new Float64Array(0),
     });
 
@@ -311,25 +319,41 @@ export default function LabelsLayer({
             style !== last.style ||
             size !== last.size ||
             // Dimming hides or recolors labels: laid out again
-            dimming.version !== last.dimVersion;
+            dimming.version !== last.dimVersion ||
+            // Facing arrows on or off: the labels' widths are measured
+            facing !== last.facing;
         // The keyframe look (and each frame of its ease on Stop) only
         // changes the weights
         const weightsChanged = look.version !== last.lookVersion;
         const weightOf = (id: number) => labelWeight(dimming, look, id);
         if (newLayout) {
             const color = rgba01(theme.defaultMarcher.label);
+            const texts = marchers.ids.map((id, i) =>
+                shown[i] &&
+                dimming.labelShown(id) &&
+                !(
+                    byNumber &&
+                    iconsNow?.icons.has(id) &&
+                    !revealed(id, i, hoveredId)
+                )
+                    ? (labels.get(id) ?? "")
+                    : "",
+            );
+            // How wide each label is, for keeping it off its facing arrow (#1316)
+            if (facing) {
+                const iconAfter =
+                    iconPlace === "beside" ? iconsNow?.icons : undefined;
+                scratch.current.widths = Float64Array.from(
+                    marchers.ids,
+                    (id, i) =>
+                        (atlas.measure(texts[i]) +
+                            (iconAfter?.has(id) ? ICON_WIDTH_EM : 0)) *
+                        size,
+                );
+            }
             text.setLabels(
                 marchers.ids.map((id, i) => ({
-                    text:
-                        shown[i] &&
-                        dimming.labelShown(id) &&
-                        !(
-                            byNumber &&
-                            iconsNow?.icons.has(id) &&
-                            !revealed(id, i, hoveredId)
-                        )
-                            ? (labels.get(id) ?? "")
-                            : "",
+                    text: texts[i],
                     size,
                     align: style.beside ? "left" : "center",
                     baseline: CENTER_BASELINE,
@@ -348,12 +372,15 @@ export default function LabelsLayer({
         } else if (weightsChanged) {
             text.setWeights((i) => weightOf(marchers.ids[i]!));
         }
+        const arrow = facing ? arrowSizes(zoom) : null;
+        const arrowLength = arrow?.length ?? 0;
         if (
             newLayout ||
             marchers.version !== last.version ||
-            facing !== last.facing
+            facing !== last.facing ||
+            arrowLength !== last.arrowLength
         ) {
-            const anchors = anchorsOffPoints();
+            const anchors = anchorsOffArrows(arrow, size);
             text.setAnchors(anchors);
             // In place of a dot an icon stays on the spot
             iconBatch?.setAnchors(onDots ? marchers.positions : anchors);
@@ -375,27 +402,36 @@ export default function LabelsLayer({
             hoveredId,
             selectionVersion: marchers.selectionVersion,
             facing,
+            arrowLength,
         };
     });
 
-    /** Each label's anchor: its marcher's spot, moved off the dot's facing point (#1316). */
-    function anchorsOffPoints(): Float64Array {
+    /** Each label's anchor: its marcher's spot, moved off its facing arrow (#1316). */
+    function anchorsOffArrows(
+        arrow: ArrowSizes | null,
+        size: number,
+    ): Float64Array {
         const beat = marchers.drawnBeat;
-        if (!facing || beat === null) return marchers.positions;
+        if (!facing || !arrow || beat === null) return marchers.positions;
         const n = marchers.positions.length;
         const buffers = scratch.current;
         if (buffers.anchors.length !== n) {
             buffers.anchors = new Float64Array(n);
             buffers.directions = new Float32Array(n);
         }
-        if (!facing.write(marchers.ids, beat, buffers.directions))
-            return marchers.positions;
-        return anchorsClearOfPoints(
-            marchers.positions,
-            buffers.directions,
-            style.beside,
-            buffers.anchors,
-        );
+        facing.write(marchers.ids, beat, buffers.directions);
+        return anchorsClearOfArrows({
+            positions: marchers.positions,
+            directions: buffers.directions,
+            widths: buffers.widths,
+            label: {
+                beside: style.beside,
+                offset: style.beside ? LABEL_BESIDE : LABEL_LIFT,
+                height: size,
+            },
+            arrow,
+            out: buffers.anchors,
+        });
     }
 
     /** Whether a marcher's drill number shows in place of its icon: hovered or selected. */

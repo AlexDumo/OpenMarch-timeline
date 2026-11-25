@@ -58,7 +58,7 @@ beforeEach(() => {
         nextPaths: false,
         equipmentIcons: "changed",
         equipmentIconPlace: "beside",
-        facingMarks: "turned",
+        facingArrows: false,
     });
 });
 afterEach(() => {
@@ -209,17 +209,16 @@ describe("FieldDisplayBar", () => {
         ).toBe("true");
     });
 
-    it("Facing: Not front by default, then Everyone or Off, and the popup closes (#1316)", () => {
+    it("Show facing: off by default, a press turns the arrows on and another off (#1316)", () => {
         open();
         const button = screen.getByTestId("field-display-facing");
-        expect(button.getAttribute("aria-label")).toBe("Facing: Not front");
+        expect(button.getAttribute("aria-label")).toBe("Show facing");
+        expect(button.getAttribute("aria-pressed")).toBe("false");
         fireEvent.click(button);
-        fireEvent.click(screen.getByTestId("field-display-facing-everyone"));
-        expect(settings().facingMarks).toBe("everyone");
-        expect(screen.queryByTestId("field-display-facing-off")).toBeNull();
-        fireEvent.click(screen.getByTestId("field-display-facing"));
-        fireEvent.click(screen.getByTestId("field-display-facing-off"));
-        expect(settings().facingMarks).toBe("off");
+        expect(settings().facingArrows).toBe(true);
+        expect(button.getAttribute("aria-pressed")).toBe("true");
+        fireEvent.click(button);
+        expect(settings().facingArrows).toBe(false);
     });
 
     it("greys Where out while the icons are off, with its reason, and a press changes nothing (#992)", () => {

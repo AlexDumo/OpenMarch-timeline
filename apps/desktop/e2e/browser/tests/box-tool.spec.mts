@@ -706,7 +706,7 @@ test("change: the field display bar holds paths, labels, equipment icons, facing
         "field-display-labels",
         // What each performer holds, as an icon by the drill number (fork #992)
         "field-display-equipment",
-        // Which way performers face, as a point on their dots (fork #1316)
+        // Show facing: an arrow from every dot the way they face (fork #1316)
         "field-display-facing",
         "field-display-shapes",
         // The show's 3D venue under the grid (#1207), off by default
@@ -716,6 +716,13 @@ test("change: the field display bar holds paths, labels, equipment icons, facing
     // Nothing else crept in
     await expect(bar.getByRole("button")).toHaveCount(6);
     await expect(page.getByTestId("open-view3d")).toBeVisible();
+    // Show facing is one toggle, off by default (fork #1316)
+    const facing = bar.getByTestId("field-display-facing");
+    await expect(facing).toHaveAttribute("aria-pressed", "false");
+    await facing.click();
+    await expect(facing).toHaveAttribute("aria-pressed", "true");
+    await facing.click();
+    await expect(facing).toHaveAttribute("aria-pressed", "false");
 
     const settings = await openSettings(page, "Field");
     for (const name of ["Grid lines", "Half lines", "Step size warnings"])

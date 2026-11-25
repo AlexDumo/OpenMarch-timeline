@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import type { EquipmentIconPlace, EquipmentIcons } from "@/cues/equipmentIcons";
-import type { FacingMarks } from "@/cues/facingMarks";
 import { parseTimelineHeight } from "@/components/timeline/timelineSplit";
 import { syncFromStorage } from "@/stores/syncFromStorage";
 import {
@@ -114,10 +113,11 @@ export interface UiSettings {
     /** Where those icons go: after the drill number, in place of the dot, or of the number */
     equipmentIconPlace?: EquipmentIconPlace;
     /**
-     * Who is drawn pointed the way they face on the field (fork #1316): performers not facing
-     * front (the default), everyone, or nobody
+     * Whether the field draws an arrow from every performer's dot the way they face (fork #1316):
+     * the field display bar's Show facing. Off by default. Was `facingMarks` (Not front, Everyone
+     * or Off) in early builds; `parseSettings` carries it over
      */
-    facingMarks?: FacingMarks;
+    facingArrows?: boolean;
     /**
      * Whether an open shape shows its walks and start rings (#403): the floating editor's
      * Pathways toggle. Off by default.
@@ -155,7 +155,7 @@ export interface UiSettings {
 export type MarcherLabelForm = "auto" | "names" | "numbers" | "off";
 export type MarcherLabelSize = "small" | "normal" | "large";
 export type ShapeOutlines = "selected" | "always" | "off";
-export type { EquipmentIconPlace, EquipmentIcons, FacingMarks };
+export type { EquipmentIconPlace, EquipmentIcons };
 
 export const FIELD_VENUE_LOOKS = [
     "off",
@@ -223,7 +223,7 @@ export const defaultSettings: UiSettings = {
     lineOrder: "off",
     equipmentIcons: "changed",
     equipmentIconPlace: "beside",
-    facingMarks: "turned",
+    facingArrows: false,
     shapeWalks: false,
     followTheLeader: false,
     fieldVenue: "off",
@@ -260,19 +260,26 @@ const stringList = (value: unknown): string[] =>
 export const parseSettings = (raw: string): UiSettings => {
     // Dropped: `previousPaths` (Previous paths) gave way to start flag positions (#331),
     // `focussedComponent` went with the old timeline focus (beat editor), and `marcherOrder`
-    // became `lineOrder` with Off for its default (an Always picked before carries over)
+    // became `lineOrder` with Off for its default (an Always picked before carries over).
+    // `facingMarks` (fork #1316's first Not front / Everyone / Off) became the `facingArrows`
+    // toggle: Not front or Everyone turn it on, Off leaves it off
     const {
         previousPaths: _previousPaths,
         focussedComponent: _focussedComponent,
         marcherOrder,
+        facingMarks,
         ...parsed
     } = JSON.parse(raw) as UiSettings & {
         previousPaths?: unknown;
         focussedComponent?: unknown;
         marcherOrder?: unknown;
+        facingMarks?: unknown;
     };
     if (marcherOrder === "always" && parsed.lineOrder === undefined)
         parsed.lineOrder = "always";
+    if (parsed.facingArrows === undefined && facingMarks !== undefined)
+        parsed.facingArrows =
+            facingMarks === "turned" || facingMarks === "everyone";
     const mergedMouseSettings = {
         ...defaultSettings.mouseSettings,
         ...parsed.mouseSettings,
@@ -296,7 +303,7 @@ export const parseSettings = (raw: string): UiSettings => {
         recentEquipment: stringList(parsed.recentEquipment).slice(0, 4),
         equipmentIcons: parseEquipmentIcons(parsed.equipmentIcons),
         equipmentIconPlace: parseEquipmentIconPlace(parsed.equipmentIconPlace),
-        facingMarks: parseFacingMarks(parsed.facingMarks),
+        facingArrows: parsed.facingArrows === true,
         startFlagPositions: parseStartFlagPositions(parsed.startFlagPositions),
         fieldVenue: oneOf(FIELD_VENUE_LOOKS, parsed.fieldVenue, "off"),
         fieldVenueLast: oneOf(
@@ -326,10 +333,6 @@ const parseEquipmentIcons = (value: unknown): EquipmentIcons =>
 /** A stored Equipment icons place, or the default for anything else. */
 const parseEquipmentIconPlace = (value: unknown): EquipmentIconPlace =>
     value === "dot" || value === "label" ? value : "beside";
-
-/** A stored Facing choice, or the default for anything else. */
-const parseFacingMarks = (value: unknown): FacingMarks =>
-    value === "off" || value === "everyone" ? value : "turned";
 
 // Helper function to load settings from localStorage
 const loadSettings = (): UiSettings => {

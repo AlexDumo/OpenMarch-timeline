@@ -404,8 +404,8 @@
     "marchers-facing-setting": {
         "chapter": "marchers",
         "kind": "still",
-        "width": 308,
-        "height": 508
+        "width": 324,
+        "height": 400
     },
     "marchers-facing-stretch": {
         "chapter": "marchers",

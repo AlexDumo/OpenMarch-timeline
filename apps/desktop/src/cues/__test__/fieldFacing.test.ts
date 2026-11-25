@@ -3,13 +3,12 @@ import { describe, expect, it } from "vitest";
 import type { DatabaseCue } from "@/db-functions/cues";
 import { marcherCueInputs } from "@/view3d/core/marchers/cueInputs";
 import { compileShowCues } from "../showCues";
+import { facingAt } from "@openmarch/core";
 import {
     cueClockAtBeat,
-    facesFront,
-    facingMarkAt,
     facingVector,
-    writeFacingMarks,
-} from "../facingMarks";
+    writeFacingDirections,
+} from "../fieldFacing";
 
 /** Three trumpets over 16 counts. Beat 0 is the fixed first beat; counts 0–15 are ids 100–115. */
 const MARCHERS = [1, 2, 3].map((id) => ({ id, section: "Trumpet" }));
@@ -67,38 +66,31 @@ describe("the field's count clock (#1316)", () => {
     });
 });
 
+/** The facing the field's arrow shows for performer `id` at spec beat `beat`, in degrees. */
+const degreesAt = (id: number, beat: number) =>
+    facingAt(show.compiled, id, clockAt(beat));
+
 describe("facing on the field (#1316)", () => {
-    it("faces front before a performer's first cue, and shows nothing for front by default", () => {
-        expect(facingMarkAt(show.compiled, 1, clockAt(2), "turned")).toBeNull();
-        expect(facingMarkAt(show.compiled, 1, clockAt(2), "everyone")).toBe(0);
-        expect(facingMarkAt(show.compiled, 3, clockAt(9), "turned")).toBeNull();
-        expect(facingMarkAt(show.compiled, 3, clockAt(9), "everyone")).toBe(0);
+    it("faces front before a performer's first cue, and with no cue at all", () => {
+        expect(degreesAt(1, 2)).toBe(0);
+        expect(degreesAt(3, 9)).toBe(0);
     });
 
     it("turns evenly through a transition and lands on the cue's count", () => {
-        const at = (beat: number) =>
-            facingMarkAt(show.compiled, 1, clockAt(beat), "turned");
         // the cue is on count 8, spec beat 9
-        expect(at(9)).toBe(180);
-        expect(at(15)).toBe(180);
-        const mid = at(7.5);
-        expect(mid).not.toBeNull();
-        expect(mid!).toBeGreaterThan(0);
-        expect(mid!).toBeLessThan(180);
+        expect(degreesAt(1, 9)).toBe(180);
+        expect(degreesAt(1, 15)).toBe(180);
+        const mid = degreesAt(1, 7.5);
+        expect(mid).toBeGreaterThan(0);
+        expect(mid).toBeLessThan(180);
         // part way is between its neighbors
-        expect(at(7)!).toBeLessThan(mid!);
-        expect(at(8)!).toBeGreaterThan(mid!);
+        expect(degreesAt(1, 7)).toBeLessThan(mid);
+        expect(degreesAt(1, 8)).toBeGreaterThan(mid);
     });
 
     it("lands an instant cue on its count", () => {
-        expect(
-            facingMarkAt(show.compiled, 2, clockAt(4.9), "turned"),
-        ).toBeNull();
-        expect(facingMarkAt(show.compiled, 2, clockAt(5), "turned")).toBe(90);
-    });
-
-    it("shows nothing when off", () => {
-        expect(facingMarkAt(show.compiled, 1, clockAt(9), "off")).toBeNull();
+        expect(degreesAt(2, 4.9)).toBe(0);
+        expect(degreesAt(2, 5)).toBe(90);
     });
 
     it("agrees with the 3D View's headings at every count", () => {
@@ -106,12 +98,11 @@ describe("facing on the field (#1316)", () => {
         const positions = new Float64Array((K + 1) * 2);
         for (const id of [1, 2]) {
             const { heading } = marcherCueInputs(show.compiled, id, positions);
-            for (let b = 1; b <= K; b++) {
-                const field =
-                    facingMarkAt(show.compiled, id, clockAt(b), "everyone") ??
-                    Number.NaN;
-                expect(field * (Math.PI / 180)).toBeCloseTo(heading[b], 9);
-            }
+            for (let b = 1; b <= K; b++)
+                expect(degreesAt(id, b) * (Math.PI / 180)).toBeCloseTo(
+                    heading[b],
+                    9,
+                );
         }
     });
 });
@@ -129,27 +120,20 @@ describe("drawing it", () => {
         expect(by).toBeCloseTo(-1);
     });
 
-    it("counts whole turns either way as front", () => {
-        expect(facesFront(0)).toBe(true);
-        expect(facesFront(360)).toBe(true);
-        expect(facesFront(-720)).toBe(true);
-        expect(facesFront(90)).toBe(false);
-        expect(facesFront(-0.5)).toBe(false);
-    });
-
-    it("writes a direction per id, zero for none and for those that can't face", () => {
+    it("writes a direction per id, front included, and zero for those that can't face", () => {
         const out = new Float32Array(6).fill(9);
-        const any = writeFacingMarks({
+        writeFacingDirections({
             compiled: show.compiled,
             ids: [1, 2, 3],
             clock: clockAt(9),
-            shown: "turned",
             include: (id) => id !== 2,
             out,
         });
-        expect(any).toBe(true);
+        // 1 faces back (up the screen), 2 is left out, 3 faces front (down the screen)
         expect(out[0]).toBeCloseTo(0);
         expect(out[1]).toBeCloseTo(-1);
-        expect([...out.slice(2)]).toEqual([0, 0, 0, 0]);
+        expect([...out.slice(2, 4)]).toEqual([0, 0]);
+        expect(out[4]).toBeCloseTo(0);
+        expect(out[5]).toBeCloseTo(1);
     });
 });

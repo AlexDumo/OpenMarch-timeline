@@ -732,32 +732,6 @@ const STATIC_ACTIONS = {
         defaultBindings: [],
         args: { shown: "everyone" },
     },
-    // Who is drawn pointed the way they face on the field (fork #1316): the field display bar's
-    // Facing choice. Unbound
-    facingMarksOff: {
-        labelKey: "actions.cues.facingMarksOff",
-        keywordsKey: "actions.cues.facingMarksKeywords",
-        category: "field",
-        scope: "canvas",
-        defaultBindings: [],
-        args: { shown: "off" },
-    },
-    facingMarksTurned: {
-        labelKey: "actions.cues.facingMarksTurned",
-        keywordsKey: "actions.cues.facingMarksKeywords",
-        category: "field",
-        scope: "canvas",
-        defaultBindings: [],
-        args: { shown: "turned" },
-    },
-    facingMarksEveryone: {
-        labelKey: "actions.cues.facingMarksEveryone",
-        keywordsKey: "actions.cues.facingMarksKeywords",
-        category: "field",
-        scope: "canvas",
-        defaultBindings: [],
-        args: { shown: "everyone" },
-    },
     // Where those icons go: the popup's Where choice. Unbound
     equipmentIconsBeside: {
         labelKey: "actions.cues.equipmentIconsBeside",
@@ -992,6 +966,16 @@ const STATIC_ACTIONS = {
         category: "ui",
         scope: "canvas",
         defaultBindings: ["M"],
+    },
+    // Facing arrows on the field (fork #1316): the display bar's Show facing. Unbound
+    toggleFacingArrows: {
+        labelKey: "actions.ui.toggleFacingArrows",
+        keywordsKey: "actions.ui.toggleFacingArrowsKeywords",
+        toggleOnKey: "actions.ui.showFacingArrows",
+        toggleOffKey: "actions.ui.hideFacingArrows",
+        category: "ui",
+        scope: "canvas",
+        defaultBindings: [],
     },
     // The show's 3D venue under the 2D grid (#1207), back in the look last picked. Unbound: a
     // view picked now and then, from the display bar's Venue button or the palette

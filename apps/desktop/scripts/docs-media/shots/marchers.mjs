@@ -1186,13 +1186,14 @@ const shots = [
     {
         id: "marchers-facing-field",
         kind: "still",
-        // On the field at the end of Page 1 (fork #1316): G6–G10 drawn pointing to side 2 and
-        // G14, G19 and G22 to the back; everyone else faces the front and is a plain dot
+        // On the field at the end of Page 1 with Show facing on (fork #1316): G6–G10's arrows
+        // point to side 2 and G14, G19 and G22's to the back; everyone else's to the front
         async setup({ page, wait }) {
             await toPage1(page, wait);
             await setFacing(page, SABRES, "facingSide2", wait);
             await setFacing(page, TUBAS, "facingBack", wait);
             await page.keyboard.press("Escape");
+            await page.getByTestId("field-display-facing").click();
             await page.mouse.move(800, 990);
             await wait(1000);
             await hideToasts(page);
@@ -1212,14 +1213,22 @@ const shots = [
     {
         id: "marchers-facing-setting",
         kind: "still",
-        // The field display bar's Facing choices, open beside the bar (fork #1316)
+        // The field display bar's Show facing button, pressed, with its tooltip (fork #1316)
         async setup({ page, wait, union, around }) {
             await toPage1(page, wait);
-            await page.getByTestId("field-display-facing").click();
-            await wait(800);
+            const button = page.getByTestId("field-display-facing");
+            await button.click();
+            // Off and back on, so the tooltip opens from a hover rather than the click
+            await button.blur();
+            await page.mouse.move(800, 500);
+            await wait(300);
+            await button.hover();
+            await wait(1500);
+            const tip = page
+                .locator("[data-radix-popper-content-wrapper]")
+                .first();
             const bar = page.getByTestId("field-display-bar");
-            const pop = page.getByRole("dialog", { name: "Facing" });
-            return { box: union(await around(bar, 12), await around(pop, 12)) };
+            return { box: union(await around(bar, 12), await around(tip, 12)) };
         },
     },
 ];
