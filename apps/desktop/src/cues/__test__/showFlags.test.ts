@@ -10,7 +10,7 @@ import {
 } from "@/showAssets/flags";
 import { carryForValue } from "@/view3d/core/marchers/equipmentSpans";
 import { compileShowCues } from "../showCues";
-import { equipmentValueOfChoice, heldValueAt } from "../equipment";
+import { equipmentValueOfChoice, heldValueAt, withRecent } from "../equipment";
 import {
     equipmentIconsAt,
     iconOfValue,
@@ -86,7 +86,7 @@ describe("the show's flags (fork #985)", () => {
     it("names a new flag after its file", () => {
         expect(flagNameOfFile("Ballad silk.png")).toBe("Ballad silk");
         expect(flagNameOfFile("my.flag.v2.PNG")).toBe("my.flag.v2");
-        expect(flagNameOfFile(".png")).toBe("Flag");
+        expect(flagNameOfFile(".png")).toBe("");
     });
 });
 
@@ -128,6 +128,11 @@ describe("handing out the show's flags with Equipment cues (fork #985)", () => {
     it("stores the flag's own reference as the cue's value", () => {
         expect(equipmentValueOfChoice(opener)).toBe(opener);
         expect(equipmentValueOfChoice("rifle")).toBe("builtin:equipment.rifle");
+    });
+
+    it("keeps the show's flags out of the recent items, which are kept across shows", () => {
+        expect(withRecent(["rifle"], opener)).toEqual(["rifle"]);
+        expect(withRecent(["rifle"], "sabre")).toEqual(["sabre", "rifle"]);
     });
 
     it("each performer holds the flag their cue names, a trumpet too", () => {

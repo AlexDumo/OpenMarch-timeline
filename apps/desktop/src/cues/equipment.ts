@@ -97,12 +97,20 @@ export function editedPerformers(
 /** How many recent Equipment choices the field menu keeps. */
 export const RECENT_EQUIPMENT_LIMIT = 4;
 
-/** The recent catalog items after choosing `key`: it goes first, at most four, no repeats. */
+/**
+ * The recent catalog items after choosing `key`: it goes first, at most four, no repeats. A show's
+ * own flag isn't one: the recent list is kept across shows, and the flags are listed anyway.
+ */
 export function withRecent(
     recent: readonly string[],
     key: EquipmentChoice,
 ): string[] {
-    if (key === "usual" || key === "none") return [...recent];
+    if (
+        key === "usual" ||
+        key === "none" ||
+        key.startsWith(SHOW_ASSET_REF_PREFIX)
+    )
+        return [...recent];
     return [key, ...recent.filter((k) => k !== key)].slice(
         0,
         RECENT_EQUIPMENT_LIMIT,

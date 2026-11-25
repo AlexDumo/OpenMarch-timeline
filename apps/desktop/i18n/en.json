@@ -3737,8 +3737,6 @@
             "guardUniforms": "Guard uniform",
             "brassFinish": "Brass finish",
             "tuba": "Tubas",
-            "silkShape": "Flag silk shape",
-            "silkArtwork": "Flag silk artwork",
             "tabs": {
                 "venue": "Venue",
                 "performers": "Performers",
@@ -3864,16 +3862,6 @@
             "swing": "Swing"
         },
         "silkArtwork": {
-            "none": "No artwork: the silks show the guard uniform's pattern or the section's color.",
-            "import": "Import PNG…",
-            "replace": "Replace…",
-            "remove": "Remove",
-            "template": "Template for {shape}:",
-            "preparing": "Preparing…",
-            "notPng": "That file isn't a PNG. Export your artwork as PNG and import it again.",
-            "tooLarge": "That PNG is too large. Export it at a lower resolution and import it again.",
-            "unreadable": "That PNG couldn't be read.",
-            "templateFailed": "The template couldn't be made.",
             "saveFailed": "Couldn't save the flag silk artwork"
         },
         "cameraSettings": {

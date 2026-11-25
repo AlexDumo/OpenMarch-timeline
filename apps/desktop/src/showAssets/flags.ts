@@ -102,8 +102,11 @@ export function flagCueValue(flag: Pick<ShowFlag, "value" | "name">): CueValue {
 export const flagCueValues = (flags: readonly ShowFlag[]): CueValue[] =>
     flags.map(flagCueValue);
 
-/** A file's name without its extension, as a new flag's name: "Ballad silk.png" → "Ballad silk" */
+/**
+ * A file's name without its extension, as a new flag's name: "Ballad silk.png" → "Ballad silk".
+ * Empty for a file with no name of its own, for the designer to name.
+ */
 export function flagNameOfFile(fileName: string): string {
     const base = fileName.replace(/\.[^./\\]+$/, "").trim();
-    return base.length > 0 ? base.slice(0, 200) : "Flag";
+    return base.slice(0, 200);
 }

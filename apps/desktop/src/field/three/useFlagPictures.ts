@@ -47,7 +47,13 @@ export function useFlagPictures(wanted: boolean): PictureAtlas | null {
         );
         return () => {
             live = false;
-            made?.texture.dispose();
+            // after the icons' next layout has moved them to the new pictures, so the field never
+            // draws with a texture that's gone
+            const old = made;
+            if (old)
+                requestAnimationFrame(() =>
+                    requestAnimationFrame(() => old.texture.dispose()),
+                );
         };
     }, [key]);
     return key && drawn?.key === key ? drawn.atlas : null;

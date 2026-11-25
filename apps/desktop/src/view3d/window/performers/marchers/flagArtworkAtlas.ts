@@ -1,7 +1,7 @@
 /**
  * The show's flags' designs as the silks' texture (fork #985): one texture with a square tile per
  * flag, in the show's order, each tile the design's trim (the template's bleed cut off) stretched
- * over it. A silk carrying a show flag reads its own tile (`Carry.artwork`, `silkSet.ts`), so
+ * over it inside a border (`FLAG_ARTWORK_GUTTER`). A silk carrying a show flag reads its own tile (`Carry.artwork`, `silkSet.ts`), so
  * performers can swap flags with Equipment cues and each shows its own design.
  */
 import { useEffect } from "react";
@@ -12,7 +12,11 @@ import { silkArtworkTrimRect } from "@/view3d/core/silkArtwork";
 import { silkShapeSurface } from "@/view3d/core/artworkTemplates/surfaces";
 import { silkShape } from "@/view3d/core/sizes/silkShapes";
 import { requestDraw } from "../../drawWake";
-import { setFlagArtworks, type FlagArtworkGrid } from "./silkSet";
+import {
+    FLAG_ARTWORK_GUTTER,
+    setFlagArtworks,
+    type FlagArtworkGrid,
+} from "./silkSet";
 
 /** A tile's side at most, in pixels: a silk's design up close */
 export const FLAG_ARTWORK_TILE_PX = 512;
@@ -59,17 +63,24 @@ async function drawAtlas(
                         bitmap.height,
                         silkShapeSurface(silkShape(flag.shape)),
                     );
-                    ctx.drawImage(
-                        bitmap,
-                        trim.x * bitmap.width,
-                        trim.y * bitmap.height,
-                        trim.width * bitmap.width,
-                        trim.height * bitmap.height,
-                        (k % grid.cols) * grid.tile,
-                        Math.floor(k / grid.cols) * grid.tile,
-                        grid.tile,
-                        grid.tile,
-                    );
+                    const x = (k % grid.cols) * grid.tile;
+                    const y = Math.floor(k / grid.cols) * grid.tile;
+                    const gutter = grid.tile * FLAG_ARTWORK_GUTTER;
+                    const draw = (at: number, side: number) =>
+                        ctx.drawImage(
+                            bitmap,
+                            trim.x * bitmap.width,
+                            trim.y * bitmap.height,
+                            trim.width * bitmap.width,
+                            trim.height * bitmap.height,
+                            x + at,
+                            y + at,
+                            side,
+                            side,
+                        );
+                    // the border: the design stretched over the whole tile, then the design inside
+                    draw(0, grid.tile);
+                    draw(gutter, grid.tile - 2 * gutter);
                 } finally {
                     bitmap.close();
                 }

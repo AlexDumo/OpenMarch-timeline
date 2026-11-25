@@ -239,7 +239,14 @@ export function useCueActionHandlers() {
         useSetEquipment(choice, commands, isPlaying);
     useActionHandlerGroup(
         SELECT_ACTIONS,
-        (id) => commands.selectHolding(SELECT_VALUES.get(id) ?? []),
+        (id) =>
+            commands.selectHolding([
+                ...(SELECT_VALUES.get(id) ?? []),
+                // the show's own flags are guard equipment too (fork #985)
+                ...(id === selectFamilyActionOf("guard")
+                    ? (commands.show?.flags ?? []).map((f) => f.value)
+                    : []),
+            ]),
         {
             enabled: !isPlaying && commands.count !== null,
             disabledReason: setReason(commands, isPlaying, true),

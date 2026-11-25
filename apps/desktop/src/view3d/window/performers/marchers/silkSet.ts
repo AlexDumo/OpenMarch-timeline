@@ -200,6 +200,12 @@ export function setFlagArtworks(
     );
 }
 
+/**
+ * Each tile's border, as a share of its side: the design stretched a little past its own edge, so
+ * a far silk's blurred (mipmapped) texture reads its own design's colors, not the next tile's.
+ */
+export const FLAG_ARTWORK_GUTTER = 1 / 16;
+
 /** `aPattern` for a silk painted with the design in tile `tile` of the flags' texture. */
 export const flagArtworkPattern = (tile: number): number => -2 - tile;
 
@@ -283,8 +289,8 @@ float silkCutAlpha(vec2 p, float cut) {
 /** A show flag's design (tile t of the flags' texture) at the flat silk point p, over the plain color. */
 vec3 flagArtworkColor(vec2 p, float t, vec3 plain) {
   vec2 cell = vec2(mod(t, uFlagArtworkGrid.x), floor(t / uFlagArtworkGrid.x));
-  // inside the tile by half a pixel, so the next tile's edge doesn't bleed in
-  vec2 q = clamp(p, vec2(0.5 / uFlagArtworkGrid.z), vec2(1.0 - 0.5 / uFlagArtworkGrid.z));
+  // the design lies inside the tile's border (FLAG_ARTWORK_GUTTER)
+  vec2 q = ${FLAG_ARTWORK_GUTTER.toFixed(6)} + clamp(p, 0.0, 1.0) * ${(1 - 2 * FLAG_ARTWORK_GUTTER).toFixed(6)};
   vec2 a = (cell + q) / uFlagArtworkGrid.xy;
   // the texture's top row is at v = 1
   vec4 art = texture2D(uFlagArtworks, vec2(a.x, 1.0 - a.y));

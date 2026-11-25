@@ -213,11 +213,11 @@ export default function LabelsLayer({
         invalidate();
         return () => iconBatch?.dispose();
     }, [iconBatch, invalidate]);
-    // The show's flags' pictures (fork #985): who holds which flag, in its own colors
+    // The show's flags' pictures (fork #985): who holds which flag, in its own colors. They go on
+    // the icons with the layout (in the frame), so a layout never reads the last set's places.
     useEffect(() => {
-        iconBatch?.setPictures(pictures);
         invalidate();
-    }, [iconBatch, pictures, invalidate]);
+    }, [pictures, invalidate]);
     const drawn = useRef({
         version: -1,
         idsVersion: -1,
@@ -343,6 +343,7 @@ export default function LabelsLayer({
                     weight: weightOf(id),
                 })),
             );
+            iconBatch?.setPictures(pictures);
             iconBatch?.setIcons(
                 iconsOf(iconsNow?.icons, shown, size, color, hoveredId),
             );
