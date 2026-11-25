@@ -113,6 +113,11 @@ export interface UiSettings {
     /** Where those icons go: after the drill number, in place of the dot, or of the number */
     equipmentIconPlace?: EquipmentIconPlace;
     /**
+     * How the field draws performers (fork #1319): dots, figures seen from above, or figures
+     * with their dots on top. Dots by default.
+     */
+    performerFigures?: PerformerFigures;
+    /**
      * Whether an open shape shows its walks and start rings (#403): the floating editor's
      * Pathways toggle. Off by default.
      */
@@ -150,6 +155,15 @@ export type MarcherLabelForm = "auto" | "names" | "numbers" | "off";
 export type MarcherLabelSize = "small" | "normal" | "large";
 export type ShapeOutlines = "selected" | "always" | "off";
 export type { EquipmentIconPlace, EquipmentIcons };
+
+/** How the field draws performers (fork #1319): dots, figures, or figures with their dots on top. */
+export type PerformerFigures = "off" | "figures" | "withDots";
+
+const PERFORMER_FIGURES: readonly PerformerFigures[] = [
+    "off",
+    "figures",
+    "withDots",
+];
 
 export const FIELD_VENUE_LOOKS = [
     "off",
@@ -217,6 +231,7 @@ export const defaultSettings: UiSettings = {
     lineOrder: "off",
     equipmentIcons: "changed",
     equipmentIconPlace: "beside",
+    performerFigures: "off",
     shapeWalks: false,
     followTheLeader: false,
     fieldVenue: "off",
@@ -289,6 +304,11 @@ export const parseSettings = (raw: string): UiSettings => {
         recentEquipment: stringList(parsed.recentEquipment).slice(0, 4),
         equipmentIcons: parseEquipmentIcons(parsed.equipmentIcons),
         equipmentIconPlace: parseEquipmentIconPlace(parsed.equipmentIconPlace),
+        performerFigures: oneOf(
+            PERFORMER_FIGURES,
+            parsed.performerFigures,
+            "off",
+        ),
         startFlagPositions: parseStartFlagPositions(parsed.startFlagPositions),
         fieldVenue: oneOf(FIELD_VENUE_LOOKS, parsed.fieldVenue, "off"),
         fieldVenueLast: oneOf(

@@ -183,6 +183,8 @@ import { threeFieldView } from "@/field/benchmark/fieldScenarios";
 import { r3fFrames } from "./benchmarkFrames";
 import { makeFloorSampler } from "@/pathways/floorSampler";
 import { useTheme } from "@/context/ThemeContext";
+import FiguresLayer from "./layers/FiguresLayer";
+import { figureKeyOf, useFigureAtlas } from "./figures/figureAtlas";
 import {
     CHECKPOINT_FONT,
     COLLISION_FONT,
@@ -200,6 +202,8 @@ const FOCUS_ORDER = 1.4;
 const ITEMS_ORDER = 1.3;
 const PATHS_ORDER = 1.5;
 const COLLISIONS_ORDER = 4;
+/** Performer figures (fork #1319): over the pathways, under the labels and the dots. */
+const FIGURES_ORDER = 1.8;
 
 /**
  * The three.js field, or an explanation in its place when its canvas can't get
@@ -365,6 +369,18 @@ function ThreeFieldView() {
     const equipmentIcons = useEquipmentIcons();
     const equipmentIconPlace = useUiSettingsStore(
         (s) => s.uiSettings.equipmentIconPlace ?? "beside",
+    );
+    // Performers as figures seen from above (fork #1319), each by what their section carries
+    const performerFigures = useUiSettingsStore(
+        (s) => s.uiSettings.performerFigures ?? "off",
+    );
+    const figureAtlas = useFigureAtlas(performerFigures !== "off");
+    const figureKeys = useMemo(
+        () =>
+            new Map(
+                (marcherRows ?? []).map((m) => [m.id, figureKeyOf(m.section)]),
+            ),
+        [marcherRows],
     );
     const items = useMemo(() => new FieldItems(marchers), [marchers]);
     const itemLabels = useFieldItems(items, beats);
@@ -905,6 +921,17 @@ function ThreeFieldView() {
                             selectedIds={selectedIds}
                             fieldProperties={fieldProperties}
                         />
+                        {performerFigures !== "off" && figureAtlas && (
+                            <FiguresLayer
+                                marchers={marchers}
+                                dimming={dimming}
+                                look={look}
+                                theme={fieldProperties.theme}
+                                atlas={figureAtlas}
+                                figureKeys={figureKeys}
+                                renderOrder={FIGURES_ORDER}
+                            />
+                        )}
                         <MarchersLayer
                             marchers={marchers}
                             dimming={dimming}
@@ -912,6 +939,14 @@ function ThreeFieldView() {
                             theme={fieldProperties.theme}
                             icons={equipmentIcons}
                             iconPlace={equipmentIconPlace}
+                            figuresInstead={
+                                performerFigures === "figures" &&
+                                figureAtlas !== null
+                            }
+                            figuresUnder={
+                                performerFigures === "withDots" &&
+                                figureAtlas !== null
+                            }
                         />
                         <LabelsLayer
                             marchers={marchers}

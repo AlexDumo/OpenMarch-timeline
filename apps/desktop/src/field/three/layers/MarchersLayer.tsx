@@ -23,6 +23,7 @@ import { dotSizes, SELECTION_RGBA01 } from "../selectionRing";
 import type { LabelIcons } from "@/cues/useEquipmentIcons";
 import type { EquipmentIconPlace } from "@/cues/equipmentIcons";
 import { useIconAtlas } from "../iconBatch";
+import { figuresDrawnAt } from "../figures/figureAtlas";
 
 /**
  * Every marcher's dot in one instanced draw, shaded in the fragment shader so
@@ -216,6 +217,9 @@ void main() {
     gl_FragColor = vec4(rgb / a, a);
 }`;
 
+/** A dot drawn on a performer's figure is this much of its usual size, so the figure shows. */
+const DOT_ON_FIGURE = 0.5;
+
 type Drawn = {
     version: number;
     idsVersion: number;
@@ -226,6 +230,8 @@ type Drawn = {
     theme: FieldTheme | null;
     /** Who has an icon in place of their dot, as `LabelIcons` keys it ("" for nobody) */
     iconDotsKey: string;
+    /** Whether figures stand in for the dots (fork #1319) */
+    figureDots: boolean;
 };
 
 /** The marchers' dots, each in its appearance at the beat drawn, with a ring on each selected one. */
@@ -236,6 +242,8 @@ export default function MarchersLayer({
     theme,
     icons = null,
     iconPlace = "beside",
+    figuresInstead = false,
+    figuresUnder = false,
 }: {
     marchers: FieldMarchers;
     /** Marchers drawn dimmed (#201). */
@@ -247,6 +255,13 @@ export default function MarchersLayer({
     icons?: LabelIcons | null;
     /** In place of the dot, a performer with an icon has only its selection ring drawn here */
     iconPlace?: EquipmentIconPlace;
+    /**
+     * Performer figures stand in for the dots (fork #1319), once loaded: only selection rings
+     * draw here, except zoomed out too far for figures, where the dots come back
+     */
+    figuresInstead?: boolean;
+    /** Performer figures draw under the dots (fork #1319): the dots shrink to sit on them */
+    figuresUnder?: boolean;
 }) {
     const invalidate = useThree((s) => s.invalidate);
     // In place of the dot: the icons' atlas, which the dots wait for
@@ -261,6 +276,7 @@ export default function MarchersLayer({
         selectionVersion: -1,
         theme: null,
         iconDotsKey: "",
+        figureDots: false,
     });
 
     const mesh = useMemo(() => {
@@ -298,7 +314,10 @@ export default function MarchersLayer({
     }, []);
 
     // A new theme restyles the dots on the next frame
-    useEffect(() => invalidate(), [theme, iconAtlas, invalidate]);
+    useEffect(
+        () => invalidate(),
+        [theme, iconAtlas, figuresInstead, figuresUnder, invalidate],
+    );
     // New dimming redraws them on the next frame
     useEffect(() => dimming.subscribe(invalidate), [dimming, invalidate]);
     useEffect(() => look.subscribe(invalidate), [look, invalidate]);
@@ -313,7 +332,12 @@ export default function MarchersLayer({
 
     useFrame(() => {
         const { zoom } = draw.view.getState();
-        const { scale, ringGap, ringWidth } = dotSizes(zoom);
+        const sizes = dotSizes(zoom);
+        const { ringGap, ringWidth } = sizes;
+        const scale =
+            figuresUnder && figuresDrawnAt(zoom)
+                ? sizes.scale * DOT_ON_FIGURE
+                : sizes.scale;
         const { uniforms } = mesh.material;
         uniforms.uScale.value = scale;
         // In the shape's own units, as the edge distance `d`
@@ -330,9 +354,11 @@ export default function MarchersLayer({
                 ? (icons?.at(marchers.drawnBeat) ?? null)
                 : null;
         const iconDotsKey = iconDots?.key ?? "";
+        const figureDots = figuresInstead && figuresDrawnAt(zoom);
         const restyled =
             resized ||
             iconDotsKey !== last.iconDotsKey ||
+            figureDots !== last.figureDots ||
             marchers.appearanceVersion !== last.appearanceVersion ||
             theme !== last.theme;
         const dimChanged =
@@ -400,6 +426,16 @@ export default function MarchersLayer({
                     outlines[i * 4 + 3] = 0;
                 });
             }
+            // A figure stands in for every performer's dot, its selection ring still drawn
+            if (figureDots) {
+                const fills = fill.array as Float32Array;
+                const outlines = outline.array as Float32Array;
+                marchers.isItem.forEach((item, i) => {
+                    if (item) return;
+                    fills[i * 4 + 3] = 0;
+                    outlines[i * 4 + 3] = 0;
+                });
+            }
             fill.needsUpdate = true;
             outline.needsUpdate = true;
             shape.needsUpdate = true;
@@ -433,6 +469,7 @@ export default function MarchersLayer({
             selectionVersion: marchers.selectionVersion,
             theme,
             iconDotsKey,
+            figureDots,
         };
     });
 

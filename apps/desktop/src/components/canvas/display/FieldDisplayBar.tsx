@@ -6,6 +6,7 @@ import {
     BoundingBoxIcon,
     HandGrabbingIcon,
     ListNumbersIcon,
+    PersonSimpleIcon,
     QuestionIcon,
     TextAaIcon,
     type Icon,
@@ -22,6 +23,7 @@ import {
     type EquipmentIconPlace,
     type EquipmentIcons,
     type MarcherLabelForm,
+    type PerformerFigures,
     type ShapeOutlines,
     type UiSettings,
 } from "@/stores/UiSettingsStore";
@@ -64,6 +66,13 @@ const EQUIPMENT_PLACE_CHOICES: readonly Choice<EquipmentIconPlace>[] = [
     { value: "beside", key: "toolbar.view.equipmentBeside" },
     { value: "dot", key: "toolbar.view.equipmentOnDot" },
     { value: "label", key: "toolbar.view.equipmentOnNumber" },
+];
+
+/** How performers are drawn (fork #1319): dots, figures seen from above, or both */
+const FIGURE_CHOICES: readonly Choice<PerformerFigures>[] = [
+    { value: "off", key: "toolbar.view.figuresOff" },
+    { value: "figures", key: "toolbar.view.figuresOn" },
+    { value: "withDots", key: "toolbar.view.figuresWithDots" },
 ];
 
 const ORDER_CHOICES: readonly Choice<ShapeOutlines>[] = [
@@ -122,6 +131,15 @@ export default function FieldDisplayBar() {
                         keepOpen
                         more={<EquipmentPlaceChoices />}
                     />
+                    {/* Performers as figures seen from above, to scale (fork #1319) */}
+                    <ChoiceButton
+                        setting="performerFigures"
+                        fallback="off"
+                        choices={FIGURE_CHOICES}
+                        icon={PersonSimpleIcon}
+                        labelKey="toolbar.view.figures"
+                        testId="field-display-figures"
+                    />
                     {/* Placed boxes' outlines (docs/timeline/research/shapes/07-placed-boxes.md) */}
                     <ChoiceButton
                         setting="shapes"
@@ -163,7 +181,12 @@ interface Choice<T extends string> {
  * them, as the View tab's select did.
  */
 function ChoiceButton<
-    K extends "marcherLabels" | "shapes" | "lineOrder" | "equipmentIcons",
+    K extends
+        | "marcherLabels"
+        | "shapes"
+        | "lineOrder"
+        | "equipmentIcons"
+        | "performerFigures",
 >({
     setting,
     fallback,
