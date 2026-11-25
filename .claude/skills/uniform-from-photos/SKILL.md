@@ -202,10 +202,13 @@ Read the exit code:
 - **5:** rendered, but a mode has errors: read each mode's `errors` in `report.json`, fix the pack
   and build again.
 - **3:** no GPU: stop and say so; there is no CPU fallback.
-- **4:** bad arguments or a pack that doesn't read: fix the command or the pack (the refusals are
-  printed and in `report.json`).
+- **4:** bad arguments, a pack that doesn't read, or another run holds the output folder: fix the
+  command or the pack (the refusals are printed and in `report.json`), or render into another
+  folder.
 - **2:** the render crashed: read the error in the output and `report.json`. Try once more; if it
   crashes again, stop and report it.
+- **130:** stopped by Ctrl+C or a signal: the browser and lock are cleaned up. Run it again if you
+  didn't mean to stop it.
 
 Open every `contact-<mode>.png`, and for each mode `stand-neutral-average-front.png`,
 `stand-neutral-average-back.png` and `atlas-neutral-average.png` at full size. Read `report.json`:

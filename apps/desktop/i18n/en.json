@@ -3962,8 +3962,9 @@
             },
             "newer": "The band's uniform was made with a newer version of OpenMarch, so the band wears its preset. Update OpenMarch to see it.",
             "loadFailed": "The band's uniform couldn't be loaded just now, so the band wears its preset for now. Its file may be fine. Try again to load it.",
-            "listFailed": "The show's custom uniforms couldn't be loaded just now, so they aren't in the list.",
-            "tryAgain": "Try again"
+            "listFailed": "The list of the show's custom uniforms couldn't be loaded just now, so some may be missing from it.",
+            "tryAgain": "Try again",
+            "loading": "Loading…"
         },
         "uniformItems": {
             "title": "Logos and numbers",
@@ -5648,7 +5649,7 @@
             "missingUniformPreviewOff": "The band's custom uniform isn't in this show anymore, so the band wears its preset. To bring it back, turn on Custom uniforms (preview) in the 3D View settings' Preferences, then import it again.",
             "unreadableUniformPreviewOff": "The band's custom uniform is in this show, but its file can't be read (it may be damaged), so the band wears its preset. Pick another uniform in the 3D View settings.",
             "newerUniform": "The band's custom uniform was made with a newer version of OpenMarch, so the band wears its preset. Update OpenMarch to see it.",
-            "loadFailedUniform": "The band's custom uniform couldn't be loaded just now, so the band wears its preset for now. Its file may be fine. Try again to load it.",
+            "loadFailedUniform": "The band's custom uniform couldn't be loaded just now. Its file may be fine. Until it loads, the band wears its preset.",
             "loadFailed": "The show's assets couldn't be loaded just now."
         },
         "removeUnused": {
@@ -5685,6 +5686,7 @@
         },
         "olderVersions": "{count, plural, one {# older version} other {# older versions}}, {size}",
         "otherVersions": "{count, plural, one {# other version} other {# other versions}}, {size}",
-        "tryAgain": "Try again"
+        "tryAgain": "Try again",
+        "loading": "Loading…"
     }
 }

@@ -28,6 +28,7 @@ import { storedVenueSettingsQueryOptions } from "@/hooks/queries/useVenueSetting
 import {
     removeUnusedShowAssetsMutationOptions,
     setShowAssetCreditsMutationOptions,
+    showAssetKeys,
     showAssetsQueryOptions,
     showAssetSizesQueryOptions,
     uniformsInHistoryKeys,
@@ -78,9 +79,14 @@ export function useSizeText() {
 /**
  * The show's assets and who uses them, live (`use`, null until they've loaded); whether the
  * list of assets couldn't be loaded (`listFailed`); and Try again, which reads again whatever
- * failed: the list, or the band's uniform ("loadFailed")
+ * failed: the list, or the band's uniform ("loadFailed"), and whether it's running (`retrying`).
+ *
+ * Try again invalidates rather than fetching again itself: the editor relays every invalidation to the 3D
+ * View window (`relayInvalidations`), whose own read of the uniform is what dresses the band, so
+ * one Try again here reads it again there too.
  */
 function useAssetUse() {
+    const queryClient = useQueryClient();
     const assetsQuery = useQuery(showAssetsQueryOptions());
     const sizesQuery = useQuery(showAssetSizesQueryOptions());
     const { data: assets } = assetsQuery;
@@ -116,10 +122,22 @@ function useAssetUse() {
     const assetsFailed = assetsQuery.isError && assets === undefined;
     const sizesFailed = sizesQuery.isError && sizes === undefined;
     const wornFailed = wornPackQuery.isError && wornPack === undefined;
+    const retrying =
+        (assetsFailed && assetsQuery.isFetching) ||
+        (sizesFailed && sizesQuery.isFetching) ||
+        (wornFailed && wornPackQuery.isFetching);
     const tryAgain = () => {
-        if (assetsFailed) void assetsQuery.refetch();
-        if (sizesFailed) void sizesQuery.refetch();
-        if (wornFailed) void wornPackQuery.refetch();
+        if (retrying) return;
+        // the assets' key covers their sizes and every uniform read
+        if (assetsFailed || sizesFailed)
+            void queryClient.invalidateQueries({
+                queryKey: showAssetKeys.all(),
+            });
+        else if (wornFailed)
+            void queryClient.invalidateQueries({
+                queryKey: uniformPackQueryOptions(worn).queryKey,
+                exact: true,
+            });
     };
     const use = useMemo(() => {
         // `venue` is null with no venue row, undefined while it loads
@@ -183,7 +201,12 @@ function useAssetUse() {
         wornPack,
         wornFailed,
     ]);
-    return { use, listFailed: assetsFailed || sizesFailed, tryAgain };
+    return {
+        use,
+        listFailed: assetsFailed || sizesFailed,
+        tryAgain,
+        retrying,
+    };
 }
 
 export function AssetsContents({
@@ -192,7 +215,7 @@ export function AssetsContents({
     /** Opens Remove unused… at once (the `removeUnusedAssets` action) */
     openRemove?: boolean;
 }) {
-    const { use, listFailed, tryAgain } = useAssetUse();
+    const { use, listFailed, tryAgain, retrying } = useAssetUse();
     const [removing, setRemoving] = useState(openRemove);
     // Remove unused… reads again which uniforms undo or redo names: an edit elsewhere may have
     // cleared the redo steps since. Its list and size wait for that read.
@@ -231,14 +254,11 @@ export function AssetsContents({
                         <span>
                             <T keyName="assets.notes.loadFailed" />
                         </span>
-                        <Button
-                            size="compact"
-                            variant="secondary"
+                        <TryAgainButton
                             onClick={tryAgain}
-                            data-testid="assets-try-again"
-                        >
-                            <T keyName="assets.tryAgain" />
-                        </Button>
+                            retrying={retrying}
+                            testId="assets-try-again"
+                        />
                     </div>
                 )}
                 {use && (
@@ -252,6 +272,7 @@ export function AssetsContents({
                         historyFailed={use.historyFailed}
                         onRemove={() => setRemoving(true)}
                         onTryAgain={tryAgain}
+                        retrying={retrying}
                     />
                 )}
                 {use && use.assets.length === 0 && (
@@ -283,6 +304,30 @@ export function AssetsContents({
     );
 }
 
+/** Try again, disabled and saying "Loading…" while it runs, so a click never starts it over */
+function TryAgainButton({
+    onClick,
+    retrying,
+    testId,
+}: {
+    onClick: () => void;
+    retrying: boolean;
+    testId: string;
+}) {
+    return (
+        <Button
+            size="compact"
+            variant="secondary"
+            className="shrink-0"
+            onClick={onClick}
+            disabled={retrying}
+            data-testid={testId}
+        >
+            <T keyName={retrying ? "assets.loading" : "assets.tryAgain"} />
+        </Button>
+    );
+}
+
 /** The quiet notes at the top: unused assets, props whose model is gone, a large show */
 function AssetNotes({
     unused,
@@ -294,6 +339,7 @@ function AssetNotes({
     historyFailed,
     onRemove,
     onTryAgain,
+    retrying,
 }: {
     unused: readonly AssetUse[];
     /** Every asset version, to count unused ones as the Remove unused… list groups them */
@@ -306,6 +352,8 @@ function AssetNotes({
     onRemove: () => void;
     /** Reads the band's uniform again after it couldn't be loaded */
     onTryAgain: () => void;
+    /** Try again is running */
+    retrying: boolean;
 }) {
     const tally = removableCount(removableLines(unused, all));
     const sizeText = useSizeText();
@@ -389,14 +437,11 @@ function AssetNotes({
                 <span>
                     <T keyName="assets.notes.loadFailedUniform" />
                 </span>
-                <Button
-                    size="compact"
-                    variant="secondary"
+                <TryAgainButton
                     onClick={onTryAgain}
-                    data-testid="assets-uniform-try-again"
-                >
-                    <T keyName="assets.tryAgain" />
-                </Button>
+                    retrying={retrying}
+                    testId="assets-uniform-try-again"
+                />
             </li>,
         );
     if (uniformProblem === "newer")

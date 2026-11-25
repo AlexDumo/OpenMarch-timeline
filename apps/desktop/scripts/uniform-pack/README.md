@@ -53,7 +53,9 @@ Without `--out` the pack goes next to the folder, named after the pack.
 ## `uniform.json`
 
 A folder holds `uniform.json` and the SVG and PNG files it names, by paths inside the folder.
-`example/` is the app's built-in sample uniform as a pack folder.
+`example/` is the app's built-in sample uniform as a pack folder. Like the built-in sample, it takes the
+counsel-gate terms of `src/view3d/assets/uniform-flats` until the owner decides whether art drawn on
+those outlines can be CC0, so its credits name no license.
 
 ```jsonc
 {

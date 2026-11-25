@@ -306,7 +306,12 @@ export function UniformPicker() {
     // a read that failed after its retries with nothing read: not a damaged file (Try again)
     const packsFailed = packsQuery.isError && packs === undefined;
     const packFailed = packQuery.isError && pack === undefined;
+    // while Try again runs, the button waits instead of starting it over
+    const retrying =
+        (packsFailed && packsQuery.isFetching) ||
+        (packFailed && packQuery.isFetching);
     const tryAgain = () => {
+        if (retrying) return;
         if (packsFailed) void packsQuery.refetch();
         if (packFailed) void packQuery.refetch();
     };
@@ -320,23 +325,30 @@ export function UniformPicker() {
         packs ? wornEntry !== undefined : undefined,
         packRead ? pack : undefined,
         uniformPackIsNewer(namedPack),
-        packsFailed || packFailed,
+        packFailed,
     );
     const worn = problem ? null : named;
-    // with the setting on, the list of the show's uniforms failed though the band wears none
-    const listFailed = flats && packsFailed && !problem;
+    // the list of the show's uniforms failed, though the band's uniform (if any) reads: a
+    // note of its own, with the setting on (the list is the picker's choices) or while the band
+    // wears a custom uniform
+    const listFailed = packsFailed && !problem && (flats || namedPack !== null);
     type Value = UniformPresetId | typeof FLATS_SAMPLE | UniformPackValue;
     const sampleOption = {
         value: FLATS_SAMPLE as Value,
         label: t("view3d.uniformPreset.flatsSample"),
     };
-    // each uniform once: the version the band wears, else its newest
-    const packOptions = (packs ?? []).map((entry) => ({
-        value: (entry === wornEntry && namedPack
-            ? namedPack
-            : entry.value) as Value,
-        label: entry.name,
-    }));
+    // each uniform once: the version the band wears, else its newest. Without the list (it
+    // failed), the uniform the band wears, as read, so it still shows picked
+    const packOptions = packs
+        ? packs.map((entry) => ({
+              value: (entry === wornEntry && namedPack
+                  ? namedPack
+                  : entry.value) as Value,
+              label: entry.name,
+          }))
+        : worn && isUniformPackValue(worn) && pack
+          ? [{ value: worn as Value, label: pack.name }]
+          : [];
     // with the preview off, only the custom uniform the band wears
     const wornOptions = !worn
         ? []
@@ -402,9 +414,12 @@ export function UniformPicker() {
                         variant="secondary"
                         size="compact"
                         onClick={tryAgain}
+                        disabled={retrying}
                         data-testid="view3d-uniform-try-again"
                     >
-                        {t("view3d.uniformImport.tryAgain")}
+                        {retrying
+                            ? t("view3d.uniformImport.loading")
+                            : t("view3d.uniformImport.tryAgain")}
                     </Button>
                 </div>
             )}

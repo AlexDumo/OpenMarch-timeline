@@ -55,17 +55,16 @@ describe("the example", () => {
             __dirname,
             "../../../../src/view3d/assets/uniform-flats/sample",
         );
-        for (const file of [
-            "front.svg",
-            "back.svg",
-            "crest.svg",
-            "number.svg",
-            "LICENSE",
-        ])
+        for (const file of ["front.svg", "back.svg", "crest.svg", "number.svg"])
             expect(
                 fs.readFileSync(path.join(example, file), "utf8"),
                 `${file}: copy it again from ${sample}`,
             ).toBe(fs.readFileSync(path.join(sample, file), "utf8"));
+    });
+
+    it("claims no license of its own, like the sample (uniform-flats' counsel gate)", () => {
+        expect(fs.existsSync(path.join(example, "LICENSE"))).toBe(false);
+        expect(exampleSource().credits?.license).toBeUndefined();
     });
 });
 

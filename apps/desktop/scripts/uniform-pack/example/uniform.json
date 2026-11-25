@@ -21,7 +21,6 @@
         "hat": true
     },
     "credits": {
-        "license": "CC0-1.0",
         "author": "OpenMarch",
         "source": "apps/desktop/src/view3d/assets/uniform-flats/sample"
     },

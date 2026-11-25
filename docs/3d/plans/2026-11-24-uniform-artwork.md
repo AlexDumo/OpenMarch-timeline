@@ -63,7 +63,7 @@ holds what doesn't change much.
 | ---- | ----- | -------------------------------------------------------------- | ----- |
 | 1    | #1256 | Download the uniform template from the 3D View settings        |       |
 | 2    | #1255 | A sample uniform in flats on the band, on all body types       |       |
-| 3    | #1257 | Import front/back PNG, SVG or PDF as the band's uniform        | 1, 2  |
+| 3    | #1257 | Import front/back PNG or SVG as the band's uniform             | 1, 2  |
 | 4    | #1258 | Place logos and numbers, and preview on all 7 bodies           | 3     |
 | 5    | #1257 | Modes (sash out, unzipped) and switching between them          | 3     |
 | 6    | #1260 | Agent skill: photos to a pack, plus headless render            | 3, 4  |
