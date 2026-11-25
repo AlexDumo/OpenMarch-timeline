@@ -277,6 +277,24 @@ Built in step 3 (fork #1257), with items added in step 4 (fork #1258); ADR 0010'
 
 Every way in produces the same pack. Nothing downstream knows which way a pack came in.
 
+### Agent tools
+
+Built in step 6 (fork #1260). The skill `.claude/skills/uniform-from-photos` takes an agent from
+photos to a pack: an inventory of every garment element, color and mode, SVG flats drawn against
+`regions.json`, items, a build, then up to 3 rounds of rendering and comparing with the photos. It
+uses three commands in `apps/desktop` (`scripts/uniform-pack/README.md`), which run the app's own
+code in headless Chromium:
+
+- `pnpm uniform:build <packDir>`: a folder of `uniform.json` plus SVG and PNG art becomes a
+  `.omasset`, drawn by the app's import and written by the app's writer. It refuses with every
+  problem it finds.
+- `pnpm uniform:render <pack> <outDir>`: renders a pack on all 7 body types with the 3D View's own
+  marchers and atlas, on the GPU (no CPU fallback): front, back, side and three-quarter views, the
+  median body mid-stride, a stands view, a contact sheet per mode and a `report.json` of the quiet
+  notes below.
+- `pnpm uniform:image`: the template downloads, and photo helpers (a pixel grid, color samples,
+  crops for print tiles).
+
 ### Modes and variants
 
 - **Mode.** A mode is an ordered list of layers plus overrides, inside one uniform. For example,
