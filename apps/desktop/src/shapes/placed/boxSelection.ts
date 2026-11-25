@@ -101,7 +101,13 @@ export function boxPressSelection(
         click,
     });
     setInsideBox(out.inside);
+    const wasInFigure = figure.some((b) => b.recipe.id === state.figure);
     setInsideFigure(out.inFigure && box ? box.recipe.id : null);
+    // A double-click's second click comes after this: when its first went into the figure, that
+    // was the double-click's step down (`doubleClickMember`)
+    if (click !== "double")
+        enteredFigureAt =
+            click === "single" && out.inFigure && !wasInFigure ? hit : null;
     // A click on a member of a box selected whole keeps the box, where the editor's rule would
     // narrow the selection to that marcher (a drag moves the box either way)
     if (!out.select && box && out.inside === null && !shift) {
@@ -109,6 +115,21 @@ export function boxPressSelection(
         if (members.every((id) => selected.has(id))) return [...selection];
     }
     return out.select;
+}
+
+/** The marcher whose click last went into a linked figure, until the next press */
+let enteredFigureAt: number | null = null;
+
+/**
+ * Whether the click just before a double-click's second on marcher `id` went into its linked
+ * figure (#1236), so the double-click has gone down its one level already: a double-click on a
+ * figure selected whole selects the shape clicked, as a double-click on a group does in Figma,
+ * not one of its marchers. Answers once.
+ */
+export function enteredFigureByClick(id: number): boolean {
+    const entered = enteredFigureAt === id;
+    enteredFigureAt = null;
+    return entered;
 }
 
 /**

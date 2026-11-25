@@ -16,6 +16,7 @@ import { useHandleMenuStore } from "../../field/handleMenu";
 import type { XY } from "../../types";
 import { boxesAt, type PlacedBox, type PlacedRecipe } from "../placedBox";
 import { useBoxSelectionStore } from "../boxSelectionStore";
+import { boxPressSelection } from "../boxSelection";
 import { openJointMenu } from "../detachLinks";
 import { linkedFigure, liveLinks } from "../shapeLinks";
 import {
@@ -287,6 +288,31 @@ describe("selecting linked shapes on the field", () => {
             inside: 4,
             figure: null,
         });
+    });
+
+    it("double-click on the figure selected whole goes down one level, to the shape, not its marcher", () => {
+        const boxes = placed(jRecipes());
+        const whole = [...LINE, ...ARC, ...TAIL];
+        field(boxes, whole);
+        useBoxSelectionStore.setState({ inside: null, figure: null });
+        // The double-click's first click goes into the figure at the shape
+        expect(boxPressSelection(22, false, whole, false, "single")).toEqual(
+            ARC,
+        );
+        selection = ARC;
+        // Its second keeps the shape, and the double-click goes no further
+        boxPressSelection(22, false, ARC, false, "double");
+        doubleClickMember(22);
+        expect(select).not.toHaveBeenCalled();
+        expect(useBoxSelectionStore.getState()).toMatchObject({
+            inside: null,
+            figure: 2,
+        });
+        // A double-click on the shape selected goes inside it, at the marcher
+        boxPressSelection(22, false, ARC, false, "single");
+        boxPressSelection(22, false, ARC, false, "double");
+        doubleClickMember(22);
+        expect(select).toHaveBeenLastCalledWith([22]);
     });
 
     it("the joint's menu offers Select linked shapes after Detach, and it selects the figure", () => {

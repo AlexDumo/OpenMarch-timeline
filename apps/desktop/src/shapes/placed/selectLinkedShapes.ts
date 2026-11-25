@@ -8,7 +8,13 @@ import {
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
-import { enterBox, figureOf, membersOf, selectOnField } from "./boxSelection";
+import {
+    enterBox,
+    enteredFigureByClick,
+    figureOf,
+    membersOf,
+    selectOnField,
+} from "./boxSelection";
 import {
     setInsideBox,
     setInsideFigure,
@@ -108,6 +114,8 @@ export function selectFigureOf(recipeId: number): void {
 export function doubleClickMember(marcherId: number): void {
     const { enabled, figure } = useBoxSelectionStore.getState();
     if (!enabled) return;
+    // Its first click went from the figure into the shape: that's this double-click's level
+    if (enteredFigureByClick(marcherId)) return;
     const beat = displayedBeat(useTimelineSelectionStore.getState());
     const boxes = placedBoxesAt(beat);
     const ids = doubleClickSelection(

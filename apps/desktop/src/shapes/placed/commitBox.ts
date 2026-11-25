@@ -213,8 +213,10 @@ export function moveShapes(
  * A drop of the selection's marchers (`positions`) that turned, scaled evenly or mirrored placed
  * shapes selected whole (#1236: the selection box's handles, a rotation typed in the inspector):
  * saved through {@link transformShapes}, so each shape goes with its members, keeping its kind,
- * count and links, and shapes linked to them follow. Null when it's no such drop (one that only
- * moved them, or bent one out of form, or a kind that can't follow), for the plain drop to save.
+ * count and links, and shapes linked to them follow. A drag of several shapes linked to shapes
+ * left out goes the same way, so those follow as the arrow keys make them (`moveShapes`). Null
+ * when it's no such drop (one that only moved them otherwise, or bent one out of form, or a kind
+ * that can't follow), for the plain drop to save.
  */
 export function dropOnShapes(
     positions: readonly {
@@ -228,10 +230,22 @@ export function dropOnShapes(
     const boxes = shapes.length > 0 ? shapes : selected ? [selected] : [];
     const field = currentShapeField();
     if (boxes.length === 0 || !field) return null;
-    const sim = similarityOfDrop(boxes, positions);
+    // A move of a whole figure, or of one shape (which takes its followers itself), is the
+    // plain drop's
+    const moves = shapes.length > 0 && linkedOutside(boxes);
+    const sim = similarityOfDrop(boxes, positions, moves);
     if (!sim || !shapesTransformed(boxes, sim, [], shapeContextFor(field)))
         return null;
-    return transformShapes(boxes, positions, queryClient);
+    return transformShapes(boxes, positions, queryClient, moves);
+}
+
+/** Whether any of `boxes` is linked to a shape shown now that isn't among them */
+function linkedOutside(boxes: readonly PlacedBox[]): boolean {
+    const beat = displayedBeat(useTimelineSelectionStore.getState());
+    const ids = new Set(boxes.map((b) => b.recipe.id));
+    return liveLinks(placedBoxesAt(beat), beat).some(
+        (l) => ids.has(l.attacher.recipe.id) !== ids.has(l.owner.recipe.id),
+    );
 }
 
 /**
@@ -240,7 +254,7 @@ export function dropOnShapes(
  * its kind, count and form and every link between them holds (`shapesTransformed`), and every
  * shape linked to them left out follows. Saved as one step, queued with {@link commitBox}'s saves
  * and worked out from the shapes as the saves before it left them. Refused when they can't follow
- * the drop any more.
+ * the drop any more. `moves` takes a drop that only moved them too.
  */
 export function transformShapes(
     boxes: readonly PlacedBox[],
@@ -250,6 +264,7 @@ export function transformShapes(
         readonly y: number;
     }[],
     queryClient: QueryClient,
+    moves = false,
 ): Promise<"saved" | "refused"> {
     if (!currentShapeField() || boxes.length === 0)
         return Promise.resolve("refused");
@@ -269,7 +284,7 @@ export function transformShapes(
             const stored = boxes
                 .filter((b) => shownStill(b, at.beat))
                 .map((b) => storedBox(b, at.beat));
-            const sim = similarityOfDrop(stored, positions);
+            const sim = similarityOfDrop(stored, positions, moves);
             if (!sim) return "refused";
             const shown = placedBoxesAt(at.beat);
             const edits = shapesTransformed(

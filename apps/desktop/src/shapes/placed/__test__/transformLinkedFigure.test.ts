@@ -22,7 +22,11 @@ import {
     type PlacedBox,
     type PlacedRecipe,
 } from "../placedBox";
-import { shapesTransformed, similarityOfDrop } from "../movedShapes";
+import {
+    shapesMoved,
+    shapesTransformed,
+    similarityOfDrop,
+} from "../movedShapes";
 import { liveLinks } from "../shapeLinks";
 
 /**
@@ -345,6 +349,17 @@ describe("membership after a hand edit", () => {
         });
     });
 
+    it("lets one of a two-marcher shape's marchers leave when it's dragged alone", () => {
+        const tail = figure[2]!;
+        const [, b] = tail.recipe.members;
+        expect(
+            membershipAfter(tail, moved([{ id: b!.marcherId, x: 30, y: 40 }])),
+        ).toEqual({ type: "leave", left: [b!.marcherId] });
+        // Both turned, it still goes with them (about one of two, a turn reads as that one dragged)
+        const turned = rotatePositions(starts([tail]), { x: 0, y: 0 }, 37);
+        expect(membershipAfter(tail, moved(turned)).type).toBe("transform");
+    });
+
     it("keeps a move a move", () => {
         const by = starts([arc]).map((p) => ({ ...p, x: p.x + 5 }));
         expect(membershipAfter(arc, moved(by))).toEqual({
@@ -404,5 +419,114 @@ describe("other kinds", () => {
         const sim = similarityOfDrop([box], scaled)!;
         expect(sim).not.toBeNull();
         expect(transformedParams(box, sim, ctx)).toBeNull();
+    });
+});
+
+describe("a shape linked to two shapes moved together", () => {
+    // A U: two posts, a bar linked to the end of each
+    const u = () =>
+        placed([
+            recipe(
+                1,
+                lineShape,
+                straight({ x: 0, y: 0 }, { x: 0, y: 60 }),
+                LINE,
+            ),
+            recipe(
+                2,
+                lineShape,
+                {
+                    ...straight({ x: 0, y: 60 }, { x: 60, y: 60 }),
+                    attach: {
+                        start: { recipe: 1, end: "end" },
+                        end: { recipe: 3, end: "end" },
+                    },
+                },
+                ARC,
+            ),
+            recipe(
+                3,
+                lineShape,
+                straight({ x: 60, y: 0 }, { x: 60, y: 60 }),
+                TAIL,
+            ),
+        ]);
+
+    it("follows both: each end to its joint, both links kept", () => {
+        const boxes = u();
+        const [post1, , post3] = boxes;
+        const by = { x: 12, y: 0 };
+        const edits = shapesMoved(
+            [post1!, post3!],
+            {
+                ...(post1!.params as LineParams),
+                points: (post1!.params as LineParams).points.map((q) => ({
+                    ...q,
+                    x: q.x + by.x,
+                })),
+            },
+            liveLinks(boxes, 0),
+        );
+        const bar = edits.find((e) => e.box.recipe.id === 2)!
+            .params as LineParams;
+        expect(endPoint(bar, "start")).toEqual({ x: 12, y: 60 });
+        expect(endPoint(bar, "end")).toEqual({ x: 72, y: 60 });
+        expect(bar.attach).toEqual({
+            start: { recipe: 1, end: "end" },
+            end: { recipe: 3, end: "end" },
+        });
+    });
+
+    it("follows both when the two are dragged together", () => {
+        const boxes = u();
+        const [post1, , post3] = boxes;
+        const dragged = starts([post1!, post3!]).map((p) => ({
+            ...p,
+            x: p.x + 12,
+        }));
+        // A drag is only a move: a turn's path takes it when asked (a drag of shapes linked out)
+        expect(similarityOfDrop([post1!, post3!], dragged)).toBeNull();
+        const sim = similarityOfDrop([post1!, post3!], dragged, true)!;
+        const edits = shapesTransformed(
+            [post1!, post3!],
+            sim,
+            liveLinks(boxes, 0),
+            ctx,
+        )!;
+        const bar = edits.find((e) => e.box.recipe.id === 2)!
+            .params as LineParams;
+        expect(near(endPoint(bar, "start"), { x: 12, y: 60 }, 1e-9)).toBe(true);
+        expect(near(endPoint(bar, "end"), { x: 72, y: 60 }, 1e-9)).toBe(true);
+        expect(bar.attach).toEqual({
+            start: { recipe: 1, end: "end" },
+            end: { recipe: 3, end: "end" },
+        });
+    });
+
+    it("follows both when the two are turned together", () => {
+        const boxes = u();
+        const [post1, , post3] = boxes;
+        const positions = rotatePositions(
+            starts([post1!, post3!]),
+            { x: 30, y: 0 },
+            20,
+        );
+        const sim = similarityOfDrop([post1!, post3!], positions)!;
+        const edits = shapesTransformed(
+            [post1!, post3!],
+            sim,
+            liveLinks(boxes, 0),
+            ctx,
+        )!;
+        const after = new Map(
+            edits.map((e) => [e.box.recipe.id, e.params as LineParams]),
+        );
+        const bar = after.get(2)!;
+        expect(
+            near(endPoint(bar, "start"), endPoint(after.get(1)!, "end"), 1e-9),
+        ).toBe(true);
+        expect(
+            near(endPoint(bar, "end"), endPoint(after.get(3)!, "end"), 1e-9),
+        ).toBe(true);
     });
 });

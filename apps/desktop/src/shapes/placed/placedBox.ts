@@ -234,7 +234,10 @@ export function membershipAfter(
         if (together) return { type: "move", delta };
     }
     const left = off.map((m) => m.marcherId);
-    // Turned or scaled evenly about a member, that one stays where it is
+    // Any two marchers fit a turn and scale, so one of two dragged alone leaves its shape as one
+    // of more does; turned or scaled about a member of more, that one stays where it is
+    const members = box.recipe.members.length;
+    if (members < 3 && off.length < members) return { type: "leave", left };
     const sim = similarityOf(
         box.recipe.members.map((m) => ({
             from: m,
@@ -247,13 +250,14 @@ export function membershipAfter(
 
 /**
  * The turn, even scale or mirror taking each `from` to its `to` (#1236), within what a marcher on
- * its spot may be off by; null when there's none, or it only moves them
+ * its spot may be off by; null when there's none, or it only moves them (unless `moves`)
  */
 export function similarityOf(
     pairs: readonly { readonly from: XY; readonly to: XY }[],
+    moves = false,
 ): Similarity | null {
     const sim = fitSimilarity(pairs, ON_SPOT);
-    return sim && !isTranslation(sim) ? sim : null;
+    return sim && (moves || !isTranslation(sim)) ? sim : null;
 }
 
 /** What a shape's recipe saves */

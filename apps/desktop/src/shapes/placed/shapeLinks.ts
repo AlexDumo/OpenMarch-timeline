@@ -459,6 +459,45 @@ export function attachedParams(
     });
 }
 
+/** Where the ends of shapes linked to an edited shape go: each shape, and its ends' new spots */
+export type FollowerEnds = Map<
+    number,
+    { box: PlacedBox<LineParams>; to: Partial<Record<LineEnd, XY>> }
+>;
+
+/**
+ * Adds to `into` the ends of the shapes linked to `box` that editing it into `params` moves: each
+ * end at a joint with `box` that's no longer where `box`'s end is now, to go there. Shapes whose
+ * joints didn't move aren't added.
+ */
+export function addFollowerEnds(
+    into: FollowerEnds,
+    box: PlacedBox,
+    params: unknown,
+    links: readonly ShapeLink[],
+): void {
+    if (!isLinkable(box)) return;
+    const p = params as LineParams;
+    if (!hasEnds(p)) return;
+    for (const link of linksOf(box, links)) {
+        const { end, other, otherEnd } = sideOf(box, link);
+        const joint = endPoint(p, end);
+        if (near(joint, endPoint(other.params, otherEnd), 1e-9)) continue;
+        const entry = into.get(other.recipe.id) ?? { box: other, to: {} };
+        entry.to[otherEnd] = joint;
+        into.set(other.recipe.id, entry);
+    }
+}
+
+/** Each shape in `ends` with its ends stretched to their new spots, its other ends staying */
+export const stretchedFollowers = (
+    ends: FollowerEnds,
+): { box: PlacedBox<LineParams>; params: LineParams }[] =>
+    [...ends.values()].map(({ box, to }) => ({
+        box,
+        params: stretchEnds(box.params, to),
+    }));
+
 /**
  * What editing `box` into `params` does to the shapes linked to it: each one whose end at a joint
  * with `box` is no longer where `box`'s end is now gets that end moved there, stretching, its
@@ -470,25 +509,9 @@ export function followersOf(
     params: unknown,
     links: readonly ShapeLink[],
 ): { box: PlacedBox<LineParams>; params: LineParams }[] {
-    if (!isLinkable(box)) return [];
-    const p = params as LineParams;
-    if (!hasEnds(p)) return [];
-    const moves = new Map<
-        number,
-        { box: PlacedBox<LineParams>; to: Partial<Record<LineEnd, XY>> }
-    >();
-    for (const link of linksOf(box, links)) {
-        const { end, other, otherEnd } = sideOf(box, link);
-        const joint = endPoint(p, end);
-        if (near(joint, endPoint(other.params, otherEnd), 1e-9)) continue;
-        const entry = moves.get(other.recipe.id) ?? { box: other, to: {} };
-        entry.to[otherEnd] = joint;
-        moves.set(other.recipe.id, entry);
-    }
-    return [...moves.values()].map(({ box: other, to }) => ({
-        box: other,
-        params: stretchEnds(other.params, to),
-    }));
+    const ends: FollowerEnds = new Map();
+    addFollowerEnds(ends, box, params, links);
+    return stretchedFollowers(ends);
 }
 
 /**

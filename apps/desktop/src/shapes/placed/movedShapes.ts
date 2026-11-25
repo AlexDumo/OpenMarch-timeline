@@ -6,7 +6,12 @@ import {
     transformedParams,
     type PlacedBox,
 } from "./placedBox";
-import { followersOf, type ShapeLink } from "./shapeLinks";
+import {
+    addFollowerEnds,
+    stretchedFollowers,
+    type FollowerEnds,
+    type ShapeLink,
+} from "./shapeLinks";
 
 /**
  * Several placed shapes selected whole and moved together (#1236): a linked figure selected with
@@ -53,7 +58,7 @@ function frameShift(box: PlacedBox, params: unknown): XY {
  * The shapes `boxes`, moved together as the first of them is moved to `params` (a nudge of it
  * through its kind, snapped as a nudge of that shape alone is): every other the same distance.
  * Shapes linked to them that aren't moved follow as an edit of one shape makes them follow, their
- * end at the joint stretched (`followersOf`). Returns each other shape's params, in the order
+ * end at the joint stretched (`followersAll`). Returns each other shape's params, in the order
  * `boxes` gives them, then the followers'; `links` are those live where the shapes are shown.
  */
 export function shapesMoved(
@@ -75,30 +80,26 @@ export function shapesMoved(
 }
 
 /**
- * The shapes linked to `edits` and not among them, each following as an edit of one shape makes
- * it (`followersOf`), once
+ * The shapes linked to `edits` and not among them, each following them as an edit of one shape
+ * makes it (`followersOf`), once: a shape linked to two of them gets both its ends moved, each to
+ * its joint
  */
 function followersAll(
     edits: readonly { box: PlacedBox; params: unknown }[],
     links: readonly ShapeLink[],
 ): { box: PlacedBox; params: unknown }[] {
-    const taken = new Set(edits.map((e) => e.box.recipe.id));
-    const followers: { box: PlacedBox; params: unknown }[] = [];
-    for (const { box, params } of edits) {
-        for (const follower of followersOf(box, params, links)) {
-            if (taken.has(follower.box.recipe.id)) continue;
-            taken.add(follower.box.recipe.id);
-            followers.push(follower);
-        }
-    }
-    return followers;
+    const ends: FollowerEnds = new Map();
+    for (const { box, params } of edits)
+        addFollowerEnds(ends, box, params, links);
+    for (const { box } of edits) ends.delete(box.recipe.id);
+    return stretchedFollowers(ends);
 }
 
 /**
  * The turn, even scale or mirror the placed shapes `boxes` went through when their members were
  * dropped at `positions` (#1236: a selection's handles, or a rotation typed in the inspector):
  * every member of every shape dropped, nobody else, and all of them through one. Null otherwise,
- * or when they only moved.
+ * or when they only moved (unless `moves`: a drag of them, for the shapes linked to them to follow).
  */
 export function similarityOfDrop(
     boxes: readonly PlacedBox[],
@@ -107,6 +108,7 @@ export function similarityOfDrop(
         readonly x: number;
         readonly y: number;
     }[],
+    moves = false,
 ): Similarity | null {
     const at = new Map(positions.map((p) => [p.id, p] as const));
     const members = boxes.flatMap((b) => b.recipe.members);
@@ -117,7 +119,7 @@ export function similarityOfDrop(
         if (!to) return null;
         pairs.push({ from: m, to });
     }
-    return similarityOf(pairs);
+    return similarityOf(pairs, moves);
 }
 
 /**

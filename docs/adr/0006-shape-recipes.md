@@ -693,7 +693,7 @@ id and end only, so it doesn't depend on how a recipe is anchored to its move.
    `also`), so it's one undo step and redo restores all of them. Only the shapes at the moved joints
    change: a follower's far end stays, so nothing cascades further.
 5. **Attaching** is a drag of a selected placed shape's end handle, or of the whole shape, that
-   leaves one of its free ends within 1.5 handle reaches of another live, free end on the same move:
+   leaves one of its free ends within 1.6 handle reaches of another live, free end on the same move:
    a ring marks it during the drag, and on release the end lands exactly on that end and stores the
    attachment, in the same save as the drag. Holding the `constrain` role key ($mod: Ctrl, or Cmd on
    a Mac, or the touch pill's toggle) during the drag skips attaching. Boxes, Circles and groups
