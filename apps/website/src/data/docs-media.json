@@ -23,24 +23,6 @@
         "width": 900,
         "height": 132
     },
-    "3d-custom-uniforms": {
-        "chapter": "3d-view",
-        "kind": "still",
-        "width": 676,
-        "height": 708
-    },
-    "3d-custom-uniforms-band": {
-        "chapter": "3d-view",
-        "kind": "still",
-        "width": 1600,
-        "height": 384
-    },
-    "3d-custom-uniforms-off": {
-        "chapter": "3d-view",
-        "kind": "still",
-        "width": 680,
-        "height": 384
-    },
     "3d-front-ensemble-3d": {
         "chapter": "3d-view",
         "kind": "still",

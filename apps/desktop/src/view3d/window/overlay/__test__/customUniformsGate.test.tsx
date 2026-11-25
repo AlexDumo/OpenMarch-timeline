@@ -2,7 +2,8 @@
  * Custom uniforms (preview) in the 3D View settings (step 7 of the uniform artwork build): with
  * it off, no custom-uniform control shows, but a show whose band wears a custom uniform still
  * draws it and the picker lists it with a note; with it on, the controls show with the Preview
- * badge and the warning, and the warning shows once more as a note after the first save.
+ * badge and the warning, and the warning shows once more as a note after the first save. A
+ * release build has none of it, and nothing offers to turn it on.
  */
 import {
     act,
@@ -35,6 +36,7 @@ import { UniformTemplateControls } from "../UniformTemplateControls";
 import { UniformImportControls } from "../UniformImportControls";
 import { UniformItemsControls } from "../UniformItemsControls";
 import { UniformModesControls } from "../UniformModesControls";
+import { CustomUniformsRow } from "../UniformPreview";
 
 const ASSET = "8a6f2c1e-4b3d-4e5f-9a0b-1c2d3e4f5a6b";
 const PACK = `library:${ASSET}@${"ab".repeat(32)}` as const;
@@ -147,6 +149,7 @@ beforeAll(async () => {
 });
 afterEach(() => {
     cleanup();
+    useCustomUniformsStore.setState({ available: true });
     localStorage.clear();
     saved.mockReset();
     venue.current = defaultVenueForKit("hs");
@@ -314,5 +317,81 @@ describe("Custom uniforms (preview) on", () => {
         await screen.findByTestId("view3d-uniform-items");
         fireEvent.click(screen.getByTestId("view3d-uniform-save"));
         expect(screen.queryByTestId("view3d-uniform-preview-note")).toBeNull();
+    });
+});
+
+describe("a build without custom uniforms (a release, until the format is final)", () => {
+    // as if this computer had turned the setting on in a build that had it
+    const release = () =>
+        void act(() =>
+            useCustomUniformsStore.setState({
+                available: false,
+                enabled: true,
+            }),
+        );
+
+    it("has no Custom uniforms switch in Preferences, and the setting can't be turned on", () => {
+        release();
+        const { container } = render(<CustomUniformsRow />, { wrapper });
+        expect(container.textContent).toBe("");
+        expect(
+            screen.queryByTestId("view3d-custom-uniforms-toggle"),
+        ).toBeNull();
+        useCustomUniformsStore.getState().setEnabled(true);
+        expect(localStorage.getItem("view3d.uniformArtwork")).toBeNull();
+    });
+
+    it("offers the built-in uniforms only, with no custom-uniform control", async () => {
+        release();
+        openPanel();
+        const picker = await screen.findByTestId("view3d-uniform-picker");
+        for (const id of GATED) expect(screen.queryByTestId(id)).toBeNull();
+        expect(picker.textContent).not.toContain("Sample flats");
+        expect(picker.textContent).not.toContain("Colleague's uniform");
+        expect(picker.querySelectorAll("button").length).toBeGreaterThan(2);
+    });
+
+    it("still lists a show's custom uniform, picked, without offering to turn anything on", async () => {
+        release();
+        venue.current = { ...defaultVenueForKit("hs"), uniformArtwork: PACK };
+        openPanel();
+        const note = await screen.findByTestId("view3d-uniform-preview-worn");
+        expect(note.textContent).toBe(
+            "This show's band wears a custom uniform. Making custom uniforms isn't in this version of OpenMarch yet.",
+        );
+        await waitFor(() =>
+            expect(
+                screen.getByTestId("view3d-uniform-picker").textContent,
+            ).toContain("Colleague's uniform"),
+        );
+        expect(
+            screen.queryByTestId("view3d-uniform-preview-turn-on"),
+        ).toBeNull();
+        for (const id of GATED) expect(screen.queryByTestId(id)).toBeNull();
+    });
+
+    it("words the notes for a uniform the band can't wear without saying to turn anything on", async () => {
+        release();
+        stored.read = "unreadable";
+        venue.current = { ...defaultVenueForKit("hs"), uniformArtwork: PACK };
+        openPanel();
+        expect(
+            (await screen.findByTestId("view3d-uniform-unreadable"))
+                .textContent,
+        ).toBe(
+            "The band's custom uniform is in this show, but its file can't be read, so the band wears its preset. Pick another uniform.",
+        );
+        expect(screen.queryByTestId("view3d-uniform-preview-worn")).toBeNull();
+
+        cleanup();
+        stored.read = "ok";
+        stored.inShow = false;
+        openPanel();
+        expect(
+            (await screen.findByTestId("view3d-uniform-missing")).textContent,
+        ).toBe(
+            "The band's custom uniform isn't in this show anymore, so the band wears its preset.",
+        );
+        expect(screen.queryByTestId("view3d-uniform-preview-worn")).toBeNull();
     });
 });

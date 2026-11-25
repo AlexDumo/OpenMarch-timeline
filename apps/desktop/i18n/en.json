@@ -4100,7 +4100,10 @@
             "showUses": "This show's band wears a custom uniform, a preview feature.",
             "turnOn": "Turn on custom uniforms",
             "missingOff": "The band's custom uniform isn't in this show anymore, so the band wears its preset. To bring it back, turn on custom uniforms and import it again.",
-            "unreadableOff": "The band's custom uniform is in this show, but its file can't be read, so the band wears its preset. Pick another uniform, or turn on custom uniforms to import one."
+            "unreadableOff": "The band's custom uniform is in this show, but its file can't be read, so the band wears its preset. Pick another uniform, or turn on custom uniforms to import one.",
+            "showUsesUnavailable": "This show's band wears a custom uniform. Making custom uniforms isn't in this version of OpenMarch yet.",
+            "missingUnavailable": "The band's custom uniform isn't in this show anymore, so the band wears its preset.",
+            "unreadableUnavailable": "The band's custom uniform is in this show, but its file can't be read, so the band wears its preset. Pick another uniform."
         }
     },
     "web": {
@@ -5686,6 +5689,7 @@
             "historyFailed": "Couldn't check which uniforms Undo can bring back, so imported uniforms aren't offered for removal.",
             "unusedVersions": "{count, plural, one {# asset version isn't used} other {# asset versions aren't used}} anywhere in the show · {size}",
             "missingUniformPreviewOff": "The band's custom uniform isn't in this show anymore, so the band wears its preset. To bring it back, turn on Custom uniforms (preview) in the 3D View settings' Preferences, then import it again.",
+            "missingUniformUnavailable": "The band's custom uniform isn't in this show anymore, so the band wears its preset.",
             "unreadableUniformPreviewOff": "The band's custom uniform is in this show, but its file can't be read (it may be damaged), so the band wears its preset. Pick another uniform in the 3D View settings.",
             "newerUniform": "The band's custom uniform was made with a newer version of OpenMarch, so the band wears its preset. Update OpenMarch to see it.",
             "loadFailedUniform": "The band's custom uniform couldn't be loaded just now. Its file may be fine. Until it loads, the band wears its preset.",

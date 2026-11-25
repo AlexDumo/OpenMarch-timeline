@@ -18,8 +18,8 @@ off. The integration pull request goes to `main` when all of these are true:
 2. Logos and numbers are placed in the app and keep their shape on every body.
 3. A pack can hold modes, such as sash out, and a show can switch between them.
 4. An agent turns uniform photos into a pack with the skill and its headless render command.
-5. The feature is behind Custom uniforms (preview), off by default in releases, and the user guide
-   describes it as a preview.
+5. The feature is behind Custom uniforms (preview), hidden in releases (owner, 2026-11-25), and
+   the user guide describes only a show that already has a custom uniform.
 6. Every CI check is green, one full independent review has been done, and the owner has approved.
 
 These used to be ship conditions. With the opt-in decision they are gates for **leaving preview**
@@ -97,3 +97,6 @@ Anyone can pick up a step, with or without agents.
   artist test, the format freeze, the speed check on an integrated GPU and on the web, and PDF
   import moved from "shipped" to the gates for leaving preview, #1310. Measured so far: 385
   marchers on an RTX 3060 Ti at the same frame rate as palette uniforms.
+- 2026-11-25: the owner chose to merge with custom uniforms hidden in releases: no Custom uniforms
+  switch, the built-in uniforms only, nothing to import. Dev, examples and lab builds keep it for
+  testing. Turning it on for releases is part of leaving preview, #1310.
