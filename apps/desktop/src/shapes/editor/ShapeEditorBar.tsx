@@ -148,7 +148,7 @@ import { GroupChips } from "./GroupChips";
 import { GROUP_MENU_ATTRIBUTE, GroupMenu } from "./GroupMenu";
 import { useFocusCarry } from "./focusCarry";
 import { OrderMenu } from "./OrderMenu";
-import { PickControls } from "./PickControls";
+import { PickBar, PickControls } from "./PickControls";
 import { OutlineGap } from "./OutlineGap";
 import { PivotMenu } from "./PivotGrid";
 import { CloseUpButton } from "./CloseUpButton";
@@ -780,6 +780,8 @@ function ShapeEditorBar({
                     testId={testId}
                 />
             )}
+            {/* Picking who goes where by hand: which shape, what waits, Done (09-who-goes-where.md) */}
+            {target.place !== undefined && <PickBar />}
             {/* An open paste that doesn't fit says so here, beside Place (#961) */}
             {testId === "shape-tool-readout" && <PasteFitNotice />}
         </animated.div>

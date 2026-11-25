@@ -24,9 +24,8 @@ const ON = "bg-fg-2 text-accent";
 
 /**
  * Who goes where by hand on the open shape (09-who-goes-where.md), in the floating editor: Pick by
- * hand and Swap two, and Clear hand picks while there are any. While picking, the bar says which
- * shape picks come from (the Marchers / Spots toggle, Tab), how many are paired and waiting, and
- * Done. None on a placed shape.
+ * hand and Swap two, and Clear hand picks while there are any. While picking, `PickBar` says which
+ * shape picks come from. None on a placed shape.
  */
 export function PickControls() {
     const session = usePickStore((s) => s.session);
@@ -108,13 +107,15 @@ export function PickControls() {
                     </button>
                 </Tip>
             )}
-            {session && <PickBar />}
         </span>
     );
 }
 
-/** While picking or swapping: which shape is in front, what's paired and waiting, and Done */
-function PickBar() {
+/**
+ * While picking or swapping, its own row under the floating editor: which shape is in front, what's
+ * paired and waiting, and Done
+ */
+export function PickBar() {
     const session = usePickStore((s) => s.session);
     if (!session) return null;
     const side = (value: PickSide, label: string) => (
@@ -135,8 +136,8 @@ function PickBar() {
     const waitingMarchers = session.marchers.length;
     const waitingSpots = session.spots.length;
     return (
-        <span
-            className="border-stroke flex items-center gap-6 border-l pl-6"
+        <div
+            className="rounded-6 border-stroke bg-bg-1 bg-modal shadow-modal flex items-center gap-6 border px-6 py-2"
             data-testid="shape-pick-bar"
         >
             {session.kind === "pick" ? (
@@ -205,6 +206,6 @@ function PickBar() {
                 {tolgee.t("shapes.edit.pick.done", "Done")}
                 <Shortcut action="applyShape" />
             </button>
-        </span>
+        </div>
     );
 }

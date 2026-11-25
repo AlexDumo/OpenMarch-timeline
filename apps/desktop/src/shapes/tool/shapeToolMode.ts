@@ -10,6 +10,7 @@ import {
     pressPick,
     releasePick,
     usePickStore,
+    type PickSession,
 } from "./pickByHand";
 import { lineCoordinate } from "../field/lineCoordinate";
 import type { PointerKind } from "@/field/editor/pointerThresholds";
@@ -513,22 +514,40 @@ export function removeLastShapePoint(): boolean {
  */
 function withPick<D extends FieldModeDrawing | null>(drawing: D): D {
     const tool = useShapeToolStore.getState().tool;
-    if (!drawing || !tool || !isPicking()) return drawing;
+    const session = usePickStore.getState().session;
+    if (!drawing || !tool || !session) return drawing;
+    // The same object for the same drawing, shape and session: the field reads it as a snapshot
+    if (
+        lastPick?.drawing === drawing &&
+        lastPick.tool === tool &&
+        lastPick.session === session
+    )
+        return lastPick.value as D;
     const pick = pickDrawing(tool);
-    if (!pick) return drawing;
-    return {
-        ...drawing,
-        pick,
-        handles: [],
-        addHandles: [],
-        selectedHandles: [],
-        barHandles: [],
-        knob: undefined,
-        centerDot: undefined,
-        pivotMark: undefined,
-        pivotPreview: undefined,
-    };
+    const value = pick
+        ? {
+              ...drawing,
+              pick,
+              handles: [],
+              addHandles: [],
+              selectedHandles: [],
+              barHandles: [],
+              knob: undefined,
+              centerDot: undefined,
+              pivotMark: undefined,
+              pivotPreview: undefined,
+          }
+        : drawing;
+    lastPick = { drawing, tool, session, value };
+    return value as D;
 }
+
+let lastPick: {
+    drawing: FieldModeDrawing;
+    tool: ToolState;
+    session: PickSession;
+    value: FieldModeDrawing;
+} | null = null;
 
 /**
  * The open shape tool on the field (docs/timeline/research/shapes/06-box-v1.md): a field editor
