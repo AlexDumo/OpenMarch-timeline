@@ -56,7 +56,7 @@ function boxRecipe(): PlacedRecipe {
     };
 }
 
-const endBeatOf = (id: number | null) =>
+const moveEndOf = (id: number | null) =>
     id === null ? 0 : id === BOX_MOVE ? 8 : undefined;
 
 const move = (start: number, end: number): CarrySpan => ({
@@ -126,7 +126,7 @@ function barsAndField(four: "stays" | "off" | "offAndBack", ids: number[]) {
         marcherIds: ids,
         within: ids.flatMap((id) => marcherHolds(spansOf(id), SHOW_END)),
         recipes,
-        endBeatOf,
+        moveEndOf,
         spansOf,
         positionAt,
     });
@@ -145,7 +145,7 @@ function barsAndField(four: "stays" | "off" | "offAndBack", ids: number[]) {
             carriedMembers(
                 boxesAt({
                     recipes,
-                    endBeatOf,
+                    moveEndOf,
                     beat: c,
                     positionOf: (id) => positionAt(id, c),
                 }),

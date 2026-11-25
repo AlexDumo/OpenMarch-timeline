@@ -139,7 +139,7 @@ export function useSelectionHolds(
                 marcherHolds(spansOf(id), showEnd),
             ),
             recipes,
-            endBeatOf: (id) => (id === null ? 0 : ends.get(id)),
+            moveEndOf: (id) => ends.get(id),
             spansOf,
             positionAt: (id, beat) => {
                 try {

@@ -185,7 +185,7 @@ describeDbTests("A line's order set by hand", (it) => {
             );
             return boxesAt({
                 recipes,
-                endBeatOf: (id) => (id === null ? 0 : ends.get(id)),
+                moveEndOf: (id) => (id === null ? 0 : ends.get(id)),
                 beat: PAGE2.end,
                 positionOf: (id) => {
                     const [x, y] = resolver().positionAt(id, PAGE2.end);

@@ -87,7 +87,7 @@ function reopened(t: ToolState, change?: (params: object) => object) {
     const at = new Map(placement.members.map((m) => [m.marcherId, m]));
     const shapes = boxesAt({
         recipes: [recipe],
-        endBeatOf: () => 8,
+        moveEndOf: () => 8,
         beat: 8,
         positionOf: (id) => at.get(id),
     });

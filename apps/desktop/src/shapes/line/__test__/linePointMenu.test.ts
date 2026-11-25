@@ -574,7 +574,7 @@ describe("the menu on a placed Line (#569)", () => {
         const at = new Map(recipe.members.map((m) => [m.marcherId, m]));
         const [box] = boxesAt({
             recipes: [recipe],
-            endBeatOf: () => 8,
+            moveEndOf: () => 8,
             beat: 8,
             positionOf: (id) => at.get(id),
         });

@@ -5,6 +5,12 @@ import {
     type PlacedBox,
     type PlacedRecipe,
 } from "@/shapes/placed/placedBox";
+import {
+    recipeCount,
+    recipeMoveEnd,
+    type MoveEndOf,
+} from "@/shapes/placed/recipeCount";
+import { isOrderMarkKind } from "@/db-functions/shapeRecipes";
 import type { AnyToolKind } from "@/shapes/tool/toolKind";
 import type { XY } from "@/shapes/types";
 import type { CarrySpan } from "./timelineCarryForward";
@@ -47,12 +53,13 @@ interface Range {
  * the field draws count `c`. Ascending and joined, per marcher; a marcher carried nowhere is left
  * out.
  *
- * `boxesAt` is asked only where the answer can change: who's in a shape changes only where a
- * recipe's move ends or a member of some shape starts or stops moving. Between two of those, every
- * member either stands still or is partway through one move (off its spot), so one look covers the
- * counts between them, and one more covers the count on the later one.
+ * `boxesAt` is asked only where the answer can change: who's in a shape changes only at a recipe's
+ * count (`recipeCount`) or where a member of some shape starts or stops moving. Between two of
+ * those, every member either stands still or is partway through one move (off its spot), so one
+ * look covers the counts between them, and one more covers the count on the later one.
  *
  * @param within the ranges to answer for (the selection's holds), any order
+ * @param moveEndOf the end beat of a move, undefined for a move that's gone (`boxesAt`)
  * @param spansOf a marcher's resolver spans, for where the shapes' members move
  * @param positionAt where a marcher stands at a beat (as the field reads it)
  */
@@ -60,7 +67,7 @@ export function carriedStretches({
     marcherIds,
     within,
     recipes,
-    endBeatOf,
+    moveEndOf,
     spansOf,
     positionAt,
     kinds = PLACED_KINDS,
@@ -68,7 +75,7 @@ export function carriedStretches({
     marcherIds: readonly number[];
     within: readonly Range[];
     recipes: readonly PlacedRecipe[];
-    endBeatOf: (timelineId: number | null) => number | undefined;
+    moveEndOf: MoveEndOf;
     spansOf: (marcherId: number) => readonly CarrySpan[];
     positionAt: (marcherId: number, beat: number) => XY | undefined;
     kinds?: readonly AnyToolKind[];
@@ -81,7 +88,7 @@ export function carriedStretches({
     );
     if (!inAnyShape || within.length === 0) return out;
 
-    const sortedCuts = shapeCuts(recipes, endBeatOf, spansOf);
+    const sortedCuts = shapeCuts(recipes, moveEndOf, spansOf);
 
     const looks = new Map<number, Set<number>>();
     const carriedOn = (beat: number) => {
@@ -91,7 +98,7 @@ export function carriedStretches({
             carried = carriedMembers(
                 boxesAt({
                     recipes,
-                    endBeatOf,
+                    moveEndOf,
                     beat,
                     kinds,
                     positionOf: (id) => {
@@ -140,16 +147,23 @@ export function carriedStretches({
     return out;
 }
 
-/** Where who's in a shape can change: where a recipe's move ends, or a member starts or stops moving */
+/**
+ * Where who's in a shape can change: at a recipe's count, or where a member starts or stops moving.
+ * An order mark draws nothing, but its cut stays where its move ends, as before (`recipeMoveEnd`):
+ * a cut at its own beat, which can fall partway through a count, would change which count the
+ * range before it is answered at.
+ */
 function shapeCuts(
     recipes: readonly PlacedRecipe[],
-    endBeatOf: (timelineId: number | null) => number | undefined,
+    moveEndOf: MoveEndOf,
     spansOf: (marcherId: number) => readonly CarrySpan[],
 ): number[] {
     const cuts = new Set<number>();
     const members = new Set<number>();
     for (const recipe of recipes) {
-        const end = endBeatOf(recipe.timelineId);
+        const end = isOrderMarkKind(recipe.kind)
+            ? recipeMoveEnd(recipe, moveEndOf)
+            : recipeCount(recipe, moveEndOf);
         if (end !== undefined) cuts.add(end);
         for (const m of recipe.members) members.add(m.marcherId);
     }

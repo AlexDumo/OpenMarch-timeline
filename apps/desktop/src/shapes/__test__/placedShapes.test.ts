@@ -83,7 +83,7 @@ function readBack(
     );
     return boxesAt({
         recipes,
-        endBeatOf: () => 8,
+        moveEndOf: () => 8,
         beat: 8,
         positionOf: (id) => at.get(id),
         ...(kinds ? { kinds } : {}),

@@ -4,7 +4,6 @@ import {
     saveShapeRecipeInTransaction,
     type ShapeRecipeMember,
 } from "@/db-functions/shapeRecipes";
-import { readTimelineEndBeats } from "@/db-functions/timelines";
 import type { DbTransaction } from "@/db-functions/types";
 import type { XY } from "../types";
 import {
@@ -15,6 +14,7 @@ import {
     type PlacedBox,
     type StoredParams,
 } from "./placedBox";
+import { readRecipeMoveEnds } from "./recipeCount";
 
 /** Marchers that left a box in an edit, and the box as it was saved without them */
 export interface BoxLeave {
@@ -70,15 +70,10 @@ export function boxMembershipEdit({
                 marcherIds: [...moved.keys()],
             });
             if (recipes.length === 0) return false;
-            const ends = await readTimelineEndBeats(
-                tx,
-                recipes.flatMap((r) =>
-                    r.timelineId === null ? [] : [r.timelineId],
-                ),
-            );
+            const ends = await readRecipeMoveEnds(tx, recipes);
             const boxes = boxesAt({
                 recipes,
-                endBeatOf: (id) => (id === null ? 0 : ends.get(id)),
+                moveEndOf: (id) => ends.get(id),
                 beat,
                 positionOf,
             });
