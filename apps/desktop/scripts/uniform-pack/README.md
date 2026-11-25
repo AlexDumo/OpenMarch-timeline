@@ -15,7 +15,7 @@ command in, not from `apps/desktop`.
 | Command          | What it does                                                                  |
 | ---------------- | ----------------------------------------------------------------------------- |
 | `uniform:build`  | a pack folder (`uniform.json` + art) → a `.omasset` the app imports           |
-| `uniform:render` | a `.omasset` or a pack folder → renders on all 7 body types, on the GPU       |
+| `uniform:render` | a `.omasset` or a pack folder → renders on every body type, on the GPU        |
 | `uniform:image`  | the template downloads, and photo helpers: a pixel grid, color samples, crops |
 
 Before the first render in a checkout: `pnpm install`, then `pnpm --filter @openmarch/core build`.
@@ -131,7 +131,7 @@ those outlines can be CC0, so its credits name no license.
 - Ids are lowercase letters, digits and dashes, at most 32 characters.
 - Layer `name` defaults to its id; `credits` to none.
 - `modes` need format version 3. A checkout that doesn't have it refuses them, and says so.
-- Grades are explained in docs/3d/uniform-artwork.md, "Grading across the 7 body types".
+- Grades are explained in docs/3d/uniform-artwork.md, "Grading across body types".
 
 ## `uniform:render`
 
@@ -144,7 +144,7 @@ It renders with the 3D View's `MarcherBodies` (the om-pose bodies, the uniform s
 hybrid flats wrap, the feather plume) and its atlas composer, under the high school venue's day
 lighting. A pack folder is built first, into `<outDir>/pack.omasset`.
 
-- **Bodies:** all 7 body types at height class 1.00, at attention (the `attention` clip's legs).
+- **Bodies:** every body type at height class 1.00, at attention (the `attention` clip's legs).
   The arms stay in the bodies' rest pose: in the clips they hold a horn, which with nothing carried
   crosses the chest and hides the art.
 - **Portraits** are a turntable. The camera keeps the sun over its left shoulder and the marcher

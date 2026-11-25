@@ -161,7 +161,7 @@ download.
   - rows that catch a fold are refilled from their neighbours
   - channels: U front, U back and the row centre
 
-  The fragment shader reads it. The 7 body models store their vertices in different orders, so the
+  The fragment shader reads it. The body models store their vertices in different orders, so the
   tables are built per body from geometry, never per vertex.
 
 - **Cape (Overlay).** The cape is sampled from the cape panel by back projection.
@@ -182,7 +182,7 @@ order:
    vertically.
 2. There is a jog where the hip meets the thigh, and spikes at the wrist.
 
-## Grading across the 7 body types
+## Grading across body types
 
 All body types share one skeleton, so lengths are the same on every body; only girth differs. Each
 body's table is rescaled row by row so its side seams land on the median outlines. The girth factor
@@ -203,9 +203,9 @@ How the atlas draws each grade (step 4, fork #1258):
 
 - **Proportional and fixed** items are drawn in strips 1/8 in tall, each `target / k(row)` as wide,
   where `target` is the k under the item's centre (proportional) or 1 (fixed). One scale per item
-  isn't enough: on `neutral-full` k runs from 1.02 to 1.40 over the 7 in of a chest crest, which
+  isn't enough: k changes fast down the chest of the fuller bodies (1.02 to 1.40 over the 7 in of a chest crest on the old `neutral-full`), which
   would leave it egg-shaped and about 1.3% wider than tall. With strips every row is within 1% on
-  all 7 bodies.
+  every body.
 - **Stretch** items are drawn as they are.
 - **Tile** items repeat in each listed region, each tile `1/k` as wide with k at the region's
   middle (as the study's prototype did). So a tile is its real size at the region's middle row
@@ -358,7 +358,7 @@ code in headless Chromium:
 - `pnpm uniform:build <packDir>`: a folder of `uniform.json` plus SVG and PNG art becomes a
   `.omasset`, drawn by the app's import and written by the app's writer. It refuses with every
   problem it finds.
-- `pnpm uniform:render <pack> <outDir>`: renders a pack on all 7 body types with the 3D View's own
+- `pnpm uniform:render <pack> <outDir>`: renders a pack on every body type with the 3D View's own
   marchers and atlas, on the GPU (no CPU fallback): front, back, left-side and three-quarter views, the
   median body mid-stride, a stands view, a contact sheet per mode and a `report.json` of the quiet
   notes below.
@@ -463,8 +463,8 @@ These are attachments, not artwork:
 
 ## Preview and warnings
 
-- The import shows the pack on all 7 body types: front, back, side and mid-stride. Not built yet:
-  the 3D View has no way to line the 7 body types up side by side.
+- The import shows the pack on every body type: front, back, side and mid-stride. Not built yet:
+  the 3D View has no way to line the body types up side by side.
 - Each of these gives a quiet note:
   - a logo-like shape painted into the fabric (suggests making it an item). Built in step 4: in
     each garment region, one sample per half inch; the region's commonest color (4 bits a

@@ -451,7 +451,7 @@ async function drawBuiltIn(
 
 /**
  * Draws one placed item onto an atlas, graded for `body` at the region under
- * its centre (docs/3d/uniform-artwork.md, "Grading across the 7 body types"):
+ * its centre (docs/3d/uniform-artwork.md, "Grading across body types"):
  * see `itemDraw` and `tileLayout`. Clipped to its panel, or to its regions
  * for a tile.
  */

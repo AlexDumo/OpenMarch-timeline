@@ -429,8 +429,8 @@ export interface ItemStrip {
 /**
  * How to draw a `proportional` or `fixed` item on body `body`'s atlas so it
  * keeps its shape row by row. The table widens each atlas row by its own k,
- * and k changes fast down the chest of the fuller bodies (on `neutral-full`
- * from 1.02 to 1.40 over 7 in), so one scale per item would leave a round
+ * and k changes fast down the chest of the fuller bodies (1.02 to 1.40
+ * over 7 in on the old `neutral-full`), so one scale per item would leave a round
  * crest egg-shaped. Instead the item is cut into strips `strip` inches tall,
  * each drawn `target / k(row)` as wide, so on the body every row is `target`
  * times its width: `target` is the k under the centre for `proportional`

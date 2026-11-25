@@ -14,13 +14,15 @@ export function resolveFromCaller(
 }
 
 export const BODIES = [
-    "neutral-slim",
     "neutral-average",
-    "neutral-athletic",
-    "neutral-broad",
-    "neutral-full",
+    "feminine-slim",
     "feminine-average",
+    "feminine-athletic",
+    "feminine-full",
+    "masculine-slim",
     "masculine-average",
+    "masculine-athletic",
+    "masculine-full",
 ] as const;
 
 export const VIEWS = [

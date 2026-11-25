@@ -20,7 +20,7 @@
 //   setUniform(mat, { style: "plastron" }); // restyle or recolour at any time
 //   setUniform(mat, { options: { stripe: false, mirror: true, hat: false } });
 //
-// Rest-pose landmarks are the v4 skeleton's (identical for all seven body types), glTF axes:
+// Rest-pose landmarks are the v4 skeleton's (identical for every body type), glTF axes:
 // +X performer's left, +Y up, +Z forward.
 
 export const PALETTE_SLOTS = [

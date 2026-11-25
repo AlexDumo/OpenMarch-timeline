@@ -60,7 +60,7 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 **Goal:** front and back Artwork on Top, Bottoms and Overlay.
 
-**Scope (amended 2026-11-24, proposed):** front/back flats rendered by the hybrid wrap, per [../uniform-artwork.md](../uniform-artwork.md), replacing the earlier rest-pose projection. It covers the per-body lookup tables, the composed flats atlas per look and body type, items (logos, numbers, prints) with their grades, the flats template, and the uniform pack with its ways in (PNG and SVG; PDF not yet supported, fork #1310) and modes. It runs on all seven body types; the block bodies take palette colors only. The work is split into fork issues under #975.
+**Scope (amended 2026-11-24, proposed):** front/back flats rendered by the hybrid wrap, per [../uniform-artwork.md](../uniform-artwork.md), replacing the earlier rest-pose projection. It covers the per-body lookup tables, the composed flats atlas per look and body type, items (logos, numbers, prints) with their grades, the flats template, and the uniform pack with its ways in (PNG and SVG; PDF not yet supported, fork #1310) and modes. It runs on every body type; the block bodies take palette colors only. The work is split into fork issues under #975.
 
 **Tickets:** 04, 08, 09.
 

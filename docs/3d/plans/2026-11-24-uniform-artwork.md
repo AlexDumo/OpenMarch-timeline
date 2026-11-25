@@ -14,7 +14,7 @@ format isn't final. A show that already wears a custom uniform still draws it wi
 off. The integration pull request goes to `main` when all of these are true:
 
 1. An artist downloads the uniform template, paints the front and back as a PNG, and uploads it.
-   The band in the 3D View then wears it on all 7 body types.
+   The band in the 3D View then wears it on every body type.
 2. Logos and numbers are placed in the app and keep their shape on every body.
 3. A pack can hold modes, such as sash out, and a show can switch between them.
 4. An agent turns uniform photos into a pack with the skill and its headless render command.
