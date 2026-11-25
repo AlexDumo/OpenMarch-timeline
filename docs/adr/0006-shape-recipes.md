@@ -660,7 +660,7 @@ adds no table and changes no recipe: a paste is an ordinary placement.
 Verification: `copyPaste.test.ts` (what is copied, and what a paste opens for each kind and
 count) and the browser scenarios in `copy-paste.spec.mts`.
 
-## Revision, 2026-11-22 (proposed): a shape is a formation at a count
+## Revision, 2026-11-22 (accepted 2026-11-25): a shape is a formation at a count
 
 _Accepted by the owner on 2026-11-25, with §9 (membership by listing, one identity per shape)
 folded in. Built in the steps of §7._
