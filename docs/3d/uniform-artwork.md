@@ -285,15 +285,29 @@ palette uniforms.
 - **The setting.** _Custom uniforms (preview)_ is a switch in the 3D View settings' Preferences tab,
   saved on this computer. Its description says the feature is a preview and that uniform files may
   change.
-  - It's off by default in release builds: packaged Electron, and the stable, nightly and preview
-    sites. The nightly is public once this is upstream, so it counts as a release.
-  - It's on by default in dev servers and in the web builds named `dev`, `examples` (the fork's
-    preview) and `lab`.
-  - A production web build whose `WEB_CHANNEL` wasn't set reads as `dev`, but starts with the
-    setting off, like a release (`VITE_PUBLIC_WEB_CHANNEL_NAMED`), so a deploy that forgot its
-    channel doesn't turn the preview on for its users.
+  - **Hidden in releases** (owner decision, 2026-11-25): packaged Electron, and the stable,
+    nightly and preview sites don't have it at all. Preferences doesn't show the switch, the
+    setting reads as off whatever was saved, and nothing offers to turn it on, so the Band uniform
+    picker offers the built-in uniforms only. The nightly is public once this is upstream, so it
+    counts as a release. `customUniformsAvailable` in `uniformArtworkPreview.ts` decides; to ship
+    the feature, make it true for releases and put the guide's section back (below).
+  - Dev servers and the web builds named `dev`, `examples` (the fork's preview) and `lab` have it,
+    on by default.
+  - A production web build whose `WEB_CHANNEL` wasn't set reads as `dev`, but doesn't have it,
+    like a release (`VITE_PUBLIC_WEB_CHANNEL_NAMED`), so a deploy that forgot its channel doesn't
+    show the preview to its users.
   - It's saved as `localStorage["view3d.uniformArtwork"]`, `"1"` or `"0"`, the key of the hidden
-    flag it replaces, so a computer that had set the flag to `"1"` finds it on.
+    flag it replaces, so a computer that had set the flag to `"1"` finds it on where the build has
+    it.
+  - In a release, a show that already wears a custom uniform (made in a lab or dev build) still
+    draws it. The picker lists it, picked, with "This show's band wears a custom uniform. Making
+    custom uniforms isn't in this version of OpenMarch yet." and no Turn on button. The notes for
+    a uniform the band can't wear only say what happened.
+  - The user guide describes only that case ("A show with a custom uniform" in
+    `venue-and-uniforms.mdx`). The full guide section, its three pictures (`3d-custom-uniforms`,
+    `3d-custom-uniforms-band`, `3d-custom-uniforms-off`, still recorded by the docs-media script)
+    and the Preferences row in `reference/settings.mdx` were taken out when the feature was hidden:
+    restore them from the commit "feat(3d): hide custom uniforms in releases".
 - **What it shows:** the template downloads (PNG, SVG, PDF and JSON), Import uniform…, Save
   uniform file, Logos and numbers, Modes and the Sample flats entry in the Band uniform picker.
   With it off, none of them show.

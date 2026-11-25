@@ -2,9 +2,12 @@
  * "Custom uniforms (preview)", a per-computer choice in the 3D View settings' Preferences
  * (docs/3d/uniform-artwork.md, "Opt-in preview"; owner decision 2026-11-24). It shows the
  * custom-uniform controls: the template downloads, Import uniform…, Save uniform file, Logos
- * and numbers, Modes and the sample uniform. The uniform file format may still change, so it is
- * off by default in release builds and on in dev servers and the dev, examples and lab web builds
- * ({@link customUniformsDefault}).
+ * and numbers, Modes and the sample uniform.
+ *
+ * Hidden in release builds until the uniform file format is final (owner decision 2026-11-25):
+ * there the setting is always off and Preferences doesn't show it, so the uniform picker offers
+ * the built-in uniforms only. Dev servers and the dev, examples and lab web builds have it, on by
+ * default ({@link customUniformsAvailable}). To ship it, make that return true for releases too.
  *
  * It never changes what a show draws: a show whose band wears a custom uniform draws it with the
  * setting off too, and the uniform picker says so (`UniformPicker`).
@@ -34,12 +37,13 @@ export interface CustomUniformsBuild {
 const PREVIEW_ON_CHANNELS = new Set(["dev", "examples", "lab"]);
 
 /**
- * On in a dev server and in the web builds named "dev", "examples" (the fork's preview) or "lab";
- * off in releases: packaged Electron, the stable, nightly (public once upstream) and preview
- * sites. A production web build whose `WEB_CHANNEL` wasn't set (it reads as "dev") is off too, so
- * a deploy that forgot its channel doesn't turn the preview on for its users.
+ * Whether the build has custom uniforms at all: a dev server and the web builds named "dev",
+ * "examples" (the fork's preview) or "lab" do; releases don't: packaged Electron, the stable,
+ * nightly (public once upstream) and preview sites. A production web build whose `WEB_CHANNEL`
+ * wasn't set (it reads as "dev") doesn't either, so a deploy that forgot its channel doesn't show
+ * the preview to its users.
  */
-export function customUniformsDefault(env: CustomUniformsBuild): boolean {
+export function customUniformsAvailable(env: CustomUniformsBuild): boolean {
     if (env.dev) return true;
     if (env.webChannel === undefined) return false;
     if (env.webChannel === "dev" && env.channelNamed === false) return false;
@@ -52,12 +56,19 @@ const BUILD: CustomUniformsBuild = {
     channelNamed: import.meta.env.VITE_PUBLIC_WEB_CHANNEL_NAMED !== "false",
 };
 
-/** The saved choice, else the build's default (also when storage is blocked). */
+/** Whether this build has custom uniforms ({@link customUniformsAvailable}). */
+export const CUSTOM_UNIFORMS_AVAILABLE = customUniformsAvailable(BUILD);
+
+/**
+ * Off where the build doesn't have custom uniforms, whatever was saved; else the saved choice,
+ * and on with nothing saved (also when storage is blocked).
+ */
 export function loadCustomUniforms(
     storage?: Storage,
     env: CustomUniformsBuild = BUILD,
 ): boolean {
-    const fallback = customUniformsDefault(env);
+    if (!customUniformsAvailable(env)) return false;
+    const fallback = true;
     try {
         const saved = (storage ?? window.localStorage).getItem(
             UNIFORM_ARTWORK_STORAGE_KEY,
@@ -69,24 +80,30 @@ export function loadCustomUniforms(
 }
 
 interface CustomUniformsState {
+    /** Whether this build has custom uniforms: false hides the setting and keeps it off */
+    available: boolean;
     enabled: boolean;
     setEnabled: (on: boolean) => void;
 }
 
-export const useCustomUniformsStore = create<CustomUniformsState>((set) => ({
-    enabled: loadCustomUniforms(),
-    setEnabled: (enabled) => {
-        try {
-            window.localStorage.setItem(
-                UNIFORM_ARTWORK_STORAGE_KEY,
-                enabled ? "1" : "0",
-            );
-        } catch {
-            // Private or blocked storage: the choice lasts for this session only.
-        }
-        set({ enabled });
-    },
-}));
+export const useCustomUniformsStore = create<CustomUniformsState>(
+    (set, get) => ({
+        available: CUSTOM_UNIFORMS_AVAILABLE,
+        enabled: loadCustomUniforms(),
+        setEnabled: (enabled) => {
+            if (!get().available) return;
+            try {
+                window.localStorage.setItem(
+                    UNIFORM_ARTWORK_STORAGE_KEY,
+                    enabled ? "1" : "0",
+                );
+            } catch {
+                // Private or blocked storage: the choice lasts for this session only.
+            }
+            set({ enabled });
+        },
+    }),
+);
 
 // another window of the app changed it
 if (typeof window !== "undefined")
@@ -97,7 +114,12 @@ if (typeof window !== "undefined")
 
 /** Whether the custom-uniform controls show; re-renders when the setting changes. */
 export function useCustomUniforms(): boolean {
-    return useCustomUniformsStore((s) => s.enabled);
+    return useCustomUniformsStore((s) => s.available && s.enabled);
+}
+
+/** Whether this build has custom uniforms, so the setting and Turn on can show. */
+export function useCustomUniformsAvailable(): boolean {
+    return useCustomUniformsStore((s) => s.available);
 }
 
 /**

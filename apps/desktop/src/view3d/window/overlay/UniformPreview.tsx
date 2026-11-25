@@ -37,12 +37,17 @@ export function PreviewTitle({ children }: { children: ReactNode }) {
     );
 }
 
-/** The Preferences switch, with what it shows and that the format may change. */
+/**
+ * The Preferences switch, with what it shows and that the format may change; none in a build
+ * without custom uniforms (a release, until the format is final).
+ */
 export function CustomUniformsRow() {
     const { t } = useTranslate();
+    const available = useCustomUniformsStore((s) => s.available);
     const enabled = useCustomUniformsStore((s) => s.enabled);
     const setEnabled = useCustomUniformsStore((s) => s.setEnabled);
     const label = t("view3d.settings.customUniforms");
+    if (!available) return null;
     return (
         <div className="flex flex-col gap-6">
             <div className="flex min-h-28 items-center justify-between gap-12">

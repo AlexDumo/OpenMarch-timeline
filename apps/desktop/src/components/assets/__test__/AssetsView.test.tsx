@@ -587,7 +587,22 @@ describeDbTests("Assets view", (it) => {
                     "turn on Custom uniforms (preview) in the 3D View settings' Preferences, then import it again",
                 ),
             );
+
+            // a release build has no such setting: the note only says what happened
+            void act(() =>
+                useCustomUniformsStore.setState({ available: false }),
+            );
+            await waitFor(() =>
+                expect(
+                    screen.getByTestId("assets-missing-uniform-note"),
+                ).toHaveTextContent(
+                    /^The band's custom uniform isn't in this show anymore, so the band wears its preset\.$/,
+                ),
+            );
         } finally {
+            void act(() =>
+                useCustomUniformsStore.setState({ available: true }),
+            );
             void act(() => useCustomUniformsStore.getState().setEnabled(true));
         }
     });
