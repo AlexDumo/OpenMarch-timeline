@@ -27,6 +27,7 @@ import {
     venueShows,
 } from "@/field/three/venueUnderlay/fieldVenue";
 import { useFollowTheLeader } from "@/pathways/followTheLeader";
+import { useShowShortcutHints } from "@/stores/KeyboardSeenStore";
 import type { ActionId } from "@/shortcuts/definitions";
 import { DISPLAY_BUTTON_CLASS } from "./displayButton";
 
@@ -252,6 +253,8 @@ function Row({
     reason?: string;
     children: ReactNode;
 }) {
+    // No keycaps on a tablet without a keyboard (tablet-parity.md)
+    const showKeys = useShowShortcutHints();
     return (
         <div className="flex flex-col gap-2">
             <div className="touch:min-h-44 flex min-h-26 items-center justify-between gap-12">
@@ -262,7 +265,7 @@ function Row({
                     )}
                 >
                     {name}
-                    {shortcut && <Shortcut action={shortcut} />}
+                    {shortcut && showKeys && <Shortcut action={shortcut} />}
                 </span>
                 {children}
             </div>
