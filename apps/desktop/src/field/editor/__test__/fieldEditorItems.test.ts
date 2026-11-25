@@ -32,6 +32,8 @@ function setup({
     small = false,
     /** Whether item 2's resize and turn handles were asked for (its Resize and turn) */
     handles = true,
+    /** Item 2 drawn as a model whose silhouette is only the left half of its Outline (x 250 to 300) */
+    silhouette = false,
 } = {}) {
     const state = {
         selected: [...selected] as readonly number[],
@@ -61,12 +63,20 @@ function setup({
         }),
         isItem: (id) => id === 2,
         isLocked: (id) => locked && id === 2,
-        itemAt: (point: FieldPoint, accept = () => true) =>
-            Math.abs(point.x - 300) <= frame.width / 2 &&
-            Math.abs(point.y - 100) <= frame.depth / 2 &&
-            accept(2)
-                ? 2
-                : null,
+        itemAt: silhouette
+            ? (point: FieldPoint, accept = () => true, reach = 0) =>
+                  point.x >= 250 - reach &&
+                  point.x <= 300 + reach &&
+                  Math.abs(point.y - 100) <= 20 + reach &&
+                  accept(2)
+                      ? 2
+                      : null
+            : (point: FieldPoint, accept = () => true) =>
+                  Math.abs(point.x - 300) <= frame.width / 2 &&
+                  Math.abs(point.y - 100) <= frame.depth / 2 &&
+                  accept(2)
+                      ? 2
+                      : null,
         itemHandlesShown: () => handles,
         openMenu: vi.fn(),
         lockedItemClicked: vi.fn(),
@@ -681,5 +691,36 @@ describe("FieldEditor with items", () => {
             expect(state.drops).toEqual([[{ id: 2, x: 300, y: 140 }]]);
             expect(state.saves).toEqual([]);
         });
+    });
+});
+
+describe("FieldEditor with an item drawn as a model", () => {
+    it("passes a click on its footprint off the silhouette", () => {
+        const { editor, state } = setup({ silhouette: true });
+        click(editor, 340, 115);
+        expect(state.selected).toEqual([]);
+    });
+
+    it("selects it a few screen pixels outside its silhouette, and no farther", () => {
+        // The mouse reaches 5 CSS px: 2.5 field units at zoom 2, not a dot's 6
+        const near = setup({ silhouette: true });
+        click(near.editor, 302, 115);
+        expect(near.state.selected).toEqual([2]);
+        const far = setup({ silhouette: true });
+        click(far.editor, 304, 115);
+        expect(far.state.selected).toEqual([]);
+    });
+
+    it("keeps it from anywhere inside its frame while its handles are shown", () => {
+        const shown = setup({ silhouette: true, selected: [2] });
+        click(shown.editor, 340, 115);
+        expect(shown.state.selected).toEqual([2]);
+        const hidden = setup({
+            silhouette: true,
+            selected: [2],
+            handles: false,
+        });
+        click(hidden.editor, 340, 115);
+        expect(hidden.state.selected).toEqual([]);
     });
 });
