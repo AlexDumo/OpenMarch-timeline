@@ -26,13 +26,6 @@ type SelectedMarcherContextProps = {
     setSelectedMarchers: (marchers: Marcher[]) => void;
 };
 
-const setsAreEqual = (set1: Set<number>, set2: Set<number>) => {
-    return (
-        set1.size === set2.size &&
-        Array.from(set1).every((value) => set2.has(value))
-    );
-};
-
 const SelectedMarcherContext = createContext<
     SelectedMarcherContextProps | undefined
 >(undefined);
@@ -67,32 +60,25 @@ export function SelectedMarchersProvider({
         [appearanceSteps, changeBeats, changeIndex],
     );
 
-    // Update the selected marcher if the marchers list changes. This refreshes the information of the selected marcher
+    // A marcher deleted from the show leaves the selection. Filtered from the selection as it is
+    // when the update runs, not as this render saw it: a click or a marquee that lands between
+    // the render and this effect would otherwise be overwritten by the older selection
     useEffect(() => {
-        if (selectedMarchers && marchers) {
-            const newSelectedMarchers = selectedMarchers.filter((marcher) =>
-                marchers.some((m) => m.id === marcher.id),
-            );
-
-            setSelectedMarchers(newSelectedMarchers);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        if (!marchers) return;
+        const ids = new Set(marchers.map((m) => m.id));
+        setSelectedMarchers((current) =>
+            current.filter((marcher) => ids.has(marcher.id)),
+        );
     }, [marchers]);
 
-    // Ensure that hidden marchers cannot be selected
+    // Ensure that hidden marchers cannot be selected (from the selection as it is then, as above)
     useEffect(() => {
-        const currentSelectedMarcherIds = new Set(
-            selectedMarchers.map((marcher) => marcher.id),
-        );
-        const newSelectedMarchers = selectedMarchers.filter(
-            (marcher) => !hiddenMarcherIds.has(marcher.id),
-        );
-        const newSelectedMarcherIds = new Set(
-            newSelectedMarchers.map((marcher) => marcher.id),
-        );
-        if (!setsAreEqual(currentSelectedMarcherIds, newSelectedMarcherIds)) {
-            setSelectedMarchers(Array.from(newSelectedMarchers));
-        }
+        setSelectedMarchers((current) => {
+            const visible = current.filter(
+                (marcher) => !hiddenMarcherIds.has(marcher.id),
+            );
+            return visible.length === current.length ? current : visible;
+        });
     }, [hiddenMarcherIds, selectedMarchers]);
 
     // Memoised so a provider render (a page change re-renders it) doesn't re-render every consumer

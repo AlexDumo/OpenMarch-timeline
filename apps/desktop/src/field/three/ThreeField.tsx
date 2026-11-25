@@ -179,6 +179,7 @@ import { threeFieldView } from "@/field/benchmark/fieldScenarios";
 import { r3fFrames } from "./benchmarkFrames";
 import { makeFloorSampler } from "@/pathways/floorSampler";
 import { useTheme } from "@/context/ThemeContext";
+import { fieldDragUndone, noteFieldInput } from "@/field/fieldInputTrace";
 import {
     CHECKPOINT_FONT,
     COLLISION_FONT,
@@ -196,6 +197,12 @@ const FOCUS_ORDER = 1.4;
 const ITEMS_ORDER = 1.3;
 const PATHS_ORDER = 1.5;
 const COLLISIONS_ORDER = 4;
+
+/** How long after the field selects it watches for the selection being replaced */
+const SELECTION_WATCH_MS = 1000;
+
+const sameSelection = (a: readonly number[], b: readonly number[]) =>
+    a.length === b.length && a.every((id) => b.includes(id));
 
 /**
  * The three.js field, or an explanation in its place when its canvas can't get
@@ -430,6 +437,26 @@ function ThreeFieldView() {
     useLayoutEffect(() => {
         selection.current = selectedIds;
     }, [selectedIds]);
+    // A click or marquee's selection replaced right after it lands looks like a marquee that
+    // selected nothing (Mac drags undone on release): reported with the input trace
+    const written = useRef<{ ids: readonly number[]; at: number } | null>(null);
+    useEffect(() => {
+        const write = written.current;
+        if (!write) return;
+        if (performance.now() - write.at > SELECTION_WATCH_MS) {
+            written.current = null;
+            return;
+        }
+        if (sameSelection(selectedIds, write.ids)) return;
+        written.current = null;
+        // Trimmed (a member hidden at this beat) is still the write's
+        const kept = new Set(write.ids);
+        if (selectedIds.length > 0 && selectedIds.every((id) => kept.has(id)))
+            return;
+        fieldDragUndone(
+            `the field's selection of ${write.ids.length} was replaced by ${selectedIds.length} right after`,
+        );
+    }, [selectedIds]);
 
     // #201: the timeline's pathways, isolation scene, collisions and dimming
     const marcherIds = useMemo(
@@ -534,6 +561,18 @@ function ThreeFieldView() {
                                 (id) => byId.get(id) ?? [],
                             );
                             selection.current = selected.map((m) => m.id);
+                            written.current = {
+                                ids: selection.current,
+                                at: performance.now(),
+                            };
+                            noteFieldInput(
+                                `selection set: ${selected.length} of ${ids.length} asked`,
+                            );
+                            // The field found marchers the app's list doesn't hold (yet)
+                            if (selected.length < ids.length)
+                                fieldDragUndone(
+                                    `${ids.length - selected.length} of the ${ids.length} marchers selected on the field aren't in the app's marcher list`,
+                                );
                             latest.current.setSelectedMarchers(selected);
                         },
                     },

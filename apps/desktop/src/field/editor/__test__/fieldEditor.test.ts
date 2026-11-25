@@ -698,6 +698,17 @@ describe("FieldEditor right-click menu (#315)", () => {
         expect(state.selected).toEqual([]);
     });
 
+    it("ends the next drag on its release when a Mac's Ctrl-press never heard its own", () => {
+        const { editor, state } = setup({ isMac: true });
+        editor.pointerDown(at(100, 100, { ctrl: true, button: 0 }));
+        // Its release went elsewhere; the next press drags marcher 1
+        expect(editor.pointerDown(at(100, 100))).toBe(true);
+        editor.pointerMove(at(100, 160));
+        editor.pointerUp(at(100, 160));
+        expect(editor.activeGesture()).toBeNull();
+        expect(state.drops).toHaveLength(1);
+    });
+
     it("opens no menu on a middle-click", () => {
         const { editor, ports } = setup();
         editor.pointerDown(at(EMPTY.x, EMPTY.y, { button: 1 }));

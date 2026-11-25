@@ -14,6 +14,7 @@ import "@fontsource/dm-mono/500.css";
 import { ThemeProvider } from "./context/ThemeContext";
 import * as Sentry from "@sentry/electron/renderer";
 import posthog, { type PostHogConfig } from "posthog-js";
+import { setFieldDragUndoneReporter } from "@/field/fieldInputTrace";
 import { PostHogProvider } from "posthog-js/react";
 import { TolgeeProvider } from "@tolgee/react";
 import { applyAnalyticsConsent } from "@/utilities/analyticsConsent";
@@ -113,6 +114,11 @@ function mountEditor() {
                     ),
                 isEditAction,
                 { subscribeToActionRuns, subscribeToActionRefusals },
+            );
+        // Field drags undone on release (seen on some Macs): what the pointer did just before
+        if (!isSettingsWindow)
+            setFieldDragUndoneReporter(({ reason, trace }) =>
+                posthog.capture("field drag undone", { reason, trace }),
             );
         // Palette searches keep only words the app's own text uses
         if (!isSettingsWindow)
