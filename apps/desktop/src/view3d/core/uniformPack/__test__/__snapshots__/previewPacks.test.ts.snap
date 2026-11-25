@@ -1,6 +1,225 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`preview pack files (format versions 1 to 3) > cadets-2019-v3.omasset draws what it drew when it was written 1`] = `
+exports[`preview pack files (format versions 1 to 3) > the format version 1 file draws what it drew when it was written 1`] = `
+{
+  "itemFiles": [],
+  "layers": [
+    {
+      "id": "base",
+      "sha256": "cc49f43336134111cb6a5f8449aeea1be3bad7b883ca3607d0500278db346a70",
+    },
+  ],
+  "manifest": {
+    "attachments": [],
+    "credits": {
+      "author": "A. Designer",
+      "license": "CC-BY-4.0",
+    },
+    "format": "openmarch-asset",
+    "formatVersion": 1,
+    "items": [],
+    "kind": "uniform",
+    "layers": [
+      {
+        "covers": "page",
+        "file": "layers/base.png",
+        "id": "base",
+        "name": "Base",
+      },
+    ],
+    "modes": [],
+    "name": "Preview v1",
+    "options": {
+      "collar": true,
+      "cuffs": true,
+      "gloves": true,
+      "hat": true,
+      "stripe": false,
+    },
+    "page": {
+      "height": 88,
+      "unit": "in",
+      "width": 105,
+    },
+    "palette": {
+      "accent": "#d8b04a",
+      "gloves": "#f2f2ee",
+      "hat": "#170d4a",
+      "pants": "#170d4a",
+      "plume": "#6442ff",
+      "primary": "#170d4a",
+      "secondary": "#f2f2ee",
+      "shoes": "#0b0b0d",
+      "trim": "#d8b04a",
+      "visor": "#d8b04a",
+    },
+    "preview": true,
+    "style": "classic",
+    "variants": [],
+  },
+  "modes": [
+    {
+      "images": [
+        {
+          "file": "layers/base.png",
+          "sha256": "cc49f43336134111cb6a5f8449aeea1be3bad7b883ca3607d0500278db346a70",
+        },
+      ],
+      "items": [],
+      "look": {
+        "colors": {
+          "accent": 14200906,
+          "gloves": 15921902,
+          "hat": 1510730,
+          "pants": 1510730,
+          "plume": 6570751,
+          "primary": 1510730,
+          "secondary": 15921902,
+          "shoes": 723725,
+          "trim": 14200906,
+          "visor": 14200906,
+        },
+        "options": {
+          "collar": true,
+          "cuffs": true,
+          "gloves": true,
+          "hat": true,
+          "stripe": false,
+        },
+        "style": "classic",
+      },
+      "mode": null,
+    },
+  ],
+}
+`;
+
+exports[`preview pack files (format versions 1 to 3) > the format version 2 file draws what it drew when it was written 1`] = `
+{
+  "itemFiles": [
+    {
+      "file": "items/crest.png",
+      "sha256": "9a14edb9d62ff9a384ed2e17283676d2648eee28eb863bfe65ef235977f7bb0c",
+    },
+  ],
+  "layers": [
+    {
+      "id": "base",
+      "sha256": "cc49f43336134111cb6a5f8449aeea1be3bad7b883ca3607d0500278db346a70",
+    },
+  ],
+  "manifest": {
+    "attachments": [],
+    "credits": {
+      "author": "A. Designer",
+      "license": "CC-BY-4.0",
+    },
+    "format": "openmarch-asset",
+    "formatVersion": 2,
+    "items": [
+      {
+        "at": [
+          17,
+          25.32,
+        ],
+        "file": "items/crest.png",
+        "grade": "proportional",
+        "id": "crest",
+        "name": "Crest",
+        "panel": "front",
+        "width": 6,
+      },
+    ],
+    "kind": "uniform",
+    "layers": [
+      {
+        "covers": "page",
+        "file": "layers/base.png",
+        "id": "base",
+        "name": "Base",
+      },
+    ],
+    "modes": [],
+    "name": "Preview v2",
+    "options": {
+      "collar": true,
+      "cuffs": true,
+      "gloves": true,
+      "hat": true,
+      "stripe": false,
+    },
+    "page": {
+      "height": 88,
+      "unit": "in",
+      "width": 105,
+    },
+    "palette": {
+      "accent": "#d8b04a",
+      "gloves": "#f2f2ee",
+      "hat": "#170d4a",
+      "pants": "#170d4a",
+      "plume": "#6442ff",
+      "primary": "#170d4a",
+      "secondary": "#f2f2ee",
+      "shoes": "#0b0b0d",
+      "trim": "#d8b04a",
+      "visor": "#d8b04a",
+    },
+    "preview": true,
+    "style": "classic",
+    "variants": [],
+  },
+  "modes": [
+    {
+      "images": [
+        {
+          "file": "layers/base.png",
+          "sha256": "cc49f43336134111cb6a5f8449aeea1be3bad7b883ca3607d0500278db346a70",
+        },
+      ],
+      "items": [
+        {
+          "at": [
+            17,
+            25.32,
+          ],
+          "file": "items/crest.png",
+          "grade": "proportional",
+          "id": "crest",
+          "name": "Crest",
+          "panel": "front",
+          "width": 6,
+        },
+      ],
+      "look": {
+        "colors": {
+          "accent": 14200906,
+          "gloves": 15921902,
+          "hat": 1510730,
+          "pants": 1510730,
+          "plume": 6570751,
+          "primary": 1510730,
+          "secondary": 15921902,
+          "shoes": 723725,
+          "trim": 14200906,
+          "visor": 14200906,
+        },
+        "options": {
+          "collar": true,
+          "cuffs": true,
+          "gloves": true,
+          "hat": true,
+          "stripe": false,
+        },
+        "style": "classic",
+      },
+      "mode": null,
+    },
+  ],
+}
+`;
+
+exports[`preview pack files (format versions 1 to 3) > the format version 3 file draws what it drew when it was written 1`] = `
 {
   "itemFiles": [
     {
@@ -300,225 +519,6 @@ exports[`preview pack files (format versions 1 to 3) > cadets-2019-v3.omasset dr
         "style": "classic",
       },
       "mode": "sash-out-unzipped-e5f6",
-    },
-  ],
-}
-`;
-
-exports[`preview pack files (format versions 1 to 3) > preview-v1.omasset draws what it drew when it was written 1`] = `
-{
-  "itemFiles": [],
-  "layers": [
-    {
-      "id": "base",
-      "sha256": "cc49f43336134111cb6a5f8449aeea1be3bad7b883ca3607d0500278db346a70",
-    },
-  ],
-  "manifest": {
-    "attachments": [],
-    "credits": {
-      "author": "A. Designer",
-      "license": "CC-BY-4.0",
-    },
-    "format": "openmarch-asset",
-    "formatVersion": 1,
-    "items": [],
-    "kind": "uniform",
-    "layers": [
-      {
-        "covers": "page",
-        "file": "layers/base.png",
-        "id": "base",
-        "name": "Base",
-      },
-    ],
-    "modes": [],
-    "name": "Preview v1",
-    "options": {
-      "collar": true,
-      "cuffs": true,
-      "gloves": true,
-      "hat": true,
-      "stripe": false,
-    },
-    "page": {
-      "height": 88,
-      "unit": "in",
-      "width": 105,
-    },
-    "palette": {
-      "accent": "#d8b04a",
-      "gloves": "#f2f2ee",
-      "hat": "#170d4a",
-      "pants": "#170d4a",
-      "plume": "#6442ff",
-      "primary": "#170d4a",
-      "secondary": "#f2f2ee",
-      "shoes": "#0b0b0d",
-      "trim": "#d8b04a",
-      "visor": "#d8b04a",
-    },
-    "preview": true,
-    "style": "classic",
-    "variants": [],
-  },
-  "modes": [
-    {
-      "images": [
-        {
-          "file": "layers/base.png",
-          "sha256": "cc49f43336134111cb6a5f8449aeea1be3bad7b883ca3607d0500278db346a70",
-        },
-      ],
-      "items": [],
-      "look": {
-        "colors": {
-          "accent": 14200906,
-          "gloves": 15921902,
-          "hat": 1510730,
-          "pants": 1510730,
-          "plume": 6570751,
-          "primary": 1510730,
-          "secondary": 15921902,
-          "shoes": 723725,
-          "trim": 14200906,
-          "visor": 14200906,
-        },
-        "options": {
-          "collar": true,
-          "cuffs": true,
-          "gloves": true,
-          "hat": true,
-          "stripe": false,
-        },
-        "style": "classic",
-      },
-      "mode": null,
-    },
-  ],
-}
-`;
-
-exports[`preview pack files (format versions 1 to 3) > preview-v2.omasset draws what it drew when it was written 1`] = `
-{
-  "itemFiles": [
-    {
-      "file": "items/crest.png",
-      "sha256": "9a14edb9d62ff9a384ed2e17283676d2648eee28eb863bfe65ef235977f7bb0c",
-    },
-  ],
-  "layers": [
-    {
-      "id": "base",
-      "sha256": "cc49f43336134111cb6a5f8449aeea1be3bad7b883ca3607d0500278db346a70",
-    },
-  ],
-  "manifest": {
-    "attachments": [],
-    "credits": {
-      "author": "A. Designer",
-      "license": "CC-BY-4.0",
-    },
-    "format": "openmarch-asset",
-    "formatVersion": 2,
-    "items": [
-      {
-        "at": [
-          17,
-          25.32,
-        ],
-        "file": "items/crest.png",
-        "grade": "proportional",
-        "id": "crest",
-        "name": "Crest",
-        "panel": "front",
-        "width": 6,
-      },
-    ],
-    "kind": "uniform",
-    "layers": [
-      {
-        "covers": "page",
-        "file": "layers/base.png",
-        "id": "base",
-        "name": "Base",
-      },
-    ],
-    "modes": [],
-    "name": "Preview v2",
-    "options": {
-      "collar": true,
-      "cuffs": true,
-      "gloves": true,
-      "hat": true,
-      "stripe": false,
-    },
-    "page": {
-      "height": 88,
-      "unit": "in",
-      "width": 105,
-    },
-    "palette": {
-      "accent": "#d8b04a",
-      "gloves": "#f2f2ee",
-      "hat": "#170d4a",
-      "pants": "#170d4a",
-      "plume": "#6442ff",
-      "primary": "#170d4a",
-      "secondary": "#f2f2ee",
-      "shoes": "#0b0b0d",
-      "trim": "#d8b04a",
-      "visor": "#d8b04a",
-    },
-    "preview": true,
-    "style": "classic",
-    "variants": [],
-  },
-  "modes": [
-    {
-      "images": [
-        {
-          "file": "layers/base.png",
-          "sha256": "cc49f43336134111cb6a5f8449aeea1be3bad7b883ca3607d0500278db346a70",
-        },
-      ],
-      "items": [
-        {
-          "at": [
-            17,
-            25.32,
-          ],
-          "file": "items/crest.png",
-          "grade": "proportional",
-          "id": "crest",
-          "name": "Crest",
-          "panel": "front",
-          "width": 6,
-        },
-      ],
-      "look": {
-        "colors": {
-          "accent": 14200906,
-          "gloves": 15921902,
-          "hat": 1510730,
-          "pants": 1510730,
-          "plume": 6570751,
-          "primary": 1510730,
-          "secondary": 15921902,
-          "shoes": 723725,
-          "trim": 14200906,
-          "visor": 14200906,
-        },
-        "options": {
-          "collar": true,
-          "cuffs": true,
-          "gloves": true,
-          "hat": true,
-          "stripe": false,
-        },
-        "style": "classic",
-      },
-      "mode": null,
     },
   ],
 }

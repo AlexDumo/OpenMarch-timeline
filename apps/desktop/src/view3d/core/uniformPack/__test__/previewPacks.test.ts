@@ -81,12 +81,15 @@ describe("preview pack files (format versions 1 to 3)", () => {
     });
 
     it.each([
-        "preview-v1.omasset",
-        "preview-v2.omasset",
-        "cadets-2019-v3.omasset",
-    ])("%s draws what it drew when it was written", (file) => {
-        expect(drawn(file)).toMatchSnapshot();
-    });
+        [1, "preview-v1.omasset"],
+        [2, "preview-v2.omasset"],
+        [3, "cadets-2019-v3.omasset"],
+    ])(
+        "the format version %i file draws what it drew when it was written",
+        (_, file) => {
+            expect(drawn(file)).toMatchSnapshot();
+        },
+    );
 
     it("refuses a later version as newer, never misreading it", () => {
         const later = zipSync({
