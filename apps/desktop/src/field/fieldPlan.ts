@@ -436,7 +436,54 @@ export function planField2d(
     return viewFrom === "performer" ? turnFieldPlan(plan) : plan;
 }
 
-/** The checkpoint labels outside the field */
+/**
+ * A label's width, a little wide: the labels draw in the platform's fallback font, so this is
+ * 0.6 em a character (wider than its digits and capitals) and 0.3 em a space.
+ */
+export function labelWidthEstimate(text: string, fontSize: number): number {
+    const spaces = text.split(" ").length - 1;
+    return fontSize * (0.6 * (text.length - spaces) + 0.3 * spaces);
+}
+
+/** Room left between two labels side by side, in font sizes */
+const LABEL_GAP = 0.25;
+/**
+ * How tall a label is when thinning front-to-back labels, in font sizes: its letters, not its
+ * text box, so labels a little closer than a line of text still both show (a college field's
+ * grid and real back hashes, 1.33 steps apart)
+ */
+const LABEL_INK_HEIGHT = 0.7;
+
+/**
+ * The labels along one edge that don't overlap, as an axis thins its tick labels: the label
+ * nearest `first` is kept, then each label further out is kept when it clears every label kept
+ * so far. On a wide floor at short steps, some lines past the grid's 0 line go unlabeled
+ * ("S1 24" is wider than 4 steps at 12 inches); the lines themselves still draw.
+ */
+function thinLabels<T>(
+    labels: readonly T[],
+    position: (label: T) => number,
+    size: (label: T) => number,
+    first: number,
+    gap: number,
+): T[] {
+    const kept: { at: number; half: number }[] = [];
+    const out: T[] = [];
+    const byNearness = [...labels].sort(
+        (a, b) => Math.abs(position(a) - first) - Math.abs(position(b) - first),
+    );
+    for (const label of byNearness) {
+        const at = position(label);
+        const half = size(label) / 2;
+        if (kept.some((k) => Math.abs(k.at - at) < k.half + half + gap))
+            continue;
+        kept.push({ at, half });
+        out.push(label);
+    }
+    return labels.filter((label) => out.includes(label));
+}
+
+/** The checkpoint labels outside the field, thinned so none overlap (`thinLabels`) */
 function checkpointLabels(fp: FieldProperties): FieldPlanText[] {
     const { centerFrontPoint, width, theme } = fp;
     const label = (
@@ -458,8 +505,15 @@ function checkpointLabels(fp: FieldProperties): FieldPlanText[] {
     });
     const out: FieldPlanText[] = [];
     const labelBaselineBelowTop = BASELINE_FROM_TOP * LABEL_FONT_SIZE;
-    for (const xCheckpoint of fp.xCheckpoints) {
-        if (!xCheckpoint.visible) continue;
+    // Side to side: kept from the center out, by each label's width
+    const xLabels = thinLabels(
+        fp.xCheckpoints.filter((c) => c.visible),
+        (c) => checkpointX(fp, c),
+        (c) => labelWidthEstimate(c.terseName, LABEL_FONT_SIZE),
+        centerFrontPoint.xPixels,
+        LABEL_GAP * LABEL_FONT_SIZE,
+    );
+    for (const xCheckpoint of xLabels) {
         const x = checkpointX(fp, xCheckpoint);
         if (fp.bottomLabelsVisible)
             out.push(
@@ -481,8 +535,15 @@ function checkpointLabels(fp: FieldProperties): FieldPlanText[] {
             );
     }
     const sidePadding = 10;
-    for (const yCheckpoint of fp.yCheckpoints) {
-        if (!yCheckpoint.visible) continue;
+    // Front to back: kept from the front, by the height of each label's letters
+    const yLabels = thinLabels(
+        fp.yCheckpoints.filter((c) => c.visible),
+        (c) => checkpointY(fp, c),
+        () => LABEL_INK_HEIGHT * LABEL_FONT_SIZE,
+        centerFrontPoint.yPixels,
+        0,
+    );
+    for (const yCheckpoint of yLabels) {
         const baseline =
             checkpointY(fp, yCheckpoint) +
             BASELINE_BELOW_CENTER * LABEL_FONT_SIZE;
