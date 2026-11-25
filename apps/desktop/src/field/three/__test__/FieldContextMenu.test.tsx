@@ -344,7 +344,7 @@ describe("FieldContextMenu", () => {
                 );
         }
         expect(groups).toEqual([
-            ["editSelectedItem"],
+            ["editSelectedItem", "resizeSelectedItem", "lockSelectedItem"],
             // Copy and paste (#961), and Paste mirrored
             [
                 "copyFormation",
@@ -364,6 +364,14 @@ describe("FieldContextMenu", () => {
                 "timelineHoldStyleStand",
                 "timelineHoldStyleMarkTime",
                 "timelineHoldStyleHighMarkTime",
+            ],
+            // #992: what the selection holds, and selecting by it, as submenus; the picked cue's
+            // performers while they can change
+            [
+                "equipment",
+                "select-holding",
+                "cueAddSelected",
+                "cueRemoveSelected",
             ],
             ["splitSelectedIntoNewMove", "timelineSplitMoveAtPlayhead"],
             // Two selected: a line's order

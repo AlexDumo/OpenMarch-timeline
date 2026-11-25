@@ -33,6 +33,8 @@ export type ThreeFieldState = {
     marchers: FieldMarchers;
     /** Each marcher's drill number, by id. */
     labels(): ReadonlyMap<number, string>;
+    /** Each marcher's equipment icon at the beat shown, for those that have one */
+    equipmentIcons(): ReadonlyMap<number, string>;
     view(): FieldViewState;
     /** The element the field draws into, or null before it mounts. */
     element(): HTMLElement | null;
@@ -91,6 +93,7 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
             const rect = element.getBoundingClientRect();
             const view = field.view();
             const labels = field.labels();
+            const icons = field.equipmentIcons();
             const { ids, positions, stacks } = field.marchers;
             const theme = field.theme();
             return ids.map((id, i): FieldTestMarcher => {
@@ -101,6 +104,7 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
                 return {
                     id,
                     label: labels.get(id) ?? "",
+                    equipmentIcon: icons.get(id) ?? "",
                     x,
                     y,
                     screen,
@@ -282,6 +286,16 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
                   to: copy(drawing.offsetStep.to),
                   across: drawing.offsetStep.across,
                   deep: drawing.offsetStep.deep,
+              }
+            : null,
+        rowsGap: drawing.rowsGap
+            ? {
+                  from: copy(drawing.rowsGap.from),
+                  corner: copy(drawing.rowsGap.corner),
+                  to: copy(drawing.rowsGap.to),
+                  outward: { ...drawing.rowsGap.outward },
+                  apart: drawing.rowsGap.apart,
+                  slant: drawing.rowsGap.slant,
               }
             : null,
     };

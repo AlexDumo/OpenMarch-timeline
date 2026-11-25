@@ -229,9 +229,13 @@ async function importChair(
 }
 
 /** Sets a number field in the Edit Prop panel. */
+/**
+ * Types into a prop's Width, Depth or Height box. A number is meters; text is typed as it is
+ * (`20'`). The boxes show the show's units, and a bare number would be feet or inches there.
+ */
 async function setPropField(page, label, value) {
     const input = page.getByLabel(label, { exact: true }).first();
-    await input.fill(String(value));
+    await input.fill(typeof value === "number" ? `${value} m` : value);
     await input.press("Enter");
     await page.waitForTimeout(600);
 }
@@ -567,6 +571,65 @@ const shots = [
         },
     },
     {
+        id: "3d-camera-row-menu",
+        kind: "still",
+        async setup(ctx) {
+            await seekInPage(ctx.page, 3, 0.5);
+            const { view } = await open3d(ctx);
+            await view.getByTestId("view3d-camera-menu").click();
+            await ctx.wait(400);
+            await view.getByTestId("view3d-camera-edit").click();
+            const panel = view.getByTestId("view3d-cameras-panel");
+            await panel.waitFor();
+            await view.getByTestId("view3d-camera-more").nth(1).click();
+            const menu = view.getByTestId("view3d-camera-menu-items");
+            await menu.waitFor();
+            await ctx.wait(600);
+            return {
+                box: ctx.union(
+                    await ctx.around(panel, 16),
+                    await ctx.around(menu, 16),
+                ),
+                target: view,
+            };
+        },
+    },
+    {
+        id: "3d-camera-settings",
+        kind: "still",
+        async setup(ctx) {
+            await seekInPage(ctx.page, 3, 0.5);
+            const { view } = await open3d(ctx);
+            await view.getByTestId("view3d-camera-menu").click();
+            await ctx.wait(400);
+            await view.getByTestId("view3d-camera-edit").click();
+            await view.getByTestId("view3d-cameras-panel").waitFor();
+            // Front row, with a long lens focused where it looks, wide open
+            await view
+                .getByTestId("view3d-camera-settings-toggle")
+                .nth(1)
+                .click();
+            await view.getByTestId("view3d-camera-settings").waitFor();
+            const set = async (key, value) => {
+                const field = view.getByTestId(`view3d-camera-setting-${key}`);
+                await field.click();
+                await field.fill(String(value));
+                await field.press("Enter");
+                await ctx.wait(600);
+            };
+            await set("focal", 85);
+            await view
+                .getByTestId("view3d-camera-focus-mode")
+                .getByText("Look-at", { exact: true })
+                .click();
+            await ctx.wait(600);
+            await set("fstop", 1.4);
+            await view.mouse.move(ctx.window.width - 4, ctx.window.height / 2);
+            await ctx.wait(1500);
+            return { box: ctx.whole, target: view };
+        },
+    },
+    {
         id: "3d-settings",
         kind: "still",
         async setup(ctx) {
@@ -672,6 +735,62 @@ const shots = [
             await view.mouse.move(ctx.window.width - 4, ctx.window.height / 2);
             await ctx.wait(3000);
             return { box: ctx.whole, target: view };
+        },
+    },
+    {
+        id: "3d-venue-nightpound",
+        kind: "still",
+        // Narrower than the usual 1600 pixels, like the arena: the crowd is busy
+        width: 1280,
+        covers: [
+            "apps/desktop/src/view3d/core/kits/nightpound.ts",
+            "apps/desktop/src/view3d/core/kits/nightpound",
+        ],
+        // Taydon, OH under Show lights from its Floor camera. Its floor is fixed, so the
+        // sample show's football field is switched to an indoor floor first; the band's spots
+        // stay where they were, off that floor, so the floor is empty
+        async setup(ctx) {
+            const { page } = ctx;
+            await ctx.wait(3000);
+            await tidy(page);
+            await page.locator("#sidebar-launcher-field").click();
+            await page.getByTestId("field-edit-panel").waitFor();
+            await ctx.wait(800);
+            await page.getByTestId("field-template-select").click();
+            await page
+                .getByRole("option", { name: "Indoor 50x90 - 6 to 5 Steps" })
+                .click();
+            await page.getByTestId("field-template-apply").click();
+            await ctx.wait(1500);
+            await page.keyboard.press("Escape");
+            await seekInPage(page, 3, 0.5);
+            const { view, baked } = await open3d(ctx);
+            await view.getByTestId("view3d-settings-button").click();
+            await view.getByTestId("view3d-settings").waitFor();
+            await view
+                .getByTestId("view3d-venue-picker")
+                .locator('[data-value="nightpound"]')
+                .click();
+            await baked(2);
+            await ctx.wait(1500);
+            await view
+                .getByTestId("view3d-lighting-picker")
+                .locator('[data-value="show"]')
+                .click()
+                .catch(() => {});
+            await ctx.wait(1500);
+            await view.getByTestId("view3d-settings-button").click();
+            await tidy(view);
+            // The Floor camera (fifth): no crowd in front of it, unlike the seats
+            await view.keyboard.press("Digit5");
+            await view.mouse.move(ctx.window.width - 4, ctx.window.height / 2);
+            await ctx.wait(3000);
+            // The flags, the stands and the drape, with a strip of the floor, under the camera bar
+            const { width, height } = ctx.window;
+            return {
+                box: { x: 0, y: 96, width, height: Math.round(height * 0.58) },
+                target: view,
+            };
         },
     },
     {
@@ -1027,7 +1146,7 @@ const shots = [
     {
         id: "3d-props-edit",
         kind: "still",
-        // The Edit Prop panel for a riser 1.2 m tall
+        // The Edit Prop panel for a riser 20 × 6 ft, 4 ft tall
         async setup(ctx) {
             const { page } = ctx;
             const { index } = await drawRiser(page, {
@@ -1043,8 +1162,9 @@ const shots = [
                 .click();
             await ctx.wait(800);
             // Round sizes, so the picture matches its alt text
-            await setPropField(page, "Width", 6);
-            await setPropField(page, "Depth", 2);
+            await setPropField(page, "Width", "20'");
+            await setPropField(page, "Depth", "6'");
+            await setPropField(page, "Height", "4'");
             // No focus ring left on the last field
             await page.evaluate(() => document.activeElement?.blur());
             await page.mouse.move(1596, 996);
@@ -1066,7 +1186,7 @@ const shots = [
     {
         id: "3d-props-handles",
         kind: "clip",
-        // A selected prop: turn it with the round handle, then resize it from a corner
+        // A prop with its handles shown: turn it with the round handle, then resize it from a corner
         async setup(ctx) {
             const { page } = ctx;
             const { item } = await drawRiser(page, { color: AMBER });
@@ -1076,7 +1196,11 @@ const shots = [
             const before = (await items(page)).find((i) => i.id === item.id);
             await zoomFieldAt(page, before.screen, 3);
             const now = (await items(page)).find((i) => i.id === item.id);
-            await page.mouse.click(now.screen.x, now.screen.y);
+            // Its handles show once asked for: right-click, Resize and turn (props epic step 2)
+            await page.mouse.click(now.screen.x, now.screen.y, {
+                button: "right",
+            });
+            await page.getByTestId("field-menu-resizeSelectedItem").click();
             await ctx.wait(600);
             const handles = await page.evaluate(() =>
                 window.fieldTest.handles(),

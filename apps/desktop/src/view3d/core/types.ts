@@ -18,6 +18,7 @@ export type VenueKitId =
     | "college"
     | "pro"
     | "markDiesel"
+    | "nightpound"
     | "gym"
     | "arena"
     | "blank";
@@ -87,6 +88,25 @@ export interface CameraSeat {
     target: Vector3Tuple;
     /** Vertical field of view; defaults to the window's. */
     fovDeg?: number;
+    /** Saved views only: the camera's roll, degrees clockwise as seen from behind. */
+    rollDeg?: number;
+    /** Saved views only: follow this performer instead of staying put. */
+    follow?: {
+        marcherId: number;
+        mode: "third" | "pov";
+        /** The follow camera's aim (`cameraList.ts` `cameraFollowSchema`). */
+        angleDeg?: number;
+        tiltDeg?: number;
+        distanceM?: number;
+    };
+    /** Saved views only: what is sharp, and the f-number (see `cameraList.ts`). */
+    focus?: {
+        fStop: number;
+        on:
+            | { kind: "lookAt" }
+            | { kind: "distance"; meters: number }
+            | { kind: "performer"; marcherId: number };
+    };
 }
 
 /**
@@ -142,6 +162,18 @@ export interface KitCrowdOptions {
      * that hold up at arm's length can stay closer than the blocks do.
      */
     clearRadius?: number;
+    /**
+     * The floor a camera in a seat sees whole, in the seat rows' frame:
+     * while the camera sits in the stands, the people whose heads would
+     * hide any of it from there are hidden too, and shown again when it
+     * leaves. Without it only `clearRadius` round the camera is cleared.
+     */
+    keepInView?: {
+        minX: number;
+        maxX: number;
+        minZ: number;
+        maxZ: number;
+    };
     /** People between aisles along a row, for rows already split at aisles. */
     aisleEvery?: number;
 }

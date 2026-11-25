@@ -4,11 +4,13 @@ import { FieldProperties } from "@openmarch/core";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import {
     fieldReferenceLines,
+    labelWidthEstimate,
     planField2d,
     planFieldImage,
     textCenterY,
 } from "../fieldPlan";
 import { yardNumberPath } from "../fieldNumbers";
+import { indoorFloorTemplate } from "@/global/classes/fieldTemplates/indoorFloors";
 
 const base: FieldProperties =
     FieldPropertiesTemplates.HIGH_SCHOOL_FOOTBALL_FIELD_NO_END_ZONES;
@@ -275,5 +277,115 @@ describe("fieldReferenceLines (#425)", () => {
             }),
         );
         expect(steps(base, none.x, "x")).not.toContain(4);
+    });
+});
+
+describe("checkpoint labels thin out so none overlap (#1296)", () => {
+    const labels = (fp: FieldProperties) =>
+        planField2d(fp, { gridLines: false, halfLines: false }).texts.filter(
+            (t) => t.role === "checkpointLabel",
+        );
+    /** One edge's labels, left to right or front to back */
+    const topRow = (fp: FieldProperties) => {
+        const texts = labels(fp);
+        const top = Math.min(...texts.map((t) => t.y));
+        return texts.filter((t) => t.y === top).sort((a, b) => a.x - b.x);
+    };
+    const leftColumn = (fp: FieldProperties) =>
+        labels(fp)
+            .filter((t) => t.anchor === "end")
+            .sort((a, b) => b.y - a.y);
+
+    it("keeps every label on every stock field", () => {
+        for (const template of Object.values(FieldPropertiesTemplates)) {
+            const fp = template as FieldProperties;
+            const visible = (cs: typeof fp.xCheckpoints) =>
+                cs.filter((c) => c.visible).length;
+            const expected =
+                visible(fp.xCheckpoints) *
+                    (Number(fp.topLabelsVisible) +
+                        Number(fp.bottomLabelsVisible)) +
+                visible(fp.yCheckpoints) *
+                    (Number(fp.leftLabelsVisible) +
+                        Number(fp.rightLabelsVisible));
+            expect(labels(fp).length, fp.name).toBe(expected);
+        }
+    });
+
+    it("leaves a label out where it would overlap its neighbor, keeping the center ones", () => {
+        // 140 ft wide at 12-inch steps: lines 4 ft apart, "S1 24" is wider than that
+        const fp = indoorFloorTemplate({ depthFeet: 110, widthFeet: 140 }, 12);
+        const row = topRow(fp);
+        for (let i = 1; i < row.length; i++) {
+            const a = row[i - 1];
+            const b = row[i];
+            const room =
+                (labelWidthEstimate(a.text, a.fontSize) +
+                    labelWidthEstimate(b.text, b.fontSize)) /
+                2;
+            expect(b.x - a.x, `${a.text} | ${b.text}`).toBeGreaterThanOrEqual(
+                room,
+            );
+        }
+        const texts = row.map((t) => t.text);
+        // Inside the 0 lines nothing is left out
+        expect(
+            texts.slice(texts.indexOf("0"), texts.lastIndexOf("0") + 1),
+        ).toEqual(["0", "1", "2", "3", "4", "5", "4", "3", "2", "1", "0"]);
+        expect(texts.some((t) => t.startsWith("S1"))).toBe(true);
+        expect(texts.some((t) => t.startsWith("S2"))).toBe(true);
+        expect(texts.length).toBeLessThan(
+            fp.xCheckpoints.filter((c) => c.visible).length,
+        );
+    });
+
+    it("keeps the labels mirrored, the same lines on both sides", () => {
+        const fp = indoorFloorTemplate({ depthFeet: 110, widthFeet: 140 }, 12);
+        const texts = topRow(fp).map((t) => t.text.replace(/^S[12] /, "S "));
+        expect(texts).toEqual([...texts].reverse());
+    });
+
+    it("keeps every label on a wide floor at 24-inch steps, where they fit", () => {
+        const fp = indoorFloorTemplate({ depthFeet: 60, widthFeet: 100 }, 24);
+        expect(topRow(fp).map((t) => t.text)).toEqual([
+            "S1 24",
+            "0",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "4",
+            "3",
+            "2",
+            "1",
+            "0",
+            "S2 24",
+        ]);
+    });
+
+    it("keeps every front-to-back letter on the deepest floor", () => {
+        const fp = indoorFloorTemplate({ depthFeet: 200, widthFeet: 60 }, 12);
+        const letters = leftColumn(fp).map((t) => t.text);
+        expect(letters).toHaveLength(51);
+        expect(letters.slice(25, 27)).toEqual(["Z", "AA"]);
+    });
+
+    it("thins front-to-back labels that would overlap", () => {
+        // Lines moved 2 steps apart at 12-inch steps: 12 px, under a label's height
+        const fp = new FieldProperties({
+            ...base,
+            yCheckpoints: [0, -2, -4, -6, -8].map((steps, id) => ({
+                id,
+                name: `L${id}`,
+                terseName: `L${id}`,
+                axis: "y" as const,
+                stepsFromCenterFront: steps,
+                useAsReference: true,
+                visible: true,
+            })),
+            stepSizeInches: 12,
+        });
+        expect(leftColumn(fp).map((t) => t.text)).toEqual(["L0", "L2", "L4"]);
     });
 });
