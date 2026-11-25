@@ -26,7 +26,8 @@ import { SilkShapeOutline } from "./SilkShapeOutline";
 const FORMATS: readonly TemplateFormat[] = ["png", "svg", "pdf"];
 
 /**
- * Adds a flag to the show (fork #985): pick its silk shape (each drawn as its outline), download
+ * Adds a flag to the show (fork #985): pick its silk shape (each drawn as its outline, and only
+ * when there's more than one to offer, `FLAG_SHAPES`), download
  * that shape's template to paint, choose the painted PNG, name it, and add it. The picture shows
  * the silk as it will look, cut to the shape; until a PNG is chosen, the shape's outline. A show may have as many flags as it likes; each is handed to performers as
  * Equipment (the field's right-click menu, Equipment › Guard equipment).
@@ -38,7 +39,9 @@ export function AddFlag({ onDone }: { onDone: () => void }) {
     const nameId = useId();
     const shapeId = useId();
     const input = useRef<HTMLInputElement>(null);
-    const [shape, setShape] = useState<SilkShapeId>(DEFAULT_SILK_SHAPE);
+    const [shape, setShape] = useState<SilkShapeId>(
+        FLAG_SHAPES[0] ?? DEFAULT_SILK_SHAPE,
+    );
     const [artwork, setArtwork] = useState<SilkArtworkImport | null>(null);
     const [name, setName] = useState("");
     const [picture, setPicture] = useState<Uint8Array | null>(null);
@@ -131,38 +134,44 @@ export function AddFlag({ onDone }: { onDone: () => void }) {
             <h3 className="text-body font-medium">
                 <T keyName="assets.flags.addTitle" />
             </h3>
-            <div className="flex flex-col gap-6">
-                <span id={shapeId} className="text-sub text-text-subtitle">
-                    <T keyName="assets.flags.shape" />
-                </span>
-                <RadioGroup.Root
-                    value={shape}
-                    onValueChange={(next) => setShape(next as SilkShapeId)}
-                    aria-labelledby={shapeId}
-                    className="grid grid-cols-3 gap-8"
-                    data-testid="assets-add-flag-shape"
-                >
-                    {FLAG_SHAPES.map((id) => (
-                        <RadioGroup.Item
-                            key={id}
-                            value={id}
-                            data-testid={`assets-add-flag-shape-${id}`}
-                            className={clsx(
-                                "rounded-6 flex min-w-0 flex-col items-center gap-4 border px-6 py-6 transition-colors duration-150 ease-out",
-                                "focus-visible:outline-accent outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2",
-                                id === shape
-                                    ? "bg-accent/20 border-accent"
-                                    : "bg-fg-2 border-stroke hover:border-accent/60",
-                            )}
-                        >
-                            <SilkShapeOutline shape={id} className="size-48" />
-                            <span className="text-sub text-text truncate">
-                                {t(`view3d.silkShape.${id}`)}
-                            </span>
-                        </RadioGroup.Item>
-                    ))}
-                </RadioGroup.Root>
-            </div>
+            {/* A choice only once there is more than one shape to offer */}
+            {FLAG_SHAPES.length > 1 && (
+                <div className="flex flex-col gap-6">
+                    <span id={shapeId} className="text-sub text-text-subtitle">
+                        <T keyName="assets.flags.shape" />
+                    </span>
+                    <RadioGroup.Root
+                        value={shape}
+                        onValueChange={(next) => setShape(next as SilkShapeId)}
+                        aria-labelledby={shapeId}
+                        className="grid grid-cols-3 gap-8"
+                        data-testid="assets-add-flag-shape"
+                    >
+                        {FLAG_SHAPES.map((id) => (
+                            <RadioGroup.Item
+                                key={id}
+                                value={id}
+                                data-testid={`assets-add-flag-shape-${id}`}
+                                className={clsx(
+                                    "rounded-6 flex min-w-0 flex-col items-center gap-4 border px-6 py-6 transition-colors duration-150 ease-out",
+                                    "focus-visible:outline-accent outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2",
+                                    id === shape
+                                        ? "bg-accent/20 border-accent"
+                                        : "bg-fg-2 border-stroke hover:border-accent/60",
+                                )}
+                            >
+                                <SilkShapeOutline
+                                    shape={id}
+                                    className="size-48"
+                                />
+                                <span className="text-sub text-text truncate">
+                                    {t(`view3d.silkShape.${id}`)}
+                                </span>
+                            </RadioGroup.Item>
+                        ))}
+                    </RadioGroup.Root>
+                </div>
+            )}
             <div className="flex items-start gap-12">
                 <span className="rounded-4 border-stroke bg-fg-2 flex h-96 w-96 shrink-0 items-center justify-center overflow-hidden border">
                     {pictureUrl ? (
