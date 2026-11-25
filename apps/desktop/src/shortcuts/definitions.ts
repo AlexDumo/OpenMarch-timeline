@@ -1111,6 +1111,31 @@ const STATIC_ACTIONS = {
         scope: "global",
         defaultBindings: [],
     },
+    // Opens the Assets panel with Add flag open (fork #985): a flag's shape, template and Artwork
+    addFlag: {
+        labelKey: "actions.ui.addFlag",
+        keywordsKey: "actions.ui.addFlagKeywords",
+        category: "ui",
+        scope: "global",
+        defaultBindings: [],
+    },
+    // Hands the show's flag `value` (args) to the selection from the paused playhead: an
+    // Equipment cue, as the catalog's items are (fork #985). Without a flag, the Assets panel.
+    equipmentShowFlag: {
+        labelKey: "actions.cues.equipmentShowFlag",
+        keywordsKey: "actions.cues.equipmentKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    // Selects whoever holds the show's flag `value` (args) at the playhead
+    selectHoldingShowFlag: {
+        labelKey: "actions.cues.selectHoldingShowFlag",
+        keywordsKey: "actions.cues.selectHoldingKeywords",
+        category: "select",
+        scope: "canvas",
+        defaultBindings: [],
+    },
     // Lists the assets nothing in the show uses and, once confirmed, removes them
     removeUnusedAssets: {
         labelKey: "actions.file.removeUnusedAssets",

@@ -95,6 +95,7 @@ export function useItemActionHandlers() {
     }, [only, item?.locked]);
     useActionHandler("importModel", () => void importModel());
     useActionHandler("openAssets", () => showAssetsView());
+    useActionHandler("addFlag", () => showAssetsView({ addFlag: true }));
     useActionHandler("removeUnusedAssets", () =>
         showAssetsView({ openRemove: true }),
     );

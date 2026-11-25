@@ -15,10 +15,12 @@ import type {
     NewCueArgs,
 } from "@/db-functions/cues";
 import { itemValueId } from "./equipmentItems";
+import { SHOW_ASSET_REF_PREFIX } from "@/showAssets/ref";
 
 /**
  * What an Equipment command sets: a catalog item's key ("trumpet", "rifle"), "usual" for the
- * performer's own instrument (their section's default) or "none".
+ * performer's own instrument (their section's default), "none", or one of the show's flags by its
+ * asset reference (`library:<id>@<hash>`, fork #985).
  */
 export type EquipmentChoice = string;
 
@@ -28,7 +30,9 @@ export const equipmentValueOfChoice = (choice: EquipmentChoice): string =>
         ? EQUIPMENT_USUAL
         : choice === "none"
           ? EQUIPMENT_NONE
-          : itemValueId(choice);
+          : choice.startsWith(SHOW_ASSET_REF_PREFIX)
+            ? choice
+            : itemValueId(choice);
 
 /**
  * The cue that sets `choice` for `marcherIds` on `beatId`, lasting, as Equipment naturally is

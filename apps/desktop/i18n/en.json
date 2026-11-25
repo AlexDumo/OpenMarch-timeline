@@ -277,7 +277,9 @@
             "hideFieldVenue": "Hide venue on field",
             "toggleView3dCameraOnField": "Show or hide 3D View camera on field",
             "showView3dCameraOnField": "Show 3D View camera on field",
-            "hideView3dCameraOnField": "Hide 3D View camera on field"
+            "hideView3dCameraOnField": "Hide 3D View camera on field",
+            "addFlag": "Add a flag to the show",
+            "addFlagKeywords": "flag silk guard equipment import artwork asset custom design"
         },
         "items": {
             "edit": "Edit selected prop or equipment",
@@ -337,7 +339,9 @@
             "facingAngle": "Facing: Angle…",
             "facingKeywords": "facing face turn direction angle degrees spin front back side",
             "editTurn": "Edit turn…",
-            "toggleFacingLane": "Show or hide the Facing lane"
+            "toggleFacingLane": "Show or hide the Facing lane",
+            "equipmentShowFlag": "Equipment: one of the show's flags",
+            "selectHoldingShowFlag": "Select who holds one of the show's flags"
         },
         "path": {
             "pen": "Path pen",
@@ -4378,7 +4382,8 @@
         "props": "Props",
         "music": "Music",
         "renderFail": "Sidebar modal content failed to render",
-        "settings": "Show settings"
+        "settings": "Show settings",
+        "assets": "Assets"
     },
     "infoTip": {
         "moreInfo": "More info"
@@ -5676,7 +5681,7 @@
     },
     "assets": {
         "title": "Assets",
-        "empty": "This show has no imported assets yet. Import a 3D model from the Props panel.",
+        "empty": "This show has no assets of its own yet. Add a flag, or import a 3D model.",
         "notes": {
             "unused": "{count, plural, one {# asset isn't used} other {# assets aren't used}} anywhere in the show · {size}",
             "missing": "{count, plural, one {# prop names a model this show doesn't have, so it draws as a block.} other {# props name models this show doesn't have, so they draw as blocks.}}",
@@ -5707,7 +5712,8 @@
         },
         "kind": {
             "model": "3D model",
-            "uniform": "Uniform"
+            "uniform": "Uniform",
+            "flag": "Flag"
         },
         "uses": "{count, plural, one {Used once} other {Used # times}}",
         "unused": "Not used",
@@ -5726,6 +5732,31 @@
         "olderVersions": "{count, plural, one {# older version} other {# older versions}}, {size}",
         "otherVersions": "{count, plural, one {# other version} other {# other versions}}, {size}",
         "tryAgain": "Try again",
-        "loading": "Loading…"
+        "loading": "Loading…",
+        "importModel": "Import 3D model",
+        "flags": {
+            "open": "Add flag…",
+            "hint": "Add as many flags as the show uses. Hand one to performers from the field's right-click menu: Equipment › Guard equipment.",
+            "addTitle": "Add a flag",
+            "shape": "Silk shape",
+            "template": "Template to paint:",
+            "preparing": "Preparing…",
+            "choose": "Choose painted PNG…",
+            "chooseAnother": "Choose another PNG…",
+            "name": "Name",
+            "namePlaceholder": "Opener silk",
+            "cancel": "Cancel",
+            "add": "Add flag",
+            "needPicture": "Choose the painted PNG first",
+            "needName": "Give the flag a name",
+            "notPng": "That file isn't a PNG. Save the painted template as a PNG, then choose it.",
+            "tooLarge": "That PNG is too large. Export it at a lower resolution and import it again.",
+            "unreadable": "Couldn't read that PNG.",
+            "templateFailed": "Couldn't make the template.",
+            "menuAdd": "Add flag…",
+            "errors": {
+                "add": "Couldn't add the flag"
+            }
+        }
     }
 }

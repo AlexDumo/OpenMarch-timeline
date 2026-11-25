@@ -5,6 +5,7 @@ import WorkspaceSettingsModal from "@/components/sidebar/WorkspaceSettingsModal"
 import AppearanceModal from "@/components/marcher/appearance/AppearanceModal";
 import MobileExportModal from "../mobile/MobileExportModal";
 import PropsModal from "@/components/items/PropsModal";
+import AssetsModal from "@/components/assets/AssetsModal";
 
 export default function Sidebar() {
     return (
@@ -19,6 +20,7 @@ export default function Sidebar() {
                 <MetronomeModal />
                 <AppearanceModal />
                 <PropsModal />
+                <AssetsModal />
             </div>
             <div className="flex flex-col gap-16">
                 {/* On the web, where sign-in can't run the panel says so. */}

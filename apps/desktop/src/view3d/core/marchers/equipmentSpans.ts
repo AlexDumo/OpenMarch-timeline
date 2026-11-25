@@ -17,6 +17,7 @@ import type { CueSegment, PerformerCarry } from "@openmarch/core";
 import { carryForModel, type Carry } from "../instruments/catalog";
 import { modelOfValue } from "@/cues/equipmentItems";
 import type { HoldFamily, HoldState } from "../instruments/holds";
+import { DEFAULT_SILK_SHAPE, type SilkShapeId } from "../sizes/silkShapes";
 import { performerCarryOf, type HornEvent } from "./hornChannel";
 
 /**
@@ -30,8 +31,17 @@ export function carryForValue(
     value: string | null,
     holds: PerformerCarry,
     base: Carry | null,
+    flagShapeOf?: FlagShapeOf,
 ): Carry | null {
     if (holds === "none") return null;
+    // One of the show's flags (fork #985): the 6 ft flag, in its own silk shape
+    const flagShape = value !== null ? flagShapeOf?.(value) : undefined;
+    if (flagShape !== undefined) {
+        const flag = carryForModel("flag6");
+        return flagShape === DEFAULT_SILK_SHAPE
+            ? flag
+            : { ...flag, options: { ...flag.options, silkShape: flagShape } };
+    }
     const model = modelOfValue(value);
     if (model) {
         if (base && base.model === model) return base;
@@ -42,6 +52,9 @@ export function carryForValue(
     if (base && performerCarryOf(base.family) === holds) return base;
     return null;
 }
+
+/** The silk shape of the show's flag an Equipment value names, or undefined for another value */
+export type FlagShapeOf = (value: string) => SilkShapeId | undefined;
 
 /** The 6 ft flag and the tuba are the section default, which a show setting may swap. */
 const sameKind = (a: string, b: string) =>
@@ -71,13 +84,19 @@ export function slotEquipment(
     segments: readonly CueSegment[],
     holdsAt: (count: number) => PerformerCarry,
     base: Carry | null,
+    flagShapeOf?: FlagShapeOf,
 ): SlotEquipment | null {
     const carries: (Carry | null)[] = [base];
     const keys = [JSON.stringify(base)];
     const spans: HeldSpan[] = [];
     for (const seg of segments) {
         if (!(seg.to > seg.from)) continue;
-        const carry = carryForValue(seg.value, holdsAt(seg.from), base);
+        const carry = carryForValue(
+            seg.value,
+            holdsAt(seg.from),
+            base,
+            flagShapeOf,
+        );
         const key = JSON.stringify(carry);
         let held = keys.indexOf(key);
         if (held < 0) {

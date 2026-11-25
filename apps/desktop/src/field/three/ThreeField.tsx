@@ -155,6 +155,7 @@ import MarchersLayer from "./layers/MarchersLayer";
 import ItemsLayer from "./layers/ItemsLayer";
 import LabelsLayer, { type LabelStyle } from "./layers/LabelsLayer";
 import { useEquipmentIcons } from "@/cues/useEquipmentIcons";
+import { useFlagPictures } from "./useFlagPictures";
 import OverlayLayer from "./layers/OverlayLayer";
 import StartFlagLayers from "./StartFlagLayers";
 import { ModeMarchers } from "./ModeMarchers";
@@ -355,6 +356,7 @@ function ThreeFieldView() {
     const numbersOnly = labelForm === "numbers";
     // What a performer holds, by their drill number, when it isn't their section's usual (#992)
     const equipmentIcons = useEquipmentIcons();
+    const flagPictures = useFlagPictures(equipmentIcons !== null);
     const equipmentIconPlace = useUiSettingsStore(
         (s) => s.uiSettings.equipmentIconPlace ?? "beside",
     );
@@ -906,6 +908,7 @@ function ThreeFieldView() {
                             style={labelStyle}
                             holdAutoSize={isPlaying}
                             icons={equipmentIcons}
+                            pictures={flagPictures}
                             iconPlace={equipmentIconPlace}
                             hovered={hoveredMarcher}
                         />

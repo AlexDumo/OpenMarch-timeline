@@ -265,7 +265,12 @@ export function EquipmentLaneView({
     const previewLane = useMemo(() => {
         if (!drag?.edit || !show) return null;
         const cues = withEquipmentSet(show.cues, drag.edit);
-        const compiled = compileShowCues(show.marchers, beats, cues);
+        const compiled = compileShowCues(
+            show.marchers,
+            beats,
+            cues,
+            show.values,
+        );
         return equipmentLane({
             compiled: compiled.compiled,
             cues,
@@ -274,6 +279,10 @@ export function EquipmentLaneView({
     }, [drag, show, beats]);
     const rows = (previewLane ?? lane)?.rows ?? [];
     const valueName = (value: string | null) => {
+        // one of the show's flags (fork #985): its own name
+        const flags = show?.flags ?? [];
+        const flag = value ? flags.find((f) => f.value === value) : undefined;
+        if (flag) return flag.name;
         const key = value === null ? "none" : itemKeyOf(value);
         if (key === "none" || key === "winds" || key === "battery")
             return t(`cues.value.${key}`);

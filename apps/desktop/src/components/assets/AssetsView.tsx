@@ -2,7 +2,8 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
     CaretRightIcon,
-    PackageIcon,
+    CubeIcon,
+    FlagIcon,
     WarningIcon,
 } from "@phosphor-icons/react";
 import { T, useTranslate } from "@tolgee/react";
@@ -17,8 +18,8 @@ import {
     Button,
 } from "@openmarch/ui";
 import ItemPanelHeader from "@/components/items/ItemPanelHeader";
-import { PropListContents } from "@/components/items/PropsModal";
-import { useSidebarModalStore } from "@/stores/SidebarModalStore";
+import { runAction } from "@/shortcuts/registry";
+import { AddFlag } from "./AddFlag";
 import { useItemDrawingStore } from "@/stores/ItemDrawingStore";
 import { ModelThumbnail } from "@/components/items/modelImport/ImportedModels";
 import { CreditFields } from "@/components/items/modelImport/ModelImportReview";
@@ -40,6 +41,7 @@ import {
     groupAssetVersions,
     type AssetGroup,
     LARGE_SHOW_ASSET_BYTES,
+    HISTORY_CHECKED_ASSET_KINDS,
     keptForHistory,
     showAssetUse,
     sizeParts,
@@ -101,7 +103,7 @@ function useAssetUse() {
     const uniforms = useMemo(
         () =>
             (assets ?? [])
-                .filter((asset) => asset.kind === UNIFORM_ASSET_KIND)
+                .filter((asset) => HISTORY_CHECKED_ASSET_KINDS.has(asset.kind))
                 .map(showAssetRefValue),
         [assets],
     );
@@ -212,12 +214,16 @@ function useAssetUse() {
 
 export function AssetsContents({
     openRemove = false,
+    addFlag = false,
 }: {
     /** Opens Remove unused… at once (the `removeUnusedAssets` action) */
     openRemove?: boolean;
+    /** Opens Add flag at once (the `addFlag` action) */
+    addFlag?: boolean;
 }) {
     const { use, listFailed, tryAgain, retrying } = useAssetUse();
     const [removing, setRemoving] = useState(openRemove);
+    const [addingFlag, setAddingFlag] = useState(addFlag);
     // Remove unused… reads again which uniforms undo or redo names: an edit elsewhere may have
     // cleared the redo steps since. Its list and size wait for that read.
     const queryClient = useQueryClient();
@@ -235,17 +241,42 @@ export function AssetsContents({
             live = false;
         };
     }, [removing, queryClient]);
-    const { setContent } = useSidebarModalStore();
     return (
         <div className="animate-scale-in text-text flex h-full w-fit flex-col gap-16">
-            <ItemPanelHeader
-                title={<T keyName="assets.title" />}
-                onBack={() => setContent(<PropListContents />, "props")}
-            />
+            <ItemPanelHeader title={<T keyName="assets.title" />} />
             <div
                 className="flex w-[28rem] grow flex-col gap-16 overflow-y-auto"
                 data-testid="assets-view"
             >
+                {addingFlag ? (
+                    <AddFlag onDone={() => setAddingFlag(false)} />
+                ) : (
+                    <div className="flex flex-col gap-6">
+                        <div className="flex items-center gap-8">
+                            <Button
+                                variant="secondary"
+                                size="compact"
+                                onClick={() => setAddingFlag(true)}
+                                data-testid="assets-add-flag-open"
+                            >
+                                <FlagIcon size={16} aria-hidden />
+                                <T keyName="assets.flags.open" />
+                            </Button>
+                            <Button
+                                variant="secondary"
+                                size="compact"
+                                onClick={() => runAction("importModel")}
+                                data-testid="assets-import-model"
+                            >
+                                <CubeIcon size={16} aria-hidden />
+                                <T keyName="assets.importModel" />
+                            </Button>
+                        </div>
+                        <p className="text-sub text-text-subtitle">
+                            <T keyName="assets.flags.hint" />
+                        </p>
+                    </div>
+                )}
                 {!use && listFailed && (
                     <div
                         className="bg-fg-2 border-stroke rounded-6 text-sub flex items-center justify-between gap-12 border p-12"

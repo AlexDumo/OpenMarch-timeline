@@ -1,4 +1,7 @@
 import { equipmentCatalog, EQUIPMENT_NONE } from "@openmarch/core";
+import { showAssetsView } from "@/components/assets/openAssets";
+import { parseShowAssetRef } from "@/showAssets/ref";
+import { publishCueCommands } from "@/cues/latestCueCommands";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import tolgee from "@/global/singletons/Tolgee";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
@@ -116,6 +119,9 @@ const END_REASONS = {
     endsThere: "cues.reason.endsAtPlayhead",
     lastingOnly: "cues.reason.facingLasting",
 } as const;
+
+/** Whether a value names a show asset (`library:<id>@<hash>`), as a show flag's does */
+const isShowAssetValue = (value: string) => parseShowAssetRef(value) !== null;
 
 /** Why a cue command can't run now, or undefined when it can. */
 function cueReason(
@@ -240,6 +246,43 @@ export function useCueActionHandlers() {
         },
     );
     const cueWhy = cueReason(commands, isPlaying);
+
+    // The show's own flags (fork #985): set or select by the flag the menu names (`args.value`)
+    useActionHandler(
+        "equipmentShowFlag",
+        (args) => {
+            const value = typeof args?.value === "string" ? args.value : null;
+            // From the palette, with no flag named: where the show's flags are
+            if (!value || !isShowAssetValue(value)) {
+                showAssetsView();
+                return;
+            }
+            commands.setEquipment(value);
+        },
+        {
+            enabled: !isPlaying && commands.canSet("usual"),
+            disabledReason: setReason(commands, isPlaying),
+        },
+    );
+    useActionHandler(
+        "selectHoldingShowFlag",
+        (args) => {
+            const value = typeof args?.value === "string" ? args.value : null;
+            if (!value || !isShowAssetValue(value)) {
+                showAssetsView();
+                return;
+            }
+            commands.selectHolding([value]);
+        },
+        {
+            enabled: !isPlaying && commands.count !== null,
+            disabledReason: setReason(commands, isPlaying, true),
+        },
+    );
+    useEffect(() => {
+        publishCueCommands(commands);
+        return () => publishCueCommands(null);
+    }, [commands]);
 
     // Facing (fork #993): the quick picks, Angle… (asks the degrees), and the picked turn's popover
     const sides = useFieldProperties()?.sideDescriptions;
