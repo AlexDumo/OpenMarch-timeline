@@ -52,9 +52,7 @@ async function main(argv: string[]): Promise<number> {
             formatVersion: built.manifest.formatVersion,
             layers: built.manifest.layers.map((l) => l.id),
             items: (built.manifest.items ?? []).map((i) => i.id),
-            modes: (
-                (built.manifest as { modes?: { id: string }[] }).modes ?? []
-            ).map((m) => m.id),
+            modes: (built.manifest.modes ?? []).map((m) => m.id),
             warnings: built.warnings,
             seconds: (Date.now() - t0) / 1000,
         };

@@ -12,7 +12,6 @@ import { z } from "zod";
 import {
     FLATS_PAGE_IN,
     FLATS_PAGE_PX,
-    UNIFORM_PACK_VERSION,
     pngHeaderSize,
     requiredPackVersion,
     uniformPackManifestSchema,
@@ -70,13 +69,13 @@ const itemSource = z.strictObject({
     file: fileName,
 });
 
+/** A mode as the app's schema has it; its `items` may be left out (none) */
 const modeSource = z.strictObject({
+    ...app.modes.unwrap().element.shape,
     id: idSchema,
-    name: z.string().min(1).max(120),
     layers: z.array(idSchema).min(1),
     items: z.array(idSchema).optional(),
     palette: paletteSource.partial().optional(),
-    options: optionsSource.partial().optional(),
 });
 
 /** The styles the app's schema takes */
@@ -233,11 +232,6 @@ export function planPack(
     });
 
     const modes = source.modes ?? [];
-    if (modes.length > 0 && UNIFORM_PACK_VERSION < 3)
-        problems.push(
-            `modes: this checkout's pack format (version ${UNIFORM_PACK_VERSION}) has no modes yet; ` +
-                'they arrive with format 3 (step 5 of fork #1257). Remove "modes" to build the first look only.',
-        );
 
     const draft = {
         format: "openmarch-asset",
@@ -256,7 +250,7 @@ export function planPack(
             covers: "page",
         })),
         items,
-        ...(modes.length && UNIFORM_PACK_VERSION >= 3
+        ...(modes.length
             ? {
                   modes: modes.map((m) => ({
                       ...m,

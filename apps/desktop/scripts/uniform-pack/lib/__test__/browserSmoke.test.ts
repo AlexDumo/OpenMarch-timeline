@@ -6,7 +6,9 @@
  * its items, through `importItemFile`).
  *
  * Needs Playwright's Chromium (`pnpm exec playwright install chromium`); where it isn't
- * installed, the test says so and skips.
+ * installed, the test says so and skips, unless `UNIFORM_SMOKE_REQUIRED` is set (CI's
+ * desktop-browser-e2e job sets it and runs this file, since the desktop-test shards have no
+ * browser).
  */
 import { createHash } from "node:crypto";
 import fs from "node:fs";
@@ -124,6 +126,10 @@ describe.skipIf(!chromiumInstalled)(
 it.runIf(!chromiumInstalled)(
     "skips the browser smoke test: Playwright's Chromium isn't installed",
     () => {
-        expect(chromiumInstalled).toBe(false);
+        // CI's desktop-browser-e2e job sets this: there, a missing browser is a failure
+        expect(
+            process.env.UNIFORM_SMOKE_REQUIRED,
+            "UNIFORM_SMOKE_REQUIRED is set, but Playwright's Chromium isn't installed",
+        ).toBeFalsy();
     },
 );

@@ -5,7 +5,6 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import regionsJson from "@/view3d/assets/uniform-flats/regions.json";
 import type { FlatsRegions } from "@/view3d/core/marchers/uniformArtwork";
-import { UNIFORM_PACK_VERSION } from "@/view3d/core/uniformPack/format";
 import { buildFolder } from "../build";
 import { itemChecks, layerNotes } from "../packChecks";
 import {
@@ -151,55 +150,35 @@ describe("planPack", () => {
         expect(plan.rasters.filter((r) => r.kind === "item")).toHaveLength(2);
     });
 
-    it.runIf(UNIFORM_PACK_VERSION < 3)(
-        "refuses modes before the format has them",
-        () => {
-            const json = exampleSource();
-            json.modes = [{ id: "plain", name: "Plain", layers: ["base"] }];
-            expect(
-                problemsOf(() => planPack(parsePackSource(json), all))[0],
-            ).toMatch(/^modes: this checkout's pack format/);
-        },
-    );
-
-    it.runIf(UNIFORM_PACK_VERSION >= 3)(
-        "writes modes as format 3, with their palette in lowercase",
-        () => {
-            const json = exampleSource();
-            json.modes = [
-                {
-                    id: "plain",
-                    name: "Plain",
-                    layers: ["base"],
-                    items: ["crest"],
-                },
-                {
-                    id: "white",
-                    name: "White",
-                    layers: ["base"],
-                    palette: { primary: "#EEEEEE" },
-                },
-            ];
-            const { manifest } = planPack(parsePackSource(json), all);
-            expect(manifest.formatVersion).toBe(3);
-            const modes = (
-                manifest as unknown as {
-                    modes: { id: string; items: string[]; palette?: object }[];
-                }
-            ).modes;
-            expect(modes.map((m) => m.items)).toEqual([["crest"], []]);
-            expect(modes[1].palette).toEqual({ primary: "#eeeeee" });
-        },
-    );
+    it("writes modes as format 3, with their palette in lowercase", () => {
+        const json = exampleSource();
+        json.modes = [
+            {
+                id: "plain",
+                name: "Plain",
+                layers: ["base"],
+                items: ["crest"],
+            },
+            {
+                id: "white",
+                name: "White",
+                layers: ["base"],
+                palette: { primary: "#EEEEEE" },
+            },
+        ];
+        const { manifest } = planPack(parsePackSource(json), all);
+        expect(manifest.formatVersion).toBe(3);
+        const modes = manifest.modes!;
+        expect(modes.map((m) => m.items)).toEqual([["crest"], []]);
+        expect(modes[1].palette).toEqual({ primary: "#eeeeee" });
+    });
 
     it("names a mode's missing layer", () => {
         const json = exampleSource();
         json.modes = [{ id: "plain", name: "Plain", layers: ["sash"] }];
         const problems = problemsOf(() => planPack(parsePackSource(json), all));
-        expect(problems.join("\n")).toMatch(
-            UNIFORM_PACK_VERSION >= 3
-                ? /mode "plain"|layer the pack doesn't have/
-                : /^modes: /,
+        expect(problems).toContain(
+            "uniform.json: mode plain names a layer the pack doesn't have (the app's pack schema)",
         );
     });
 

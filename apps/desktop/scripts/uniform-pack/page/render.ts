@@ -38,20 +38,25 @@ import {
     type BodyType,
 } from "@/view3d/core/marchers/looks";
 import { showAssetRefValue, type ShowAssetRef } from "@/showAssets/ref";
-import * as uniformArtwork from "@/view3d/core/marchers/uniformArtwork";
+import {
+    MAX_TILES_PER_REGION,
+    itemSize,
+    tileLayout,
+    withMode,
+} from "@/view3d/core/marchers/uniformArtwork";
 import type {
     FlatsArtworkKey,
     FlatsRegions,
     UniformPackValue,
 } from "@/view3d/core/marchers/uniformArtwork";
-import * as format from "@/view3d/core/uniformPack/format";
 import {
     FLATS_PAGE_DPI,
     FLATS_PAGE_PX,
+    drawnInMode,
+    lookOfManifest,
     pngHeaderSize,
     readUniformPack,
     type UniformPack,
-    type UniformPackItem,
     type UniformPackManifest,
 } from "@/view3d/core/uniformPack/format";
 import {
@@ -309,53 +314,17 @@ interface ModeInfo {
     name: string;
 }
 
-/** The modes a manifest has (format 3, step 5), or the one implicit mode */
+/** The modes a manifest has, or the one implicit mode of a pack without modes */
 function modesOf(manifest: UniformPackManifest): ModeInfo[] {
-    const modes = (manifest as { modes?: { id: string; name: string }[] })
-        .modes;
-    return modes?.length
+    const modes = manifest.modes ?? [];
+    return modes.length
         ? modes.map((m) => ({ id: m.id, name: m.name }))
         : [{ id: null, name: "default" }];
 }
 
-/** What mode `mode` draws: its layers and items (format 3), else all of them */
-function drawn(manifest: UniformPackManifest, mode: string | null) {
-    const f = format as unknown as {
-        drawnInMode?: (
-            m: UniformPackManifest,
-            id: string | null,
-        ) => {
-            layers: { id: string }[];
-            items: UniformPackItem[];
-        };
-    };
-    if (!mode) return { layers: manifest.layers, items: manifest.items ?? [] };
-    if (!f.drawnInMode)
-        throw new Error(`this checkout's pack format can't draw mode ${mode}`);
-    return f.drawnInMode(manifest, mode);
-}
-
-/** The look a mode wears: the manifest's palette and options with the mode's changes */
-function lookOf(manifest: UniformPackManifest, mode: string | null) {
-    const f = format as unknown as {
-        lookOfManifest: (
-            m: UniformPackManifest,
-            id?: string | null,
-        ) => ReturnType<typeof format.lookOfManifest>;
-    };
-    return f.lookOfManifest(manifest, mode);
-}
-
-/** The 3D View's key for the pack in a mode (`withMode`, format 3), else the pack's own */
-function keyOf(mode: string | null): FlatsArtworkKey {
-    const a = uniformArtwork as unknown as {
-        withMode?: (k: UniformPackValue, m: string | null) => UniformPackValue;
-    };
-    if (!mode) return packValue!;
-    if (!a.withMode)
-        throw new Error(`this checkout's 3D View can't wear mode ${mode}`);
-    return a.withMode(packValue!, mode);
-}
+/** The 3D View's key for the pack worn in `mode` (the pack's own key without modes) */
+const keyOf = (mode: string | null): FlatsArtworkKey =>
+    withMode(packValue!, mode);
 
 /** Each layer's notes (the app's page checks), by id, and whether its image is the page's size */
 async function layerPageNotes(p: UniformPack) {
@@ -440,7 +409,7 @@ export async function prepareMode(modeId: string | null, dpi: number) {
     if (!info) throw new Error(`the pack has no mode ${modeId}`);
     thumbs = {};
     const key = keyOf(modeId);
-    const look = lookOf(pack.manifest, modeId);
+    const look = lookOfManifest(pack.manifest, modeId);
     const { layout } = await loadFlatsGeometry();
     flats = new Map();
     let atlasBytes = 0;
@@ -482,7 +451,7 @@ export async function prepareMode(modeId: string | null, dpi: number) {
     marchers.setClip(STRIDE, { row: march, phase: strideCount });
 
     // the app's quiet notes for what this mode draws
-    const shown = drawn(pack.manifest, modeId);
+    const shown = drawnInMode(pack.manifest, modeId);
     const errors: string[] = [];
     const warnings: string[] = [];
     shown.layers.forEach((layer, i) => {
@@ -505,10 +474,10 @@ export async function prepareMode(modeId: string | null, dpi: number) {
     // a print's region with too many copies is left plain on that body
     for (const item of shown.items) {
         if (item.grade !== "tile") continue;
-        const size = uniformArtwork.itemSize(item, aspects[item.file] ?? 1);
+        const size = itemSize(item, aspects[item.file] ?? 1);
         if (!size) continue;
         for (const body of BODY_TYPES) {
-            const laid = uniformArtwork.tileLayout(
+            const laid = tileLayout(
                 layout,
                 regions,
                 body,
@@ -522,7 +491,7 @@ export async function prepareMode(modeId: string | null, dpi: number) {
             );
             if (plain.length)
                 warnings.push(
-                    `item "${item.id}": on ${body}, ${plain.join(", ")} would need over ${uniformArtwork.MAX_TILES_PER_REGION} copies, so it is left plain`,
+                    `item "${item.id}": on ${body}, ${plain.join(", ")} would need over ${MAX_TILES_PER_REGION} copies, so it is left plain`,
                 );
         }
     }

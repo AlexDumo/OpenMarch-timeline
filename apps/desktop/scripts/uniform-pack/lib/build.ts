@@ -86,7 +86,7 @@ export function planFolder(dir: string): PackPlan {
 
 /** The first layer each mode draws (or the pack's first): what must cover the garment */
 function baseLayers(manifest: UniformPackManifest): Set<string> {
-    const modes = (manifest as { modes?: { layers: string[] }[] }).modes;
+    const modes = manifest.modes;
     return new Set(
         modes?.length ? modes.map((m) => m.layers[0]) : [manifest.layers[0].id],
     );
