@@ -4148,6 +4148,7 @@
     "shapes.rows.summary": "The Rows menu's button in the shape editor bar once there are rows: Rows and how many.",
     "shapes.rows.tip": "Tooltip of the Rows button in the shape editor bar: splits the selected marchers into rows alongside the drawn line.",
     "shapes.rows.go": "Label in the Rows menu of the shape editor (it splits the selected marchers of a drawn line into parallel rows): which way the rows step away from the drawn line. Its button opens a short list of ways. Short.",
+    "shapes.rows.goTip": "Tooltip on the 'Rows go' button in the shape editor's Rows menu: what the setting decides. One short sentence.",
     "shapes.rows.goRings": "Choice under 'Rows go' for an arc: each row is a ring around the arc's center (concentric arcs). Short.",
     "shapes.rows.goRingsDetail": "Explains the 'Rings' choice under 'Rows go' in the shape editor's Rows menu. A few words.",
     "shapes.rows.goFollow": "Choice under 'Rows go' for a curve or bent line: each row stays square to the line wherever it bends, so the rows run alongside it. Short.",

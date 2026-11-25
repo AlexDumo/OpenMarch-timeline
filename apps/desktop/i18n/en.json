@@ -2797,7 +2797,8 @@
             "goSlideCurve": "Slide the whole curve",
             "goSlideCurveDetail": "The same curve, moved",
             "goSlideLine": "Slide the whole line",
-            "goSlideLineDetail": "The same line, moved"
+            "goSlideLineDetail": "The same line, moved",
+            "goTip": "Which way each row steps from the line you drew"
         }
     },
     "tags": {

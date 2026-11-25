@@ -1003,6 +1003,12 @@ const GO_CHOICE: ToolChoice<P> = {
     get label() {
         return tolgee.t("shapes.rows.go", "Rows go");
     },
+    get tip() {
+        return tolgee.t(
+            "shapes.rows.goTip",
+            "Which way each row steps from the line you drew",
+        );
+    },
     options: (p) =>
         goValues(p).map((value) => ({
             value,

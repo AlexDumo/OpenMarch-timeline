@@ -91,7 +91,7 @@ export function ChoiceMenu({
     };
     return (
         <Popover.Root open={open} onOpenChange={setOpen}>
-            <Tip label={choice.label}>
+            <Tip label={choice.tip ?? choice.label}>
                 <Popover.Trigger asChild>
                     <button
                         type="button"

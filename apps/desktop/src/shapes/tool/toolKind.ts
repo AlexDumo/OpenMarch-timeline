@@ -404,6 +404,8 @@ export interface ToolChoice<P> {
     readonly key: string;
     /** What it is, for its tooltip and screen readers: "Spacing" */
     readonly label: string;
+    /** Its tooltip when its name is shown beside it and would only repeat it */
+    readonly tip?: string;
     /** The answers, in the order the menu lists them */
     options(params: P, n: number): readonly ToolChoiceOption[];
     /** The answer the shape has now: one of {@link options}' values */
